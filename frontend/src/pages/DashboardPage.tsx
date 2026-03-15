@@ -106,6 +106,7 @@ export function DashboardPage() {
   const [taskDescription, setTaskDescription] = useState("");
   const [taskStarterCode, setTaskStarterCode] = useState("");
   const [taskLanguage, setTaskLanguage] = useState("javascript");
+  const [createTaskModalOpened, setCreateTaskModalOpened] = useState(false);
 
   const [roomTitle, setRoomTitle] = useState("Техническое интервью");
   const [roomLanguage, setRoomLanguage] = useState("javascript");
@@ -215,6 +216,11 @@ export function DashboardPage() {
     }));
   }, [currentLanguageTasks]);
 
+  const selectedRoomTasks = useMemo(() => {
+    const selected = new Set(roomTaskIds);
+    return currentLanguageTasks.filter((task) => selected.has(task.id));
+  }, [currentLanguageTasks, roomTaskIds]);
+
   useEffect(() => {
     const allowed = new Set(currentLanguageTasks.map((task) => task.id));
     setRoomTaskIds((prev) => prev.filter((id) => allowed.has(id)));
@@ -245,6 +251,7 @@ export function DashboardPage() {
       setTaskTitle("");
       setTaskDescription("");
       setTaskStarterCode("");
+      setCreateTaskModalOpened(false);
       const params = new URLSearchParams(searchParams);
       params.set("lang", taskLanguage);
       setSearchParams(params, { replace: true });
@@ -509,6 +516,59 @@ export function DashboardPage() {
         </Stack>
       </Modal>
 
+      <Modal
+        opened={createTaskModalOpened}
+        onClose={() => setCreateTaskModalOpened(false)}
+        title="Создать задачу"
+        size="50%"
+        centered
+      >
+        <form onSubmit={onCreateTask}>
+          <Stack>
+            <TextInput
+              id="create-task-title"
+              data-testid="create-task-title-input"
+              label="Название"
+              value={taskTitle}
+              onChange={(e) => setTaskTitle(e.currentTarget.value)}
+              styles={darkFieldStyles}
+              required
+            />
+            <Textarea
+              id="create-task-description"
+              data-testid="create-task-description-input"
+              label="Описание"
+              value={taskDescription}
+              onChange={(e) => setTaskDescription(e.currentTarget.value)}
+              minRows={4}
+              styles={darkFieldStyles}
+              required
+            />
+            <Textarea
+              id="create-task-code"
+              data-testid="create-task-code-input"
+              label="Стартовый код"
+              value={taskStarterCode}
+              onChange={(e) => setTaskStarterCode(e.currentTarget.value)}
+              minRows={10}
+              styles={darkFieldStyles}
+              required
+            />
+            <Select
+              data-testid="create-task-language-select"
+              label="Язык"
+              value={taskLanguage}
+              onChange={(value) => setTaskLanguage(value ?? "javascript")}
+              data={LANGUAGE_OPTIONS}
+              styles={darkSelectStyles}
+            />
+            <Button data-testid="create-task-submit-button" type="submit" loading={createTaskState.isLoading}>
+              Сохранить задачу
+            </Button>
+          </Stack>
+        </form>
+      </Modal>
+
       <AppShell padding={0} header={{ height: 72 }}>
         <AppShell.Header bg="#101318" c="white" style={{ borderBottom: "1px solid #272b34" }}>
           <Container size="xl" h="100%">
@@ -605,8 +665,8 @@ export function DashboardPage() {
               </Card>
 
               {activeSection === "rooms" && (
-                <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="md">
-                  <Card withBorder radius="lg" padding="lg" bg="#11151c" c="gray.1" style={{ borderColor: "#272b34" }}>
+                <SimpleGrid cols={{ base: 1, lg: 1 }} spacing="md">
+                  <Card withBorder radius="lg" padding="lg" bg="#11151c" c="gray.1" style={{ borderColor: "#272b34" }} data-testid="create-room-card">
                     <form onSubmit={onCreateRoom}>
                       <Stack>
                         <Group>
@@ -633,6 +693,7 @@ export function DashboardPage() {
                           styles={darkSelectStyles}
                         />
                         <MultiSelect
+                          data-testid="room-task-select"
                           label="Задачи для комнаты"
                           description="Показываются задачи только выбранного языка"
                           data={taskSelectData}
@@ -641,6 +702,25 @@ export function DashboardPage() {
                           searchable
                           styles={darkSelectStyles}
                         />
+                        <Stack gap="xs" data-testid="selected-task-preview">
+                          <Text fw={600}>Выбранные задачи</Text>
+                          {selectedRoomTasks.length === 0 ? (
+                            <Text size="sm" c="gray.4">
+                              Пока ничего не выбрано
+                            </Text>
+                          ) : (
+                            selectedRoomTasks.map((task) => (
+                              <Card key={task.id} withBorder radius="md" padding="sm" bg="#121720" style={{ borderColor: "#2a3039" }}>
+                                <Stack gap={4}>
+                                  <Text fw={700}>{task.title}</Text>
+                                  <Text size="sm" c="gray.4">
+                                    {task.description}
+                                  </Text>
+                                </Stack>
+                              </Card>
+                            ))
+                          )}
+                        </Stack>
                         <Button type="submit" loading={createRoomState.isLoading}>
                           Создать и открыть
                         </Button>
@@ -648,7 +728,7 @@ export function DashboardPage() {
                     </form>
                   </Card>
 
-                  <Card withBorder radius="lg" padding="lg" bg="#11151c" c="gray.1" style={{ borderColor: "#272b34" }}>
+                  {false && (<Card withBorder radius="lg" padding="lg" bg="#11151c" c="gray.1" style={{ borderColor: "#272b34" }}>
                     <Stack>
                       <Title order={4}>Текущие параметры</Title>
                       <Divider color="#272b34" />
@@ -659,13 +739,13 @@ export function DashboardPage() {
                         После создания откроется live-coding сессия. Ссылка и код комнаты передаются кандидату.
                       </Text>
                     </Stack>
-                  </Card>
+                  </Card>)}
                 </SimpleGrid>
               )}
 
               {activeSection === "tasks" && (
-                <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="md">
-                  <Card withBorder radius="lg" padding="lg" bg="#11151c" c="gray.1" style={{ borderColor: "#272b34" }}>
+                <SimpleGrid cols={{ base: 1, lg: 1 }} spacing="md">
+                  {false && (<Card withBorder radius="lg" padding="lg" bg="#11151c" c="gray.1" style={{ borderColor: "#272b34" }}>
                     <form onSubmit={onCreateTask}>
                       <Stack>
                         <Title order={4}>Создать задачу</Title>
@@ -704,18 +784,27 @@ export function DashboardPage() {
                         </Button>
                       </Stack>
                     </form>
-                  </Card>
+                  </Card>)}
 
-                  <Card withBorder radius="lg" padding="lg" bg="#11151c" c="gray.1" style={{ borderColor: "#272b34" }}>
+                  <Card withBorder radius="lg" padding="lg" bg="#11151c" c="gray.1" style={{ borderColor: "#272b34" }} data-testid="task-bank-panel">
                     <Stack>
                       <Title order={4}>Управление задачами</Title>
+                      <Group justify="space-between" align="center">
+                        <Button
+                          data-testid="open-create-task-modal"
+                          leftSection={<IconPlus size={14} />}
+                          onClick={() => setCreateTaskModalOpened(true)}
+                        >
+                          Создать задачу
+                        </Button>
+                      </Group>
                       <Group wrap="wrap" gap="xs">
                         {normalizedTaskGroups.map((group) => (
                           <Button
                             key={group.language}
                             size="xs"
                             variant={group.language === safeTaskLanguage ? "filled" : "subtle"}
-                            color={group.language === safeTaskLanguage ? "gray" : "dark"}
+                            color={group.language === safeTaskLanguage ? "blue" : "gray"}
                             onClick={() => {
                               const params = new URLSearchParams(searchParams);
                               params.set("lang", group.language);
@@ -733,7 +822,7 @@ export function DashboardPage() {
                             <Stack gap="xs">
                               <Group justify="space-between">
                                 <Text fw={700}>{task.title}</Text>
-                                <Badge color="gray" variant="light">
+                                <Badge color="blue" variant="light">
                                   {labelForLanguage(task.language)}
                                 </Badge>
                               </Group>

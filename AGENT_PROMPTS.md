@@ -1,5 +1,8 @@
 # Agent Prompts
 
+> Note: English split-by-role agent contracts now live in `agents/`.
+> Start with `agents/README.md`.
+
 ## 1. Назначение
 
 Этот документ задает промпт-контракты для мультиагентной системы разработки проекта `interview-online`.

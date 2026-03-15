@@ -7,6 +7,7 @@
     "dev": "rspack serve --config rspack.config.mjs",
     "build": "rspack build --config rspack.config.mjs",
     "typecheck": "tsc --noEmit",
+    "e2e:dashboard-redesign": "node e2e-dashboard-redesign.mjs",
     "chaos:test": "node e2e-chaos-harness.mjs",
     "chaos:faults": "node e2e-chaos-fault-injection.mjs"
   },
