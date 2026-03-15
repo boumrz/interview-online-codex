@@ -1,0 +1,197 @@
+.shell {
+  min-height: 100vh;
+  background: #0f1115;
+  color: #f3f5f7;
+}
+
+.topBar {
+  height: 54px;
+  border-bottom: 1px solid #252a32;
+  background: #101318;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.topInner {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 16px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.brandTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: #f3f5f7;
+}
+
+.roomCode {
+  font-size: 12px;
+  color: #8b919b;
+}
+
+.topActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ownerBody {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  min-height: calc(100vh - 54px);
+}
+
+.sidebar {
+  border-right: 1px solid #252a32;
+  padding: 14px;
+  background: #11151c;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.sectionTitle {
+  font-size: 12px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #8b919b;
+  font-weight: 700;
+}
+
+.stepList {
+  display: grid;
+  gap: 8px;
+}
+
+.stepMeta {
+  color: #a3aab5;
+  font-size: 12px;
+}
+
+.workspace {
+  padding: 14px;
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 12px;
+}
+
+.editorPanel,
+.outputPanel,
+.candidatePanel {
+  border: 1px solid #252a32;
+  border-radius: 12px;
+  background: #11151c;
+  overflow: hidden;
+}
+
+.outputPanel {
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+}
+
+.panelHeader {
+  padding: 10px 12px;
+  border-bottom: 1px solid #252a32;
+  font-size: 12px;
+  color: #8b919b;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.editorWrap {
+  min-height: 60vh;
+}
+
+.candidateEditorWrap {
+  min-height: calc(100vh - 150px);
+}
+
+.outputContent {
+  padding: 12px;
+  color: #d2d8e1;
+  font-size: 13px;
+  white-space: pre-wrap;
+  max-height: 300px;
+  overflow: auto;
+}
+
+.taskBlock {
+  padding: 10px 12px;
+  border-bottom: 1px solid #252a32;
+  color: #d2d8e1;
+}
+
+.participants {
+  padding: 10px 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.participantItem {
+  border: 1px solid #2a3039;
+  background: #121720;
+  border-radius: 8px;
+  padding: 7px 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: #d2d8e1;
+}
+
+.candidateBody {
+  padding: 14px;
+  max-width: 1400px;
+  margin: 0 auto;
+  display: grid;
+  gap: 10px;
+}
+
+.candidateMeta {
+  border: 1px solid #252a32;
+  border-radius: 10px;
+  background: #11151c;
+  padding: 10px 12px;
+  color: #c9d0db;
+  font-size: 13px;
+}
+
+.error {
+  color: #ff8484;
+  font-size: 13px;
+}
+
+@media (max-width: 1200px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .outputPanel {
+    grid-template-rows: auto auto auto auto;
+  }
+}
+
+@media (max-width: 960px) {
+  .ownerBody {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    border-right: 0;
+    border-bottom: 1px solid #252a32;
+  }
+}
