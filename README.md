@@ -12,6 +12,7 @@
 
 - `frontend` - web client
 - `backend` - API + WebSocket server
+- `agents` - split English multi-agent prompt contracts (roles + shared rules)
 - `TECHNICAL_SPECIFICATION.md` - detailed technical specification
 
 ## Quick Start
