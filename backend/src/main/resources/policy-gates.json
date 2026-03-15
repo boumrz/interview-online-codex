@@ -1,0 +1,10 @@
+{
+  "requireAcceptanceCriteria": true,
+  "requireLinkedArtifacts": true,
+  "requireHumanApproval": true,
+  "requiredVerdicts": [
+    "SOLUTION",
+    "SECURITY_RELIABILITY",
+    "TEST"
+  ]
+}

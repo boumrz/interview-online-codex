@@ -1,0 +1,52 @@
+flowchart LR
+  classDef core fill:#0f172a,stroke:#334155,color:#e2e8f0,stroke-width:1px;
+  classDef review fill:#1f2937,stroke:#475569,color:#f8fafc,stroke-width:1px;
+  classDef infra fill:#0b3b2e,stroke:#2a7f62,color:#e8fff5,stroke-width:1px;
+  classDef ext fill:#1e293b,stroke:#64748b,color:#e2e8f0,stroke-dasharray: 4 3;
+
+  subgraph Team["Агентная команда (спецификация проекта)"]
+    TZ["Specification (TZ) Agent"]:::core
+    PO["Product Owner Agent"]:::core
+    ARCH["Architect Agent"]:::core
+    TL["Team Lead Agent"]:::core
+    EXEC["Developer / Designer / QA"]:::core
+
+    AUD["Prompt/Task Auditor"]:::review
+    SOL["Solution Reviewer"]:::review
+    SEC["Security & Reliability"]:::review
+    TEST["Test Reviewer"]:::review
+    UX["UX Critic"]:::review
+  end
+
+  subgraph Runtime["Реализация в backend (MVP)"]
+    UI["Frontend Agent Ops"]:::ext
+    ORCH["WorkflowOrchestratorService"]:::infra
+    REVSRV["IndependentReviewerService"]:::infra
+    RUNTIMES["Reviewer runtimes:\nSOLUTION / SECURITY_RELIABILITY / TEST / UX"]:::infra
+    GATE["PolicyGateService\n(переход в QA/DONE)"]:::infra
+    PROV["Workflow providers:\nTemporal | LangGraph"]:::infra
+    REG["Artifact registry + trace\n(agent_artifacts / verdicts / trace_events)"]:::infra
+    LINEAR["LinearSyncService\n+ Linear issue state"]:::infra
+  end
+
+  TZ --> PO --> ARCH --> TL --> EXEC
+  TL --> AUD
+  EXEC --> SOL
+  EXEC --> SEC
+  EXEC --> UX
+  EXEC --> TEST
+  SOL --> TL
+  SEC --> TL
+  UX --> TL
+  TEST --> TL
+
+  UI -->|"start run + transition"| ORCH
+  ORCH --> PROV
+  ORCH --> REG
+  ORCH --> GATE
+  ORCH --> LINEAR
+  ORCH -->|"execute reviewer"| REVSRV --> RUNTIMES --> ORCH
+
+  EXEC -."artifacts/verdict context".-> ORCH
+  TL -."task-state sync".-> LINEAR
+  PO -."acceptance + priorities".-> LINEAR

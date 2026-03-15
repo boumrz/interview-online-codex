@@ -1,0 +1,49 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/interview_online}
+    username: ${DB_USER:interview}
+    password: ${DB_PASSWORD:interview}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+app:
+  cors:
+    allowed-origins: ${CORS_ORIGINS:http://localhost:5173}
+  agent:
+    default-provider: ${AGENT_DEFAULT_PROVIDER:temporal}
+    default-workflow-name: ${AGENT_DEFAULT_WORKFLOW_NAME:task_orchestration}
+    observability:
+      service-name: ${AGENT_OBS_SERVICE_NAME:interview-online-agent}
+      langfuse-enabled: ${AGENT_LANGFUSE_ENABLED:false}
+      langfuse-url: ${AGENT_LANGFUSE_URL:}
+      langfuse-api-key: ${AGENT_LANGFUSE_API_KEY:}
+    linear:
+      enabled: ${AGENT_LINEAR_SYNC_ENABLED:false}
+      api-url: ${LINEAR_API_URL:https://api.linear.app/graphql}
+      api-key: ${LINEAR_API_KEY:}
+      status-map:
+        BACKLOG: Backlog
+        REFINEMENT: Backlog
+        READY: Взято в разработку
+        IN_PROGRESS: В работе (Back)
+        IN_REVIEW: In Review
+        QA: Передано на Front
+        DONE: Выполнено
+        BLOCKED: Backlog
+  execution:
+    mode: ${EXECUTION_MODE:local}
+    local-enabled: ${EXECUTION_LOCAL_ENABLED:true}
+    isolated-url: ${EXECUTION_ISOLATED_URL:http://localhost:7070/api/execute}
+    fallback-to-local: ${EXECUTION_FALLBACK_TO_LOCAL:false}
+    kill-switch: ${EXECUTION_KILL_SWITCH:false}
