@@ -30,7 +30,9 @@ data class RoomResponse(
     val language: String,
     val currentStep: Int,
     val code: String,
+    val notes: String,
     val ownerToken: String?,
+    val interviewerToken: String?,
     val tasks: List<RoomTaskDto>,
 )
 
@@ -39,6 +41,7 @@ data class RoomSummaryDto(
     val title: String,
     val inviteCode: String,
     val language: String,
+    val accessRole: String,
     val createdAt: String,
 )
 

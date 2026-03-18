@@ -40,8 +40,15 @@ class RoomController(
     }
 
     @GetMapping("/rooms/{inviteCode}")
-    fun getRoom(@PathVariable inviteCode: String): RoomResponse {
-        return roomService.getByInviteCode(inviteCode)
+    fun getRoom(
+        @PathVariable inviteCode: String,
+        @RequestHeader("X-Room-Owner-Token", required = false) ownerToken: String?,
+        @RequestHeader("X-Room-Interviewer-Token", required = false) interviewerToken: String?,
+        @RequestHeader("Authorization", required = false) authorization: String?,
+    ): RoomResponse {
+        val authToken = authorization?.removePrefix("Bearer ")?.trim()
+        val user = authService.resolveUserByToken(authToken)
+        return roomService.getByInviteCode(inviteCode, ownerToken, interviewerToken, user)
     }
 
     @PostMapping("/rooms/{inviteCode}/next-step")

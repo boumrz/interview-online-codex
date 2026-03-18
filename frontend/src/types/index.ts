@@ -24,7 +24,9 @@ export type Room = {
   language: string;
   currentStep: number;
   code: string;
+  notes: string;
   ownerToken: string | null;
+  interviewerToken: string | null;
   tasks: RoomTask[];
 };
 
@@ -33,6 +35,7 @@ export type RoomSummary = {
   title: string;
   inviteCode: string;
   language: string;
+  accessRole: "owner" | "participant";
   createdAt: string;
 };
 

@@ -33,7 +33,8 @@ class RoomWebSocketHandler(
             fallback = query.getFirst("displayName"),
         )
         val ownerToken = query.getFirst("ownerToken")
-        collaborationService.joinRoom(inviteCode, session, sessionId, displayName, ownerToken)
+        val interviewerToken = query.getFirst("interviewerToken")
+        collaborationService.joinRoom(inviteCode, session, sessionId, displayName, ownerToken, interviewerToken)
     }
 
     override fun handleTextMessage(session: WebSocketSession, message: TextMessage) {
@@ -45,6 +46,8 @@ class RoomWebSocketHandler(
                 "language_update" -> collaborationService.updateLanguage(session, payload.readText("language"))
                 "next_step" -> collaborationService.nextStep(session)
                 "set_step" -> collaborationService.setStep(session, payload.readInt("stepIndex"))
+                "notes_update" -> collaborationService.updateNotes(session, payload.readText("notes"))
+                "presence_update" -> collaborationService.updatePresence(session, payload.readText("presenceStatus"))
                 else -> throw ApiException(org.springframework.http.HttpStatus.BAD_REQUEST, "Неизвестный тип сообщения: $type")
             }
         } catch (ex: ApiException) {

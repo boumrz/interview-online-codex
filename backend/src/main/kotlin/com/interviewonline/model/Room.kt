@@ -30,6 +30,9 @@ class Room(
     @Column(name = "owner_session_token", nullable = false)
     var ownerSessionToken: String = "",
 
+    @Column(name = "interviewer_session_token", nullable = false)
+    var interviewerSessionToken: String = "",
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_user_id")
     var ownerUser: User? = null,
@@ -42,6 +45,9 @@ class Room(
 
     @Column(nullable = false, columnDefinition = "TEXT")
     var code: String = "",
+
+    @Column(columnDefinition = "TEXT")
+    var notes: String? = "",
 
     @Column(name = "created_at", nullable = false)
     var createdAt: Instant = Instant.now(),

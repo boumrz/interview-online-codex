@@ -64,7 +64,7 @@ declare const __FEATURE_AGENT_OPS__: string | undefined;
 
 const BASE_DASHBOARD_SECTIONS: Array<{ value: DashboardSection; label: string }> = [
   { value: "rooms", label: "Комнаты" },
-  { value: "tasks", label: "Банк задач" },
+  { value: "tasks", label: "Задачи" },
   { value: "manage", label: "Управление комнатами" },
   { value: "agents", label: "Agent Ops" }
 ];
@@ -137,7 +137,7 @@ export function DashboardPage() {
     (dashboardSection) => agentOpsEnabled || dashboardSection.value !== "agents"
   );
 
-  const { data: rooms = [] } = useMyRoomsQuery(undefined, { skip: !auth.token });
+  const { data: rooms = [] } = useMyRoomsQuery(undefined, { skip: !auth.token, refetchOnMountOrArgChange: true });
   const { data: groupedTasks = [] } = useTasksGroupedQuery(undefined, { skip: !auth.token });
 
   const [createTask, createTaskState] = useCreateTaskTemplateMutation();
@@ -329,6 +329,7 @@ export function DashboardPage() {
       setRoomSaveStatus((prev) => ({ ...prev, [roomId]: "saving" }));
       setError("");
       await updateRoom({ roomId, title: normalized }).unwrap();
+      setRoomTitleDrafts((prev) => ({ ...prev, [roomId]: normalized }));
       setRoomSaveStatus((prev) => ({ ...prev, [roomId]: "saved" }));
       window.setTimeout(() => {
         setRoomSaveStatus((prev) => {
@@ -353,7 +354,8 @@ export function DashboardPage() {
     }
 
     roomSaveTimersRef.current[roomId] = window.setTimeout(() => {
-      void persistRoomTitle(roomId, originalTitle, nextTitle);
+      const latestOriginal = rooms.find((room) => room.id === roomId)?.title ?? originalTitle;
+      void persistRoomTitle(roomId, latestOriginal, nextTitle);
     }, 600);
   };
 
@@ -363,7 +365,8 @@ export function DashboardPage() {
       delete roomSaveTimersRef.current[roomId];
     }
     const draft = roomTitleDrafts[roomId] ?? originalTitle;
-    void persistRoomTitle(roomId, originalTitle, draft);
+    const latestOriginal = rooms.find((room) => room.id === roomId)?.title ?? originalTitle;
+    void persistRoomTitle(roomId, latestOriginal, draft);
   };
 
   const removeRoom = async (roomId: string) => {
@@ -580,7 +583,7 @@ export function DashboardPage() {
                 <Box>
                   <Title order={4}>Личный кабинет</Title>
                   <Text size="xs" c="gray.4">
-                    Управление комнатами и банком задач
+                    Управление комнатами и задачами
                   </Text>
                 </Box>
               </Group>
@@ -627,7 +630,7 @@ export function DashboardPage() {
                 </Card>
                 <Card withBorder bg="#11151c" c="gray.1" style={{ borderColor: "#272b34" }}>
                   <Group justify="space-between">
-                    <Text c="gray.4">Задач в банке</Text>
+                    <Text c="gray.4">Задач</Text>
                     <ThemeIcon color="gray" variant="light">
                       <IconBook2 size={16} />
                     </ThemeIcon>
@@ -882,6 +885,9 @@ export function DashboardPage() {
                               <Badge color="gray" variant="light">
                                 {labelForLanguage(room.language)}
                               </Badge>
+                              <Badge color={room.accessRole === "owner" ? "teal" : "blue"} variant="light">
+                                {room.accessRole === "owner" ? "Владелец" : "Участник"}
+                              </Badge>
                               <Badge variant="outline" color={statusColor(roomSaveStatus[room.id])}>
                                 {statusLabel(roomSaveStatus[room.id])}
                               </Badge>
@@ -893,8 +899,10 @@ export function DashboardPage() {
                               <ActionIcon
                                 variant="light"
                                 color="red"
+                                disabled={room.accessRole !== "owner"}
                                 onClick={(event) => {
                                   event.stopPropagation();
+                                  if (room.accessRole !== "owner") return;
                                   void removeRoom(room.id);
                                 }}
                               >
@@ -906,11 +914,18 @@ export function DashboardPage() {
                           <TextInput
                             label="Название комнаты"
                             value={roomTitleDrafts[room.id] ?? room.title}
+                            disabled={room.accessRole !== "owner"}
                             onClick={(event) => event.stopPropagation()}
+                            onMouseDown={(event) => event.stopPropagation()}
+                            onKeyDown={(event) => event.stopPropagation()}
                             onChange={(event) => {
+                              if (room.accessRole !== "owner") return;
                               scheduleRoomAutoSave(room.id, room.title, event.currentTarget.value);
                             }}
-                            onBlur={() => flushRoomAutoSave(room.id, room.title)}
+                            onBlur={() => {
+                              if (room.accessRole !== "owner") return;
+                              flushRoomAutoSave(room.id, room.title);
+                            }}
                             styles={darkFieldStyles}
                           />
 

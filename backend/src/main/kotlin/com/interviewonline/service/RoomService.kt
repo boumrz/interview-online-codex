@@ -7,8 +7,10 @@ import com.interviewonline.dto.RoomSummaryDto
 import com.interviewonline.dto.RoomTaskDto
 import com.interviewonline.dto.UpdateRoomRequest
 import com.interviewonline.model.Room
+import com.interviewonline.model.RoomParticipant
 import com.interviewonline.model.RoomTask
 import com.interviewonline.model.User
+import com.interviewonline.repository.RoomParticipantRepository
 import com.interviewonline.repository.RoomRepository
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
@@ -19,6 +21,7 @@ import java.util.UUID
 @Service
 class RoomService(
     private val roomRepository: RoomRepository,
+    private val roomParticipantRepository: RoomParticipantRepository,
     private val taskTemplateService: TaskTemplateService,
     private val collaborationService: CollaborationService,
     private val userTaskService: UserTaskService,
@@ -28,8 +31,9 @@ class RoomService(
         val language = request.language.ifBlank { "javascript" }.lowercase()
         val room = Room(
             title = request.title.ifBlank { "Комната собеседования" },
-            inviteCode = "r-${UUID.randomUUID().toString().take(8)}",
+            inviteCode = "r-${UUID.randomUUID()}",
             ownerSessionToken = "owner_${UUID.randomUUID()}",
+            interviewerSessionToken = "interviewer_${UUID.randomUUID()}",
             language = language,
         )
         val tasks = taskTemplateService.defaultRoomTasks(language).toMutableList()
@@ -38,7 +42,7 @@ class RoomService(
         room.code = tasks.firstOrNull()?.starterCode.orEmpty()
         val saved = roomRepository.save(room)
         collaborationService.bootstrapRoom(saved)
-        return toRoomResponse(saved, includeOwnerToken = true)
+        return toRoomResponse(saved, includeOwnerToken = true, includeInterviewerToken = true)
     }
 
     @Transactional
@@ -47,8 +51,9 @@ class RoomService(
         val selectedTasks = userTaskService.resolveTasksForRoom(user, request.taskIds, language)
         val room = Room(
             title = request.title,
-            inviteCode = "r-${UUID.randomUUID().toString().take(8)}",
+            inviteCode = "r-${UUID.randomUUID()}",
             ownerSessionToken = "owner_${UUID.randomUUID()}",
+            interviewerSessionToken = "interviewer_${UUID.randomUUID()}",
             ownerUser = user,
             language = language,
         )
@@ -71,14 +76,20 @@ class RoomService(
         room.code = tasks.firstOrNull()?.starterCode.orEmpty()
         val saved = roomRepository.save(room)
         collaborationService.bootstrapRoom(saved)
-        return toRoomResponse(saved, includeOwnerToken = true)
+        return toRoomResponse(saved, includeOwnerToken = true, includeInterviewerToken = true)
     }
 
-    @Transactional(readOnly = true)
-    fun getByInviteCode(inviteCode: String): RoomResponse {
+    @Transactional
+    fun getByInviteCode(inviteCode: String, ownerToken: String?, interviewerToken: String?, user: User?): RoomResponse {
         val room = roomRepository.findByInviteCode(inviteCode)
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
-        return toRoomResponse(room, includeOwnerToken = false)
+        val hasInterviewerAccess = !interviewerToken.isNullOrBlank() && room.interviewerSessionToken == interviewerToken
+        if (hasInterviewerAccess && user != null) {
+            ensureParticipant(room, user)
+        }
+        val includeInterviewerToken =
+            room.ownerSessionToken == ownerToken || room.interviewerSessionToken == interviewerToken
+        return toRoomResponse(room, includeOwnerToken = false, includeInterviewerToken = includeInterviewerToken)
     }
 
     @Transactional(readOnly = true)
@@ -100,22 +111,39 @@ class RoomService(
         room.code = room.tasks[room.currentStep].starterCode
         val saved = roomRepository.save(room)
         collaborationService.syncFromRoom(saved)
-        return toRoomResponse(saved, includeOwnerToken = false)
+        return toRoomResponse(saved, includeOwnerToken = false, includeInterviewerToken = false)
     }
 
     @Transactional(readOnly = true)
     fun listRoomsForUser(user: User): List<RoomSummaryDto> {
-        return roomRepository.findByOwnerUserId(user.id!!)
-            .sortedByDescending { it.createdAt }
-            .map {
-            RoomSummaryDto(
-                id = it.id!!,
-                title = it.title,
-                inviteCode = it.inviteCode,
-                language = it.language,
-                createdAt = DateTimeFormatter.ISO_INSTANT.format(it.createdAt),
-            )
+        val userId = user.id!!
+        val ownedRooms = roomRepository.findByOwnerUserId(userId)
+        val participantRooms = roomParticipantRepository.findAllByUserId(userId)
+            .mapNotNull { it.room }
+
+        val merged = linkedMapOf<String, Pair<Room, String>>()
+        ownedRooms.forEach { room ->
+            merged[room.id!!] = room to "owner"
         }
+        participantRooms.forEach { room ->
+            val roomId = room.id ?: return@forEach
+            if (!merged.containsKey(roomId)) {
+                merged[roomId] = room to "participant"
+            }
+        }
+
+        return merged.values
+            .sortedByDescending { (room) -> room.createdAt }
+            .map { (room, accessRole) ->
+                RoomSummaryDto(
+                    id = room.id!!,
+                    title = room.title,
+                    inviteCode = room.inviteCode,
+                    language = room.language,
+                    accessRole = accessRole,
+                    createdAt = DateTimeFormatter.ISO_INSTANT.format(room.createdAt),
+                )
+            }
     }
 
     @Transactional
@@ -133,6 +161,7 @@ class RoomService(
             title = saved.title,
             inviteCode = saved.inviteCode,
             language = saved.language,
+            accessRole = "owner",
             createdAt = DateTimeFormatter.ISO_INSTANT.format(saved.createdAt),
         )
     }
@@ -152,7 +181,7 @@ class RoomService(
         }
     }
 
-    private fun toRoomResponse(room: Room, includeOwnerToken: Boolean): RoomResponse {
+    private fun toRoomResponse(room: Room, includeOwnerToken: Boolean, includeInterviewerToken: Boolean): RoomResponse {
         return RoomResponse(
             id = room.id!!,
             title = room.title,
@@ -160,7 +189,9 @@ class RoomService(
             language = room.language,
             currentStep = room.currentStep,
             code = room.code,
+            notes = room.notes.orEmpty(),
             ownerToken = if (includeOwnerToken) room.ownerSessionToken else null,
+            interviewerToken = if (includeInterviewerToken) room.interviewerSessionToken else null,
             tasks = room.tasks.map {
                 RoomTaskDto(
                     stepIndex = it.stepIndex,
@@ -171,6 +202,21 @@ class RoomService(
                     categoryName = it.categoryName,
                 )
             },
+        )
+    }
+
+    private fun ensureParticipant(room: Room, user: User) {
+        val roomId = room.id ?: return
+        val userId = user.id ?: return
+        if (room.ownerUser?.id == userId) return
+        val existing = roomParticipantRepository.findByRoomIdAndUserId(roomId, userId)
+        if (existing != null) return
+        roomParticipantRepository.save(
+            RoomParticipant(
+                room = room,
+                user = user,
+                role = "interviewer",
+            ),
         )
     }
 }

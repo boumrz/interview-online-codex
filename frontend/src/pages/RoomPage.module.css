@@ -1,27 +1,29 @@
 .shell {
-  min-height: 100vh;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: #0f1115;
   color: #f3f5f7;
 }
 
 .topBar {
-  height: 54px;
+  min-height: 54px;
   border-bottom: 1px solid #252a32;
   background: #101318;
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  flex-shrink: 0;
 }
 
 .topInner {
-  max-width: 1400px;
+  max-width: 1560px;
   margin: 0 auto;
-  padding: 0 16px;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  width: 100%;
+  padding: 8px 16px;
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: auto minmax(140px, 1fr) auto;
   gap: 12px;
+  align-items: center;
 }
 
 .brand {
@@ -35,11 +37,29 @@
   font-size: 14px;
   font-weight: 700;
   color: #f3f5f7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.roomCode {
-  font-size: 12px;
-  color: #8b919b;
+.participantsHost {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.participantsInline {
+  min-width: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+.participantBadge {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .topActions {
@@ -48,32 +68,66 @@
   gap: 8px;
 }
 
+.invitesBar {
+  flex-shrink: 0;
+  border-bottom: 1px solid #222b36;
+  background: #0f141c;
+  padding: 6px 12px;
+}
+
 .ownerBody {
-  display: grid;
-  grid-template-columns: 280px 1fr;
-  min-height: calc(100vh - 54px);
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.edgeToggle {
+  position: absolute !important;
+  top: auto !important;
+  bottom: 14px !important;
+  z-index: 40;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  background: #223449 !important;
+  color: #f9fbff !important;
+  border: 1px solid #6f84a3 !important;
+  border-radius: 10px;
+  box-shadow: 0 7px 18px rgba(0, 0, 0, 0.38);
+  transition: left 180ms ease, right 180ms ease, background-color 120ms ease, transform 120ms ease;
+}
+
+.edgeToggle:hover {
+  background: #2e4762 !important;
+  transform: translateY(-1px);
+}
+
+.leftEdgeToggle {
+  left: 14px;
+}
+
+.rightEdgeToggle {
+  right: 14px;
 }
 
 .sidebar {
+  height: 100%;
+  overflow-y: auto;
   border-right: 1px solid #252a32;
-  padding: 14px;
+  padding: 12px;
   background: #11151c;
   display: grid;
   align-content: start;
-  gap: 12px;
-}
-
-.sectionTitle {
-  font-size: 12px;
-  letter-spacing: 0.8px;
-  text-transform: uppercase;
-  color: #8b919b;
-  font-weight: 700;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .stepList {
   display: grid;
-  gap: 8px;
+  gap: 7px;
 }
 
 .stepMeta {
@@ -81,11 +135,38 @@
   font-size: 12px;
 }
 
+.resizeHandle {
+  width: 10px;
+  flex-shrink: 0;
+  border-left: 1px solid #1f242d;
+  border-right: 1px solid #1f242d;
+  background: #0f141b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #5f6772;
+  cursor: col-resize;
+}
+
+.resizeHandle:hover {
+  color: #8f99a6;
+  background: #121824;
+}
+
 .workspace {
-  padding: 14px;
-  display: grid;
-  grid-template-columns: 1fr 360px;
-  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+  padding: 10px;
+}
+
+.editorColumn {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
 }
 
 .editorPanel,
@@ -97,60 +178,37 @@
   overflow: hidden;
 }
 
-.outputPanel {
-  display: grid;
-  grid-template-rows: auto auto 1fr auto;
+.editorPanel {
+  flex: 1;
+  height: 100%;
+  min-height: 0;
 }
 
-.panelHeader {
-  padding: 10px 12px;
-  border-bottom: 1px solid #252a32;
-  font-size: 12px;
-  color: #8b919b;
-  letter-spacing: 0.8px;
+.editorWrap {
+  height: 100%;
+  min-height: 0;
+}
+
+.outputPanel {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.notesHeader {
+  padding: 8px 10px;
+  border-bottom: 1px solid #273242;
+  color: #d4dce7;
+  font-size: 11px;
+  letter-spacing: 0.6px;
   text-transform: uppercase;
   font-weight: 700;
 }
 
-.editorWrap {
-  min-height: 60vh;
-}
-
-.candidateEditorWrap {
-  min-height: calc(100vh - 150px);
-}
-
-.outputContent {
-  padding: 12px;
-  color: #d2d8e1;
-  font-size: 13px;
-  white-space: pre-wrap;
-  max-height: 300px;
-  overflow: auto;
-}
-
-.taskBlock {
-  padding: 10px 12px;
-  border-bottom: 1px solid #252a32;
-  color: #d2d8e1;
-}
-
-.participants {
-  padding: 10px 12px;
-  display: grid;
-  gap: 6px;
-}
-
-.participantItem {
-  border: 1px solid #2a3039;
-  background: #121720;
-  border-radius: 8px;
-  padding: 7px 8px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 12px;
-  color: #d2d8e1;
+.notesStack {
+  padding: 8px;
 }
 
 .candidateBody {
@@ -159,6 +217,7 @@
   margin: 0 auto;
   display: grid;
   gap: 10px;
+  width: 100%;
 }
 
 .candidateMeta {
@@ -172,26 +231,62 @@
 
 .error {
   color: #ff8484;
-  font-size: 13px;
+  font-size: 12px;
+  padding: 8px 4px;
 }
 
-@media (max-width: 1200px) {
-  .workspace {
+@media (max-width: 1180px) {
+  .topInner {
     grid-template-columns: 1fr;
+    gap: 8px;
+    align-items: flex-start;
   }
 
-  .outputPanel {
-    grid-template-rows: auto auto auto auto;
+  .topActions {
+    flex-wrap: wrap;
   }
 }
 
-@media (max-width: 960px) {
+@media (max-width: 1024px) {
+  .shell {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
   .ownerBody {
+    display: grid;
     grid-template-columns: 1fr;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .edgeToggle,
+  .resizeHandle {
+    display: none;
   }
 
   .sidebar {
+    width: auto !important;
     border-right: 0;
     border-bottom: 1px solid #252a32;
+    max-height: 330px;
+  }
+
+  .workspace {
+    display: grid;
+    grid-template-columns: 1fr;
+    padding: 10px;
+    gap: 10px;
+    overflow: visible;
+  }
+
+  .editorColumn {
+    min-height: 520px;
+  }
+
+  .outputPanel {
+    width: auto !important;
+    max-height: 360px;
   }
 }
