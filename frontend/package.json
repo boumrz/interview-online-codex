@@ -7,6 +7,13 @@
     "dev": "rspack serve --config rspack.config.mjs",
     "build": "rspack build --config rspack.config.mjs",
     "typecheck": "tsc --noEmit",
+    "e2e:smoke": "node e2e-smoke.mjs",
+    "e2e:dashboard": "node e2e-dashboard-smoke.mjs",
+    "e2e:auth": "node e2e-auth-navigation.mjs",
+    "e2e:room": "node e2e-room-step-smoke.mjs",
+    "e2e:roles": "node e2e-interviewer-role-notes-lock.mjs",
+    "e2e:presence": "node e2e-participants-presence.mjs",
+    "e2e:all": "npm run e2e:smoke && npm run e2e:dashboard && npm run e2e:auth && npm run e2e:room && npm run e2e:roles && npm run e2e:presence",
     "e2e:dashboard-redesign": "node e2e-dashboard-redesign.mjs",
     "chaos:test": "node e2e-chaos-harness.mjs",
     "chaos:faults": "node e2e-chaos-fault-injection.mjs"

@@ -40,8 +40,14 @@ export const api = createApi({
       query: (body) => ({ url: "/rooms", method: "POST", body }),
       invalidatesTags: ["MyRooms"]
     }),
-    getRoom: builder.query<Room, { inviteCode: string }>({
-      query: ({ inviteCode }) => `/rooms/${inviteCode}`,
+    getRoom: builder.query<Room, { inviteCode: string; ownerToken?: string; interviewerToken?: string }>({
+      query: ({ inviteCode, ownerToken, interviewerToken }) => ({
+        url: `/rooms/${inviteCode}`,
+        headers: {
+          ...(ownerToken ? { "X-Room-Owner-Token": ownerToken } : {}),
+          ...(interviewerToken ? { "X-Room-Interviewer-Token": interviewerToken } : {})
+        }
+      }),
       providesTags: ["Room"]
     }),
     nextStep: builder.mutation<Room, { inviteCode: string; ownerToken: string }>({

@@ -52,6 +52,12 @@ class AuthService(
         return session.user ?: throw ApiException(HttpStatus.UNAUTHORIZED, "Сессия не найдена")
     }
 
+    fun resolveUserByToken(token: String?): User? {
+        if (token.isNullOrBlank()) return null
+        val session = userSessionRepository.findByToken(token) ?: return null
+        return session.user
+    }
+
     private fun createSession(user: User): AuthResponse {
         val token = "usr_${UUID.randomUUID()}"
         userSessionRepository.save(UserSession(user = user, token = token))

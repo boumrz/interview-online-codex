@@ -15,6 +15,7 @@ import {
 } from "@mantine/core";
 import { IconArrowRight, IconCode, IconDeviceLaptop, IconUsers } from "@tabler/icons-react";
 import { Link, useNavigate } from "react-router-dom";
+import { useAppSelector } from "../app/hooks";
 import { useCreateGuestRoomMutation } from "../services/api";
 
 const LANGUAGES = [
@@ -42,6 +43,7 @@ const darkFieldStyles = {
 
 export function LandingPage() {
   const navigate = useNavigate();
+  const authToken = useAppSelector((store) => store.auth.token);
   const [title, setTitle] = useState("Live-coding interview");
   const [displayName, setDisplayName] = useState("Interviewer");
   const [language, setLanguage] = useState("javascript");
@@ -99,7 +101,13 @@ export function LandingPage() {
               <Badge variant="outline" color="gray">
                 Minimal mode
               </Badge>
-              <Button component={Link} to="/login" size="xs" variant="light" color="gray">
+              <Button
+                component={Link}
+                to={authToken ? "/dashboard/rooms" : "/login"}
+                size="xs"
+                variant="light"
+                color="gray"
+              >
                 Личный кабинет
               </Button>
             </Group>

@@ -16,8 +16,8 @@ import {
   Title
 } from "@mantine/core";
 import { IconKey, IconUser } from "@tabler/icons-react";
-import { Link, useNavigate } from "react-router-dom";
-import { useAppDispatch } from "../app/hooks";
+import { Link, Navigate, useNavigate } from "react-router-dom";
+import { useAppDispatch, useAppSelector } from "../app/hooks";
 import { setAuth } from "../features/auth/authSlice";
 import { useLoginMutation, useRegisterMutation } from "../services/api";
 
@@ -33,6 +33,7 @@ const fieldStyles = {
 export function LoginPage() {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
+  const authToken = useAppSelector((store) => store.auth.token);
   const [mode, setMode] = useState<"login" | "register">("login");
   const [nickname, setNickname] = useState("");
   const [password, setPassword] = useState("");
@@ -40,6 +41,10 @@ export function LoginPage() {
   const [login, loginState] = useLoginMutation();
   const [register, registerState] = useRegisterMutation();
   const isLoading = loginState.isLoading || registerState.isLoading;
+
+  if (authToken) {
+    return <Navigate to="/dashboard/rooms" replace />;
+  }
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();

@@ -78,7 +78,7 @@ try {
   metrics.propagationMs = now() - t0;
 
   const candidateOwnerControlVisible = await candidateA
-    .getByRole("button", { name: "Следующий шаг" })
+    .getByRole("button", { name: /Запустить код|Запуск.../ })
     .isVisible()
     .catch(() => false);
   metrics.permissionCheck = candidateOwnerControlVisible ? "FAILED" : "PASSED";

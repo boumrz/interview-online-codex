@@ -13,7 +13,7 @@ try {
   await page.getByRole("button", { name: "Создать аккаунт" }).click();
   await page.waitForURL(/\/dashboard\/rooms/, { timeout: 15000 });
   await page.getByRole("button", { name: "Комнаты", exact: true }).waitFor();
-  await page.getByRole("button", { name: "Банк задач", exact: true }).click();
+  await page.getByRole("button", { name: "Задачи", exact: true }).click();
   await page.waitForURL(/\/dashboard\/tasks/, { timeout: 15000 });
   await page.getByText("Создать задачу", { exact: true }).waitFor();
   console.log("DASHBOARD_UI_OK");
