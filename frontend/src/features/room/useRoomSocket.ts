@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { WS_BASE_URL } from "../../config/runtime";
 
 type Participant = {
   sessionId: string;
@@ -66,8 +67,7 @@ export function useRoomSocket({ enabled = true, inviteCode, displayName, ownerTo
     params.set("displayNameEncoded", displayName);
     if (ownerToken) params.set("ownerToken", ownerToken);
     if (interviewerToken) params.set("interviewerToken", interviewerToken);
-    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(`${protocol}://localhost:8080/ws/rooms/${inviteCode}?${params.toString()}`);
+    const ws = new WebSocket(`${WS_BASE_URL}/rooms/${inviteCode}?${params.toString()}`);
     wsRef.current = ws;
 
     let hasWindowFocus = true;

@@ -1,0 +1,21 @@
+[Unit]
+Description=Interview Online Backend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=deploy
+Group=www-data
+WorkingDirectory=/opt/interview-online-codex/current/backend
+EnvironmentFile=/etc/interview-online/backend.env
+ExecStart=/usr/bin/java -Xms256m -Xmx1024m -jar /opt/interview-online-codex/current/backend/interview-online-backend.jar
+SuccessExitStatus=143
+Restart=always
+RestartSec=5
+TimeoutStartSec=60
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
+
