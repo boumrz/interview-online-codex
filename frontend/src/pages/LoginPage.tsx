@@ -41,6 +41,7 @@ export function LoginPage() {
   const [login, loginState] = useLoginMutation();
   const [register, registerState] = useRegisterMutation();
   const isLoading = loginState.isLoading || registerState.isLoading;
+  const feedbackText = error || " ";
 
   if (authToken) {
     return <Navigate to="/dashboard/rooms" replace />;
@@ -62,7 +63,14 @@ export function LoginPage() {
   return (
     <Box style={{ minHeight: "100vh", background: "#0f1115", display: "flex", alignItems: "center" }}>
       <Container size="xs" py={40}>
-        <Card withBorder radius="lg" padding="xl" bg="#11151c" c="gray.1" style={{ borderColor: "#272b34" }}>
+        <Card
+          withBorder
+          radius="lg"
+          padding="xl"
+          bg="#11151c"
+          c="gray.1"
+          style={{ borderColor: "#272b34", width: "100%", maxWidth: 460 }}
+        >
           <Stack>
             <Group justify="space-between">
               <Group>
@@ -84,7 +92,11 @@ export function LoginPage() {
 
             <SegmentedControl
               value={mode}
-              onChange={(value) => setMode(value as "login" | "register")}
+              onChange={(value) => {
+                setMode(value as "login" | "register");
+                setError("");
+              }}
+              fullWidth
               data={[
                 { label: "Вход", value: "login" },
                 { label: "Регистрация", value: "register" }
@@ -109,13 +121,26 @@ export function LoginPage() {
                   styles={fieldStyles}
                   required
                 />
-                <Button type="submit" loading={isLoading} style={{ background: "#f3f5f7", color: "#0f1115" }}>
+                <Button
+                  type="submit"
+                  loading={isLoading}
+                  fullWidth
+                  h={42}
+                  style={{ background: "#f3f5f7", color: "#0f1115" }}
+                >
                   {mode === "login" ? "Войти в кабинет" : "Создать аккаунт"}
                 </Button>
               </Stack>
             </form>
 
-            {error && <Text c="red.4">{error}</Text>}
+            <Text
+              c={error ? "red.4" : "transparent"}
+              size="sm"
+              aria-live="polite"
+              style={{ minHeight: 44, overflowWrap: "anywhere" }}
+            >
+              {feedbackText}
+            </Text>
 
             <Group justify="center">
               <Anchor component={Link} to="/" c="#c9d0db">

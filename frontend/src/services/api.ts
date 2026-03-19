@@ -11,8 +11,9 @@ import type {
   TaskTemplate
 } from "../types";
 import type { RootState } from "../app/store";
+import { API_BASE_URL } from "../config/runtime";
 
-const API_URL = "http://localhost:8080/api";
+const API_URL = API_BASE_URL;
 
 export const api = createApi({
   reducerPath: "api",

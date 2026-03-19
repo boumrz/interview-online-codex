@@ -1,0 +1,10 @@
+
+> interview-online-frontend@0.1.0 dev
+> rspack serve --config rspack.config.mjs
+
+Rspack compiled [1m[32msuccessfully[39m[22m in 302 ms
+Rspack compiled [1m[32msuccessfully[39m[22m in 44 ms
+Rspack compiled [1m[32msuccessfully[39m[22m in 43 ms
+Rspack compiled [1m[32msuccessfully[39m[22m in 41 ms
+Rspack compiled [1m[32msuccessfully[39m[22m in 41 ms
+Rspack compiled [1m[32msuccessfully[39m[22m in 41 ms
