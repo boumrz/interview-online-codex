@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-APP_ROOT="${APP_ROOT:-/opt/interview-online-codex}"
+APP_ROOT="${APP_ROOT:-/opt/interview-online}"
 REPO_DIR="${REPO_DIR:-${APP_ROOT}/repo}"
 RELEASES_DIR="${RELEASES_DIR:-${APP_ROOT}/releases}"
 CURRENT_LINK="${CURRENT_LINK:-${APP_ROOT}/current}"
