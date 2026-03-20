@@ -2,8 +2,10 @@ import { defineConfig } from "@rspack/cli";
 import rspack from "@rspack/core";
 import path from "node:path";
 
+const isBuildCommand = process.argv.includes("build");
+
 export default defineConfig({
-  mode: "development",
+  mode: isBuildCommand ? "production" : "development",
   entry: "./src/main.tsx",
   output: {
     path: path.resolve(process.cwd(), "dist"),

@@ -95,11 +95,11 @@ class RoomWebSocketHandler(
             }.getOrNull()
             !fallback.isNullOrBlank() -> fallback
             else -> null
-        } ?: "Participant"
+        } ?: "Участник"
 
         val decoded = runCatching { URLDecoder.decode(rawInput, StandardCharsets.UTF_8) }
             .getOrDefault(rawInput)
 
-        return decoded.trim().ifBlank { "Participant" }.take(64)
+        return decoded.trim().ifBlank { "Участник" }.take(64)
     }
 }

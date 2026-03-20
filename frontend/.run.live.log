@@ -44,3 +44,20 @@ Rspack compiled [1m[32msuccessfully[39m[22m in 64 ms
 Rspack compiled [1m[32msuccessfully[39m[22m in 42 ms
 Rspack compiled [1m[32msuccessfully[39m[22m in 42 ms
 Rspack compiled [1m[32msuccessfully[39m[22m in 47 ms
+[1m[31mERROR[39m[22m in [1m./src/pages/RoomPage.tsx[39m[22m [1m[32m182:1-63[39m[22m
+  [31m×[0m Module not found: Can't resolve '../features/room/useRoomSocket' in 'F:\FRONTEND\interview-online-codex\frontend\src\pages'
+     ╭─[182:0]
+ [2m180[0m │ import { useAppSelector } from "../app/hooks";
+ [2m181[0m │ import { useGetRoomQuery } from "../services/api";
+ [2m182[0m │ import { useRoomSocket } from "../features/room/useRoomSocket";
+     · [35;1m───────────────────────────────────────────────────────────────[0m
+ [2m183[0m │ import styles from "./RoomPage.module.css";
+ [2m184[0m │ var LANGUAGES = [
+     ╰────
+[0m
+
+Rspack compiled with [1m[31m1 error[39m[22m in 39 ms
+Rspack compiled [1m[32msuccessfully[39m[22m in 37 ms
+Rspack compiled [1m[32msuccessfully[39m[22m in 52 ms
+Rspack compiled [1m[32msuccessfully[39m[22m in 35 ms
+Rspack compiled [1m[32msuccessfully[39m[22m in 50 ms

@@ -38,6 +38,9 @@ type Options = {
   onError: (message: string) => void;
 };
 
+const RECONNECT_BASE_DELAY_MS = 500;
+const RECONNECT_MAX_DELAY_MS = 5000;
+
 function sessionIdKey(inviteCode: string) {
   return `room_ws_session_id_${inviteCode}`;
 }
@@ -55,6 +58,10 @@ function currentPresenceStatus(hasWindowFocus: boolean): "active" | "away" {
   return document.visibilityState === "visible" && hasWindowFocus ? "active" : "away";
 }
 
+function reconnectDelay(attempt: number): number {
+  return Math.min(RECONNECT_BASE_DELAY_MS * 2 ** attempt, RECONNECT_MAX_DELAY_MS);
+}
+
 export function useRoomSocket({
   enabled = true,
   inviteCode,
@@ -70,22 +77,28 @@ export function useRoomSocket({
   const sessionId = useMemo(() => getOrCreateSessionId(inviteCode), [inviteCode]);
 
   useEffect(() => {
-    if (!enabled) return;
-    const params = new URLSearchParams({
-      sessionId
-    });
-    params.set("displayNameEncoded", displayName);
-    if (authToken) params.set("authToken", authToken);
-    if (ownerToken) params.set("ownerToken", ownerToken);
-    if (interviewerToken) params.set("interviewerToken", interviewerToken);
-    const ws = new WebSocket(`${WS_BASE_URL}/rooms/${inviteCode}?${params.toString()}`);
-    wsRef.current = ws;
+    if (!enabled) {
+      setConnected(false);
+      return;
+    }
 
+    let reconnectAttempt = 0;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let hasWindowFocus = true;
+    let disposed = false;
+    let closedInCleanup = false;
+
+    const clearReconnectTimer = () => {
+      if (reconnectTimer !== null) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+    };
 
     const sendPresence = (status: "active" | "away") => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "presence_update", presenceStatus: status }));
+      const socket = wsRef.current;
+      if (socket?.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: "presence_update", presenceStatus: status }));
       }
     };
 
@@ -93,36 +106,86 @@ export function useRoomSocket({
       sendPresence(currentPresenceStatus(hasWindowFocus));
     };
 
+    const scheduleReconnect = (closeCode: number) => {
+      if (disposed) return;
+      const delay = reconnectDelay(reconnectAttempt);
+      reconnectAttempt += 1;
+      onError(`Соединение потеряно (код ${closeCode}). Идет переподключение...`);
+      clearReconnectTimer();
+      reconnectTimer = setTimeout(() => {
+        connect();
+      }, delay);
+    };
+
+    const connect = () => {
+      if (disposed) return;
+
+      const params = new URLSearchParams({
+        sessionId
+      });
+      params.set("displayNameEncoded", displayName);
+      if (authToken) params.set("authToken", authToken);
+      if (ownerToken) params.set("ownerToken", ownerToken);
+      if (interviewerToken) params.set("interviewerToken", interviewerToken);
+
+      const socket = new WebSocket(`${WS_BASE_URL}/rooms/${inviteCode}?${params.toString()}`);
+      wsRef.current = socket;
+      closedInCleanup = false;
+
+      socket.onopen = () => {
+        if (disposed) {
+          closedInCleanup = true;
+          socket.close(1000, "component_disposed");
+          return;
+        }
+        setConnected(true);
+        reconnectAttempt = 0;
+        onError("");
+        publishCurrentPresence();
+      };
+
+      socket.onclose = (event) => {
+        if (wsRef.current === socket) {
+          wsRef.current = null;
+        }
+        setConnected(false);
+        if (disposed || closedInCleanup || event.code === 1000) return;
+        scheduleReconnect(event.code);
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data) as WsMessage;
+          if (message.type === "state_sync") onState(message.payload as RealtimeState);
+          if (message.type === "error") onError((message.payload as { message: string }).message);
+        } catch {
+          onError("Ошибка чтения сообщения комнаты");
+        }
+      };
+    };
+
     const handleFocus = () => {
       hasWindowFocus = true;
       publishCurrentPresence();
     };
+
     const handleBlur = () => {
       hasWindowFocus = false;
       sendPresence("away");
     };
+
     const handleVisibilityChange = () => publishCurrentPresence();
+
     const handlePageHide = () => {
       sendPresence("away");
-      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-        ws.close(1000, "page_unload");
+      const socket = wsRef.current;
+      if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+        closedInCleanup = true;
+        socket.close(1000, "page_unload");
       }
     };
 
-    ws.onopen = () => {
-      setConnected(true);
-      publishCurrentPresence();
-    };
-    ws.onclose = () => setConnected(false);
-    ws.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data) as WsMessage;
-        if (message.type === "state_sync") onState(message.payload as RealtimeState);
-        if (message.type === "error") onError((message.payload as { message: string }).message);
-      } catch {
-        onError("Ошибка чтения сообщения комнаты");
-      }
-    };
+    connect();
 
     window.addEventListener("focus", handleFocus);
     window.addEventListener("blur", handleBlur);
@@ -136,9 +199,18 @@ export function useRoomSocket({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("pagehide", handlePageHide);
       window.removeEventListener("beforeunload", handlePageHide);
-      ws.close();
+
+      disposed = true;
+      clearReconnectTimer();
+
+      const socket = wsRef.current;
+      wsRef.current = null;
+      if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+        closedInCleanup = true;
+        socket.close(1000, "component_unmount");
+      }
     };
-  }, [authToken, displayName, enabled, inviteCode, interviewerToken, ownerToken, onError, onState, sessionId]);
+  }, [authToken, displayName, enabled, inviteCode, interviewerToken, onError, onState, ownerToken, sessionId]);
 
   const send = (payload: Record<string, unknown>) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
