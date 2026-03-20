@@ -117,8 +117,8 @@ export function RoomPage() {
       resolved = authNickname || stored || "Интервьюер";
       shouldAskName = false;
     } else if (interviewerToken) {
-      if (authToken && authNickname) {
-        resolved = authNickname;
+      if (authToken) {
+        resolved = authNickname || stored || "Interviewer";
         shouldAskName = false;
       } else {
         resolved = readStoredDisplayName(inviteCode, {
@@ -128,8 +128,8 @@ export function RoomPage() {
         shouldAskName = !resolved;
       }
     } else {
-      if (authToken && authNickname) {
-        resolved = authNickname;
+      if (authToken) {
+        resolved = authNickname || stored || "Participant";
         shouldAskName = false;
       } else {
         resolved = stored;
