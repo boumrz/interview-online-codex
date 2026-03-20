@@ -37,6 +37,28 @@ if [ "${SKIP_SUDO_CHECK}" != "true" ] && [ "$(id -u)" -ne 0 ]; then
   fi
 fi
 
+wait_for_url() {
+  local name="$1"
+  local url="$2"
+  local max_attempts="${3:-30}"
+  local sleep_seconds="${4:-2}"
+
+  local attempt
+  for attempt in $(seq 1 "${max_attempts}"); do
+    if curl -fsS "${url}" >/dev/null 2>&1; then
+      echo "   [ok] ${name} (${attempt}/${max_attempts})"
+      return 0
+    fi
+    echo "   [wait] ${name} is not ready yet (${attempt}/${max_attempts})"
+    sleep "${sleep_seconds}"
+  done
+
+  echo "Smoke check failed: ${name} is not reachable at ${url}"
+  echo "Hint: sudo systemctl status ${SERVICE_NAME} --no-pager -l"
+  echo "Hint: sudo journalctl -u ${SERVICE_NAME} -n 120 --no-pager"
+  return 1
+}
+
 timestamp="$(date +%Y%m%d%H%M%S)"
 release_dir="${RELEASES_DIR}/${timestamp}"
 
@@ -75,8 +97,8 @@ sudo systemctl restart "${SERVICE_NAME}"
 sudo systemctl reload nginx
 
 echo "==> Running smoke checks"
-curl -fsS "http://127.0.0.1:${BACKEND_HEALTH_PORT}/api/agent/environment/doctor" >/dev/null
-curl -fsS "https://${DOMAIN}/healthz" >/dev/null
-curl -fsS "https://${DOMAIN}/" >/dev/null
+wait_for_url "Backend health" "http://127.0.0.1:${BACKEND_HEALTH_PORT}/api/agent/environment/doctor" 45 2
+wait_for_url "Public healthz" "https://${DOMAIN}/healthz" 30 2
+wait_for_url "Public index" "https://${DOMAIN}/" 15 2
 
 echo "Deployment completed: ${release_dir}"
