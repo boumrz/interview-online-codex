@@ -19,6 +19,7 @@ data class WsIncomingMessage(
     val shiftKey: Boolean? = null,
     val metaKey: Boolean? = null,
     val yjsUpdate: String? = null,
+    val syncKey: String? = null,
     val presenceStatus: String? = null,
     val displayName: String? = null,
     val ownerToken: String? = null,

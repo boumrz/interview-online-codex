@@ -65,7 +65,7 @@ type Options = {
   interviewerToken?: string | null;
   onState: (state: RealtimeState) => void;
   onError: (message: string) => void;
-  onYjsUpdate?: (payload: { sessionId: string; yjsUpdate: string }) => void;
+  onYjsUpdate?: (payload: { sessionId: string; yjsUpdate: string; syncKey?: string | null }) => void;
 };
 
 type ClientMessage =
@@ -83,7 +83,7 @@ type ClientMessage =
       selectionEndLineNumber?: number | null;
       selectionEndColumn?: number | null;
     }
-  | { type: "yjs_update"; yjsUpdate: string }
+  | { type: "yjs_update"; yjsUpdate: string; syncKey?: string | null }
   | {
       type: "key_press";
       key: string;
@@ -97,7 +97,7 @@ type ClientMessage =
 const WS_RECONNECT_BASE_DELAY_MS = 500;
 const WS_RECONNECT_MAX_DELAY_MS = 5000;
 const WS_FAILS_BEFORE_SSE_FALLBACK = 2;
-const PRESENCE_HEARTBEAT_MS = 10_000;
+const PRESENCE_HEARTBEAT_MS = 1_000;
 const MAX_PENDING_MESSAGES = 300;
 
 function sessionIdKey(inviteCode: string) {
@@ -113,8 +113,12 @@ function getOrCreateSessionId(inviteCode: string) {
   return next;
 }
 
-function currentPresenceStatus(hasWindowFocus: boolean): "active" | "away" {
-  return document.visibilityState === "visible" && hasWindowFocus ? "active" : "away";
+function currentPresenceStatus(hasWindowFocusFallback: boolean): "active" | "away" {
+  const hasFocus = typeof document !== "undefined" && typeof document.hasFocus === "function"
+    ? document.hasFocus()
+    : hasWindowFocusFallback;
+  const visible = typeof document === "undefined" || document.visibilityState === "visible";
+  return visible && hasFocus ? "active" : "away";
 }
 
 function reconnectDelay(attempt: number): number {
@@ -213,11 +217,12 @@ export function useRoomSocket({
           return;
         }
         if (message.type === "yjs_update") {
-          const payload = message.payload as { sessionId?: string; yjsUpdate?: string };
+          const payload = message.payload as { sessionId?: string; yjsUpdate?: string; syncKey?: string | null };
           if (payload?.sessionId && payload?.yjsUpdate) {
             onYjsUpdate?.({
               sessionId: payload.sessionId,
-              yjsUpdate: payload.yjsUpdate
+              yjsUpdate: payload.yjsUpdate,
+              syncKey: payload.syncKey ?? null
             });
           }
           return;
@@ -500,8 +505,8 @@ export function useRoomSocket({
     });
   };
 
-  const sendYjsUpdate = (yjsUpdate: string) => {
-    send({ type: "yjs_update", yjsUpdate });
+  const sendYjsUpdate = (yjsUpdate: string, syncKey?: string | null) => {
+    send({ type: "yjs_update", yjsUpdate, syncKey: syncKey ?? null });
   };
 
   const sendKeyPress = (payload: {

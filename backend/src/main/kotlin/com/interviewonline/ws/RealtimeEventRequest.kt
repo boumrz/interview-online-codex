@@ -21,4 +21,5 @@ data class RealtimeEventRequest(
     val shiftKey: Boolean? = null,
     val metaKey: Boolean? = null,
     val yjsUpdate: String? = null,
+    val syncKey: String? = null,
 )
