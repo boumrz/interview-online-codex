@@ -128,8 +128,13 @@ export function RoomPage() {
         shouldAskName = !resolved;
       }
     } else {
-      resolved = stored;
-      shouldAskName = !resolved;
+      if (authToken && authNickname) {
+        resolved = authNickname;
+        shouldAskName = false;
+      } else {
+        resolved = stored;
+        shouldAskName = !resolved;
+      }
     }
 
     if (resolved) {
@@ -183,8 +188,7 @@ export function RoomPage() {
     setError(message);
   }, []);
 
-  const requiresNamePrompt = !authToken && !ownerToken;
-  const canConnect = !requiresNamePrompt || (!nameModalOpened && !!displayName.trim());
+  const canConnect = !nameModalOpened && !!displayName.trim();
   const { connected, sessionId, sendCodeUpdate, sendLanguageUpdate, sendSetStep, sendNotesUpdate } = useRoomSocket({
     enabled: canConnect,
     inviteCode,
