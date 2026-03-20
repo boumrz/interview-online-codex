@@ -37,6 +37,8 @@ export type RoomSummary = {
   language: string;
   accessRole: "owner" | "participant";
   createdAt: string;
+  ownerToken: string | null;
+  interviewerToken: string | null;
 };
 
 export type TaskTemplate = {

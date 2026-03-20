@@ -10,6 +10,7 @@ BRANCH="${BRANCH:-main}"
 DOMAIN="${DOMAIN:-interview.domiknote.ru}"
 SERVICE_NAME="${SERVICE_NAME:-interview-online-backend}"
 BACKEND_HEALTH_PORT="${BACKEND_HEALTH_PORT:-18080}"
+SKIP_SUDO_CHECK="${SKIP_SUDO_CHECK:-false}"
 
 if ! command -v mvn >/dev/null 2>&1; then
   echo "mvn is not installed."
@@ -24,6 +25,14 @@ fi
 if [ ! -d "${REPO_DIR}/.git" ]; then
   echo "Git repository is missing at ${REPO_DIR}"
   exit 1
+fi
+
+if [ "${SKIP_SUDO_CHECK}" != "true" ] && [ "$(id -u)" -ne 0 ]; then
+  if ! sudo -n true >/dev/null 2>&1; then
+    echo "sudo requires passwordless access for deploy automation."
+    echo "Configure /etc/sudoers.d/deploy-interview-online first."
+    exit 1
+  fi
 fi
 
 timestamp="$(date +%Y%m%d%H%M%S)"

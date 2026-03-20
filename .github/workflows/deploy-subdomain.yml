@@ -1,0 +1,63 @@
+name: Deploy Interview Subdomain
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch to deploy
+        required: true
+        default: main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: interview-online-subdomain-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ github.event_name != 'push' || !contains(github.event.head_commit.message, '[skip deploy]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_SSH_USER }}
+      DEPLOY_PORT: ${{ vars.DEPLOY_SSH_PORT != '' && vars.DEPLOY_SSH_PORT || '22' }}
+      APP_ROOT: ${{ vars.DEPLOY_APP_ROOT != '' && vars.DEPLOY_APP_ROOT || '/opt/interview-online-codex' }}
+      DOMAIN: ${{ vars.DEPLOY_DOMAIN != '' && vars.DEPLOY_DOMAIN || 'interview.domiknote.ru' }}
+      BRANCH_TO_DEPLOY: ${{ github.event_name == 'workflow_dispatch' && inputs.branch || 'main' }}
+
+    steps:
+      - name: Validate required secrets
+        run: |
+          set -euo pipefail
+          test -n "${DEPLOY_HOST}" || (echo "Missing secret DEPLOY_SSH_HOST" && exit 1)
+          test -n "${DEPLOY_USER}" || (echo "Missing secret DEPLOY_SSH_USER" && exit 1)
+
+      - name: Load SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+
+      - name: Add server to known_hosts
+        run: |
+          set -euo pipefail
+          mkdir -p "${HOME}/.ssh"
+          ssh-keyscan -p "${DEPLOY_PORT}" -H "${DEPLOY_HOST}" >> "${HOME}/.ssh/known_hosts"
+
+      - name: Run deploy on server
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=yes -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "env APP_ROOT='${APP_ROOT}' REPO_DIR='${APP_ROOT}/repo' RELEASES_DIR='${APP_ROOT}/releases' CURRENT_LINK='${APP_ROOT}/current' DOMAIN='${DOMAIN}' BRANCH='${BRANCH_TO_DEPLOY}' /bin/bash '${APP_ROOT}/repo/deploy/scripts/deploy_subdomain.sh'"
+
+      - name: Print deployed target
+        run: |
+          echo "Deploy finished."
+          echo "Server: ${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PORT}"
+          echo "Domain: https://${DOMAIN}"
+          echo "Branch: ${BRANCH_TO_DEPLOY}"

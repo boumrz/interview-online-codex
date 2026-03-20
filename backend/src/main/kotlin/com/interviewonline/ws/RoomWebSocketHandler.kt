@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.interviewonline.service.ApiException
+import com.interviewonline.service.AuthService
 import com.interviewonline.service.CollaborationService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
@@ -19,6 +20,7 @@ import java.util.UUID
 @Component
 class RoomWebSocketHandler(
     private val collaborationService: CollaborationService,
+    private val authService: AuthService,
     private val objectMapper: ObjectMapper,
 ) : TextWebSocketHandler() {
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -34,7 +36,9 @@ class RoomWebSocketHandler(
         )
         val ownerToken = query.getFirst("ownerToken")
         val interviewerToken = query.getFirst("interviewerToken")
-        collaborationService.joinRoom(inviteCode, session, sessionId, displayName, ownerToken, interviewerToken)
+        val authToken = query.getFirst("authToken")
+        val user = authService.resolveUserByToken(authToken)
+        collaborationService.joinRoom(inviteCode, session, sessionId, displayName, ownerToken, interviewerToken, user)
     }
 
     override fun handleTextMessage(session: WebSocketSession, message: TextMessage) {

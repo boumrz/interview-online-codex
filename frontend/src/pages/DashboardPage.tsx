@@ -56,7 +56,7 @@ import {
   useUpdateRoomMutation,
   useUpdateTaskTemplateMutation
 } from "../services/api";
-import type { TaskTemplate } from "../types";
+import type { RoomSummary, TaskTemplate } from "../types";
 
 type DashboardSection = "rooms" | "tasks" | "manage" | "agents";
 type RoomSaveStatus = "idle" | "saving" | "saved" | "error";
@@ -66,7 +66,7 @@ const BASE_DASHBOARD_SECTIONS: Array<{ value: DashboardSection; label: string }>
   { value: "rooms", label: "Комнаты" },
   { value: "tasks", label: "Задачи" },
   { value: "manage", label: "Управление комнатами" },
-  { value: "agents", label: "Agent Ops" }
+  { value: "agents", label: "Агент-операции" }
 ];
 
 const LANGUAGE_OPTIONS = [
@@ -123,10 +123,10 @@ export function DashboardPage() {
   const [editTaskLanguage, setEditTaskLanguage] = useState("javascript");
   const [agentIssueId, setAgentIssueId] = useState("");
   const [agentProvider, setAgentProvider] = useState<"temporal" | "langgraph">("temporal");
-  const [agentRole, setAgentRole] = useState("Team Lead");
+  const [agentRole, setAgentRole] = useState("Тимлид");
   const [agentRequiresApproval, setAgentRequiresApproval] = useState(true);
   const [agentCriteria, setAgentCriteria] = useState(
-    "Есть acceptance criteria\nЕсть reviewer verdict\nЕсть security verdict\nЕсть test verdict\nЕсть linked artifacts"
+    "Сформулированы критерии приемки\nЕсть итог ревью решения\nЕсть итог ревью безопасности\nЕсть итог ревью тестов\nЕсть связанные артефакты"
   );
   const [transitionComment, setTransitionComment] = useState("");
   const [selectedPolicyRunId, setSelectedPolicyRunId] = useState<string | null>(null);
@@ -221,6 +221,22 @@ export function DashboardPage() {
     return currentLanguageTasks.filter((task) => selected.has(task.id));
   }, [currentLanguageTasks, roomTaskIds]);
 
+  const allowedRoomTaskIds = useMemo(() => {
+    return new Set(currentLanguageTasks.map((task) => task.id));
+  }, [currentLanguageTasks]);
+
+  const hasUnavailableSelectedRoomTasks = useMemo(() => {
+    return roomTaskIds.some((taskId) => !allowedRoomTaskIds.has(taskId));
+  }, [allowedRoomTaskIds, roomTaskIds]);
+
+  const totalTasksCount = useMemo(() => {
+    return normalizedTaskGroups.reduce((acc, group) => acc + group.tasks.length, 0);
+  }, [normalizedTaskGroups]);
+
+  const activeLanguagesCount = useMemo(() => {
+    return normalizedTaskGroups.filter((group) => group.tasks.length > 0).length;
+  }, [normalizedTaskGroups]);
+
   useEffect(() => {
     const allowed = new Set(currentLanguageTasks.map((task) => task.id));
     setRoomTaskIds((prev) => prev.filter((id) => allowed.has(id)));
@@ -264,10 +280,14 @@ export function DashboardPage() {
     e.preventDefault();
     try {
       setError("");
+      const normalizedTaskIds = Array.from(new Set(roomTaskIds.filter((taskId) => allowedRoomTaskIds.has(taskId))));
+      if (normalizedTaskIds.length !== roomTaskIds.length) {
+        setRoomTaskIds(normalizedTaskIds);
+      }
       const room = await createRoom({
         title: roomTitle,
         language: roomLanguage,
-        taskIds: roomTaskIds
+        taskIds: normalizedTaskIds
       }).unwrap();
       const ownerName = auth.user?.nickname ?? "Интервьюер";
       localStorage.setItem(`owner_token_${room.inviteCode}`, room.ownerToken ?? "");
@@ -379,12 +399,30 @@ export function DashboardPage() {
     }
   };
 
+  const openRoomFromDashboard = (room: RoomSummary) => {
+    const ownerStorageKey = `owner_token_${room.inviteCode}`;
+    const ownerToken = room.ownerToken?.trim() ?? "";
+    const interviewerToken = room.interviewerToken?.trim() ?? "";
+
+    if (ownerToken) {
+      localStorage.setItem(ownerStorageKey, ownerToken);
+    } else {
+      localStorage.removeItem(ownerStorageKey);
+    }
+
+    const destination =
+      room.accessRole === "participant" && interviewerToken
+        ? `/room/${room.inviteCode}?interviewerToken=${encodeURIComponent(interviewerToken)}`
+        : `/room/${room.inviteCode}`;
+    navigate(destination);
+  };
+
   const onStartAgentRun = async (e: FormEvent) => {
     e.preventDefault();
     try {
       setError("");
       if (!issueIdLooksValid) {
-        setError("Укажите Linear issue в формате KEY-123");
+        setError("Укажите задачу Linear в формате KEY-123");
         return;
       }
       await startAgentRun({
@@ -399,7 +437,7 @@ export function DashboardPage() {
       }).unwrap();
       await refetchAgentRuns();
     } catch {
-      setError("Не удалось запустить agent workflow");
+      setError("Не удалось запустить агентный процесс");
     }
   };
 
@@ -416,7 +454,7 @@ export function DashboardPage() {
       await refetchAgentRuns();
       setSelectedPolicyRunId(runId);
     } catch {
-      setError("Не удалось выполнить transition run");
+      setError("Не удалось выполнить переход процесса");
     }
   };
 
@@ -427,7 +465,7 @@ export function DashboardPage() {
       await refetchAgentRuns();
       setSelectedPolicyRunId(runId);
     } catch {
-      setError("Не удалось запустить независимых reviewers");
+      setError("Не удалось запустить независимые ревью");
     }
   };
 
@@ -441,7 +479,7 @@ export function DashboardPage() {
         dropEveryNthMessage: Number(faultDropEvery) || 0
       }).unwrap();
     } catch {
-      setError("Не удалось применить realtime fault profile");
+      setError("Не удалось применить профиль сбоев realtime");
     }
   };
 
@@ -451,7 +489,7 @@ export function DashboardPage() {
       if (!faultInviteCode.trim()) return;
       await clearRealtimeFaults({ inviteCode: faultInviteCode.trim() }).unwrap();
     } catch {
-      setError("Не удалось очистить realtime fault profile");
+      setError("Не удалось очистить профиль сбоев realtime");
     }
   };
 
@@ -636,7 +674,7 @@ export function DashboardPage() {
                     </ThemeIcon>
                   </Group>
                   <Title order={2} mt={8}>
-                    {normalizedTaskGroups.reduce((acc, group) => acc + group.tasks.length, 0)}
+                    {totalTasksCount}
                   </Title>
                 </Card>
                 <Card withBorder bg="#11151c" c="gray.1" style={{ borderColor: "#272b34" }}>
@@ -647,7 +685,7 @@ export function DashboardPage() {
                     </ThemeIcon>
                   </Group>
                   <Title order={2} mt={8}>
-                    {normalizedTaskGroups.filter((group) => group.tasks.length > 0).length}
+                    {activeLanguagesCount}
                   </Title>
                 </Card>
               </SimpleGrid>
@@ -705,6 +743,12 @@ export function DashboardPage() {
                           searchable
                           styles={darkSelectStyles}
                         />
+                        {hasUnavailableSelectedRoomTasks && (
+                          <Text size="xs" c="yellow.4">
+                            Часть выбранных задач не соответствует текущему языку и будет удалена перед созданием
+                            комнаты.
+                          </Text>
+                        )}
                         <Stack gap="xs" data-testid="selected-task-preview">
                           <Text fw={600}>Выбранные задачи</Text>
                           {selectedRoomTasks.length === 0 ? (
@@ -724,7 +768,11 @@ export function DashboardPage() {
                             ))
                           )}
                         </Stack>
-                        <Button type="submit" loading={createRoomState.isLoading}>
+                        <Button
+                          type="submit"
+                          loading={createRoomState.isLoading}
+                          disabled={hasUnavailableSelectedRoomTasks}
+                        >
                           Создать и открыть
                         </Button>
                       </Stack>
@@ -877,7 +925,7 @@ export function DashboardPage() {
                         padding="sm"
                         bg="#121720"
                         style={{ borderColor: "#2a3039", cursor: "pointer" }}
-                        onClick={() => navigate(`/room/${room.inviteCode}`)}
+                        onClick={() => openRoomFromDashboard(room)}
                       >
                         <Stack gap="sm">
                           <Group justify="space-between">
@@ -956,13 +1004,13 @@ export function DashboardPage() {
                             <ThemeIcon color="gray" variant="light">
                               <IconRobot size={15} />
                             </ThemeIcon>
-                            <Title order={4}>Agent Workflow Launcher</Title>
+                            <Title order={4}>Запуск агентного процесса</Title>
                           </Group>
                           <Text size="sm" c="gray.4">
-                            Запуск orchestration run только внутри Linear issue.
+                            Запуск процесса оркестрации доступен только внутри задачи Linear.
                           </Text>
                           <TextInput
-                            label="Linear issue"
+                            label="Задача Linear"
                             placeholder="LDT-76"
                             value={agentIssueId}
                             onChange={(event) => setAgentIssueId(event.currentTarget.value)}
@@ -970,12 +1018,12 @@ export function DashboardPage() {
                             required
                           />
                           <Select
-                            label="Workflow provider"
+                            label="Провайдер процесса"
                             value={agentProvider}
                             onChange={(value) => setAgentProvider((value as "temporal" | "langgraph") ?? "temporal")}
                             data={[
-                              { value: "temporal", label: "Temporal (primary)" },
-                              { value: "langgraph", label: "LangGraph (prototype)" }
+                              { value: "temporal", label: "Temporal (основной)" },
+                              { value: "langgraph", label: "LangGraph (прототип)" }
                             ]}
                             styles={darkSelectStyles}
                           />
@@ -986,19 +1034,19 @@ export function DashboardPage() {
                             styles={darkFieldStyles}
                           />
                           <Switch
-                            label="Human approval обязателен для QA/Done"
+                            label="Ручное подтверждение обязательно для финальных этапов"
                             checked={agentRequiresApproval}
                             onChange={(event) => setAgentRequiresApproval(event.currentTarget.checked)}
                           />
                           <Textarea
-                            label="Acceptance criteria (по строкам)"
+                            label="Критерии приемки (по строкам)"
                             minRows={5}
                             value={agentCriteria}
                             onChange={(event) => setAgentCriteria(event.currentTarget.value)}
                             styles={darkFieldStyles}
                           />
                           <Button type="submit" loading={startAgentRunState.isLoading}>
-                            Стартовать run
+                            Запустить процесс
                           </Button>
                         </Stack>
                       </form>
@@ -1011,7 +1059,7 @@ export function DashboardPage() {
                             <ThemeIcon color="gray" variant="light">
                               <IconShieldCheck size={15} />
                             </ThemeIcon>
-                            <Title order={4}>Environment Doctor</Title>
+                            <Title order={4}>Проверка окружения</Title>
                           </Group>
                           <Button variant="light" size="xs" onClick={() => refetchEnvironmentDoctor()}>
                             Обновить
@@ -1027,7 +1075,7 @@ export function DashboardPage() {
                               : "red"
                           }
                         >
-                          Статус: {environmentDoctor?.status ?? "UNKNOWN"}
+                          Статус: {environmentDoctor?.status ?? "НЕИЗВЕСТНО"}
                         </Badge>
                         <Stack gap="xs">
                           {(environmentDoctor?.checks ?? []).map((check) => (
@@ -1070,14 +1118,14 @@ export function DashboardPage() {
                           <ThemeIcon color="gray" variant="light">
                             <IconBolt size={15} />
                           </ThemeIcon>
-                          <Title order={4}>Realtime Fault Injection</Title>
+                          <Title order={4}>Инъекции сбоев realtime</Title>
                         </Group>
                         <Text size="sm" c="gray.4">
-                          Для chaos/regression: искусственная задержка и периодический drop broadcast по комнате.
+                          Для тестов хаоса: искусственная задержка и периодический пропуск broadcast по комнате.
                         </Text>
                         <Group grow>
                           <TextInput
-                            label="Invite code"
+                            label="Код приглашения"
                             placeholder="r-xxxxxxxx"
                             value={faultInviteCode}
                             onChange={(event) => setFaultInviteCode(event.currentTarget.value)}
@@ -1085,13 +1133,13 @@ export function DashboardPage() {
                             required
                           />
                           <TextInput
-                            label="Latency (ms)"
+                            label="Задержка (мс)"
                             value={faultLatencyMs}
                             onChange={(event) => setFaultLatencyMs(event.currentTarget.value)}
                             styles={darkFieldStyles}
                           />
                           <TextInput
-                            label="Drop every Nth"
+                            label="Пропускать каждый N-й"
                             value={faultDropEvery}
                             onChange={(event) => setFaultDropEvery(event.currentTarget.value)}
                             styles={darkFieldStyles}
@@ -1118,13 +1166,13 @@ export function DashboardPage() {
                   <Card withBorder radius="lg" padding="lg" bg="#11151c" c="gray.1" style={{ borderColor: "#272b34" }}>
                     <Stack>
                       <Group justify="space-between">
-                        <Title order={4}>Runs по issue {issueIdLooksValid ? normalizedIssueId : "—"}</Title>
+                        <Title order={4}>Запуски по задаче {issueIdLooksValid ? normalizedIssueId : "—"}</Title>
                         <Button variant="light" size="xs" disabled={!issueIdLooksValid} onClick={() => refetchAgentRuns()}>
                           Обновить список
                         </Button>
                       </Group>
                       <TextInput
-                        label="Комментарий для handoff"
+                        label="Комментарий для передачи"
                         value={transitionComment}
                         onChange={(event) => setTransitionComment(event.currentTarget.value)}
                         styles={darkFieldStyles}
@@ -1142,14 +1190,14 @@ export function DashboardPage() {
                                     {run.currentState}
                                   </Badge>
                                   <Badge variant="outline" color="gray">
-                                    retry {run.retryCount}/{run.maxRetries}
+                                    повтор {run.retryCount}/{run.maxRetries}
                                   </Badge>
                                 </Group>
                                 <Text size="xs" c="gray.4">
-                                  trace: {run.traceId}
+                                  трасса: {run.traceId}
                                 </Text>
                               </Group>
-                              <Text size="sm">Role: {run.assignedRole || "—"}</Text>
+                              <Text size="sm">Роль: {run.assignedRole || "—"}</Text>
                               <Group gap="xs" wrap="wrap">
                                 {run.allowedTransitions.map((targetState) => (
                                   <Button
@@ -1168,7 +1216,7 @@ export function DashboardPage() {
                                   variant="outline"
                                   onClick={() => setSelectedPolicyRunId(run.id)}
                                 >
-                                  Проверить Gates
+                                  Проверить гейты
                                 </Button>
                                 <Button
                                   size="xs"
@@ -1177,7 +1225,7 @@ export function DashboardPage() {
                                   onClick={() => onExecuteReviewers(run.id)}
                                   loading={executeAllRunReviewersState.isLoading}
                                 >
-                                  Запустить Reviewers
+                                  Запустить ревьюеров
                                 </Button>
                               </Group>
                             </Stack>
@@ -1185,7 +1233,7 @@ export function DashboardPage() {
                         ))}
                         {issueIdLooksValid && agentRuns.length === 0 && (
                           <Text size="sm" c="gray.4">
-                            Для issue пока нет запущенных run.
+                            Для задачи пока нет запущенных процессов.
                           </Text>
                         )}
                       </Stack>
@@ -1194,9 +1242,9 @@ export function DashboardPage() {
                         <Card withBorder radius="md" padding="sm" bg="#121720" style={{ borderColor: "#2a3039" }}>
                           <Stack gap="xs">
                             <Group justify="space-between">
-                              <Text fw={700}>Policy result для {selectedPolicyRunId}</Text>
+                              <Text fw={700}>Результат гейтов для {selectedPolicyRunId}</Text>
                               <Badge color={selectedPolicyResult.passed ? "teal" : "red"} variant="light">
-                                {selectedPolicyResult.passed ? "PASSED" : "FAILED"}
+                                {selectedPolicyResult.passed ? "ПРОЙДЕНО" : "НЕ ПРОЙДЕНО"}
                               </Badge>
                             </Group>
                             {selectedPolicyResult.checks.map((check) => (

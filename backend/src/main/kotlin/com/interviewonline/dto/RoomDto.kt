@@ -43,6 +43,8 @@ data class RoomSummaryDto(
     val language: String,
     val accessRole: String,
     val createdAt: String,
+    val ownerToken: String?,
+    val interviewerToken: String?,
 )
 
 data class RunCodeRequest(
