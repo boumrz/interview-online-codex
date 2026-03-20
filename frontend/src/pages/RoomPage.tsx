@@ -118,7 +118,7 @@ export function RoomPage() {
       shouldAskName = false;
     } else if (interviewerToken) {
       if (authToken) {
-        resolved = authNickname || stored || "Interviewer";
+        resolved = authNickname || stored || "Интервьюер";
         shouldAskName = false;
       } else {
         resolved = readStoredDisplayName(inviteCode, {
@@ -129,7 +129,7 @@ export function RoomPage() {
       }
     } else {
       if (authToken) {
-        resolved = authNickname || stored || "Participant";
+        resolved = authNickname || stored || "Участник";
         shouldAskName = false;
       } else {
         resolved = stored;
@@ -188,7 +188,7 @@ export function RoomPage() {
     setError(message);
   }, []);
 
-  const fallbackDisplayName = authUser?.nickname?.trim() || (interviewerToken ? "Interviewer" : "Participant");
+  const fallbackDisplayName = authUser?.nickname?.trim() || (interviewerToken ? "Интервьюер" : "Участник");
   const effectiveDisplayName = displayName.trim() || fallbackDisplayName;
   const canConnect = Boolean(inviteCode);
   const { connected, sessionId, sendCodeUpdate, sendLanguageUpdate, sendSetStep, sendNotesUpdate } = useRoomSocket({
