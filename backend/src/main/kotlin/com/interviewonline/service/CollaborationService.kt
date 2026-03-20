@@ -7,12 +7,14 @@ import com.interviewonline.model.User
 import com.interviewonline.repository.RoomParticipantRepository
 import com.interviewonline.repository.RoomRepository
 import com.interviewonline.ws.ParticipantPayload
+import com.interviewonline.ws.RealtimeEventRequest
 import com.interviewonline.ws.RoomRealtimePayload
 import com.interviewonline.ws.WsOutgoingMessage
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import org.springframework.web.socket.TextMessage
 import org.springframework.web.socket.WebSocketSession
 import java.time.Instant
@@ -75,8 +77,12 @@ class CollaborationService(
     )
 
     private val roomSockets = ConcurrentHashMap<String, MutableSet<WebSocketSession>>()
+    private val roomSseConnections = ConcurrentHashMap<String, MutableSet<String>>()
+    private val wsConnections = ConcurrentHashMap<String, WebSocketSession>()
+    private val sseConnections = ConcurrentHashMap<String, SseEmitter>()
     private val participants = ConcurrentHashMap<String, ParticipantMeta>()
     private val roomState = ConcurrentHashMap<String, RealtimeState>()
+    private val connectionByRoomSession = ConcurrentHashMap<String, String>()
 
     fun bootstrapRoom(room: Room) {
         roomState[room.inviteCode] = toRealtimeState(room)
@@ -102,8 +108,11 @@ class CollaborationService(
         roomState.computeIfAbsent(inviteCode) {
             toRealtimeState(room)
         }
+
+        wsConnections[socket.id] = socket
         roomSockets.computeIfAbsent(inviteCode) { ConcurrentHashMap.newKeySet() }.add(socket)
         evictDuplicateSession(inviteCode, sessionId, socket.id)
+
         val role = resolveRole(room, ownerToken, interviewerToken, user)
         participants[socket.id] = ParticipantMeta(
             inviteCode = inviteCode,
@@ -112,17 +121,80 @@ class CollaborationService(
             role = role,
             presenceStatus = PresenceStatus.ACTIVE,
         )
+        connectionByRoomSession[roomSessionKey(inviteCode, sessionId)] = socket.id
         broadcastState(inviteCode)
     }
 
+    @Transactional
+    fun joinRoomSse(
+        inviteCode: String,
+        sessionId: String,
+        displayName: String,
+        ownerToken: String?,
+        interviewerToken: String?,
+        user: User?,
+    ): SseEmitter {
+        val room = roomRepository.findByInviteCode(inviteCode)
+            ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+        roomState.computeIfAbsent(inviteCode) {
+            toRealtimeState(room)
+        }
+
+        val connectionId = sseConnectionId(sessionId)
+        val emitter = SseEmitter(0L)
+        sseConnections[connectionId] = emitter
+        roomSseConnections.computeIfAbsent(inviteCode) { ConcurrentHashMap.newKeySet() }.add(connectionId)
+        evictDuplicateSession(inviteCode, sessionId, connectionId)
+
+        val role = resolveRole(room, ownerToken, interviewerToken, user)
+        participants[connectionId] = ParticipantMeta(
+            inviteCode = inviteCode,
+            sessionId = sessionId,
+            displayName = displayName,
+            role = role,
+            presenceStatus = PresenceStatus.ACTIVE,
+        )
+        connectionByRoomSession[roomSessionKey(inviteCode, sessionId)] = connectionId
+
+        emitter.onCompletion { leaveRoomConnection(connectionId) }
+        emitter.onTimeout { leaveRoomConnection(connectionId) }
+        emitter.onError { leaveRoomConnection(connectionId) }
+
+        broadcastState(inviteCode)
+        return emitter
+    }
+
     fun leaveRoom(socket: WebSocketSession) {
-        val participant = participants.remove(socket.id) ?: return
-        roomSockets[participant.inviteCode]?.remove(socket)
-        broadcastState(participant.inviteCode)
+        leaveRoomConnection(socket.id)
+    }
+
+    fun leaveRoomConnection(connectionId: String) {
+        val inviteCode = detachConnection(connectionId, closeTransport = false)
+        if (inviteCode != null) {
+            broadcastState(inviteCode)
+        }
+    }
+
+    @Transactional
+    fun handleRealtimeEvent(inviteCode: String, request: RealtimeEventRequest) {
+        val connectionId = requireConnectionId(inviteCode, request.sessionId)
+        when (request.type) {
+            "code_update" -> updateCode(connectionId, request.code.orEmpty())
+            "language_update" -> updateLanguage(connectionId, request.language.orEmpty())
+            "next_step" -> nextStep(connectionId)
+            "set_step" -> setStep(connectionId, request.stepIndex ?: -1)
+            "notes_update" -> updateNotes(connectionId, request.notes.orEmpty())
+            "presence_update" -> updatePresence(connectionId, request.presenceStatus)
+            else -> throw ApiException(HttpStatus.BAD_REQUEST, "Неизвестный тип сообщения: ${request.type}")
+        }
     }
 
     fun updateCode(socket: WebSocketSession, code: String) {
-        val participant = participants[socket.id] ?: return
+        updateCode(socket.id, code)
+    }
+
+    private fun updateCode(connectionId: String, code: String) {
+        val participant = participants[connectionId] ?: return
         markParticipantActive(participant)
         roomState[participant.inviteCode]?.code = code
         roomRepository.findByInviteCode(participant.inviteCode)?.let {
@@ -133,7 +205,11 @@ class CollaborationService(
     }
 
     fun updateLanguage(socket: WebSocketSession, language: String) {
-        val participant = participants[socket.id] ?: return
+        updateLanguage(socket.id, language)
+    }
+
+    private fun updateLanguage(connectionId: String, language: String) {
+        val participant = participants[connectionId] ?: return
         markParticipantActive(participant)
         if (!participant.canManageRoom) {
             throw ApiException(HttpStatus.FORBIDDEN, "Только интервьюер может менять язык")
@@ -147,7 +223,11 @@ class CollaborationService(
     }
 
     fun updateNotes(socket: WebSocketSession, notes: String) {
-        val participant = participants[socket.id] ?: return
+        updateNotes(socket.id, notes)
+    }
+
+    private fun updateNotes(connectionId: String, notes: String) {
+        val participant = participants[connectionId] ?: return
         markParticipantActive(participant)
         if (!participant.canManageRoom) {
             throw ApiException(HttpStatus.FORBIDDEN, "Только интервьюер может редактировать заметки")
@@ -167,7 +247,11 @@ class CollaborationService(
     }
 
     fun updatePresence(socket: WebSocketSession, presenceStatus: String?) {
-        val participant = participants[socket.id] ?: return
+        updatePresence(socket.id, presenceStatus)
+    }
+
+    private fun updatePresence(connectionId: String, presenceStatus: String?) {
+        val participant = participants[connectionId] ?: return
         val nextStatus = PresenceStatus.fromWire(presenceStatus)
         if (participant.presenceStatus == nextStatus) return
         participant.presenceStatus = nextStatus
@@ -176,7 +260,11 @@ class CollaborationService(
 
     @Transactional
     fun nextStep(socket: WebSocketSession) {
-        val participant = participants[socket.id] ?: return
+        nextStep(socket.id)
+    }
+
+    private fun nextStep(connectionId: String) {
+        val participant = participants[connectionId] ?: return
         markParticipantActive(participant)
         if (!participant.canManageRoom) {
             throw ApiException(HttpStatus.FORBIDDEN, "Только интервьюер может переключать шаги")
@@ -192,7 +280,11 @@ class CollaborationService(
 
     @Transactional
     fun setStep(socket: WebSocketSession, stepIndex: Int) {
-        val participant = participants[socket.id] ?: return
+        setStep(socket.id, stepIndex)
+    }
+
+    private fun setStep(connectionId: String, stepIndex: Int) {
+        val participant = participants[connectionId] ?: return
         markParticipantActive(participant)
         if (!participant.canManageRoom) {
             throw ApiException(HttpStatus.FORBIDDEN, "Только интервьюер может переключать шаги")
@@ -210,15 +302,16 @@ class CollaborationService(
 
     fun closeRoom(inviteCode: String) {
         roomState.remove(inviteCode)
-        roomSockets.remove(inviteCode)?.forEach { socket ->
-            try {
-                if (socket.isOpen) {
-                    socket.close()
-                }
-            } catch (_: Exception) {
-            }
+        val connectionIds = participants.entries
+            .asSequence()
+            .filter { it.value.inviteCode == inviteCode }
+            .map { it.key }
+            .toList()
+        connectionIds.forEach { connectionId ->
+            detachConnection(connectionId, closeTransport = true)
         }
-        participants.entries.removeIf { it.value.inviteCode == inviteCode }
+        roomSockets.remove(inviteCode)
+        roomSseConnections.remove(inviteCode)
     }
 
     private fun broadcastState(inviteCode: String) {
@@ -232,8 +325,6 @@ class CollaborationService(
         }
 
         val state = roomState[inviteCode] ?: return
-        val sockets = roomSockets[inviteCode]?.toList().orEmpty()
-        if (sockets.isEmpty()) return
         val participantsPayload = participants.values
             .asSequence()
             .filter { it.inviteCode == inviteCode }
@@ -241,23 +332,17 @@ class CollaborationService(
             .distinctBy { it.sessionId }
             .map { ParticipantPayload(it.sessionId, it.displayName, it.presenceStatus.wireValue) }
             .toList()
+
+        val sockets = roomSockets[inviteCode]?.toList().orEmpty()
         sockets.filterNotNull().forEach { socket ->
+            val connectionId = socket.id
+            val participant = participants[connectionId]
+            if (participant == null) {
+                detachConnection(connectionId, closeTransport = false)
+                return@forEach
+            }
             try {
-                val participant = participants[socket.id]
-                val payload = RoomRealtimePayload(
-                    inviteCode = inviteCode,
-                    language = state.language,
-                    code = state.code,
-                    currentStep = state.currentStep,
-                    notes = state.notes,
-                    participants = participantsPayload,
-                    isOwner = participant?.isOwner == true,
-                    role = participant?.role?.wireValue ?: RoomRole.CANDIDATE.wireValue,
-                    canManageRoom = participant?.canManageRoom == true,
-                    notesLockedBySessionId = state.notesLockedBySessionId,
-                    notesLockedByDisplayName = state.notesLockedByDisplayName,
-                    notesLockedUntilEpochMs = state.notesLockedUntilEpochMs,
-                )
+                val payload = buildPayload(inviteCode, state, participantsPayload, participant)
                 val message = WsOutgoingMessage(type = "state_sync", payload = payload)
                 if (socket.isOpen) {
                     synchronized(socket) {
@@ -267,11 +352,53 @@ class CollaborationService(
                     }
                 }
             } catch (ex: Exception) {
-                logger.warn("Failed to broadcast room state", ex)
-                roomSockets[inviteCode]?.remove(socket)
-                participants.remove(socket.id)
+                logger.warn("Failed to broadcast room state via websocket", ex)
+                detachConnection(connectionId, closeTransport = true)
             }
         }
+
+        val sseConnectionIds = roomSseConnections[inviteCode]?.toList().orEmpty()
+        sseConnectionIds.forEach { connectionId ->
+            val participant = participants[connectionId]
+            val emitter = sseConnections[connectionId]
+            if (participant == null || emitter == null) {
+                detachConnection(connectionId, closeTransport = false)
+                return@forEach
+            }
+            try {
+                val payload = buildPayload(inviteCode, state, participantsPayload, participant)
+                val message = WsOutgoingMessage(type = "state_sync", payload = payload)
+                emitter.send(
+                    SseEmitter.event()
+                        .data(objectMapper.writeValueAsString(message)),
+                )
+            } catch (ex: Exception) {
+                logger.warn("Failed to broadcast room state via sse", ex)
+                detachConnection(connectionId, closeTransport = true)
+            }
+        }
+    }
+
+    private fun buildPayload(
+        inviteCode: String,
+        state: RealtimeState,
+        participantsPayload: List<ParticipantPayload>,
+        participant: ParticipantMeta,
+    ): RoomRealtimePayload {
+        return RoomRealtimePayload(
+            inviteCode = inviteCode,
+            language = state.language,
+            code = state.code,
+            currentStep = state.currentStep,
+            notes = state.notes,
+            participants = participantsPayload,
+            isOwner = participant.isOwner,
+            role = participant.role.wireValue,
+            canManageRoom = participant.canManageRoom,
+            notesLockedBySessionId = state.notesLockedBySessionId,
+            notesLockedByDisplayName = state.notesLockedByDisplayName,
+            notesLockedUntilEpochMs = state.notesLockedUntilEpochMs,
+        )
     }
 
     private fun setStepInternal(inviteCode: String, room: Room, stepIndex: Int) {
@@ -297,32 +424,89 @@ class CollaborationService(
         }
     }
 
-    private fun evictDuplicateSession(inviteCode: String, sessionId: String, currentSocketId: String) {
-        val duplicateSocketIds = participants.entries
+    private fun evictDuplicateSession(inviteCode: String, sessionId: String, currentConnectionId: String) {
+        val duplicateConnectionIds = participants.entries
             .asSequence()
-            .filter { (socketId, participant) ->
-                socketId != currentSocketId &&
+            .filter { (connectionId, participant) ->
+                connectionId != currentConnectionId &&
                     participant.inviteCode == inviteCode &&
                     participant.sessionId == sessionId
             }
             .map { it.key }
             .toList()
 
-        if (duplicateSocketIds.isEmpty()) return
+        if (duplicateConnectionIds.isEmpty()) return
 
-        val socketsInRoom = roomSockets[inviteCode]
-        duplicateSocketIds.forEach { socketId ->
-            participants.remove(socketId)
-            val oldSocket = socketsInRoom?.firstOrNull { it.id == socketId }
-            if (oldSocket != null) {
-                socketsInRoom.remove(oldSocket)
+        duplicateConnectionIds.forEach { connectionId ->
+            detachConnection(connectionId, closeTransport = true)
+        }
+    }
+
+    private fun requireConnectionId(inviteCode: String, sessionId: String): String {
+        if (sessionId.isBlank()) {
+            throw ApiException(HttpStatus.BAD_REQUEST, "Отсутствует sessionId")
+        }
+
+        val key = roomSessionKey(inviteCode, sessionId)
+        val connectionId = connectionByRoomSession[key]
+            ?: throw ApiException(HttpStatus.FORBIDDEN, "Нет активного подключения для этой сессии")
+        val participant = participants[connectionId]
+        if (participant == null || participant.inviteCode != inviteCode || participant.sessionId != sessionId) {
+            connectionByRoomSession.remove(key, connectionId)
+            throw ApiException(HttpStatus.FORBIDDEN, "Нет активного подключения для этой сессии")
+        }
+        return connectionId
+    }
+
+    private fun detachConnection(connectionId: String, closeTransport: Boolean): String? {
+        val participant = participants.remove(connectionId)
+        val inviteCode = participant?.inviteCode
+
+        if (participant != null) {
+            connectionByRoomSession.remove(roomSessionKey(participant.inviteCode, participant.sessionId), connectionId)
+        }
+
+        wsConnections.remove(connectionId)?.let { socket ->
+            if (inviteCode != null) {
+                roomSockets[inviteCode]?.remove(socket)
+            } else {
+                roomSockets.values.forEach { it.remove(socket) }
+            }
+            if (closeTransport) {
                 runCatching {
-                    if (oldSocket.isOpen) {
-                        oldSocket.close()
+                    if (socket.isOpen) {
+                        socket.close()
                     }
                 }
             }
         }
+
+        sseConnections.remove(connectionId)?.let { emitter ->
+            if (inviteCode != null) {
+                roomSseConnections[inviteCode]?.remove(connectionId)
+            } else {
+                roomSseConnections.values.forEach { it.remove(connectionId) }
+            }
+            if (closeTransport) {
+                runCatching { emitter.complete() }
+            }
+        }
+
+        if (inviteCode != null) {
+            roomSseConnections[inviteCode]?.remove(connectionId)
+        } else {
+            roomSseConnections.values.forEach { it.remove(connectionId) }
+        }
+
+        return inviteCode
+    }
+
+    private fun roomSessionKey(inviteCode: String, sessionId: String): String {
+        return "$inviteCode::$sessionId"
+    }
+
+    private fun sseConnectionId(sessionId: String): String {
+        return "sse:$sessionId"
     }
 
     private fun resolveRole(room: Room, ownerToken: String?, interviewerToken: String?, user: User?): RoomRole {
