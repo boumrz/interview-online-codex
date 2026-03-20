@@ -29,6 +29,10 @@ type CursorInfo = {
   role: "owner" | "interviewer" | "candidate";
   lineNumber: number;
   column: number;
+  selectionStartLineNumber?: number | null;
+  selectionStartColumn?: number | null;
+  selectionEndLineNumber?: number | null;
+  selectionEndColumn?: number | null;
 };
 
 type CandidateKeyInfo = {
@@ -59,6 +63,7 @@ type RealtimeState = {
   notesLockedUntilEpochMs: number | null;
   cursors: CursorInfo[];
   lastCandidateKey: CandidateKeyInfo | null;
+  candidateKeyHistory: CandidateKeyInfo[];
 };
 
 type ResizeSide = "left" | "right";
@@ -227,7 +232,8 @@ export function RoomPage() {
       notesLockedByDisplayName: null,
       notesLockedUntilEpochMs: null,
       cursors: [],
-      lastCandidateKey: null
+      lastCandidateKey: null,
+      candidateKeyHistory: []
     };
   }, [room, state]);
 
@@ -248,7 +254,13 @@ export function RoomPage() {
     setState({
       ...incoming,
       participants,
-      lastCodeUpdatedBySessionId: incoming.lastCodeUpdatedBySessionId ?? null
+      lastCodeUpdatedBySessionId: incoming.lastCodeUpdatedBySessionId ?? null,
+      lastCandidateKey: incoming.lastCandidateKey ?? null,
+      candidateKeyHistory: Array.isArray(incoming.candidateKeyHistory)
+        ? incoming.candidateKeyHistory
+        : incoming.lastCandidateKey
+          ? [incoming.lastCandidateKey]
+          : []
     });
   }, []);
 
@@ -432,10 +444,11 @@ export function RoomPage() {
             sessionId={sessionId}
             cursors={merged.cursors}
             lastCandidateKey={merged.lastCandidateKey}
+            candidateKeyHistory={merged.candidateKeyHistory ?? []}
             onCodeChange={(value) => sendCodeUpdate(value ?? "")}
             onLanguageChange={(value) => value && sendLanguageUpdate(value)}
             onSelectStep={(stepIndex) => sendSetStep(stepIndex)}
-            onCursorChange={(lineNumber, column) => sendCursorUpdate(lineNumber, column)}
+            onCursorChange={(payload) => sendCursorUpdate(payload)}
             onYjsUpdate={(yjsUpdate) => sendYjsUpdate(yjsUpdate)}
             onYjsBridgeReady={onYjsBridgeReady}
             onKeyPress={(payload) => sendKeyPress(payload)}
@@ -454,7 +467,7 @@ export function RoomPage() {
             sessionId={sessionId}
             cursors={merged.cursors}
             onCodeChange={(value) => sendCodeUpdate(value ?? "")}
-            onCursorChange={(lineNumber, column) => sendCursorUpdate(lineNumber, column)}
+            onCursorChange={(payload) => sendCursorUpdate(payload)}
             onYjsUpdate={(yjsUpdate) => sendYjsUpdate(yjsUpdate)}
             onYjsBridgeReady={onYjsBridgeReady}
             onKeyPress={(payload) => sendKeyPress(payload)}
@@ -649,6 +662,7 @@ function OwnerLayout({
   sessionId,
   cursors,
   lastCandidateKey,
+  candidateKeyHistory,
   onCodeChange,
   onLanguageChange,
   onSelectStep,
@@ -669,10 +683,18 @@ function OwnerLayout({
   sessionId: string;
   cursors: CursorInfo[];
   lastCandidateKey: CandidateKeyInfo | null;
+  candidateKeyHistory: CandidateKeyInfo[];
   onCodeChange: (value: string | undefined) => void;
   onLanguageChange: (value: string | null) => void;
   onSelectStep: (stepIndex: number) => void;
-  onCursorChange: (lineNumber: number, column: number) => void;
+  onCursorChange: (payload: {
+    lineNumber: number;
+    column: number;
+    selectionStartLineNumber?: number | null;
+    selectionStartColumn?: number | null;
+    selectionEndLineNumber?: number | null;
+    selectionEndColumn?: number | null;
+  }) => void;
   onYjsUpdate: (yjsUpdate: string) => void;
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
   onKeyPress: (payload: { key: string; keyCode: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void;
@@ -760,6 +782,12 @@ function OwnerLayout({
     : candidateOutOfFocus
       ? "Кандидат вне окна/вкладки (возможен Alt+Tab)"
       : "Кандидат в фокусе";
+  const recentCandidateKeyHistory = [...(candidateKeyHistory ?? [])]
+    .sort((a, b) => b.timestampEpochMs - a.timestampEpochMs)
+    .slice(0, 12);
+  if (recentCandidateKeyHistory.length === 0 && lastCandidateKey) {
+    recentCandidateKeyHistory.push(lastCandidateKey);
+  }
 
   return (
     <Box className={styles.ownerBody} ref={ownerBodyRef}>
@@ -878,10 +906,17 @@ function OwnerLayout({
                 <Text size="xs" c={candidateOutOfFocus ? "#f5c26b" : "#8b919b"}>
                   {candidateFocusHint}
                 </Text>
-                {lastCandidateKey && (
-                  <Text size="xs" c="#7bb0ff">
-                    Клавиша кандидата: {formatCandidateKey(lastCandidateKey)}
-                  </Text>
+                {recentCandidateKeyHistory.length > 0 && (
+                  <>
+                    <Text size="xs" c="#7bb0ff" fw={600}>
+                      История клавиш кандидата
+                    </Text>
+                    {recentCandidateKeyHistory.map((event, index) => (
+                      <Text key={`${event.sessionId}-${event.timestampEpochMs}-${index}`} size="xs" c="#7bb0ff">
+                        {formatCandidateKeyHistoryEntry(event)}
+                      </Text>
+                    ))}
+                  </>
                 )}
                 <Textarea
                   value={notesDraft}
@@ -930,7 +965,14 @@ function CandidateLayout({
   sessionId: string;
   cursors: CursorInfo[];
   onCodeChange: (value: string | undefined) => void;
-  onCursorChange: (lineNumber: number, column: number) => void;
+  onCursorChange: (payload: {
+    lineNumber: number;
+    column: number;
+    selectionStartLineNumber?: number | null;
+    selectionStartColumn?: number | null;
+    selectionEndLineNumber?: number | null;
+    selectionEndColumn?: number | null;
+  }) => void;
   onYjsUpdate: (yjsUpdate: string) => void;
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
   onKeyPress: (payload: { key: string; keyCode: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void;
@@ -988,6 +1030,15 @@ function formatCandidateKey(event: CandidateKeyInfo): string {
   return [...modifiers, key].join("+");
 }
 
+function formatCandidateKeyHistoryEntry(event: CandidateKeyInfo): string {
+  const timestamp = new Date(event.timestampEpochMs).toLocaleTimeString("ru-RU", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+  return `${timestamp} · ${event.displayName}: ${formatCandidateKey(event)}`;
+}
+
 function hashSessionId(sessionId: string): number {
   let hash = 0;
   for (let i = 0; i < sessionId.length; i += 1) {
@@ -1000,6 +1051,8 @@ function colorThemeForSession(sessionId: string) {
   const hue = hashSessionId(sessionId) % 360;
   return {
     caret: `hsl(${hue} 88% 60%)`,
+    selection: `hsl(${hue} 88% 60% / 0.18)`,
+    selectionBorder: `hsl(${hue} 88% 60% / 0.45)`,
     labelBackground: `hsl(${hue} 70% 42%)`,
     labelText: "#f7f9fc"
   };
@@ -1007,6 +1060,10 @@ function colorThemeForSession(sessionId: string) {
 
 function cursorClassBySession(sessionId: string): string {
   return `remote-cursor-caret-${sessionId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+}
+
+function selectionClassBySession(sessionId: string): string {
+  return `remote-selection-${sessionId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
 }
 
 function RoomCodeEditor({
@@ -1029,7 +1086,14 @@ function RoomCodeEditor({
   sessionId: string;
   cursors: CursorInfo[];
   onChange: (value: string | undefined) => void;
-  onCursorChange: (lineNumber: number, column: number) => void;
+  onCursorChange: (payload: {
+    lineNumber: number;
+    column: number;
+    selectionStartLineNumber?: number | null;
+    selectionStartColumn?: number | null;
+    selectionEndLineNumber?: number | null;
+    selectionEndColumn?: number | null;
+  }) => void;
   onYjsUpdate: (yjsUpdate: string) => void;
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
   onKeyPress: (payload: { key: string; keyCode: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void;
@@ -1048,10 +1112,25 @@ function RoomCodeEditor({
     node: HTMLDivElement;
     setPosition: (lineNumber: number, column: number) => void;
   }>>(new Map());
-  const lastCursorSentRef = useRef<{ lineNumber: number; column: number; ts: number }>({ lineNumber: 0, column: 0, ts: 0 });
+  const lastCursorSentRef = useRef<{
+    lineNumber: number;
+    column: number;
+    selectionStartLineNumber: number | null;
+    selectionStartColumn: number | null;
+    selectionEndLineNumber: number | null;
+    selectionEndColumn: number | null;
+    ts: number;
+  }>({
+    lineNumber: 0,
+    column: 0,
+    selectionStartLineNumber: null,
+    selectionStartColumn: null,
+    selectionEndLineNumber: null,
+    selectionEndColumn: null,
+    ts: 0
+  });
   const syncKeyRef = useRef(syncKey);
   const lastLocalEditAtRef = useRef(0);
-  const lastYjsInboundAtRef = useRef(0);
 
   const schedulePersistCode = useCallback((nextCode: string) => {
     if (persistTimerRef.current) {
@@ -1142,13 +1221,16 @@ function RoomCodeEditor({
 
     const remoteCursors = cursors.filter((cursor) => cursor.sessionId !== sessionId);
     const caretCssRules: string[] = [];
-    const decorations = remoteCursors.map((cursor) => {
+    const selectionCssRules: string[] = [];
+    const decorations: any[] = [];
+    remoteCursors.forEach((cursor) => {
       const { lineNumber, column } = clampCursor(cursor.lineNumber, cursor.column);
       const label = cursor.displayName.trim().slice(0, 18) || "Участник";
       const theme = colorThemeForSession(cursor.sessionId);
       const widgetId = `remote-cursor-${cursor.sessionId}`;
       const widgetState = cursorWidgetsRef.current.get(widgetId) ?? createCursorWidget(widgetId, lineNumber, column);
       const caretClassName = cursorClassBySession(cursor.sessionId);
+      const selectionClassName = selectionClassBySession(cursor.sessionId);
 
       widgetState.node.textContent = label;
       widgetState.node.className = styles.remoteCursorLabel;
@@ -1157,6 +1239,9 @@ function RoomCodeEditor({
       widgetState.setPosition(lineNumber, column);
 
       caretCssRules.push(`.${caretClassName} { border-left-color: ${theme.caret} !important; }`);
+      selectionCssRules.push(
+        `.${selectionClassName} { background-color: ${theme.selection} !important; border: 1px solid ${theme.selectionBorder} !important; border-radius: 3px; }`
+      );
 
       if (!cursorWidgetsRef.current.has(widgetId)) {
         cursorWidgetsRef.current.set(widgetId, widgetState);
@@ -1165,13 +1250,43 @@ function RoomCodeEditor({
         editor.layoutContentWidget(widgetState.widget);
       }
 
-      return {
+      decorations.push({
         range: new monaco.Range(lineNumber, column, lineNumber, column),
         options: {
           afterContentClassName: `${styles.remoteCursorCaret} ${caretClassName}`,
           hoverMessage: { value: `${cursor.displayName} (${cursor.role})` }
         }
-      };
+      });
+
+      const hasSelection =
+        typeof cursor.selectionStartLineNumber === "number" &&
+        typeof cursor.selectionStartColumn === "number" &&
+        typeof cursor.selectionEndLineNumber === "number" &&
+        typeof cursor.selectionEndColumn === "number";
+      if (!hasSelection) return;
+
+      const start = clampCursor(cursor.selectionStartLineNumber as number, cursor.selectionStartColumn as number);
+      const end = clampCursor(cursor.selectionEndLineNumber as number, cursor.selectionEndColumn as number);
+      const isBackward = start.lineNumber > end.lineNumber || (start.lineNumber === end.lineNumber && start.column > end.column);
+      const selectionStart = isBackward ? end : start;
+      const selectionEnd = isBackward ? start : end;
+      const isCollapsed =
+        selectionStart.lineNumber === selectionEnd.lineNumber &&
+        selectionStart.column === selectionEnd.column;
+      if (isCollapsed) return;
+
+      decorations.push({
+        range: new monaco.Range(
+          selectionStart.lineNumber,
+          selectionStart.column,
+          selectionEnd.lineNumber,
+          selectionEnd.column
+        ),
+        options: {
+          className: `${styles.remoteSelectionHighlight} ${selectionClassName}`,
+          hoverMessage: { value: `${cursor.displayName} выделяет фрагмент` }
+        }
+      });
     });
 
     const activeWidgetIds = new Set(remoteCursors.map((cursor) => `remote-cursor-${cursor.sessionId}`));
@@ -1182,7 +1297,7 @@ function RoomCodeEditor({
     });
 
     if (styleElementRef.current) {
-      styleElementRef.current.textContent = caretCssRules.join("\n");
+      styleElementRef.current.textContent = [...caretCssRules, ...selectionCssRules].join("\n");
     }
 
     decorationsRef.current = editor.deltaDecorations(decorationsRef.current, decorations);
@@ -1202,7 +1317,6 @@ function RoomCodeEditor({
     // Do not override active collaborative typing with stale snapshots.
     const now = Date.now();
     if (!syncKeyChanged) {
-      if (now - lastYjsInboundAtRef.current < 1200) return;
       if (now - lastLocalEditAtRef.current < 300) return;
     }
 
@@ -1242,9 +1356,9 @@ function RoomCodeEditor({
         yDocRef.current = yDoc;
         yTextRef.current = yText;
 
-        const handleDocUpdate = (update: Uint8Array, origin: unknown) => {
+        const handleDocUpdate = (_update: Uint8Array, origin: unknown) => {
           if (origin === "remote" || origin === "bootstrap") return;
-          const encodedUpdate = bytesToBase64(update);
+          const encodedUpdate = bytesToBase64(Y.encodeStateAsUpdate(yDoc));
           onYjsUpdate(encodedUpdate);
           schedulePersistCode(yText.toString());
         };
@@ -1309,21 +1423,52 @@ function RoomCodeEditor({
           if (!activeDoc) return;
           const updateBytes = base64ToBytes(encodedYjsUpdate);
           if (updateBytes.length === 0) return;
-          lastYjsInboundAtRef.current = Date.now();
           Y.applyUpdate(activeDoc, updateBytes, "remote");
         });
 
         disposablesRef.current.push(
-          editor.onDidChangeCursorPosition((event: any) => {
-            const lineNumber = event.position?.lineNumber ?? 1;
-            const column = event.position?.column ?? 1;
+          editor.onDidChangeCursorSelection((event: any) => {
+            const selection = event.selection;
+            const lineNumber = event.position?.lineNumber ?? selection?.endLineNumber ?? 1;
+            const column = event.position?.column ?? selection?.endColumn ?? 1;
+            const hasSelection =
+              !!selection &&
+              typeof selection.isEmpty === "function" &&
+              !selection.isEmpty();
+            const selectionStartLineNumber = hasSelection ? selection.startLineNumber : null;
+            const selectionStartColumn = hasSelection ? selection.startColumn : null;
+            const selectionEndLineNumber = hasSelection ? selection.endLineNumber : null;
+            const selectionEndColumn = hasSelection ? selection.endColumn : null;
             const now = Date.now();
             const prev = lastCursorSentRef.current;
-            if (prev.lineNumber === lineNumber && prev.column === column && now - prev.ts < 40) {
+            if (
+              prev.lineNumber === lineNumber &&
+              prev.column === column &&
+              prev.selectionStartLineNumber === selectionStartLineNumber &&
+              prev.selectionStartColumn === selectionStartColumn &&
+              prev.selectionEndLineNumber === selectionEndLineNumber &&
+              prev.selectionEndColumn === selectionEndColumn &&
+              now - prev.ts < 40
+            ) {
               return;
             }
-            lastCursorSentRef.current = { lineNumber, column, ts: now };
-            onCursorChange(lineNumber, column);
+            lastCursorSentRef.current = {
+              lineNumber,
+              column,
+              selectionStartLineNumber,
+              selectionStartColumn,
+              selectionEndLineNumber,
+              selectionEndColumn,
+              ts: now
+            };
+            onCursorChange({
+              lineNumber,
+              column,
+              selectionStartLineNumber,
+              selectionStartColumn,
+              selectionEndLineNumber,
+              selectionEndColumn
+            });
           })
         );
 

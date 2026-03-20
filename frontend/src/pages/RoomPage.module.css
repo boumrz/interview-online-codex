@@ -245,6 +245,10 @@
   opacity: 0.95;
 }
 
+.remoteSelectionHighlight {
+  box-sizing: border-box;
+}
+
 .remoteCursorCaretOwner {
   border-left-color: #ffaa4d;
 }

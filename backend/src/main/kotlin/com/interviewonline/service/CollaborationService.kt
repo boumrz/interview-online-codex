@@ -31,7 +31,8 @@ class CollaborationService(
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val notesLockMillis = 3_000L
-    private val keyEventBroadcastThrottleMs = 100L
+    private val keyEventBroadcastThrottleMs = 20L
+    private val candidateKeyHistoryMaxSize = 30
 
     private enum class RoomRole(val wireValue: String) {
         OWNER("owner"),
@@ -80,12 +81,17 @@ class CollaborationService(
         var notesLockedUntilEpochMs: Long? = null,
         val cursorsBySessionId: MutableMap<String, CursorState> = ConcurrentHashMap(),
         var lastCandidateKey: CandidateKeyPayload? = null,
+        val candidateKeyHistory: MutableList<CandidateKeyPayload> = mutableListOf(),
         var lastCandidateKeyAtEpochMs: Long = 0L,
     )
 
     private data class CursorState(
         var lineNumber: Int,
         var column: Int,
+        var selectionStartLineNumber: Int? = null,
+        var selectionStartColumn: Int? = null,
+        var selectionEndLineNumber: Int? = null,
+        var selectionEndColumn: Int? = null,
     )
 
     private val roomSockets = ConcurrentHashMap<String, MutableSet<WebSocketSession>>()
@@ -197,7 +203,15 @@ class CollaborationService(
             "set_step" -> setStep(connectionId, request.stepIndex ?: -1)
             "notes_update" -> updateNotes(connectionId, request.notes.orEmpty())
             "presence_update" -> updatePresence(connectionId, request.presenceStatus)
-            "cursor_update" -> updateCursor(connectionId, request.lineNumber, request.column)
+            "cursor_update" -> updateCursor(
+                connectionId = connectionId,
+                lineNumber = request.lineNumber,
+                column = request.column,
+                selectionStartLineNumber = request.selectionStartLineNumber,
+                selectionStartColumn = request.selectionStartColumn,
+                selectionEndLineNumber = request.selectionEndLineNumber,
+                selectionEndColumn = request.selectionEndColumn,
+            )
             "yjs_update" -> relayYjsUpdate(connectionId, request.yjsUpdate.orEmpty())
             "key_press" -> trackKeyPress(
                 connectionId = connectionId,
@@ -303,24 +317,69 @@ class CollaborationService(
         broadcastState(participant.inviteCode)
     }
 
-    fun updateCursor(socket: WebSocketSession, lineNumber: Int?, column: Int?) {
-        updateCursor(socket.id, lineNumber, column)
+    fun updateCursor(
+        socket: WebSocketSession,
+        lineNumber: Int?,
+        column: Int?,
+        selectionStartLineNumber: Int? = null,
+        selectionStartColumn: Int? = null,
+        selectionEndLineNumber: Int? = null,
+        selectionEndColumn: Int? = null,
+    ) {
+        updateCursor(
+            connectionId = socket.id,
+            lineNumber = lineNumber,
+            column = column,
+            selectionStartLineNumber = selectionStartLineNumber,
+            selectionStartColumn = selectionStartColumn,
+            selectionEndLineNumber = selectionEndLineNumber,
+            selectionEndColumn = selectionEndColumn,
+        )
     }
 
-    private fun updateCursor(connectionId: String, lineNumber: Int?, column: Int?) {
+    private fun updateCursor(
+        connectionId: String,
+        lineNumber: Int?,
+        column: Int?,
+        selectionStartLineNumber: Int?,
+        selectionStartColumn: Int?,
+        selectionEndLineNumber: Int?,
+        selectionEndColumn: Int?,
+    ) {
         val participant = participants[connectionId] ?: return
         val nextLine = (lineNumber ?: 1).coerceAtLeast(1)
         val nextColumn = (column ?: 1).coerceAtLeast(1)
+        val hasCompleteSelection =
+            selectionStartLineNumber != null &&
+                selectionStartColumn != null &&
+                selectionEndLineNumber != null &&
+                selectionEndColumn != null
+        val nextSelectionStartLine = if (hasCompleteSelection) selectionStartLineNumber!!.coerceAtLeast(1) else null
+        val nextSelectionStartColumn = if (hasCompleteSelection) selectionStartColumn!!.coerceAtLeast(1) else null
+        val nextSelectionEndLine = if (hasCompleteSelection) selectionEndLineNumber!!.coerceAtLeast(1) else null
+        val nextSelectionEndColumn = if (hasCompleteSelection) selectionEndColumn!!.coerceAtLeast(1) else null
 
         val state = roomState[participant.inviteCode] ?: return
         val currentCursor = state.cursorsBySessionId[participant.sessionId]
-        if (currentCursor != null && currentCursor.lineNumber == nextLine && currentCursor.column == nextColumn) {
+        if (
+            currentCursor != null &&
+            currentCursor.lineNumber == nextLine &&
+            currentCursor.column == nextColumn &&
+            currentCursor.selectionStartLineNumber == nextSelectionStartLine &&
+            currentCursor.selectionStartColumn == nextSelectionStartColumn &&
+            currentCursor.selectionEndLineNumber == nextSelectionEndLine &&
+            currentCursor.selectionEndColumn == nextSelectionEndColumn
+        ) {
             return
         }
 
         state.cursorsBySessionId[participant.sessionId] = CursorState(
             lineNumber = nextLine,
             column = nextColumn,
+            selectionStartLineNumber = nextSelectionStartLine,
+            selectionStartColumn = nextSelectionStartColumn,
+            selectionEndLineNumber = nextSelectionEndLine,
+            selectionEndColumn = nextSelectionEndColumn,
         )
         markParticipantActive(participant)
         broadcastState(participant.inviteCode)
@@ -371,6 +430,15 @@ class CollaborationService(
             metaKey = metaKey,
             timestampEpochMs = now,
         )
+        state.lastCandidateKey?.let { event ->
+            state.candidateKeyHistory.add(event)
+            if (state.candidateKeyHistory.size > candidateKeyHistoryMaxSize) {
+                val overflow = state.candidateKeyHistory.size - candidateKeyHistoryMaxSize
+                repeat(overflow) {
+                    state.candidateKeyHistory.removeAt(0)
+                }
+            }
+        }
         state.lastCandidateKeyAtEpochMs = now
         markParticipantActive(participant)
         broadcastState(participant.inviteCode)
@@ -464,6 +532,10 @@ class CollaborationService(
                     role = role,
                     lineNumber = cursor.lineNumber,
                     column = cursor.column,
+                    selectionStartLineNumber = cursor.selectionStartLineNumber,
+                    selectionStartColumn = cursor.selectionStartColumn,
+                    selectionEndLineNumber = cursor.selectionEndLineNumber,
+                    selectionEndColumn = cursor.selectionEndColumn,
                 )
             }
             .toList()
@@ -604,6 +676,7 @@ class CollaborationService(
             notesLockedUntilEpochMs = state.notesLockedUntilEpochMs,
             cursors = cursorsPayload,
             lastCandidateKey = state.lastCandidateKey,
+            candidateKeyHistory = state.candidateKeyHistory.toList(),
         )
     }
 
@@ -623,6 +696,7 @@ class CollaborationService(
             notesLockedUntilEpochMs = currentState?.notesLockedUntilEpochMs,
             cursorsBySessionId = currentState?.cursorsBySessionId ?: ConcurrentHashMap(),
             lastCandidateKey = currentState?.lastCandidateKey,
+            candidateKeyHistory = currentState?.candidateKeyHistory?.toMutableList() ?: mutableListOf(),
             lastCandidateKeyAtEpochMs = currentState?.lastCandidateKeyAtEpochMs ?: 0L,
         )
         broadcastState(inviteCode)
@@ -677,8 +751,11 @@ class CollaborationService(
             roomState[participant.inviteCode]?.let { state ->
                 state.cursorsBySessionId.remove(participant.sessionId)
                 if (state.lastCandidateKey?.sessionId == participant.sessionId) {
-                    state.lastCandidateKey = null
-                    state.lastCandidateKeyAtEpochMs = 0L
+                    state.candidateKeyHistory.removeAll { it.sessionId == participant.sessionId }
+                    state.lastCandidateKey = state.candidateKeyHistory.lastOrNull()
+                    state.lastCandidateKeyAtEpochMs = state.lastCandidateKey?.timestampEpochMs ?: 0L
+                } else if (state.candidateKeyHistory.isNotEmpty()) {
+                    state.candidateKeyHistory.removeAll { it.sessionId == participant.sessionId }
                 }
             }
         }

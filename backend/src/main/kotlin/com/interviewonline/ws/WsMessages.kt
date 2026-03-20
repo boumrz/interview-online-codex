@@ -8,6 +8,10 @@ data class WsIncomingMessage(
     val notes: String? = null,
     val lineNumber: Int? = null,
     val column: Int? = null,
+    val selectionStartLineNumber: Int? = null,
+    val selectionStartColumn: Int? = null,
+    val selectionEndLineNumber: Int? = null,
+    val selectionEndColumn: Int? = null,
     val key: String? = null,
     val keyCode: String? = null,
     val ctrlKey: Boolean? = null,
@@ -41,6 +45,7 @@ data class RoomRealtimePayload(
     val notesLockedUntilEpochMs: Long? = null,
     val cursors: List<CursorPayload> = emptyList(),
     val lastCandidateKey: CandidateKeyPayload? = null,
+    val candidateKeyHistory: List<CandidateKeyPayload> = emptyList(),
 )
 
 data class ParticipantPayload(
@@ -56,6 +61,10 @@ data class CursorPayload(
     val role: String,
     val lineNumber: Int,
     val column: Int,
+    val selectionStartLineNumber: Int? = null,
+    val selectionStartColumn: Int? = null,
+    val selectionEndLineNumber: Int? = null,
+    val selectionEndColumn: Int? = null,
 )
 
 data class CandidateKeyPayload(
