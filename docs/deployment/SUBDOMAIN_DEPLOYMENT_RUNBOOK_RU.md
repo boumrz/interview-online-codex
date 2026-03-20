@@ -1,4 +1,4 @@
-# Ручной деплой Interview Online на поддомен (без GitHub Actions)
+# Деплой Interview Online на поддомен (ручной + GitHub Actions)
 
 ## Цель
 
@@ -178,6 +178,82 @@ ls -1 /opt/interview-online-codex/releases
 sudo -u deploy env APP_ROOT=/opt/interview-online-codex \
   /opt/interview-online-codex/repo/deploy/scripts/rollback_subdomain.sh <release-id>
 ```
+
+## 13. Автодеплой по `git push` через GitHub Actions
+
+Схема: `push в main` -> GitHub Actions workflow -> SSH на сервер -> запуск `deploy_subdomain.sh` -> перезапуск backend/nginx.
+
+### 13.1. Подготовить права deploy-пользователя (обязательно)
+
+`deploy_subdomain.sh` внутри себя вызывает `sudo systemctl ...`, поэтому для CI нужен парольless sudo.
+
+```bash
+sudo cp /opt/interview-online-codex/repo/deploy/env/sudoers-deploy-interview-online.example /etc/sudoers.d/deploy-interview-online
+sudo chmod 440 /etc/sudoers.d/deploy-interview-online
+sudo visudo -cf /etc/sudoers.d/deploy-interview-online
+```
+
+### 13.2. Добавить CI SSH ключ на сервер
+
+Сгенерируйте отдельный deploy-ключ (без passphrase) и добавьте публичную часть в:
+
+```bash
+/home/deploy/.ssh/authorized_keys
+```
+
+Права:
+
+```bash
+sudo chown -R deploy:deploy /home/deploy/.ssh
+sudo chmod 700 /home/deploy/.ssh
+sudo chmod 600 /home/deploy/.ssh/authorized_keys
+```
+
+### 13.3. Настроить GitHub Secrets и Variables
+
+В репозитории GitHub: **Settings -> Secrets and variables -> Actions**.
+
+Secrets:
+
+- `DEPLOY_SSH_HOST` — IP или домен сервера
+- `DEPLOY_SSH_USER` — обычно `deploy`
+- `DEPLOY_SSH_PRIVATE_KEY` — приватный ключ для SSH
+
+Variables:
+
+- `DEPLOY_SSH_PORT` — обычно `22`
+- `DEPLOY_APP_ROOT` — например `/opt/interview-online-codex` (или `/opt/interview-online`, если у вас так)
+- `DEPLOY_DOMAIN` — `interview.domiknote.ru`
+
+### 13.4. Workflow уже добавлен в репозиторий
+
+Файл:
+
+- `.github/workflows/deploy-subdomain.yml`
+
+Триггеры:
+
+- автоматически на `push` в `main`
+- вручную через `workflow_dispatch` (можно указать branch)
+
+### 13.5. Проверка автодеплоя
+
+1. Сделайте push в `main`.
+2. Откройте **GitHub -> Actions -> Deploy Interview Subdomain**.
+3. На сервере проверьте:
+
+```bash
+ls -lt /opt/interview-online-codex/releases | head
+systemctl status interview-online-backend --no-pager
+journalctl -u interview-online-backend -n 100 --no-pager
+curl -fsS https://interview.domiknote.ru/healthz | head
+```
+
+### 13.6. Ручной запуск из Actions (если нужно)
+
+Вкладка **Actions** -> workflow **Deploy Interview Subdomain** -> **Run workflow**.
+
+Это удобно для повторного выката без нового коммита.
 
 ## Почему это не затронет существующий проект
 

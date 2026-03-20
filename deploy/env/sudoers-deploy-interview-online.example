@@ -1,0 +1,6 @@
+# Install as:
+#   sudo cp /opt/interview-online-codex/repo/deploy/env/sudoers-deploy-interview-online.example /etc/sudoers.d/deploy-interview-online
+#   sudo chmod 440 /etc/sudoers.d/deploy-interview-online
+#   sudo visudo -cf /etc/sudoers.d/deploy-interview-online
+
+deploy ALL=(root) NOPASSWD: /usr/bin/systemctl daemon-reload, /usr/bin/systemctl restart interview-online-backend, /usr/bin/systemctl reload nginx

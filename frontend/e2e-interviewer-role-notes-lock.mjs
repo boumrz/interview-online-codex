@@ -37,7 +37,12 @@ try {
   }
 
   const ownerContext = await browser.newContext();
-  await ownerContext.addInitScript(({ inviteCode, ownerToken }) => {
+  const interviewerContext = await browser.newContext();
+
+  const ownerPage = await ownerContext.newPage();
+  const interviewerPage = await interviewerContext.newPage();
+  await ownerPage.goto(webBaseUrl, { waitUntil: "domcontentloaded" });
+  await ownerPage.evaluate(({ inviteCode, ownerToken }) => {
     localStorage.setItem(`owner_token_${inviteCode}`, ownerToken);
     localStorage.setItem("display_name", "Host QA");
     localStorage.setItem(`guest_display_name_${inviteCode}`, "Host QA");
@@ -45,11 +50,6 @@ try {
     inviteCode: room.inviteCode,
     ownerToken: room.ownerToken
   });
-
-  const interviewerContext = await browser.newContext();
-
-  const ownerPage = await ownerContext.newPage();
-  const interviewerPage = await interviewerContext.newPage();
 
   await ownerPage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "networkidle" });
   await ownerPage.locator(".monaco-editor").waitFor({ timeout: 15000 });

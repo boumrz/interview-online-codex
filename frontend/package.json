@@ -12,6 +12,7 @@
     "e2e:auth": "node e2e-auth-navigation.mjs",
     "e2e:room": "node e2e-room-step-smoke.mjs",
     "e2e:roles": "node e2e-interviewer-role-notes-lock.mjs",
+    "e2e:account-binding": "node e2e-account-room-binding.mjs",
     "e2e:presence": "node e2e-participants-presence.mjs",
     "e2e:all": "npm run e2e:smoke && npm run e2e:dashboard && npm run e2e:auth && npm run e2e:room && npm run e2e:roles && npm run e2e:presence",
     "e2e:dashboard-redesign": "node e2e-dashboard-redesign.mjs",

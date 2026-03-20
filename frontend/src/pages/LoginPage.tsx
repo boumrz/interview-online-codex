@@ -1,4 +1,4 @@
-import React, { FormEvent, useState } from "react";
+import React, { FormEvent, useMemo, useState } from "react";
 import {
   Anchor,
   Badge,
@@ -16,7 +16,7 @@ import {
   Title
 } from "@mantine/core";
 import { IconKey, IconUser } from "@tabler/icons-react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../app/hooks";
 import { setAuth } from "../features/auth/authSlice";
 import { useLoginMutation, useRegisterMutation } from "../services/api";
@@ -31,6 +31,7 @@ const fieldStyles = {
 };
 
 export function LoginPage() {
+  const location = useLocation();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const authToken = useAppSelector((store) => store.auth.token);
@@ -42,9 +43,16 @@ export function LoginPage() {
   const [register, registerState] = useRegisterMutation();
   const isLoading = loginState.isLoading || registerState.isLoading;
   const feedbackText = error || " ";
+  const nextPath = useMemo(() => {
+    const requested = new URLSearchParams(location.search).get("next")?.trim() ?? "";
+    if (!requested.startsWith("/") || requested.startsWith("//")) {
+      return "/dashboard/rooms";
+    }
+    return requested;
+  }, [location.search]);
 
   if (authToken) {
-    return <Navigate to="/dashboard/rooms" replace />;
+    return <Navigate to={nextPath} replace />;
   }
 
   const onSubmit = async (e: FormEvent) => {
@@ -54,7 +62,7 @@ export function LoginPage() {
       const fn = mode === "login" ? login : register;
       const auth = await fn({ nickname, password }).unwrap();
       dispatch(setAuth(auth));
-      navigate("/dashboard/rooms");
+      navigate(nextPath, { replace: true });
     } catch {
       setError("Не удалось выполнить вход. Проверьте ник и пароль.");
     }

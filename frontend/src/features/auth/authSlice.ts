@@ -29,6 +29,19 @@ const authSlice = createSlice({
       state.user = null;
       localStorage.removeItem("auth_token");
       localStorage.removeItem("auth_user");
+      const scopedPrefixes = [
+        "owner_token_",
+        "interviewer_token_",
+        "guest_display_name_",
+        "guest_interviewer_display_name_"
+      ];
+      for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+        const key = localStorage.key(index);
+        if (!key) continue;
+        if (scopedPrefixes.some((prefix) => key.startsWith(prefix))) {
+          localStorage.removeItem(key);
+        }
+      }
     }
   }
 });

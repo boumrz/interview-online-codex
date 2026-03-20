@@ -83,12 +83,29 @@ class RoomService(
     fun getByInviteCode(inviteCode: String, ownerToken: String?, interviewerToken: String?, user: User?): RoomResponse {
         val room = roomRepository.findByInviteCode(inviteCode)
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
-        val hasInterviewerAccess = !interviewerToken.isNullOrBlank() && room.interviewerSessionToken == interviewerToken
-        if (hasInterviewerAccess && user != null) {
-            ensureParticipant(room, user)
+        if (room.ownerUser != null) {
+            val hasValidInterviewerToken =
+                !interviewerToken.isNullOrBlank() && room.interviewerSessionToken == interviewerToken
+            var hasInterviewerAccess = user?.let { isParticipant(room, it) } ?: false
+            val isOwnerUser = user?.id != null && room.ownerUser?.id == user.id
+            val canClaimInterviewerAccess =
+                user != null &&
+                    hasValidInterviewerToken &&
+                    !hasInterviewerAccess &&
+                    !isOwnerUser
+
+            if (canClaimInterviewerAccess) {
+                ensureParticipant(room, user!!)
+                hasInterviewerAccess = true
+            }
+
+            val hasGuestInterviewerAccess = user == null && hasValidInterviewerToken
+            val includeInterviewerToken = isOwnerUser || hasInterviewerAccess || hasGuestInterviewerAccess
+            return toRoomResponse(room, includeOwnerToken = false, includeInterviewerToken = includeInterviewerToken)
         }
-        val includeInterviewerToken =
-            room.ownerSessionToken == ownerToken || room.interviewerSessionToken == interviewerToken
+
+        val hasInterviewerAccess = !interviewerToken.isNullOrBlank() && room.interviewerSessionToken == interviewerToken
+        val includeInterviewerToken = room.ownerSessionToken == ownerToken || hasInterviewerAccess
         return toRoomResponse(room, includeOwnerToken = false, includeInterviewerToken = includeInterviewerToken)
     }
 
@@ -142,6 +159,8 @@ class RoomService(
                     language = room.language,
                     accessRole = accessRole,
                     createdAt = DateTimeFormatter.ISO_INSTANT.format(room.createdAt),
+                    ownerToken = if (accessRole == "owner") room.ownerSessionToken else null,
+                    interviewerToken = room.interviewerSessionToken,
                 )
             }
     }
@@ -163,6 +182,8 @@ class RoomService(
             language = saved.language,
             accessRole = "owner",
             createdAt = DateTimeFormatter.ISO_INSTANT.format(saved.createdAt),
+            ownerToken = saved.ownerSessionToken,
+            interviewerToken = saved.interviewerSessionToken,
         )
     }
 
@@ -218,5 +239,11 @@ class RoomService(
                 role = "interviewer",
             ),
         )
+    }
+
+    private fun isParticipant(room: Room, user: User): Boolean {
+        val roomId = room.id ?: return false
+        val userId = user.id ?: return false
+        return roomParticipantRepository.findByRoomIdAndUserId(roomId, userId) != null
     }
 }

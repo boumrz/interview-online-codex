@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Editor from "@monaco-editor/react";
 import { ActionIcon, Badge, Box, Button, Group, Menu, Modal, Select, Stack, Text, TextInput, Textarea, ThemeIcon } from "@mantine/core";
 import { IconChevronLeft, IconChevronRight, IconCode, IconGripVertical, IconHome2, IconLayoutDashboard, IconMenu2, IconUsers } from "@tabler/icons-react";
-import { Link, useLocation, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAppSelector } from "../app/hooks";
 import { useGetRoomQuery } from "../services/api";
 import { useRoomSocket } from "../features/room/useRoomSocket";
@@ -65,6 +65,7 @@ function readStoredDisplayName(
 export function RoomPage() {
   const { inviteCode = "" } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const auth = useAppSelector((store) => store.auth);
   const authToken = auth.token;
   const authUser = auth.user;
@@ -93,7 +94,7 @@ export function RoomPage() {
   const [draftName, setDraftName] = useState(() => initialStoredName);
   const [nameModalOpened, setNameModalOpened] = useState(() => {
     if (ownerToken) return false;
-    if (interviewerToken) return !authToken;
+    if (interviewerToken) return !authToken && !initialStoredName;
     return !initialStoredName;
   });
   const [notesDraft, setNotesDraft] = useState("");
@@ -124,7 +125,7 @@ export function RoomPage() {
           role: "interviewer-guest",
           includeGlobalFallback: false
         });
-        shouldAskName = true;
+        shouldAskName = !resolved;
       }
     } else {
       resolved = stored;
@@ -182,11 +183,12 @@ export function RoomPage() {
     setError(message);
   }, []);
 
-  const requiresNamePrompt = !ownerToken && !(!!interviewerToken && !!authToken);
+  const requiresNamePrompt = !authToken && !ownerToken;
   const canConnect = !requiresNamePrompt || (!nameModalOpened && !!displayName.trim());
   const { connected, sessionId, sendCodeUpdate, sendLanguageUpdate, sendSetStep, sendNotesUpdate } = useRoomSocket({
     enabled: canConnect,
     inviteCode,
+    authToken,
     displayName: displayName || "Участник",
     ownerToken,
     interviewerToken,
@@ -239,6 +241,11 @@ export function RoomPage() {
     setNameModalOpened(false);
   };
 
+  const goToLoginAndReturn = () => {
+    const next = `${location.pathname}${location.search}`;
+    navigate(`/login?next=${encodeURIComponent(next)}`);
+  };
+
   const candidateInviteLink = useMemo(() => {
     if (!inviteCode) return "";
     return `${window.location.origin}/room/${inviteCode}`;
@@ -287,6 +294,11 @@ export function RoomPage() {
           <Text size="sm" c="dimmed">
             Это имя увидит собеседующий в списке участников.
           </Text>
+          {interviewerToken && !authToken && (
+            <Text size="sm" c="yellow.3">
+              По ссылке интервьюера можно войти по имени без аккаунта. Авторизация по желанию.
+            </Text>
+          )}
           <TextInput
             label="Ваше имя"
             placeholder="Например, Иван"
@@ -295,6 +307,11 @@ export function RoomPage() {
             autoFocus
           />
           <Button onClick={submitCandidateName}>Войти в комнату</Button>
+          {!authToken && (
+            <Button variant="outline" color="gray" onClick={goToLoginAndReturn}>
+              Войти через аккаунт (по желанию)
+            </Button>
+          )}
         </Stack>
       </Modal>
 
@@ -660,7 +677,7 @@ function OwnerLayout({
             <Text className={styles.stepMeta}>{stepDescription}</Text>
 
             <Select
-              label="Language"
+              label="Язык"
               data={LANGUAGES}
               value={merged.language}
               onChange={onLanguageChange}
@@ -673,7 +690,12 @@ function OwnerLayout({
             />
           </Box>
 
-          <div className={styles.resizeHandle} role="separator" aria-label="Resize left sidebar" onMouseDown={startDrag("left")}>
+          <div
+            className={styles.resizeHandle}
+            role="separator"
+            aria-label="Изменить ширину левой панели"
+            onMouseDown={startDrag("left")}
+          >
             <IconGripVertical size={14} />
           </div>
         </>
@@ -702,12 +724,17 @@ function OwnerLayout({
 
         {rightSidebarVisible && (
           <>
-            <div className={styles.resizeHandle} role="separator" aria-label="Resize right sidebar" onMouseDown={startDrag("right")}>
+            <div
+              className={styles.resizeHandle}
+              role="separator"
+              aria-label="Изменить ширину правой панели"
+              onMouseDown={startDrag("right")}
+            >
               <IconGripVertical size={14} />
             </div>
 
             <Box className={styles.outputPanel} style={{ width: rightWidth }}>
-              <Box className={styles.notesHeader}>Notes</Box>
+              <Box className={styles.notesHeader}>Заметки</Box>
               <Stack gap="xs" className={styles.notesStack}>
                 <Text size="xs" c={notesLockedByOther ? "#f78989" : notesStatus === "Сохраняем..." ? "#f5c26b" : "#8b919b"}>
                   {notesStatus}
@@ -766,7 +793,7 @@ function CandidateLayout({
             </Text>
           </Group>
           <Badge variant="light" color="gray">
-            collaborative mode
+            Совместный режим
           </Badge>
         </Group>
       </Box>

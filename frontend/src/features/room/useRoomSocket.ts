@@ -31,6 +31,7 @@ type Options = {
   enabled?: boolean;
   inviteCode: string;
   displayName: string;
+  authToken?: string | null;
   ownerToken?: string | null;
   interviewerToken?: string | null;
   onState: (state: RealtimeState) => void;
@@ -54,7 +55,16 @@ function currentPresenceStatus(hasWindowFocus: boolean): "active" | "away" {
   return document.visibilityState === "visible" && hasWindowFocus ? "active" : "away";
 }
 
-export function useRoomSocket({ enabled = true, inviteCode, displayName, ownerToken, interviewerToken, onState, onError }: Options) {
+export function useRoomSocket({
+  enabled = true,
+  inviteCode,
+  displayName,
+  authToken,
+  ownerToken,
+  interviewerToken,
+  onState,
+  onError
+}: Options) {
   const wsRef = useRef<WebSocket | null>(null);
   const [connected, setConnected] = useState(false);
   const sessionId = useMemo(() => getOrCreateSessionId(inviteCode), [inviteCode]);
@@ -65,6 +75,7 @@ export function useRoomSocket({ enabled = true, inviteCode, displayName, ownerTo
       sessionId
     });
     params.set("displayNameEncoded", displayName);
+    if (authToken) params.set("authToken", authToken);
     if (ownerToken) params.set("ownerToken", ownerToken);
     if (interviewerToken) params.set("interviewerToken", interviewerToken);
     const ws = new WebSocket(`${WS_BASE_URL}/rooms/${inviteCode}?${params.toString()}`);
@@ -127,7 +138,7 @@ export function useRoomSocket({ enabled = true, inviteCode, displayName, ownerTo
       window.removeEventListener("beforeunload", handlePageHide);
       ws.close();
     };
-  }, [displayName, enabled, inviteCode, interviewerToken, ownerToken, onError, onState, sessionId]);
+  }, [authToken, displayName, enabled, inviteCode, interviewerToken, ownerToken, onError, onState, sessionId]);
 
   const send = (payload: Record<string, unknown>) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {

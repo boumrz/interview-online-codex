@@ -2,6 +2,9 @@ package com.interviewonline.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.interviewonline.model.Room
+import com.interviewonline.model.RoomParticipant
+import com.interviewonline.model.User
+import com.interviewonline.repository.RoomParticipantRepository
 import com.interviewonline.repository.RoomRepository
 import com.interviewonline.ws.ParticipantPayload
 import com.interviewonline.ws.RoomRealtimePayload
@@ -18,6 +21,7 @@ import java.util.concurrent.ConcurrentHashMap
 @Service
 class CollaborationService(
     private val roomRepository: RoomRepository,
+    private val roomParticipantRepository: RoomParticipantRepository,
     private val realtimeFaultInjectionService: RealtimeFaultInjectionService,
     private val objectMapper: ObjectMapper,
 ) {
@@ -83,6 +87,7 @@ class CollaborationService(
         broadcastState(room.inviteCode)
     }
 
+    @Transactional
     fun joinRoom(
         inviteCode: String,
         socket: WebSocketSession,
@@ -90,6 +95,7 @@ class CollaborationService(
         displayName: String,
         ownerToken: String?,
         interviewerToken: String?,
+        user: User?,
     ) {
         val room = roomRepository.findByInviteCode(inviteCode)
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
@@ -98,7 +104,7 @@ class CollaborationService(
         }
         roomSockets.computeIfAbsent(inviteCode) { ConcurrentHashMap.newKeySet() }.add(socket)
         evictDuplicateSession(inviteCode, sessionId, socket.id)
-        val role = resolveRole(room, ownerToken, interviewerToken)
+        val role = resolveRole(room, ownerToken, interviewerToken, user)
         participants[socket.id] = ParticipantMeta(
             inviteCode = inviteCode,
             sessionId = sessionId,
@@ -319,7 +325,34 @@ class CollaborationService(
         }
     }
 
-    private fun resolveRole(room: Room, ownerToken: String?, interviewerToken: String?): RoomRole {
+    private fun resolveRole(room: Room, ownerToken: String?, interviewerToken: String?, user: User?): RoomRole {
+        if (room.ownerUser != null) {
+            val hasValidInterviewerToken =
+                !interviewerToken.isNullOrBlank() && room.interviewerSessionToken == interviewerToken
+            if (user == null) {
+                return if (hasValidInterviewerToken) RoomRole.INTERVIEWER else RoomRole.CANDIDATE
+            }
+
+            val roomId = room.id ?: return if (hasValidInterviewerToken) RoomRole.INTERVIEWER else RoomRole.CANDIDATE
+            val userId = user.id ?: return if (hasValidInterviewerToken) RoomRole.INTERVIEWER else RoomRole.CANDIDATE
+            if (room.ownerUser?.id == userId) return RoomRole.OWNER
+
+            val participant = roomParticipantRepository.findByRoomIdAndUserId(roomId, userId)
+            if (participant != null) return RoomRole.INTERVIEWER
+
+            if (hasValidInterviewerToken) {
+                roomParticipantRepository.save(
+                    RoomParticipant(
+                        room = room,
+                        user = user,
+                        role = "interviewer",
+                    ),
+                )
+                return RoomRole.INTERVIEWER
+            }
+            return RoomRole.CANDIDATE
+        }
+
         return when {
             !ownerToken.isNullOrBlank() && room.ownerSessionToken == ownerToken -> RoomRole.OWNER
             !interviewerToken.isNullOrBlank() && room.interviewerSessionToken == interviewerToken -> RoomRole.INTERVIEWER
