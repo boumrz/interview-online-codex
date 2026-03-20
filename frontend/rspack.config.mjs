@@ -70,6 +70,17 @@ export default defineConfig({
     new rspack.HtmlRspackPlugin({
       template: "./public/index.html"
     }),
+    new rspack.CopyRspackPlugin({
+      patterns: [
+        {
+          from: path.resolve(process.cwd(), "public"),
+          to: path.resolve(process.cwd(), "dist"),
+          globOptions: {
+            ignore: ["**/index.html"]
+          }
+        }
+      ]
+    }),
     new rspack.CssExtractRspackPlugin()
   ]
 });
