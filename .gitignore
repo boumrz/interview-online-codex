@@ -5,3 +5,17 @@ backend/build
 .gradle
 .idea
 .vscode
+
+# Build artifacts
+backend/target/
+frontend/dist/
+
+# Runtime logs and local run metadata
+.run/
+backend/.run/
+frontend/.run*.log
+frontend/.run*.err.log
+frontend/.run*.pid
+
+# Local debug tooling output
+.playwright-cli/
