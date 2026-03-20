@@ -53,6 +53,7 @@ class RoomWebSocketHandler(
                 "notes_update" -> collaborationService.updateNotes(session, payload.readText("notes"))
                 "presence_update" -> collaborationService.updatePresence(session, payload.readText("presenceStatus"))
                 "cursor_update" -> collaborationService.updateCursor(session, payload.readNullableInt("lineNumber"), payload.readNullableInt("column"))
+                "yjs_update" -> collaborationService.relayYjsUpdate(session, payload.readText("yjsUpdate"))
                 "key_press" -> collaborationService.trackKeyPress(
                     socket = session,
                     key = payload.readText("key"),

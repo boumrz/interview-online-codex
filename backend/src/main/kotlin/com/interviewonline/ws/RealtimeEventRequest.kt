@@ -16,4 +16,5 @@ data class RealtimeEventRequest(
     val altKey: Boolean? = null,
     val shiftKey: Boolean? = null,
     val metaKey: Boolean? = null,
+    val yjsUpdate: String? = null,
 )

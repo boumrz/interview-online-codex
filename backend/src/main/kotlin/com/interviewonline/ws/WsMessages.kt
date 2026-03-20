@@ -14,6 +14,7 @@ data class WsIncomingMessage(
     val altKey: Boolean? = null,
     val shiftKey: Boolean? = null,
     val metaKey: Boolean? = null,
+    val yjsUpdate: String? = null,
     val presenceStatus: String? = null,
     val displayName: String? = null,
     val ownerToken: String? = null,
@@ -28,6 +29,7 @@ data class RoomRealtimePayload(
     val inviteCode: String,
     val language: String,
     val code: String,
+    val lastCodeUpdatedBySessionId: String? = null,
     val currentStep: Int,
     val notes: String,
     val participants: List<ParticipantPayload>,
@@ -44,6 +46,7 @@ data class RoomRealtimePayload(
 data class ParticipantPayload(
     val sessionId: String,
     val displayName: String,
+    val role: String = "candidate",
     val presenceStatus: String = "active",
 )
 

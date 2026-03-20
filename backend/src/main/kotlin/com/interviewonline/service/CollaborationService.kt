@@ -72,6 +72,7 @@ class CollaborationService(
     private data class RealtimeState(
         var language: String,
         var code: String,
+        var lastCodeUpdatedBySessionId: String? = null,
         var currentStep: Int,
         var notes: String,
         var notesLockedBySessionId: String? = null,
@@ -197,6 +198,7 @@ class CollaborationService(
             "notes_update" -> updateNotes(connectionId, request.notes.orEmpty())
             "presence_update" -> updatePresence(connectionId, request.presenceStatus)
             "cursor_update" -> updateCursor(connectionId, request.lineNumber, request.column)
+            "yjs_update" -> relayYjsUpdate(connectionId, request.yjsUpdate.orEmpty())
             "key_press" -> trackKeyPress(
                 connectionId = connectionId,
                 key = request.key,
@@ -217,12 +219,34 @@ class CollaborationService(
     private fun updateCode(connectionId: String, code: String) {
         val participant = participants[connectionId] ?: return
         markParticipantActive(participant)
-        roomState[participant.inviteCode]?.code = code
+        roomState[participant.inviteCode]?.apply {
+            this.code = code
+            this.lastCodeUpdatedBySessionId = participant.sessionId
+        }
         roomRepository.findByInviteCode(participant.inviteCode)?.let {
             it.code = code
             roomRepository.save(it)
         }
         broadcastState(participant.inviteCode)
+    }
+
+    fun relayYjsUpdate(socket: WebSocketSession, yjsUpdate: String) {
+        relayYjsUpdate(socket.id, yjsUpdate)
+    }
+
+    private fun relayYjsUpdate(connectionId: String, yjsUpdate: String) {
+        val participant = participants[connectionId] ?: return
+        if (yjsUpdate.isBlank()) return
+        markParticipantActive(participant)
+        broadcastTransportMessage(
+            inviteCode = participant.inviteCode,
+            type = "yjs_update",
+            payload = mapOf(
+                "sessionId" to participant.sessionId,
+                "yjsUpdate" to yjsUpdate,
+            ),
+            excludeConnectionId = connectionId,
+        )
     }
 
     fun updateLanguage(socket: WebSocketSession, language: String) {
@@ -426,7 +450,7 @@ class CollaborationService(
             .distinctBy { it.sessionId }
             .toList()
         val participantsPayload = roomParticipants
-            .map { ParticipantPayload(it.sessionId, it.displayName, it.presenceStatus.wireValue) }
+            .map { ParticipantPayload(it.sessionId, it.displayName, it.role.wireValue, it.presenceStatus.wireValue) }
         val roleBySessionId = roomParticipants.associate { it.sessionId to it.role.wireValue }
         val displayNameBySessionId = roomParticipants.associate { it.sessionId to it.displayName }
         val cursorsPayload = state.cursorsBySessionId.entries
@@ -490,6 +514,73 @@ class CollaborationService(
         }
     }
 
+    private fun broadcastTransportMessage(
+        inviteCode: String,
+        type: String,
+        payload: Any,
+        excludeConnectionId: String? = null,
+    ) {
+        val faultProfile = realtimeFaultInjectionService.profileFor(inviteCode)
+        if (faultProfile != null && faultProfile.latencyMs > 0) {
+            Thread.sleep(faultProfile.latencyMs.toLong())
+        }
+        if (realtimeFaultInjectionService.shouldDropMessage(inviteCode)) {
+            logger.info("Fault injection dropped realtime transport message for room {}", inviteCode)
+            return
+        }
+
+        val message = WsOutgoingMessage(type = type, payload = payload)
+        val encoded = objectMapper.writeValueAsString(message)
+
+        val sockets = roomSockets[inviteCode]?.toList().orEmpty()
+        sockets.filterNotNull().forEach { socket ->
+            val connectionId = socket.id
+            if (excludeConnectionId != null && excludeConnectionId == connectionId) return@forEach
+            if (participants[connectionId] == null) {
+                detachConnection(connectionId, closeTransport = false)
+                return@forEach
+            }
+            try {
+                sendWsMessage(socket, encoded)
+            } catch (ex: Exception) {
+                logger.warn("Failed to broadcast realtime transport message via websocket", ex)
+                detachConnection(connectionId, closeTransport = true)
+            }
+        }
+
+        val sseConnectionIds = roomSseConnections[inviteCode]?.toList().orEmpty()
+        sseConnectionIds.forEach { connectionId ->
+            if (excludeConnectionId != null && excludeConnectionId == connectionId) return@forEach
+            val emitter = sseConnections[connectionId]
+            if (participants[connectionId] == null || emitter == null) {
+                detachConnection(connectionId, closeTransport = false)
+                return@forEach
+            }
+            try {
+                sendSseMessage(emitter, encoded)
+            } catch (ex: Exception) {
+                logger.warn("Failed to broadcast realtime transport message via sse", ex)
+                detachConnection(connectionId, closeTransport = true)
+            }
+        }
+    }
+
+    private fun sendWsMessage(socket: WebSocketSession, encodedMessage: String) {
+        if (!socket.isOpen) return
+        synchronized(socket) {
+            if (socket.isOpen) {
+                socket.sendMessage(TextMessage(encodedMessage))
+            }
+        }
+    }
+
+    private fun sendSseMessage(emitter: SseEmitter, encodedMessage: String) {
+        emitter.send(
+            SseEmitter.event()
+                .data(encodedMessage),
+        )
+    }
+
     private fun buildPayload(
         inviteCode: String,
         state: RealtimeState,
@@ -501,6 +592,7 @@ class CollaborationService(
             inviteCode = inviteCode,
             language = state.language,
             code = state.code,
+            lastCodeUpdatedBySessionId = state.lastCodeUpdatedBySessionId,
             currentStep = state.currentStep,
             notes = state.notes,
             participants = participantsPayload,
@@ -523,6 +615,7 @@ class CollaborationService(
         roomState[inviteCode] = RealtimeState(
             language = room.language,
             code = room.code,
+            lastCodeUpdatedBySessionId = null,
             currentStep = room.currentStep,
             notes = room.notes.orEmpty(),
             notesLockedBySessionId = currentState?.notesLockedBySessionId,
@@ -672,6 +765,7 @@ class CollaborationService(
         return RealtimeState(
             language = room.language,
             code = room.code,
+            lastCodeUpdatedBySessionId = null,
             currentStep = room.currentStep,
             notes = room.notes.orEmpty(),
             notesLockedBySessionId = null,
