@@ -28,9 +28,11 @@ if [ ! -d "${REPO_DIR}/.git" ]; then
 fi
 
 if [ "${SKIP_SUDO_CHECK}" != "true" ] && [ "$(id -u)" -ne 0 ]; then
-  if ! sudo -n true >/dev/null 2>&1; then
+  # Check sudo non-interactively with a command this script already needs later.
+  if ! sudo -n /usr/bin/systemctl daemon-reload >/dev/null 2>&1; then
     echo "sudo requires passwordless access for deploy automation."
     echo "Configure /etc/sudoers.d/deploy-interview-online first."
+    echo "Expected: /usr/bin/systemctl daemon-reload, restart ${SERVICE_NAME}, reload nginx."
     exit 1
   fi
 fi
