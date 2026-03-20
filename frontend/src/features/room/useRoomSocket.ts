@@ -14,6 +14,10 @@ type CursorPayload = {
   role: "owner" | "interviewer" | "candidate";
   lineNumber: number;
   column: number;
+  selectionStartLineNumber?: number | null;
+  selectionStartColumn?: number | null;
+  selectionEndLineNumber?: number | null;
+  selectionEndColumn?: number | null;
 };
 
 type CandidateKeyPayload = {
@@ -44,6 +48,7 @@ type RealtimeState = {
   notesLockedUntilEpochMs: number | null;
   cursors: CursorPayload[];
   lastCandidateKey: CandidateKeyPayload | null;
+  candidateKeyHistory: CandidateKeyPayload[];
 };
 
 type WsMessage = {
@@ -69,7 +74,15 @@ type ClientMessage =
   | { type: "set_step"; stepIndex: number }
   | { type: "notes_update"; notes: string }
   | { type: "presence_update"; presenceStatus: "active" | "away" }
-  | { type: "cursor_update"; lineNumber: number; column: number }
+  | {
+      type: "cursor_update";
+      lineNumber: number;
+      column: number;
+      selectionStartLineNumber?: number | null;
+      selectionStartColumn?: number | null;
+      selectionEndLineNumber?: number | null;
+      selectionEndColumn?: number | null;
+    }
   | { type: "yjs_update"; yjsUpdate: string }
   | {
       type: "key_press";
@@ -468,8 +481,23 @@ export function useRoomSocket({
     send({ type: "notes_update", notes });
   };
 
-  const sendCursorUpdate = (lineNumber: number, column: number) => {
-    send({ type: "cursor_update", lineNumber, column });
+  const sendCursorUpdate = (payload: {
+    lineNumber: number;
+    column: number;
+    selectionStartLineNumber?: number | null;
+    selectionStartColumn?: number | null;
+    selectionEndLineNumber?: number | null;
+    selectionEndColumn?: number | null;
+  }) => {
+    send({
+      type: "cursor_update",
+      lineNumber: payload.lineNumber,
+      column: payload.column,
+      selectionStartLineNumber: payload.selectionStartLineNumber,
+      selectionStartColumn: payload.selectionStartColumn,
+      selectionEndLineNumber: payload.selectionEndLineNumber,
+      selectionEndColumn: payload.selectionEndColumn
+    });
   };
 
   const sendYjsUpdate = (yjsUpdate: string) => {
