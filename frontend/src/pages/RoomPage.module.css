@@ -235,6 +235,21 @@
   padding: 8px 4px;
 }
 
+.remoteCursorOwner {
+  background: rgba(255, 170, 77, 0.35);
+  border-bottom: 2px solid #ffaa4d;
+}
+
+.remoteCursorInterviewer {
+  background: rgba(95, 195, 160, 0.35);
+  border-bottom: 2px solid #5fc3a0;
+}
+
+.remoteCursorCandidate {
+  background: rgba(108, 159, 255, 0.32);
+  border-bottom: 2px solid #6c9fff;
+}
+
 @media (max-width: 1180px) {
   .topInner {
     grid-template-columns: 1fr;
