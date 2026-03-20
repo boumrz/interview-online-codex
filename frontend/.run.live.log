@@ -18,3 +18,29 @@ Rspack compiled [1m[32msuccessfully[39m[22m in 41 ms
 Rspack compiled [1m[32msuccessfully[39m[22m in 45 ms
 Rspack compiled [1m[32msuccessfully[39m[22m in 62 ms
 Rspack compiled [1m[32msuccessfully[39m[22m in 43 ms
+Rspack compiled [1m[32msuccessfully[39m[22m in 43 ms
+[1m[31mERROR[39m[22m in [1m./src/pages/RoomPage.tsx[39m[22m
+  [31m×[0m Module build failed (from builtin:swc-loader):
+  ├─▶   [31m×[0m   x Expected ',', got 'ident'
+  │     │      ,-[F:\FRONTEND\interview-online-codex\frontend\src\pages\RoomPage.tsx:199:1]
+  │     │  196 |     inviteCode,
+  │     │  197 |     authToken,
+  │     │  198 |     displayName: effectiveDisplayName
+  │     │  199 |     ownerToken,
+  │     │      :     ^^^^^^^^^^
+  │     │  200 |     interviewerToken,
+  │     │  201 |     onState,
+  │     │  201 |     onError
+  │     │      `----
+  │     │
+  │   
+  ╰─▶   [31m×[0m Syntax Error
+      
+[0m
+
+Rspack compiled with [1m[31m1 error[39m[22m in 45 ms
+Rspack compiled [1m[32msuccessfully[39m[22m in 64 ms
+Rspack compiled [1m[32msuccessfully[39m[22m in 64 ms
+Rspack compiled [1m[32msuccessfully[39m[22m in 42 ms
+Rspack compiled [1m[32msuccessfully[39m[22m in 42 ms
+Rspack compiled [1m[32msuccessfully[39m[22m in 47 ms
