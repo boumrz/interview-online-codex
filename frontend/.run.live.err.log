@@ -40667,3 +40667,3216 @@
 <e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
 <e>   code: 'ERR_STREAM_WRITE_AFTER_END'
 <e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.ping (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:274:12)
+<e>     at WebSocket.ping (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:382:18)
+<e>     at F:\FRONTEND\interview-online-codex\frontend\node_modules\webpack-dev-server\lib\servers\WebsocketServer.js:76:18
+<e>     at Array.forEach (<anonymous>)
+<e>     at Timeout._onTimeout (F:\FRONTEND\interview-online-codex\frontend\node_modules\webpack-dev-server\lib\servers\WebsocketServer.js:64:20)
+<e>     at listOnTimeout (node:internal/timers:581:17)
+<e>     at process.processTimers (node:internal/timers:519:7) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.ping (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:274:12)
+<e>     at WebSocket.ping (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:382:18)
+<e>     at F:\FRONTEND\interview-online-codex\frontend\node_modules\webpack-dev-server\lib\servers\WebsocketServer.js:76:18
+<e>     at Array.forEach (<anonymous>)
+<e>     at Timeout._onTimeout (F:\FRONTEND\interview-online-codex\frontend\node_modules\webpack-dev-server\lib\servers\WebsocketServer.js:64:20)
+<e>     at listOnTimeout (node:internal/timers:581:17)
+<e>     at process.processTimers (node:internal/timers:519:7) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+<e>     at _write (node:internal/streams/writable:489:11)
+<e>     at Writable.write (node:internal/streams/writable:510:10)
+<e>     at Sender.sendFrame (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:561:20)
+<e>     at Sender.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\sender.js:222:12)
+<e>     at WebSocket.close (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:316:18)
+<e>     at Receiver.receiverOnConclude (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\websocket.js:1167:18)
+<e>     at Receiver.emit (node:events:524:28)
+<e>     at Receiver.controlMessage (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:658:14)
+<e>     at Receiver.getData (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:477:12)
+<e>     at Receiver.startLoop (F:\FRONTEND\interview-online-codex\frontend\node_modules\ws\lib\receiver.js:167:16) {
+<e>   code: 'ERR_STREAM_WRITE_AFTER_END'
+<e> }
+<i> [webpack-dev-server] [HPM] Upgrading to WebSocket
+<e> [webpack-dev-server] [HPM] WebSocket error: Error: read ECONNRESET
+<e>     at TCP.onStreamRead (node:internal/stream_base_commons:218:20) {
+<e>   errno: -4077,
+<e>   code: 'ECONNRESET',
+<e>   syscall: 'read'
+<e> }
