@@ -188,12 +188,14 @@ export function RoomPage() {
     setError(message);
   }, []);
 
-  const canConnect = !nameModalOpened && !!displayName.trim();
+  const fallbackDisplayName = authUser?.nickname?.trim() || (interviewerToken ? "Interviewer" : "Participant");
+  const effectiveDisplayName = displayName.trim() || fallbackDisplayName;
+  const canConnect = Boolean(inviteCode);
   const { connected, sessionId, sendCodeUpdate, sendLanguageUpdate, sendSetStep, sendNotesUpdate } = useRoomSocket({
     enabled: canConnect,
     inviteCode,
     authToken,
-    displayName: displayName || "Участник",
+    displayName: effectiveDisplayName,
     ownerToken,
     interviewerToken,
     onState,
