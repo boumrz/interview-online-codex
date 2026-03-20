@@ -3,6 +3,7 @@ import Editor from "@monaco-editor/react";
 import { ActionIcon, Badge, Box, Button, Group, Menu, Modal, Select, Stack, Text, TextInput, Textarea, ThemeIcon } from "@mantine/core";
 import { IconChevronLeft, IconChevronRight, IconCode, IconGripVertical, IconHome2, IconLayoutDashboard, IconMenu2, IconUsers } from "@tabler/icons-react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import * as Y from "yjs";
 import { useAppSelector } from "../app/hooks";
 import { useGetRoomQuery } from "../services/api";
 import { useRoomSocket } from "../features/room/useRoomSocket";
@@ -18,6 +19,7 @@ const LANGUAGES = [
 type Participant = {
   sessionId: string;
   displayName: string;
+  role: "owner" | "interviewer" | "candidate";
   presenceStatus: "active" | "away";
 };
 
@@ -45,6 +47,7 @@ type RealtimeState = {
   inviteCode: string;
   language: string;
   code: string;
+  lastCodeUpdatedBySessionId: string | null;
   currentStep: number;
   notes: string;
   participants: Participant[];
@@ -67,6 +70,36 @@ const MAX_RIGHT_WIDTH = 520;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 1) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(base64: string): Uint8Array {
+  const normalized = base64.trim();
+  if (!normalized) return new Uint8Array(0);
+  const binary = atob(normalized);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function createDeterministicBootstrapUpdate(code: string): Uint8Array {
+  const bootstrapDoc = new Y.Doc();
+  // Use a fixed bootstrap client id so every participant starts from the same CRDT history.
+  (bootstrapDoc as { clientID: number }).clientID = 1;
+  const bootstrapText = bootstrapDoc.getText("room-code");
+  if (code) {
+    bootstrapText.insert(0, code);
+  }
+  return Y.encodeStateAsUpdate(bootstrapDoc);
 }
 
 function guestNameKey(inviteCode: string, role: "candidate" | "interviewer-guest" = "candidate") {
@@ -123,6 +156,8 @@ export function RoomPage() {
   const [notesDirty, setNotesDirty] = useState(false);
   const [copiedHint, setCopiedHint] = useState("");
   const [notesLockTick, setNotesLockTick] = useState(0);
+  const yjsPendingUpdatesRef = useRef<string[]>([]);
+  const yjsApplyUpdateRef = useRef<((yjsUpdate: string) => void) | null>(null);
 
   useEffect(() => {
     const isGuestInterviewerMode = !!interviewerToken && !authToken;
@@ -181,6 +216,7 @@ export function RoomPage() {
       inviteCode: room.inviteCode,
       language: room.language,
       code: room.code,
+      lastCodeUpdatedBySessionId: null,
       currentStep: room.currentStep,
       notes: room.notes ?? "",
       participants: [] as Participant[],
@@ -205,17 +241,42 @@ export function RoomPage() {
   }, [mergedNotes, notesDirty]);
 
   const onState = useCallback((incoming: RealtimeState) => {
-    setState(incoming);
+    const participants = (incoming.participants ?? []).map((participant) => ({
+      ...participant,
+      role: participant.role ?? "candidate"
+    }));
+    setState({
+      ...incoming,
+      participants,
+      lastCodeUpdatedBySessionId: incoming.lastCodeUpdatedBySessionId ?? null
+    });
   }, []);
 
   const onError = useCallback((message: string) => {
     setError(message);
   }, []);
 
+  const onYjsUpdate = useCallback((payload: { sessionId: string; yjsUpdate: string }) => {
+    const update = payload.yjsUpdate?.trim();
+    if (!update) return;
+    if (yjsApplyUpdateRef.current) {
+      yjsApplyUpdateRef.current(update);
+      return;
+    }
+    yjsPendingUpdatesRef.current.push(update);
+  }, []);
+
+  const onYjsBridgeReady = useCallback((applyUpdate: ((yjsUpdate: string) => void) | null) => {
+    yjsApplyUpdateRef.current = applyUpdate;
+    if (!applyUpdate) return;
+    const pending = yjsPendingUpdatesRef.current.splice(0, yjsPendingUpdatesRef.current.length);
+    pending.forEach((update) => applyUpdate(update));
+  }, []);
+
   const fallbackDisplayName = authUser?.nickname?.trim() || (interviewerToken ? "Интервьюер" : "Участник");
   const effectiveDisplayName = displayName.trim() || fallbackDisplayName;
   const canConnect = Boolean(inviteCode);
-  const { connected, sessionId, sendCodeUpdate, sendLanguageUpdate, sendSetStep, sendNotesUpdate, sendCursorUpdate, sendKeyPress } = useRoomSocket({
+  const { connected, sessionId, sendCodeUpdate, sendLanguageUpdate, sendSetStep, sendNotesUpdate, sendCursorUpdate, sendYjsUpdate, sendKeyPress } = useRoomSocket({
     enabled: canConnect,
     inviteCode,
     authToken,
@@ -223,7 +284,8 @@ export function RoomPage() {
     ownerToken,
     interviewerToken,
     onState,
-    onError
+    onError,
+    onYjsUpdate
   });
 
   const notesLockActive = (merged?.notesLockedUntilEpochMs ?? 0) > Date.now();
@@ -374,6 +436,8 @@ export function RoomPage() {
             onLanguageChange={(value) => value && sendLanguageUpdate(value)}
             onSelectStep={(stepIndex) => sendSetStep(stepIndex)}
             onCursorChange={(lineNumber, column) => sendCursorUpdate(lineNumber, column)}
+            onYjsUpdate={(yjsUpdate) => sendYjsUpdate(yjsUpdate)}
+            onYjsBridgeReady={onYjsBridgeReady}
             onKeyPress={(payload) => sendKeyPress(payload)}
             onNotesChange={(value) => {
               setNotesDraft(value);
@@ -391,6 +455,8 @@ export function RoomPage() {
             cursors={merged.cursors}
             onCodeChange={(value) => sendCodeUpdate(value ?? "")}
             onCursorChange={(lineNumber, column) => sendCursorUpdate(lineNumber, column)}
+            onYjsUpdate={(yjsUpdate) => sendYjsUpdate(yjsUpdate)}
+            onYjsBridgeReady={onYjsBridgeReady}
             onKeyPress={(payload) => sendKeyPress(payload)}
             error={error}
           />
@@ -587,6 +653,8 @@ function OwnerLayout({
   onLanguageChange,
   onSelectStep,
   onCursorChange,
+  onYjsUpdate,
+  onYjsBridgeReady,
   onKeyPress,
   onNotesChange
 }: {
@@ -605,6 +673,8 @@ function OwnerLayout({
   onLanguageChange: (value: string | null) => void;
   onSelectStep: (stepIndex: number) => void;
   onCursorChange: (lineNumber: number, column: number) => void;
+  onYjsUpdate: (yjsUpdate: string) => void;
+  onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
   onKeyPress: (payload: { key: string; keyCode: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void;
   onNotesChange: (value: string) => void;
 }) {
@@ -683,6 +753,13 @@ function OwnerLayout({
   const maxOffset = Math.max(baseInset, ownerBodyWidth - iconSize - 4);
   const leftToggleOffset = clamp(leftSidebarVisible ? leftWidth + 12 : baseInset, baseInset, maxOffset);
   const rightToggleOffset = clamp(rightSidebarVisible ? rightWidth + 12 : baseInset, baseInset, maxOffset);
+  const candidateParticipants = merged.participants.filter((participant) => participant.role === "candidate");
+  const candidateOutOfFocus = candidateParticipants.some((participant) => participant.presenceStatus === "away");
+  const candidateFocusHint = candidateParticipants.length === 0
+    ? "Кандидат пока не подключен"
+    : candidateOutOfFocus
+      ? "Кандидат вне окна/вкладки (возможен Alt+Tab)"
+      : "Кандидат в фокусе";
 
   return (
     <Box className={styles.ownerBody} ref={ownerBodyRef}>
@@ -768,10 +845,13 @@ function OwnerLayout({
                 height="100%"
                 language={merged.language}
                 value={merged.code}
+                syncKey={`${merged.inviteCode}:${merged.currentStep}:${merged.language}`}
                 sessionId={sessionId}
                 cursors={cursors}
                 onChange={onCodeChange}
                 onCursorChange={onCursorChange}
+                onYjsUpdate={onYjsUpdate}
+                onYjsBridgeReady={onYjsBridgeReady}
                 onKeyPress={onKeyPress}
               />
             </div>
@@ -794,6 +874,9 @@ function OwnerLayout({
               <Stack gap="xs" className={styles.notesStack}>
                 <Text size="xs" c={notesLockedByOther ? "#f78989" : notesStatus === "Сохраняем..." ? "#f5c26b" : "#8b919b"}>
                   {notesStatus}
+                </Text>
+                <Text size="xs" c={candidateOutOfFocus ? "#f5c26b" : "#8b919b"}>
+                  {candidateFocusHint}
                 </Text>
                 {lastCandidateKey && (
                   <Text size="xs" c="#7bb0ff">
@@ -837,6 +920,8 @@ function CandidateLayout({
   cursors,
   onCodeChange,
   onCursorChange,
+  onYjsUpdate,
+  onYjsBridgeReady,
   onKeyPress,
   error
 }: {
@@ -846,6 +931,8 @@ function CandidateLayout({
   cursors: CursorInfo[];
   onCodeChange: (value: string | undefined) => void;
   onCursorChange: (lineNumber: number, column: number) => void;
+  onYjsUpdate: (yjsUpdate: string) => void;
+  onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
   onKeyPress: (payload: { key: string; keyCode: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void;
   error: string;
 }) {
@@ -873,12 +960,14 @@ function CandidateLayout({
             height="calc(100vh - 170px)"
             language={merged.language}
             value={merged.code}
+            syncKey={`${merged.inviteCode}:${merged.currentStep}:${merged.language}`}
             sessionId={sessionId}
             cursors={cursors}
             onChange={onCodeChange}
             onCursorChange={onCursorChange}
+            onYjsUpdate={onYjsUpdate}
+            onYjsBridgeReady={onYjsBridgeReady}
             onKeyPress={onKeyPress}
-            showRemoteCursors={false}
           />
         </div>
       </Box>
@@ -899,45 +988,117 @@ function formatCandidateKey(event: CandidateKeyInfo): string {
   return [...modifiers, key].join("+");
 }
 
-function cursorClassByRole(role: CursorInfo["role"]): string {
-  if (role === "owner") return styles.remoteCursorOwner;
-  if (role === "interviewer") return styles.remoteCursorInterviewer;
-  return styles.remoteCursorCandidate;
+function hashSessionId(sessionId: string): number {
+  let hash = 0;
+  for (let i = 0; i < sessionId.length; i += 1) {
+    hash = (hash * 31 + sessionId.charCodeAt(i)) >>> 0;
+  }
+  return hash;
+}
+
+function colorThemeForSession(sessionId: string) {
+  const hue = hashSessionId(sessionId) % 360;
+  return {
+    caret: `hsl(${hue} 88% 60%)`,
+    labelBackground: `hsl(${hue} 70% 42%)`,
+    labelText: "#f7f9fc"
+  };
+}
+
+function cursorClassBySession(sessionId: string): string {
+  return `remote-cursor-caret-${sessionId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
 }
 
 function RoomCodeEditor({
   height,
   language,
   value,
+  syncKey,
   sessionId,
   cursors,
   onChange,
   onCursorChange,
-  onKeyPress,
-  showRemoteCursors = true
+  onYjsUpdate,
+  onYjsBridgeReady,
+  onKeyPress
 }: {
   height: string;
   language: string;
   value: string;
+  syncKey: string;
   sessionId: string;
   cursors: CursorInfo[];
   onChange: (value: string | undefined) => void;
   onCursorChange: (lineNumber: number, column: number) => void;
+  onYjsUpdate: (yjsUpdate: string) => void;
+  onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
   onKeyPress: (payload: { key: string; keyCode: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void;
-  showRemoteCursors?: boolean;
 }) {
   const editorRef = useRef<any>(null);
   const monacoRef = useRef<any>(null);
+  const yDocRef = useRef<Y.Doc | null>(null);
+  const yTextRef = useRef<Y.Text | null>(null);
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const styleElementRef = useRef<HTMLStyleElement | null>(null);
+  const suppressEditorChangesRef = useRef(false);
   const disposablesRef = useRef<Array<{ dispose: () => void }>>([]);
   const decorationsRef = useRef<string[]>([]);
+  const cursorWidgetsRef = useRef<Map<string, {
+    widget: any;
+    node: HTMLDivElement;
+    setPosition: (lineNumber: number, column: number) => void;
+  }>>(new Map());
   const lastCursorSentRef = useRef<{ lineNumber: number; column: number; ts: number }>({ lineNumber: 0, column: 0, ts: 0 });
+  const syncKeyRef = useRef(syncKey);
+  const lastLocalEditAtRef = useRef(0);
+  const lastYjsInboundAtRef = useRef(0);
+
+  const schedulePersistCode = useCallback((nextCode: string) => {
+    if (persistTimerRef.current) {
+      clearTimeout(persistTimerRef.current);
+    }
+    persistTimerRef.current = setTimeout(() => {
+      onChange(nextCode);
+    }, 450);
+  }, [onChange]);
+
+  useEffect(() => {
+    const styleNode = document.createElement("style");
+    styleNode.setAttribute("data-room-cursor-style", sessionId);
+    document.head.appendChild(styleNode);
+    styleElementRef.current = styleNode;
+    return () => {
+      styleElementRef.current?.remove();
+      styleElementRef.current = null;
+    };
+  }, [sessionId]);
 
   useEffect(() => {
     return () => {
+      onYjsBridgeReady(null);
+
+      if (persistTimerRef.current) {
+        clearTimeout(persistTimerRef.current);
+        persistTimerRef.current = null;
+      }
+
+      const editor = editorRef.current;
+      if (editor) {
+        cursorWidgetsRef.current.forEach((state) => {
+          editor.removeContentWidget(state.widget);
+        });
+      }
+      cursorWidgetsRef.current.clear();
+      decorationsRef.current = [];
+
+      yDocRef.current?.destroy();
+      yDocRef.current = null;
+      yTextRef.current = null;
+
       disposablesRef.current.forEach((disposable) => disposable.dispose());
       disposablesRef.current = [];
     };
-  }, []);
+  }, [onYjsBridgeReady]);
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -947,39 +1108,210 @@ function RoomCodeEditor({
     const model = editor.getModel();
     if (!model) return;
 
-    const remoteCursors = showRemoteCursors ? cursors.filter((cursor) => cursor.sessionId !== sessionId) : [];
-    const decorations = remoteCursors.map((cursor) => {
+    const clampCursor = (lineNumber: number, column: number) => {
       const maxLine = model.getLineCount();
-      const lineNumber = Math.min(Math.max(cursor.lineNumber, 1), maxLine);
-      const lineMaxColumn = model.getLineMaxColumn(lineNumber);
-      const startColumn = Math.min(Math.max(cursor.column, 1), lineMaxColumn);
-      const endColumn = Math.min(startColumn + 1, lineMaxColumn);
+      const nextLine = Math.min(Math.max(lineNumber, 1), maxLine);
+      const lineMaxColumn = model.getLineMaxColumn(nextLine);
+      const nextColumn = Math.min(Math.max(column, 1), lineMaxColumn);
+      return { lineNumber: nextLine, column: nextColumn };
+    };
+
+    const createCursorWidget = (widgetId: string, lineNumber: number, column: number) => {
+      const node = document.createElement("div");
+      let position = new monaco.Position(lineNumber, column);
+      const widget = {
+        getId: () => widgetId,
+        getDomNode: () => node,
+        getPosition: () => ({
+          position,
+          preference: [
+            monaco.editor.ContentWidgetPositionPreference.ABOVE,
+            monaco.editor.ContentWidgetPositionPreference.BELOW
+          ]
+        })
+      };
 
       return {
-        range: new monaco.Range(lineNumber, startColumn, lineNumber, Math.max(endColumn, startColumn)),
+        widget,
+        node,
+        setPosition: (nextLine: number, nextColumn: number) => {
+          position = new monaco.Position(nextLine, nextColumn);
+        }
+      };
+    };
+
+    const remoteCursors = cursors.filter((cursor) => cursor.sessionId !== sessionId);
+    const caretCssRules: string[] = [];
+    const decorations = remoteCursors.map((cursor) => {
+      const { lineNumber, column } = clampCursor(cursor.lineNumber, cursor.column);
+      const label = cursor.displayName.trim().slice(0, 18) || "Участник";
+      const theme = colorThemeForSession(cursor.sessionId);
+      const widgetId = `remote-cursor-${cursor.sessionId}`;
+      const widgetState = cursorWidgetsRef.current.get(widgetId) ?? createCursorWidget(widgetId, lineNumber, column);
+      const caretClassName = cursorClassBySession(cursor.sessionId);
+
+      widgetState.node.textContent = label;
+      widgetState.node.className = styles.remoteCursorLabel;
+      widgetState.node.style.backgroundColor = theme.labelBackground;
+      widgetState.node.style.color = theme.labelText;
+      widgetState.setPosition(lineNumber, column);
+
+      caretCssRules.push(`.${caretClassName} { border-left-color: ${theme.caret} !important; }`);
+
+      if (!cursorWidgetsRef.current.has(widgetId)) {
+        cursorWidgetsRef.current.set(widgetId, widgetState);
+        editor.addContentWidget(widgetState.widget);
+      } else {
+        editor.layoutContentWidget(widgetState.widget);
+      }
+
+      return {
+        range: new monaco.Range(lineNumber, column, lineNumber, column),
         options: {
-          inlineClassName: cursorClassByRole(cursor.role),
+          afterContentClassName: `${styles.remoteCursorCaret} ${caretClassName}`,
           hoverMessage: { value: `${cursor.displayName} (${cursor.role})` }
         }
       };
     });
 
+    const activeWidgetIds = new Set(remoteCursors.map((cursor) => `remote-cursor-${cursor.sessionId}`));
+    cursorWidgetsRef.current.forEach((state, widgetId) => {
+      if (activeWidgetIds.has(widgetId)) return;
+      editor.removeContentWidget(state.widget);
+      cursorWidgetsRef.current.delete(widgetId);
+    });
+
+    if (styleElementRef.current) {
+      styleElementRef.current.textContent = caretCssRules.join("\n");
+    }
+
     decorationsRef.current = editor.deltaDecorations(decorationsRef.current, decorations);
-  }, [cursors, sessionId, showRemoteCursors]);
+  }, [cursors, sessionId]);
+
+  useEffect(() => {
+    const yDoc = yDocRef.current;
+    const yText = yTextRef.current;
+    if (!yDoc || !yText) return;
+
+    const current = yText.toString();
+    const next = value ?? "";
+    const syncKeyChanged = syncKeyRef.current !== syncKey;
+    if (!syncKeyChanged && current === next) return;
+
+    // Keep state_sync as a fallback when Yjs transport drops updates.
+    // Do not override active collaborative typing with stale snapshots.
+    const now = Date.now();
+    if (!syncKeyChanged) {
+      if (now - lastYjsInboundAtRef.current < 1200) return;
+      if (now - lastLocalEditAtRef.current < 300) return;
+    }
+
+    syncKeyRef.current = syncKey;
+    yDoc.transact(() => {
+      yText.delete(0, yText.length);
+      if (next) {
+        yText.insert(0, next);
+      }
+    }, "remote");
+  }, [syncKey, value]);
 
   return (
     <Editor
       height={height}
       language={language}
-      value={value}
+      defaultValue={value}
       theme="vs-dark"
-      onChange={onChange}
       onMount={(editor, monaco) => {
         editorRef.current = editor;
         monacoRef.current = monaco;
 
         disposablesRef.current.forEach((disposable) => disposable.dispose());
         disposablesRef.current = [];
+
+        yDocRef.current?.destroy();
+        yDocRef.current = null;
+        yTextRef.current = null;
+
+        const model = editor.getModel();
+        if (!model) return;
+
+        const yDoc = new Y.Doc();
+        Y.applyUpdate(yDoc, createDeterministicBootstrapUpdate(value), "bootstrap");
+        const yText = yDoc.getText("room-code");
+
+        yDocRef.current = yDoc;
+        yTextRef.current = yText;
+
+        const handleDocUpdate = (update: Uint8Array, origin: unknown) => {
+          if (origin === "remote" || origin === "bootstrap") return;
+          const encodedUpdate = bytesToBase64(update);
+          onYjsUpdate(encodedUpdate);
+          schedulePersistCode(yText.toString());
+        };
+        yDoc.on("update", handleDocUpdate);
+
+        const handleYTextChange = (event: Y.YTextEvent, transaction: Y.Transaction) => {
+          if (transaction.origin === "editor") return;
+          const activeEditor = editorRef.current;
+          const activeMonaco = monacoRef.current;
+          const activeModel = activeEditor?.getModel();
+          if (!activeEditor || !activeMonaco || !activeModel) return;
+
+          const edits: Array<{ range: any; text: string; forceMoveMarkers: boolean }> = [];
+          let index = 0;
+          event.delta.forEach((part) => {
+            if (typeof part.retain === "number") {
+              index += part.retain;
+              return;
+            }
+            if (typeof part.delete === "number") {
+              const start = activeModel.getPositionAt(index);
+              const end = activeModel.getPositionAt(index + part.delete);
+              edits.push({
+                range: new activeMonaco.Range(start.lineNumber, start.column, end.lineNumber, end.column),
+                text: "",
+                forceMoveMarkers: true
+              });
+              return;
+            }
+            if (typeof part.insert === "string" && part.insert.length > 0) {
+              const start = activeModel.getPositionAt(index);
+              edits.push({
+                range: new activeMonaco.Range(start.lineNumber, start.column, start.lineNumber, start.column),
+                text: part.insert,
+                forceMoveMarkers: true
+              });
+              index += part.insert.length;
+            }
+          });
+
+          if (edits.length === 0) return;
+
+          suppressEditorChangesRef.current = true;
+          try {
+            const selection = activeEditor.getSelection();
+            const scrollTop = activeEditor.getScrollTop();
+            const scrollLeft = activeEditor.getScrollLeft();
+            activeEditor.executeEdits("yjs-remote", edits);
+            if (selection) {
+              activeEditor.setSelection(selection);
+            }
+            activeEditor.setScrollTop(scrollTop);
+            activeEditor.setScrollLeft(scrollLeft);
+          } finally {
+            suppressEditorChangesRef.current = false;
+          }
+        };
+        yText.observe(handleYTextChange);
+
+        onYjsBridgeReady((encodedYjsUpdate: string) => {
+          const activeDoc = yDocRef.current;
+          if (!activeDoc) return;
+          const updateBytes = base64ToBytes(encodedYjsUpdate);
+          if (updateBytes.length === 0) return;
+          lastYjsInboundAtRef.current = Date.now();
+          Y.applyUpdate(activeDoc, updateBytes, "remote");
+        });
 
         disposablesRef.current.push(
           editor.onDidChangeCursorPosition((event: any) => {
@@ -996,6 +1328,28 @@ function RoomCodeEditor({
         );
 
         disposablesRef.current.push(
+          editor.onDidChangeModelContent((event: any) => {
+            if (suppressEditorChangesRef.current) return;
+            const activeText = yTextRef.current;
+            const activeDoc = yDocRef.current;
+            if (!activeText || !activeDoc) return;
+            lastLocalEditAtRef.current = Date.now();
+
+            const changes = [...event.changes].sort((a, b) => b.rangeOffset - a.rangeOffset);
+            activeDoc.transact(() => {
+              changes.forEach((change) => {
+                if (change.rangeLength > 0) {
+                  activeText.delete(change.rangeOffset, change.rangeLength);
+                }
+                if (change.text && change.text.length > 0) {
+                  activeText.insert(change.rangeOffset, change.text);
+                }
+              });
+            }, "editor");
+          })
+        );
+
+        disposablesRef.current.push(
           editor.onKeyDown((event: any) => {
             const browserEvent = event.browserEvent as KeyboardEvent;
             onKeyPress({
@@ -1008,6 +1362,13 @@ function RoomCodeEditor({
             });
           })
         );
+
+        disposablesRef.current.push({
+          dispose: () => {
+            yDoc.off("update", handleDocUpdate);
+            yText.unobserve(handleYTextChange);
+          }
+        });
       }}
       options={{
         minimap: { enabled: false },

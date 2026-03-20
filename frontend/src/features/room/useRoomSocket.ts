@@ -4,6 +4,7 @@ import { API_BASE_URL, WS_BASE_URL } from "../../config/runtime";
 type Participant = {
   sessionId: string;
   displayName: string;
+  role: "owner" | "interviewer" | "candidate";
   presenceStatus: "active" | "away";
 };
 
@@ -31,6 +32,7 @@ type RealtimeState = {
   inviteCode: string;
   language: string;
   code: string;
+  lastCodeUpdatedBySessionId: string | null;
   currentStep: number;
   notes: string;
   participants: Participant[];
@@ -58,6 +60,7 @@ type Options = {
   interviewerToken?: string | null;
   onState: (state: RealtimeState) => void;
   onError: (message: string) => void;
+  onYjsUpdate?: (payload: { sessionId: string; yjsUpdate: string }) => void;
 };
 
 type ClientMessage =
@@ -67,6 +70,7 @@ type ClientMessage =
   | { type: "notes_update"; notes: string }
   | { type: "presence_update"; presenceStatus: "active" | "away" }
   | { type: "cursor_update"; lineNumber: number; column: number }
+  | { type: "yjs_update"; yjsUpdate: string }
   | {
       type: "key_press";
       key: string;
@@ -81,6 +85,7 @@ const WS_RECONNECT_BASE_DELAY_MS = 500;
 const WS_RECONNECT_MAX_DELAY_MS = 5000;
 const WS_FAILS_BEFORE_SSE_FALLBACK = 2;
 const PRESENCE_HEARTBEAT_MS = 10_000;
+const MAX_PENDING_MESSAGES = 300;
 
 function sessionIdKey(inviteCode: string) {
   return `room_ws_session_id_${inviteCode}`;
@@ -111,11 +116,19 @@ export function useRoomSocket({
   ownerToken,
   interviewerToken,
   onState,
-  onError
+  onError,
+  onYjsUpdate
 }: Options) {
   const wsRef = useRef<WebSocket | null>(null);
   const sseRef = useRef<EventSource | null>(null);
   const transportRef = useRef<"ws" | "sse">("ws");
+  const pendingMessagesRef = useRef<ClientMessage[]>([]);
+  const sendRef = useRef<(payload: ClientMessage) => void>((payload: ClientMessage) => {
+    pendingMessagesRef.current.push(payload);
+    if (pendingMessagesRef.current.length > MAX_PENDING_MESSAGES) {
+      pendingMessagesRef.current.shift();
+    }
+  });
   const [connected, setConnected] = useState(false);
   const sessionId = useMemo(() => getOrCreateSessionId(inviteCode), [inviteCode]);
 
@@ -136,6 +149,18 @@ export function useRoomSocket({
     let disposed = false;
     let closedInCleanup = false;
     let sseErrorNotified = false;
+
+    const shouldQueuePayload = (payload: ClientMessage) => {
+      return payload.type !== "cursor_update" && payload.type !== "presence_update";
+    };
+
+    const enqueuePayload = (payload: ClientMessage) => {
+      if (!shouldQueuePayload(payload)) return;
+      pendingMessagesRef.current.push(payload);
+      if (pendingMessagesRef.current.length > MAX_PENDING_MESSAGES) {
+        pendingMessagesRef.current.shift();
+      }
+    };
 
     const clearWsReconnectTimer = () => {
       if (wsReconnectTimer !== null) {
@@ -174,6 +199,16 @@ export function useRoomSocket({
           onState(message.payload as RealtimeState);
           return;
         }
+        if (message.type === "yjs_update") {
+          const payload = message.payload as { sessionId?: string; yjsUpdate?: string };
+          if (payload?.sessionId && payload?.yjsUpdate) {
+            onYjsUpdate?.({
+              sessionId: payload.sessionId,
+              yjsUpdate: payload.yjsUpdate
+            });
+          }
+          return;
+        }
         if (message.type === "error") {
           onError((message.payload as { message: string }).message);
         }
@@ -182,7 +217,7 @@ export function useRoomSocket({
       }
     };
 
-    const postFallbackEvent = (payload: ClientMessage) => {
+    const postFallbackEvent = (payload: ClientMessage, queueOnFailure = true) => {
       void fetch(`${API_BASE_URL}/realtime/rooms/${inviteCode}/events`, {
         method: "POST",
         headers: {
@@ -196,25 +231,51 @@ export function useRoomSocket({
         .then(async (response) => {
           if (response.ok) return;
           const data = (await response.json().catch(() => ({}))) as { error?: string };
+          if (queueOnFailure) {
+            enqueuePayload(payload);
+          }
           onError(data.error || "Не удалось отправить действие в комнату");
         })
         .catch(() => {
+          if (queueOnFailure) {
+            enqueuePayload(payload);
+          }
           onError("Не удалось отправить действие в комнату");
         });
     };
 
-    const sendViaActiveTransport = (payload: ClientMessage) => {
+    const sendViaActiveTransport = (payload: ClientMessage, queueOnUnavailable = true) => {
       if (transportRef.current === "ws") {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
           wsRef.current.send(JSON.stringify(payload));
+          return;
+        }
+        if (queueOnUnavailable) {
+          enqueuePayload(payload);
         }
         return;
       }
-      postFallbackEvent(payload);
+
+      const source = sseRef.current;
+      if (source?.readyState !== EventSource.OPEN) {
+        if (queueOnUnavailable) {
+          enqueuePayload(payload);
+        }
+        return;
+      }
+
+      postFallbackEvent(payload, queueOnUnavailable);
+    };
+
+    const flushPendingMessages = () => {
+      if (pendingMessagesRef.current.length === 0) return;
+      const pending = [...pendingMessagesRef.current];
+      pendingMessagesRef.current = [];
+      pending.forEach((payload) => sendViaActiveTransport(payload, true));
     };
 
     const sendPresence = (status: "active" | "away") => {
-      sendViaActiveTransport({ type: "presence_update", presenceStatus: status });
+      sendViaActiveTransport({ type: "presence_update", presenceStatus: status }, false);
     };
 
     const publishCurrentPresence = () => {
@@ -237,6 +298,7 @@ export function useRoomSocket({
         sseErrorNotified = false;
         setConnected(true);
         onError("");
+        flushPendingMessages();
         publishCurrentPresence();
         ensurePresenceHeartbeat();
       };
@@ -304,6 +366,7 @@ export function useRoomSocket({
         wsFailedAttempts = 0;
         setConnected(true);
         onError("");
+        flushPendingMessages();
         publishCurrentPresence();
         ensurePresenceHeartbeat();
       };
@@ -346,6 +409,9 @@ export function useRoomSocket({
     };
 
     transportRef.current = "ws";
+    sendRef.current = (payload: ClientMessage) => {
+      sendViaActiveTransport(payload, true);
+    };
     connectWs();
 
     window.addEventListener("focus", handleFocus);
@@ -375,29 +441,15 @@ export function useRoomSocket({
       const sse = sseRef.current;
       sseRef.current = null;
       sse?.close();
+
+      sendRef.current = (payload: ClientMessage) => {
+        enqueuePayload(payload);
+      };
     };
-  }, [authToken, displayName, enabled, interviewerToken, inviteCode, onError, onState, ownerToken, sessionId]);
+  }, [authToken, displayName, enabled, interviewerToken, inviteCode, onError, onState, onYjsUpdate, ownerToken, sessionId]);
 
   const send = (payload: ClientMessage) => {
-    if (transportRef.current === "ws") {
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify(payload));
-      }
-      return;
-    }
-
-    void fetch(`${API_BASE_URL}/realtime/rooms/${inviteCode}/events`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        sessionId,
-        ...payload
-      })
-    }).catch(() => {
-      onError("Не удалось отправить действие в комнату");
-    });
+    sendRef.current(payload);
   };
 
   const sendCodeUpdate = (code: string) => {
@@ -418,6 +470,10 @@ export function useRoomSocket({
 
   const sendCursorUpdate = (lineNumber: number, column: number) => {
     send({ type: "cursor_update", lineNumber, column });
+  };
+
+  const sendYjsUpdate = (yjsUpdate: string) => {
+    send({ type: "yjs_update", yjsUpdate });
   };
 
   const sendKeyPress = (payload: {
@@ -447,6 +503,8 @@ export function useRoomSocket({
     sendSetStep,
     sendNotesUpdate,
     sendCursorUpdate,
+    sendYjsUpdate,
     sendKeyPress
   };
 }
+

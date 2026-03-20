@@ -21,7 +21,7 @@ export default defineConfig({
         changeOrigin: true
       },
       {
-        context: ["/ws"],
+        context: ["/ws/rooms"],
         target: process.env.DEV_WS_PROXY_TARGET ?? "http://localhost:8080",
         changeOrigin: true,
         ws: true

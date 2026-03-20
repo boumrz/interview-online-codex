@@ -17,7 +17,8 @@ function now() {
 
 async function roomCodeValue(page) {
   return page.evaluate(() => {
-    const model = window.monaco?.editor?.getModels?.()[0];
+    const editors = window.monaco?.editor?.getEditors?.() ?? [];
+    const model = editors[0]?.getModel?.() ?? window.monaco?.editor?.getModels?.()[0];
     if (model) return model.getValue();
     const viewLines = document.querySelector(".view-lines");
     return viewLines?.textContent || "";
@@ -26,8 +27,21 @@ async function roomCodeValue(page) {
 
 async function appendCode(page, snippet) {
   await page.evaluate((chunk) => {
-    const model = window.monaco?.editor?.getModels?.()[0];
+    const monacoApi = window.monaco;
+    const editor = monacoApi?.editor?.getEditors?.()?.[0];
+    const model = editor?.getModel?.() ?? monacoApi?.editor?.getModels?.()[0];
     if (!model) throw new Error("MONACO_MODEL_NOT_FOUND");
+    if (editor && monacoApi?.Range) {
+      const end = model.getFullModelRange().getEndPosition();
+      editor.executeEdits("chaos-append", [
+        {
+          range: new monacoApi.Range(end.lineNumber, end.column, end.lineNumber, end.column),
+          text: chunk,
+          forceMoveMarkers: true
+        }
+      ]);
+      return;
+    }
     const next = `${model.getValue()}${chunk}`;
     model.setValue(next);
   }, snippet);

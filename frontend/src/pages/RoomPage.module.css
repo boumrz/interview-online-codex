@@ -235,19 +235,54 @@
   padding: 8px 4px;
 }
 
-.remoteCursorOwner {
-  background: rgba(255, 170, 77, 0.35);
-  border-bottom: 2px solid #ffaa4d;
+.remoteCursorCaret {
+  position: relative;
+  display: inline-block;
+  height: 1.2em;
+  margin-left: -1px;
+  border-left: 2px solid;
+  pointer-events: none;
+  opacity: 0.95;
 }
 
-.remoteCursorInterviewer {
-  background: rgba(95, 195, 160, 0.35);
-  border-bottom: 2px solid #5fc3a0;
+.remoteCursorCaretOwner {
+  border-left-color: #ffaa4d;
 }
 
-.remoteCursorCandidate {
-  background: rgba(108, 159, 255, 0.32);
-  border-bottom: 2px solid #6c9fff;
+.remoteCursorCaretInterviewer {
+  border-left-color: #5fc3a0;
+}
+
+.remoteCursorCaretCandidate {
+  border-left-color: #6c9fff;
+}
+
+.remoteCursorLabel {
+  display: inline-block;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 10px;
+  line-height: 1.2;
+  font-weight: 700;
+  white-space: nowrap;
+  letter-spacing: 0.2px;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.remoteCursorLabelOwner {
+  background: #ffaa4d;
+  color: #221708;
+}
+
+.remoteCursorLabelInterviewer {
+  background: #5fc3a0;
+  color: #0f261f;
+}
+
+.remoteCursorLabelCandidate {
+  background: #6c9fff;
+  color: #0e1f43;
 }
 
 @media (max-width: 1180px) {
