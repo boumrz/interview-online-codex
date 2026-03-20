@@ -52,6 +52,16 @@ class RoomWebSocketHandler(
                 "set_step" -> collaborationService.setStep(session, payload.readInt("stepIndex"))
                 "notes_update" -> collaborationService.updateNotes(session, payload.readText("notes"))
                 "presence_update" -> collaborationService.updatePresence(session, payload.readText("presenceStatus"))
+                "cursor_update" -> collaborationService.updateCursor(session, payload.readNullableInt("lineNumber"), payload.readNullableInt("column"))
+                "key_press" -> collaborationService.trackKeyPress(
+                    socket = session,
+                    key = payload.readText("key"),
+                    keyCode = payload.readText("keyCode"),
+                    ctrlKey = payload.readBoolean("ctrlKey"),
+                    altKey = payload.readBoolean("altKey"),
+                    shiftKey = payload.readBoolean("shiftKey"),
+                    metaKey = payload.readBoolean("metaKey"),
+                )
                 else -> throw ApiException(org.springframework.http.HttpStatus.BAD_REQUEST, "Неизвестный тип сообщения: $type")
             }
         } catch (ex: ApiException) {
@@ -86,6 +96,16 @@ class RoomWebSocketHandler(
 
     private fun JsonNode.readInt(field: String): Int {
         return path(field).asInt(-1)
+    }
+
+    private fun JsonNode.readNullableInt(field: String): Int? {
+        val node = path(field)
+        if (node.isMissingNode || node.isNull || !node.isNumber) return null
+        return node.asInt()
+    }
+
+    private fun JsonNode.readBoolean(field: String): Boolean {
+        return path(field).asBoolean(false)
     }
 
     private fun decodeDisplayName(encoded: String?, fallback: String?): String {

@@ -6,6 +6,8 @@ import com.interviewonline.model.RoomParticipant
 import com.interviewonline.model.User
 import com.interviewonline.repository.RoomParticipantRepository
 import com.interviewonline.repository.RoomRepository
+import com.interviewonline.ws.CandidateKeyPayload
+import com.interviewonline.ws.CursorPayload
 import com.interviewonline.ws.ParticipantPayload
 import com.interviewonline.ws.RealtimeEventRequest
 import com.interviewonline.ws.RoomRealtimePayload
@@ -29,6 +31,7 @@ class CollaborationService(
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val notesLockMillis = 3_000L
+    private val keyEventBroadcastThrottleMs = 100L
 
     private enum class RoomRole(val wireValue: String) {
         OWNER("owner"),
@@ -74,6 +77,14 @@ class CollaborationService(
         var notesLockedBySessionId: String? = null,
         var notesLockedByDisplayName: String? = null,
         var notesLockedUntilEpochMs: Long? = null,
+        val cursorsBySessionId: MutableMap<String, CursorState> = ConcurrentHashMap(),
+        var lastCandidateKey: CandidateKeyPayload? = null,
+        var lastCandidateKeyAtEpochMs: Long = 0L,
+    )
+
+    private data class CursorState(
+        var lineNumber: Int,
+        var column: Int,
     )
 
     private val roomSockets = ConcurrentHashMap<String, MutableSet<WebSocketSession>>()
@@ -185,6 +196,16 @@ class CollaborationService(
             "set_step" -> setStep(connectionId, request.stepIndex ?: -1)
             "notes_update" -> updateNotes(connectionId, request.notes.orEmpty())
             "presence_update" -> updatePresence(connectionId, request.presenceStatus)
+            "cursor_update" -> updateCursor(connectionId, request.lineNumber, request.column)
+            "key_press" -> trackKeyPress(
+                connectionId = connectionId,
+                key = request.key,
+                keyCode = request.keyCode,
+                ctrlKey = request.ctrlKey ?: false,
+                altKey = request.altKey ?: false,
+                shiftKey = request.shiftKey ?: false,
+                metaKey = request.metaKey ?: false,
+            )
             else -> throw ApiException(HttpStatus.BAD_REQUEST, "Неизвестный тип сообщения: ${request.type}")
         }
     }
@@ -258,6 +279,79 @@ class CollaborationService(
         broadcastState(participant.inviteCode)
     }
 
+    fun updateCursor(socket: WebSocketSession, lineNumber: Int?, column: Int?) {
+        updateCursor(socket.id, lineNumber, column)
+    }
+
+    private fun updateCursor(connectionId: String, lineNumber: Int?, column: Int?) {
+        val participant = participants[connectionId] ?: return
+        val nextLine = (lineNumber ?: 1).coerceAtLeast(1)
+        val nextColumn = (column ?: 1).coerceAtLeast(1)
+
+        val state = roomState[participant.inviteCode] ?: return
+        val currentCursor = state.cursorsBySessionId[participant.sessionId]
+        if (currentCursor != null && currentCursor.lineNumber == nextLine && currentCursor.column == nextColumn) {
+            return
+        }
+
+        state.cursorsBySessionId[participant.sessionId] = CursorState(
+            lineNumber = nextLine,
+            column = nextColumn,
+        )
+        markParticipantActive(participant)
+        broadcastState(participant.inviteCode)
+    }
+
+    fun trackKeyPress(
+        socket: WebSocketSession,
+        key: String?,
+        keyCode: String?,
+        ctrlKey: Boolean,
+        altKey: Boolean,
+        shiftKey: Boolean,
+        metaKey: Boolean,
+    ) {
+        trackKeyPress(socket.id, key, keyCode, ctrlKey, altKey, shiftKey, metaKey)
+    }
+
+    private fun trackKeyPress(
+        connectionId: String,
+        key: String?,
+        keyCode: String?,
+        ctrlKey: Boolean,
+        altKey: Boolean,
+        shiftKey: Boolean,
+        metaKey: Boolean,
+    ) {
+        val participant = participants[connectionId] ?: return
+        if (participant.role != RoomRole.CANDIDATE) return
+
+        val normalizedKey = key.orEmpty().trim().take(32)
+        val normalizedCode = keyCode.orEmpty().trim().take(32)
+        if (normalizedKey.isBlank() && normalizedCode.isBlank()) return
+
+        val state = roomState[participant.inviteCode] ?: return
+        val now = Instant.now().toEpochMilli()
+        if (now - state.lastCandidateKeyAtEpochMs < keyEventBroadcastThrottleMs) {
+            return
+        }
+
+        state.lastCandidateKey = CandidateKeyPayload(
+            sessionId = participant.sessionId,
+            displayName = participant.displayName,
+            key = normalizedKey.ifBlank { "Unknown" },
+            keyCode = normalizedCode.ifBlank { "Unknown" },
+            ctrlKey = ctrlKey,
+            altKey = altKey,
+            shiftKey = shiftKey,
+            metaKey = metaKey,
+            timestampEpochMs = now,
+        )
+        state.lastCandidateKeyAtEpochMs = now
+        markParticipantActive(participant)
+        broadcastState(participant.inviteCode)
+    }
+
     @Transactional
     fun nextStep(socket: WebSocketSession) {
         nextStep(socket.id)
@@ -325,12 +419,29 @@ class CollaborationService(
         }
 
         val state = roomState[inviteCode] ?: return
-        val participantsPayload = participants.values
+        val roomParticipants = participants.values
             .asSequence()
             .filter { it.inviteCode == inviteCode }
             .sortedBy { it.displayName.lowercase() }
             .distinctBy { it.sessionId }
+            .toList()
+        val participantsPayload = roomParticipants
             .map { ParticipantPayload(it.sessionId, it.displayName, it.presenceStatus.wireValue) }
+        val roleBySessionId = roomParticipants.associate { it.sessionId to it.role.wireValue }
+        val displayNameBySessionId = roomParticipants.associate { it.sessionId to it.displayName }
+        val cursorsPayload = state.cursorsBySessionId.entries
+            .asSequence()
+            .mapNotNull { (sessionId, cursor) ->
+                val role = roleBySessionId[sessionId] ?: return@mapNotNull null
+                val displayName = displayNameBySessionId[sessionId] ?: return@mapNotNull null
+                CursorPayload(
+                    sessionId = sessionId,
+                    displayName = displayName,
+                    role = role,
+                    lineNumber = cursor.lineNumber,
+                    column = cursor.column,
+                )
+            }
             .toList()
 
         val sockets = roomSockets[inviteCode]?.toList().orEmpty()
@@ -342,7 +453,7 @@ class CollaborationService(
                 return@forEach
             }
             try {
-                val payload = buildPayload(inviteCode, state, participantsPayload, participant)
+                val payload = buildPayload(inviteCode, state, participantsPayload, cursorsPayload, participant)
                 val message = WsOutgoingMessage(type = "state_sync", payload = payload)
                 if (socket.isOpen) {
                     synchronized(socket) {
@@ -366,7 +477,7 @@ class CollaborationService(
                 return@forEach
             }
             try {
-                val payload = buildPayload(inviteCode, state, participantsPayload, participant)
+                val payload = buildPayload(inviteCode, state, participantsPayload, cursorsPayload, participant)
                 val message = WsOutgoingMessage(type = "state_sync", payload = payload)
                 emitter.send(
                     SseEmitter.event()
@@ -383,6 +494,7 @@ class CollaborationService(
         inviteCode: String,
         state: RealtimeState,
         participantsPayload: List<ParticipantPayload>,
+        cursorsPayload: List<CursorPayload>,
         participant: ParticipantMeta,
     ): RoomRealtimePayload {
         return RoomRealtimePayload(
@@ -398,6 +510,8 @@ class CollaborationService(
             notesLockedBySessionId = state.notesLockedBySessionId,
             notesLockedByDisplayName = state.notesLockedByDisplayName,
             notesLockedUntilEpochMs = state.notesLockedUntilEpochMs,
+            cursors = cursorsPayload,
+            lastCandidateKey = state.lastCandidateKey,
         )
     }
 
@@ -414,6 +528,9 @@ class CollaborationService(
             notesLockedBySessionId = currentState?.notesLockedBySessionId,
             notesLockedByDisplayName = currentState?.notesLockedByDisplayName,
             notesLockedUntilEpochMs = currentState?.notesLockedUntilEpochMs,
+            cursorsBySessionId = currentState?.cursorsBySessionId ?: ConcurrentHashMap(),
+            lastCandidateKey = currentState?.lastCandidateKey,
+            lastCandidateKeyAtEpochMs = currentState?.lastCandidateKeyAtEpochMs ?: 0L,
         )
         broadcastState(inviteCode)
     }
@@ -464,6 +581,13 @@ class CollaborationService(
 
         if (participant != null) {
             connectionByRoomSession.remove(roomSessionKey(participant.inviteCode, participant.sessionId), connectionId)
+            roomState[participant.inviteCode]?.let { state ->
+                state.cursorsBySessionId.remove(participant.sessionId)
+                if (state.lastCandidateKey?.sessionId == participant.sessionId) {
+                    state.lastCandidateKey = null
+                    state.lastCandidateKeyAtEpochMs = 0L
+                }
+            }
         }
 
         wsConnections.remove(connectionId)?.let { socket ->

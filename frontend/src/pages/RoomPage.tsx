@@ -21,6 +21,26 @@ type Participant = {
   presenceStatus: "active" | "away";
 };
 
+type CursorInfo = {
+  sessionId: string;
+  displayName: string;
+  role: "owner" | "interviewer" | "candidate";
+  lineNumber: number;
+  column: number;
+};
+
+type CandidateKeyInfo = {
+  sessionId: string;
+  displayName: string;
+  key: string;
+  keyCode: string;
+  ctrlKey: boolean;
+  altKey: boolean;
+  shiftKey: boolean;
+  metaKey: boolean;
+  timestampEpochMs: number;
+};
+
 type RealtimeState = {
   inviteCode: string;
   language: string;
@@ -34,6 +54,8 @@ type RealtimeState = {
   notesLockedBySessionId: string | null;
   notesLockedByDisplayName: string | null;
   notesLockedUntilEpochMs: number | null;
+  cursors: CursorInfo[];
+  lastCandidateKey: CandidateKeyInfo | null;
 };
 
 type ResizeSide = "left" | "right";
@@ -167,7 +189,9 @@ export function RoomPage() {
       canManageRoom: false,
       notesLockedBySessionId: null,
       notesLockedByDisplayName: null,
-      notesLockedUntilEpochMs: null
+      notesLockedUntilEpochMs: null,
+      cursors: [],
+      lastCandidateKey: null
     };
   }, [room, state]);
 
@@ -191,7 +215,7 @@ export function RoomPage() {
   const fallbackDisplayName = authUser?.nickname?.trim() || (interviewerToken ? "Интервьюер" : "Участник");
   const effectiveDisplayName = displayName.trim() || fallbackDisplayName;
   const canConnect = Boolean(inviteCode);
-  const { connected, sessionId, sendCodeUpdate, sendLanguageUpdate, sendSetStep, sendNotesUpdate } = useRoomSocket({
+  const { connected, sessionId, sendCodeUpdate, sendLanguageUpdate, sendSetStep, sendNotesUpdate, sendCursorUpdate, sendKeyPress } = useRoomSocket({
     enabled: canConnect,
     inviteCode,
     authToken,
@@ -218,16 +242,10 @@ export function RoomPage() {
   }, [merged?.notesLockedUntilEpochMs, notesLockTick]);
 
   useEffect(() => {
-    if (!canManageRoom || !merged || notesLockedByOther) return;
-    if (notesDraft === mergedNotes) {
-      if (notesDirty) setNotesDirty(false);
-      return;
+    if (notesDirty && notesDraft === mergedNotes) {
+      setNotesDirty(false);
     }
-    const timer = window.setTimeout(() => {
-      sendNotesUpdate(notesDraft);
-    }, 300);
-    return () => window.clearTimeout(timer);
-  }, [canManageRoom, merged, mergedNotes, notesDirty, notesDraft, notesLockedByOther, sendNotesUpdate]);
+  }, [mergedNotes, notesDirty, notesDraft]);
 
   useEffect(() => {
     if (!copiedHint) return;
@@ -322,7 +340,13 @@ export function RoomPage() {
       </Modal>
 
       <Box className={styles.shell}>
-        <TopBar roomTitle={room?.title ?? "Комната"} authToken={authToken} connected={connected} participants={merged.participants} />
+        <TopBar
+          roomTitle={room?.title ?? "Комната"}
+          authToken={authToken}
+          connected={connected}
+          participants={merged.participants}
+          showParticipants={canManageRoom}
+        />
 
         {canManageRoom && (
           <InvitationsMenu
@@ -343,19 +367,31 @@ export function RoomPage() {
             notesDraft={notesDraft}
             notesStatus={notesStatus}
             notesLockedByOther={notesLockedByOther}
+            sessionId={sessionId}
+            cursors={merged.cursors}
+            lastCandidateKey={merged.lastCandidateKey}
             onCodeChange={(value) => sendCodeUpdate(value ?? "")}
             onLanguageChange={(value) => value && sendLanguageUpdate(value)}
             onSelectStep={(stepIndex) => sendSetStep(stepIndex)}
+            onCursorChange={(lineNumber, column) => sendCursorUpdate(lineNumber, column)}
+            onKeyPress={(payload) => sendKeyPress(payload)}
             onNotesChange={(value) => {
               setNotesDraft(value);
               setNotesDirty(true);
+              if (!notesLockedByOther) {
+                sendNotesUpdate(value);
+              }
             }}
           />
         ) : (
           <CandidateLayout
             merged={merged}
             stepTitle={step?.title ?? "-"}
+            sessionId={sessionId}
+            cursors={merged.cursors}
             onCodeChange={(value) => sendCodeUpdate(value ?? "")}
+            onCursorChange={(lineNumber, column) => sendCursorUpdate(lineNumber, column)}
+            onKeyPress={(payload) => sendKeyPress(payload)}
             error={error}
           />
         )}
@@ -368,12 +404,14 @@ function TopBar({
   roomTitle,
   authToken,
   connected,
-  participants
+  participants,
+  showParticipants
 }: {
   roomTitle: string;
   authToken: string | null;
   connected: boolean;
   participants: Participant[];
+  showParticipants: boolean;
 }) {
   const normalizedParticipants = useMemo(() => {
     const unique = new Map<string, Participant>();
@@ -389,6 +427,7 @@ function TopBar({
   const [maxVisibleParticipants, setMaxVisibleParticipants] = useState(normalizedParticipants.length);
 
   useEffect(() => {
+    if (!showParticipants) return;
     const host = participantsHostRef.current;
     if (!host) return;
 
@@ -422,7 +461,7 @@ function TopBar({
       observer.disconnect();
       window.removeEventListener("resize", recalc);
     };
-  }, [normalizedParticipants.length]);
+  }, [normalizedParticipants.length, showParticipants]);
 
   const visibleParticipants = normalizedParticipants.slice(0, maxVisibleParticipants);
   const hiddenParticipants = normalizedParticipants.slice(visibleParticipants.length);
@@ -437,38 +476,42 @@ function TopBar({
           <div className={styles.brandTitle}>{roomTitle}</div>
         </Box>
 
-        <Box className={styles.participantsHost} ref={participantsHostRef}>
-          <Group className={styles.participantsInline} gap={6} wrap="nowrap">
-            {visibleParticipants.map((participant) => (
-              <Badge
-                key={participant.sessionId}
-                variant="light"
-                color={participant.presenceStatus === "active" ? "teal" : "gray"}
-                className={styles.participantBadge}
-                data-testid={`participant-badge-${participant.presenceStatus}`}
-              >
-                {participant.displayName}
-              </Badge>
-            ))}
+        {showParticipants ? (
+          <Box className={styles.participantsHost} ref={participantsHostRef}>
+            <Group className={styles.participantsInline} gap={6} wrap="nowrap">
+              {visibleParticipants.map((participant) => (
+                <Badge
+                  key={participant.sessionId}
+                  variant="light"
+                  color={participant.presenceStatus === "active" ? "teal" : "gray"}
+                  className={styles.participantBadge}
+                  data-testid={`participant-badge-${participant.presenceStatus}`}
+                >
+                  {participant.displayName}
+                </Badge>
+              ))}
 
-            {hiddenParticipants.length > 0 && (
-              <Menu withinPortal position="bottom-end" shadow="md">
-                <Menu.Target>
-                  <ActionIcon variant="subtle" color="gray" size="sm" aria-label="Скрытые участники">
-                    <IconMenu2 size={16} />
-                  </ActionIcon>
-                </Menu.Target>
-                <Menu.Dropdown>
-                  {hiddenParticipants.map((participant) => (
-                    <Menu.Item key={participant.sessionId} leftSection={<IconUsers size={14} />}>
-                      {participant.displayName} {participant.presenceStatus === "active" ? "• в фокусе" : "• вне фокуса"}
-                    </Menu.Item>
-                  ))}
-                </Menu.Dropdown>
-              </Menu>
-            )}
-          </Group>
-        </Box>
+              {hiddenParticipants.length > 0 && (
+                <Menu withinPortal position="bottom-end" shadow="md">
+                  <Menu.Target>
+                    <ActionIcon variant="subtle" color="gray" size="sm" aria-label="Скрытые участники">
+                      <IconMenu2 size={16} />
+                    </ActionIcon>
+                  </Menu.Target>
+                  <Menu.Dropdown>
+                    {hiddenParticipants.map((participant) => (
+                      <Menu.Item key={participant.sessionId} leftSection={<IconUsers size={14} />}>
+                        {participant.displayName} {participant.presenceStatus === "active" ? "• в фокусе" : "• вне фокуса"}
+                      </Menu.Item>
+                    ))}
+                  </Menu.Dropdown>
+                </Menu>
+              )}
+            </Group>
+          </Box>
+        ) : (
+          <Box className={styles.participantsHost} />
+        )}
 
         <Group className={styles.topActions}>
           <Badge color={connected ? "teal" : "gray"} variant="light">
@@ -537,9 +580,14 @@ function OwnerLayout({
   notesDraft,
   notesStatus,
   notesLockedByOther,
+  sessionId,
+  cursors,
+  lastCandidateKey,
   onCodeChange,
   onLanguageChange,
   onSelectStep,
+  onCursorChange,
+  onKeyPress,
   onNotesChange
 }: {
   merged: RealtimeState;
@@ -550,9 +598,14 @@ function OwnerLayout({
   notesDraft: string;
   notesStatus: string;
   notesLockedByOther: boolean;
+  sessionId: string;
+  cursors: CursorInfo[];
+  lastCandidateKey: CandidateKeyInfo | null;
   onCodeChange: (value: string | undefined) => void;
   onLanguageChange: (value: string | null) => void;
   onSelectStep: (stepIndex: number) => void;
+  onCursorChange: (lineNumber: number, column: number) => void;
+  onKeyPress: (payload: { key: string; keyCode: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void;
   onNotesChange: (value: string) => void;
 }) {
   const [leftSidebarVisible, setLeftSidebarVisible] = useState(true);
@@ -711,18 +764,15 @@ function OwnerLayout({
         <Box className={styles.editorColumn}>
           <Box className={styles.editorPanel}>
             <div className={styles.editorWrap}>
-              <Editor
+              <RoomCodeEditor
                 height="100%"
                 language={merged.language}
                 value={merged.code}
-                theme="vs-dark"
+                sessionId={sessionId}
+                cursors={cursors}
                 onChange={onCodeChange}
-                options={{
-                  minimap: { enabled: false },
-                  fontSize: 14,
-                  lineNumbersMinChars: 3,
-                  smoothScrolling: true
-                }}
+                onCursorChange={onCursorChange}
+                onKeyPress={onKeyPress}
               />
             </div>
           </Box>
@@ -745,6 +795,11 @@ function OwnerLayout({
                 <Text size="xs" c={notesLockedByOther ? "#f78989" : notesStatus === "Сохраняем..." ? "#f5c26b" : "#8b919b"}>
                   {notesStatus}
                 </Text>
+                {lastCandidateKey && (
+                  <Text size="xs" c="#7bb0ff">
+                    Клавиша кандидата: {formatCandidateKey(lastCandidateKey)}
+                  </Text>
+                )}
                 <Textarea
                   value={notesDraft}
                   onChange={(event) => onNotesChange(event.currentTarget.value)}
@@ -778,12 +833,20 @@ function OwnerLayout({
 function CandidateLayout({
   merged,
   stepTitle,
+  sessionId,
+  cursors,
   onCodeChange,
+  onCursorChange,
+  onKeyPress,
   error
 }: {
   merged: RealtimeState;
   stepTitle: string;
+  sessionId: string;
+  cursors: CursorInfo[];
   onCodeChange: (value: string | undefined) => void;
+  onCursorChange: (lineNumber: number, column: number) => void;
+  onKeyPress: (payload: { key: string; keyCode: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void;
   error: string;
 }) {
   return (
@@ -806,23 +869,152 @@ function CandidateLayout({
 
       <Box className={styles.candidatePanel}>
         <div className={styles.editorWrap}>
-          <Editor
+          <RoomCodeEditor
             height="calc(100vh - 170px)"
             language={merged.language}
             value={merged.code}
-            theme="vs-dark"
+            sessionId={sessionId}
+            cursors={cursors}
             onChange={onCodeChange}
-            options={{
-              minimap: { enabled: false },
-              fontSize: 14,
-              lineNumbersMinChars: 3,
-              smoothScrolling: true
-            }}
+            onCursorChange={onCursorChange}
+            onKeyPress={onKeyPress}
+            showRemoteCursors={false}
           />
         </div>
       </Box>
 
       {error && <Text className={styles.error}>{error}</Text>}
     </Box>
+  );
+}
+
+function formatCandidateKey(event: CandidateKeyInfo): string {
+  const modifiers: string[] = [];
+  if (event.ctrlKey) modifiers.push("Ctrl");
+  if (event.altKey) modifiers.push("Alt");
+  if (event.shiftKey) modifiers.push("Shift");
+  if (event.metaKey) modifiers.push("Meta");
+
+  const key = event.key || event.keyCode || "Unknown";
+  return [...modifiers, key].join("+");
+}
+
+function cursorClassByRole(role: CursorInfo["role"]): string {
+  if (role === "owner") return styles.remoteCursorOwner;
+  if (role === "interviewer") return styles.remoteCursorInterviewer;
+  return styles.remoteCursorCandidate;
+}
+
+function RoomCodeEditor({
+  height,
+  language,
+  value,
+  sessionId,
+  cursors,
+  onChange,
+  onCursorChange,
+  onKeyPress,
+  showRemoteCursors = true
+}: {
+  height: string;
+  language: string;
+  value: string;
+  sessionId: string;
+  cursors: CursorInfo[];
+  onChange: (value: string | undefined) => void;
+  onCursorChange: (lineNumber: number, column: number) => void;
+  onKeyPress: (payload: { key: string; keyCode: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void;
+  showRemoteCursors?: boolean;
+}) {
+  const editorRef = useRef<any>(null);
+  const monacoRef = useRef<any>(null);
+  const disposablesRef = useRef<Array<{ dispose: () => void }>>([]);
+  const decorationsRef = useRef<string[]>([]);
+  const lastCursorSentRef = useRef<{ lineNumber: number; column: number; ts: number }>({ lineNumber: 0, column: 0, ts: 0 });
+
+  useEffect(() => {
+    return () => {
+      disposablesRef.current.forEach((disposable) => disposable.dispose());
+      disposablesRef.current = [];
+    };
+  }, []);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+    if (!editor || !monaco) return;
+
+    const model = editor.getModel();
+    if (!model) return;
+
+    const remoteCursors = showRemoteCursors ? cursors.filter((cursor) => cursor.sessionId !== sessionId) : [];
+    const decorations = remoteCursors.map((cursor) => {
+      const maxLine = model.getLineCount();
+      const lineNumber = Math.min(Math.max(cursor.lineNumber, 1), maxLine);
+      const lineMaxColumn = model.getLineMaxColumn(lineNumber);
+      const startColumn = Math.min(Math.max(cursor.column, 1), lineMaxColumn);
+      const endColumn = Math.min(startColumn + 1, lineMaxColumn);
+
+      return {
+        range: new monaco.Range(lineNumber, startColumn, lineNumber, Math.max(endColumn, startColumn)),
+        options: {
+          inlineClassName: cursorClassByRole(cursor.role),
+          hoverMessage: { value: `${cursor.displayName} (${cursor.role})` }
+        }
+      };
+    });
+
+    decorationsRef.current = editor.deltaDecorations(decorationsRef.current, decorations);
+  }, [cursors, sessionId, showRemoteCursors]);
+
+  return (
+    <Editor
+      height={height}
+      language={language}
+      value={value}
+      theme="vs-dark"
+      onChange={onChange}
+      onMount={(editor, monaco) => {
+        editorRef.current = editor;
+        monacoRef.current = monaco;
+
+        disposablesRef.current.forEach((disposable) => disposable.dispose());
+        disposablesRef.current = [];
+
+        disposablesRef.current.push(
+          editor.onDidChangeCursorPosition((event: any) => {
+            const lineNumber = event.position?.lineNumber ?? 1;
+            const column = event.position?.column ?? 1;
+            const now = Date.now();
+            const prev = lastCursorSentRef.current;
+            if (prev.lineNumber === lineNumber && prev.column === column && now - prev.ts < 40) {
+              return;
+            }
+            lastCursorSentRef.current = { lineNumber, column, ts: now };
+            onCursorChange(lineNumber, column);
+          })
+        );
+
+        disposablesRef.current.push(
+          editor.onKeyDown((event: any) => {
+            const browserEvent = event.browserEvent as KeyboardEvent;
+            onKeyPress({
+              key: browserEvent.key,
+              keyCode: browserEvent.code,
+              ctrlKey: browserEvent.ctrlKey,
+              altKey: browserEvent.altKey,
+              shiftKey: browserEvent.shiftKey,
+              metaKey: browserEvent.metaKey
+            });
+          })
+        );
+      }}
+      options={{
+        minimap: { enabled: false },
+        fontSize: 14,
+        lineNumbersMinChars: 3,
+        smoothScrolling: true
+      }}
+    />
   );
 }

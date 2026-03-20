@@ -7,6 +7,26 @@ type Participant = {
   presenceStatus: "active" | "away";
 };
 
+type CursorPayload = {
+  sessionId: string;
+  displayName: string;
+  role: "owner" | "interviewer" | "candidate";
+  lineNumber: number;
+  column: number;
+};
+
+type CandidateKeyPayload = {
+  sessionId: string;
+  displayName: string;
+  key: string;
+  keyCode: string;
+  ctrlKey: boolean;
+  altKey: boolean;
+  shiftKey: boolean;
+  metaKey: boolean;
+  timestampEpochMs: number;
+};
+
 type RealtimeState = {
   inviteCode: string;
   language: string;
@@ -20,6 +40,8 @@ type RealtimeState = {
   notesLockedBySessionId: string | null;
   notesLockedByDisplayName: string | null;
   notesLockedUntilEpochMs: number | null;
+  cursors: CursorPayload[];
+  lastCandidateKey: CandidateKeyPayload | null;
 };
 
 type WsMessage = {
@@ -38,18 +60,27 @@ type Options = {
   onError: (message: string) => void;
 };
 
-type ClientMessage = {
-  type: "code_update" | "language_update" | "set_step" | "notes_update" | "presence_update";
-  code?: string;
-  language?: string;
-  stepIndex?: number;
-  notes?: string;
-  presenceStatus?: "active" | "away";
-};
+type ClientMessage =
+  | { type: "code_update"; code: string }
+  | { type: "language_update"; language: string }
+  | { type: "set_step"; stepIndex: number }
+  | { type: "notes_update"; notes: string }
+  | { type: "presence_update"; presenceStatus: "active" | "away" }
+  | { type: "cursor_update"; lineNumber: number; column: number }
+  | {
+      type: "key_press";
+      key: string;
+      keyCode: string;
+      ctrlKey: boolean;
+      altKey: boolean;
+      shiftKey: boolean;
+      metaKey: boolean;
+    };
 
 const WS_RECONNECT_BASE_DELAY_MS = 500;
 const WS_RECONNECT_MAX_DELAY_MS = 5000;
 const WS_FAILS_BEFORE_SSE_FALLBACK = 2;
+const PRESENCE_HEARTBEAT_MS = 10_000;
 
 function sessionIdKey(inviteCode: string) {
   return `room_ws_session_id_${inviteCode}`;
@@ -100,7 +131,8 @@ export function useRoomSocket({
 
     let wsFailedAttempts = 0;
     let wsReconnectTimer: ReturnType<typeof setTimeout> | null = null;
-    let hasWindowFocus = true;
+    let presenceHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
+    let hasWindowFocus = typeof document !== "undefined" ? document.hasFocus() : true;
     let disposed = false;
     let closedInCleanup = false;
     let sseErrorNotified = false;
@@ -110,6 +142,20 @@ export function useRoomSocket({
         clearTimeout(wsReconnectTimer);
         wsReconnectTimer = null;
       }
+    };
+
+    const clearPresenceHeartbeat = () => {
+      if (presenceHeartbeatTimer !== null) {
+        clearInterval(presenceHeartbeatTimer);
+        presenceHeartbeatTimer = null;
+      }
+    };
+
+    const ensurePresenceHeartbeat = () => {
+      if (presenceHeartbeatTimer !== null) return;
+      presenceHeartbeatTimer = setInterval(() => {
+        sendPresence(currentPresenceStatus(hasWindowFocus));
+      }, PRESENCE_HEARTBEAT_MS);
     };
 
     const buildParams = () => {
@@ -157,7 +203,7 @@ export function useRoomSocket({
         });
     };
 
-    const send = (payload: ClientMessage) => {
+    const sendViaActiveTransport = (payload: ClientMessage) => {
       if (transportRef.current === "ws") {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
           wsRef.current.send(JSON.stringify(payload));
@@ -168,7 +214,7 @@ export function useRoomSocket({
     };
 
     const sendPresence = (status: "active" | "away") => {
-      send({ type: "presence_update", presenceStatus: status });
+      sendViaActiveTransport({ type: "presence_update", presenceStatus: status });
     };
 
     const publishCurrentPresence = () => {
@@ -192,6 +238,7 @@ export function useRoomSocket({
         setConnected(true);
         onError("");
         publishCurrentPresence();
+        ensurePresenceHeartbeat();
       };
 
       source.onmessage = (event) => {
@@ -258,6 +305,7 @@ export function useRoomSocket({
         setConnected(true);
         onError("");
         publishCurrentPresence();
+        ensurePresenceHeartbeat();
       };
 
       socket.onclose = (event) => {
@@ -294,6 +342,7 @@ export function useRoomSocket({
         ws.close(1000, "page_unload");
       }
       sseRef.current?.close();
+      clearPresenceHeartbeat();
     };
 
     transportRef.current = "ws";
@@ -314,6 +363,7 @@ export function useRoomSocket({
 
       disposed = true;
       clearWsReconnectTimer();
+      clearPresenceHeartbeat();
 
       const ws = wsRef.current;
       wsRef.current = null;
@@ -366,12 +416,37 @@ export function useRoomSocket({
     send({ type: "notes_update", notes });
   };
 
+  const sendCursorUpdate = (lineNumber: number, column: number) => {
+    send({ type: "cursor_update", lineNumber, column });
+  };
+
+  const sendKeyPress = (payload: {
+    key: string;
+    keyCode: string;
+    ctrlKey: boolean;
+    altKey: boolean;
+    shiftKey: boolean;
+    metaKey: boolean;
+  }) => {
+    send({
+      type: "key_press",
+      key: payload.key,
+      keyCode: payload.keyCode,
+      ctrlKey: payload.ctrlKey,
+      altKey: payload.altKey,
+      shiftKey: payload.shiftKey,
+      metaKey: payload.metaKey
+    });
+  };
+
   return {
     connected,
     sessionId,
     sendCodeUpdate,
     sendLanguageUpdate,
     sendSetStep,
-    sendNotesUpdate
+    sendNotesUpdate,
+    sendCursorUpdate,
+    sendKeyPress
   };
 }
