@@ -212,7 +212,7 @@ class CollaborationService(
                 selectionEndLineNumber = request.selectionEndLineNumber,
                 selectionEndColumn = request.selectionEndColumn,
             )
-            "yjs_update" -> relayYjsUpdate(connectionId, request.yjsUpdate.orEmpty())
+            "yjs_update" -> relayYjsUpdate(connectionId, request.yjsUpdate.orEmpty(), request.syncKey)
             "key_press" -> trackKeyPress(
                 connectionId = connectionId,
                 key = request.key,
@@ -244,11 +244,11 @@ class CollaborationService(
         broadcastState(participant.inviteCode)
     }
 
-    fun relayYjsUpdate(socket: WebSocketSession, yjsUpdate: String) {
-        relayYjsUpdate(socket.id, yjsUpdate)
+    fun relayYjsUpdate(socket: WebSocketSession, yjsUpdate: String, syncKey: String?) {
+        relayYjsUpdate(socket.id, yjsUpdate, syncKey)
     }
 
-    private fun relayYjsUpdate(connectionId: String, yjsUpdate: String) {
+    private fun relayYjsUpdate(connectionId: String, yjsUpdate: String, syncKey: String?) {
         val participant = participants[connectionId] ?: return
         if (yjsUpdate.isBlank()) return
         markParticipantActive(participant)
@@ -258,6 +258,7 @@ class CollaborationService(
             payload = mapOf(
                 "sessionId" to participant.sessionId,
                 "yjsUpdate" to yjsUpdate,
+                "syncKey" to syncKey,
             ),
             excludeConnectionId = connectionId,
         )

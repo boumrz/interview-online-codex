@@ -161,6 +161,8 @@ export function RoomPage() {
   const [notesDirty, setNotesDirty] = useState(false);
   const [copiedHint, setCopiedHint] = useState("");
   const [notesLockTick, setNotesLockTick] = useState(0);
+  const [editorHydrated, setEditorHydrated] = useState(false);
+  const [resyncSignal, setResyncSignal] = useState(0);
   const yjsPendingUpdatesRef = useRef<string[]>([]);
   const yjsApplyUpdateRef = useRef<((yjsUpdate: string) => void) | null>(null);
 
@@ -239,6 +241,27 @@ export function RoomPage() {
 
   const mergedNotes = merged?.notes ?? "";
   const canManageRoom = merged?.canManageRoom ?? false;
+  const currentSyncKey = useMemo(() => {
+    if (!merged) return `${inviteCode}:0:javascript`;
+    return `${merged.inviteCode}:${merged.currentStep}:${merged.language}`;
+  }, [inviteCode, merged]);
+  const syncKeyRef = useRef(currentSyncKey);
+  const previousParticipantsCountRef = useRef<number | null>(null);
+  const sessionIdRef = useRef<string>("");
+  const recentLocalYjsUpdatesRef = useRef<Map<string, number>>(new Map());
+
+  useEffect(() => {
+    syncKeyRef.current = currentSyncKey;
+  }, [currentSyncKey]);
+
+  useEffect(() => {
+    const participantsCount = merged?.participants.length ?? 0;
+    const previous = previousParticipantsCountRef.current;
+    if (previous !== null && participantsCount > previous) {
+      setResyncSignal((value) => value + 1);
+    }
+    previousParticipantsCountRef.current = participantsCount;
+  }, [merged?.participants.length]);
 
   useEffect(() => {
     if (!notesDirty) {
@@ -268,9 +291,23 @@ export function RoomPage() {
     setError(message);
   }, []);
 
-  const onYjsUpdate = useCallback((payload: { sessionId: string; yjsUpdate: string }) => {
+  const onYjsUpdate = useCallback((payload: { sessionId: string; yjsUpdate: string; syncKey?: string | null }) => {
     const update = payload.yjsUpdate?.trim();
     if (!update) return;
+    const incomingSyncKey = payload.syncKey?.trim();
+    if (incomingSyncKey && incomingSyncKey !== syncKeyRef.current) {
+      return;
+    }
+
+    const dedupeKey = `${incomingSyncKey ?? ""}::${update}`;
+    const now = Date.now();
+    const recentSentAt = recentLocalYjsUpdatesRef.current.get(dedupeKey);
+    if (recentSentAt && now - recentSentAt < 10_000) {
+      recentLocalYjsUpdatesRef.current.delete(dedupeKey);
+      return;
+    }
+
+    setEditorHydrated(true);
     if (yjsApplyUpdateRef.current) {
       yjsApplyUpdateRef.current(update);
       return;
@@ -299,6 +336,45 @@ export function RoomPage() {
     onError,
     onYjsUpdate
   });
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
+
+  const sendYjsUpdateTracked = useCallback((yjsUpdate: string, syncKey?: string | null) => {
+    const update = yjsUpdate.trim();
+    if (!update) return;
+    const normalizedSyncKey = syncKey?.trim() ?? "";
+    const now = Date.now();
+    const dedupeKey = `${normalizedSyncKey}::${update}`;
+    recentLocalYjsUpdatesRef.current.set(dedupeKey, now);
+    recentLocalYjsUpdatesRef.current.forEach((timestamp, key) => {
+      if (now - timestamp > 15_000) {
+        recentLocalYjsUpdatesRef.current.delete(key);
+      }
+    });
+    sendYjsUpdate(update, normalizedSyncKey || null);
+  }, [sendYjsUpdate]);
+
+  const hasRealtimeState = Boolean(state);
+  const participantsCount = state?.participants.length ?? 0;
+
+  useEffect(() => {
+    if (!hasRealtimeState) {
+      setEditorHydrated(false);
+      return;
+    }
+    if (participantsCount <= 1) {
+      setEditorHydrated(true);
+      return;
+    }
+    setEditorHydrated(false);
+    const timer = window.setTimeout(() => {
+      setEditorHydrated(true);
+    }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [currentSyncKey, hasRealtimeState, participantsCount]);
+
+  const editorReady = !hasRealtimeState || editorHydrated;
 
   const notesLockActive = (merged?.notesLockedUntilEpochMs ?? 0) > Date.now();
   const notesLockedByOther =
@@ -445,11 +521,14 @@ export function RoomPage() {
             cursors={merged.cursors}
             lastCandidateKey={merged.lastCandidateKey}
             candidateKeyHistory={merged.candidateKeyHistory ?? []}
+            syncKey={currentSyncKey}
+            resyncSignal={resyncSignal}
+            editorReady={editorReady}
             onCodeChange={(value) => sendCodeUpdate(value ?? "")}
             onLanguageChange={(value) => value && sendLanguageUpdate(value)}
             onSelectStep={(stepIndex) => sendSetStep(stepIndex)}
             onCursorChange={(payload) => sendCursorUpdate(payload)}
-            onYjsUpdate={(yjsUpdate) => sendYjsUpdate(yjsUpdate)}
+            onYjsUpdate={(yjsUpdate, syncKey) => sendYjsUpdateTracked(yjsUpdate, syncKey)}
             onYjsBridgeReady={onYjsBridgeReady}
             onKeyPress={(payload) => sendKeyPress(payload)}
             onNotesChange={(value) => {
@@ -466,9 +545,12 @@ export function RoomPage() {
             stepTitle={step?.title ?? "-"}
             sessionId={sessionId}
             cursors={merged.cursors}
+            syncKey={currentSyncKey}
+            resyncSignal={resyncSignal}
+            editorReady={editorReady}
             onCodeChange={(value) => sendCodeUpdate(value ?? "")}
             onCursorChange={(payload) => sendCursorUpdate(payload)}
-            onYjsUpdate={(yjsUpdate) => sendYjsUpdate(yjsUpdate)}
+            onYjsUpdate={(yjsUpdate, syncKey) => sendYjsUpdateTracked(yjsUpdate, syncKey)}
             onYjsBridgeReady={onYjsBridgeReady}
             onKeyPress={(payload) => sendKeyPress(payload)}
             error={error}
@@ -663,6 +745,9 @@ function OwnerLayout({
   cursors,
   lastCandidateKey,
   candidateKeyHistory,
+  syncKey,
+  resyncSignal,
+  editorReady,
   onCodeChange,
   onLanguageChange,
   onSelectStep,
@@ -684,6 +769,9 @@ function OwnerLayout({
   cursors: CursorInfo[];
   lastCandidateKey: CandidateKeyInfo | null;
   candidateKeyHistory: CandidateKeyInfo[];
+  syncKey: string;
+  resyncSignal: number;
+  editorReady: boolean;
   onCodeChange: (value: string | undefined) => void;
   onLanguageChange: (value: string | null) => void;
   onSelectStep: (stepIndex: number) => void;
@@ -695,7 +783,7 @@ function OwnerLayout({
     selectionEndLineNumber?: number | null;
     selectionEndColumn?: number | null;
   }) => void;
-  onYjsUpdate: (yjsUpdate: string) => void;
+  onYjsUpdate: (yjsUpdate: string, syncKey: string) => void;
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
   onKeyPress: (payload: { key: string; keyCode: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void;
   onNotesChange: (value: string) => void;
@@ -870,10 +958,13 @@ function OwnerLayout({
           <Box className={styles.editorPanel}>
             <div className={styles.editorWrap}>
               <RoomCodeEditor
+                key={syncKey}
                 height="100%"
                 language={merged.language}
                 value={merged.code}
-                syncKey={`${merged.inviteCode}:${merged.currentStep}:${merged.language}`}
+                syncKey={syncKey}
+                resyncSignal={resyncSignal}
+                readOnly={!editorReady}
                 sessionId={sessionId}
                 cursors={cursors}
                 onChange={onCodeChange}
@@ -953,6 +1044,9 @@ function CandidateLayout({
   stepTitle,
   sessionId,
   cursors,
+  syncKey,
+  resyncSignal,
+  editorReady,
   onCodeChange,
   onCursorChange,
   onYjsUpdate,
@@ -964,6 +1058,9 @@ function CandidateLayout({
   stepTitle: string;
   sessionId: string;
   cursors: CursorInfo[];
+  syncKey: string;
+  resyncSignal: number;
+  editorReady: boolean;
   onCodeChange: (value: string | undefined) => void;
   onCursorChange: (payload: {
     lineNumber: number;
@@ -973,7 +1070,7 @@ function CandidateLayout({
     selectionEndLineNumber?: number | null;
     selectionEndColumn?: number | null;
   }) => void;
-  onYjsUpdate: (yjsUpdate: string) => void;
+  onYjsUpdate: (yjsUpdate: string, syncKey: string) => void;
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
   onKeyPress: (payload: { key: string; keyCode: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void;
   error: string;
@@ -999,10 +1096,13 @@ function CandidateLayout({
       <Box className={styles.candidatePanel}>
         <div className={styles.editorWrap}>
           <RoomCodeEditor
+            key={syncKey}
             height="calc(100vh - 170px)"
             language={merged.language}
             value={merged.code}
-            syncKey={`${merged.inviteCode}:${merged.currentStep}:${merged.language}`}
+            syncKey={syncKey}
+            resyncSignal={resyncSignal}
+            readOnly={!editorReady}
             sessionId={sessionId}
             cursors={cursors}
             onChange={onCodeChange}
@@ -1071,6 +1171,8 @@ function RoomCodeEditor({
   language,
   value,
   syncKey,
+  resyncSignal,
+  readOnly,
   sessionId,
   cursors,
   onChange,
@@ -1083,6 +1185,8 @@ function RoomCodeEditor({
   language: string;
   value: string;
   syncKey: string;
+  resyncSignal: number;
+  readOnly: boolean;
   sessionId: string;
   cursors: CursorInfo[];
   onChange: (value: string | undefined) => void;
@@ -1094,7 +1198,7 @@ function RoomCodeEditor({
     selectionEndLineNumber?: number | null;
     selectionEndColumn?: number | null;
   }) => void;
-  onYjsUpdate: (yjsUpdate: string) => void;
+  onYjsUpdate: (yjsUpdate: string, syncKey: string) => void;
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
   onKeyPress: (payload: { key: string; keyCode: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void;
 }) {
@@ -1240,7 +1344,7 @@ function RoomCodeEditor({
 
       caretCssRules.push(`.${caretClassName} { border-left-color: ${theme.caret} !important; }`);
       selectionCssRules.push(
-        `.${selectionClassName} { background-color: ${theme.selection} !important; border: 1px solid ${theme.selectionBorder} !important; border-radius: 3px; }`
+        `.${selectionClassName} { background-color: ${theme.selection} !important; box-shadow: inset 0 0 0 1px ${theme.selectionBorder}; border-radius: 2px; }`
       );
 
       if (!cursorWidgetsRef.current.has(widgetId)) {
@@ -1283,7 +1387,7 @@ function RoomCodeEditor({
           selectionEnd.column
         ),
         options: {
-          className: `${styles.remoteSelectionHighlight} ${selectionClassName}`,
+          inlineClassName: selectionClassName,
           hoverMessage: { value: `${cursor.displayName} выделяет фрагмент` }
         }
       });
@@ -1311,13 +1415,10 @@ function RoomCodeEditor({
     const current = yText.toString();
     const next = value ?? "";
     const syncKeyChanged = syncKeyRef.current !== syncKey;
-    if (!syncKeyChanged && current === next) return;
-
-    // Keep state_sync as a fallback when Yjs transport drops updates.
-    // Do not override active collaborative typing with stale snapshots.
-    const now = Date.now();
-    if (!syncKeyChanged) {
-      if (now - lastLocalEditAtRef.current < 300) return;
+    if (!syncKeyChanged) return;
+    if (current === next) {
+      syncKeyRef.current = syncKey;
+      return;
     }
 
     syncKeyRef.current = syncKey;
@@ -1328,6 +1429,14 @@ function RoomCodeEditor({
       }
     }, "remote");
   }, [syncKey, value]);
+
+  useEffect(() => {
+    if (resyncSignal <= 0) return;
+    const yDoc = yDocRef.current;
+    if (!yDoc) return;
+    const encodedUpdate = bytesToBase64(Y.encodeStateAsUpdate(yDoc));
+    onYjsUpdate(encodedUpdate, syncKeyRef.current);
+  }, [onYjsUpdate, resyncSignal]);
 
   return (
     <Editor
@@ -1359,7 +1468,7 @@ function RoomCodeEditor({
         const handleDocUpdate = (_update: Uint8Array, origin: unknown) => {
           if (origin === "remote" || origin === "bootstrap") return;
           const encodedUpdate = bytesToBase64(Y.encodeStateAsUpdate(yDoc));
-          onYjsUpdate(encodedUpdate);
+          onYjsUpdate(encodedUpdate, syncKeyRef.current);
           schedulePersistCode(yText.toString());
         };
         yDoc.on("update", handleDocUpdate);
@@ -1371,42 +1480,109 @@ function RoomCodeEditor({
           const activeModel = activeEditor?.getModel();
           if (!activeEditor || !activeMonaco || !activeModel) return;
 
-          const edits: Array<{ range: any; text: string; forceMoveMarkers: boolean }> = [];
-          let index = 0;
+          const draftEdits: Array<{ offset: number; deleteLength: number; text: string }> = [];
+          let sourceOffset = 0;
+          let pendingDeleteOffset: number | null = null;
+          let pendingDeleteLength = 0;
+
+          const pushDraftEdit = (offset: number, deleteLength: number, text: string) => {
+            if (deleteLength <= 0 && text.length === 0) return;
+            const lastEdit = draftEdits[draftEdits.length - 1];
+            if (lastEdit && lastEdit.offset === offset) {
+              if (lastEdit.deleteLength === 0 && deleteLength === 0) {
+                lastEdit.text += text;
+                return;
+              }
+              // merge "delete + insert" and chained inserts at same anchor into a single replacement
+              if (deleteLength === 0 && lastEdit.deleteLength >= 0) {
+                lastEdit.text += text;
+                return;
+              }
+            }
+            draftEdits.push({ offset, deleteLength, text });
+          };
+
+          const flushPendingDelete = () => {
+            if (pendingDeleteOffset === null || pendingDeleteLength <= 0) return;
+            pushDraftEdit(pendingDeleteOffset, pendingDeleteLength, "");
+            pendingDeleteOffset = null;
+            pendingDeleteLength = 0;
+          };
+
           event.delta.forEach((part) => {
             if (typeof part.retain === "number") {
-              index += part.retain;
+              flushPendingDelete();
+              sourceOffset += part.retain;
               return;
             }
-            if (typeof part.delete === "number") {
-              const start = activeModel.getPositionAt(index);
-              const end = activeModel.getPositionAt(index + part.delete);
-              edits.push({
-                range: new activeMonaco.Range(start.lineNumber, start.column, end.lineNumber, end.column),
-                text: "",
-                forceMoveMarkers: true
-              });
+
+            if (typeof part.delete === "number" && part.delete > 0) {
+              if (pendingDeleteOffset === null) {
+                pendingDeleteOffset = sourceOffset;
+                pendingDeleteLength = part.delete;
+              } else if (pendingDeleteOffset + pendingDeleteLength === sourceOffset) {
+                pendingDeleteLength += part.delete;
+              } else {
+                flushPendingDelete();
+                pendingDeleteOffset = sourceOffset;
+                pendingDeleteLength = part.delete;
+              }
+              sourceOffset += part.delete;
               return;
             }
+
             if (typeof part.insert === "string" && part.insert.length > 0) {
-              const start = activeModel.getPositionAt(index);
-              edits.push({
-                range: new activeMonaco.Range(start.lineNumber, start.column, start.lineNumber, start.column),
-                text: part.insert,
-                forceMoveMarkers: true
-              });
-              index += part.insert.length;
+              if (pendingDeleteOffset !== null) {
+                pushDraftEdit(pendingDeleteOffset, pendingDeleteLength, part.insert);
+                pendingDeleteOffset = null;
+                pendingDeleteLength = 0;
+              } else {
+                flushPendingDelete();
+                pushDraftEdit(sourceOffset, 0, part.insert);
+              }
+              return;
             }
+          });
+          flushPendingDelete();
+
+          const edits = draftEdits.map((edit) => {
+            const start = activeModel.getPositionAt(edit.offset);
+            const end = activeModel.getPositionAt(edit.offset + edit.deleteLength);
+            return {
+              range: new activeMonaco.Range(start.lineNumber, start.column, end.lineNumber, end.column),
+              text: edit.text,
+              forceMoveMarkers: true
+            };
           });
 
           if (edits.length === 0) return;
 
           suppressEditorChangesRef.current = true;
           try {
+            const expectedValue = yText.toString();
             const selection = activeEditor.getSelection();
             const scrollTop = activeEditor.getScrollTop();
             const scrollLeft = activeEditor.getScrollLeft();
-            activeEditor.executeEdits("yjs-remote", edits);
+            try {
+              activeEditor.executeEdits("yjs-remote", edits);
+            } catch {
+              activeEditor.executeEdits("yjs-remote-fallback", [
+                {
+                  range: activeModel.getFullModelRange(),
+                  text: yText.toString(),
+                  forceMoveMarkers: true
+                }
+              ]);
+            }
+            if (activeModel.getValue() !== expectedValue) {
+              activeEditor.executeEdits("yjs-remote-repair", [
+                {
+                  range: activeModel.getFullModelRange(),
+                  text: expectedValue,
+                  forceMoveMarkers: true
+                }
+              ]);
+            }
             if (selection) {
               activeEditor.setSelection(selection);
             }
@@ -1420,55 +1596,87 @@ function RoomCodeEditor({
 
         onYjsBridgeReady((encodedYjsUpdate: string) => {
           const activeDoc = yDocRef.current;
-          if (!activeDoc) return;
+          const activeText = yTextRef.current;
+          if (!activeDoc || !activeText) return;
           const updateBytes = base64ToBytes(encodedYjsUpdate);
           if (updateBytes.length === 0) return;
+          try {
+            // Guard against stale full-state echoes after refresh:
+            // if incoming snapshot text already equals current text, skip update.
+            const previewDoc = new Y.Doc();
+            Y.applyUpdate(previewDoc, updateBytes, "preview");
+            const incomingText = previewDoc.getText("room-code").toString();
+            previewDoc.destroy();
+            if (incomingText === activeText.toString()) {
+              return;
+            }
+          } catch {
+            // fall through and try applying directly
+          }
           Y.applyUpdate(activeDoc, updateBytes, "remote");
         });
 
+        const emitCursorSync = (position: any, selectionLike: any) => {
+          const lineNumber = position?.lineNumber ?? selectionLike?.endLineNumber ?? 1;
+          const column = position?.column ?? selectionLike?.endColumn ?? 1;
+          const isSelectionEmpty =
+            !selectionLike
+              ? true
+              : typeof selectionLike.isEmpty === "function"
+                ? selectionLike.isEmpty()
+                : typeof selectionLike.isEmpty === "boolean"
+                  ? selectionLike.isEmpty
+                  : selectionLike.startLineNumber === selectionLike.endLineNumber &&
+                    selectionLike.startColumn === selectionLike.endColumn;
+          const hasSelection = !isSelectionEmpty;
+          const selectionStartLineNumber = hasSelection ? selectionLike.startLineNumber : null;
+          const selectionStartColumn = hasSelection ? selectionLike.startColumn : null;
+          const selectionEndLineNumber = hasSelection ? selectionLike.endLineNumber : null;
+          const selectionEndColumn = hasSelection ? selectionLike.endColumn : null;
+
+          const now = Date.now();
+          const prev = lastCursorSentRef.current;
+          if (
+            prev.lineNumber === lineNumber &&
+            prev.column === column &&
+            prev.selectionStartLineNumber === selectionStartLineNumber &&
+            prev.selectionStartColumn === selectionStartColumn &&
+            prev.selectionEndLineNumber === selectionEndLineNumber &&
+            prev.selectionEndColumn === selectionEndColumn &&
+            now - prev.ts < 40
+          ) {
+            return;
+          }
+
+          lastCursorSentRef.current = {
+            lineNumber,
+            column,
+            selectionStartLineNumber,
+            selectionStartColumn,
+            selectionEndLineNumber,
+            selectionEndColumn,
+            ts: now
+          };
+          onCursorChange({
+            lineNumber,
+            column,
+            selectionStartLineNumber,
+            selectionStartColumn,
+            selectionEndLineNumber,
+            selectionEndColumn
+          });
+        };
+
         disposablesRef.current.push(
           editor.onDidChangeCursorSelection((event: any) => {
-            const selection = event.selection;
-            const lineNumber = event.position?.lineNumber ?? selection?.endLineNumber ?? 1;
-            const column = event.position?.column ?? selection?.endColumn ?? 1;
-            const hasSelection =
-              !!selection &&
-              typeof selection.isEmpty === "function" &&
-              !selection.isEmpty();
-            const selectionStartLineNumber = hasSelection ? selection.startLineNumber : null;
-            const selectionStartColumn = hasSelection ? selection.startColumn : null;
-            const selectionEndLineNumber = hasSelection ? selection.endLineNumber : null;
-            const selectionEndColumn = hasSelection ? selection.endColumn : null;
-            const now = Date.now();
-            const prev = lastCursorSentRef.current;
-            if (
-              prev.lineNumber === lineNumber &&
-              prev.column === column &&
-              prev.selectionStartLineNumber === selectionStartLineNumber &&
-              prev.selectionStartColumn === selectionStartColumn &&
-              prev.selectionEndLineNumber === selectionEndLineNumber &&
-              prev.selectionEndColumn === selectionEndColumn &&
-              now - prev.ts < 40
-            ) {
-              return;
-            }
-            lastCursorSentRef.current = {
-              lineNumber,
-              column,
-              selectionStartLineNumber,
-              selectionStartColumn,
-              selectionEndLineNumber,
-              selectionEndColumn,
-              ts: now
-            };
-            onCursorChange({
-              lineNumber,
-              column,
-              selectionStartLineNumber,
-              selectionStartColumn,
-              selectionEndLineNumber,
-              selectionEndColumn
-            });
+            emitCursorSync(event.position, event.selection);
+          })
+        );
+
+        disposablesRef.current.push(
+          editor.onDidChangeCursorPosition((event: any) => {
+            const selection = editor.getSelection();
+            emitCursorSync(event.position, selection);
           })
         );
 
@@ -1519,7 +1727,8 @@ function RoomCodeEditor({
         minimap: { enabled: false },
         fontSize: 14,
         lineNumbersMinChars: 3,
-        smoothScrolling: true
+        smoothScrolling: true,
+        readOnly
       }}
     />
   );

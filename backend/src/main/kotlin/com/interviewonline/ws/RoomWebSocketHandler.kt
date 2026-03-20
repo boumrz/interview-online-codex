@@ -61,7 +61,11 @@ class RoomWebSocketHandler(
                     selectionEndLineNumber = payload.readNullableInt("selectionEndLineNumber"),
                     selectionEndColumn = payload.readNullableInt("selectionEndColumn"),
                 )
-                "yjs_update" -> collaborationService.relayYjsUpdate(session, payload.readText("yjsUpdate"))
+                "yjs_update" -> collaborationService.relayYjsUpdate(
+                    socket = session,
+                    yjsUpdate = payload.readText("yjsUpdate"),
+                    syncKey = payload.readNullableText("syncKey"),
+                )
                 "key_press" -> collaborationService.trackKeyPress(
                     socket = session,
                     key = payload.readText("key"),
@@ -115,6 +119,13 @@ class RoomWebSocketHandler(
 
     private fun JsonNode.readBoolean(field: String): Boolean {
         return path(field).asBoolean(false)
+    }
+
+    private fun JsonNode.readNullableText(field: String): String? {
+        val node = path(field)
+        if (node.isMissingNode || node.isNull) return null
+        val value = node.asText("").trim()
+        return value.ifBlank { null }
     }
 
     private fun decodeDisplayName(encoded: String?, fallback: String?): String {
