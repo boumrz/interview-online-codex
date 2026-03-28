@@ -20,6 +20,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import org.springframework.web.socket.TextMessage
 import org.springframework.web.socket.WebSocketSession
 import java.time.Instant
+import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 
 @Service
@@ -32,7 +33,7 @@ class CollaborationService(
     private val logger = LoggerFactory.getLogger(javaClass)
     private val notesLockMillis = 3_000L
     private val keyEventBroadcastThrottleMs = 20L
-    private val candidateKeyHistoryMaxSize = 30
+    private val candidateKeyHistoryMaxSize = 50
 
     private enum class RoomRole(val wireValue: String) {
         OWNER("owner"),
@@ -79,6 +80,7 @@ class CollaborationService(
         var notesLockedBySessionId: String? = null,
         var notesLockedByDisplayName: String? = null,
         var notesLockedUntilEpochMs: Long? = null,
+        val taskScoresByStepIndex: MutableMap<Int, Int?> = Collections.synchronizedMap(mutableMapOf()),
         val cursorsBySessionId: MutableMap<String, CursorState> = ConcurrentHashMap(),
         var lastCandidateKey: CandidateKeyPayload? = null,
         val candidateKeyHistory: MutableList<CandidateKeyPayload> = mutableListOf(),
@@ -201,6 +203,7 @@ class CollaborationService(
             "language_update" -> updateLanguage(connectionId, request.language.orEmpty())
             "next_step" -> nextStep(connectionId)
             "set_step" -> setStep(connectionId, request.stepIndex ?: -1)
+            "task_rating_update" -> updateTaskRating(connectionId, request.stepIndex, request.rating)
             "notes_update" -> updateNotes(connectionId, request.notes.orEmpty())
             "presence_update" -> updatePresence(connectionId, request.presenceStatus)
             "cursor_update" -> updateCursor(
@@ -239,6 +242,7 @@ class CollaborationService(
         }
         roomRepository.findByInviteCode(participant.inviteCode)?.let {
             it.code = code
+            it.tasks.getOrNull(it.currentStep)?.solutionCode = code
             roomRepository.save(it)
         }
         broadcastState(participant.inviteCode)
@@ -277,6 +281,7 @@ class CollaborationService(
         roomState[participant.inviteCode]?.language = language
         roomRepository.findByInviteCode(participant.inviteCode)?.let {
             it.language = language
+            it.tasks.getOrNull(it.currentStep)?.solutionLanguage = language
             roomRepository.save(it)
         }
         broadcastState(participant.inviteCode)
@@ -301,8 +306,43 @@ class CollaborationService(
         }
         roomRepository.findByInviteCode(participant.inviteCode)?.let {
             it.notes = notes
+            it.tasks.getOrNull(it.currentStep)?.interviewerNotes = notes
             roomRepository.save(it)
         }
+        broadcastState(participant.inviteCode)
+    }
+
+    fun updateTaskRating(socket: WebSocketSession, stepIndex: Int?, rating: Int?) {
+        updateTaskRating(socket.id, stepIndex, rating)
+    }
+
+    private fun updateTaskRating(connectionId: String, stepIndex: Int?, rating: Int?) {
+        val participant = participants[connectionId] ?: return
+        markParticipantActive(participant)
+        if (!participant.canManageRoom) {
+            throw ApiException(HttpStatus.FORBIDDEN, "РўРѕР»СЊРєРѕ РёРЅС‚РµСЂРІСЊСЋРµСЂ РјРѕР¶РµС‚ РІС‹СЃС‚Р°РІР»СЏС‚СЊ РѕС†РµРЅРєСѓ РїРѕ С€Р°РіСѓ")
+        }
+
+        val normalizedRating = when {
+            rating == null || rating <= 0 -> null
+            rating in 1..5 -> rating
+            else -> throw ApiException(HttpStatus.BAD_REQUEST, "РћС†РµРЅРєР° РґРѕР»Р¶РЅР° Р±С‹С‚СЊ РІ РґРёР°РїР°Р·РѕРЅРµ 1..5")
+        }
+
+        val room = roomRepository.findWithTasksByInviteCode(participant.inviteCode)
+            ?: throw ApiException(HttpStatus.NOT_FOUND, "РљРѕРјРЅР°С‚Р° РЅРµ РЅР°Р№РґРµРЅР°")
+        if (room.tasks.isEmpty()) {
+            throw ApiException(HttpStatus.BAD_REQUEST, "Р’ РєРѕРјРЅР°С‚Рµ РЅРµС‚ Р·Р°РґР°С‡")
+        }
+
+        val targetStep = stepIndex ?: room.currentStep
+        if (targetStep < 0 || targetStep >= room.tasks.size) {
+            throw ApiException(HttpStatus.BAD_REQUEST, "РќРѕРјРµСЂ С€Р°РіР° РІРЅРµ РґРёР°РїР°Р·РѕРЅР°")
+        }
+
+        room.tasks[targetStep].score = normalizedRating
+        roomRepository.save(room)
+        roomState[participant.inviteCode]?.taskScoresByStepIndex?.set(targetStep, normalizedRating)
         broadcastState(participant.inviteCode)
     }
 
@@ -675,6 +715,7 @@ class CollaborationService(
             notesLockedBySessionId = state.notesLockedBySessionId,
             notesLockedByDisplayName = state.notesLockedByDisplayName,
             notesLockedUntilEpochMs = state.notesLockedUntilEpochMs,
+            taskScores = state.taskScoresByStepIndex.toMap(),
             cursors = cursorsPayload,
             lastCandidateKey = state.lastCandidateKey,
             candidateKeyHistory = state.candidateKeyHistory.toList(),
@@ -682,10 +723,20 @@ class CollaborationService(
     }
 
     private fun setStepInternal(inviteCode: String, room: Room, stepIndex: Int) {
-        room.currentStep = stepIndex
-        room.code = room.tasks[stepIndex].starterCode
-        roomRepository.save(room)
         val currentState = roomState[inviteCode]
+        room.tasks.getOrNull(room.currentStep)?.let { currentTask ->
+            currentTask.solutionCode = currentState?.code ?: room.code
+            currentTask.interviewerNotes = currentState?.notes ?: room.notes.orEmpty()
+            currentTask.solutionLanguage = currentState?.language ?: room.language
+        }
+
+        room.currentStep = stepIndex
+        val nextTask = room.tasks[stepIndex]
+        room.language = nextTask.solutionLanguage?.ifBlank { null } ?: nextTask.language
+        room.code = nextTask.solutionCode ?: nextTask.starterCode
+        room.notes = nextTask.interviewerNotes ?: ""
+        roomRepository.save(room)
+
         roomState[inviteCode] = RealtimeState(
             language = room.language,
             code = room.code,
@@ -695,6 +746,7 @@ class CollaborationService(
             notesLockedBySessionId = currentState?.notesLockedBySessionId,
             notesLockedByDisplayName = currentState?.notesLockedByDisplayName,
             notesLockedUntilEpochMs = currentState?.notesLockedUntilEpochMs,
+            taskScoresByStepIndex = buildTaskScores(room),
             cursorsBySessionId = currentState?.cursorsBySessionId ?: ConcurrentHashMap(),
             lastCandidateKey = currentState?.lastCandidateKey,
             candidateKeyHistory = currentState?.candidateKeyHistory?.toMutableList() ?: mutableListOf(),
@@ -839,16 +891,29 @@ class CollaborationService(
         }
     }
 
+    private fun buildTaskScores(room: Room): MutableMap<Int, Int?> {
+        val scores: MutableMap<Int, Int?> = Collections.synchronizedMap(mutableMapOf())
+        room.tasks.forEach { task ->
+            scores[task.stepIndex] = task.score
+        }
+        return scores
+    }
+
     private fun toRealtimeState(room: Room): RealtimeState {
+        val currentTask = room.tasks.getOrNull(room.currentStep)
+        val language = currentTask?.solutionLanguage?.ifBlank { null } ?: room.language
+        val code = currentTask?.solutionCode ?: room.code.ifBlank { currentTask?.starterCode.orEmpty() }
+        val notes = currentTask?.interviewerNotes ?: room.notes.orEmpty()
         return RealtimeState(
-            language = room.language,
-            code = room.code,
+            language = language,
+            code = code,
             lastCodeUpdatedBySessionId = null,
             currentStep = room.currentStep,
-            notes = room.notes.orEmpty(),
+            notes = notes,
             notesLockedBySessionId = null,
             notesLockedByDisplayName = null,
             notesLockedUntilEpochMs = null,
+            taskScoresByStepIndex = buildTaskScores(room),
         )
     }
 }

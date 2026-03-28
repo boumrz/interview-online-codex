@@ -39,6 +39,7 @@ type RealtimeState = {
   lastCodeUpdatedBySessionId: string | null;
   currentStep: number;
   notes: string;
+  taskScores: Record<string, number | null>;
   participants: Participant[];
   isOwner: boolean;
   role: "owner" | "interviewer" | "candidate";
@@ -72,6 +73,7 @@ type ClientMessage =
   | { type: "code_update"; code: string }
   | { type: "language_update"; language: string }
   | { type: "set_step"; stepIndex: number }
+  | { type: "task_rating_update"; stepIndex: number; rating: number | null }
   | { type: "notes_update"; notes: string }
   | { type: "presence_update"; presenceStatus: "active" | "away" }
   | {
@@ -482,6 +484,10 @@ export function useRoomSocket({
     send({ type: "set_step", stepIndex });
   };
 
+  const sendTaskRatingUpdate = (stepIndex: number, rating: number | null) => {
+    send({ type: "task_rating_update", stepIndex, rating });
+  };
+
   const sendNotesUpdate = (notes: string) => {
     send({ type: "notes_update", notes });
   };
@@ -534,6 +540,7 @@ export function useRoomSocket({
     sendCodeUpdate,
     sendLanguageUpdate,
     sendSetStep,
+    sendTaskRatingUpdate,
     sendNotesUpdate,
     sendCursorUpdate,
     sendYjsUpdate,

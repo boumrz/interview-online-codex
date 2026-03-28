@@ -73,7 +73,9 @@ const LANGUAGE_OPTIONS = [
   { value: "javascript", label: "JavaScript" },
   { value: "typescript", label: "TypeScript" },
   { value: "python", label: "Python" },
-  { value: "kotlin", label: "Kotlin" }
+  { value: "kotlin", label: "Kotlin" },
+  { value: "java", label: "Java" },
+  { value: "sql", label: "SQL" }
 ];
 
 const darkFieldStyles = {
@@ -1295,6 +1297,10 @@ function labelForLanguage(language: string) {
       return "Python";
     case "kotlin":
       return "Kotlin";
+    case "java":
+      return "Java";
+    case "sql":
+      return "SQL";
     default:
       return "JavaScript";
   }

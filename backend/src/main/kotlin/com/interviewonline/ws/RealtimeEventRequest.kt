@@ -6,6 +6,7 @@ data class RealtimeEventRequest(
     val code: String? = null,
     val language: String? = null,
     val stepIndex: Int? = null,
+    val rating: Int? = null,
     val notes: String? = null,
     val presenceStatus: String? = null,
     val lineNumber: Int? = null,

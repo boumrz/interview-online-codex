@@ -74,7 +74,7 @@ class UserTaskService(
         ensurePresetTasks(user)
         val tasks = taskRepository.findAllByOwnerUserIdOrderByCreatedAtDesc(user.id!!)
         val tasksByLanguage = tasks.groupBy { it.language }
-        val languageOrder = listOf("javascript", "typescript", "python", "kotlin")
+        val languageOrder = listOf("javascript", "typescript", "python", "kotlin", "java", "sql")
         return languageOrder.map { language ->
             TaskLanguageGroupDto(
                 language = language,
@@ -132,6 +132,8 @@ class UserTaskService(
         return when (language.lowercase()) {
             "python" -> "python"
             "kotlin" -> "kotlin"
+            "java" -> "java"
+            "sql" -> "sql"
             "typescript" -> "typescript"
             else -> "javascript"
         }

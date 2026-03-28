@@ -15,6 +15,7 @@ export type RoomTask = {
   starterCode: string;
   language: string;
   categoryName: string | null;
+  score: number | null;
 };
 
 export type Room = {
