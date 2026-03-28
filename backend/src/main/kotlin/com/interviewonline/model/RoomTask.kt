@@ -32,6 +32,18 @@ class RoomTask(
     @Column(name = "starter_code", nullable = false, columnDefinition = "TEXT")
     var starterCode: String = "",
 
+    @Column(name = "solution_code", columnDefinition = "TEXT")
+    var solutionCode: String? = null,
+
+    @Column(name = "interviewer_notes", columnDefinition = "TEXT")
+    var interviewerNotes: String? = null,
+
+    @Column(name = "solution_language")
+    var solutionLanguage: String? = null,
+
+    @Column(name = "score")
+    var score: Int? = null,
+
     @Column(nullable = false)
     var language: String = "javascript",
 

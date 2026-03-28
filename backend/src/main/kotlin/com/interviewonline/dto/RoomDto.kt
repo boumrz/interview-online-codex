@@ -21,6 +21,7 @@ data class RoomTaskDto(
     val starterCode: String,
     val language: String,
     val categoryName: String?,
+    val score: Int?,
 )
 
 data class RoomResponse(

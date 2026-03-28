@@ -39,7 +39,7 @@ class RoomService(
         val tasks = taskTemplateService.defaultRoomTasks(language).toMutableList()
         tasks.forEach { it.room = room }
         room.tasks = tasks
-        room.code = tasks.firstOrNull()?.starterCode.orEmpty()
+        initializeCurrentStepSnapshot(room)
         val saved = roomRepository.save(room)
         collaborationService.bootstrapRoom(saved)
         return toRoomResponse(saved, includeOwnerToken = true, includeInterviewerToken = true)
@@ -73,7 +73,7 @@ class RoomService(
         }
         tasks.forEach { it.room = room }
         room.tasks = tasks
-        room.code = tasks.firstOrNull()?.starterCode.orEmpty()
+        initializeCurrentStepSnapshot(room)
         val saved = roomRepository.save(room)
         collaborationService.bootstrapRoom(saved)
         return toRoomResponse(saved, includeOwnerToken = true, includeInterviewerToken = true)
@@ -124,8 +124,9 @@ class RoomService(
             throw ApiException(HttpStatus.BAD_REQUEST, "В комнате нет задач для переключения")
         }
         val maxStep = room.tasks.size - 1
+        saveCurrentStepSnapshot(room)
         room.currentStep = (room.currentStep + 1).coerceAtMost(maxStep)
-        room.code = room.tasks[room.currentStep].starterCode
+        applyCurrentStepSnapshot(room)
         val saved = roomRepository.save(room)
         collaborationService.syncFromRoom(saved)
         return toRoomResponse(saved, includeOwnerToken = false, includeInterviewerToken = false)
@@ -203,14 +204,19 @@ class RoomService(
     }
 
     private fun toRoomResponse(room: Room, includeOwnerToken: Boolean, includeInterviewerToken: Boolean): RoomResponse {
+        val activeTask = room.tasks.getOrNull(room.currentStep)
+        val activeLanguage = activeTask?.solutionLanguage?.ifBlank { null } ?: room.language
+        val activeCode = activeTask?.solutionCode ?: room.code.ifBlank { activeTask?.starterCode.orEmpty() }
+        val activeNotes = activeTask?.interviewerNotes ?: room.notes.orEmpty()
+
         return RoomResponse(
             id = room.id!!,
             title = room.title,
             inviteCode = room.inviteCode,
-            language = room.language,
+            language = activeLanguage,
             currentStep = room.currentStep,
-            code = room.code,
-            notes = room.notes.orEmpty(),
+            code = activeCode,
+            notes = activeNotes,
             ownerToken = if (includeOwnerToken) room.ownerSessionToken else null,
             interviewerToken = if (includeInterviewerToken) room.interviewerSessionToken else null,
             tasks = room.tasks.map {
@@ -221,9 +227,34 @@ class RoomService(
                     starterCode = it.starterCode,
                     language = it.language,
                     categoryName = it.categoryName,
+                    score = it.score,
                 )
             },
         )
+    }
+
+    private fun initializeCurrentStepSnapshot(room: Room) {
+        val firstTask = room.tasks.getOrNull(room.currentStep) ?: room.tasks.firstOrNull() ?: return
+        firstTask.solutionCode = firstTask.solutionCode ?: firstTask.starterCode
+        firstTask.interviewerNotes = firstTask.interviewerNotes ?: ""
+        firstTask.solutionLanguage = firstTask.solutionLanguage?.ifBlank { null } ?: firstTask.language
+        room.code = firstTask.solutionCode.orEmpty()
+        room.notes = firstTask.interviewerNotes.orEmpty()
+        room.language = firstTask.solutionLanguage.orEmpty().ifBlank { firstTask.language }
+    }
+
+    private fun saveCurrentStepSnapshot(room: Room) {
+        val currentTask = room.tasks.getOrNull(room.currentStep) ?: return
+        currentTask.solutionCode = room.code
+        currentTask.interviewerNotes = room.notes.orEmpty()
+        currentTask.solutionLanguage = room.language
+    }
+
+    private fun applyCurrentStepSnapshot(room: Room) {
+        val currentTask = room.tasks.getOrNull(room.currentStep) ?: return
+        room.code = currentTask.solutionCode ?: currentTask.starterCode
+        room.notes = currentTask.interviewerNotes ?: ""
+        room.language = currentTask.solutionLanguage?.ifBlank { null } ?: currentTask.language
     }
 
     private fun ensureParticipant(room: Room, user: User) {

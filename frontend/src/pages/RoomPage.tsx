@@ -13,7 +13,9 @@ const LANGUAGES = [
   { value: "javascript", label: "JavaScript" },
   { value: "typescript", label: "TypeScript" },
   { value: "python", label: "Python" },
-  { value: "kotlin", label: "Kotlin" }
+  { value: "kotlin", label: "Kotlin" },
+  { value: "java", label: "Java" },
+  { value: "sql", label: "SQL" }
 ];
 
 type Participant = {
@@ -54,6 +56,7 @@ type RealtimeState = {
   lastCodeUpdatedBySessionId: string | null;
   currentStep: number;
   notes: string;
+  taskScores: Record<string, number | null>;
   participants: Participant[];
   isOwner: boolean;
   role: "owner" | "interviewer" | "candidate";
@@ -72,6 +75,7 @@ const MIN_LEFT_WIDTH = 220;
 const MAX_LEFT_WIDTH = 440;
 const MIN_RIGHT_WIDTH = 250;
 const MAX_RIGHT_WIDTH = 520;
+const LOG_HISTORY_LIMIT = 50;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -94,6 +98,30 @@ function base64ToBytes(base64: string): Uint8Array {
     bytes[i] = binary.charCodeAt(i);
   }
   return bytes;
+}
+
+function normalizeTaskScores(value: unknown): Record<string, number | null> {
+  if (!value || typeof value !== "object") return {};
+  const normalized: Record<string, number | null> = {};
+  Object.entries(value as Record<string, unknown>).forEach(([stepKey, scoreValue]) => {
+    const stepIndex = Number.parseInt(stepKey, 10);
+    if (!Number.isInteger(stepIndex) || stepIndex < 0) return;
+    if (typeof scoreValue === "number" && scoreValue >= 1 && scoreValue <= 5) {
+      normalized[String(stepIndex)] = scoreValue;
+      return;
+    }
+    normalized[String(stepIndex)] = null;
+  });
+  return normalized;
+}
+
+function taskScoresFromTasks(tasks: Array<{ stepIndex: number; score?: number | null }>): Record<string, number | null> {
+  const result: Record<string, number | null> = {};
+  tasks.forEach((task) => {
+    const score = task.score;
+    result[String(task.stepIndex)] = typeof score === "number" && score >= 1 && score <= 5 ? score : null;
+  });
+  return result;
 }
 
 function createDeterministicBootstrapUpdate(code: string): Uint8Array {
@@ -226,6 +254,7 @@ export function RoomPage() {
       lastCodeUpdatedBySessionId: null,
       currentStep: room.currentStep,
       notes: room.notes ?? "",
+      taskScores: taskScoresFromTasks(room.tasks ?? []),
       participants: [] as Participant[],
       isOwner: false,
       role: "candidate" as const,
@@ -274,9 +303,11 @@ export function RoomPage() {
       ...participant,
       role: participant.role ?? "candidate"
     }));
+    const taskScores = normalizeTaskScores(incoming.taskScores);
     setState({
       ...incoming,
       participants,
+      taskScores,
       lastCodeUpdatedBySessionId: incoming.lastCodeUpdatedBySessionId ?? null,
       lastCandidateKey: incoming.lastCandidateKey ?? null,
       candidateKeyHistory: Array.isArray(incoming.candidateKeyHistory)
@@ -325,7 +356,7 @@ export function RoomPage() {
   const fallbackDisplayName = authUser?.nickname?.trim() || (interviewerToken ? "Интервьюер" : "Участник");
   const effectiveDisplayName = displayName.trim() || fallbackDisplayName;
   const canConnect = Boolean(inviteCode);
-  const { connected, sessionId, sendCodeUpdate, sendLanguageUpdate, sendSetStep, sendNotesUpdate, sendCursorUpdate, sendYjsUpdate, sendKeyPress } = useRoomSocket({
+  const { connected, sessionId, sendCodeUpdate, sendLanguageUpdate, sendSetStep, sendTaskRatingUpdate, sendNotesUpdate, sendCursorUpdate, sendYjsUpdate, sendKeyPress } = useRoomSocket({
     enabled: canConnect,
     inviteCode,
     authToken,
@@ -450,8 +481,9 @@ export function RoomPage() {
   }
 
   const step = room?.tasks.find((task) => task.stepIndex === merged.currentStep);
+  const currentTaskRating = merged.taskScores[String(merged.currentStep)] ?? step?.score ?? null;
   const notesLockName = merged.notesLockedByDisplayName?.trim() || "другой интервьюер";
-  const notesStatus = notesLockedByOther ? `Пишет ${notesLockName}. Поле временно заблокировано.` : notesDirty ? "Сохраняем..." : "Синхронизировано";
+  const notesStatus = notesLockedByOther ? `Пишет ${notesLockName}. Поле временно заблокировано.` : notesDirty ? "Сохраняем..." : "Сохранено";
 
   return (
     <>
@@ -514,6 +546,8 @@ export function RoomPage() {
             stepTitle={step?.title ?? "-"}
             stepDescription={step?.description ?? ""}
             error={error}
+            taskScores={merged.taskScores}
+            currentTaskRating={currentTaskRating}
             notesDraft={notesDraft}
             notesStatus={notesStatus}
             notesLockedByOther={notesLockedByOther}
@@ -531,6 +565,7 @@ export function RoomPage() {
             onYjsUpdate={(yjsUpdate, syncKey) => sendYjsUpdateTracked(yjsUpdate, syncKey)}
             onYjsBridgeReady={onYjsBridgeReady}
             onKeyPress={(payload) => sendKeyPress(payload)}
+            onTaskRatingChange={(rating) => sendTaskRatingUpdate(merged.currentStep, rating)}
             onNotesChange={(value) => {
               setNotesDraft(value);
               setNotesDirty(true);
@@ -738,6 +773,8 @@ function OwnerLayout({
   stepTitle,
   stepDescription,
   error,
+  taskScores,
+  currentTaskRating,
   notesDraft,
   notesStatus,
   notesLockedByOther,
@@ -755,13 +792,16 @@ function OwnerLayout({
   onYjsUpdate,
   onYjsBridgeReady,
   onKeyPress,
+  onTaskRatingChange,
   onNotesChange
 }: {
   merged: RealtimeState;
-  tasks: Array<{ stepIndex: number; title: string; language: string }>;
+  tasks: Array<{ stepIndex: number; title: string; language: string; score: number | null }>;
   stepTitle: string;
   stepDescription: string;
   error: string;
+  taskScores: Record<string, number | null>;
+  currentTaskRating: number | null;
   notesDraft: string;
   notesStatus: string;
   notesLockedByOther: boolean;
@@ -786,10 +826,12 @@ function OwnerLayout({
   onYjsUpdate: (yjsUpdate: string, syncKey: string) => void;
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
   onKeyPress: (payload: { key: string; keyCode: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void;
+  onTaskRatingChange: (rating: number | null) => void;
   onNotesChange: (value: string) => void;
 }) {
   const [leftSidebarVisible, setLeftSidebarVisible] = useState(true);
   const [rightSidebarVisible, setRightSidebarVisible] = useState(true);
+  const [rightPanelTab, setRightPanelTab] = useState<"notes" | "logs">("notes");
   const [leftWidth, setLeftWidth] = useState(280);
   const [rightWidth, setRightWidth] = useState(320);
   const ownerBodyRef = useRef<HTMLDivElement | null>(null);
@@ -858,11 +900,11 @@ function OwnerLayout({
     return () => observer.disconnect();
   }, []);
 
-  const baseInset = 12;
-  const iconSize = 30;
-  const maxOffset = Math.max(baseInset, ownerBodyWidth - iconSize - 4);
-  const leftToggleOffset = clamp(leftSidebarVisible ? leftWidth + 12 : baseInset, baseInset, maxOffset);
-  const rightToggleOffset = clamp(rightSidebarVisible ? rightWidth + 12 : baseInset, baseInset, maxOffset);
+  const baseInset = 10;
+  const toggleHandleWidth = 20;
+  const maxOffset = Math.max(baseInset, ownerBodyWidth - toggleHandleWidth - 4);
+  const leftToggleOffset = clamp(leftSidebarVisible ? leftWidth + 10 : baseInset, baseInset, maxOffset);
+  const rightToggleOffset = clamp(rightSidebarVisible ? rightWidth + 10 : baseInset, baseInset, maxOffset);
   const candidateParticipants = merged.participants.filter((participant) => participant.role === "candidate");
   const candidateOutOfFocus = candidateParticipants.some((participant) => participant.presenceStatus === "away");
   const candidateFocusHint = candidateParticipants.length === 0
@@ -872,34 +914,34 @@ function OwnerLayout({
       : "Кандидат в фокусе";
   const recentCandidateKeyHistory = [...(candidateKeyHistory ?? [])]
     .sort((a, b) => b.timestampEpochMs - a.timestampEpochMs)
-    .slice(0, 12);
+    .slice(0, LOG_HISTORY_LIMIT);
   if (recentCandidateKeyHistory.length === 0 && lastCandidateKey) {
     recentCandidateKeyHistory.push(lastCandidateKey);
   }
 
   return (
     <Box className={styles.ownerBody} ref={ownerBodyRef}>
-      <ActionIcon
+      <button
+        type="button"
         className={`${styles.edgeToggle} ${styles.leftEdgeToggle}`}
         style={{ left: leftToggleOffset }}
-        variant="filled"
-        color="dark"
+        data-open={leftSidebarVisible}
         onClick={() => setLeftSidebarVisible((current) => !current)}
         aria-label={leftSidebarVisible ? "Скрыть левый сайдбар" : "Показать левый сайдбар"}
       >
-        {leftSidebarVisible ? <IconChevronLeft size={14} /> : <IconChevronRight size={14} />}
-      </ActionIcon>
+        {leftSidebarVisible ? <IconChevronLeft size={14} className={styles.edgeToggleIcon} /> : <IconChevronRight size={14} className={styles.edgeToggleIcon} />}
+      </button>
 
-      <ActionIcon
+      <button
+        type="button"
         className={`${styles.edgeToggle} ${styles.rightEdgeToggle}`}
         style={{ right: rightToggleOffset }}
-        variant="filled"
-        color="dark"
+        data-open={rightSidebarVisible}
         onClick={() => setRightSidebarVisible((current) => !current)}
         aria-label={rightSidebarVisible ? "Скрыть правый сайдбар" : "Показать правый сайдбар"}
       >
-        {rightSidebarVisible ? <IconChevronRight size={14} /> : <IconChevronLeft size={14} />}
-      </ActionIcon>
+        {rightSidebarVisible ? <IconChevronRight size={14} className={styles.edgeToggleIcon} /> : <IconChevronLeft size={14} className={styles.edgeToggleIcon} />}
+      </button>
 
       {leftSidebarVisible && (
         <>
@@ -909,18 +951,21 @@ function OwnerLayout({
             </Text>
 
             <Box className={styles.stepList}>
-              {tasks.map((task) => (
-                <Button
-                  key={task.stepIndex}
-                  size="xs"
-                  variant={task.stepIndex === merged.currentStep ? "filled" : "light"}
-                  color={task.stepIndex === merged.currentStep ? "gray" : "dark"}
-                  justify="space-between"
-                  onClick={() => onSelectStep(task.stepIndex)}
-                >
-                  {task.stepIndex + 1}. {task.title}
-                </Button>
-              ))}
+              {tasks.map((task) => {
+                const taskRating = taskScores[String(task.stepIndex)] ?? task.score ?? null;
+                return (
+                  <Button
+                    key={task.stepIndex}
+                    size="xs"
+                    variant={task.stepIndex === merged.currentStep ? "filled" : "light"}
+                    color={task.stepIndex === merged.currentStep ? "gray" : "dark"}
+                    justify="space-between"
+                    onClick={() => onSelectStep(task.stepIndex)}
+                  >
+                    {`${task.stepIndex + 1}. ${task.title}${taskRating ? ` · ★${taskRating}` : ""}`}
+                  </Button>
+                );
+              })}
             </Box>
 
             <Text size="sm" c="#e1e6ef" fw={600}>
@@ -989,46 +1034,108 @@ function OwnerLayout({
             </div>
 
             <Box className={styles.outputPanel} style={{ width: rightWidth }}>
-              <Box className={styles.notesHeader}>Заметки</Box>
-              <Stack gap="xs" className={styles.notesStack}>
-                <Text size="xs" c={notesLockedByOther ? "#f78989" : notesStatus === "Сохраняем..." ? "#f5c26b" : "#8b919b"}>
-                  {notesStatus}
-                </Text>
-                <Text size="xs" c={candidateOutOfFocus ? "#f5c26b" : "#8b919b"}>
-                  {candidateFocusHint}
-                </Text>
-                {recentCandidateKeyHistory.length > 0 && (
-                  <>
-                    <Text size="xs" c="#7bb0ff" fw={600}>
-                      История клавиш кандидата
-                    </Text>
-                    {recentCandidateKeyHistory.map((event, index) => (
-                      <Text key={`${event.sessionId}-${event.timestampEpochMs}-${index}`} size="xs" c="#7bb0ff">
-                        {formatCandidateKeyHistoryEntry(event)}
+              <div className={styles.panelTabs}>
+                <div className={styles.panelTabsList} role="tablist" aria-label="Правая панель">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={rightPanelTab === "notes"}
+                    className={`${styles.panelTab} ${rightPanelTab === "notes" ? styles.panelTabActive : ""}`}
+                    onClick={() => setRightPanelTab("notes")}
+                  >
+                    Заметки
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={rightPanelTab === "logs"}
+                    className={`${styles.panelTab} ${rightPanelTab === "logs" ? styles.panelTabActive : ""}`}
+                    onClick={() => setRightPanelTab("logs")}
+                  >
+                    Логи
+                  </button>
+                </div>
+
+                {rightPanelTab === "notes" ? (
+                  <div className={styles.panelTabPanel} role="tabpanel" aria-label="Заметки">
+                  <Text className={styles.panelSectionTitle}>Заметки по шагу</Text>
+                  <div className={styles.notesTopRow}>
+                    <div
+                      className={styles.notesStatusBanner}
+                      data-state={notesLockedByOther ? "locked" : notesStatus === "Сохраняем..." ? "saving" : "saved"}
+                    >
+                      <Text className={styles.notesStatusLabel}>Статус сохранения</Text>
+                      <Text className={styles.notesStatusValue}>{notesStatus}</Text>
+                    </div>
+                    <Select
+                      className={styles.notesRating}
+                      classNames={{ option: styles.notesRatingOption }}
+                      label="Оценка"
+                      placeholder="Нет оценки"
+                      value={currentTaskRating ? String(currentTaskRating) : null}
+                      onChange={(value) => onTaskRatingChange(value ? Number.parseInt(value, 10) : null)}
+                      withCheckIcon={false}
+                      clearable
+                      data={[
+                        { value: "1", label: "1" },
+                        { value: "2", label: "2" },
+                        { value: "3", label: "3" },
+                        { value: "4", label: "4" },
+                        { value: "5", label: "5" }
+                      ]}
+                      styles={{
+                        label: { color: "#9ba0a8", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6 },
+                        input: { backgroundColor: "#11161f", borderColor: "#273242", color: "#d6dce6", fontSize: 12 },
+                        dropdown: { backgroundColor: "#11161f", borderColor: "#273242" },
+                        option: { color: "#d6dce6" }
+                      }}
+                    />
+                  </div>
+                  <Textarea
+                    value={notesDraft}
+                    onChange={(event) => onNotesChange(event.currentTarget.value)}
+                    minRows={14}
+                    disabled={notesLockedByOther}
+                    data-testid="room-notes-input"
+                    classNames={{ input: styles.notesInput }}
+                  />
+                  </div>
+                ) : (
+                  <div className={styles.panelTabPanel} role="tabpanel" aria-label="Логи">
+                  <header className={styles.logsHeader}>
+                    <div className={styles.logsTitleWrap}>
+                      <Text component="h3" className={styles.logsTitle}>
+                        Логи кандидата
                       </Text>
-                    ))}
-                  </>
+                      <span className={styles.logsCount}>{recentCandidateKeyHistory.length}</span>
+                    </div>
+                    <Text className={styles.logsCounter}>Лимит {LOG_HISTORY_LIMIT}</Text>
+                  </header>
+
+                  <Text size="xs" c={candidateOutOfFocus ? "#f5c26b" : "#8b919b"} className={styles.logsHint}>
+                    {candidateFocusHint}
+                  </Text>
+
+                  <div className={styles.logsList} role="log" aria-label="Логи кандидата">
+                    {recentCandidateKeyHistory.length > 0 ? (
+                      recentCandidateKeyHistory.map((event, index) => (
+                        <div key={`${event.sessionId}-${event.timestampEpochMs}-${index}`} className={styles.logItem}>
+                          <time className={styles.logTime}>{formatCandidateKeyHistoryTimestamp(event)}</time>
+                          <p className={styles.logMessage}>
+                            {event.displayName}: {formatCandidateKey(event)}
+                          </p>
+                        </div>
+                      ))
+                    ) : (
+                      <div className={styles.logsEmpty}>
+                        <Text className={styles.logsEmptyTitle}>Пока пусто</Text>
+                        <Text className={styles.logsEmptyText}>События клавиатуры появятся здесь.</Text>
+                      </div>
+                    )}
+                  </div>
+                  </div>
                 )}
-                <Textarea
-                  value={notesDraft}
-                  onChange={(event) => onNotesChange(event.currentTarget.value)}
-                  minRows={4}
-                  maxRows={16}
-                  autosize
-                  disabled={notesLockedByOther}
-                  data-testid="room-notes-input"
-                  styles={{
-                    input: {
-                      backgroundColor: "#11161f",
-                      borderColor: "#273242",
-                      color: "#d6dce6",
-                      fontFamily: "IBM Plex Mono, ui-monospace, SFMono-Regular, Menlo, monospace",
-                      lineHeight: 1.4,
-                      fontSize: 12
-                    }
-                  }}
-                />
-              </Stack>
+              </div>
 
               {error && <Text className={styles.error}>{error}</Text>}
             </Box>
@@ -1130,13 +1237,12 @@ function formatCandidateKey(event: CandidateKeyInfo): string {
   return [...modifiers, key].join("+");
 }
 
-function formatCandidateKeyHistoryEntry(event: CandidateKeyInfo): string {
-  const timestamp = new Date(event.timestampEpochMs).toLocaleTimeString("ru-RU", {
+function formatCandidateKeyHistoryTimestamp(event: CandidateKeyInfo): string {
+  return new Date(event.timestampEpochMs).toLocaleTimeString("ru-RU", {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit"
   });
-  return `${timestamp} · ${event.displayName}: ${formatCandidateKey(event)}`;
 }
 
 function hashSessionId(sessionId: string): number {
@@ -1733,3 +1839,4 @@ function RoomCodeEditor({
     />
   );
 }
+

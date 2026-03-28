@@ -50,6 +50,11 @@ class RoomWebSocketHandler(
                 "language_update" -> collaborationService.updateLanguage(session, payload.readText("language"))
                 "next_step" -> collaborationService.nextStep(session)
                 "set_step" -> collaborationService.setStep(session, payload.readInt("stepIndex"))
+                "task_rating_update" -> collaborationService.updateTaskRating(
+                    socket = session,
+                    stepIndex = payload.readNullableInt("stepIndex"),
+                    rating = payload.readNullableInt("rating"),
+                )
                 "notes_update" -> collaborationService.updateNotes(session, payload.readText("notes"))
                 "presence_update" -> collaborationService.updatePresence(session, payload.readText("presenceStatus"))
                 "cursor_update" -> collaborationService.updateCursor(

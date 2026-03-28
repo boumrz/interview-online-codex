@@ -26,7 +26,7 @@ class TaskTemplateService {
     }
 
     fun catalogByLanguage(): Map<String, List<TemplateSeed>> {
-        val supported = listOf("javascript", "typescript", "python", "kotlin")
+        val supported = listOf("javascript", "typescript", "python", "kotlin", "java", "sql")
         return supported.associateWith { seedsForLanguage(it) }
     }
 
@@ -34,6 +34,8 @@ class TaskTemplateService {
         return when (language.lowercase()) {
             "python" -> "python"
             "kotlin" -> "kotlin"
+            "java" -> "java"
+            "sql" -> "sql"
             "typescript" -> "typescript"
             else -> "javascript"
         }
@@ -43,6 +45,8 @@ class TaskTemplateService {
         return when (language) {
             "python" -> pythonSeeds()
             "kotlin" -> kotlinSeeds()
+            "java" -> javaSeeds()
+            "sql" -> sqlSeeds()
             "typescript" -> tsSeeds()
             else -> jsSeeds()
         }
@@ -164,6 +168,66 @@ class TaskTemplateService {
                 title = "CodeRun · Merge Intervals",
                 description = "Слейте пересекающиеся интервалы.",
                 starterCode = "fun mergeIntervals(intervals: List<IntRange>): List<IntRange> {\n    // TODO\n    return emptyList()\n}\n",
+            ),
+        )
+    }
+
+    private fun javaSeeds(): List<TemplateSeed> {
+        return listOf(
+            TemplateSeed(
+                title = "CodeRun · A+B",
+                description = "Реализуйте метод, возвращающий сумму двух чисел.",
+                starterCode = "public class Solution {\n    public static int solve(int a, int b) {\n        return a + b;\n    }\n}\n",
+            ),
+            TemplateSeed(
+                title = "CodeRun · Палиндром",
+                description = "Верните true, если строка является палиндромом.",
+                starterCode = "public class Solution {\n    public static boolean isPalindrome(String s) {\n        // TODO\n        return false;\n    }\n}\n",
+            ),
+            TemplateSeed(
+                title = "CodeRun · Two Sum",
+                description = "Верните индексы двух элементов массива с суммой target.",
+                starterCode = "import java.util.*;\n\npublic class Solution {\n    public static int[] twoSum(int[] nums, int target) {\n        // TODO\n        return new int[0];\n    }\n}\n",
+            ),
+            TemplateSeed(
+                title = "CodeRun · Валидные скобки",
+                description = "Проверьте корректность последовательности скобок.",
+                starterCode = "import java.util.*;\n\npublic class Solution {\n    public static boolean isValidBrackets(String s) {\n        // TODO\n        return false;\n    }\n}\n",
+            ),
+            TemplateSeed(
+                title = "CodeRun · Merge Intervals",
+                description = "Слейте пересекающиеся интервалы.",
+                starterCode = "import java.util.*;\n\npublic class Solution {\n    public static int[][] mergeIntervals(int[][] intervals) {\n        // TODO\n        return new int[0][0];\n    }\n}\n",
+            ),
+        )
+    }
+
+    private fun sqlSeeds(): List<TemplateSeed> {
+        return listOf(
+            TemplateSeed(
+                title = "SQL · Найти дубли email",
+                description = "Выведите email, которые встречаются больше одного раза в таблице users.",
+                starterCode = "SELECT email\nFROM users\nGROUP BY email\nHAVING COUNT(*) > 1;\n",
+            ),
+            TemplateSeed(
+                title = "SQL · Топ 3 зарплаты",
+                description = "Найдите трёх сотрудников с максимальной зарплатой.",
+                starterCode = "SELECT id, name, salary\nFROM employees\nORDER BY salary DESC\nLIMIT 3;\n",
+            ),
+            TemplateSeed(
+                title = "SQL · Заказы за 30 дней",
+                description = "Выведите количество заказов по дням за последние 30 дней.",
+                starterCode = "SELECT DATE(created_at) AS day, COUNT(*) AS orders_count\nFROM orders\nWHERE created_at >= CURRENT_DATE - INTERVAL '30 day'\nGROUP BY DATE(created_at)\nORDER BY day;\n",
+            ),
+            TemplateSeed(
+                title = "SQL · Клиенты без заказов",
+                description = "Найдите клиентов, у которых нет ни одного заказа.",
+                starterCode = "SELECT c.id, c.name\nFROM customers c\nLEFT JOIN orders o ON o.customer_id = c.id\nWHERE o.id IS NULL;\n",
+            ),
+            TemplateSeed(
+                title = "SQL · Конверсия воронки",
+                description = "Посчитайте количество пользователей на каждом этапе воронки.",
+                starterCode = "SELECT stage, COUNT(DISTINCT user_id) AS users_count\nFROM funnel_events\nGROUP BY stage\nORDER BY stage;\n",
             ),
         )
     }
