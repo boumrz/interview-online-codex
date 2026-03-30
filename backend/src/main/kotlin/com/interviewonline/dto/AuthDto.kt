@@ -5,7 +5,9 @@ import jakarta.validation.constraints.Size
 
 data class RegisterRequest(
     @field:NotBlank @field:Size(min = 3, max = 24) val nickname: String,
-    @field:Size(min = 6) val password: String,
+    @field:NotBlank(message = "Пароль обязателен")
+    @field:Size(min = 6, message = "Пароль должен быть не короче 6 символов")
+    val password: String,
 )
 
 data class LoginRequest(
@@ -21,4 +23,5 @@ data class AuthResponse(
 data class UserDto(
     val id: String,
     val nickname: String,
+    val role: String,
 )

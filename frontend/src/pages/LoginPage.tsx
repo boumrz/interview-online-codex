@@ -39,9 +39,11 @@ export function LoginPage() {
   const [nickname, setNickname] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
   const [login, loginState] = useLoginMutation();
   const [register, registerState] = useRegisterMutation();
   const isLoading = loginState.isLoading || registerState.isLoading;
+  const isRegisterMode = mode === "register";
   const feedbackText = error || " ";
   const nextPath = useMemo(() => {
     const requested = new URLSearchParams(location.search).get("next")?.trim() ?? "";
@@ -59,12 +61,28 @@ export function LoginPage() {
     e.preventDefault();
     try {
       setError("");
+      setPasswordError("");
+      if (isRegisterMode && password.length < 6) {
+        const passwordValidationError = "Пароль должен быть не короче 6 символов";
+        setPasswordError(passwordValidationError);
+        setError(passwordValidationError);
+        return;
+      }
       const fn = mode === "login" ? login : register;
       const auth = await fn({ nickname, password }).unwrap();
       dispatch(setAuth(auth));
       navigate(nextPath, { replace: true });
-    } catch {
-      setError("Не удалось выполнить вход. Проверьте ник и пароль.");
+    } catch (err) {
+      const apiMessage = extractApiErrorMessage(err);
+      if (isRegisterMode) {
+        const registerMessage = apiMessage || "Не удалось зарегистрироваться. Проверьте данные и попробуйте снова.";
+        setError(registerMessage);
+        if (registerMessage.toLowerCase().includes("пароль")) {
+          setPasswordError(registerMessage);
+        }
+        return;
+      }
+      setError(apiMessage || "Не удалось выполнить вход. Проверьте ник и пароль.");
     }
   };
 
@@ -103,6 +121,7 @@ export function LoginPage() {
               onChange={(value) => {
                 setMode(value as "login" | "register");
                 setError("");
+                setPasswordError("");
               }}
               fullWidth
               data={[
@@ -123,9 +142,18 @@ export function LoginPage() {
                 />
                 <PasswordInput
                   label="Пароль"
+                  description={isRegisterMode ? "Минимум 6 символов" : undefined}
                   leftSection={<IconKey size={15} />}
                   value={password}
-                  onChange={(e) => setPassword(e.currentTarget.value)}
+                  onChange={(e) => {
+                    const nextPassword = e.currentTarget.value;
+                    setPassword(nextPassword);
+                    if (!isRegisterMode) return;
+                    if (nextPassword.length >= 6) {
+                      setPasswordError("");
+                    }
+                  }}
+                  error={passwordError || undefined}
                   styles={fieldStyles}
                   required
                 />
@@ -160,4 +188,21 @@ export function LoginPage() {
       </Container>
     </Box>
   );
+}
+
+function extractApiErrorMessage(error: unknown): string | null {
+  if (!error || typeof error !== "object") return null;
+  const maybeError = error as {
+    data?: unknown;
+    error?: string;
+  };
+  if (typeof maybeError.error === "string" && maybeError.error.trim()) {
+    return maybeError.error;
+  }
+  if (!maybeError.data || typeof maybeError.data !== "object") return null;
+  const data = maybeError.data as { error?: unknown };
+  if (typeof data.error === "string" && data.error.trim()) {
+    return data.error;
+  }
+  return null;
 }

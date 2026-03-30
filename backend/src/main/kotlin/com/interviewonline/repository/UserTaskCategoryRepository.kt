@@ -7,4 +7,5 @@ interface UserTaskCategoryRepository : JpaRepository<UserTaskCategory, String> {
     fun findAllByOwnerUserIdOrderByNameAsc(ownerUserId: String): List<UserTaskCategory>
     fun findByIdAndOwnerUserId(id: String, ownerUserId: String): UserTaskCategory?
     fun findByOwnerUserIdAndNameIgnoreCase(ownerUserId: String, name: String): UserTaskCategory?
+    fun deleteAllByOwnerUserId(ownerUserId: String): Long
 }
