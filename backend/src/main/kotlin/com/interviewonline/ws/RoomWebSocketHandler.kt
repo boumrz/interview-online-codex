@@ -44,52 +44,120 @@ class RoomWebSocketHandler(
     override fun handleTextMessage(session: WebSocketSession, message: TextMessage) {
         try {
             val payload = objectMapper.readTree(message.payload)
-            val type = payload.path("type").asText("")
+            val type = payload.path("type").asText("").trim()
+            if (type.isBlank()) {
+                logger.debug("Skipping websocket message without type: {}", message.payload)
+                return
+            }
+
             when (type) {
-                "code_update" -> collaborationService.updateCode(session, payload.readText("code"))
-                "language_update" -> collaborationService.updateLanguage(session, payload.readText("language"))
+                "code_update" -> {
+                    val code = payload.readTextOrNull("code") ?: run {
+                        logger.debug("Skipping incomplete code_update websocket message: {}", message.payload)
+                        return
+                    }
+                    collaborationService.updateCode(session, code)
+                }
+                "language_update" -> {
+                    val language = payload.readTextOrNull("language")?.takeIf { it.isNotBlank() } ?: run {
+                        logger.debug("Skipping incomplete language_update websocket message: {}", message.payload)
+                        return
+                    }
+                    collaborationService.updateLanguage(session, language)
+                }
                 "next_step" -> collaborationService.nextStep(session)
-                "set_step" -> collaborationService.setStep(session, payload.readInt("stepIndex"))
-                "task_rating_update" -> collaborationService.updateTaskRating(
-                    socket = session,
-                    stepIndex = payload.readNullableInt("stepIndex"),
-                    rating = payload.readNullableInt("rating"),
-                )
-                "notes_update" -> collaborationService.updateNotes(session, payload.readText("notes"))
-                "presence_update" -> collaborationService.updatePresence(session, payload.readText("presenceStatus"))
-                "cursor_update" -> collaborationService.updateCursor(
-                    socket = session,
-                    lineNumber = payload.readNullableInt("lineNumber"),
-                    column = payload.readNullableInt("column"),
-                    selectionStartLineNumber = payload.readNullableInt("selectionStartLineNumber"),
-                    selectionStartColumn = payload.readNullableInt("selectionStartColumn"),
-                    selectionEndLineNumber = payload.readNullableInt("selectionEndLineNumber"),
-                    selectionEndColumn = payload.readNullableInt("selectionEndColumn"),
-                )
-                "yjs_update" -> collaborationService.relayYjsUpdate(
-                    socket = session,
-                    yjsUpdate = payload.readText("yjsUpdate"),
-                    syncKey = payload.readNullableText("syncKey"),
-                )
-                "key_press" -> collaborationService.trackKeyPress(
-                    socket = session,
-                    key = payload.readText("key"),
-                    keyCode = payload.readText("keyCode"),
-                    ctrlKey = payload.readBoolean("ctrlKey"),
-                    altKey = payload.readBoolean("altKey"),
-                    shiftKey = payload.readBoolean("shiftKey"),
-                    metaKey = payload.readBoolean("metaKey"),
-                )
-                else -> throw ApiException(org.springframework.http.HttpStatus.BAD_REQUEST, "Неизвестный тип сообщения: $type")
+                "set_step" -> {
+                    val stepIndex = payload.readNullableInt("stepIndex") ?: run {
+                        logger.debug("Skipping incomplete set_step websocket message: {}", message.payload)
+                        return
+                    }
+                    collaborationService.setStep(session, stepIndex)
+                }
+                "task_rating_update" -> {
+                    if (!payload.has("stepIndex") && !payload.has("rating")) {
+                        logger.debug("Skipping incomplete task_rating_update websocket message: {}", message.payload)
+                        return
+                    }
+                    collaborationService.updateTaskRating(
+                        socket = session,
+                        stepIndex = payload.readNullableInt("stepIndex"),
+                        rating = payload.readNullableInt("rating"),
+                    )
+                }
+                "notes_update" -> {
+                    val notes = payload.readTextOrNull("notes") ?: run {
+                        logger.debug("Skipping incomplete notes_update websocket message: {}", message.payload)
+                        return
+                    }
+                    collaborationService.updateNotes(session, notes)
+                }
+                "presence_update" -> {
+                    val presenceStatus = payload.readTextOrNull("presenceStatus")?.takeIf { it.isNotBlank() } ?: run {
+                        logger.debug("Skipping incomplete presence_update websocket message: {}", message.payload)
+                        return
+                    }
+                    collaborationService.updatePresence(session, presenceStatus)
+                }
+                "cursor_update" -> {
+                    val lineNumber = payload.readNullableInt("lineNumber") ?: run {
+                        logger.debug("Skipping incomplete cursor_update websocket message: {}", message.payload)
+                        return
+                    }
+                    val column = payload.readNullableInt("column") ?: run {
+                        logger.debug("Skipping incomplete cursor_update websocket message: {}", message.payload)
+                        return
+                    }
+                    collaborationService.updateCursor(
+                        socket = session,
+                        lineNumber = lineNumber,
+                        column = column,
+                        selectionStartLineNumber = payload.readNullableInt("selectionStartLineNumber"),
+                        selectionStartColumn = payload.readNullableInt("selectionStartColumn"),
+                        selectionEndLineNumber = payload.readNullableInt("selectionEndLineNumber"),
+                        selectionEndColumn = payload.readNullableInt("selectionEndColumn"),
+                    )
+                }
+                "yjs_update" -> {
+                    val yjsUpdate = payload.readTextOrNull("yjsUpdate")?.takeIf { it.isNotBlank() } ?: run {
+                        logger.debug("Skipping incomplete yjs_update websocket message: {}", message.payload)
+                        return
+                    }
+                    collaborationService.relayYjsUpdate(
+                        socket = session,
+                        yjsUpdate = yjsUpdate,
+                        syncKey = payload.readNullableText("syncKey"),
+                    )
+                }
+                "key_press" -> {
+                    val key = payload.readTextOrNull("key")
+                    val keyCode = payload.readTextOrNull("keyCode")
+                    if (key.isNullOrBlank() && keyCode.isNullOrBlank()) {
+                        logger.debug("Skipping incomplete key_press websocket message: {}", message.payload)
+                        return
+                    }
+                    collaborationService.trackKeyPress(
+                        socket = session,
+                        key = key,
+                        keyCode = keyCode,
+                        ctrlKey = payload.readBoolean("ctrlKey"),
+                        altKey = payload.readBoolean("altKey"),
+                        shiftKey = payload.readBoolean("shiftKey"),
+                        metaKey = payload.readBoolean("metaKey"),
+                    )
+                }
+                else -> {
+                    logger.debug("Ignoring unsupported websocket message type: {}", type)
+                    safeSendError(session, "Неизвестный тип сообщения: $type")
+                }
             }
         } catch (ex: ApiException) {
-            sendError(session, ex.message)
+            safeSendError(session, ex.message)
         } catch (ex: JsonProcessingException) {
             logger.warn("Invalid websocket json payload: {}", message.payload)
-            sendError(session, "Некорректный формат WebSocket сообщения")
+            safeSendError(session, "Некорректный формат WebSocket сообщения")
         } catch (ex: Exception) {
             logger.warn("WebSocket message handling error", ex)
-            sendError(session, "Ошибка обработки WebSocket сообщения")
+            safeSendError(session, "Ошибка обработки WebSocket сообщения")
         }
     }
 
@@ -97,23 +165,26 @@ class RoomWebSocketHandler(
         collaborationService.leaveRoom(session)
     }
 
-    private fun sendError(session: WebSocketSession, message: String) {
-        if (session.isOpen) {
-            val payload = objectMapper.writeValueAsString(WsOutgoingMessage("error", mapOf("message" to message)))
-            synchronized(session) {
-                if (session.isOpen) {
-                    session.sendMessage(TextMessage(payload))
+    private fun safeSendError(session: WebSocketSession, message: String?) {
+        if (message.isNullOrBlank()) return
+        runCatching {
+            if (session.isOpen) {
+                val payload = objectMapper.writeValueAsString(WsOutgoingMessage("error", mapOf("message" to message)))
+                synchronized(session) {
+                    if (session.isOpen) {
+                        session.sendMessage(TextMessage(payload))
+                    }
                 }
             }
+        }.onFailure { ex ->
+            logger.debug("Skipping websocket error response because it could not be sent", ex)
         }
     }
 
-    private fun JsonNode.readText(field: String): String {
-        return path(field).asText("")
-    }
-
-    private fun JsonNode.readInt(field: String): Int {
-        return path(field).asInt(-1)
+    private fun JsonNode.readTextOrNull(field: String): String? {
+        val node = path(field)
+        if (node.isMissingNode || node.isNull) return null
+        return node.asText()
     }
 
     private fun JsonNode.readNullableInt(field: String): Int? {

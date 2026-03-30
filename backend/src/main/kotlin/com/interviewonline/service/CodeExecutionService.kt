@@ -43,7 +43,7 @@ class CodeExecutionService(
 
         val language = request.language.lowercase()
         val (filename, command) = when (language) {
-            "javascript", "typescript" -> "main.js" to listOf("node", "main.js")
+            "nodejs", "javascript", "typescript" -> "main.js" to listOf("node", "main.js")
             "python" -> "main.py" to listOf("python3", "main.py")
             else -> {
                 return RunCodeResponse(

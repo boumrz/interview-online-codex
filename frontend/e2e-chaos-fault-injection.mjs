@@ -23,7 +23,7 @@ async function registerAndCreateRoom() {
       "Content-Type": "application/json",
       Authorization: `Bearer ${auth.token}`
     },
-    body: JSON.stringify({ title: "Chaos Room", language: "javascript", taskIds: [] })
+    body: JSON.stringify({ title: "Chaos Room", language: "nodejs", taskIds: [] })
   });
   const room = await createRoomResponse.json();
   if (!createRoomResponse.ok) {

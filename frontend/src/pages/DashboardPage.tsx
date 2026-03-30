@@ -76,8 +76,7 @@ const BASE_DASHBOARD_SECTIONS: Array<{ value: DashboardSection; label: string }>
 const ADMIN_DASHBOARD_SECTION: { value: DashboardSection; label: string } = { value: "admin", label: "Админка" };
 
 const LANGUAGE_OPTIONS = [
-  { value: "javascript", label: "JavaScript" },
-  { value: "typescript", label: "TypeScript" },
+  { value: "nodejs", label: "Node JS" },
   { value: "python", label: "Python" },
   { value: "kotlin", label: "Kotlin" },
   { value: "java", label: "Java" },
@@ -94,6 +93,14 @@ const darkSelectStyles = {
   dropdown: { backgroundColor: "#0f1c34", borderColor: "#27456f" },
   option: { color: "#e2e8f0" }
 };
+
+const NODEJS_LANGUAGE_ALIASES = new Set(["nodejs", "javascript", "typescript"]);
+
+function normalizeLanguageKey(language: string | null | undefined): string {
+  const normalized = (language ?? "").trim().toLowerCase();
+  if (!normalized || NODEJS_LANGUAGE_ALIASES.has(normalized)) return "nodejs";
+  return normalized;
+}
 
 function isDashboardSection(value: string | undefined, agentOpsEnabled: boolean, isAdmin: boolean): value is DashboardSection {
   if (value === "rooms" || value === "tasks" || value === "manage") return true;
@@ -115,11 +122,11 @@ export function DashboardPage() {
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDescription, setTaskDescription] = useState("");
   const [taskStarterCode, setTaskStarterCode] = useState("");
-  const [taskLanguage, setTaskLanguage] = useState("javascript");
+  const [taskLanguage, setTaskLanguage] = useState("nodejs");
   const [createTaskModalOpened, setCreateTaskModalOpened] = useState(false);
 
   const [roomTitle, setRoomTitle] = useState("Техническое интервью");
-  const [roomLanguage, setRoomLanguage] = useState("javascript");
+  const [roomLanguage, setRoomLanguage] = useState("nodejs");
   const [roomTaskIds, setRoomTaskIds] = useState<string[]>([]);
 
   const [roomTitleDrafts, setRoomTitleDrafts] = useState<Record<string, string>>({});
@@ -130,7 +137,7 @@ export function DashboardPage() {
   const [editTaskTitle, setEditTaskTitle] = useState("");
   const [editTaskDescription, setEditTaskDescription] = useState("");
   const [editTaskStarterCode, setEditTaskStarterCode] = useState("");
-  const [editTaskLanguage, setEditTaskLanguage] = useState("javascript");
+  const [editTaskLanguage, setEditTaskLanguage] = useState("nodejs");
   const [agentIssueId, setAgentIssueId] = useState("");
   const [agentProvider, setAgentProvider] = useState<"temporal" | "langgraph">("temporal");
   const [agentRole, setAgentRole] = useState("Тимлид");
@@ -193,12 +200,17 @@ export function DashboardPage() {
   if (!isDashboardSection(section, agentOpsEnabled, isAdmin)) return <Navigate to="/dashboard/rooms" replace />;
 
   const activeSection = section;
-  const activeTaskLanguage = searchParams.get("lang") ?? "javascript";
+  const activeTaskLanguage = normalizeLanguageKey(searchParams.get("lang"));
 
   const normalizedTaskGroups = useMemo(() => {
     const tasksByLanguage = new Map<string, TaskTemplate[]>();
     groupedTasks.forEach((group) => {
-      tasksByLanguage.set(group.language, group.tasks);
+      const language = normalizeLanguageKey(group.language);
+      const current = tasksByLanguage.get(language) ?? [];
+      tasksByLanguage.set(
+        language,
+        [...current, ...group.tasks.map((task) => ({ ...task, language: normalizeLanguageKey(task.language) }))]
+      );
     });
     LANGUAGE_OPTIONS.forEach((languageOption) => {
       if (!tasksByLanguage.has(languageOption.value)) {
@@ -213,10 +225,10 @@ export function DashboardPage() {
 
   const safeTaskLanguage = normalizedTaskGroups.some((group) => group.language === activeTaskLanguage)
     ? activeTaskLanguage
-    : "javascript";
+    : "nodejs";
 
   const currentTaskGroup = normalizedTaskGroups.find((group) => group.language === safeTaskLanguage) ?? {
-    language: "javascript",
+    language: "nodejs",
     tasks: []
   };
 
@@ -333,7 +345,7 @@ export function DashboardPage() {
     setEditTaskTitle(task.title);
     setEditTaskDescription(task.description);
     setEditTaskStarterCode(task.starterCode);
-    setEditTaskLanguage(task.language);
+    setEditTaskLanguage(normalizeLanguageKey(task.language));
   };
 
   const submitTaskEdit = async () => {
@@ -604,7 +616,7 @@ export function DashboardPage() {
           <Select
             label="Язык"
             value={editTaskLanguage}
-            onChange={(value) => setEditTaskLanguage(value ?? "javascript")}
+            onChange={(value) => setEditTaskLanguage(value ?? "nodejs")}
             data={LANGUAGE_OPTIONS}
             styles={darkSelectStyles}
           />
@@ -656,7 +668,7 @@ export function DashboardPage() {
               data-testid="create-task-language-select"
               label="Язык"
               value={taskLanguage}
-              onChange={(value) => setTaskLanguage(value ?? "javascript")}
+              onChange={(value) => setTaskLanguage(value ?? "nodejs")}
               data={LANGUAGE_OPTIONS}
               styles={darkSelectStyles}
             />
@@ -786,7 +798,7 @@ export function DashboardPage() {
                         <Select
                           label="Язык комнаты"
                           value={roomLanguage}
-                          onChange={(value) => setRoomLanguage(value ?? "javascript")}
+                          onChange={(value) => setRoomLanguage(value ?? "nodejs")}
                           data={LANGUAGE_OPTIONS}
                           styles={darkSelectStyles}
                         />
@@ -883,7 +895,7 @@ export function DashboardPage() {
                         <Select
                           label="Язык"
                           value={taskLanguage}
-                          onChange={(value) => setTaskLanguage(value ?? "javascript")}
+                          onChange={(value) => setTaskLanguage(value ?? "nodejs")}
                           data={LANGUAGE_OPTIONS}
                           styles={darkSelectStyles}
                         />
@@ -1436,9 +1448,9 @@ function statusLabel(status: RoomSaveStatus | undefined) {
 }
 
 function labelForLanguage(language: string) {
-  switch (language) {
-    case "typescript":
-      return "TypeScript";
+  switch (normalizeLanguageKey(language)) {
+    case "nodejs":
+      return "Node JS";
     case "python":
       return "Python";
     case "kotlin":
@@ -1448,7 +1460,7 @@ function labelForLanguage(language: string) {
     case "sql":
       return "SQL";
     default:
-      return "JavaScript";
+      return "Node JS";
   }
 }
 

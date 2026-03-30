@@ -76,8 +76,8 @@ class UserTaskService(
     @Transactional
     fun listTasksGrouped(user: User): List<TaskLanguageGroupDto> {
         val tasks = taskRepository.findAllByOwnerUserIdOrderByCreatedAtDesc(user.id!!)
-        val tasksByLanguage = tasks.groupBy { it.language }
-        val languageOrder = listOf("javascript", "typescript", "python", "kotlin", "java", "sql")
+        val tasksByLanguage = tasks.groupBy { normalizeLanguage(it.language) }
+        val languageOrder = listOf("nodejs", "python", "kotlin", "java", "sql")
         return languageOrder.map { language ->
             TaskLanguageGroupDto(
                 language = language,
@@ -91,13 +91,17 @@ class UserTaskService(
         val normalizedLanguage = normalizeLanguage(language)
         val normalized = taskIds.map { it.trim() }.filter { it.isNotBlank() }.distinct()
         if (normalized.isEmpty()) {
-            return taskRepository.findAllByOwnerUserIdAndLanguageOrderByCreatedAtAsc(user.id!!, normalizedLanguage)
+            return taskRepository.findAllByOwnerUserIdOrderByCreatedAtDesc(user.id!!)
+                .asSequence()
+                .filter { normalizeLanguage(it.language) == normalizedLanguage }
+                .sortedBy { it.createdAt }
+                .toList()
         }
         val tasks = taskRepository.findAllByIdInAndOwnerUserId(normalized, user.id!!)
         if (tasks.size != normalized.size) {
             throw ApiException(HttpStatus.BAD_REQUEST, "Некоторые задачи не найдены или не принадлежат пользователю")
         }
-        if (tasks.any { it.language != normalizedLanguage }) {
+        if (tasks.any { normalizeLanguage(it.language) != normalizedLanguage }) {
             throw ApiException(
                 HttpStatus.BAD_REQUEST,
                 "Выбранные задачи должны соответствовать языку комнаты: $normalizedLanguage",
@@ -132,12 +136,12 @@ class UserTaskService(
 
     private fun normalizeLanguage(language: String): String {
         return when (language.lowercase()) {
+            "javascript", "typescript", "nodejs" -> "nodejs"
             "python" -> "python"
             "kotlin" -> "kotlin"
             "java" -> "java"
             "sql" -> "sql"
-            "typescript" -> "typescript"
-            else -> "javascript"
+            else -> "nodejs"
         }
     }
 
@@ -147,7 +151,7 @@ class UserTaskService(
             title = title,
             description = description,
             starterCode = starterCode,
-            language = language,
+            language = normalizeLanguage(language),
         )
     }
 }

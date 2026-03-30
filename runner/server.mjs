@@ -62,7 +62,7 @@ app.listen(PORT, () => {
 });
 
 function resolveRunner(language) {
-  if (language === "javascript" || language === "typescript") {
+  if (language === "nodejs" || language === "javascript" || language === "typescript") {
     return { filename: "main.js", command: ["node", "main.js"] };
   }
   if (language === "python") {

@@ -278,10 +278,11 @@ class CollaborationService(
         if (!participant.canManageRoom) {
             throw ApiException(HttpStatus.FORBIDDEN, "Только интервьюер может менять язык")
         }
-        roomState[participant.inviteCode]?.language = language
+        val normalizedLanguage = normalizeLanguage(language)
+        roomState[participant.inviteCode]?.language = normalizedLanguage
         roomRepository.findByInviteCode(participant.inviteCode)?.let {
-            it.language = language
-            it.tasks.getOrNull(it.currentStep)?.solutionLanguage = language
+            it.language = normalizedLanguage
+            it.tasks.getOrNull(it.currentStep)?.solutionLanguage = normalizedLanguage
             roomRepository.save(it)
         }
         broadcastState(participant.inviteCode)
@@ -306,7 +307,7 @@ class CollaborationService(
         }
         roomRepository.findByInviteCode(participant.inviteCode)?.let {
             it.notes = notes
-            it.tasks.getOrNull(it.currentStep)?.interviewerNotes = notes
+            it.tasks.forEach { task -> task.interviewerNotes = null }
             roomRepository.save(it)
         }
         broadcastState(participant.inviteCode)
@@ -724,21 +725,25 @@ class CollaborationService(
 
     private fun setStepInternal(inviteCode: String, room: Room, stepIndex: Int) {
         val currentState = roomState[inviteCode]
-        room.tasks.getOrNull(room.currentStep)?.let { currentTask ->
-            currentTask.solutionCode = currentState?.code ?: room.code
-            currentTask.interviewerNotes = currentState?.notes ?: room.notes.orEmpty()
-            currentTask.solutionLanguage = currentState?.language ?: room.language
+        val currentTask = room.tasks.getOrNull(room.currentStep)
+        currentTask?.let { current ->
+            current.solutionCode = currentState?.code ?: room.code
+            current.solutionLanguage = normalizeLanguage(currentState?.language ?: room.language)
         }
+        if (room.notes.isNullOrBlank()) {
+            room.notes = currentTask?.interviewerNotes?.takeIf { it.isNotBlank() }
+                ?: currentState?.notes.orEmpty()
+        }
+        room.tasks.forEach { it.interviewerNotes = null }
 
         room.currentStep = stepIndex
         val nextTask = room.tasks[stepIndex]
-        room.language = nextTask.solutionLanguage?.ifBlank { null } ?: nextTask.language
+        room.language = normalizeLanguage(nextTask.solutionLanguage?.ifBlank { null } ?: nextTask.language)
         room.code = nextTask.solutionCode ?: nextTask.starterCode
-        room.notes = nextTask.interviewerNotes ?: ""
         roomRepository.save(room)
 
         roomState[inviteCode] = RealtimeState(
-            language = room.language,
+            language = normalizeLanguage(room.language),
             code = room.code,
             lastCodeUpdatedBySessionId = null,
             currentStep = room.currentStep,
@@ -901,9 +906,9 @@ class CollaborationService(
 
     private fun toRealtimeState(room: Room): RealtimeState {
         val currentTask = room.tasks.getOrNull(room.currentStep)
-        val language = currentTask?.solutionLanguage?.ifBlank { null } ?: room.language
+        val language = normalizeLanguage(currentTask?.solutionLanguage?.ifBlank { null } ?: room.language)
         val code = currentTask?.solutionCode ?: room.code.ifBlank { currentTask?.starterCode.orEmpty() }
-        val notes = currentTask?.interviewerNotes ?: room.notes.orEmpty()
+        val notes = room.notes.orEmpty().ifBlank { currentTask?.interviewerNotes.orEmpty() }
         return RealtimeState(
             language = language,
             code = code,
@@ -915,5 +920,16 @@ class CollaborationService(
             notesLockedUntilEpochMs = null,
             taskScoresByStepIndex = buildTaskScores(room),
         )
+    }
+
+    private fun normalizeLanguage(language: String): String {
+        return when (language.trim().lowercase()) {
+            "javascript", "typescript", "nodejs" -> "nodejs"
+            "python" -> "python"
+            "kotlin" -> "kotlin"
+            "java" -> "java"
+            "sql" -> "sql"
+            else -> "nodejs"
+        }
     }
 }

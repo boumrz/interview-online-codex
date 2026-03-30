@@ -45,7 +45,7 @@ class RoomTask(
     var score: Int? = null,
 
     @Column(nullable = false)
-    var language: String = "javascript",
+    var language: String = "nodejs",
 
     @Column(name = "category_name")
     var categoryName: String? = null,

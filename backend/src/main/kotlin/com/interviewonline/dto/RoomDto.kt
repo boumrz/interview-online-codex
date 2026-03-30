@@ -4,14 +4,14 @@ import jakarta.validation.constraints.NotBlank
 
 data class CreateRoomRequest(
     @field:NotBlank val title: String,
-    @field:NotBlank val language: String = "javascript",
+    @field:NotBlank val language: String = "nodejs",
     val taskIds: List<String> = emptyList(),
 )
 
 data class CreateGuestRoomRequest(
     val title: String = "Комната собеседования",
     val ownerDisplayName: String = "Интервьюер",
-    val language: String = "javascript",
+    val language: String = "nodejs",
 )
 
 data class RoomTaskDto(
