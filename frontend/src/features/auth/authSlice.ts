@@ -9,9 +9,24 @@ type AuthState = {
 const storedToken = localStorage.getItem("auth_token");
 const storedUser = localStorage.getItem("auth_user");
 
+function normalizeStoredUser(raw: User | null): User | null {
+  if (!raw) return null;
+  const nickname = raw.nickname ?? "";
+  const normalizedRole =
+    typeof raw.role === "string" && raw.role.trim().length > 0
+      ? raw.role
+      : nickname.trim().toLowerCase() === "boumrz"
+      ? "admin"
+      : "user";
+  return {
+    ...raw,
+    role: normalizedRole
+  };
+}
+
 const initialState: AuthState = {
   token: storedToken,
-  user: storedUser ? (JSON.parse(storedUser) as User) : null
+  user: storedUser ? normalizeStoredUser(JSON.parse(storedUser) as User) : null
 };
 
 const authSlice = createSlice({

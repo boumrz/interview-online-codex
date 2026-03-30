@@ -17,7 +17,14 @@ import java.util.UUID
 class AuthService(
     private val userRepository: UserRepository,
     private val userSessionRepository: UserSessionRepository,
+    private val userTaskService: UserTaskService,
 ) {
+    companion object {
+        const val ROLE_USER = "user"
+        const val ROLE_ADMIN = "admin"
+        private const val PRIMARY_ADMIN_NICKNAME = "boumrz"
+    }
+
     private val passwordEncoder = BCryptPasswordEncoder()
 
     fun register(request: RegisterRequest): AuthResponse {
@@ -29,8 +36,10 @@ class AuthService(
             User(
                 nickname = nickname,
                 passwordHash = passwordEncoder.encode(request.password),
+                role = if (nickname.equals(PRIMARY_ADMIN_NICKNAME, ignoreCase = true)) ROLE_ADMIN else ROLE_USER,
             ),
         )
+        userTaskService.initializeTaskBank(user)
         return createSession(user)
     }
 
@@ -40,7 +49,7 @@ class AuthService(
         if (!passwordEncoder.matches(request.password, user.passwordHash)) {
             throw ApiException(HttpStatus.UNAUTHORIZED, "Неверный ник или пароль")
         }
-        return createSession(user)
+        return createSession(ensurePrimaryAdminRole(user))
     }
 
     fun requireUserByToken(token: String?): User {
@@ -49,13 +58,15 @@ class AuthService(
         }
         val session = userSessionRepository.findByToken(token)
             ?: throw ApiException(HttpStatus.UNAUTHORIZED, "Недействительный токен авторизации")
-        return session.user ?: throw ApiException(HttpStatus.UNAUTHORIZED, "Сессия не найдена")
+        val user = session.user ?: throw ApiException(HttpStatus.UNAUTHORIZED, "Сессия не найдена")
+        return ensurePrimaryAdminRole(user)
     }
 
     fun resolveUserByToken(token: String?): User? {
         if (token.isNullOrBlank()) return null
         val session = userSessionRepository.findByToken(token) ?: return null
-        return session.user
+        val user = session.user ?: return null
+        return ensurePrimaryAdminRole(user)
     }
 
     private fun createSession(user: User): AuthResponse {
@@ -63,7 +74,14 @@ class AuthService(
         userSessionRepository.save(UserSession(user = user, token = token))
         return AuthResponse(
             token = token,
-            user = UserDto(id = user.id!!, nickname = user.nickname),
+            user = UserDto(id = user.id!!, nickname = user.nickname, role = user.role),
         )
+    }
+
+    private fun ensurePrimaryAdminRole(user: User): User {
+        if (!user.nickname.equals(PRIMARY_ADMIN_NICKNAME, ignoreCase = true)) return user
+        if (user.role == ROLE_ADMIN) return user
+        user.role = ROLE_ADMIN
+        return userRepository.save(user)
     }
 }

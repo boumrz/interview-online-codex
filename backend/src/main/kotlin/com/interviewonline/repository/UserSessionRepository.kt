@@ -5,4 +5,5 @@ import org.springframework.data.jpa.repository.JpaRepository
 
 interface UserSessionRepository : JpaRepository<UserSession, String> {
     fun findByToken(token: String): UserSession?
+    fun deleteAllByUserId(userId: String): Long
 }

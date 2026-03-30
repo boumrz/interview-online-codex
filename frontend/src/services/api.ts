@@ -1,5 +1,6 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import type {
+  AdminUser,
   AgentPolicyGateResult,
   AgentRun,
   AuthResponse,
@@ -25,7 +26,7 @@ export const api = createApi({
       return headers;
     }
   }),
-  tagTypes: ["Room", "MyRooms", "Tasks"],
+  tagTypes: ["Room", "MyRooms", "Tasks", "AdminUsers"],
   endpoints: (builder) => ({
     register: builder.mutation<AuthResponse, { nickname: string; password: string }>({
       query: (body) => ({ url: "/auth/register", method: "POST", body })
@@ -115,6 +116,25 @@ export const api = createApi({
       }),
       invalidatesTags: ["Tasks"]
     }),
+    adminUsers: builder.query<AdminUser[], void>({
+      query: () => "/admin/users",
+      providesTags: ["AdminUsers"]
+    }),
+    adminUpdateUserRole: builder.mutation<AdminUser, { userId: string; role: string }>({
+      query: ({ userId, role }) => ({
+        url: `/admin/users/${userId}/role`,
+        method: "PATCH",
+        body: { role }
+      }),
+      invalidatesTags: ["AdminUsers"]
+    }),
+    adminDeleteUser: builder.mutation<{ status: string }, { userId: string }>({
+      query: ({ userId }) => ({
+        url: `/admin/users/${userId}`,
+        method: "DELETE"
+      }),
+      invalidatesTags: ["AdminUsers"]
+    }),
     startAgentRun: builder.mutation<
       AgentRun,
       {
@@ -202,6 +222,9 @@ export const {
   useCreateTaskTemplateMutation,
   useUpdateTaskTemplateMutation,
   useDeleteTaskTemplateMutation,
+  useAdminUsersQuery,
+  useAdminUpdateUserRoleMutation,
+  useAdminDeleteUserMutation,
   useStartAgentRunMutation,
   useTransitionAgentRunMutation,
   useExecuteAllRunReviewersMutation,

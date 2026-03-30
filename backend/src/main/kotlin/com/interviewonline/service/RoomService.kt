@@ -49,6 +49,12 @@ class RoomService(
     fun createUserRoom(request: CreateRoomRequest, user: User): RoomResponse {
         val language = request.language.ifBlank { "javascript" }.lowercase()
         val selectedTasks = userTaskService.resolveTasksForRoom(user, request.taskIds, language)
+        if (selectedTasks.isEmpty()) {
+            throw ApiException(
+                HttpStatus.BAD_REQUEST,
+                "В банке нет задач для выбранного языка. Добавьте задачи и повторите создание комнаты",
+            )
+        }
         val room = Room(
             title = request.title,
             inviteCode = "r-${UUID.randomUUID()}",
@@ -57,20 +63,16 @@ class RoomService(
             ownerUser = user,
             language = language,
         )
-        val tasks = if (selectedTasks.isEmpty()) {
-            taskTemplateService.defaultRoomTasks(language).toMutableList()
-        } else {
-            selectedTasks.mapIndexed { index, task ->
-                RoomTask(
-                    stepIndex = index,
-                    title = task.title,
-                    description = task.description,
-                    starterCode = task.starterCode,
-                    language = task.language,
-                    categoryName = task.language,
-                )
-            }.toMutableList()
-        }
+        val tasks = selectedTasks.mapIndexed { index, task ->
+            RoomTask(
+                stepIndex = index,
+                title = task.title,
+                description = task.description,
+                starterCode = task.starterCode,
+                language = task.language,
+                categoryName = task.language,
+            )
+        }.toMutableList()
         tasks.forEach { it.room = room }
         room.tasks = tasks
         initializeCurrentStepSnapshot(room)

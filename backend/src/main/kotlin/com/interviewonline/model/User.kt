@@ -21,6 +21,9 @@ class User(
     @Column(name = "password_hash", nullable = false)
     var passwordHash: String = "",
 
+    @Column(name = "role", nullable = false, columnDefinition = "VARCHAR(32) DEFAULT 'user'")
+    var role: String = "user",
+
     @Column(name = "created_at", nullable = false)
     var createdAt: Instant = Instant.now(),
 )

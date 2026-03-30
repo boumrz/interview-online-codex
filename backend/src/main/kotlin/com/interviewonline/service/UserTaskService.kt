@@ -20,6 +20,12 @@ class UserTaskService(
     private val taskTemplateService: TaskTemplateService,
 ) {
     @Transactional
+    fun initializeTaskBank(user: User) {
+        if (taskRepository.existsByOwnerUserId(user.id!!)) return
+        seedDefaultTaskBank(user)
+    }
+
+    @Transactional
     fun createTask(user: User, request: CreateTaskTemplateRequest): TaskTemplateDto {
         val language = normalizeLanguage(request.language)
         val title = request.title.trim()
@@ -43,7 +49,6 @@ class UserTaskService(
 
     @Transactional
     fun updateTask(user: User, taskId: String, request: UpdateTaskTemplateRequest): TaskTemplateDto {
-        ensurePresetTasks(user)
         val task = taskRepository.findByIdAndOwnerUserId(taskId, user.id!!)
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Задача не найдена")
         val language = normalizeLanguage(request.language)
@@ -62,7 +67,6 @@ class UserTaskService(
 
     @Transactional
     fun deleteTask(user: User, taskId: String) {
-        ensurePresetTasks(user)
         val deleted = taskRepository.deleteByIdAndOwnerUserId(taskId, user.id!!)
         if (deleted == 0L) {
             throw ApiException(HttpStatus.NOT_FOUND, "Задача не найдена")
@@ -71,7 +75,6 @@ class UserTaskService(
 
     @Transactional
     fun listTasksGrouped(user: User): List<TaskLanguageGroupDto> {
-        ensurePresetTasks(user)
         val tasks = taskRepository.findAllByOwnerUserIdOrderByCreatedAtDesc(user.id!!)
         val tasksByLanguage = tasks.groupBy { it.language }
         val languageOrder = listOf("javascript", "typescript", "python", "kotlin", "java", "sql")
@@ -85,10 +88,11 @@ class UserTaskService(
 
     @Transactional
     fun resolveTasksForRoom(user: User, taskIds: List<String>, language: String): List<UserTaskTemplate> {
-        ensurePresetTasks(user)
         val normalizedLanguage = normalizeLanguage(language)
-        val normalized = taskIds.distinct()
-        if (normalized.isEmpty()) return emptyList()
+        val normalized = taskIds.map { it.trim() }.filter { it.isNotBlank() }.distinct()
+        if (normalized.isEmpty()) {
+            return taskRepository.findAllByOwnerUserIdAndLanguageOrderByCreatedAtAsc(user.id!!, normalizedLanguage)
+        }
         val tasks = taskRepository.findAllByIdInAndOwnerUserId(normalized, user.id!!)
         if (tasks.size != normalized.size) {
             throw ApiException(HttpStatus.BAD_REQUEST, "Некоторые задачи не найдены или не принадлежат пользователю")
@@ -103,9 +107,7 @@ class UserTaskService(
         return normalized.mapNotNull { tasksById[it] }
     }
 
-    private fun ensurePresetTasks(user: User) {
-        if (taskRepository.existsByOwnerUserId(user.id!!)) return
-
+    private fun seedDefaultTaskBank(user: User) {
         val entities = mutableListOf<UserTaskTemplate>()
         taskTemplateService.catalogByLanguage().forEach { (language, seeds) ->
             val category = ensureLanguageCategory(user, language)

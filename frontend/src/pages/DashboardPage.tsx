@@ -33,7 +33,8 @@ import {
   IconRobot,
   IconRocket,
   IconShieldCheck,
-  IconTrash
+  IconTrash,
+  IconUsers
 } from "@tabler/icons-react";
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../app/hooks";
@@ -41,6 +42,9 @@ import { clearAuth } from "../features/auth/authSlice";
 import {
   useCreateRoomMutation,
   useCreateTaskTemplateMutation,
+  useAdminDeleteUserMutation,
+  useAdminUpdateUserRoleMutation,
+  useAdminUsersQuery,
   useClearRealtimeFaultsMutation,
   useConfigureRealtimeFaultsMutation,
   useDeleteRoomMutation,
@@ -56,9 +60,9 @@ import {
   useUpdateRoomMutation,
   useUpdateTaskTemplateMutation
 } from "../services/api";
-import type { RoomSummary, TaskTemplate } from "../types";
+import type { AdminUser, RoomSummary, TaskTemplate } from "../types";
 
-type DashboardSection = "rooms" | "tasks" | "manage" | "agents";
+type DashboardSection = "rooms" | "tasks" | "manage" | "agents" | "admin";
 type RoomSaveStatus = "idle" | "saving" | "saved" | "error";
 declare const __FEATURE_AGENT_OPS__: string | undefined;
 
@@ -68,6 +72,8 @@ const BASE_DASHBOARD_SECTIONS: Array<{ value: DashboardSection; label: string }>
   { value: "manage", label: "Управление комнатами" },
   { value: "agents", label: "Агент-операции" }
 ];
+
+const ADMIN_DASHBOARD_SECTION: { value: DashboardSection; label: string } = { value: "admin", label: "Админка" };
 
 const LANGUAGE_OPTIONS = [
   { value: "javascript", label: "JavaScript" },
@@ -89,8 +95,9 @@ const darkSelectStyles = {
   option: { color: "#e2e8f0" }
 };
 
-function isDashboardSection(value: string | undefined, agentOpsEnabled: boolean): value is DashboardSection {
+function isDashboardSection(value: string | undefined, agentOpsEnabled: boolean, isAdmin: boolean): value is DashboardSection {
   if (value === "rooms" || value === "tasks" || value === "manage") return true;
+  if (isAdmin && value === "admin") return true;
   return agentOpsEnabled && value === "agents";
 }
 
@@ -103,6 +110,7 @@ export function DashboardPage() {
   const [error, setError] = useState("");
   const agentOpsEnabled =
     (typeof __FEATURE_AGENT_OPS__ !== "undefined" ? __FEATURE_AGENT_OPS__ : "false") === "true";
+  const isAdmin = auth.user?.role === "admin" || auth.user?.nickname?.trim().toLowerCase() === "boumrz";
 
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDescription, setTaskDescription] = useState("");
@@ -135,16 +143,22 @@ export function DashboardPage() {
   const [faultInviteCode, setFaultInviteCode] = useState("");
   const [faultLatencyMs, setFaultLatencyMs] = useState("250");
   const [faultDropEvery, setFaultDropEvery] = useState("0");
+  const [adminRoleDrafts, setAdminRoleDrafts] = useState<Record<string, string>>({});
   const dashboardSections = BASE_DASHBOARD_SECTIONS.filter(
     (dashboardSection) => agentOpsEnabled || dashboardSection.value !== "agents"
-  );
+  ).concat(isAdmin ? [ADMIN_DASHBOARD_SECTION] : []);
 
   const { data: rooms = [] } = useMyRoomsQuery(undefined, { skip: !auth.token, refetchOnMountOrArgChange: true });
   const { data: groupedTasks = [] } = useTasksGroupedQuery(undefined, { skip: !auth.token });
+  const { data: adminUsers = [], refetch: refetchAdminUsers } = useAdminUsersQuery(undefined, {
+    skip: !auth.token || !isAdmin
+  });
 
   const [createTask, createTaskState] = useCreateTaskTemplateMutation();
   const [updateTask, updateTaskState] = useUpdateTaskTemplateMutation();
   const [deleteTask, deleteTaskState] = useDeleteTaskTemplateMutation();
+  const [updateAdminUserRole, updateAdminUserRoleState] = useAdminUpdateUserRoleMutation();
+  const [deleteAdminUser, deleteAdminUserState] = useAdminDeleteUserMutation();
   const [createRoom, createRoomState] = useCreateRoomMutation();
   const [updateRoom, updateRoomState] = useUpdateRoomMutation();
   const [deleteRoom, deleteRoomState] = useDeleteRoomMutation();
@@ -176,7 +190,7 @@ export function DashboardPage() {
   }, []);
 
   if (!auth.token) return <Navigate to="/login" replace />;
-  if (!isDashboardSection(section, agentOpsEnabled)) return <Navigate to="/dashboard/rooms" replace />;
+  if (!isDashboardSection(section, agentOpsEnabled, isAdmin)) return <Navigate to="/dashboard/rooms" replace />;
 
   const activeSection = section;
   const activeTaskLanguage = searchParams.get("lang") ?? "javascript";
@@ -256,6 +270,19 @@ export function DashboardPage() {
     });
   }, [rooms]);
 
+  useEffect(() => {
+    if (!isAdmin) return;
+    setAdminRoleDrafts((prev) => {
+      const next = { ...prev };
+      adminUsers.forEach((user) => {
+        if (!next[user.id]) {
+          next[user.id] = user.role;
+        }
+      });
+      return next;
+    });
+  }, [adminUsers, isAdmin]);
+
   const onCreateTask = async (e: FormEvent) => {
     e.preventDefault();
     try {
@@ -333,6 +360,28 @@ export function DashboardPage() {
       await deleteTask({ taskId }).unwrap();
     } catch {
       setError("Не удалось удалить задачу");
+    }
+  };
+
+  const saveAdminRole = async (user: AdminUser) => {
+    const nextRole = (adminRoleDrafts[user.id] ?? user.role).trim().toLowerCase();
+    if (!nextRole || nextRole === user.role) return;
+    try {
+      setError("");
+      await updateAdminUserRole({ userId: user.id, role: nextRole }).unwrap();
+      setAdminRoleDrafts((prev) => ({ ...prev, [user.id]: nextRole }));
+    } catch {
+      setError("Не удалось обновить роль пользователя");
+    }
+  };
+
+  const removeUserByAdmin = async (user: AdminUser) => {
+    if (!window.confirm(`Удалить пользователя @${user.nickname}?`)) return;
+    try {
+      setError("");
+      await deleteAdminUser({ userId: user.id }).unwrap();
+    } catch {
+      setError("Не удалось удалить пользователя");
     }
   };
 
@@ -499,6 +548,8 @@ export function DashboardPage() {
     createTaskState.isLoading ||
     updateTaskState.isLoading ||
     deleteTaskState.isLoading ||
+    updateAdminUserRoleState.isLoading ||
+    deleteAdminUserState.isLoading ||
     createRoomState.isLoading ||
     updateRoomState.isLoading ||
     deleteRoomState.isLoading ||
@@ -510,6 +561,10 @@ export function DashboardPage() {
 
   const switchSection = (nextSection: DashboardSection) => {
     if (nextSection === "agents" && !agentOpsEnabled) {
+      navigate("/dashboard/rooms");
+      return;
+    }
+    if (nextSection === "admin" && !isAdmin) {
       navigate("/dashboard/rooms");
       return;
     }
@@ -719,7 +774,7 @@ export function DashboardPage() {
                           <Title order={4}>Создать комнату</Title>
                         </Group>
                         <Text size="sm" c="gray.4">
-                          Выбери язык и нужные шаги. Если шаги не выбраны, автоматически подставятся дефолтные задачи языка.
+                          Выбери язык и нужные шаги. Если шаги не выбраны, в комнату попадут все задачи выбранного языка из вашего банка.
                         </Text>
                         <TextInput
                           label="Название комнаты"
@@ -755,7 +810,7 @@ export function DashboardPage() {
                           <Text fw={600}>Выбранные задачи</Text>
                           {selectedRoomTasks.length === 0 ? (
                             <Text size="sm" c="gray.4">
-                              Пока ничего не выбрано
+                              Пока ничего не выбрано. Будут использованы все задачи из банка для этого языка.
                             </Text>
                           ) : (
                             selectedRoomTasks.map((task) => (
@@ -992,6 +1047,97 @@ export function DashboardPage() {
                       </Card>
                     ))}
                     {rooms.length === 0 && <Text c="gray.4">Комнат пока нет</Text>}
+                  </Stack>
+                </Card>
+              )}
+
+              {activeSection === "admin" && isAdmin && (
+                <Card withBorder radius="lg" padding="lg" bg="#11151c" c="gray.1" style={{ borderColor: "#272b34" }}>
+                  <Stack>
+                    <Group justify="space-between" align="center">
+                      <Group>
+                        <ThemeIcon color="gray" variant="light">
+                          <IconUsers size={15} />
+                        </ThemeIcon>
+                        <Title order={4}>Админка пользователей</Title>
+                      </Group>
+                      <Button variant="light" size="xs" onClick={() => refetchAdminUsers()}>
+                        Обновить
+                      </Button>
+                    </Group>
+
+                    <Text size="sm" c="gray.4">
+                      Управляйте ролями и удаляйте пользователей. Системный администратор `boumrz` защищен от удаления.
+                    </Text>
+
+                    <Stack gap="sm">
+                      {adminUsers.map((user) => {
+                        const draftRole = adminRoleDrafts[user.id] ?? user.role;
+                        const isCurrentUser = user.id === auth.user?.id;
+                        return (
+                          <Card key={user.id} withBorder radius="md" padding="sm" bg="#121720" style={{ borderColor: "#2a3039" }}>
+                            <Stack gap="sm">
+                              <Group justify="space-between" align="center">
+                                <Group gap="xs">
+                                  <Text fw={700}>@{user.nickname}</Text>
+                                  <Badge color={user.role === "admin" ? "orange" : "gray"} variant="light">
+                                    {user.role === "admin" ? "Администратор" : "Пользователь"}
+                                  </Badge>
+                                  {isCurrentUser && (
+                                    <Badge color="teal" variant="outline">
+                                      Это вы
+                                    </Badge>
+                                  )}
+                                </Group>
+                                <Text size="xs" c="gray.4">
+                                  Создан: {formatCreatedAt(user.createdAt)}
+                                </Text>
+                              </Group>
+
+                              <Group align="end" wrap="wrap">
+                                <Select
+                                  label="Роль"
+                                  value={draftRole}
+                                  onChange={(value) => {
+                                    if (!value) return;
+                                    setAdminRoleDrafts((prev) => ({ ...prev, [user.id]: value }));
+                                  }}
+                                  data={[
+                                    { value: "user", label: "Пользователь" },
+                                    { value: "admin", label: "Администратор" }
+                                  ]}
+                                  styles={darkSelectStyles}
+                                  w={220}
+                                  disabled={user.nickname.trim().toLowerCase() === "boumrz"}
+                                />
+                                <Button
+                                  variant="light"
+                                  loading={updateAdminUserRoleState.isLoading}
+                                  disabled={draftRole === user.role}
+                                  onClick={() => saveAdminRole(user)}
+                                >
+                                  Сохранить роль
+                                </Button>
+                                <Button
+                                  color="red"
+                                  variant="outline"
+                                  loading={deleteAdminUserState.isLoading}
+                                  disabled={isCurrentUser || user.nickname.trim().toLowerCase() === "boumrz"}
+                                  onClick={() => removeUserByAdmin(user)}
+                                >
+                                  Удалить пользователя
+                                </Button>
+                              </Group>
+                            </Stack>
+                          </Card>
+                        );
+                      })}
+                      {adminUsers.length === 0 && (
+                        <Text size="sm" c="gray.4">
+                          Пользователи пока не найдены
+                        </Text>
+                      )}
+                    </Stack>
                   </Stack>
                 </Card>
               )}
@@ -1304,4 +1450,16 @@ function labelForLanguage(language: string) {
     default:
       return "JavaScript";
   }
+}
+
+function formatCreatedAt(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
 }

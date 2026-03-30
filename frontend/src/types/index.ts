@@ -1,6 +1,7 @@
 export type User = {
   id: string;
   nickname: string;
+  role: "user" | "admin" | string;
 };
 
 export type AuthResponse = {
@@ -53,6 +54,13 @@ export type TaskTemplate = {
 export type TaskLanguageGroup = {
   language: string;
   tasks: TaskTemplate[];
+};
+
+export type AdminUser = {
+  id: string;
+  nickname: string;
+  role: "user" | "admin" | string;
+  createdAt: string;
 };
 
 export type RunCodeResponse = {

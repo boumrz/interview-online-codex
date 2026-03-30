@@ -578,6 +578,7 @@ export function RoomPage() {
           <CandidateLayout
             merged={merged}
             stepTitle={step?.title ?? "-"}
+            stepDescription={step?.description ?? ""}
             sessionId={sessionId}
             cursors={merged.cursors}
             syncKey={currentSyncKey}
@@ -907,11 +908,17 @@ function OwnerLayout({
   const rightToggleOffset = clamp(rightSidebarVisible ? rightWidth + 10 : baseInset, baseInset, maxOffset);
   const candidateParticipants = merged.participants.filter((participant) => participant.role === "candidate");
   const candidateOutOfFocus = candidateParticipants.some((participant) => participant.presenceStatus === "away");
-  const candidateFocusHint = candidateParticipants.length === 0
+  const candidatePresenceState = candidateParticipants.length === 0 ? "offline" : candidateOutOfFocus ? "away" : "active";
+  const candidatePresenceLabel = candidatePresenceState === "offline"
+    ? "Не подключен"
+    : candidatePresenceState === "away"
+      ? "Вне фокуса"
+      : "В фокусе";
+  const candidatePresenceDetail = candidatePresenceState === "offline"
     ? "Кандидат пока не подключен"
-    : candidateOutOfFocus
-      ? "Кандидат вне окна/вкладки (возможен Alt+Tab)"
-      : "Кандидат в фокусе";
+    : candidatePresenceState === "away"
+      ? "Кандидат вне окна/вкладки"
+      : "Кандидат работает в текущем окне";
   const recentCandidateKeyHistory = [...(candidateKeyHistory ?? [])]
     .sort((a, b) => b.timestampEpochMs - a.timestampEpochMs)
     .slice(0, LOG_HISTORY_LIMIT);
@@ -1035,6 +1042,15 @@ function OwnerLayout({
 
             <Box className={styles.outputPanel} style={{ width: rightWidth }}>
               <div className={styles.panelTabs}>
+                <div className={styles.ownerPresenceBanner} aria-label="Статус кандидата">
+                  <div className={styles.ownerPresenceCopy}>
+                    <Text className={styles.ownerPresenceLabel}>Статус кандидата</Text>
+                    <Text className={styles.ownerPresenceDetail}>{candidatePresenceDetail}</Text>
+                  </div>
+                  <Badge className={styles.ownerPresenceBadge} variant="light" data-state={candidatePresenceState}>
+                    {candidatePresenceLabel}
+                  </Badge>
+                </div>
                 <div className={styles.panelTabsList} role="tablist" aria-label="Правая панель">
                   <button
                     type="button"
@@ -1112,10 +1128,6 @@ function OwnerLayout({
                     <Text className={styles.logsCounter}>Лимит {LOG_HISTORY_LIMIT}</Text>
                   </header>
 
-                  <Text size="xs" c={candidateOutOfFocus ? "#f5c26b" : "#8b919b"} className={styles.logsHint}>
-                    {candidateFocusHint}
-                  </Text>
-
                   <div className={styles.logsList} role="log" aria-label="Логи кандидата">
                     {recentCandidateKeyHistory.length > 0 ? (
                       recentCandidateKeyHistory.map((event, index) => (
@@ -1149,6 +1161,7 @@ function OwnerLayout({
 function CandidateLayout({
   merged,
   stepTitle,
+  stepDescription,
   sessionId,
   cursors,
   syncKey,
@@ -1163,6 +1176,7 @@ function CandidateLayout({
 }: {
   merged: RealtimeState;
   stepTitle: string;
+  stepDescription: string;
   sessionId: string;
   cursors: CursorInfo[];
   syncKey: string;
@@ -1198,6 +1212,7 @@ function CandidateLayout({
             Совместный режим
           </Badge>
         </Group>
+        {stepDescription ? <Text className={styles.candidateDescription}>{stepDescription}</Text> : null}
       </Box>
 
       <Box className={styles.candidatePanel}>
@@ -1615,7 +1630,7 @@ function RoomCodeEditor({
             pendingDeleteLength = 0;
           };
 
-          event.delta.forEach((part) => {
+          event.delta.forEach((part: { retain?: number; delete?: number; insert?: unknown }) => {
             if (typeof part.retain === "number") {
               flushPendingDelete();
               sourceOffset += part.retain;
@@ -1834,9 +1849,10 @@ function RoomCodeEditor({
         fontSize: 14,
         lineNumbersMinChars: 3,
         smoothScrolling: true,
+        scrollBeyondLastLine: false,
+        renderValidationDecorations: "off",
         readOnly
       }}
     />
   );
 }
-
