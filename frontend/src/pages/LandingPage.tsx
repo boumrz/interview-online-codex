@@ -19,8 +19,7 @@ import { useAppSelector } from "../app/hooks";
 import { useCreateGuestRoomMutation } from "../services/api";
 
 const LANGUAGES = [
-  { value: "javascript", label: "JavaScript" },
-  { value: "typescript", label: "TypeScript" },
+  { value: "nodejs", label: "Node JS" },
   { value: "python", label: "Python" },
   { value: "kotlin", label: "Kotlin" },
   { value: "java", label: "Java" },
@@ -48,7 +47,7 @@ export function LandingPage() {
   const authToken = useAppSelector((store) => store.auth.token);
   const [title, setTitle] = useState("Live-coding interview");
   const [displayName, setDisplayName] = useState("Interviewer");
-  const [language, setLanguage] = useState("javascript");
+  const [language, setLanguage] = useState("nodejs");
   const [inviteCode, setInviteCode] = useState("");
   const [error, setError] = useState("");
   const [createGuestRoom, { isLoading }] = useCreateGuestRoomMutation();
@@ -183,7 +182,7 @@ export function LandingPage() {
 def solve(nums):
     return sum(nums)
 
-# JS
+# Node JS
 function solve(nums) {
   return nums.reduce((a, b) => a + b, 0);
 }`}
@@ -225,7 +224,7 @@ function solve(nums) {
                     label="Язык"
                     data={LANGUAGES}
                     value={language}
-                    onChange={(value) => setLanguage(value ?? "javascript")}
+                    onChange={(value) => setLanguage(value ?? "nodejs")}
                     styles={darkFieldStyles}
                     required
                   />

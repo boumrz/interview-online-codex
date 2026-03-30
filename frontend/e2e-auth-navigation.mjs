@@ -27,7 +27,7 @@ async function createGuestRoom() {
     body: JSON.stringify({
       title: `Navigation room ${Date.now()}`,
       ownerDisplayName: "Navigation Owner",
-      language: "javascript"
+      language: "nodejs"
     })
   });
 

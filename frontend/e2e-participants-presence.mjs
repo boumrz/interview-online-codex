@@ -10,7 +10,7 @@ async function createGuestRoom() {
     body: JSON.stringify({
       title: `Presence room ${Date.now()}`,
       ownerDisplayName: "Host Presence",
-      language: "javascript"
+      language: "nodejs"
     })
   });
 

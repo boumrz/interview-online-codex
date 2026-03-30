@@ -17,7 +17,7 @@ async function createGuestRoom() {
     body: JSON.stringify({
       title: `Role lock room ${Date.now()}`,
       ownerDisplayName: "Host QA",
-      language: "javascript"
+      language: "nodejs"
     })
   });
 

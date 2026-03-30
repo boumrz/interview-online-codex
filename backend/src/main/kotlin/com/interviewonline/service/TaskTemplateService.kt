@@ -26,28 +26,28 @@ class TaskTemplateService {
     }
 
     fun catalogByLanguage(): Map<String, List<TemplateSeed>> {
-        val supported = listOf("javascript", "typescript", "python", "kotlin", "java", "sql")
+        val supported = listOf("nodejs", "python", "kotlin", "java", "sql")
         return supported.associateWith { seedsForLanguage(it) }
     }
 
     private fun normalizeLanguage(language: String): String {
         return when (language.lowercase()) {
+            "javascript", "typescript", "nodejs" -> "nodejs"
             "python" -> "python"
             "kotlin" -> "kotlin"
             "java" -> "java"
             "sql" -> "sql"
-            "typescript" -> "typescript"
-            else -> "javascript"
+            else -> "nodejs"
         }
     }
 
     private fun seedsForLanguage(language: String): List<TemplateSeed> {
         return when (language) {
+            "nodejs" -> jsSeeds()
             "python" -> pythonSeeds()
             "kotlin" -> kotlinSeeds()
             "java" -> javaSeeds()
             "sql" -> sqlSeeds()
-            "typescript" -> tsSeeds()
             else -> jsSeeds()
         }
     }
@@ -78,36 +78,6 @@ class TaskTemplateService {
                 title = "CodeRun · Merge Intervals",
                 description = "Слейте пересекающиеся интервалы и верните упорядоченный результат.",
                 starterCode = "function mergeIntervals(intervals) {\n  // TODO\n  return [];\n}\n",
-            ),
-        )
-    }
-
-    private fun tsSeeds(): List<TemplateSeed> {
-        return listOf(
-            TemplateSeed(
-                title = "CodeRun · A+B",
-                description = "Реализуйте функцию, которая принимает два числа и возвращает сумму.",
-                starterCode = "function solve(a: number, b: number): number {\n  return a + b;\n}\n",
-            ),
-            TemplateSeed(
-                title = "CodeRun · Палиндром",
-                description = "Верните true, если строка является палиндромом.",
-                starterCode = "function isPalindrome(s: string): boolean {\n  // TODO\n  return false;\n}\n",
-            ),
-            TemplateSeed(
-                title = "CodeRun · Two Sum",
-                description = "Найдите индексы двух элементов с суммой target.",
-                starterCode = "function twoSum(nums: number[], target: number): number[] {\n  // TODO\n  return [];\n}\n",
-            ),
-            TemplateSeed(
-                title = "CodeRun · Валидные скобки",
-                description = "Проверьте корректность последовательности скобок.",
-                starterCode = "function isValidBrackets(s: string): boolean {\n  // TODO\n  return false;\n}\n",
-            ),
-            TemplateSeed(
-                title = "CodeRun · Merge Intervals",
-                description = "Слейте пересекающиеся интервалы.",
-                starterCode = "function mergeIntervals(intervals: Array<[number, number]>): Array<[number, number]> {\n  // TODO\n  return [];\n}\n",
             ),
         )
     }

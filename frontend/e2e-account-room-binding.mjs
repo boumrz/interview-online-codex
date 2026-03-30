@@ -27,7 +27,7 @@ async function createUserRoom(token) {
     },
     body: JSON.stringify({
       title: `Bound room ${Date.now()}`,
-      language: "javascript",
+      language: "nodejs",
       taskIds: []
     })
   });

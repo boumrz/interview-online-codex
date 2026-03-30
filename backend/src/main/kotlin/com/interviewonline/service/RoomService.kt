@@ -28,7 +28,7 @@ class RoomService(
 ) {
     @Transactional
     fun createGuestRoom(request: CreateGuestRoomRequest): RoomResponse {
-        val language = request.language.ifBlank { "javascript" }.lowercase()
+        val language = normalizeLanguage(request.language.ifBlank { "nodejs" })
         val room = Room(
             title = request.title.ifBlank { "Комната собеседования" },
             inviteCode = "r-${UUID.randomUUID()}",
@@ -47,7 +47,7 @@ class RoomService(
 
     @Transactional
     fun createUserRoom(request: CreateRoomRequest, user: User): RoomResponse {
-        val language = request.language.ifBlank { "javascript" }.lowercase()
+        val language = normalizeLanguage(request.language.ifBlank { "nodejs" })
         val selectedTasks = userTaskService.resolveTasksForRoom(user, request.taskIds, language)
         if (selectedTasks.isEmpty()) {
             throw ApiException(
@@ -69,8 +69,8 @@ class RoomService(
                 title = task.title,
                 description = task.description,
                 starterCode = task.starterCode,
-                language = task.language,
-                categoryName = task.language,
+                language = normalizeLanguage(task.language),
+                categoryName = normalizeLanguage(task.language),
             )
         }.toMutableList()
         tasks.forEach { it.room = room }
@@ -207,9 +207,9 @@ class RoomService(
 
     private fun toRoomResponse(room: Room, includeOwnerToken: Boolean, includeInterviewerToken: Boolean): RoomResponse {
         val activeTask = room.tasks.getOrNull(room.currentStep)
-        val activeLanguage = activeTask?.solutionLanguage?.ifBlank { null } ?: room.language
+        val activeLanguage = normalizeLanguage(activeTask?.solutionLanguage?.ifBlank { null } ?: room.language)
         val activeCode = activeTask?.solutionCode ?: room.code.ifBlank { activeTask?.starterCode.orEmpty() }
-        val activeNotes = activeTask?.interviewerNotes ?: room.notes.orEmpty()
+        val activeNotes = room.notes.orEmpty().ifBlank { activeTask?.interviewerNotes.orEmpty() }
 
         return RoomResponse(
             id = room.id!!,
@@ -227,8 +227,8 @@ class RoomService(
                     title = it.title,
                     description = it.description,
                     starterCode = it.starterCode,
-                    language = it.language,
-                    categoryName = it.categoryName,
+                    language = normalizeLanguage(it.language),
+                    categoryName = it.categoryName?.let(::normalizeLanguage),
                     score = it.score,
                 )
             },
@@ -238,25 +238,40 @@ class RoomService(
     private fun initializeCurrentStepSnapshot(room: Room) {
         val firstTask = room.tasks.getOrNull(room.currentStep) ?: room.tasks.firstOrNull() ?: return
         firstTask.solutionCode = firstTask.solutionCode ?: firstTask.starterCode
-        firstTask.interviewerNotes = firstTask.interviewerNotes ?: ""
         firstTask.solutionLanguage = firstTask.solutionLanguage?.ifBlank { null } ?: firstTask.language
+        if (room.notes.isNullOrBlank() && !firstTask.interviewerNotes.isNullOrBlank()) {
+            room.notes = firstTask.interviewerNotes
+        }
+        room.tasks.forEach { it.interviewerNotes = null }
         room.code = firstTask.solutionCode.orEmpty()
-        room.notes = firstTask.interviewerNotes.orEmpty()
-        room.language = firstTask.solutionLanguage.orEmpty().ifBlank { firstTask.language }
+        room.language = normalizeLanguage(firstTask.solutionLanguage.orEmpty().ifBlank { firstTask.language })
     }
 
     private fun saveCurrentStepSnapshot(room: Room) {
         val currentTask = room.tasks.getOrNull(room.currentStep) ?: return
         currentTask.solutionCode = room.code
-        currentTask.interviewerNotes = room.notes.orEmpty()
-        currentTask.solutionLanguage = room.language
+        currentTask.solutionLanguage = normalizeLanguage(room.language)
+        if (room.notes.isNullOrBlank() && !currentTask.interviewerNotes.isNullOrBlank()) {
+            room.notes = currentTask.interviewerNotes
+        }
+        room.tasks.forEach { it.interviewerNotes = null }
     }
 
     private fun applyCurrentStepSnapshot(room: Room) {
         val currentTask = room.tasks.getOrNull(room.currentStep) ?: return
         room.code = currentTask.solutionCode ?: currentTask.starterCode
-        room.notes = currentTask.interviewerNotes ?: ""
-        room.language = currentTask.solutionLanguage?.ifBlank { null } ?: currentTask.language
+        room.language = normalizeLanguage(currentTask.solutionLanguage?.ifBlank { null } ?: currentTask.language)
+    }
+
+    private fun normalizeLanguage(language: String): String {
+        return when (language.trim().lowercase()) {
+            "javascript", "typescript", "nodejs" -> "nodejs"
+            "python" -> "python"
+            "kotlin" -> "kotlin"
+            "java" -> "java"
+            "sql" -> "sql"
+            else -> "nodejs"
+        }
     }
 
     private fun ensureParticipant(room: Room, user: User) {

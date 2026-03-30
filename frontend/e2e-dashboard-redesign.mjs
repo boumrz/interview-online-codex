@@ -41,7 +41,7 @@ try {
   const createdTaskTitle = `UI Task ${Date.now()}`;
   const createdTaskDescription = "Task description for redesigned dashboard test";
 
-  await page.goto(`${webBaseUrl}/dashboard/tasks?lang=javascript`, { waitUntil: "networkidle" });
+  await page.goto(`${webBaseUrl}/dashboard/tasks?lang=nodejs`, { waitUntil: "networkidle" });
   await page.locator('[data-testid="task-bank-panel"]').waitFor({ timeout: 15000 });
 
   const taskBankWidthShare = await page.evaluate(() => {

@@ -36,7 +36,7 @@ class UserTaskTemplate(
     var starterCode: String = "",
 
     @Column(nullable = false)
-    var language: String = "javascript",
+    var language: String = "nodejs",
 
     @Column(name = "created_at", nullable = false)
     var createdAt: Instant = Instant.now(),

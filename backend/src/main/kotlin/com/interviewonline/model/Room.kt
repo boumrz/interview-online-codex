@@ -38,7 +38,7 @@ class Room(
     var ownerUser: User? = null,
 
     @Column(nullable = false)
-    var language: String = "javascript",
+    var language: String = "nodejs",
 
     @Column(name = "current_step", nullable = false)
     var currentStep: Int = 0,

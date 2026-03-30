@@ -10,8 +10,7 @@ import { useRoomSocket } from "../features/room/useRoomSocket";
 import styles from "./RoomPage.module.css";
 
 const LANGUAGES = [
-  { value: "javascript", label: "JavaScript" },
-  { value: "typescript", label: "TypeScript" },
+  { value: "nodejs", label: "Node JS" },
   { value: "python", label: "Python" },
   { value: "kotlin", label: "Kotlin" },
   { value: "java", label: "Java" },
@@ -76,6 +75,65 @@ const MAX_LEFT_WIDTH = 440;
 const MIN_RIGHT_WIDTH = 250;
 const MAX_RIGHT_WIDTH = 520;
 const LOG_HISTORY_LIMIT = 50;
+const NODEJS_LANGUAGE_ALIASES = new Set(["javascript", "typescript", "nodejs"]);
+
+function normalizeRoomLanguage(language: string | null | undefined): string {
+  const normalized = (language ?? "").trim().toLowerCase();
+  if (!normalized) return "nodejs";
+  if (NODEJS_LANGUAGE_ALIASES.has(normalized)) {
+    return "nodejs";
+  }
+  return normalized;
+}
+
+function toEditorLanguage(language: string | null | undefined): string {
+  const normalized = (language ?? "").trim().toLowerCase();
+  if (!normalized || NODEJS_LANGUAGE_ALIASES.has(normalized)) {
+    return "javascript";
+  }
+  return normalizeRoomLanguage(normalized);
+}
+
+function normalizeKeyCodeLabel(code: string): string {
+  const normalizedCode = code.trim();
+  if (!normalizedCode) return "";
+  if (normalizedCode.startsWith("Key")) {
+    return normalizedCode.slice(3);
+  }
+  if (normalizedCode.startsWith("Digit")) {
+    return normalizedCode.slice(5);
+  }
+  if (normalizedCode === "Space") {
+    return "Space";
+  }
+  if (normalizedCode.startsWith("Numpad")) {
+    return normalizedCode.replace("Numpad", "Num");
+  }
+  return normalizedCode.replace(/(Left|Right)$/g, "");
+}
+
+function normalizeKeyLabel(key: string, keyCode: string): string {
+  const normalized = key.trim();
+  if (!normalized) {
+    return normalizeKeyCodeLabel(keyCode) || "Unknown";
+  }
+
+  const aliases: Record<string, string> = {
+    Control: "Ctrl",
+    Meta: "Cmd",
+    Command: "Cmd",
+    OS: "Cmd",
+    Escape: "Esc",
+    " ": "Space"
+  };
+  if (aliases[normalized]) {
+    return aliases[normalized];
+  }
+  if (normalized.startsWith("Arrow")) {
+    return normalized.slice(5);
+  }
+  return normalized;
+}
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -249,7 +307,7 @@ export function RoomPage() {
     if (!room) return null;
     return {
       inviteCode: room.inviteCode,
-      language: room.language,
+      language: normalizeRoomLanguage(room.language),
       code: room.code,
       lastCodeUpdatedBySessionId: null,
       currentStep: room.currentStep,
@@ -271,7 +329,7 @@ export function RoomPage() {
   const mergedNotes = merged?.notes ?? "";
   const canManageRoom = merged?.canManageRoom ?? false;
   const currentSyncKey = useMemo(() => {
-    if (!merged) return `${inviteCode}:0:javascript`;
+    if (!merged) return `${inviteCode}:0:nodejs`;
     return `${merged.inviteCode}:${merged.currentStep}:${merged.language}`;
   }, [inviteCode, merged]);
   const syncKeyRef = useRef(currentSyncKey);
@@ -306,6 +364,7 @@ export function RoomPage() {
     const taskScores = normalizeTaskScores(incoming.taskScores);
     setState({
       ...incoming,
+      language: normalizeRoomLanguage(incoming.language),
       participants,
       taskScores,
       lastCodeUpdatedBySessionId: incoming.lastCodeUpdatedBySessionId ?? null,
@@ -483,7 +542,7 @@ export function RoomPage() {
   const step = room?.tasks.find((task) => task.stepIndex === merged.currentStep);
   const currentTaskRating = merged.taskScores[String(merged.currentStep)] ?? step?.score ?? null;
   const notesLockName = merged.notesLockedByDisplayName?.trim() || "другой интервьюер";
-  const notesStatus = notesLockedByOther ? `Пишет ${notesLockName}. Поле временно заблокировано.` : notesDirty ? "Сохраняем..." : "Сохранено";
+  const notesStatus = notesLockedByOther ? `Редактирует ${notesLockName}` : notesDirty ? "Сохраняем" : "Сохранено";
 
   return (
     <>
@@ -507,7 +566,7 @@ export function RoomPage() {
           )}
           <TextInput
             label="Ваше имя"
-            placeholder="Например, Иван"
+            placeholder="Имя"
             value={draftName}
             onChange={(event) => setDraftName(event.currentTarget.value)}
             autoFocus
@@ -914,11 +973,6 @@ function OwnerLayout({
     : candidatePresenceState === "away"
       ? "Вне фокуса"
       : "В фокусе";
-  const candidatePresenceDetail = candidatePresenceState === "offline"
-    ? "Кандидат пока не подключен"
-    : candidatePresenceState === "away"
-      ? "Кандидат вне окна/вкладки"
-      : "Кандидат работает в текущем окне";
   const recentCandidateKeyHistory = [...(candidateKeyHistory ?? [])]
     .sort((a, b) => b.timestampEpochMs - a.timestampEpochMs)
     .slice(0, LOG_HISTORY_LIMIT);
@@ -983,8 +1037,8 @@ function OwnerLayout({
             <Select
               label="Язык"
               data={LANGUAGES}
-              value={merged.language}
-              onChange={onLanguageChange}
+              value={normalizeRoomLanguage(merged.language)}
+              onChange={(value) => onLanguageChange(value ? normalizeRoomLanguage(value) : null)}
               styles={{
                 label: { color: "#9ba0a8", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6 },
                 input: { backgroundColor: "#14171d", borderColor: "#262a31", color: "#f3f5f7" },
@@ -1012,7 +1066,7 @@ function OwnerLayout({
               <RoomCodeEditor
                 key={syncKey}
                 height="100%"
-                language={merged.language}
+                language={toEditorLanguage(merged.language)}
                 value={merged.code}
                 syncKey={syncKey}
                 resyncSignal={resyncSignal}
@@ -1045,7 +1099,6 @@ function OwnerLayout({
                 <div className={styles.ownerPresenceBanner} aria-label="Статус кандидата">
                   <div className={styles.ownerPresenceCopy}>
                     <Text className={styles.ownerPresenceLabel}>Статус кандидата</Text>
-                    <Text className={styles.ownerPresenceDetail}>{candidatePresenceDetail}</Text>
                   </div>
                   <Badge className={styles.ownerPresenceBadge} variant="light" data-state={candidatePresenceState}>
                     {candidatePresenceLabel}
@@ -1074,13 +1127,13 @@ function OwnerLayout({
 
                 {rightPanelTab === "notes" ? (
                   <div className={styles.panelTabPanel} role="tabpanel" aria-label="Заметки">
-                  <Text className={styles.panelSectionTitle}>Заметки по шагу</Text>
+                  <Text className={styles.panelSectionTitle}>Заметки по комнате</Text>
                   <div className={styles.notesTopRow}>
                     <div
                       className={styles.notesStatusBanner}
-                      data-state={notesLockedByOther ? "locked" : notesStatus === "Сохраняем..." ? "saving" : "saved"}
+                      data-state={notesLockedByOther ? "locked" : notesStatus === "Сохраняем" ? "saving" : "saved"}
+                      aria-label={`Статус заметок: ${notesStatus}`}
                     >
-                      <Text className={styles.notesStatusLabel}>Статус сохранения</Text>
                       <Text className={styles.notesStatusValue}>{notesStatus}</Text>
                     </div>
                     <Select
@@ -1220,7 +1273,7 @@ function CandidateLayout({
           <RoomCodeEditor
             key={syncKey}
             height="calc(100vh - 170px)"
-            language={merged.language}
+            language={toEditorLanguage(merged.language)}
             value={merged.code}
             syncKey={syncKey}
             resyncSignal={resyncSignal}
@@ -1242,13 +1295,18 @@ function CandidateLayout({
 }
 
 function formatCandidateKey(event: CandidateKeyInfo): string {
+  const keyLabel = normalizeKeyLabel(event.key || "", event.keyCode || "");
+  const isCtrlKey = keyLabel === "Ctrl";
+  const isAltKey = keyLabel === "Alt";
+  const isShiftKey = keyLabel === "Shift";
+  const isMetaKey = keyLabel === "Cmd" || keyLabel === "Meta";
   const modifiers: string[] = [];
-  if (event.ctrlKey) modifiers.push("Ctrl");
-  if (event.altKey) modifiers.push("Alt");
-  if (event.shiftKey) modifiers.push("Shift");
-  if (event.metaKey) modifiers.push("Meta");
+  if (event.ctrlKey && !isCtrlKey) modifiers.push("Ctrl");
+  if (event.altKey && !isAltKey) modifiers.push("Alt");
+  if (event.shiftKey && !isShiftKey) modifiers.push("Shift");
+  if (event.metaKey && !isMetaKey) modifiers.push("Cmd");
 
-  const key = event.key || event.keyCode || "Unknown";
+  const key = keyLabel || normalizeKeyCodeLabel(event.keyCode || "") || "Unknown";
   return [...modifiers, key].join("+");
 }
 
@@ -1274,8 +1332,8 @@ function colorThemeForSession(sessionId: string) {
     caret: `hsl(${hue} 88% 60%)`,
     selection: `hsl(${hue} 88% 60% / 0.18)`,
     selectionBorder: `hsl(${hue} 88% 60% / 0.45)`,
-    labelBackground: `hsl(${hue} 70% 42%)`,
-    labelText: "#f7f9fc"
+    labelBackground: `hsl(${hue} 58% 42% / 0.24)`,
+    labelText: "rgba(247, 249, 252, 0.82)"
   };
 }
 
