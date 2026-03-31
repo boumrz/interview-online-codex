@@ -145,10 +145,6 @@ class CollaborationService(
 
         val connectionId = sseConnectionId(sessionId)
         val emitter = SseEmitter(0L)
-        sseConnections[connectionId] = emitter
-        roomSseConnections.computeIfAbsent(inviteCode) { ConcurrentHashMap.newKeySet() }.add(connectionId)
-        evictDuplicateSession(inviteCode, sessionId, connectionId)
-
         val role = resolveRole(room, ownerToken, interviewerToken, user)
         participants[connectionId] = ParticipantMeta(
             inviteCode = inviteCode,
@@ -158,6 +154,9 @@ class CollaborationService(
             presenceStatus = PresenceStatus.ACTIVE,
         )
         connectionByRoomSession[roomSessionKey(inviteCode, sessionId)] = connectionId
+        sseConnections[connectionId] = emitter
+        roomSseConnections.computeIfAbsent(inviteCode) { ConcurrentHashMap.newKeySet() }.add(connectionId)
+        evictDuplicateSession(inviteCode, sessionId, connectionId)
 
         emitter.onCompletion { leaveRoomConnection(connectionId) }
         emitter.onTimeout { leaveRoomConnection(connectionId) }
@@ -301,45 +300,47 @@ class CollaborationService(
 
         var acceptedCodeSnapshot: String? = null
         var yjsSequence = 0L
+        var outboundSyncKey = syncKey
         val state = roomState[participant.inviteCode]
         if (state != null) {
             synchronized(state) {
+                val normalizedSyncKey = syncKey?.trim().orEmpty()
+                val expectedSyncKey = "${participant.inviteCode}:${state.currentStep}:${state.language}"
+                if (normalizedSyncKey.isNotEmpty() && normalizedSyncKey != expectedSyncKey) {
+                    logger.debug(
+                        "Dropping stale yjs update for room {} session {}: syncKey {} != {}",
+                        participant.inviteCode,
+                        participant.sessionId,
+                        normalizedSyncKey,
+                        expectedSyncKey,
+                    )
+                    return
+                }
+                outboundSyncKey = if (normalizedSyncKey.isNotEmpty()) normalizedSyncKey else expectedSyncKey
                 if (codeSnapshot != null) {
-                    val normalizedSyncKey = syncKey?.trim().orEmpty()
-                    val expectedSyncKey = "${participant.inviteCode}:${state.currentStep}:${state.language}"
-                    if (normalizedSyncKey.isNotEmpty() && normalizedSyncKey != expectedSyncKey) {
-                        logger.debug(
-                            "Skipping stale yjs code snapshot for room {} session {}: syncKey {} != {}",
-                            participant.inviteCode,
-                            participant.sessionId,
-                            normalizedSyncKey,
-                            expectedSyncKey,
-                        )
-                    } else {
-                        val canApplySnapshot = if (yjsClientSequence != null) {
-                            val lastSnapshotSequence = state.lastYjsSnapshotSequenceBySessionId[participant.sessionId]
-                            if (lastSnapshotSequence != null && yjsClientSequence < lastSnapshotSequence) {
-                                logger.debug(
-                                    "Skipping stale yjs snapshot for room {} session {}: clientSequence {} < {}",
-                                    participant.inviteCode,
-                                    participant.sessionId,
-                                    yjsClientSequence,
-                                    lastSnapshotSequence,
-                                )
-                                false
-                            } else {
-                                state.lastYjsSnapshotSequenceBySessionId[participant.sessionId] = yjsClientSequence
-                                true
-                            }
+                    val canApplySnapshot = if (yjsClientSequence != null) {
+                        val lastSnapshotSequence = state.lastYjsSnapshotSequenceBySessionId[participant.sessionId]
+                        if (lastSnapshotSequence != null && yjsClientSequence < lastSnapshotSequence) {
+                            logger.debug(
+                                "Skipping stale yjs snapshot for room {} session {}: clientSequence {} < {}",
+                                participant.inviteCode,
+                                participant.sessionId,
+                                yjsClientSequence,
+                                lastSnapshotSequence,
+                            )
+                            false
                         } else {
+                            state.lastYjsSnapshotSequenceBySessionId[participant.sessionId] = yjsClientSequence
                             true
                         }
+                    } else {
+                        true
+                    }
 
-                        if (canApplySnapshot) {
-                            state.code = codeSnapshot
-                            state.lastCodeUpdatedBySessionId = participant.sessionId
-                            acceptedCodeSnapshot = codeSnapshot
-                        }
+                    if (canApplySnapshot) {
+                        state.code = codeSnapshot
+                        state.lastCodeUpdatedBySessionId = participant.sessionId
+                        acceptedCodeSnapshot = codeSnapshot
                     }
                 }
                 state.lastYjsSequence += 1
@@ -354,15 +355,18 @@ class CollaborationService(
                 room.tasks.getOrNull(room.currentStep)?.solutionCode = snapshot
                 roomRepository.save(room)
             }
+            broadcastState(participant.inviteCode)
+            return
         }
 
+        // Legacy fallback: if snapshot wasn't provided, keep incremental relay.
         broadcastTransportMessage(
             inviteCode = participant.inviteCode,
             type = "yjs_update",
             payload = mapOf(
                 "sessionId" to participant.sessionId,
                 "yjsUpdate" to yjsUpdate,
-                "syncKey" to syncKey,
+                "syncKey" to outboundSyncKey,
                 "yjsSequence" to yjsSequence,
             ),
             excludeConnectionId = connectionId,

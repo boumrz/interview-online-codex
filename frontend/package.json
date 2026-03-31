@@ -15,6 +15,8 @@
     "e2e:account-binding": "node e2e-account-room-binding.mjs",
     "e2e:presence": "node e2e-participants-presence.mjs",
     "e2e:sse-reconnect": "node e2e-sse-reconnect-sync.mjs",
+    "e2e:yjs-multi": "node e2e-yjs-multi-participant-sync.mjs",
+    "e2e:join-race": "node e2e-join-race-sync.mjs",
     "e2e:all": "npm run e2e:smoke && npm run e2e:dashboard && npm run e2e:auth && npm run e2e:room && npm run e2e:roles && npm run e2e:presence && npm run e2e:sse-reconnect",
     "e2e:dashboard-redesign": "node e2e-dashboard-redesign.mjs",
     "chaos:test": "node e2e-chaos-harness.mjs",

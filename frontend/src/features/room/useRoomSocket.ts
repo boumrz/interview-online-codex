@@ -222,6 +222,8 @@ export function useRoomSocket({
     let lastStateSyncRequestAt = 0;
     let expectRecoveryStateSync = false;
     let pendingStateSyncRequest = false;
+    let reconnectTimerId: number | null = null;
+    let reconnectScheduled = false;
     lastPresenceRef.current = null;
 
     const shouldQueuePayload = (payload: ClientMessage) => {
@@ -245,6 +247,23 @@ export function useRoomSocket({
       return params;
     };
 
+    const scheduleReconnect = () => {
+      if (disposed || reconnectScheduled) return;
+      reconnectScheduled = true;
+      setConnected(false);
+      const activeSource = sseRef.current;
+      sseRef.current = null;
+      activeSource?.close();
+      if (reconnectTimerId != null) {
+        window.clearTimeout(reconnectTimerId);
+      }
+      reconnectTimerId = window.setTimeout(() => {
+        reconnectTimerId = null;
+        reconnectScheduled = false;
+        connectSse();
+      }, 180);
+    };
+
     const postEvent = (payload: ClientMessage, queueOnFailure = true) => {
       void fetch(`${API_BASE_URL}/realtime/rooms/${inviteCode}/events`, {
         method: "POST",
@@ -262,12 +281,16 @@ export function useRoomSocket({
           if (queueOnFailure && shouldQueuePayload(payload)) {
             enqueuePayload(payload);
           }
+          if (response.status === 403) {
+            scheduleReconnect();
+          }
           onError(data.error || "Не удалось отправить действие в комнату");
         })
         .catch(() => {
           if (queueOnFailure && shouldQueuePayload(payload)) {
             enqueuePayload(payload);
           }
+          scheduleReconnect();
           onError("Не удалось отправить действие в комнату");
         });
     };
@@ -302,7 +325,9 @@ export function useRoomSocket({
         return;
       }
       const now = Date.now();
-      if (now - lastStateSyncRequestAt < 300) return;
+      // Recovery hydration should never be skipped: missing this request can leave one tab stale
+      // until someone else forces a full state broadcast.
+      if (!options.expectHydration && now - lastStateSyncRequestAt < 300) return;
       lastStateSyncRequestAt = now;
       pendingStateSyncRequest = false;
       sendViaPost({ type: "request_state_sync" }, false);
@@ -330,6 +355,11 @@ export function useRoomSocket({
           source.close();
           return;
         }
+        reconnectScheduled = false;
+        if (reconnectTimerId != null) {
+          window.clearTimeout(reconnectTimerId);
+          reconnectTimerId = null;
+        }
         sseErrorNotified = false;
         setConnected(true);
         onError("");
@@ -348,6 +378,9 @@ export function useRoomSocket({
       source.onerror = () => {
         if (disposed) return;
         setConnected(false);
+        if (source.readyState === EventSource.CLOSED) {
+          scheduleReconnect();
+        }
         if (!sseErrorNotified) {
           sseErrorNotified = true;
           onError("Соединение с realtime временно потеряно. Пытаемся восстановить связь...");
@@ -450,6 +483,11 @@ export function useRoomSocket({
       const sse = sseRef.current;
       sseRef.current = null;
       sse?.close();
+      if (reconnectTimerId != null) {
+        window.clearTimeout(reconnectTimerId);
+      }
+      reconnectTimerId = null;
+      reconnectScheduled = false;
 
       sendRef.current = (payload: ClientMessage) => {
         enqueuePayload(payload);

@@ -636,7 +636,9 @@ export function RoomPage() {
     setEditorHydrated(true);
   }, [hasRealtimeState]);
 
-  const editorReady = (!hasRealtimeState || editorHydrated) && !awaitingRecoverySync;
+  // Prevent local edits before realtime hydration finishes; otherwise a freshly reloaded
+  // tab may produce updates against stale base state and diverge peers.
+  const editorReady = hasRealtimeState && editorHydrated && !awaitingRecoverySync;
 
   const notesLockActive = (merged?.notesLockedUntilEpochMs ?? 0) > Date.now();
   const notesLockedByOther =
