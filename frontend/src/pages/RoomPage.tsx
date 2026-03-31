@@ -340,14 +340,12 @@ export function RoomPage() {
   const syncKeyRef = useRef(currentSyncKey);
   const sessionIdRef = useRef<string>("");
   const recentLocalYjsUpdatesRef = useRef<Map<string, number>>(new Map());
-  const recoveryYjsWatermarkBySyncKeyRef = useRef<Map<string, number>>(new Map());
   const recoverySyncTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     syncKeyRef.current = currentSyncKey;
     // Drop buffered updates from previous step/language to avoid stale apply after remount.
     yjsPendingUpdatesRef.current = [];
-    recoveryYjsWatermarkBySyncKeyRef.current.clear();
   }, [currentSyncKey]);
 
   useEffect(() => {
@@ -429,10 +427,6 @@ export function RoomPage() {
       previousState.code !== nextState.code &&
       nextState.lastCodeUpdatedBySessionId !== sessionIdRef.current
     ) {
-      const nextSyncKey = `${nextState.inviteCode}:${nextState.currentStep}:${nextState.language}`;
-      const previousWatermark = recoveryYjsWatermarkBySyncKeyRef.current.get(nextSyncKey) ?? 0;
-      const nextWatermark = typeof nextState.lastYjsSequence === "number" ? nextState.lastYjsSequence : 0;
-      recoveryYjsWatermarkBySyncKeyRef.current.set(nextSyncKey, Math.max(previousWatermark, nextWatermark));
       setResyncSignal((value) => value + 1);
     }
     clearRecoverySyncPending();
@@ -497,6 +491,9 @@ export function RoomPage() {
       if (!previous || !incomingKey?.sessionId) {
         return previous;
       }
+      if (!previous.canManageRoom) {
+        return previous;
+      }
 
       const timestampEpochMs = typeof incomingKey.timestampEpochMs === "number" ? incomingKey.timestampEpochMs : Date.now();
       const normalizedKey: CandidateKeyInfo = {
@@ -531,7 +528,7 @@ export function RoomPage() {
       const currentHistory = previous.candidateKeyHistory ?? [];
       const nextHistory = hasDuplicate
         ? currentHistory
-        : [normalizedKey, ...currentHistory].sort((a, b) => b.timestampEpochMs - a.timestampEpochMs).slice(0, LOG_HISTORY_LIMIT);
+        : [normalizedKey, ...currentHistory].slice(0, LOG_HISTORY_LIMIT);
       const previousLastTimestamp = previous.lastCandidateKey?.timestampEpochMs ?? 0;
       const nextLastCandidateKey = timestampEpochMs >= previousLastTimestamp ? normalizedKey : previous.lastCandidateKey;
 
@@ -548,9 +545,7 @@ export function RoomPage() {
   }, []);
 
   const onRecoveryStateSync = useCallback((lastYjsSequence: number) => {
-    const activeSyncKey = syncKeyRef.current;
-    const previousWatermark = recoveryYjsWatermarkBySyncKeyRef.current.get(activeSyncKey) ?? 0;
-    recoveryYjsWatermarkBySyncKeyRef.current.set(activeSyncKey, Math.max(previousWatermark, lastYjsSequence || 0));
+    void lastYjsSequence;
     clearRecoverySyncPending();
     setResyncSignal((value) => value + 1);
   }, [clearRecoverySyncPending]);
@@ -561,14 +556,6 @@ export function RoomPage() {
     const incomingSyncKey = payload.syncKey?.trim() || syncKeyRef.current;
     if (incomingSyncKey !== syncKeyRef.current) {
       return;
-    }
-    const incomingYjsSequence = typeof payload.yjsSequence === "number" ? payload.yjsSequence : null;
-    const recoveryWatermark = recoveryYjsWatermarkBySyncKeyRef.current.get(incomingSyncKey) ?? 0;
-    if (incomingYjsSequence != null) {
-      if (incomingYjsSequence <= recoveryWatermark) {
-        return;
-      }
-      recoveryYjsWatermarkBySyncKeyRef.current.delete(incomingSyncKey);
     }
 
     const dedupeKey = `${incomingSyncKey}::${update}`;
@@ -807,7 +794,11 @@ export function RoomPage() {
             onCursorChange={(payload) => sendCursorUpdate(payload)}
             onYjsUpdate={(yjsUpdate, syncKey, codeSnapshot) => sendYjsUpdateTracked(yjsUpdate, syncKey, codeSnapshot)}
             onYjsBridgeReady={onYjsBridgeReady}
-            onKeyPress={(payload) => sendKeyPress(payload)}
+            onKeyPress={(payload) => {
+              if (merged.role === "candidate") {
+                sendKeyPress(payload);
+              }
+            }}
             onTaskRatingChange={(rating) => sendTaskRatingUpdate(merged.currentStep, rating)}
             onNotesChange={(value) => {
               setNotesDraft(value);
@@ -830,7 +821,11 @@ export function RoomPage() {
             onCursorChange={(payload) => sendCursorUpdate(payload)}
             onYjsUpdate={(yjsUpdate, syncKey, codeSnapshot) => sendYjsUpdateTracked(yjsUpdate, syncKey, codeSnapshot)}
             onYjsBridgeReady={onYjsBridgeReady}
-            onKeyPress={(payload) => sendKeyPress(payload)}
+            onKeyPress={(payload) => {
+              if (merged.role === "candidate") {
+                sendKeyPress(payload);
+              }
+            }}
             error={error}
           />
         )}
@@ -1854,23 +1849,9 @@ function RoomCodeEditor({
 
         onYjsBridgeReady((encodedYjsUpdate: string) => {
           const activeDoc = yDocRef.current;
-          const activeText = yTextRef.current;
-          if (!activeDoc || !activeText) return;
+          if (!activeDoc) return;
           const updateBytes = base64ToBytes(encodedYjsUpdate);
           if (updateBytes.length === 0) return;
-          try {
-            // Guard against stale full-state echoes after refresh:
-            // if incoming snapshot text already equals current text, skip update.
-            const previewDoc = new Y.Doc();
-            Y.applyUpdate(previewDoc, updateBytes, "preview");
-            const incomingText = previewDoc.getText("room-code").toString();
-            previewDoc.destroy();
-            if (incomingText === activeText.toString()) {
-              return;
-            }
-          } catch {
-            // fall through and try applying directly
-          }
           Y.applyUpdate(activeDoc, updateBytes, "remote");
         });
 
@@ -1910,7 +1891,7 @@ function RoomCodeEditor({
             prev.selectionStartColumn === selectionStartColumn &&
             prev.selectionEndLineNumber === selectionEndLineNumber &&
             prev.selectionEndColumn === selectionEndColumn &&
-            now - prev.ts < 40
+            now - prev.ts < 85
           ) {
             return;
           }

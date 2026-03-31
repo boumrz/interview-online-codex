@@ -105,6 +105,7 @@ type ClientMessage =
   | { type: "request_state_sync" };
 
 const MAX_PENDING_MESSAGES = 300;
+const KEY_PRESS_CLIENT_THROTTLE_MS = 120;
 
 function sessionIdKey(inviteCode: string) {
   return `room_ws_session_id_${inviteCode}`;
@@ -191,6 +192,7 @@ export function useRoomSocket({
   const codeSequenceRef = useRef(0);
   const yjsSequenceRef = useRef(0);
   const lastPresenceRef = useRef<"active" | "away" | null>(null);
+  const lastKeyPressSentAtRef = useRef(0);
   const sendRef = useRef<(payload: ClientMessage) => void>((payload: ClientMessage) => {
     pendingMessagesRef.current.push(payload);
     if (pendingMessagesRef.current.length > MAX_PENDING_MESSAGES) {
@@ -520,6 +522,11 @@ export function useRoomSocket({
     shiftKey: boolean;
     metaKey: boolean;
   }) => {
+    const now = Date.now();
+    if (now - lastKeyPressSentAtRef.current < KEY_PRESS_CLIENT_THROTTLE_MS) {
+      return;
+    }
+    lastKeyPressSentAtRef.current = now;
     send({
       type: "key_press",
       key: payload.key,
