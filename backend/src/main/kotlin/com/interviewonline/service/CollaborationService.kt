@@ -571,10 +571,19 @@ class CollaborationService(
         }
         state.lastCandidateKeyAtEpochMs = now
         val keyEvent = state.lastCandidateKey ?: return
+        val managerConnectionIds = participants.entries
+            .asSequence()
+            .filter { (_, meta) -> meta.inviteCode == participant.inviteCode && meta.canManageRoom }
+            .map { (id, _) -> id }
+            .toSet()
+        if (managerConnectionIds.isEmpty()) {
+            return
+        }
         broadcastTransportMessage(
             inviteCode = participant.inviteCode,
             type = "candidate_key",
             payload = keyEvent,
+            includeConnectionIds = managerConnectionIds,
         )
     }
 
@@ -687,6 +696,7 @@ class CollaborationService(
         type: String,
         payload: Any,
         excludeConnectionId: String? = null,
+        includeConnectionIds: Set<String>? = null,
     ) {
         val faultProfile = realtimeFaultInjectionService.profileFor(inviteCode)
         if (faultProfile != null && faultProfile.latencyMs > 0) {
@@ -703,6 +713,7 @@ class CollaborationService(
         val sseConnectionIds = roomSseConnections[inviteCode]?.toList().orEmpty()
         sseConnectionIds.forEach { connectionId ->
             if (excludeConnectionId != null && excludeConnectionId == connectionId) return@forEach
+            if (includeConnectionIds != null && !includeConnectionIds.contains(connectionId)) return@forEach
             val emitter = sseConnections[connectionId]
             if (participants[connectionId] == null || emitter == null) {
                 detachConnection(connectionId, closeTransport = false)
