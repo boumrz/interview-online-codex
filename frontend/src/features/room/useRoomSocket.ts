@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { API_BASE_URL, WS_BASE_URL } from "../../config/runtime";
+import { API_BASE_URL } from "../../config/runtime";
 
 type Participant = {
   sessionId: string;
@@ -12,6 +12,7 @@ type CursorPayload = {
   sessionId: string;
   displayName: string;
   role: "owner" | "interviewer" | "candidate";
+  cursorSequence?: number | null;
   lineNumber: number;
   column: number;
   selectionStartLineNumber?: number | null;
@@ -37,6 +38,7 @@ type RealtimeState = {
   language: string;
   code: string;
   lastCodeUpdatedBySessionId: string | null;
+  lastYjsSequence?: number;
   currentStep: number;
   notes: string;
   taskScores: Record<string, number | null>;
@@ -54,7 +56,7 @@ type RealtimeState = {
 
 type WsMessage = {
   type: string;
-  payload: RealtimeState | { message: string };
+  payload: unknown;
 };
 
 type Options = {
@@ -66,11 +68,15 @@ type Options = {
   interviewerToken?: string | null;
   onState: (state: RealtimeState) => void;
   onError: (message: string) => void;
-  onYjsUpdate?: (payload: { sessionId: string; yjsUpdate: string; syncKey?: string | null }) => void;
+  onYjsUpdate?: (payload: { sessionId: string; yjsUpdate: string; syncKey?: string | null; yjsSequence?: number | null }) => void;
+  onCursorUpdate?: (payload: CursorPayload) => void;
+  onCandidateKey?: (payload: CandidateKeyPayload) => void;
+  onRecoveryStateSync?: (lastYjsSequence: number) => void;
+  onRequireRecoverySync?: () => void;
 };
 
 type ClientMessage =
-  | { type: "code_update"; code: string }
+  | { type: "code_update"; code: string; codeSequence: number; syncKey?: string | null }
   | { type: "language_update"; language: string }
   | { type: "set_step"; stepIndex: number }
   | { type: "task_rating_update"; stepIndex: number; rating: number | null }
@@ -80,12 +86,13 @@ type ClientMessage =
       type: "cursor_update";
       lineNumber: number;
       column: number;
+      cursorSequence: number;
       selectionStartLineNumber?: number | null;
       selectionStartColumn?: number | null;
       selectionEndLineNumber?: number | null;
       selectionEndColumn?: number | null;
     }
-  | { type: "yjs_update"; yjsUpdate: string; syncKey?: string | null }
+  | { type: "yjs_update"; yjsUpdate: string; syncKey?: string | null; code?: string | null; yjsClientSequence: number }
   | {
       type: "key_press";
       key: string;
@@ -94,16 +101,25 @@ type ClientMessage =
       altKey: boolean;
       shiftKey: boolean;
       metaKey: boolean;
-    };
+    }
+  | { type: "request_state_sync" };
 
-const WS_RECONNECT_BASE_DELAY_MS = 500;
-const WS_RECONNECT_MAX_DELAY_MS = 5000;
-const WS_FAILS_BEFORE_SSE_FALLBACK = 2;
-const PRESENCE_HEARTBEAT_MS = 1_000;
 const MAX_PENDING_MESSAGES = 300;
 
 function sessionIdKey(inviteCode: string) {
   return `room_ws_session_id_${inviteCode}`;
+}
+
+function cursorSequenceKey(inviteCode: string) {
+  return `room_cursor_sequence_${inviteCode}`;
+}
+
+function codeSequenceKey(inviteCode: string) {
+  return `room_code_sequence_${inviteCode}`;
+}
+
+function yjsSequenceKey(inviteCode: string) {
+  return `room_yjs_sequence_${inviteCode}`;
 }
 
 function getOrCreateSessionId(inviteCode: string) {
@@ -115,16 +131,43 @@ function getOrCreateSessionId(inviteCode: string) {
   return next;
 }
 
-function currentPresenceStatus(hasWindowFocusFallback: boolean): "active" | "away" {
-  const hasFocus = typeof document !== "undefined" && typeof document.hasFocus === "function"
-    ? document.hasFocus()
-    : hasWindowFocusFallback;
-  const visible = typeof document === "undefined" || document.visibilityState === "visible";
-  return visible && hasFocus ? "active" : "away";
+function getInitialCursorSequence(inviteCode: string) {
+  const key = cursorSequenceKey(inviteCode);
+  const parsed = Number(sessionStorage.getItem(key) ?? "0");
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 0;
 }
 
-function reconnectDelay(attempt: number): number {
-  return Math.min(WS_RECONNECT_BASE_DELAY_MS * 2 ** attempt, WS_RECONNECT_MAX_DELAY_MS);
+function persistCursorSequence(inviteCode: string, sequence: number) {
+  sessionStorage.setItem(cursorSequenceKey(inviteCode), String(sequence));
+}
+
+function getInitialCodeSequence(inviteCode: string) {
+  const key = codeSequenceKey(inviteCode);
+  const parsed = Number(sessionStorage.getItem(key) ?? "0");
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 0;
+}
+
+function persistCodeSequence(inviteCode: string, sequence: number) {
+  sessionStorage.setItem(codeSequenceKey(inviteCode), String(sequence));
+}
+
+function getInitialYjsSequence(inviteCode: string) {
+  const key = yjsSequenceKey(inviteCode);
+  const parsed = Number(sessionStorage.getItem(key) ?? "0");
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 0;
+}
+
+function persistYjsSequence(inviteCode: string, sequence: number) {
+  sessionStorage.setItem(yjsSequenceKey(inviteCode), String(sequence));
+}
+
+function currentPresenceStatus(hasWindowFocusFallback: boolean): "active" | "away" {
+  const hasFocus =
+    typeof document !== "undefined" && typeof document.hasFocus === "function"
+      ? document.hasFocus()
+      : hasWindowFocusFallback;
+  const visible = typeof document === "undefined" || document.visibilityState === "visible";
+  return visible && hasFocus ? "active" : "away";
 }
 
 export function useRoomSocket({
@@ -136,12 +179,18 @@ export function useRoomSocket({
   interviewerToken,
   onState,
   onError,
-  onYjsUpdate
+  onYjsUpdate,
+  onCursorUpdate,
+  onCandidateKey,
+  onRecoveryStateSync,
+  onRequireRecoverySync
 }: Options) {
-  const wsRef = useRef<WebSocket | null>(null);
   const sseRef = useRef<EventSource | null>(null);
-  const transportRef = useRef<"ws" | "sse">("ws");
   const pendingMessagesRef = useRef<ClientMessage[]>([]);
+  const cursorSequenceRef = useRef(0);
+  const codeSequenceRef = useRef(0);
+  const yjsSequenceRef = useRef(0);
+  const lastPresenceRef = useRef<"active" | "away" | null>(null);
   const sendRef = useRef<(payload: ClientMessage) => void>((payload: ClientMessage) => {
     pendingMessagesRef.current.push(payload);
     if (pendingMessagesRef.current.length > MAX_PENDING_MESSAGES) {
@@ -152,25 +201,29 @@ export function useRoomSocket({
   const sessionId = useMemo(() => getOrCreateSessionId(inviteCode), [inviteCode]);
 
   useEffect(() => {
+    cursorSequenceRef.current = getInitialCursorSequence(inviteCode);
+    codeSequenceRef.current = getInitialCodeSequence(inviteCode);
+    yjsSequenceRef.current = getInitialYjsSequence(inviteCode);
+  }, [inviteCode]);
+
+  useEffect(() => {
     if (!enabled) {
       setConnected(false);
-      wsRef.current?.close();
       sseRef.current?.close();
-      wsRef.current = null;
       sseRef.current = null;
       return;
     }
 
-    let wsFailedAttempts = 0;
-    let wsReconnectTimer: ReturnType<typeof setTimeout> | null = null;
-    let presenceHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
     let hasWindowFocus = typeof document !== "undefined" ? document.hasFocus() : true;
     let disposed = false;
-    let closedInCleanup = false;
     let sseErrorNotified = false;
+    let lastStateSyncRequestAt = 0;
+    let expectRecoveryStateSync = false;
+    let pendingStateSyncRequest = false;
+    lastPresenceRef.current = null;
 
     const shouldQueuePayload = (payload: ClientMessage) => {
-      return payload.type !== "cursor_update" && payload.type !== "presence_update";
+      return payload.type !== "cursor_update" && payload.type !== "presence_update" && payload.type !== "request_state_sync";
     };
 
     const enqueuePayload = (payload: ClientMessage) => {
@@ -179,27 +232,6 @@ export function useRoomSocket({
       if (pendingMessagesRef.current.length > MAX_PENDING_MESSAGES) {
         pendingMessagesRef.current.shift();
       }
-    };
-
-    const clearWsReconnectTimer = () => {
-      if (wsReconnectTimer !== null) {
-        clearTimeout(wsReconnectTimer);
-        wsReconnectTimer = null;
-      }
-    };
-
-    const clearPresenceHeartbeat = () => {
-      if (presenceHeartbeatTimer !== null) {
-        clearInterval(presenceHeartbeatTimer);
-        presenceHeartbeatTimer = null;
-      }
-    };
-
-    const ensurePresenceHeartbeat = () => {
-      if (presenceHeartbeatTimer !== null) return;
-      presenceHeartbeatTimer = setInterval(() => {
-        sendPresence(currentPresenceStatus(hasWindowFocus));
-      }, PRESENCE_HEARTBEAT_MS);
     };
 
     const buildParams = () => {
@@ -211,33 +243,7 @@ export function useRoomSocket({
       return params;
     };
 
-    const handleIncomingMessage = (raw: string) => {
-      try {
-        const message = JSON.parse(raw) as WsMessage;
-        if (message.type === "state_sync") {
-          onState(message.payload as RealtimeState);
-          return;
-        }
-        if (message.type === "yjs_update") {
-          const payload = message.payload as { sessionId?: string; yjsUpdate?: string; syncKey?: string | null };
-          if (payload?.sessionId && payload?.yjsUpdate) {
-            onYjsUpdate?.({
-              sessionId: payload.sessionId,
-              yjsUpdate: payload.yjsUpdate,
-              syncKey: payload.syncKey ?? null
-            });
-          }
-          return;
-        }
-        if (message.type === "error") {
-          onError((message.payload as { message: string }).message);
-        }
-      } catch {
-        onError("Ошибка чтения сообщения комнаты");
-      }
-    };
-
-    const postFallbackEvent = (payload: ClientMessage, queueOnFailure = true) => {
+    const postEvent = (payload: ClientMessage, queueOnFailure = true) => {
       void fetch(`${API_BASE_URL}/realtime/rooms/${inviteCode}/events`, {
         method: "POST",
         headers: {
@@ -251,31 +257,20 @@ export function useRoomSocket({
         .then(async (response) => {
           if (response.ok) return;
           const data = (await response.json().catch(() => ({}))) as { error?: string };
-          if (queueOnFailure) {
+          if (queueOnFailure && shouldQueuePayload(payload)) {
             enqueuePayload(payload);
           }
           onError(data.error || "Не удалось отправить действие в комнату");
         })
         .catch(() => {
-          if (queueOnFailure) {
+          if (queueOnFailure && shouldQueuePayload(payload)) {
             enqueuePayload(payload);
           }
           onError("Не удалось отправить действие в комнату");
         });
     };
 
-    const sendViaActiveTransport = (payload: ClientMessage, queueOnUnavailable = true) => {
-      if (transportRef.current === "ws") {
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
-          wsRef.current.send(JSON.stringify(payload));
-          return;
-        }
-        if (queueOnUnavailable) {
-          enqueuePayload(payload);
-        }
-        return;
-      }
-
+    const sendViaPost = (payload: ClientMessage, queueOnUnavailable = true) => {
       const source = sseRef.current;
       if (source?.readyState !== EventSource.OPEN) {
         if (queueOnUnavailable) {
@@ -284,31 +279,49 @@ export function useRoomSocket({
         return;
       }
 
-      postFallbackEvent(payload, queueOnUnavailable);
+      postEvent(payload, queueOnUnavailable);
     };
 
     const flushPendingMessages = () => {
       if (pendingMessagesRef.current.length === 0) return;
       const pending = [...pendingMessagesRef.current];
       pendingMessagesRef.current = [];
-      pending.forEach((payload) => sendViaActiveTransport(payload, true));
+      pending.forEach((payload) => sendViaPost(payload, true));
     };
 
-    const sendPresence = (status: "active" | "away") => {
-      sendViaActiveTransport({ type: "presence_update", presenceStatus: status }, false);
+    const requestStateSync = (options: { expectHydration?: boolean } = {}) => {
+      if (options.expectHydration) {
+        expectRecoveryStateSync = true;
+        onRequireRecoverySync?.();
+      }
+      const source = sseRef.current;
+      if (source?.readyState !== EventSource.OPEN) {
+        pendingStateSyncRequest = true;
+        return;
+      }
+      const now = Date.now();
+      if (now - lastStateSyncRequestAt < 300) return;
+      lastStateSyncRequestAt = now;
+      pendingStateSyncRequest = false;
+      sendViaPost({ type: "request_state_sync" }, false);
     };
 
-    const publishCurrentPresence = () => {
-      sendPresence(currentPresenceStatus(hasWindowFocus));
+    const sendPresence = (status: "active" | "away", options: { force?: boolean } = {}) => {
+      if (!options.force && lastPresenceRef.current === status) return;
+      lastPresenceRef.current = status;
+      sendViaPost({ type: "presence_update", presenceStatus: status }, false);
     };
 
-    const connectSse = () => {
+    const publishCurrentPresence = (options: { force?: boolean } = {}) => {
+      sendPresence(currentPresenceStatus(hasWindowFocus), options);
+    };
+
+    function connectSse() {
       if (disposed) return;
 
       const params = buildParams();
       const source = new EventSource(`${API_BASE_URL}/realtime/rooms/${inviteCode}/stream?${params.toString()}`);
       sseRef.current = source;
-      transportRef.current = "sse";
 
       source.onopen = () => {
         if (disposed) {
@@ -319,8 +332,11 @@ export function useRoomSocket({
         setConnected(true);
         onError("");
         flushPendingMessages();
-        publishCurrentPresence();
-        ensurePresenceHeartbeat();
+        publishCurrentPresence({ force: true });
+        if (pendingStateSyncRequest) {
+          pendingStateSyncRequest = false;
+        }
+        requestStateSync({ expectHydration: true });
       };
 
       source.onmessage = (event) => {
@@ -332,82 +348,62 @@ export function useRoomSocket({
         setConnected(false);
         if (!sseErrorNotified) {
           sseErrorNotified = true;
-          onError("Резервное подключение нестабильно. Пробуем восстановить связь...");
+          onError("Соединение с realtime временно потеряно. Пытаемся восстановить связь...");
         }
       };
-    };
+    }
 
-    const switchToSseFallback = () => {
-      if (disposed || transportRef.current === "sse") return;
-
-      clearWsReconnectTimer();
-      const ws = wsRef.current;
-      wsRef.current = null;
-      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
-        closedInCleanup = true;
-        ws.close(1000, "switch_to_sse");
-      }
-
-      onError("WebSocket недоступен. Переключились на резервный режим подключения.");
-      connectSse();
-    };
-
-    const scheduleWsReconnect = (closeCode: number) => {
-      if (disposed || transportRef.current === "sse") return;
-
-      wsFailedAttempts += 1;
-      if (wsFailedAttempts >= WS_FAILS_BEFORE_SSE_FALLBACK) {
-        switchToSseFallback();
-        return;
-      }
-
-      const delay = reconnectDelay(wsFailedAttempts - 1);
-      onError(`Соединение потеряно (код ${closeCode}). Повторная попытка подключения...`);
-      clearWsReconnectTimer();
-      wsReconnectTimer = setTimeout(() => {
-        connectWs();
-      }, delay);
-    };
-
-    const connectWs = () => {
-      if (disposed || transportRef.current === "sse") return;
-
-      const params = buildParams();
-      const socket = new WebSocket(`${WS_BASE_URL}/rooms/${inviteCode}?${params.toString()}`);
-      wsRef.current = socket;
-      closedInCleanup = false;
-
-      socket.onopen = () => {
-        if (disposed) {
-          closedInCleanup = true;
-          socket.close(1000, "component_disposed");
+    const handleIncomingMessage = (raw: string) => {
+      try {
+        const message = JSON.parse(raw) as WsMessage;
+        if (message.type === "state_sync") {
+          const payload = message.payload as RealtimeState;
+          const shouldHydrateFromState = expectRecoveryStateSync;
+          expectRecoveryStateSync = false;
+          onState(payload);
+          if (shouldHydrateFromState) {
+            onRecoveryStateSync?.(typeof payload.lastYjsSequence === "number" ? payload.lastYjsSequence : 0);
+          }
           return;
         }
-        wsFailedAttempts = 0;
-        setConnected(true);
-        onError("");
-        flushPendingMessages();
-        publishCurrentPresence();
-        ensurePresenceHeartbeat();
-      };
-
-      socket.onclose = (event) => {
-        if (wsRef.current === socket) {
-          wsRef.current = null;
+        if (message.type === "yjs_update") {
+          const payload = message.payload as { sessionId?: string; yjsUpdate?: string; syncKey?: string | null; yjsSequence?: number | null };
+          if (payload?.sessionId && payload?.yjsUpdate) {
+            onYjsUpdate?.({
+              sessionId: payload.sessionId,
+              yjsUpdate: payload.yjsUpdate,
+              syncKey: payload.syncKey ?? null,
+              yjsSequence: typeof payload.yjsSequence === "number" ? payload.yjsSequence : null
+            });
+          }
+          return;
         }
-        setConnected(false);
-        if (disposed || closedInCleanup || event.code === 1000) return;
-        scheduleWsReconnect(event.code);
-      };
-
-      socket.onmessage = (event) => {
-        handleIncomingMessage(event.data);
-      };
+        if (message.type === "cursor_update") {
+          const payload = message.payload as unknown as CursorPayload;
+          if (payload?.sessionId) {
+            onCursorUpdate?.(payload);
+          }
+          return;
+        }
+        if (message.type === "candidate_key") {
+          const payload = message.payload as unknown as CandidateKeyPayload;
+          if (payload?.sessionId) {
+            onCandidateKey?.(payload);
+          }
+          return;
+        }
+        if (message.type === "error") {
+          onError((message.payload as { message: string }).message);
+        }
+      } catch {
+        onError("Ошибка чтения сообщения комнаты");
+      }
     };
 
     const handleFocus = () => {
       hasWindowFocus = true;
       publishCurrentPresence();
+      requestStateSync({ expectHydration: true });
     };
 
     const handleBlur = () => {
@@ -415,24 +411,24 @@ export function useRoomSocket({
       sendPresence("away");
     };
 
-    const handleVisibilityChange = () => publishCurrentPresence();
+    const handleVisibilityChange = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        hasWindowFocus = typeof document.hasFocus === "function" ? document.hasFocus() : hasWindowFocus;
+        publishCurrentPresence();
+        requestStateSync({ expectHydration: true });
+        return;
+      }
+      publishCurrentPresence();
+    };
 
     const handlePageHide = () => {
       sendPresence("away");
-      const ws = wsRef.current;
-      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
-        closedInCleanup = true;
-        ws.close(1000, "page_unload");
-      }
-      sseRef.current?.close();
-      clearPresenceHeartbeat();
     };
 
-    transportRef.current = "ws";
     sendRef.current = (payload: ClientMessage) => {
-      sendViaActiveTransport(payload, true);
+      sendViaPost(payload, true);
     };
-    connectWs();
+    connectSse();
 
     window.addEventListener("focus", handleFocus);
     window.addEventListener("blur", handleBlur);
@@ -448,15 +444,6 @@ export function useRoomSocket({
       window.removeEventListener("beforeunload", handlePageHide);
 
       disposed = true;
-      clearWsReconnectTimer();
-      clearPresenceHeartbeat();
-
-      const ws = wsRef.current;
-      wsRef.current = null;
-      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
-        closedInCleanup = true;
-        ws.close(1000, "component_unmount");
-      }
 
       const sse = sseRef.current;
       sseRef.current = null;
@@ -466,14 +453,17 @@ export function useRoomSocket({
         enqueuePayload(payload);
       };
     };
-  }, [authToken, displayName, enabled, interviewerToken, inviteCode, onError, onState, onYjsUpdate, ownerToken, sessionId]);
+  }, [authToken, displayName, enabled, interviewerToken, inviteCode, onCandidateKey, onCursorUpdate, onError, onRecoveryStateSync, onRequireRecoverySync, onState, onYjsUpdate, ownerToken, sessionId]);
 
   const send = (payload: ClientMessage) => {
     sendRef.current(payload);
   };
 
-  const sendCodeUpdate = (code: string) => {
-    send({ type: "code_update", code });
+  const sendCodeUpdate = (code: string, syncKey?: string | null) => {
+    const codeSequence = codeSequenceRef.current + 1;
+    codeSequenceRef.current = codeSequence;
+    persistCodeSequence(inviteCode, codeSequence);
+    send({ type: "code_update", code, codeSequence, syncKey: syncKey ?? null });
   };
 
   const sendLanguageUpdate = (language: string) => {
@@ -500,10 +490,14 @@ export function useRoomSocket({
     selectionEndLineNumber?: number | null;
     selectionEndColumn?: number | null;
   }) => {
+    const cursorSequence = cursorSequenceRef.current + 1;
+    cursorSequenceRef.current = cursorSequence;
+    persistCursorSequence(inviteCode, cursorSequence);
     send({
       type: "cursor_update",
       lineNumber: payload.lineNumber,
       column: payload.column,
+      cursorSequence,
       selectionStartLineNumber: payload.selectionStartLineNumber,
       selectionStartColumn: payload.selectionStartColumn,
       selectionEndLineNumber: payload.selectionEndLineNumber,
@@ -511,8 +505,11 @@ export function useRoomSocket({
     });
   };
 
-  const sendYjsUpdate = (yjsUpdate: string, syncKey?: string | null) => {
-    send({ type: "yjs_update", yjsUpdate, syncKey: syncKey ?? null });
+  const sendYjsUpdate = (yjsUpdate: string, syncKey?: string | null, codeSnapshot?: string | null) => {
+    const yjsClientSequence = yjsSequenceRef.current + 1;
+    yjsSequenceRef.current = yjsClientSequence;
+    persistYjsSequence(inviteCode, yjsClientSequence);
+    send({ type: "yjs_update", yjsUpdate, syncKey: syncKey ?? null, code: codeSnapshot ?? null, yjsClientSequence });
   };
 
   const sendKeyPress = (payload: {
@@ -547,4 +544,3 @@ export function useRoomSocket({
     sendKeyPress
   };
 }
-

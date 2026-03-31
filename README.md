@@ -11,7 +11,7 @@
 ## Repository Structure
 
 - `frontend` - web client
-- `backend` - API + WebSocket server
+- `backend` - API + realtime SSE server
 - `agents` - split English multi-agent prompt contracts (roles + shared rules)
 - `TECHNICAL_SPECIFICATION.md` - detailed technical specification
 
@@ -79,7 +79,7 @@ FEATURE_AGENT_OPS=true npm run dev
 - категории задач и создание собственных задач в кабинете
 - выбор языка и набора задач при создании комнаты
 - вход в комнату по invite-коду
-- совместное редактирование кода в реальном времени по WebSocket
+- совместное редактирование кода в реальном времени через SSE stream + POST `/events`
 - управление шагами и языком редактора владельцем комнаты
 - запуск кода только владельцем комнаты
 - Agent orchestration API с обязательной привязкой к Linear issue

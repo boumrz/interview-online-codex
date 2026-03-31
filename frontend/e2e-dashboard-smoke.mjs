@@ -1,12 +1,14 @@
 import { chromium } from "playwright";
 
+const webBaseUrl = process.env.E2E_BASE_URL || "http://localhost:5173";
+
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext();
 const page = await context.newPage();
 const nickname = `qa_ui_${Date.now()}`;
 
 try {
-  await page.goto("http://localhost:5173/login", { waitUntil: "networkidle" });
+  await page.goto(`${webBaseUrl}/login`, { waitUntil: "domcontentloaded" });
   await page.getByText("Регистрация", { exact: true }).click();
   await page.getByLabel("Ник").fill(nickname);
   await page.getByLabel("Пароль").fill("secret123");

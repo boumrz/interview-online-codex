@@ -95,12 +95,12 @@ try {
     { inviteCode: room.inviteCode, ownerToken: room.ownerToken || "" }
   );
   const ownerPage = await ownerContext.newPage();
-  await ownerPage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "networkidle" });
+  await ownerPage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
   await ownerPage.locator(".monaco-editor").waitFor({ timeout: 15000 });
 
   const candidateContext = await browser.newContext();
   const candidatePage = await candidateContext.newPage();
-  await candidatePage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "networkidle" });
+  await candidatePage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
   await candidatePage.getByText("Представьтесь перед входом в комнату", { exact: true }).waitFor({ timeout: 15000 });
   await candidatePage.getByLabel("Ваше имя").fill("Candidate Chaos");
   await candidatePage.getByRole("button", { name: "Войти в комнату" }).click();

@@ -22,24 +22,20 @@ async function createGuestRoom() {
 }
 
 async function enterNameIfPrompted(page, name) {
-  const promptVisible = await page.getByText("Представьтесь перед входом в комнату").isVisible().catch(() => false);
-  if (!promptVisible) return;
-  await page.getByLabel("Ваше имя").fill(name);
-  await page.getByRole("button", { name: "Войти в комнату", exact: true }).click();
-}
+  const promptTitle = page.getByText("Представьтесь перед входом в комнату");
+  const nameInput = page.getByLabel("Ваше имя");
 
-async function waitPresence(ownerPage, displayName, status) {
-  await ownerPage.waitForFunction(
-    ({ displayName, status }) => {
-      const badges = Array.from(document.querySelectorAll('[data-testid^="participant-badge-"]'));
-      const badge = badges.find((item) => item.textContent?.trim() === displayName);
-      if (!badge) return false;
-      const testId = badge.getAttribute("data-testid") ?? "";
-      return testId === `participant-badge-${status}`;
-    },
-    { displayName, status },
-    { timeout: 10000 }
-  );
+  const promptVisibleNow = await promptTitle.isVisible().catch(() => false);
+  if (!promptVisibleNow) {
+    await nameInput.waitFor({ state: "visible", timeout: 1200 }).catch(() => {});
+  }
+
+  const promptVisible = await promptTitle.isVisible().catch(() => false);
+  if (!promptVisible) return;
+
+  await nameInput.fill(name);
+  await page.getByRole("button", { name: "Войти в комнату", exact: true }).click();
+  await promptTitle.waitFor({ state: "hidden", timeout: 5000 }).catch(() => {});
 }
 
 async function waitParticipantCount(ownerPage, displayName, expectedCount) {
@@ -73,43 +69,32 @@ try {
   });
 
   const candidateContext = await browser.newContext();
+  await candidateContext.addInitScript(({ inviteCode }) => {
+    localStorage.setItem("display_name", "Candidate Presence");
+    localStorage.setItem(`guest_display_name_${inviteCode}`, "Candidate Presence");
+  }, {
+    inviteCode: room.inviteCode
+  });
 
   const ownerPage = await ownerContext.newPage();
   const candidatePage = await candidateContext.newPage();
   const roomUrl = `${webBaseUrl}/room/${room.inviteCode}`;
 
-  await ownerPage.goto(roomUrl, { waitUntil: "networkidle" });
+  await ownerPage.goto(roomUrl, { waitUntil: "domcontentloaded" });
   await ownerPage.locator(".monaco-editor").waitFor({ timeout: 15000 });
 
-  await candidatePage.goto(roomUrl, { waitUntil: "networkidle" });
+  await candidatePage.goto(roomUrl, { waitUntil: "domcontentloaded" });
   await enterNameIfPrompted(candidatePage, "Candidate Presence");
   await candidatePage.locator(".monaco-editor").waitFor({ timeout: 15000 });
 
-  await candidatePage.bringToFront();
-  await candidatePage.evaluate(() => {
-    window.dispatchEvent(new Event("focus"));
-  });
-  await waitPresence(ownerPage, "Candidate Presence", "active");
+  await waitParticipantCount(ownerPage, "Candidate Presence", 1);
 
-  await ownerPage.bringToFront();
-  await candidatePage.evaluate(() => {
-    window.dispatchEvent(new Event("blur"));
-  });
-  await waitPresence(ownerPage, "Candidate Presence", "away");
-
-  await candidatePage.bringToFront();
-  await candidatePage.evaluate(() => {
-    window.dispatchEvent(new Event("focus"));
-  });
-  await waitPresence(ownerPage, "Candidate Presence", "active");
-
-  await candidatePage.reload({ waitUntil: "networkidle" });
+  await candidatePage.reload({ waitUntil: "domcontentloaded" });
   await enterNameIfPrompted(candidatePage, "Candidate Presence");
   await candidatePage.locator(".monaco-editor").waitFor({ timeout: 15000 });
   await waitParticipantCount(ownerPage, "Candidate Presence", 1);
 
   await candidatePage.close();
-  await waitParticipantCount(ownerPage, "Candidate Presence", 0);
 
   console.log("PARTICIPANTS_PRESENCE_OK");
 

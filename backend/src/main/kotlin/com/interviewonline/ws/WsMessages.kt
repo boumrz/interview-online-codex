@@ -1,31 +1,5 @@
 package com.interviewonline.ws
 
-data class WsIncomingMessage(
-    val type: String,
-    val code: String? = null,
-    val language: String? = null,
-    val stepIndex: Int? = null,
-    val rating: Int? = null,
-    val notes: String? = null,
-    val lineNumber: Int? = null,
-    val column: Int? = null,
-    val selectionStartLineNumber: Int? = null,
-    val selectionStartColumn: Int? = null,
-    val selectionEndLineNumber: Int? = null,
-    val selectionEndColumn: Int? = null,
-    val key: String? = null,
-    val keyCode: String? = null,
-    val ctrlKey: Boolean? = null,
-    val altKey: Boolean? = null,
-    val shiftKey: Boolean? = null,
-    val metaKey: Boolean? = null,
-    val yjsUpdate: String? = null,
-    val syncKey: String? = null,
-    val presenceStatus: String? = null,
-    val displayName: String? = null,
-    val ownerToken: String? = null,
-)
-
 data class WsOutgoingMessage(
     val type: String,
     val payload: Any,
@@ -36,6 +10,7 @@ data class RoomRealtimePayload(
     val language: String,
     val code: String,
     val lastCodeUpdatedBySessionId: String? = null,
+    val lastYjsSequence: Long = 0,
     val currentStep: Int,
     val notes: String,
     val participants: List<ParticipantPayload>,
@@ -62,6 +37,7 @@ data class CursorPayload(
     val sessionId: String,
     val displayName: String,
     val role: String,
+    val cursorSequence: Long? = null,
     val lineNumber: Int,
     val column: Int,
     val selectionStartLineNumber: Int? = null,
