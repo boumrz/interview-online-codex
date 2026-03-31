@@ -78,6 +78,10 @@ const MIN_RIGHT_WIDTH = 240;
 const MAX_RIGHT_WIDTH = 420;
 const LOG_HISTORY_LIMIT = 50;
 const NODEJS_LANGUAGE_ALIASES = new Set(["javascript", "typescript", "nodejs"]);
+const STATE_SYNC_CODE_SMOOTHING_WINDOW_MS = 480;
+const REMOTE_SELECTION_HIGHLIGHT_ENABLED = false;
+const REMOTE_CURSOR_RENDER_DEBOUNCE_MS = 170;
+const HARD_MODEL_RECONCILE_DEBOUNCE_MS = 220;
 
 function normalizeRoomLanguage(language: string | null | undefined): string {
   const normalized = (language ?? "").trim().toLowerCase();
@@ -253,8 +257,11 @@ export function RoomPage() {
   const [editorHydrated, setEditorHydrated] = useState(false);
   const [resyncSignal, setResyncSignal] = useState(0);
   const [awaitingRecoverySync, setAwaitingRecoverySync] = useState(false);
+  const awaitingRecoverySyncRef = useRef(false);
+  const editorValueRef = useRef("");
   const yjsPendingUpdatesRef = useRef<Array<{ syncKey: string; update: string }>>([]);
   const yjsApplyUpdateRef = useRef<((yjsUpdate: string) => void) | null>(null);
+  const lastAcceptedYjsAtRef = useRef(0);
 
   useEffect(() => {
     const isGuestInterviewerMode = !!interviewerToken && !authToken;
@@ -356,6 +363,10 @@ export function RoomPage() {
     };
   }, []);
 
+  useEffect(() => {
+    awaitingRecoverySyncRef.current = awaitingRecoverySync;
+  }, [awaitingRecoverySync]);
+
   const markRecoverySyncPending = useCallback(() => {
     setAwaitingRecoverySync(true);
     if (recoverySyncTimeoutRef.current != null) {
@@ -422,10 +433,28 @@ export function RoomPage() {
           ? [incoming.lastCandidateKey]
           : []
     };
+    const previousSyncKey = previousState ? `${previousState.inviteCode}:${previousState.currentStep}:${previousState.language}` : null;
+    const nextSyncKey = `${nextState.inviteCode}:${nextState.currentStep}:${nextState.language}`;
+    const syncContextChanged = previousSyncKey !== null && previousSyncKey !== nextSyncKey;
+    const shouldForceHydrateFromState = awaitingRecoverySyncRef.current || syncContextChanged;
+    const inActiveYjsWindow = Date.now() - lastAcceptedYjsAtRef.current < STATE_SYNC_CODE_SMOOTHING_WINDOW_MS;
     if (
       previousState &&
       previousState.code !== nextState.code &&
-      nextState.lastCodeUpdatedBySessionId !== sessionIdRef.current
+      !shouldForceHydrateFromState &&
+      inActiveYjsWindow
+    ) {
+      // While remote typing is active, trust incremental Yjs updates for editor text and
+      // avoid frequent full-code rewrites from trailing state_sync snapshots.
+      nextState.code = previousState.code;
+      nextState.lastCodeUpdatedBySessionId = previousState.lastCodeUpdatedBySessionId;
+    }
+    const editorOutOfSync = editorValueRef.current !== nextState.code;
+    if (
+      previousState &&
+      previousState.code !== nextState.code &&
+      nextState.lastCodeUpdatedBySessionId !== sessionIdRef.current &&
+      (shouldForceHydrateFromState || editorOutOfSync)
     ) {
       setResyncSignal((value) => value + 1);
     }
@@ -433,6 +462,10 @@ export function RoomPage() {
     stateRef.current = nextState;
     setState(nextState);
   }, [clearRecoverySyncPending]);
+
+  const onEditorValueChange = useCallback((value: string) => {
+    editorValueRef.current = value;
+  }, []);
 
   const onError = useCallback((message: string) => {
     setError(message);
@@ -557,6 +590,7 @@ export function RoomPage() {
     if (incomingSyncKey !== syncKeyRef.current) {
       return;
     }
+    lastAcceptedYjsAtRef.current = Date.now();
 
     const dedupeKey = `${incomingSyncKey}::${update}`;
     const now = Date.now();
@@ -796,6 +830,7 @@ export function RoomPage() {
             onCursorChange={(payload) => sendCursorUpdate(payload)}
             onYjsUpdate={(yjsUpdate, syncKey, codeSnapshot) => sendYjsUpdateTracked(yjsUpdate, syncKey, codeSnapshot)}
             onYjsBridgeReady={onYjsBridgeReady}
+            onEditorValueChange={onEditorValueChange}
             onKeyPress={(payload) => {
               if (merged.role === "candidate") {
                 sendKeyPress(payload);
@@ -823,6 +858,7 @@ export function RoomPage() {
             onCursorChange={(payload) => sendCursorUpdate(payload)}
             onYjsUpdate={(yjsUpdate, syncKey, codeSnapshot) => sendYjsUpdateTracked(yjsUpdate, syncKey, codeSnapshot)}
             onYjsBridgeReady={onYjsBridgeReady}
+            onEditorValueChange={onEditorValueChange}
             onKeyPress={(payload) => {
               if (merged.role === "candidate") {
                 sendKeyPress(payload);
@@ -1030,6 +1066,7 @@ function OwnerLayout({
   onCursorChange,
   onYjsUpdate,
   onYjsBridgeReady,
+  onEditorValueChange,
   onKeyPress,
   onTaskRatingChange,
   onNotesChange
@@ -1063,6 +1100,7 @@ function OwnerLayout({
   }) => void;
   onYjsUpdate: (yjsUpdate: string, syncKey: string, codeSnapshot?: string | null) => void;
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
+  onEditorValueChange: (value: string) => void;
   onKeyPress: (payload: { key: string; keyCode: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void;
   onTaskRatingChange: (rating: number | null) => void;
   onNotesChange: (value: string) => void;
@@ -1271,6 +1309,7 @@ function OwnerLayout({
                 onCursorChange={onCursorChange}
                 onYjsUpdate={onYjsUpdate}
                 onYjsBridgeReady={onYjsBridgeReady}
+                onEditorValueChange={onEditorValueChange}
                 onKeyPress={onKeyPress}
               />
             </div>
@@ -1417,6 +1456,7 @@ function CandidateLayout({
   onCursorChange,
   onYjsUpdate,
   onYjsBridgeReady,
+  onEditorValueChange,
   onKeyPress,
   error
 }: {
@@ -1438,6 +1478,7 @@ function CandidateLayout({
   }) => void;
   onYjsUpdate: (yjsUpdate: string, syncKey: string, codeSnapshot?: string | null) => void;
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
+  onEditorValueChange: (value: string) => void;
   onKeyPress: (payload: { key: string; keyCode: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void;
   error: string;
 }) {
@@ -1475,6 +1516,7 @@ function CandidateLayout({
             onCursorChange={onCursorChange}
             onYjsUpdate={onYjsUpdate}
             onYjsBridgeReady={onYjsBridgeReady}
+            onEditorValueChange={onEditorValueChange}
             onKeyPress={onKeyPress}
           />
         </div>
@@ -1546,6 +1588,7 @@ function RoomCodeEditor({
   onCursorChange,
   onYjsUpdate,
   onYjsBridgeReady,
+  onEditorValueChange,
   onKeyPress
 }: {
   height: string;
@@ -1566,6 +1609,7 @@ function RoomCodeEditor({
   }) => void;
   onYjsUpdate: (yjsUpdate: string, syncKey: string, codeSnapshot?: string | null) => void;
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
+  onEditorValueChange: (value: string) => void;
   onKeyPress: (payload: { key: string; keyCode: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void;
 }) {
   const editorRef = useRef<any>(null);
@@ -1576,7 +1620,7 @@ function RoomCodeEditor({
   const suppressEditorChangesRef = useRef(false);
   const lastHandledResyncSignalRef = useRef(0);
   const disposablesRef = useRef<Array<{ dispose: () => void }>>([]);
-  const decorationsRef = useRef<string[]>([]);
+  const decorationsCollectionRef = useRef<any | null>(null);
   const lastRemoteCursorSignatureRef = useRef<string>("");
   const lastRemoteCursorStyleSignatureRef = useRef<string>("");
   const lastCursorSentRef = useRef<{
@@ -1597,6 +1641,8 @@ function RoomCodeEditor({
     ts: 0
   });
   const syncKeyRef = useRef(syncKey);
+  const pendingHardReconcileTimerRef = useRef<number | null>(null);
+  const pendingHardReconcileValueRef = useRef<string>("");
 
   useEffect(() => {
     const styleNode = document.createElement("style");
@@ -1612,7 +1658,15 @@ function RoomCodeEditor({
   useEffect(() => {
     return () => {
       onYjsBridgeReady(null);
-      decorationsRef.current = [];
+      if (pendingHardReconcileTimerRef.current != null) {
+        window.clearTimeout(pendingHardReconcileTimerRef.current);
+        pendingHardReconcileTimerRef.current = null;
+      }
+      pendingHardReconcileValueRef.current = "";
+      if (decorationsCollectionRef.current) {
+        decorationsCollectionRef.current.set([]);
+        decorationsCollectionRef.current = null;
+      }
       lastRemoteCursorSignatureRef.current = "";
       lastRemoteCursorStyleSignatureRef.current = "";
 
@@ -1633,94 +1687,104 @@ function RoomCodeEditor({
     const model = editor.getModel();
     if (!model) return;
 
-    const clampCursor = (lineNumber: number, column: number) => {
-      const maxLine = model.getLineCount();
-      const nextLine = Math.min(Math.max(lineNumber, 1), maxLine);
-      const lineMaxColumn = model.getLineMaxColumn(nextLine);
-      const nextColumn = Math.min(Math.max(column, 1), lineMaxColumn);
-      return { lineNumber: nextLine, column: nextColumn };
+    const renderRemoteCursors = () => {
+      const clampCursor = (lineNumber: number, column: number) => {
+        const maxLine = model.getLineCount();
+        const nextLine = Math.min(Math.max(lineNumber, 1), maxLine);
+        const lineMaxColumn = model.getLineMaxColumn(nextLine);
+        const nextColumn = Math.min(Math.max(column, 1), lineMaxColumn);
+        return { lineNumber: nextLine, column: nextColumn };
+      };
+
+      const remoteCursors = cursors.filter((cursor) => cursor.sessionId !== sessionId);
+      const remoteCursorSignature = remoteCursors
+        .slice()
+        .sort((a, b) => a.sessionId.localeCompare(b.sessionId))
+        .map((cursor) => [
+          cursor.sessionId,
+          cursor.lineNumber,
+          cursor.column,
+          cursor.selectionStartLineNumber ?? "na",
+          cursor.selectionStartColumn ?? "na",
+          cursor.selectionEndLineNumber ?? "na",
+          cursor.selectionEndColumn ?? "na"
+        ].join(":"))
+        .join("|");
+      if (remoteCursorSignature === lastRemoteCursorSignatureRef.current) {
+        return;
+      }
+      lastRemoteCursorSignatureRef.current = remoteCursorSignature;
+      const caretCssRules: string[] = [];
+      const selectionCssRules: string[] = [];
+      const decorations: any[] = [];
+      remoteCursors.forEach((cursor) => {
+        const { lineNumber, column } = clampCursor(cursor.lineNumber, cursor.column);
+        const theme = colorThemeForSession(cursor.sessionId);
+        const caretClassName = cursorClassBySession(cursor.sessionId);
+        const selectionClassName = selectionClassBySession(cursor.sessionId);
+
+        caretCssRules.push(`.${caretClassName} { border-left-color: ${theme.caret} !important; }`);
+        if (REMOTE_SELECTION_HIGHLIGHT_ENABLED) {
+          selectionCssRules.push(
+            `.${selectionClassName} { background-color: ${theme.selection} !important; box-shadow: inset 0 0 0 1px ${theme.selectionBorder}; border-radius: 2px; }`
+          );
+        }
+
+        decorations.push({
+          range: new monaco.Range(lineNumber, column, lineNumber, column),
+          options: {
+            afterContentClassName: `${styles.remoteCursorCaret} ${caretClassName}`,
+            hoverMessage: { value: `${cursor.displayName} (${cursor.role})` }
+          }
+        });
+
+        const hasSelection =
+          REMOTE_SELECTION_HIGHLIGHT_ENABLED &&
+          typeof cursor.selectionStartLineNumber === "number" &&
+          typeof cursor.selectionStartColumn === "number" &&
+          typeof cursor.selectionEndLineNumber === "number" &&
+          typeof cursor.selectionEndColumn === "number";
+        if (!hasSelection) return;
+
+        const start = clampCursor(cursor.selectionStartLineNumber as number, cursor.selectionStartColumn as number);
+        const end = clampCursor(cursor.selectionEndLineNumber as number, cursor.selectionEndColumn as number);
+        const isBackward = start.lineNumber > end.lineNumber || (start.lineNumber === end.lineNumber && start.column > end.column);
+        const selectionStart = isBackward ? end : start;
+        const selectionEnd = isBackward ? start : end;
+        const isCollapsed =
+          selectionStart.lineNumber === selectionEnd.lineNumber &&
+          selectionStart.column === selectionEnd.column;
+        if (isCollapsed) return;
+
+        decorations.push({
+          range: new monaco.Range(
+            selectionStart.lineNumber,
+            selectionStart.column,
+            selectionEnd.lineNumber,
+            selectionEnd.column
+          ),
+          options: {
+            inlineClassName: selectionClassName,
+            hoverMessage: { value: `${cursor.displayName} выделяет фрагмент` }
+          }
+        });
+      });
+
+      if (styleElementRef.current) {
+        const styleSignature = [...caretCssRules, ...selectionCssRules].join("\n");
+        if (styleSignature !== lastRemoteCursorStyleSignatureRef.current) {
+          styleElementRef.current.textContent = styleSignature;
+          lastRemoteCursorStyleSignatureRef.current = styleSignature;
+        }
+      }
+
+      if (decorationsCollectionRef.current) {
+        decorationsCollectionRef.current.set(decorations);
+      }
     };
 
-    const remoteCursors = cursors.filter((cursor) => cursor.sessionId !== sessionId);
-    const remoteCursorSignature = remoteCursors
-      .slice()
-      .sort((a, b) => a.sessionId.localeCompare(b.sessionId))
-      .map((cursor) => [
-        cursor.sessionId,
-        cursor.lineNumber,
-        cursor.column,
-        cursor.selectionStartLineNumber ?? "na",
-        cursor.selectionStartColumn ?? "na",
-        cursor.selectionEndLineNumber ?? "na",
-        cursor.selectionEndColumn ?? "na"
-      ].join(":"))
-      .join("|");
-    if (remoteCursorSignature === lastRemoteCursorSignatureRef.current) {
-      return;
-    }
-    lastRemoteCursorSignatureRef.current = remoteCursorSignature;
-    const caretCssRules: string[] = [];
-    const selectionCssRules: string[] = [];
-    const decorations: any[] = [];
-    remoteCursors.forEach((cursor) => {
-      const { lineNumber, column } = clampCursor(cursor.lineNumber, cursor.column);
-      const theme = colorThemeForSession(cursor.sessionId);
-      const caretClassName = cursorClassBySession(cursor.sessionId);
-      const selectionClassName = selectionClassBySession(cursor.sessionId);
-
-      caretCssRules.push(`.${caretClassName} { border-left-color: ${theme.caret} !important; }`);
-      selectionCssRules.push(
-        `.${selectionClassName} { background-color: ${theme.selection} !important; box-shadow: inset 0 0 0 1px ${theme.selectionBorder}; border-radius: 2px; }`
-      );
-
-      decorations.push({
-        range: new monaco.Range(lineNumber, column, lineNumber, column),
-        options: {
-          afterContentClassName: `${styles.remoteCursorCaret} ${caretClassName}`,
-          hoverMessage: { value: `${cursor.displayName} (${cursor.role})` }
-        }
-      });
-
-      const hasSelection =
-        typeof cursor.selectionStartLineNumber === "number" &&
-        typeof cursor.selectionStartColumn === "number" &&
-        typeof cursor.selectionEndLineNumber === "number" &&
-        typeof cursor.selectionEndColumn === "number";
-      if (!hasSelection) return;
-
-      const start = clampCursor(cursor.selectionStartLineNumber as number, cursor.selectionStartColumn as number);
-      const end = clampCursor(cursor.selectionEndLineNumber as number, cursor.selectionEndColumn as number);
-      const isBackward = start.lineNumber > end.lineNumber || (start.lineNumber === end.lineNumber && start.column > end.column);
-      const selectionStart = isBackward ? end : start;
-      const selectionEnd = isBackward ? start : end;
-      const isCollapsed =
-        selectionStart.lineNumber === selectionEnd.lineNumber &&
-        selectionStart.column === selectionEnd.column;
-      if (isCollapsed) return;
-
-      decorations.push({
-        range: new monaco.Range(
-          selectionStart.lineNumber,
-          selectionStart.column,
-          selectionEnd.lineNumber,
-          selectionEnd.column
-        ),
-        options: {
-          inlineClassName: selectionClassName,
-          hoverMessage: { value: `${cursor.displayName} выделяет фрагмент` }
-        }
-      });
-    });
-
-    if (styleElementRef.current) {
-      const styleSignature = [...caretCssRules, ...selectionCssRules].join("\n");
-      if (styleSignature !== lastRemoteCursorStyleSignatureRef.current) {
-        styleElementRef.current.textContent = styleSignature;
-        lastRemoteCursorStyleSignatureRef.current = styleSignature;
-      }
-    }
-
-    decorationsRef.current = editor.deltaDecorations(decorationsRef.current, decorations);
+    const timer = window.setTimeout(renderRemoteCursors, REMOTE_CURSOR_RENDER_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
   }, [cursors, sessionId]);
 
   useEffect(() => {
@@ -1768,6 +1832,8 @@ function RoomCodeEditor({
 
         const model = editor.getModel();
         if (!model) return;
+        decorationsCollectionRef.current = editor.createDecorationsCollection();
+        onEditorValueChange(model.getValue());
 
         const yDoc = new Y.Doc();
         Y.applyUpdate(yDoc, createDeterministicBootstrapUpdate(value), "bootstrap");
@@ -1832,14 +1898,39 @@ function RoomCodeEditor({
                 }
               });
             }
-            if (activeModel.getValue() !== expectedValue) {
-              activeEditor.executeEdits("yjs-remote-sync-fallback", [
-                {
-                  range: activeModel.getFullModelRange(),
-                  text: expectedValue,
-                  forceMoveMarkers: true
+            const scheduleHardReconcile = () => {
+              if (pendingHardReconcileTimerRef.current != null) {
+                window.clearTimeout(pendingHardReconcileTimerRef.current);
+              }
+              pendingHardReconcileValueRef.current = expectedValue;
+              pendingHardReconcileTimerRef.current = window.setTimeout(() => {
+                pendingHardReconcileTimerRef.current = null;
+                const latestEditor = editorRef.current;
+                const latestModel = latestEditor?.getModel?.();
+                if (!latestEditor || !latestModel) return;
+                const targetValue = pendingHardReconcileValueRef.current;
+                pendingHardReconcileValueRef.current = "";
+                if (latestModel.getValue() === targetValue) return;
+                suppressEditorChangesRef.current = true;
+                try {
+                  latestEditor.executeEdits("yjs-remote-sync-fallback", [
+                    {
+                      range: latestModel.getFullModelRange(),
+                      text: targetValue,
+                      forceMoveMarkers: true
+                    }
+                  ]);
+                } finally {
+                  suppressEditorChangesRef.current = false;
                 }
-              ]);
+              }, HARD_MODEL_RECONCILE_DEBOUNCE_MS);
+            };
+            if (activeModel.getValue() !== expectedValue) {
+              scheduleHardReconcile();
+            } else if (pendingHardReconcileTimerRef.current != null) {
+              window.clearTimeout(pendingHardReconcileTimerRef.current);
+              pendingHardReconcileTimerRef.current = null;
+              pendingHardReconcileValueRef.current = "";
             }
             activeEditor.setScrollTop(scrollTop);
             activeEditor.setScrollLeft(scrollLeft);
@@ -1938,6 +2029,7 @@ function RoomCodeEditor({
 
         disposablesRef.current.push(
           editor.onDidChangeModelContent((event: any) => {
+            onEditorValueChange(editor.getModel()?.getValue?.() ?? "");
             if (suppressEditorChangesRef.current) return;
             const activeText = yTextRef.current;
             const activeDoc = yDocRef.current;
@@ -1999,7 +2091,8 @@ function RoomCodeEditor({
         acceptSuggestionOnEnter: "off",
         wordBasedSuggestions: "off",
         parameterHints: { enabled: false },
-        inlineSuggest: { enabled: false }
+        inlineSuggest: { enabled: false },
+        "semanticHighlighting.enabled": false
       }}
     />
   );

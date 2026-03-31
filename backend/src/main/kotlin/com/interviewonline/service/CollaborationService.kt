@@ -21,6 +21,9 @@ import java.time.Instant
 import java.util.Collections
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
 
 @Service
 class CollaborationService(
@@ -104,6 +107,8 @@ class CollaborationService(
     private val participants = ConcurrentHashMap<String, ParticipantMeta>()
     private val roomState = ConcurrentHashMap<String, RealtimeState>()
     private val connectionByRoomSession = ConcurrentHashMap<String, String>()
+    private val yjsStateBroadcastScheduler = Executors.newSingleThreadScheduledExecutor()
+    private val pendingYjsStateBroadcastByRoom = ConcurrentHashMap<String, ScheduledFuture<*>>()
 
     fun bootstrapRoom(room: Room) {
         roomState[room.inviteCode] = toRealtimeState(room)
@@ -355,7 +360,7 @@ class CollaborationService(
                 room.tasks.getOrNull(room.currentStep)?.solutionCode = snapshot
                 roomRepository.save(room)
             }
-            broadcastState(participant.inviteCode)
+            scheduleStateBroadcastFromYjs(participant.inviteCode)
             return
         }
 
@@ -371,6 +376,16 @@ class CollaborationService(
             ),
             excludeConnectionId = connectionId,
         )
+    }
+
+    private fun scheduleStateBroadcastFromYjs(inviteCode: String) {
+        // Coalesce frequent Yjs snapshots into a trailing full-state sync to prevent UI jitter.
+        pendingYjsStateBroadcastByRoom.remove(inviteCode)?.cancel(false)
+        val next = yjsStateBroadcastScheduler.schedule({
+            pendingYjsStateBroadcastByRoom.remove(inviteCode)
+            broadcastState(inviteCode)
+        }, 110, TimeUnit.MILLISECONDS)
+        pendingYjsStateBroadcastByRoom[inviteCode] = next
     }
 
     private fun updateLanguage(connectionId: String, language: String) {
@@ -622,6 +637,7 @@ class CollaborationService(
     }
 
     fun closeRoom(inviteCode: String) {
+        pendingYjsStateBroadcastByRoom.remove(inviteCode)?.cancel(false)
         roomState.remove(inviteCode)
         val connectionIds = participants.entries
             .asSequence()
