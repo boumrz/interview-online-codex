@@ -7,7 +7,7 @@ import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate, removeAwareness
 import { yCollab } from "y-codemirror.next";
 import { EditorSelection, EditorState, Compartment } from "@codemirror/state";
 import { EditorView, keymap, drawSelection, highlightActiveLine, lineNumbers } from "@codemirror/view";
-import { history, historyKeymap, defaultKeymap } from "@codemirror/commands";
+import { history, historyKeymap, defaultKeymap, indentWithTab } from "@codemirror/commands";
 import { indentOnInput, bracketMatching, foldGutter, syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { javascript } from "@codemirror/lang-javascript";
@@ -2012,7 +2012,7 @@ function RoomCodeEditor({
           indentOnInput(),
           bracketMatching(),
           syntaxHighlighting(defaultHighlightStyle),
-          keymap.of([...defaultKeymap, ...historyKeymap]),
+          keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap]),
           readOnlyCompartment.of(EditorState.readOnly.of(readOnly)),
           languageCompartment.of(languageExtension),
           yCollab(yText, awareness, { undoManager: false }),
