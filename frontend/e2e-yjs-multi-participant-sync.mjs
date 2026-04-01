@@ -129,6 +129,18 @@ try {
     );
   }
 
+  // Remote awareness carets (y-protocols) must appear — catches frozen/missing cursors after reload.
+  await ownerPage.waitForFunction(
+    () => document.querySelectorAll(".cm-ySelectionCaret").length >= 2,
+    null,
+    { timeout: 25_000 }
+  );
+  await candidateBPage.waitForFunction(
+    () => document.querySelectorAll(".cm-ySelectionCaret").length >= 2,
+    null,
+    { timeout: 25_000 }
+  );
+
   console.log("YJS_MULTI_PARTICIPANT_SYNC_OK", room.inviteCode);
 
   await ownerContext.close();

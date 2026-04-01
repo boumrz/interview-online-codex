@@ -3,8 +3,9 @@ import { ActionIcon, Badge, Box, Button, Group, Menu, Modal, Select, Stack, Text
 import { IconChevronLeft, IconChevronRight, IconCode, IconGripVertical, IconHome2, IconLayoutDashboard, IconMenu2, IconUsers } from "@tabler/icons-react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import * as Y from "yjs";
+import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate, removeAwarenessStates } from "y-protocols/awareness";
 import { yCollab } from "y-codemirror.next";
-import { EditorState, Compartment } from "@codemirror/state";
+import { EditorSelection, EditorState, Compartment } from "@codemirror/state";
 import { EditorView, keymap, drawSelection, highlightActiveLine, lineNumbers } from "@codemirror/view";
 import { history, historyKeymap, defaultKeymap } from "@codemirror/commands";
 import { indentOnInput, bracketMatching, foldGutter, syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
@@ -409,12 +410,16 @@ export function RoomPage() {
   const sessionIdRef = useRef<string>("");
   const yjsPendingUpdatesRef = useRef<Array<{ syncKey: string; update: string }>>([]);
   const yjsApplyUpdateRef = useRef<((yjsUpdate: string) => void) | null>(null);
+  const awarenessApplyRef = useRef<((b64: string) => void) | null>(null);
+  /** Awareness may arrive over SSE before RoomCodeEditor registers the applier (same race as yjs). */
+  const awarenessPendingRef = useRef<string[]>([]);
   const recentLocalYjsUpdatesRef = useRef<Map<string, number>>(new Map());
   const recoverySyncTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     syncKeyRef.current = currentSyncKey;
     yjsPendingUpdatesRef.current = [];
+    awarenessPendingRef.current = [];
   }, [currentSyncKey]);
 
   useEffect(() => {
@@ -715,10 +720,41 @@ export function RoomPage() {
       .forEach((item) => applyUpdate(item.update));
   }, []);
 
+  const onAwarenessBridgeReady = useCallback((applyFn: ((b64: string) => void) | null) => {
+    awarenessApplyRef.current = applyFn;
+    if (!applyFn) return;
+    const pending = awarenessPendingRef.current.splice(0, awarenessPendingRef.current.length);
+    pending.forEach((b64) => applyFn(b64));
+  }, []);
+
+  const onAwarenessUpdateSocket = useCallback((payload: { sessionId: string; awarenessUpdate: string }) => {
+    if (payload.sessionId === sessionIdRef.current) return;
+    const b64 = payload.awarenessUpdate?.trim() ?? "";
+    if (!b64) return;
+    if (awarenessApplyRef.current) {
+      awarenessApplyRef.current(b64);
+      return;
+    }
+    awarenessPendingRef.current.push(b64);
+    if (awarenessPendingRef.current.length > 200) {
+      awarenessPendingRef.current.splice(0, awarenessPendingRef.current.length - 200);
+    }
+  }, []);
+
   const fallbackDisplayName = authUser?.nickname?.trim() || (interviewerToken ? "Интервьюер" : "Участник");
   const effectiveDisplayName = displayName.trim() || fallbackDisplayName;
   const canConnect = Boolean(inviteCode);
-  const { connected, sessionId, sendLanguageUpdate, sendSetStep, sendTaskRatingUpdate, sendNotesUpdate, sendCursorUpdate, sendYjsUpdate, sendKeyPress } = useRoomSocket({
+  const {
+    connected,
+    sessionId,
+    sendLanguageUpdate,
+    sendSetStep,
+    sendTaskRatingUpdate,
+    sendNotesUpdate,
+    sendAwarenessUpdate,
+    sendYjsUpdate,
+    sendKeyPress
+  } = useRoomSocket({
     enabled: canConnect,
     inviteCode,
     authToken,
@@ -730,6 +766,7 @@ export function RoomPage() {
     onCursorUpdate,
     onCandidateKey,
     onYjsUpdate,
+    onAwarenessUpdate: onAwarenessUpdateSocket,
     onRecoveryStateSync,
     onRequireRecoverySync: markRecoverySyncPending
   });
@@ -912,7 +949,9 @@ export function RoomPage() {
             notesStatus={notesStatus}
             notesLockedByOther={notesLockedByOther}
             sessionId={sessionId}
-            cursors={merged.cursors}
+            participantLabel={effectiveDisplayName}
+            sendAwarenessUpdate={sendAwarenessUpdate}
+            onAwarenessBridgeReady={onAwarenessBridgeReady}
             lastCandidateKey={merged.lastCandidateKey}
             candidateKeyHistory={merged.candidateKeyHistory ?? []}
             syncKey={currentSyncKey}
@@ -920,7 +959,6 @@ export function RoomPage() {
             editorReady={editorReady}
             onLanguageChange={(value) => value && sendLanguageUpdate(value)}
             onSelectStep={(stepIndex) => sendSetStep(stepIndex)}
-            onCursorChange={(payload) => sendCursorUpdate(payload)}
             onYjsUpdate={(yjsUpdate, syncKey, codeSnapshot, yjsDoc) =>
               sendYjsUpdateTracked(yjsUpdate, syncKey, codeSnapshot, yjsDoc)
             }
@@ -946,11 +984,12 @@ export function RoomPage() {
             stepTitle={step?.title ?? "-"}
             stepDescription={step?.description ?? ""}
             sessionId={sessionId}
-            cursors={merged.cursors}
+            participantLabel={effectiveDisplayName}
+            sendAwarenessUpdate={sendAwarenessUpdate}
+            onAwarenessBridgeReady={onAwarenessBridgeReady}
             syncKey={currentSyncKey}
             resyncSignal={resyncSignal}
             editorReady={editorReady}
-            onCursorChange={(payload) => sendCursorUpdate(payload)}
             onYjsUpdate={(yjsUpdate, syncKey, codeSnapshot, yjsDoc) =>
               sendYjsUpdateTracked(yjsUpdate, syncKey, codeSnapshot, yjsDoc)
             }
@@ -1144,7 +1183,9 @@ function OwnerLayout({
   notesStatus,
   notesLockedByOther,
   sessionId,
-  cursors,
+  participantLabel,
+  sendAwarenessUpdate,
+  onAwarenessBridgeReady,
   lastCandidateKey,
   candidateKeyHistory,
   syncKey,
@@ -1152,7 +1193,6 @@ function OwnerLayout({
   editorReady,
   onLanguageChange,
   onSelectStep,
-  onCursorChange,
   onYjsUpdate,
   onYjsBridgeReady,
   onEditorValueChange,
@@ -1171,7 +1211,9 @@ function OwnerLayout({
   notesStatus: string;
   notesLockedByOther: boolean;
   sessionId: string;
-  cursors: CursorInfo[];
+  participantLabel: string;
+  sendAwarenessUpdate: (awarenessUpdate: string) => void;
+  onAwarenessBridgeReady: (applyFn: ((b64: string) => void) | null) => void;
   lastCandidateKey: CandidateKeyInfo | null;
   candidateKeyHistory: CandidateKeyInfo[];
   syncKey: string;
@@ -1179,14 +1221,6 @@ function OwnerLayout({
   editorReady: boolean;
   onLanguageChange: (value: string | null) => void;
   onSelectStep: (stepIndex: number) => void;
-  onCursorChange: (payload: {
-    lineNumber: number;
-    column: number;
-    selectionStartLineNumber?: number | null;
-    selectionStartColumn?: number | null;
-    selectionEndLineNumber?: number | null;
-    selectionEndColumn?: number | null;
-  }) => void;
   onYjsUpdate: (yjsUpdate: string, syncKey: string, codeSnapshot?: string | null, yjsDocumentBase64?: string | null) => void;
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
   onEditorValueChange: (value: string) => void;
@@ -1396,8 +1430,9 @@ function OwnerLayout({
                 syncKey={syncKey}
                 readOnly={!editorReady}
                 sessionId={sessionId}
-                cursors={cursors}
-                onCursorChange={onCursorChange}
+                participantLabel={participantLabel}
+                sendAwarenessUpdate={sendAwarenessUpdate}
+                onAwarenessBridgeReady={onAwarenessBridgeReady}
                 onYjsUpdate={onYjsUpdate}
                 onYjsBridgeReady={onYjsBridgeReady}
                 onEditorValueChange={onEditorValueChange}
@@ -1540,11 +1575,12 @@ function CandidateLayout({
   stepTitle,
   stepDescription,
   sessionId,
-  cursors,
+  participantLabel,
+  sendAwarenessUpdate,
+  onAwarenessBridgeReady,
   syncKey,
   resyncSignal,
   editorReady,
-  onCursorChange,
   onYjsUpdate,
   onYjsBridgeReady,
   onEditorValueChange,
@@ -1555,18 +1591,12 @@ function CandidateLayout({
   stepTitle: string;
   stepDescription: string;
   sessionId: string;
-  cursors: CursorInfo[];
+  participantLabel: string;
+  sendAwarenessUpdate: (awarenessUpdate: string) => void;
+  onAwarenessBridgeReady: (applyFn: ((b64: string) => void) | null) => void;
   syncKey: string;
   resyncSignal: number;
   editorReady: boolean;
-  onCursorChange: (payload: {
-    lineNumber: number;
-    column: number;
-    selectionStartLineNumber?: number | null;
-    selectionStartColumn?: number | null;
-    selectionEndLineNumber?: number | null;
-    selectionEndColumn?: number | null;
-  }) => void;
   onYjsUpdate: (yjsUpdate: string, syncKey: string, codeSnapshot?: string | null, yjsDocumentBase64?: string | null) => void;
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
   onEditorValueChange: (value: string) => void;
@@ -1605,8 +1635,9 @@ function CandidateLayout({
             syncKey={syncKey}
             readOnly={!editorReady}
             sessionId={sessionId}
-            cursors={cursors}
-            onCursorChange={onCursorChange}
+            participantLabel={participantLabel}
+            sendAwarenessUpdate={sendAwarenessUpdate}
+            onAwarenessBridgeReady={onAwarenessBridgeReady}
             onYjsUpdate={onYjsUpdate}
             onYjsBridgeReady={onYjsBridgeReady}
             onEditorValueChange={onEditorValueChange}
@@ -1652,22 +1683,122 @@ function hashSessionId(sessionId: string): number {
   return hash;
 }
 
-function colorThemeForSession(sessionId: string) {
+function awarenessUserColors(sessionId: string): { color: string; colorLight: string } {
   const hue = hashSessionId(sessionId) % 360;
   return {
-    caret: `hsl(${hue} 88% 60%)`,
-    selection: `hsl(${hue} 88% 60% / 0.18)`,
-    selectionBorder: `hsl(${hue} 88% 60% / 0.45)`
+    color: `hsl(${hue} 68% 58%)`,
+    colorLight: `hsla(${hue} 68% 58% / 0.24)`
   };
 }
 
-function selectionClassBySession(sessionId: string): string {
-  return `remote-selection-${sessionId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+/**
+ * After a tab refresh, Yjs assigns a new clientID while the realtime sessionId stays the same.
+ * Peers briefly keep both awareness entries → duplicate remote carets.
+ *
+ * Do not pick the winner by `clock` alone: the old tab's client keeps a large frozen clock while the new tab's
+ * clock resets — we would keep the dead entry and drop live updates. Prefer `meta.lastUpdated` (refreshed on each
+ * inbound awareness message for that clientId); the disconnected client stops receiving bumps.
+ */
+function dedupeRemoteAwarenessEntries(awareness: Awareness) {
+  const localId = awareness.clientID;
+
+  const clockOf = (clientId: number) => awareness.meta.get(clientId)?.clock ?? 0;
+  const lastUpdatedOf = (clientId: number) => awareness.meta.get(clientId)?.lastUpdated ?? 0;
+
+  const hasSessionIdInUser = (st: { user?: unknown } | undefined) => {
+    const sid = (st?.user as { sessionId?: string } | undefined)?.sessionId;
+    return typeof sid === "string" && sid.trim().length > 0;
+  };
+
+  const remoteWinsOver = (newId: number, oldId: number) => {
+    const luN = lastUpdatedOf(newId);
+    const luO = lastUpdatedOf(oldId);
+    if (luN !== luO) {
+      return luN > luO;
+    }
+    const stN = awareness.states.get(newId);
+    const stO = awareness.states.get(oldId);
+    const sidN = hasSessionIdInUser(stN);
+    const sidO = hasSessionIdInUser(stO);
+    if (sidN !== sidO) {
+      return sidN;
+    }
+    const cN = clockOf(newId);
+    const cO = clockOf(oldId);
+    if (cN !== cO) {
+      return cN > cO;
+    }
+    return newId > oldId;
+  };
+
+  const winnerByKey = new Map<string, number>();
+  awareness.states.forEach((_state, clientId) => {
+    if (clientId === localId) return;
+    const st = awareness.states.get(clientId);
+    const u = st?.user as { sessionId?: string; name?: string; color?: string } | undefined;
+    if (!u) return;
+    const key =
+      typeof u.sessionId === "string" && u.sessionId.trim()
+        ? `sid:${u.sessionId.trim()}`
+        : `legacy:${String(u.name ?? "")}|${String(u.color ?? "")}`;
+    const prev = winnerByKey.get(key);
+    if (prev === undefined || remoteWinsOver(clientId, prev)) {
+      winnerByKey.set(key, clientId);
+    }
+  });
+
+  const toRemove = new Set<number>();
+  awareness.states.forEach((_state, clientId) => {
+    if (clientId === localId) return;
+    const st = awareness.states.get(clientId);
+    const u = st?.user as { sessionId?: string; name?: string; color?: string } | undefined;
+    if (!u) return;
+    const key =
+      typeof u.sessionId === "string" && u.sessionId.trim()
+        ? `sid:${u.sessionId.trim()}`
+        : `legacy:${String(u.name ?? "")}|${String(u.color ?? "")}`;
+    if (winnerByKey.get(key) !== clientId) {
+      toRemove.add(clientId);
+    }
+  });
+
+  // Drop pre-sessionId ghosts when the same participant already has sessionId in awareness.
+  const hasSessionId = new Set<string>();
+  awareness.states.forEach((st, id) => {
+    if (id === localId) return;
+    const sid = (st?.user as { sessionId?: string } | undefined)?.sessionId;
+    if (typeof sid === "string" && sid.trim()) {
+      hasSessionId.add(`${String((st?.user as { name?: string }).name ?? "")}|${String((st?.user as { color?: string }).color ?? "")}`);
+    }
+  });
+  awareness.states.forEach((_state, clientId) => {
+    if (clientId === localId) return;
+    const st = awareness.states.get(clientId);
+    const u = st?.user as { sessionId?: string; name?: string; color?: string } | undefined;
+    if (!u || (typeof u.sessionId === "string" && u.sessionId.trim())) return;
+    const legacyKey = `${String(u.name ?? "")}|${String(u.color ?? "")}`;
+    if (hasSessionId.has(legacyKey) && !toRemove.has(clientId)) {
+      toRemove.add(clientId);
+    }
+  });
+
+  if (toRemove.size > 0) {
+    removeAwarenessStates(awareness, Array.from(toRemove), "local");
+  }
 }
 
-function caretClassBySession(sessionId: string): string {
-  return `remote-caret-${sessionId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
-}
+/** Remote carets on one-dark background (y-codemirror defaults assume light theme). */
+const remoteCursorDarkTheme = EditorView.baseTheme({
+  ".cm-ySelectionCaret": {
+    borderLeft: "2px solid rgba(255,255,255,0.88)",
+    borderRight: "2px solid rgba(255,255,255,0.88)"
+  },
+  ".cm-ySelectionInfo": {
+    color: "#0c0e12",
+    fontFamily: "system-ui, sans-serif",
+    fontSize: "11px"
+  }
+});
 
 function RoomCodeEditor({
   height,
@@ -1678,9 +1809,10 @@ function RoomCodeEditor({
   syncKey,
   resyncSignal,
   readOnly,
-  sessionId: _sessionId,
-  cursors: _cursors,
-  onCursorChange: _onCursorChange,
+  sessionId,
+  participantLabel,
+  sendAwarenessUpdate,
+  onAwarenessBridgeReady,
   onYjsUpdate,
   onYjsBridgeReady,
   onEditorValueChange,
@@ -1695,15 +1827,9 @@ function RoomCodeEditor({
   resyncSignal: number;
   readOnly: boolean;
   sessionId: string;
-  cursors: CursorInfo[];
-  onCursorChange: (payload: {
-    lineNumber: number;
-    column: number;
-    selectionStartLineNumber?: number | null;
-    selectionStartColumn?: number | null;
-    selectionEndLineNumber?: number | null;
-    selectionEndColumn?: number | null;
-  }) => void;
+  participantLabel: string;
+  sendAwarenessUpdate: (awarenessUpdate: string) => void;
+  onAwarenessBridgeReady: (applyFn: ((b64: string) => void) | null) => void;
   onYjsUpdate: (yjsUpdate: string, syncKey: string, codeSnapshot?: string | null, yjsDocumentBase64?: string | null) => void;
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
   onEditorValueChange: (value: string) => void;
@@ -1723,12 +1849,59 @@ function RoomCodeEditor({
   const lastAppliedServerYjsSeqRef = useRef(-1);
   const lastAppliedServerYjsSnapRef = useRef<string | null>(null);
   const lastSyncKeyForServerSeqRef = useRef(syncKey);
+  const sendAwarenessUpdateRef = useRef(sendAwarenessUpdate);
+  const awarenessRef = useRef<Awareness | null>(null);
+
+  /** After remote Yjs merges (reload / resync), re-anchor local cursor in Awareness and refresh remote carets. */
+  const bumpLocalAwarenessAfterRemoteDocChange = useCallback(() => {
+    requestAnimationFrame(() => {
+      const v = viewRef.current;
+      const awareness = awarenessRef.current;
+      const yText = yTextRef.current;
+      if (!v || !awareness || !yText) return;
+      try {
+        const docLen = yText.length;
+        const sel = v.state.selection.main;
+        const anchor = Math.min(Math.max(sel.anchor, 0), docLen);
+        const head = Math.min(Math.max(sel.head, 0), docLen);
+        if (anchor !== sel.anchor || head !== sel.head) {
+          v.dispatch({ selection: EditorSelection.single(anchor, head) });
+        }
+        const next = v.state.selection.main;
+        awareness.setLocalStateField("cursor", {
+          anchor: Y.createRelativePositionFromTypeIndex(yText, next.anchor),
+          head: Y.createRelativePositionFromTypeIndex(yText, next.head)
+        });
+      } catch {
+        /* selection can be adjusting after applyUpdate */
+      }
+      dedupeRemoteAwarenessEntries(awareness);
+      v.dispatch({});
+    });
+  }, []);
+
+  useEffect(() => {
+    sendAwarenessUpdateRef.current = sendAwarenessUpdate;
+  }, [sendAwarenessUpdate]);
 
   useEffect(() => {
     onYjsUpdateRef.current = onYjsUpdate;
     onEditorValueChangeRef.current = onEditorValueChange;
     onKeyPressRef.current = onKeyPress;
   }, [onEditorValueChange, onKeyPress, onYjsUpdate]);
+
+  useEffect(() => {
+    const awareness = awarenessRef.current;
+    if (!awareness) return;
+    const st = awareness.getLocalState();
+    if (!st?.user) return;
+    const name = participantLabel.trim() || "Участник";
+    if (st.user.name === name && (st.user as { sessionId?: string }).sessionId === sessionId) return;
+    awareness.setLocalState({
+      ...st,
+      user: { ...st.user, name, sessionId }
+    });
+  }, [participantLabel, sessionId]);
 
   const languageExtension = useMemo(() => {
     const normalized = normalizeRoomLanguage(language);
@@ -1741,13 +1914,15 @@ function RoomCodeEditor({
   useEffect(() => {
     return () => {
       onYjsBridgeReady(null);
+      onAwarenessBridgeReady(null);
       viewRef.current?.destroy();
       viewRef.current = null;
       yDocRef.current?.destroy();
       yDocRef.current = null;
       yTextRef.current = null;
+      awarenessRef.current = null;
     };
-  }, [onYjsBridgeReady]);
+  }, [onAwarenessBridgeReady, onYjsBridgeReady]);
 
   useEffect(() => {
     if (!hostRef.current || viewRef.current) return;
@@ -1780,6 +1955,50 @@ function RoomCodeEditor({
     yDocRef.current = yDoc;
     yTextRef.current = yText;
 
+    const awareness = new Awareness(yDoc);
+    awarenessRef.current = awareness;
+    const { color, colorLight } = awarenessUserColors(sessionId);
+    awareness.setLocalState({
+      user: {
+        name: participantLabel.trim() || "Участник",
+        color,
+        colorLight,
+        sessionId
+      }
+    });
+
+    let awarenessFlushTimer: number | null = null;
+    const flushAwareness = () => {
+      awarenessFlushTimer = null;
+      try {
+        const u = encodeAwarenessUpdate(awareness, [awareness.clientID]);
+        sendAwarenessUpdateRef.current(bytesToBase64(u));
+      } catch {
+        /* ignore */
+      }
+    };
+    const onAwarenessChanged = (
+      { added, updated, removed }: { added: number[]; updated: number[]; removed: number[] },
+      origin: unknown
+    ) => {
+      if (origin === "remote") return;
+      const touched = new Set([...added, ...updated, ...removed]);
+      if (!touched.has(awareness.clientID)) return;
+      if (awarenessFlushTimer != null) window.clearTimeout(awarenessFlushTimer);
+      awarenessFlushTimer = window.setTimeout(flushAwareness, 48);
+    };
+    awareness.on("update", onAwarenessChanged);
+
+    onAwarenessBridgeReady((b64) => {
+      try {
+        if (!b64) return;
+        applyAwarenessUpdate(awareness, base64ToBytes(b64), "remote");
+        dedupeRemoteAwarenessEntries(awareness);
+      } catch {
+        /* ignore malformed */
+      }
+    });
+
     const view = new EditorView({
       state: EditorState.create({
         doc: yText.toString(),
@@ -1796,7 +2015,8 @@ function RoomCodeEditor({
           keymap.of([...defaultKeymap, ...historyKeymap]),
           readOnlyCompartment.of(EditorState.readOnly.of(readOnly)),
           languageCompartment.of(languageExtension),
-          yCollab(yText, null, { undoManager: false }),
+          yCollab(yText, awareness, { undoManager: false }),
+          remoteCursorDarkTheme,
           EditorView.updateListener.of((update) => {
             if (!update.docChanged) return;
             onEditorValueChangeRef.current(update.state.doc.toString());
@@ -1867,6 +2087,11 @@ function RoomCodeEditor({
       window.clearTimeout(snapshotTimerId);
       window.clearInterval(heartbeatId);
       yDoc.off("update", handleDocUpdate);
+      awareness.off("update", onAwarenessChanged);
+      if (awarenessFlushTimer != null) window.clearTimeout(awarenessFlushTimer);
+      onAwarenessBridgeReady(null);
+      awareness.destroy();
+      awarenessRef.current = null;
     };
     // IMPORTANT: do not depend on `value` or `serverYjsBase64` here. When those change every state_sync,
     // this effect's cleanup ran yDoc.off("update") while viewRef stayed set → early return on next run
@@ -1900,7 +2125,8 @@ function RoomCodeEditor({
     lastAppliedServerYjsSeqRef.current = seq;
     lastAppliedServerYjsSnapRef.current = snap || null;
     onEditorValueChangeRef.current(activeDoc.getText("room-code").toString());
-  }, [serverYjsBase64, serverYjsSequence, syncKey]);
+    bumpLocalAwarenessAfterRemoteDocChange();
+  }, [bumpLocalAwarenessAfterRemoteDocChange, serverYjsBase64, serverYjsSequence, syncKey]);
 
   /** Step change or explicit resync (focus/reconnect): merge server Y snapshot or plain code fallback. */
   useEffect(() => {
@@ -1941,7 +2167,8 @@ function RoomCodeEditor({
       roomSyncLog("hydrate_from_server_failed", { error: String(e) });
     }
     onEditorValueChangeRef.current(activeDoc.getText("room-code").toString());
-  }, [resyncSignal, serverYjsBase64, syncKey, value]);
+    bumpLocalAwarenessAfterRemoteDocChange();
+  }, [bumpLocalAwarenessAfterRemoteDocChange, resyncSignal, serverYjsBase64, syncKey, value]);
 
   useEffect(() => {
     const activeView = viewRef.current;

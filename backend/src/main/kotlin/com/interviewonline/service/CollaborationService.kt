@@ -37,6 +37,7 @@ class CollaborationService(
     private val keyEventBroadcastThrottleMs = 20L
     private val candidateKeyHistoryMaxSize = 50
     private val maxYjsDocumentBase64Chars = 400_000
+    private val maxAwarenessUpdateBase64Chars = 24_000
 
     private enum class RoomRole(val wireValue: String) {
         OWNER("owner"),
@@ -205,6 +206,7 @@ class CollaborationService(
                 selectionEndColumn = request.selectionEndColumn,
                 cursorSequence = request.cursorSequence,
             )
+            "awareness_update" -> relayAwarenessUpdate(connectionId, request.awarenessUpdate.orEmpty())
             "yjs_update" -> relayYjsUpdate(
                 connectionId = connectionId,
                 yjsUpdate = request.yjsUpdate.orEmpty(),
@@ -298,6 +300,23 @@ class CollaborationService(
             roomRepository.save(it)
         }
         broadcastState(participant.inviteCode)
+    }
+
+    private fun relayAwarenessUpdate(connectionId: String, awarenessBase64: String) {
+        val participant = participants[connectionId] ?: return
+        val trimmed = awarenessBase64.trim()
+        if (trimmed.isEmpty() || trimmed.length > maxAwarenessUpdateBase64Chars) {
+            return
+        }
+        broadcastTransportMessage(
+            inviteCode = participant.inviteCode,
+            type = "awareness_update",
+            payload = mapOf(
+                "sessionId" to participant.sessionId,
+                "awarenessUpdate" to trimmed,
+            ),
+            excludeConnectionId = connectionId,
+        )
     }
 
     private fun relayYjsUpdate(
