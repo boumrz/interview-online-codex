@@ -1,9 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Editor from "@monaco-editor/react";
 import { ActionIcon, Badge, Box, Button, Group, Menu, Modal, Select, Stack, Text, TextInput, Textarea, ThemeIcon } from "@mantine/core";
 import { IconChevronLeft, IconChevronRight, IconCode, IconGripVertical, IconHome2, IconLayoutDashboard, IconMenu2, IconUsers } from "@tabler/icons-react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import * as Y from "yjs";
+import { yCollab } from "y-codemirror.next";
+import { EditorState, Compartment } from "@codemirror/state";
+import { EditorView, keymap, drawSelection, highlightActiveLine, lineNumbers } from "@codemirror/view";
+import { history, historyKeymap, defaultKeymap } from "@codemirror/commands";
+import { indentOnInput, bracketMatching, foldGutter, syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
+import { oneDark } from "@codemirror/theme-one-dark";
+import { javascript } from "@codemirror/lang-javascript";
+import { python } from "@codemirror/lang-python";
+import { java } from "@codemirror/lang-java";
+import { sql } from "@codemirror/lang-sql";
 import { useAppSelector } from "../app/hooks";
 import { useGetRoomQuery } from "../services/api";
 import { useRoomSocket } from "../features/room/useRoomSocket";
@@ -55,6 +64,7 @@ type RealtimeState = {
   language: string;
   code: string;
   lastCodeUpdatedBySessionId: string | null;
+  yjsDocumentBase64?: string | null;
   lastYjsSequence?: number;
   currentStep: number;
   notes: string;
@@ -79,7 +89,6 @@ const MIN_RIGHT_WIDTH = 240;
 const MAX_RIGHT_WIDTH = 420;
 const LOG_HISTORY_LIMIT = 50;
 const NODEJS_LANGUAGE_ALIASES = new Set(["javascript", "typescript", "nodejs"]);
-const STATE_SYNC_CODE_SMOOTHING_WINDOW_MS = 480;
 const REMOTE_SELECTION_HIGHLIGHT_ENABLED = true;
 const REMOTE_CARET_HIGHLIGHT_ENABLED = true;
 const REMOTE_CURSOR_RENDER_DEBOUNCE_MS = 80;
@@ -92,15 +101,42 @@ const REMOTE_CARET_IDLE_SHOW_DELAY_MS = 500;
 const REMOTE_CURSOR_RENDER_TICK_MS = 120;
 const CURSOR_DEBUG_QUERY_PARAM = "cursorDebug";
 const CURSOR_DEBUG_STORAGE_KEY = "room_cursor_debug";
+const ROOM_SYNC_LOG_QUERY_PARAM = "syncLog";
+const ROOM_SYNC_LOG_STORAGE_KEY = "room_sync_log";
 
+/** Off: ?syncLog=0 or localStorage room_sync_log = "0" */
+function isRoomSyncLogEnabled(): boolean {
+  try {
+    if (typeof window === "undefined") return true;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get(ROOM_SYNC_LOG_QUERY_PARAM) === "0") return false;
+    if (params.get(ROOM_SYNC_LOG_QUERY_PARAM) === "1") return true;
+    return window.localStorage.getItem(ROOM_SYNC_LOG_STORAGE_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function roomSyncLog(event: string, payload?: Record<string, unknown>) {
+  if (!isRoomSyncLogEnabled()) return;
+  const ts = new Date().toISOString();
+  if (payload && Object.keys(payload).length > 0) {
+    console.info(`[room-sync][${ts}] ${event}`, payload);
+  } else {
+    console.info(`[room-sync][${ts}] ${event}`);
+  }
+}
+
+/** Off: ?cursorDebug=0 or localStorage room_cursor_debug = "0" */
 function isCursorDebugEnabled(): boolean {
   try {
-    if (typeof window === "undefined") return false;
+    if (typeof window === "undefined") return true;
     const params = new URLSearchParams(window.location.search);
+    if (params.get(CURSOR_DEBUG_QUERY_PARAM) === "0") return false;
     if (params.get(CURSOR_DEBUG_QUERY_PARAM) === "1") return true;
-    return window.localStorage.getItem(CURSOR_DEBUG_STORAGE_KEY) === "1";
+    return window.localStorage.getItem(CURSOR_DEBUG_STORAGE_KEY) !== "0";
   } catch {
-    return false;
+    return true;
   }
 }
 
@@ -282,14 +318,10 @@ export function RoomPage() {
   const [notesDirty, setNotesDirty] = useState(false);
   const [copiedHint, setCopiedHint] = useState("");
   const [notesLockTick, setNotesLockTick] = useState(0);
-  const [editorHydrated, setEditorHydrated] = useState(false);
   const [resyncSignal, setResyncSignal] = useState(0);
   const [awaitingRecoverySync, setAwaitingRecoverySync] = useState(false);
   const awaitingRecoverySyncRef = useRef(false);
   const editorValueRef = useRef("");
-  const yjsPendingUpdatesRef = useRef<Array<{ syncKey: string; update: string }>>([]);
-  const yjsApplyUpdateRef = useRef<((yjsUpdate: string) => void) | null>(null);
-  const lastAcceptedYjsAtRef = useRef(0);
 
   useEffect(() => {
     const isGuestInterviewerMode = !!interviewerToken && !authToken;
@@ -349,6 +381,7 @@ export function RoomPage() {
       language: normalizeRoomLanguage(room.language),
       code: room.code,
       lastCodeUpdatedBySessionId: null,
+      yjsDocumentBase64: null,
       lastYjsSequence: 0,
       currentStep: room.currentStep,
       notes: room.notes ?? "",
@@ -374,12 +407,13 @@ export function RoomPage() {
   }, [inviteCode, merged]);
   const syncKeyRef = useRef(currentSyncKey);
   const sessionIdRef = useRef<string>("");
+  const yjsPendingUpdatesRef = useRef<Array<{ syncKey: string; update: string }>>([]);
+  const yjsApplyUpdateRef = useRef<((yjsUpdate: string) => void) | null>(null);
   const recentLocalYjsUpdatesRef = useRef<Map<string, number>>(new Map());
   const recoverySyncTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     syncKeyRef.current = currentSyncKey;
-    // Drop buffered updates from previous step/language to avoid stale apply after remount.
     yjsPendingUpdatesRef.current = [];
   }, [currentSyncKey]);
 
@@ -471,6 +505,7 @@ export function RoomPage() {
       cursors,
       taskScores,
       lastCodeUpdatedBySessionId: incoming.lastCodeUpdatedBySessionId ?? null,
+      yjsDocumentBase64: typeof incoming.yjsDocumentBase64 === "string" ? incoming.yjsDocumentBase64 : null,
       lastYjsSequence: typeof incoming.lastYjsSequence === "number" ? incoming.lastYjsSequence : 0,
       lastCandidateKey: incoming.lastCandidateKey ?? null,
       candidateKeyHistory: Array.isArray(incoming.candidateKeyHistory)
@@ -483,24 +518,26 @@ export function RoomPage() {
     const nextSyncKey = `${nextState.inviteCode}:${nextState.currentStep}:${nextState.language}`;
     const syncContextChanged = previousSyncKey !== null && previousSyncKey !== nextSyncKey;
     const shouldForceHydrateFromState = awaitingRecoverySyncRef.current || syncContextChanged;
-    const inActiveYjsWindow = Date.now() - lastAcceptedYjsAtRef.current < STATE_SYNC_CODE_SMOOTHING_WINDOW_MS;
     if (
-      previousState &&
-      previousState.code !== nextState.code &&
-      !shouldForceHydrateFromState &&
-      inActiveYjsWindow
+      !previousState ||
+      previousState.lastYjsSequence !== nextState.lastYjsSequence ||
+      previousState.code !== nextState.code ||
+      previousState.yjsDocumentBase64 !== nextState.yjsDocumentBase64
     ) {
-      // While remote typing is active, trust incremental Yjs updates for editor text and
-      // avoid frequent full-code rewrites from trailing state_sync snapshots.
-      nextState.code = previousState.code;
-      nextState.lastCodeUpdatedBySessionId = previousState.lastCodeUpdatedBySessionId;
+      roomSyncLog("state_sync", {
+        codeLen: nextState.code?.length ?? 0,
+        lastYjsSequence: nextState.lastYjsSequence,
+        yjsDocLen: nextState.yjsDocumentBase64?.length ?? 0,
+        syncKey: nextSyncKey,
+        fromSession: nextState.lastCodeUpdatedBySessionId
+      });
     }
-    const editorOutOfSync = editorValueRef.current !== nextState.code;
+    // Do not bump resync on mere code drift during live Yjs typing — server string can lag merged CRDT and would clobber peers.
     if (
       previousState &&
       previousState.code !== nextState.code &&
       nextState.lastCodeUpdatedBySessionId !== sessionIdRef.current &&
-      (shouldForceHydrateFromState || editorOutOfSync)
+      shouldForceHydrateFromState
     ) {
       setResyncSignal((value) => value + 1);
     }
@@ -649,6 +686,7 @@ export function RoomPage() {
     setResyncSignal((value) => value + 1);
   }, [clearRecoverySyncPending]);
 
+  /** Peers: incremental Yjs relay. Server still owns DB + state_sync snapshots (recovery / tabs). */
   const onYjsUpdate = useCallback((payload: { sessionId: string; yjsUpdate: string; syncKey?: string | null; yjsSequence?: number | null }) => {
     const update = payload.yjsUpdate?.trim();
     if (!update) return;
@@ -656,17 +694,10 @@ export function RoomPage() {
     if (incomingSyncKey !== syncKeyRef.current) {
       return;
     }
-    lastAcceptedYjsAtRef.current = Date.now();
-
-    const dedupeKey = `${incomingSyncKey}::${update}`;
-    const now = Date.now();
-    const recentSentAt = recentLocalYjsUpdatesRef.current.get(dedupeKey);
-    if (recentSentAt && now - recentSentAt < 10_000) {
-      recentLocalYjsUpdatesRef.current.delete(dedupeKey);
-      return;
-    }
-
-    setEditorHydrated(true);
+    roomSyncLog("sse:yjs_update_incremental", {
+      fromSession: payload.sessionId,
+      yjsSequence: payload.yjsSequence ?? null
+    });
     if (yjsApplyUpdateRef.current) {
       yjsApplyUpdateRef.current(update);
       return;
@@ -710,35 +741,31 @@ export function RoomPage() {
     stateRef.current = state;
   }, [state]);
 
-  const sendYjsUpdateTracked = useCallback((yjsUpdate: string, syncKey?: string | null, codeSnapshot?: string | null) => {
+  const sendYjsUpdateTracked = useCallback(
+    (yjsUpdate: string, syncKey?: string | null, codeSnapshot?: string | null, yjsDocumentBase64?: string | null) => {
     const update = yjsUpdate.trim();
-    if (!update) return;
+    const docSnap = yjsDocumentBase64?.trim() ?? "";
+    if (!update && !docSnap) return;
     const normalizedSyncKey = syncKey?.trim() ?? "";
     const now = Date.now();
-    const dedupeKey = `${normalizedSyncKey}::${update}`;
+    const dedupeKey = docSnap ? `${normalizedSyncKey}::snap::${docSnap.length}::${docSnap.slice(0, 120)}` : `${normalizedSyncKey}::${update}`;
     recentLocalYjsUpdatesRef.current.set(dedupeKey, now);
     recentLocalYjsUpdatesRef.current.forEach((timestamp, key) => {
       if (now - timestamp > 15_000) {
         recentLocalYjsUpdatesRef.current.delete(key);
       }
     });
-    sendYjsUpdate(update, normalizedSyncKey || null, codeSnapshot ?? null);
-  }, [sendYjsUpdate]);
+    sendYjsUpdate(update, normalizedSyncKey || null, codeSnapshot ?? null, docSnap || null);
+  },
+  [sendYjsUpdate]
+);
 
   const hasRealtimeState = Boolean(state);
   const participantsCount = state?.participants.length ?? 0;
 
-  useEffect(() => {
-    if (!hasRealtimeState) {
-      setEditorHydrated(false);
-      return;
-    }
-    setEditorHydrated(true);
-  }, [hasRealtimeState]);
-
-  // Prevent local edits before realtime hydration finishes; otherwise a freshly reloaded
-  // tab may produce updates against stale base state and diverge peers.
-  const editorReady = hasRealtimeState && editorHydrated && !awaitingRecoverySync;
+  // Editing must not wait for SSE: readOnly blocked y-codemirror + Yjs until first state_sync.
+  // `readOnly` blocks user input; merged Yjs updates still apply once the editor is mounted.
+  const editorReady = Boolean(merged);
 
   const notesLockActive = (merged?.notesLockedUntilEpochMs ?? 0) > Date.now();
   const notesLockedByOther =
@@ -894,7 +921,9 @@ export function RoomPage() {
             onLanguageChange={(value) => value && sendLanguageUpdate(value)}
             onSelectStep={(stepIndex) => sendSetStep(stepIndex)}
             onCursorChange={(payload) => sendCursorUpdate(payload)}
-            onYjsUpdate={(yjsUpdate, syncKey, codeSnapshot) => sendYjsUpdateTracked(yjsUpdate, syncKey, codeSnapshot)}
+            onYjsUpdate={(yjsUpdate, syncKey, codeSnapshot, yjsDoc) =>
+              sendYjsUpdateTracked(yjsUpdate, syncKey, codeSnapshot, yjsDoc)
+            }
             onYjsBridgeReady={onYjsBridgeReady}
             onEditorValueChange={onEditorValueChange}
             onKeyPress={(payload) => {
@@ -922,7 +951,9 @@ export function RoomPage() {
             resyncSignal={resyncSignal}
             editorReady={editorReady}
             onCursorChange={(payload) => sendCursorUpdate(payload)}
-            onYjsUpdate={(yjsUpdate, syncKey, codeSnapshot) => sendYjsUpdateTracked(yjsUpdate, syncKey, codeSnapshot)}
+            onYjsUpdate={(yjsUpdate, syncKey, codeSnapshot, yjsDoc) =>
+              sendYjsUpdateTracked(yjsUpdate, syncKey, codeSnapshot, yjsDoc)
+            }
             onYjsBridgeReady={onYjsBridgeReady}
             onEditorValueChange={onEditorValueChange}
             onKeyPress={(payload) => {
@@ -1156,7 +1187,7 @@ function OwnerLayout({
     selectionEndLineNumber?: number | null;
     selectionEndColumn?: number | null;
   }) => void;
-  onYjsUpdate: (yjsUpdate: string, syncKey: string, codeSnapshot?: string | null) => void;
+  onYjsUpdate: (yjsUpdate: string, syncKey: string, codeSnapshot?: string | null, yjsDocumentBase64?: string | null) => void;
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
   onEditorValueChange: (value: string) => void;
   onKeyPress: (payload: { key: string; keyCode: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void;
@@ -1359,8 +1390,10 @@ function OwnerLayout({
                 height="100%"
                 language={toEditorLanguage(merged.language)}
                 value={merged.code}
-                syncKey={syncKey}
+                serverYjsBase64={merged.yjsDocumentBase64 ?? null}
+                serverYjsSequence={merged.lastYjsSequence ?? 0}
                 resyncSignal={resyncSignal}
+                syncKey={syncKey}
                 readOnly={!editorReady}
                 sessionId={sessionId}
                 cursors={cursors}
@@ -1534,7 +1567,7 @@ function CandidateLayout({
     selectionEndLineNumber?: number | null;
     selectionEndColumn?: number | null;
   }) => void;
-  onYjsUpdate: (yjsUpdate: string, syncKey: string, codeSnapshot?: string | null) => void;
+  onYjsUpdate: (yjsUpdate: string, syncKey: string, codeSnapshot?: string | null, yjsDocumentBase64?: string | null) => void;
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
   onEditorValueChange: (value: string) => void;
   onKeyPress: (payload: { key: string; keyCode: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void;
@@ -1566,8 +1599,10 @@ function CandidateLayout({
             height="calc(100vh - 170px)"
             language={toEditorLanguage(merged.language)}
             value={merged.code}
-            syncKey={syncKey}
+            serverYjsBase64={merged.yjsDocumentBase64 ?? null}
+            serverYjsSequence={merged.lastYjsSequence ?? 0}
             resyncSignal={resyncSignal}
+            syncKey={syncKey}
             readOnly={!editorReady}
             sessionId={sessionId}
             cursors={cursors}
@@ -1638,12 +1673,14 @@ function RoomCodeEditor({
   height,
   language,
   value,
+  serverYjsBase64 = null,
+  serverYjsSequence = 0,
   syncKey,
   resyncSignal,
   readOnly,
-  sessionId,
-  cursors,
-  onCursorChange,
+  sessionId: _sessionId,
+  cursors: _cursors,
+  onCursorChange: _onCursorChange,
   onYjsUpdate,
   onYjsBridgeReady,
   onEditorValueChange,
@@ -1652,6 +1689,8 @@ function RoomCodeEditor({
   height: string;
   language: string;
   value: string;
+  serverYjsBase64?: string | null;
+  serverYjsSequence?: number;
   syncKey: string;
   resyncSignal: number;
   readOnly: boolean;
@@ -1665,663 +1704,260 @@ function RoomCodeEditor({
     selectionEndLineNumber?: number | null;
     selectionEndColumn?: number | null;
   }) => void;
-  onYjsUpdate: (yjsUpdate: string, syncKey: string, codeSnapshot?: string | null) => void;
+  onYjsUpdate: (yjsUpdate: string, syncKey: string, codeSnapshot?: string | null, yjsDocumentBase64?: string | null) => void;
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
   onEditorValueChange: (value: string) => void;
   onKeyPress: (payload: { key: string; keyCode: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void;
 }) {
-  const editorRef = useRef<any>(null);
-  const monacoRef = useRef<any>(null);
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const viewRef = useRef<EditorView | null>(null);
   const yDocRef = useRef<Y.Doc | null>(null);
   const yTextRef = useRef<Y.Text | null>(null);
-  const styleElementRef = useRef<HTMLStyleElement | null>(null);
-  const suppressEditorChangesRef = useRef(false);
   const lastHandledResyncSignalRef = useRef(0);
-  const disposablesRef = useRef<Array<{ dispose: () => void }>>([]);
-  const caretDecorationsCollectionRef = useRef<any | null>(null);
-  const selectionDecorationsCollectionRef = useRef<any | null>(null);
-  const lastRemoteCaretSignatureRef = useRef<string>("");
-  const lastRemoteSelectionSignatureRef = useRef<string>("");
-  const lastRemoteCursorStyleSignatureRef = useRef<string>("");
-  const lastCursorSentRef = useRef<{
-    lineNumber: number;
-    column: number;
-    selectionStartLineNumber: number | null;
-    selectionStartColumn: number | null;
-    selectionEndLineNumber: number | null;
-    selectionEndColumn: number | null;
-    ts: number;
-  }>({
-    lineNumber: 0,
-    column: 0,
-    selectionStartLineNumber: null,
-    selectionStartColumn: null,
-    selectionEndLineNumber: null,
-    selectionEndColumn: null,
-    ts: 0
-  });
-  const syncKeyRef = useRef(syncKey);
-  const pendingHardReconcileTimerRef = useRef<number | null>(null);
-  const pendingHardReconcileValueRef = useRef<string>("");
-  const lastLocalTypingAtRef = useRef(0);
-  const lastRemoteApplyAtRef = useRef(0);
+  const syncKeyRef = useRef<string>(syncKey);
+  const onYjsUpdateRef = useRef(onYjsUpdate);
+  const onEditorValueChangeRef = useRef(onEditorValueChange);
+  const onKeyPressRef = useRef(onKeyPress);
+  const readOnlyCompartmentRef = useRef(new Compartment());
+  const languageCompartmentRef = useRef(new Compartment());
+  const lastAppliedServerYjsSeqRef = useRef(-1);
+  const lastAppliedServerYjsSnapRef = useRef<string | null>(null);
+  const lastSyncKeyForServerSeqRef = useRef(syncKey);
 
   useEffect(() => {
-    const styleNode = document.createElement("style");
-    styleNode.setAttribute("data-room-cursor-style", sessionId);
-    document.head.appendChild(styleNode);
-    styleElementRef.current = styleNode;
-    return () => {
-      styleElementRef.current?.remove();
-      styleElementRef.current = null;
-    };
-  }, [sessionId]);
+    onYjsUpdateRef.current = onYjsUpdate;
+    onEditorValueChangeRef.current = onEditorValueChange;
+    onKeyPressRef.current = onKeyPress;
+  }, [onEditorValueChange, onKeyPress, onYjsUpdate]);
+
+  const languageExtension = useMemo(() => {
+    const normalized = normalizeRoomLanguage(language);
+    if (normalized === "python") return python();
+    if (normalized === "java" || normalized === "kotlin") return java();
+    if (normalized === "sql") return sql();
+    return javascript();
+  }, [language]);
 
   useEffect(() => {
     return () => {
       onYjsBridgeReady(null);
-      if (pendingHardReconcileTimerRef.current != null) {
-        window.clearTimeout(pendingHardReconcileTimerRef.current);
-        pendingHardReconcileTimerRef.current = null;
-      }
-      pendingHardReconcileValueRef.current = "";
-      if (caretDecorationsCollectionRef.current) {
-        caretDecorationsCollectionRef.current.set([]);
-        caretDecorationsCollectionRef.current = null;
-      }
-      if (selectionDecorationsCollectionRef.current) {
-        selectionDecorationsCollectionRef.current.set([]);
-        selectionDecorationsCollectionRef.current = null;
-      }
-      lastRemoteCaretSignatureRef.current = "";
-      lastRemoteSelectionSignatureRef.current = "";
-      lastRemoteCursorStyleSignatureRef.current = "";
-
+      viewRef.current?.destroy();
+      viewRef.current = null;
       yDocRef.current?.destroy();
       yDocRef.current = null;
       yTextRef.current = null;
-
-      disposablesRef.current.forEach((disposable) => disposable.dispose());
-      disposablesRef.current = [];
     };
   }, [onYjsBridgeReady]);
 
   useEffect(() => {
-    const editor = editorRef.current;
-    const monaco = monacoRef.current;
-    if (!editor || !monaco) return;
+    if (!hostRef.current || viewRef.current) return;
 
-    const model = editor.getModel();
-    if (!model) return;
-
-    const renderRemoteCursors = () => {
-      const clampCursor = (lineNumber: number, column: number) => {
-        const maxLine = model.getLineCount();
-        const nextLine = Math.min(Math.max(lineNumber, 1), maxLine);
-        const lineMaxColumn = model.getLineMaxColumn(nextLine);
-        const nextColumn = Math.min(Math.max(column, 1), lineMaxColumn);
-        return { lineNumber: nextLine, column: nextColumn };
-      };
-
-      const remoteCursors = cursors.filter((cursor) => cursor.sessionId !== sessionId);
-      debugCursorLog("render:remote_selection:start", {
-        ownSessionId: sessionId,
-        remoteCursorCount: remoteCursors.length
-      });
-      const nowEpochMs = Date.now();
-      const remoteCaretSignature = remoteCursors
-        .slice()
-        .sort((a, b) => a.sessionId.localeCompare(b.sessionId))
-        .map((cursor) => [
-          cursor.sessionId,
-          nowEpochMs - (cursor.lastSeenAtEpochMs ?? 0) >= REMOTE_CARET_IDLE_SHOW_DELAY_MS ? "idle" : "typing",
-          cursor.lineNumber,
-          cursor.column
-        ].join(":"))
-        .join("|");
-      const remoteSelectionSignature = remoteCursors
-        .slice()
-        .sort((a, b) => a.sessionId.localeCompare(b.sessionId))
-        .map((cursor) => [
-          cursor.sessionId,
-          cursor.selectionStartLineNumber ?? "na",
-          cursor.selectionStartColumn ?? "na",
-          cursor.selectionEndLineNumber ?? "na",
-          cursor.selectionEndColumn ?? "na"
-        ].join(":"))
-        .join("|");
-      if (remoteCaretSignature === lastRemoteCaretSignatureRef.current && remoteSelectionSignature === lastRemoteSelectionSignatureRef.current) {
-        debugCursorLog("render:remote_selection:skip_same_signature", {
-          signatureLength: remoteSelectionSignature.length
-        });
-        return;
+    const readOnlyCompartment = readOnlyCompartmentRef.current;
+    const languageCompartment = languageCompartmentRef.current;
+    const targetCode = value ?? "";
+    const snap = serverYjsBase64?.trim();
+    let yDoc = new Y.Doc();
+    if (snap) {
+      try {
+        const raw = base64ToBytes(snap);
+        if (raw.length > 0) {
+          Y.applyUpdate(yDoc, raw, "bootstrap");
+        }
+      } catch {
+        /* invalid snapshot */
       }
-      lastRemoteCaretSignatureRef.current = remoteCaretSignature;
-      lastRemoteSelectionSignatureRef.current = remoteSelectionSignature;
-      const caretCssRules: string[] = [];
-      const selectionCssRules: string[] = [];
-      const caretDecorations: any[] = [];
-      const selectionDecorations: any[] = [];
-      remoteCursors.forEach((cursor) => {
-        const isTypingNow = nowEpochMs - (cursor.lastSeenAtEpochMs ?? 0) < REMOTE_CARET_IDLE_SHOW_DELAY_MS;
-        const clampedCaret = clampCursor(cursor.lineNumber, cursor.column);
-        const caretClassName = caretClassBySession(cursor.sessionId);
-        const theme = colorThemeForSession(cursor.sessionId);
-        const selectionClassName = selectionClassBySession(cursor.sessionId);
-        if (REMOTE_CARET_HIGHLIGHT_ENABLED && !isTypingNow) {
-          caretCssRules.push(`.${caretClassName} { border-left-color: ${theme.caret} !important; }`);
-          caretDecorations.push({
-            range: new monaco.Range(clampedCaret.lineNumber, clampedCaret.column, clampedCaret.lineNumber, clampedCaret.column),
-            options: {
-              afterContentClassName: `${styles.remoteCursorCaret} ${caretClassName}`,
-              hoverMessage: { value: `${cursor.displayName} (${cursor.role})` }
+    } else {
+      Y.applyUpdate(yDoc, createDeterministicBootstrapUpdate(targetCode), "bootstrap");
+    }
+    let yText = yDoc.getText("room-code");
+    // Server CRDT snapshot can disagree with `merged.code` (last writer / ordering); never replace a merged doc with the plain string.
+    if (yText.toString() !== targetCode && !snap) {
+      yDoc.destroy();
+      yDoc = new Y.Doc();
+      Y.applyUpdate(yDoc, createDeterministicBootstrapUpdate(targetCode), "bootstrap");
+      yText = yDoc.getText("room-code");
+    }
+    yDocRef.current = yDoc;
+    yTextRef.current = yText;
+
+    const view = new EditorView({
+      state: EditorState.create({
+        doc: yText.toString(),
+        extensions: [
+          oneDark,
+          lineNumbers(),
+          highlightActiveLine(),
+          drawSelection(),
+          history(),
+          foldGutter(),
+          indentOnInput(),
+          bracketMatching(),
+          syntaxHighlighting(defaultHighlightStyle),
+          keymap.of([...defaultKeymap, ...historyKeymap]),
+          readOnlyCompartment.of(EditorState.readOnly.of(readOnly)),
+          languageCompartment.of(languageExtension),
+          yCollab(yText, null, { undoManager: false }),
+          EditorView.updateListener.of((update) => {
+            if (!update.docChanged) return;
+            onEditorValueChangeRef.current(update.state.doc.toString());
+          }),
+          EditorView.domEventHandlers({
+            keydown: (_event, viewInstance) => {
+              const event = _event as KeyboardEvent;
+              onKeyPressRef.current({
+                key: event.key,
+                keyCode: event.code,
+                ctrlKey: event.ctrlKey,
+                altKey: event.altKey,
+                shiftKey: event.shiftKey,
+                metaKey: event.metaKey
+              });
+              if (viewInstance.state.readOnly) {
+                event.preventDefault();
+                return true;
+              }
+              return false;
             }
-          });
-        }
-        if (REMOTE_SELECTION_HIGHLIGHT_ENABLED) {
-          selectionCssRules.push(
-            `.${selectionClassName} { background-color: ${theme.selection} !important; box-shadow: inset 0 0 0 1px ${theme.selectionBorder}; border-radius: 2px; }`
-          );
-        }
+          })
+        ]
+      }),
+      parent: hostRef.current
+    });
+    viewRef.current = view;
+    onEditorValueChangeRef.current(view.state.doc.toString());
 
-        const hasSelection =
-          REMOTE_SELECTION_HIGHLIGHT_ENABLED &&
-          typeof cursor.selectionStartLineNumber === "number" &&
-          typeof cursor.selectionStartColumn === "number" &&
-          typeof cursor.selectionEndLineNumber === "number" &&
-          typeof cursor.selectionEndColumn === "number";
-        if (!hasSelection) return;
+    syncKeyRef.current = syncKey;
 
-        const start = clampCursor(cursor.selectionStartLineNumber as number, cursor.selectionStartColumn as number);
-        const end = clampCursor(cursor.selectionEndLineNumber as number, cursor.selectionEndColumn as number);
-        const isBackward = start.lineNumber > end.lineNumber || (start.lineNumber === end.lineNumber && start.column > end.column);
-        const selectionStart = isBackward ? end : start;
-        const selectionEnd = isBackward ? start : end;
-        const isCollapsed =
-          selectionStart.lineNumber === selectionEnd.lineNumber &&
-          selectionStart.column === selectionEnd.column;
-        if (isCollapsed) return;
-
-        selectionDecorations.push({
-          range: new monaco.Range(
-            selectionStart.lineNumber,
-            selectionStart.column,
-            selectionEnd.lineNumber,
-            selectionEnd.column
-          ),
-          options: {
-            inlineClassName: selectionClassName,
-            hoverMessage: { value: `${cursor.displayName} выделяет фрагмент` }
-          }
-        });
-      });
-
-      if (styleElementRef.current) {
-        const styleSignature = [...caretCssRules, ...selectionCssRules].join("\n");
-        if (styleSignature !== lastRemoteCursorStyleSignatureRef.current) {
-          styleElementRef.current.textContent = styleSignature;
-          lastRemoteCursorStyleSignatureRef.current = styleSignature;
-        }
-      }
-
-      if (caretDecorationsCollectionRef.current) {
-        debugCursorLog("render:remote_selection:apply", {
-          decorationCount: caretDecorations.length + selectionDecorations.length
-        });
-        caretDecorationsCollectionRef.current.set(caretDecorations);
-      }
-      if (selectionDecorationsCollectionRef.current) {
-        selectionDecorationsCollectionRef.current.set(selectionDecorations);
-      }
+    const handleDocUpdate = (updateBytes: Uint8Array, origin: unknown) => {
+      if (origin === "remote" || origin === "bootstrap") return;
+      const encodedUpdate = bytesToBase64(updateBytes);
+      // Always send full Yjs state with each local edit so the server snapshot stays current.
+      // After a tab refresh, missed SSE increments cannot be replayed; reconnecting clients rely on state_sync yjsDocumentBase64.
+      const fullDoc = bytesToBase64(Y.encodeStateAsUpdate(yDoc));
+      onYjsUpdateRef.current(encodedUpdate, syncKeyRef.current, yText.toString(), fullDoc);
     };
+    yDoc.on("update", handleDocUpdate);
 
-    const timer = window.setTimeout(renderRemoteCursors, REMOTE_CURSOR_RENDER_DEBOUNCE_MS);
-    const interval = window.setInterval(renderRemoteCursors, REMOTE_CURSOR_RENDER_TICK_MS);
+    // Idle tabs still refresh the server snapshot so a reloaded peer does not bootstrap from stale CRDT state.
+    const heartbeatId = window.setInterval(() => {
+      const d = yDocRef.current;
+      const t = yTextRef.current;
+      if (!d || !t) return;
+      const full = bytesToBase64(Y.encodeStateAsUpdate(d));
+      onYjsUpdateRef.current("", syncKeyRef.current, t.toString(), full);
+    }, 2500);
+
+    onYjsBridgeReady((encodedYjsUpdate: string) => {
+      const activeDoc = yDocRef.current;
+      if (!activeDoc) return;
+      const updateBytes = base64ToBytes(encodedYjsUpdate);
+      if (updateBytes.length === 0) return;
+      Y.applyUpdate(activeDoc, updateBytes, "remote");
+    });
+
+    const snapshotTimerId = window.setTimeout(() => {
+      const d = yDocRef.current;
+      const t = yTextRef.current;
+      if (!d || !t) return;
+      const full = bytesToBase64(Y.encodeStateAsUpdate(d));
+      onYjsUpdateRef.current("", syncKeyRef.current, t.toString(), full);
+    }, 400);
+
     return () => {
-      window.clearTimeout(timer);
-      window.clearInterval(interval);
+      window.clearTimeout(snapshotTimerId);
+      window.clearInterval(heartbeatId);
+      yDoc.off("update", handleDocUpdate);
     };
-  }, [cursors, sessionId]);
+    // IMPORTANT: do not depend on `value` or `serverYjsBase64` here. When those change every state_sync,
+    // this effect's cleanup ran yDoc.off("update") while viewRef stayed set → early return on next run
+    // never re-attached the listener, so outbound Yjs updates stopped after the first remote sync.
+  }, [onYjsBridgeReady, syncKey]);
 
+  /** Merge server CRDT when `lastYjsSequence` advances (same step); passive tabs and late snapshots. */
   useEffect(() => {
-    const yDoc = yDocRef.current;
-    const yText = yTextRef.current;
-    if (!yDoc || !yText) return;
+    const activeDoc = yDocRef.current;
+    if (!activeDoc) return;
+    if (lastSyncKeyForServerSeqRef.current !== syncKey) {
+      lastSyncKeyForServerSeqRef.current = syncKey;
+      lastAppliedServerYjsSeqRef.current = -1;
+      lastAppliedServerYjsSnapRef.current = null;
+    }
+    const seq = typeof serverYjsSequence === "number" && !Number.isNaN(serverYjsSequence) ? serverYjsSequence : 0;
+    const snap = serverYjsBase64?.trim() ?? "";
+    const seqAdvanced = seq > lastAppliedServerYjsSeqRef.current;
+    const snapChangedAtSameSeq = seq === lastAppliedServerYjsSeqRef.current && snap !== lastAppliedServerYjsSnapRef.current;
+    if (!seqAdvanced && !snapChangedAtSameSeq) return;
+    try {
+      if (snap) {
+        const raw = base64ToBytes(snap);
+        if (raw.length > 0) {
+          Y.applyUpdate(activeDoc, raw, "remote");
+        }
+      }
+    } catch (e) {
+      roomSyncLog("merge_server_yjs_seq_failed", { error: String(e) });
+    }
+    lastAppliedServerYjsSeqRef.current = seq;
+    lastAppliedServerYjsSnapRef.current = snap || null;
+    onEditorValueChangeRef.current(activeDoc.getText("room-code").toString());
+  }, [serverYjsBase64, serverYjsSequence, syncKey]);
 
-    const current = yText.toString();
-    const next = value ?? "";
+  /** Step change or explicit resync (focus/reconnect): merge server Y snapshot or plain code fallback. */
+  useEffect(() => {
+    const activeDoc = yDocRef.current;
+    if (!activeDoc) return;
     const syncKeyChanged = syncKeyRef.current !== syncKey;
+    syncKeyRef.current = syncKey;
     const forceHydrateFromState = resyncSignal > lastHandledResyncSignalRef.current;
     if (forceHydrateFromState) {
       lastHandledResyncSignalRef.current = resyncSignal;
     }
     if (!syncKeyChanged && !forceHydrateFromState) return;
 
-    syncKeyRef.current = syncKey;
-    if (current === next) {
-      return;
-    }
-    yDoc.transact(() => {
-      yText.delete(0, yText.length);
-      if (next) {
-        yText.insert(0, next);
+    const t = activeDoc.getText("room-code");
+    const next = value ?? "";
+    const snap = serverYjsBase64?.trim() ?? "";
+
+    roomSyncLog("hydrate_from_server", {
+      syncKeyChanged,
+      resync: forceHydrateFromState,
+      hasYjsSnap: Boolean(snap),
+      codeLen: next.length
+    });
+    try {
+      if (snap) {
+        const raw = base64ToBytes(snap);
+        if (raw.length > 0) {
+          Y.applyUpdate(activeDoc, raw, "remote");
+        }
       }
-    }, "remote");
-  }, [resyncSignal, syncKey, value]);
+      if (!snap && t.toString() !== next) {
+        activeDoc.transact(() => {
+          t.delete(0, t.length);
+          if (next) t.insert(0, next);
+        }, "remote");
+      }
+    } catch (e) {
+      roomSyncLog("hydrate_from_server_failed", { error: String(e) });
+    }
+    onEditorValueChangeRef.current(activeDoc.getText("room-code").toString());
+  }, [resyncSignal, serverYjsBase64, syncKey, value]);
 
-  return (
-    <Editor
-      height={height}
-      language={language}
-      defaultValue={value}
-      theme="vs-dark"
-      onMount={(editor, monaco) => {
-        editorRef.current = editor;
-        monacoRef.current = monaco;
+  useEffect(() => {
+    const activeView = viewRef.current;
+    if (!activeView) return;
+    activeView.dispatch({
+      effects: readOnlyCompartmentRef.current.reconfigure(EditorState.readOnly.of(readOnly))
+    });
+  }, [readOnly]);
 
-        disposablesRef.current.forEach((disposable) => disposable.dispose());
-        disposablesRef.current = [];
+  useEffect(() => {
+    const activeView = viewRef.current;
+    if (!activeView) return;
+    activeView.dispatch({
+      effects: languageCompartmentRef.current.reconfigure(languageExtension)
+    });
+  }, [languageExtension]);
 
-        yDocRef.current?.destroy();
-        yDocRef.current = null;
-        yTextRef.current = null;
-
-        const model = editor.getModel();
-        if (!model) return;
-        caretDecorationsCollectionRef.current = editor.createDecorationsCollection();
-        selectionDecorationsCollectionRef.current = editor.createDecorationsCollection();
-        onEditorValueChange(model.getValue());
-
-        const yDoc = new Y.Doc();
-        Y.applyUpdate(yDoc, createDeterministicBootstrapUpdate(value), "bootstrap");
-        const yText = yDoc.getText("room-code");
-
-        yDocRef.current = yDoc;
-        yTextRef.current = yText;
-
-        const handleDocUpdate = (updateBytes: Uint8Array, origin: unknown) => {
-          if (origin === "remote" || origin === "bootstrap") return;
-          const encodedUpdate = bytesToBase64(updateBytes);
-          onYjsUpdate(encodedUpdate, syncKeyRef.current, yText.toString());
-        };
-        yDoc.on("update", handleDocUpdate);
-
-
-        const handleYTextChange = (event: Y.YTextEvent, transaction: Y.Transaction) => {
-          if (transaction.origin === "editor") return;
-          lastRemoteApplyAtRef.current = Date.now();
-          const activeEditor = editorRef.current;
-          const activeMonaco = monacoRef.current;
-          const activeModel = activeEditor?.getModel();
-          if (!activeEditor || !activeMonaco || !activeModel) return;
-
-          const expectedValue = yText.toString();
-          if (activeModel.getValue() === expectedValue) return;
-
-          suppressEditorChangesRef.current = true;
-          try {
-            const scrollTop = activeEditor.getScrollTop();
-            const scrollLeft = activeEditor.getScrollLeft();
-            const shouldProtectCaret = Date.now() - lastLocalTypingAtRef.current < LOCAL_TYPING_GUARD_MS;
-            const previousPosition = shouldProtectCaret ? activeEditor.getPosition?.() : null;
-            const delta = Array.isArray((event as any)?.delta) ? ((event as any).delta as Array<any>) : [];
-            if (delta.length > 0) {
-              let offset = 0;
-              delta.forEach((op) => {
-                if (typeof op?.retain === "number" && op.retain > 0) {
-                  offset += op.retain;
-                  return;
-                }
-                if (typeof op?.delete === "number" && op.delete > 0) {
-                  const start = activeModel.getPositionAt(offset);
-                  const end = activeModel.getPositionAt(offset + op.delete);
-                  activeModel.applyEdits([
-                    {
-                      range: new activeMonaco.Range(start.lineNumber, start.column, end.lineNumber, end.column),
-                      text: "",
-                      forceMoveMarkers: true
-                    }
-                  ]);
-                  return;
-                }
-                if (op?.insert != null) {
-                  const text = typeof op.insert === "string" ? op.insert : String(op.insert);
-                  if (!text) return;
-                  const start = activeModel.getPositionAt(offset);
-                  activeModel.applyEdits([
-                    {
-                      range: new activeMonaco.Range(start.lineNumber, start.column, start.lineNumber, start.column),
-                      text,
-                      forceMoveMarkers: true
-                    }
-                  ]);
-                  offset += text.length;
-                }
-              });
-            }
-            const scheduleHardReconcile = () => {
-              if (Date.now() - lastLocalTypingAtRef.current < LOCAL_TYPING_GUARD_MS) {
-                debugCursorLog("reconcile:skip_local_typing_guard", {
-                  guardMs: LOCAL_TYPING_GUARD_MS
-                });
-                return;
-              }
-              if (pendingHardReconcileTimerRef.current != null) {
-                window.clearTimeout(pendingHardReconcileTimerRef.current);
-              }
-              pendingHardReconcileValueRef.current = expectedValue;
-              debugCursorLog("reconcile:scheduled", {
-                debounceMs: HARD_MODEL_RECONCILE_DEBOUNCE_MS,
-                expectedLength: expectedValue.length
-              });
-              pendingHardReconcileTimerRef.current = window.setTimeout(() => {
-                pendingHardReconcileTimerRef.current = null;
-                const latestEditor = editorRef.current;
-                const latestModel = latestEditor?.getModel?.();
-                if (!latestEditor || !latestModel) return;
-                const targetValue = pendingHardReconcileValueRef.current;
-                pendingHardReconcileValueRef.current = "";
-                if (latestModel.getValue() === targetValue) return;
-                const previousPosition = latestEditor.getPosition?.();
-                suppressEditorChangesRef.current = true;
-                try {
-                  debugCursorLog("reconcile:apply_full_model_replace", {
-                    targetLength: targetValue.length
-                  });
-                  latestEditor.executeEdits("yjs-remote-sync-fallback", [
-                    {
-                      range: latestModel.getFullModelRange(),
-                      text: targetValue,
-                      forceMoveMarkers: true
-                    }
-                  ]);
-                  if (previousPosition) {
-                    const validated = latestModel.validatePosition(previousPosition);
-                    latestEditor.setPosition(validated);
-                  }
-                } finally {
-                  suppressEditorChangesRef.current = false;
-                }
-              }, HARD_MODEL_RECONCILE_DEBOUNCE_MS);
-            };
-            if (activeModel.getValue() !== expectedValue) {
-              scheduleHardReconcile();
-            } else if (pendingHardReconcileTimerRef.current != null) {
-              window.clearTimeout(pendingHardReconcileTimerRef.current);
-              pendingHardReconcileTimerRef.current = null;
-              pendingHardReconcileValueRef.current = "";
-            }
-            if (previousPosition) {
-              const validated = activeModel.validatePosition(previousPosition);
-              activeEditor.setPosition(validated);
-            }
-            activeEditor.setScrollTop(scrollTop);
-            activeEditor.setScrollLeft(scrollLeft);
-          } finally {
-            suppressEditorChangesRef.current = false;
-          }
-        };
-        yText.observe(handleYTextChange);
-
-        onYjsBridgeReady((encodedYjsUpdate: string) => {
-          const activeDoc = yDocRef.current;
-          if (!activeDoc) return;
-          const updateBytes = base64ToBytes(encodedYjsUpdate);
-          if (updateBytes.length === 0) return;
-          Y.applyUpdate(activeDoc, updateBytes, "remote");
-        });
-
-        const emitCursorSync = (position: any, selectionLike: any, source: string) => {
-          const isVisible = typeof document === "undefined" || document.visibilityState === "visible";
-          const hasFocus =
-            typeof document === "undefined" || typeof document.hasFocus !== "function"
-              ? true
-              : document.hasFocus();
-          if (!isVisible || !hasFocus) {
-            debugCursorLog("cursor:emit:skip_window_unfocused", {
-              isVisible,
-              hasFocus
-            });
-            return;
-          }
-
-          const activeEditor = editorRef.current;
-          const activeSelection = activeEditor?.getSelection?.() ?? null;
-          const activePosition = activeEditor?.getPosition?.() ?? null;
-          const resolvedSelection = activeSelection ?? selectionLike ?? null;
-          const lineNumber = activePosition?.lineNumber ?? position?.lineNumber ?? resolvedSelection?.endLineNumber ?? 1;
-          const column = activePosition?.column ?? position?.column ?? resolvedSelection?.endColumn ?? 1;
-          const isSelectionEmpty =
-            !resolvedSelection
-              ? true
-              : typeof resolvedSelection.isEmpty === "function"
-                ? resolvedSelection.isEmpty()
-                : typeof resolvedSelection.isEmpty === "boolean"
-                  ? resolvedSelection.isEmpty
-                  : resolvedSelection.startLineNumber === resolvedSelection.endLineNumber &&
-                    resolvedSelection.startColumn === resolvedSelection.endColumn;
-          const hasSelection = !isSelectionEmpty;
-          const selectionStartLineNumber = hasSelection ? resolvedSelection.startLineNumber : null;
-          const selectionStartColumn = hasSelection ? resolvedSelection.startColumn : null;
-          const selectionEndLineNumber = hasSelection ? resolvedSelection.endLineNumber : null;
-          const selectionEndColumn = hasSelection ? resolvedSelection.endColumn : null;
-
-          const now = Date.now();
-          const prev = lastCursorSentRef.current;
-          const keyboardDriven = source.includes("keyboard") || source.includes("delete");
-          const mouseDriven = source.includes("mouse");
-          // Prevent post-typing phantom cursor jumps: collapsed caret updates are allowed
-          // only during active typing burst or explicit mouse interaction.
-          if (!hasSelection && !mouseDriven && (!keyboardDriven || now - lastLocalTypingAtRef.current > KEYBOARD_CARET_EMIT_WINDOW_MS)) {
-            debugCursorLog("cursor:emit:skip_keyboard_without_recent_typing", {
-              lineNumber,
-              column,
-              elapsedSinceTypingMs: now - lastLocalTypingAtRef.current
-            });
-            return;
-          }
-          if (!hasSelection && now - lastRemoteApplyAtRef.current < REMOTE_APPLY_CURSOR_GUARD_MS) {
-            debugCursorLog("cursor:emit:skip_remote_apply_guard", {
-              lineNumber,
-              column,
-              guardMs: REMOTE_APPLY_CURSOR_GUARD_MS
-            });
-            return;
-          }
-          if (
-            prev.lineNumber === lineNumber &&
-            prev.column === column &&
-            prev.selectionStartLineNumber === selectionStartLineNumber &&
-            prev.selectionStartColumn === selectionStartColumn &&
-            prev.selectionEndLineNumber === selectionEndLineNumber &&
-            prev.selectionEndColumn === selectionEndColumn &&
-            now - prev.ts < CURSOR_UPDATE_THROTTLE_MS
-          ) {
-            debugCursorLog("cursor:emit:skip_same_payload", {
-              lineNumber,
-              column,
-              selectionStartLineNumber,
-              selectionStartColumn,
-              selectionEndLineNumber,
-              selectionEndColumn,
-              elapsedMs: now - prev.ts
-            });
-            return;
-          }
-
-          lastCursorSentRef.current = {
-            lineNumber,
-            column,
-            selectionStartLineNumber,
-            selectionStartColumn,
-            selectionEndLineNumber,
-            selectionEndColumn,
-            ts: now
-          };
-          onCursorChange({
-            lineNumber,
-            column,
-            selectionStartLineNumber,
-            selectionStartColumn,
-            selectionEndLineNumber,
-            selectionEndColumn
-          });
-          debugCursorLog("cursor:emit:sent", {
-            lineNumber,
-            column,
-            selectionStartLineNumber,
-            selectionStartColumn,
-            selectionEndLineNumber,
-            selectionEndColumn
-          });
-        };
-
-        disposablesRef.current.push(
-          editor.onDidChangeCursorSelection((event: any) => {
-            if (suppressEditorChangesRef.current) {
-              return;
-            }
-            const source = typeof event?.source === "string" ? event.source.toLowerCase() : "";
-            const reason = typeof event?.reason === "number" ? event.reason : null;
-            const cursorChangeReason = monacoRef.current?.editor?.CursorChangeReason;
-            const isRecoverFromMarkers =
-              typeof cursorChangeReason?.RecoverFromMarkers === "number" &&
-              reason === cursorChangeReason.RecoverFromMarkers;
-            const isContentFlush =
-              typeof cursorChangeReason?.ContentFlush === "number" &&
-              reason === cursorChangeReason.ContentFlush;
-            const isUserDrivenSource =
-              source.includes("keyboard") ||
-              source.includes("mouse") ||
-              source.includes("paste") ||
-              source.includes("delete") ||
-              source.includes("undo") ||
-              source.includes("redo");
-            // Ignore service-driven cursor shifts produced by remote edits to avoid ping-pong and flicker.
-            if (!isUserDrivenSource || source.includes("model") || source === "api" || isRecoverFromMarkers || isContentFlush) {
-              debugCursorLog("cursor:selection_event:ignored", {
-                source,
-                reason,
-                isUserDrivenSource,
-                isRecoverFromMarkers,
-                isContentFlush
-              });
-              return;
-            }
-            debugCursorLog("cursor:selection_event:accepted", {
-              source,
-              reason,
-              lineNumber: event?.position?.lineNumber ?? null,
-              column: event?.position?.column ?? null
-            });
-            emitCursorSync(event.position, event.selection, source);
-          })
-        );
-
-        disposablesRef.current.push(
-          editor.onDidChangeModelContent((event: any) => {
-            onEditorValueChange(editor.getModel()?.getValue?.() ?? "");
-            if (suppressEditorChangesRef.current) return;
-            lastLocalTypingAtRef.current = Date.now();
-            debugCursorLog("editor:model_content:local_change", {
-              changesCount: Array.isArray(event?.changes) ? event.changes.length : 0
-            });
-            const activeText = yTextRef.current;
-            const activeDoc = yDocRef.current;
-            if (!activeText || !activeDoc) return;
-            const changes = [...event.changes].sort((a, b) => b.rangeOffset - a.rangeOffset);
-            activeDoc.transact(() => {
-              changes.forEach((change) => {
-                if (change.rangeLength > 0) {
-                  activeText.delete(change.rangeOffset, change.rangeLength);
-                }
-                if (change.text && change.text.length > 0) {
-                  activeText.insert(change.rangeOffset, change.text);
-                }
-              });
-            }, "editor");
-          })
-        );
-
-        disposablesRef.current.push(
-          editor.onKeyDown((event: any) => {
-            const browserEvent = event.browserEvent as KeyboardEvent;
-            onKeyPress({
-              key: browserEvent.key,
-              keyCode: browserEvent.code,
-              ctrlKey: browserEvent.ctrlKey,
-              altKey: browserEvent.altKey,
-              shiftKey: browserEvent.shiftKey,
-              metaKey: browserEvent.metaKey
-            });
-          })
-        );
-
-        disposablesRef.current.push({
-          dispose: () => {
-            yDoc.off("update", handleDocUpdate);
-            yText.unobserve(handleYTextChange);
-          }
-        });
-      }}
-      options={{
-        minimap: { enabled: false },
-        fontSize: 14,
-        lineNumbersMinChars: 3,
-        smoothScrolling: true,
-        scrollBeyondLastLine: false,
-        renderValidationDecorations: "off",
-        readOnly,
-        autoClosingBrackets: "never",
-        autoClosingQuotes: "never",
-        autoClosingDelete: "never",
-        autoClosingOvertype: "never",
-        autoIndent: "none",
-        autoIndentOnPaste: false,
-        autoIndentOnPasteWithinString: false,
-        formatOnType: false,
-        formatOnPaste: false,
-        quickSuggestions: false,
-        suggest: {
-          showWords: false,
-          showSnippets: false,
-          showMethods: false,
-          showFunctions: false,
-          showConstructors: false,
-          showFields: false,
-          showVariables: false,
-          showClasses: false,
-          showStructs: false,
-          showInterfaces: false,
-          showModules: false,
-          showProperties: false,
-          showEvents: false,
-          showOperators: false,
-          showUnits: false,
-          showValues: false,
-          showConstants: false,
-          showEnums: false,
-          showEnumMembers: false,
-          showKeywords: false,
-          showColors: false,
-          showFiles: false,
-          showReferences: false,
-          showFolders: false,
-          showTypeParameters: false,
-          showIssues: false,
-          showUsers: false
-        },
-        suggestOnTriggerCharacters: false,
-        snippetSuggestions: "none",
-        tabCompletion: "off",
-        wordBasedSuggestionsOnlySameLanguage: false,
-        acceptSuggestionOnEnter: "off",
-        wordBasedSuggestions: "off",
-        parameterHints: { enabled: false },
-        inlineSuggest: { enabled: false },
-        codeLens: false,
-        "semanticHighlighting.enabled": false
-      }}
-    />
-  );
+  return <div className="cm-host" style={{ height, overflow: "hidden" }} ref={hostRef} />;
 }

@@ -62,18 +62,18 @@ try {
   });
 
   await ownerPage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
-  await ownerPage.locator(".monaco-editor").waitFor({ timeout: 15000 });
+  await ownerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
   await ownerPage.getByRole("button", { name: "Приглашения", exact: true }).waitFor({ timeout: 10000 });
 
   await interviewerPage.goto(`${webBaseUrl}/room/${room.inviteCode}?interviewerToken=${encodeURIComponent(room.interviewerToken)}`, {
     waitUntil: "domcontentloaded"
   });
   await enterNameIfPrompted(interviewerPage, "Interviewer QA");
-  await interviewerPage.locator(".monaco-editor").waitFor({ timeout: 15000 });
+  await interviewerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
   await interviewerPage.getByRole("button", { name: "Приглашения", exact: true }).waitFor({ timeout: 10000 });
 
   await interviewerPage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
-  await interviewerPage.locator(".monaco-editor").waitFor({ timeout: 15000 });
+  await interviewerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
   const invitationsVisibleInCandidateMode = await interviewerPage
     .getByRole("button", { name: "Приглашения", exact: true })
     .isVisible()
@@ -86,7 +86,7 @@ try {
     waitUntil: "domcontentloaded"
   });
   await enterNameIfPrompted(interviewerPage, "Interviewer QA");
-  await interviewerPage.locator(".monaco-editor").waitFor({ timeout: 15000 });
+  await interviewerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
   await interviewerPage.getByRole("button", { name: "Приглашения", exact: true }).waitFor({ timeout: 10000 });
 
   await interviewerPage.getByRole("button", { name: /^2\./ }).first().click();

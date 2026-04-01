@@ -36,6 +36,7 @@ class CollaborationService(
     private val notesLockMillis = 3_000L
     private val keyEventBroadcastThrottleMs = 20L
     private val candidateKeyHistoryMaxSize = 50
+    private val maxYjsDocumentBase64Chars = 400_000
 
     private enum class RoomRole(val wireValue: String) {
         OWNER("owner"),
@@ -77,6 +78,7 @@ class CollaborationService(
         var language: String,
         var code: String,
         var lastCodeUpdatedBySessionId: String? = null,
+        var yjsDocumentBase64: String? = null,
         var lastYjsSequence: Long = 0,
         var currentStep: Int,
         var notes: String,
@@ -109,6 +111,9 @@ class CollaborationService(
     private val connectionByRoomSession = ConcurrentHashMap<String, String>()
     private val yjsStateBroadcastScheduler = Executors.newSingleThreadScheduledExecutor()
     private val pendingYjsStateBroadcastByRoom = ConcurrentHashMap<String, ScheduledFuture<*>>()
+    private val roomCodeDbSaveScheduler = Executors.newSingleThreadScheduledExecutor()
+    private val pendingRoomCodeDbSaveByRoom = ConcurrentHashMap<String, ScheduledFuture<*>>()
+    private val latestCodeForDebouncedDbSaveByRoom = ConcurrentHashMap<String, String>()
 
     fun bootstrapRoom(room: Room) {
         roomState[room.inviteCode] = toRealtimeState(room)
@@ -126,6 +131,7 @@ class CollaborationService(
             lastCodeSequenceBySessionId = currentState?.lastCodeSequenceBySessionId ?: ConcurrentHashMap(),
             lastYjsSnapshotSequenceBySessionId = currentState?.lastYjsSnapshotSequenceBySessionId ?: ConcurrentHashMap(),
             lastYjsSequence = currentState?.lastYjsSequence ?: 0,
+            yjsDocumentBase64 = currentState?.yjsDocumentBase64,
             lastCandidateKey = currentState?.lastCandidateKey,
             candidateKeyHistory = currentState?.candidateKeyHistory?.toMutableList() ?: mutableListOf(),
             lastCandidateKeyAtEpochMs = currentState?.lastCandidateKeyAtEpochMs ?: 0L,
@@ -205,6 +211,7 @@ class CollaborationService(
                 syncKey = request.syncKey,
                 codeSnapshot = request.code,
                 yjsClientSequence = request.yjsClientSequence,
+                yjsDocumentBase64 = request.yjsDocumentBase64,
             )
             "request_state_sync" -> sendStateToConnection(connectionId)
             "key_press" -> trackKeyPress(
@@ -299,72 +306,95 @@ class CollaborationService(
         syncKey: String?,
         codeSnapshot: String?,
         yjsClientSequence: Long?,
+        yjsDocumentBase64: String?,
     ) {
         val participant = participants[connectionId] ?: return
-        if (yjsUpdate.isBlank()) return
+        val state = roomState[participant.inviteCode] ?: return
 
-        var acceptedCodeSnapshot: String? = null
-        var yjsSequence = 0L
-        var outboundSyncKey = syncKey
-        val state = roomState[participant.inviteCode]
-        if (state != null) {
-            synchronized(state) {
-                val normalizedSyncKey = syncKey?.trim().orEmpty()
-                val expectedSyncKey = "${participant.inviteCode}:${state.currentStep}:${state.language}"
-                if (normalizedSyncKey.isNotEmpty() && normalizedSyncKey != expectedSyncKey) {
-                    logger.debug(
-                        "Dropping stale yjs update for room {} session {}: syncKey {} != {}",
-                        participant.inviteCode,
-                        participant.sessionId,
-                        normalizedSyncKey,
-                        expectedSyncKey,
-                    )
-                    return
-                }
-                outboundSyncKey = if (normalizedSyncKey.isNotEmpty()) normalizedSyncKey else expectedSyncKey
-                if (codeSnapshot != null) {
-                    val canApplySnapshot = if (yjsClientSequence != null) {
-                        val lastSnapshotSequence = state.lastYjsSnapshotSequenceBySessionId[participant.sessionId]
-                        if (lastSnapshotSequence != null && yjsClientSequence < lastSnapshotSequence) {
-                            logger.debug(
-                                "Skipping stale yjs snapshot for room {} session {}: clientSequence {} < {}",
-                                participant.inviteCode,
-                                participant.sessionId,
-                                yjsClientSequence,
-                                lastSnapshotSequence,
-                            )
-                            false
-                        } else {
-                            state.lastYjsSnapshotSequenceBySessionId[participant.sessionId] = yjsClientSequence
-                            true
-                        }
-                    } else {
-                        true
-                    }
+        val trimmedDocCandidate = yjsDocumentBase64?.trim().orEmpty()
+        val safeDocSnap =
+            if (trimmedDocCandidate.isNotEmpty() && trimmedDocCandidate.length <= maxYjsDocumentBase64Chars) trimmedDocCandidate else null
 
-                    if (canApplySnapshot) {
-                        state.code = codeSnapshot
-                        state.lastCodeUpdatedBySessionId = participant.sessionId
-                        acceptedCodeSnapshot = codeSnapshot
-                    }
-                }
-                state.lastYjsSequence += 1
-                yjsSequence = state.lastYjsSequence
+        fun resolveOutboundSyncKey(): String? {
+            val normalizedSyncKey = syncKey?.trim().orEmpty()
+            val expectedSyncKey = "${participant.inviteCode}:${state.currentStep}:${state.language}"
+            if (normalizedSyncKey.isNotEmpty() && normalizedSyncKey != expectedSyncKey) {
+                logger.debug(
+                    "Dropping stale yjs update for room {} session {}: syncKey {} != {}",
+                    participant.inviteCode,
+                    participant.sessionId,
+                    normalizedSyncKey,
+                    expectedSyncKey,
+                )
+                return null
             }
+            return if (normalizedSyncKey.isNotEmpty()) normalizedSyncKey else expectedSyncKey
         }
 
-        if (acceptedCodeSnapshot != null) {
-            val snapshot = acceptedCodeSnapshot!!
-            roomRepository.findByInviteCode(participant.inviteCode)?.let { room ->
-                room.code = snapshot
-                room.tasks.getOrNull(room.currentStep)?.solutionCode = snapshot
-                roomRepository.save(room)
+        fun tryApplyCodeSnapshot(): String? {
+            if (codeSnapshot == null) return null
+            val canApplySnapshot = if (yjsClientSequence != null) {
+                val lastSnapshotSequence = state.lastYjsSnapshotSequenceBySessionId[participant.sessionId]
+                if (lastSnapshotSequence != null && yjsClientSequence < lastSnapshotSequence) {
+                    logger.debug(
+                        "Skipping stale yjs snapshot for room {} session {}: clientSequence {} < {}",
+                        participant.inviteCode,
+                        participant.sessionId,
+                        yjsClientSequence,
+                        lastSnapshotSequence,
+                    )
+                    false
+                } else {
+                    state.lastYjsSnapshotSequenceBySessionId[participant.sessionId] = yjsClientSequence
+                    true
+                }
+            } else {
+                true
+            }
+            if (!canApplySnapshot) return null
+            state.code = codeSnapshot
+            state.lastCodeUpdatedBySessionId = participant.sessionId
+            return codeSnapshot
+        }
+
+        // Full CRDT snapshot without incremental update (used so reconnecting clients get compatible state).
+        if (yjsUpdate.isBlank()) {
+            if (safeDocSnap == null) return
+            var acceptedCodeSnapshot: String? = null
+            synchronized(state) {
+                if (resolveOutboundSyncKey() == null) return
+                state.yjsDocumentBase64 = safeDocSnap
+                acceptedCodeSnapshot = tryApplyCodeSnapshot()
+            }
+            if (acceptedCodeSnapshot != null) {
+                scheduleDebouncedRoomCodeSave(participant.inviteCode, acceptedCodeSnapshot!!)
             }
             scheduleStateBroadcastFromYjs(participant.inviteCode)
             return
         }
 
-        // Legacy fallback: if snapshot wasn't provided, keep incremental relay.
+        var acceptedCodeSnapshot: String? = null
+        synchronized(state) {
+            if (resolveOutboundSyncKey() == null) return
+            if (safeDocSnap != null) {
+                state.yjsDocumentBase64 = safeDocSnap
+                // Only trust `code` together with a full Yjs snapshot. Incremental-only messages
+                // interleave across tabs: applying codeSnapshot here without updating the stored doc
+                // makes state_sync show one lastYjsSequence with inconsistent code vs yjsDocumentBase64.
+                acceptedCodeSnapshot = tryApplyCodeSnapshot()
+            }
+            state.lastYjsSequence += 1
+        }
+
+        if (acceptedCodeSnapshot != null) {
+            scheduleDebouncedRoomCodeSave(participant.inviteCode, acceptedCodeSnapshot!!)
+        }
+
+        // Authoritative snapshots + DB: always broadcast full room state (debounced).
+        scheduleStateBroadcastFromYjs(participant.inviteCode)
+
+        // JVM cannot merge Yjs CRDT; relay increments so peers converge in real time. state_sync remains for recovery.
+        val outboundSyncKey = resolveOutboundSyncKey() ?: return
         broadcastTransportMessage(
             inviteCode = participant.inviteCode,
             type = "yjs_update",
@@ -372,10 +402,30 @@ class CollaborationService(
                 "sessionId" to participant.sessionId,
                 "yjsUpdate" to yjsUpdate,
                 "syncKey" to outboundSyncKey,
-                "yjsSequence" to yjsSequence,
+                "yjsSequence" to state.lastYjsSequence,
             ),
             excludeConnectionId = connectionId,
         )
+    }
+
+    /** Yjs can post full snapshots every keystroke; coalesce DB writes to avoid hammering the repository. */
+    private fun scheduleDebouncedRoomCodeSave(inviteCode: String, code: String) {
+        latestCodeForDebouncedDbSaveByRoom[inviteCode] = code
+        pendingRoomCodeDbSaveByRoom.remove(inviteCode)?.cancel(false)
+        val next = roomCodeDbSaveScheduler.schedule({
+            pendingRoomCodeDbSaveByRoom.remove(inviteCode)
+            val latest = latestCodeForDebouncedDbSaveByRoom.remove(inviteCode) ?: return@schedule
+            try {
+                roomRepository.findByInviteCode(inviteCode)?.let { room ->
+                    room.code = latest
+                    room.tasks.getOrNull(room.currentStep)?.solutionCode = latest
+                    roomRepository.save(room)
+                }
+            } catch (ex: Exception) {
+                logger.warn("Debounced room code save failed for {}", inviteCode, ex)
+            }
+        }, 750, TimeUnit.MILLISECONDS)
+        pendingRoomCodeDbSaveByRoom[inviteCode] = next
     }
 
     private fun scheduleStateBroadcastFromYjs(inviteCode: String) {
@@ -638,6 +688,8 @@ class CollaborationService(
 
     fun closeRoom(inviteCode: String) {
         pendingYjsStateBroadcastByRoom.remove(inviteCode)?.cancel(false)
+        pendingRoomCodeDbSaveByRoom.remove(inviteCode)?.cancel(false)
+        latestCodeForDebouncedDbSaveByRoom.remove(inviteCode)
         roomState.remove(inviteCode)
         val connectionIds = participants.entries
             .asSequence()
@@ -767,6 +819,7 @@ class CollaborationService(
             language = state.language,
             code = state.code,
             lastCodeUpdatedBySessionId = state.lastCodeUpdatedBySessionId,
+            yjsDocumentBase64 = state.yjsDocumentBase64,
             lastYjsSequence = state.lastYjsSequence,
             currentStep = state.currentStep,
             notes = state.notes,
@@ -807,6 +860,7 @@ class CollaborationService(
             language = normalizeLanguage(room.language),
             code = room.code,
             lastCodeUpdatedBySessionId = null,
+            yjsDocumentBase64 = null,
             lastYjsSequence = 0,
             currentStep = room.currentStep,
             notes = room.notes.orEmpty(),
@@ -968,6 +1022,7 @@ class CollaborationService(
             language = language,
             code = code,
             lastCodeUpdatedBySessionId = null,
+            yjsDocumentBase64 = null,
             lastYjsSequence = 0,
             currentStep = room.currentStep,
             notes = notes,

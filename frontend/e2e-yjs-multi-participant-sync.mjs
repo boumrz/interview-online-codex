@@ -30,28 +30,23 @@ async function enterNameIfPrompted(page, name) {
 }
 
 async function modelValue(page) {
-  return page.evaluate(() => window.monaco?.editor?.getModels?.()[0]?.getValue() ?? "");
+  return page.evaluate(() => {
+    const editor = document.querySelector(".cm-editor");
+    const anyEditor = editor;
+    const view = anyEditor?.cmView?.view ?? anyEditor?.cmView?.rootView?.view ?? null;
+    if (view?.state?.doc?.toString) {
+      return view.state.doc.toString();
+    }
+    return document.querySelector(".cm-content")?.textContent ?? "";
+  });
 }
 
-async function typeByEdits(page, text, delayMs = 18) {
-  for (const ch of text) {
-    await page.evaluate((char) => {
-      const editors = window.monaco?.editor?.getEditors?.() ?? [];
-      const editor = editors[0];
-      const model = editor?.getModel?.();
-      if (!editor || !model) return;
-      const line = model.getLineCount();
-      const column = model.getLineMaxColumn(line);
-      editor.executeEdits("e2e-multi-sync", [
-        {
-          range: new window.monaco.Range(line, column, line, column),
-          text: char,
-          forceMoveMarkers: true
-        }
-      ]);
-    }, ch);
-    await page.waitForTimeout(delayMs);
-  }
+async function typeByEdits(page, text, delayMs = 18, fallbackName = "Candidate") {
+  await enterNameIfPrompted(page, fallbackName);
+  const content = page.locator(".cm-content");
+  await content.click({ force: true });
+  await page.keyboard.press("End");
+  await page.keyboard.type(text, { delay: delayMs });
 }
 
 const browser = await chromium.launch({ headless: true });
@@ -78,27 +73,27 @@ try {
   const candidateCPage = await candidateCContext.newPage();
 
   await ownerPage.goto(roomUrl, { waitUntil: "domcontentloaded" });
-  await ownerPage.locator(".monaco-editor").waitFor({ timeout: 15000 });
+  await ownerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
 
   await candidateAPage.goto(roomUrl, { waitUntil: "domcontentloaded" });
   await enterNameIfPrompted(candidateAPage, "Candidate A");
-  await candidateAPage.locator(".monaco-editor").waitFor({ timeout: 15000 });
+  await candidateAPage.locator(".cm-editor").waitFor({ timeout: 15000 });
 
   await candidateBPage.goto(roomUrl, { waitUntil: "domcontentloaded" });
   await enterNameIfPrompted(candidateBPage, "Candidate B");
-  await candidateBPage.locator(".monaco-editor").waitFor({ timeout: 15000 });
+  await candidateBPage.locator(".cm-editor").waitFor({ timeout: 15000 });
 
   await candidateCPage.goto(roomUrl, { waitUntil: "domcontentloaded" });
   await enterNameIfPrompted(candidateCPage, "Candidate C");
-  await candidateCPage.locator(".monaco-editor").waitFor({ timeout: 15000 });
+  await candidateCPage.locator(".cm-editor").waitFor({ timeout: 15000 });
 
   await Promise.all([
-    typeByEdits(candidateAPage, " alpha_yjs_A "),
-    typeByEdits(candidateBPage, " beta_yjs_B "),
-    typeByEdits(candidateCPage, " gamma_yjs_C ")
+    typeByEdits(candidateAPage, " alpha_yjs_A ", 18, "Candidate A"),
+    typeByEdits(candidateBPage, " beta_yjs_B ", 18, "Candidate B"),
+    typeByEdits(candidateCPage, " gamma_yjs_C ", 18, "Candidate C")
   ]);
 
-  await ownerPage.waitForTimeout(3500);
+  await ownerPage.waitForTimeout(12000);
 
   const values = await Promise.all([
     modelValue(ownerPage),
@@ -107,13 +102,30 @@ try {
     modelValue(candidateCPage)
   ]);
   const [ownerValue, candidateAValue, candidateBValue, candidateCValue] = values;
-  const allEqual =
-    ownerValue === candidateAValue &&
-    ownerValue === candidateBValue &&
-    ownerValue === candidateCValue;
-  if (!allEqual) {
+  const markers = ["alpha_yjs_A", "beta_yjs_B", "gamma_yjs_C"];
+  const hasAllMarkers = (text) => markers.every((m) => text.includes(m));
+  const allHaveContent = values.every(hasAllMarkers);
+  if (!allHaveContent) {
     throw new Error(
-      `MULTI_PARTICIPANT_SYNC_FAILED\nowner=${ownerValue.length}\na=${candidateAValue.length}\nb=${candidateBValue.length}\nc=${candidateCValue.length}`
+      `MULTI_PARTICIPANT_SYNC_FAILED (missing markers)\nowner(${ownerValue.length})=${ownerValue}\na(${candidateAValue.length})=${candidateAValue}\nb(${candidateBValue.length})=${candidateBValue}\nc(${candidateCValue.length})=${candidateCValue}`
+    );
+  }
+
+  // Hard reload one participant: must converge again from server snapshot + SSE (regression: stale yjs on server).
+  await candidateBPage.reload({ waitUntil: "domcontentloaded" });
+  await enterNameIfPrompted(candidateBPage, "Candidate B");
+  await candidateBPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await candidateBPage.waitForTimeout(14000);
+
+  const afterReload = await Promise.all([
+    modelValue(ownerPage),
+    modelValue(candidateAPage),
+    modelValue(candidateBPage),
+    modelValue(candidateCPage)
+  ]);
+  if (!afterReload.every(hasAllMarkers)) {
+    throw new Error(
+      `MULTI_PARTICIPANT_SYNC_FAILED_AFTER_RELOAD\n${afterReload.map((v, i) => `${i}:(${v.length})=${v}`).join("\n")}`
     );
   }
 

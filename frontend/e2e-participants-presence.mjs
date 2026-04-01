@@ -81,17 +81,17 @@ try {
   const roomUrl = `${webBaseUrl}/room/${room.inviteCode}`;
 
   await ownerPage.goto(roomUrl, { waitUntil: "domcontentloaded" });
-  await ownerPage.locator(".monaco-editor").waitFor({ timeout: 15000 });
+  await ownerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
 
   await candidatePage.goto(roomUrl, { waitUntil: "domcontentloaded" });
   await enterNameIfPrompted(candidatePage, "Candidate Presence");
-  await candidatePage.locator(".monaco-editor").waitFor({ timeout: 15000 });
+  await candidatePage.locator(".cm-editor").waitFor({ timeout: 15000 });
 
   await waitParticipantCount(ownerPage, "Candidate Presence", 1);
 
   await candidatePage.reload({ waitUntil: "domcontentloaded" });
   await enterNameIfPrompted(candidatePage, "Candidate Presence");
-  await candidatePage.locator(".monaco-editor").waitFor({ timeout: 15000 });
+  await candidatePage.locator(".cm-editor").waitFor({ timeout: 15000 });
   await waitParticipantCount(ownerPage, "Candidate Presence", 1);
 
   await candidatePage.close();

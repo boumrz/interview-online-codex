@@ -10,6 +10,8 @@ data class RoomRealtimePayload(
     val language: String,
     val code: String,
     val lastCodeUpdatedBySessionId: String? = null,
+    /** Base64 of Y.encodeStateAsUpdate (full CRDT state) so reconnecting clients match live peers. */
+    val yjsDocumentBase64: String? = null,
     val lastYjsSequence: Long = 0,
     val currentStep: Int,
     val notes: String,
