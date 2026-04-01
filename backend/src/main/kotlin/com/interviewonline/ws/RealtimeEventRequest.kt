@@ -26,4 +26,5 @@ data class RealtimeEventRequest(
     val yjsUpdate: String? = null,
     val syncKey: String? = null,
     val yjsClientSequence: Long? = null,
+    val yjsDocumentBase64: String? = null,
 )

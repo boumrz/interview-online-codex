@@ -11,7 +11,7 @@ try {
   await page.waitForSelector("text=Создать комнату", { timeout: 15000 });
   await page.click("button:has-text('Создать комнату')");
   await page.waitForURL(/\/room\//, { timeout: 15000 });
-  await page.waitForSelector(".monaco-editor", { timeout: 15000 });
+  await page.waitForSelector(".cm-editor", { timeout: 15000 });
   await page.waitForSelector("text=Подключено", { timeout: 15000 });
   const url = page.url();
   console.log(`E2E_OK ${url}`);

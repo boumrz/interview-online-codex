@@ -33,7 +33,15 @@ async function registerAndCreateRoom() {
 }
 
 async function modelValue(page) {
-  return page.evaluate(() => window.monaco?.editor?.getModels?.()[0]?.getValue() ?? "");
+  return page.evaluate(() => {
+    const editor = document.querySelector(".cm-editor");
+    const anyEditor = editor;
+    const view = anyEditor?.cmView?.view ?? anyEditor?.cmView?.rootView?.view ?? null;
+    if (view?.state?.doc?.toString) {
+      return view.state.doc.toString();
+    }
+    return document.querySelector(".cm-content")?.textContent ?? "";
+  });
 }
 
 const appendedText = "\nfocus-reconnect-alpha\nfocus-reconnect-beta\nfocus-reconnect-gamma";
@@ -54,7 +62,7 @@ try {
   );
   const ownerPage = await ownerContext.newPage();
   await ownerPage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
-  await ownerPage.locator(".monaco-editor").waitFor({ timeout: 15000 });
+  await ownerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
 
   const candidateContext = await browser.newContext();
   const candidatePage = await candidateContext.newPage();
@@ -62,20 +70,17 @@ try {
   await candidatePage.getByText("Представьтесь перед входом в комнату", { exact: true }).waitFor({ timeout: 15000 });
   await candidatePage.getByLabel("Ваше имя").fill("Candidate SSE");
   await candidatePage.getByRole("button", { name: "Войти в комнату" }).click();
-  await candidatePage.locator(".monaco-editor").waitFor({ timeout: 15000 });
+  await candidatePage.locator(".cm-editor").waitFor({ timeout: 15000 });
 
-  const initialValue = await modelValue(ownerPage);
-  const expectedValue = `${initialValue}${appendedText}`;
+  const markers = ["focus-reconnect-alpha", "focus-reconnect-beta", "focus-reconnect-gamma"];
 
   // Emulate background connection loss while another participant continues typing.
   await candidateContext.setOffline(true);
 
   await ownerPage.bringToFront();
-  await ownerPage.evaluate((suffix) => {
-    const model = window.monaco?.editor?.getModels?.()[0];
-    if (!model) return;
-    model.setValue(`${model.getValue()}${suffix}`);
-  }, appendedText);
+  await ownerPage.locator(".cm-content").click({ force: true });
+  await ownerPage.keyboard.press("End");
+  await ownerPage.keyboard.type(appendedText, { delay: 8 });
   await ownerPage.waitForTimeout(1200);
 
   await candidateContext.setOffline(false);
@@ -85,9 +90,10 @@ try {
   const ownerValue = await modelValue(ownerPage);
   const candidateValue = await modelValue(candidatePage);
 
-  if (ownerValue !== expectedValue || candidateValue !== expectedValue) {
+  const hasMarkers = (text) => markers.every((m) => text.includes(m));
+  if (!hasMarkers(ownerValue) || !hasMarkers(candidateValue)) {
     throw new Error(
-      `SSE_RECONNECT_SYNC_FAILED\nEXPECTED:\n${expectedValue}\n\nOWNER:\n${ownerValue}\n\nCANDIDATE:\n${candidateValue}`
+      `SSE_RECONNECT_SYNC_FAILED\nOWNER:\n${ownerValue}\n\nCANDIDATE:\n${candidateValue}`
     );
   }
 

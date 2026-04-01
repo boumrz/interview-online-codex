@@ -1,6 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE_URL } from "../../config/runtime";
 
+/** Same opt-out as RoomPage: localStorage room_sync_log = "0" or ?syncLog=0 */
+function isRoomSyncTransportLogEnabled(): boolean {
+  try {
+    if (typeof window === "undefined") return true;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("syncLog") === "0") return false;
+    if (params.get("syncLog") === "1") return true;
+    return window.localStorage.getItem("room_sync_log") !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function roomSyncTransportLog(event: string, detail?: Record<string, unknown>) {
+  if (!isRoomSyncTransportLogEnabled()) return;
+  const ts = new Date().toISOString();
+  if (detail && Object.keys(detail).length > 0) {
+    console.info(`[room-sync][${ts}] transport:${event}`, detail);
+  } else {
+    console.info(`[room-sync][${ts}] transport:${event}`);
+  }
+}
+
 type Participant = {
   sessionId: string;
   displayName: string;
@@ -38,6 +61,8 @@ type RealtimeState = {
   language: string;
   code: string;
   lastCodeUpdatedBySessionId: string | null;
+  /** Full Yjs document (Y.encodeStateAsUpdate) as base64 for CRDT-consistent reconnects. */
+  yjsDocumentBase64?: string | null;
   lastYjsSequence?: number;
   currentStep: number;
   notes: string;
@@ -92,7 +117,14 @@ type ClientMessage =
       selectionEndLineNumber?: number | null;
       selectionEndColumn?: number | null;
     }
-  | { type: "yjs_update"; yjsUpdate: string; syncKey?: string | null; code?: string | null; yjsClientSequence: number }
+  | {
+      type: "yjs_update";
+      yjsUpdate: string;
+      syncKey?: string | null;
+      code?: string | null;
+      yjsClientSequence: number;
+      yjsDocumentBase64?: string | null;
+    }
   | {
       type: "key_press";
       key: string;
@@ -221,7 +253,6 @@ export function useRoomSocket({
     let sseErrorNotified = false;
     let lastStateSyncRequestAt = 0;
     let expectRecoveryStateSync = false;
-    let pendingStateSyncRequest = false;
     let reconnectTimerId: number | null = null;
     let reconnectScheduled = false;
     lastPresenceRef.current = null;
@@ -295,16 +326,11 @@ export function useRoomSocket({
         });
     };
 
-    const sendViaPost = (payload: ClientMessage, queueOnUnavailable = true) => {
-      const source = sseRef.current;
-      if (source?.readyState !== EventSource.OPEN) {
-        if (queueOnUnavailable) {
-          enqueuePayload(payload);
-        }
-        return;
-      }
-
-      postEvent(payload, queueOnUnavailable);
+    // Do not gate POST on EventSource.OPEN: during CONNECTING/reconnect the socket is not OPEN yet
+    // outbound events were only queued — no fetch ran, so DevTools showed no POSTs after a few keystrokes.
+    // Server validates sessionId; failed POSTs are queued when queueOnFailure allows it.
+    const sendViaPost = (payload: ClientMessage, queueOnFailure = true) => {
+      postEvent(payload, queueOnFailure);
     };
 
     const flushPendingMessages = () => {
@@ -319,17 +345,11 @@ export function useRoomSocket({
         expectRecoveryStateSync = true;
         onRequireRecoverySync?.();
       }
-      const source = sseRef.current;
-      if (source?.readyState !== EventSource.OPEN) {
-        pendingStateSyncRequest = true;
-        return;
-      }
       const now = Date.now();
       // Recovery hydration should never be skipped: missing this request can leave one tab stale
       // until someone else forces a full state broadcast.
       if (!options.expectHydration && now - lastStateSyncRequestAt < 300) return;
       lastStateSyncRequestAt = now;
-      pendingStateSyncRequest = false;
       sendViaPost({ type: "request_state_sync" }, false);
     };
 
@@ -362,12 +382,10 @@ export function useRoomSocket({
         }
         sseErrorNotified = false;
         setConnected(true);
+        roomSyncTransportLog("sse_open", { inviteCode });
         onError("");
         flushPendingMessages();
         publishCurrentPresence({ force: true });
-        if (pendingStateSyncRequest) {
-          pendingStateSyncRequest = false;
-        }
         requestStateSync({ expectHydration: true });
       };
 
@@ -438,6 +456,7 @@ export function useRoomSocket({
     const handleFocus = () => {
       hasWindowFocus = true;
       publishCurrentPresence();
+      roomSyncTransportLog("window_focus_request_state_sync");
       requestStateSync({ expectHydration: true });
     };
 
@@ -450,6 +469,7 @@ export function useRoomSocket({
       if (typeof document !== "undefined" && document.visibilityState === "visible") {
         hasWindowFocus = typeof document.hasFocus === "function" ? document.hasFocus() : hasWindowFocus;
         publishCurrentPresence();
+        roomSyncTransportLog("visibility_visible_request_state_sync");
         requestStateSync({ expectHydration: true });
         return;
       }
@@ -545,11 +565,23 @@ export function useRoomSocket({
     });
   };
 
-  const sendYjsUpdate = (yjsUpdate: string, syncKey?: string | null, codeSnapshot?: string | null) => {
+  const sendYjsUpdate = (
+    yjsUpdate: string,
+    syncKey?: string | null,
+    codeSnapshot?: string | null,
+    yjsDocumentBase64?: string | null
+  ) => {
     const yjsClientSequence = yjsSequenceRef.current + 1;
     yjsSequenceRef.current = yjsClientSequence;
     persistYjsSequence(inviteCode, yjsClientSequence);
-    send({ type: "yjs_update", yjsUpdate, syncKey: syncKey ?? null, code: codeSnapshot ?? null, yjsClientSequence });
+    send({
+      type: "yjs_update",
+      yjsUpdate,
+      syncKey: syncKey ?? null,
+      code: codeSnapshot ?? null,
+      yjsClientSequence,
+      yjsDocumentBase64: yjsDocumentBase64?.trim() || null
+    });
   };
 
   const sendKeyPress = (payload: {
