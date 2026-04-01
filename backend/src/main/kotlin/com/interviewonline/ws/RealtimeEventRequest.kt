@@ -27,4 +27,6 @@ data class RealtimeEventRequest(
     val syncKey: String? = null,
     val yjsClientSequence: Long? = null,
     val yjsDocumentBase64: String? = null,
+    /** Base64-encoded y-protocols awareness update (remote cursors / selections). */
+    val awarenessUpdate: String? = null,
 )

@@ -94,6 +94,7 @@ type Options = {
   onState: (state: RealtimeState) => void;
   onError: (message: string) => void;
   onYjsUpdate?: (payload: { sessionId: string; yjsUpdate: string; syncKey?: string | null; yjsSequence?: number | null }) => void;
+  onAwarenessUpdate?: (payload: { sessionId: string; awarenessUpdate: string }) => void;
   onCursorUpdate?: (payload: CursorPayload) => void;
   onCandidateKey?: (payload: CandidateKeyPayload) => void;
   onRecoveryStateSync?: (lastYjsSequence: number) => void;
@@ -125,6 +126,7 @@ type ClientMessage =
       yjsClientSequence: number;
       yjsDocumentBase64?: string | null;
     }
+  | { type: "awareness_update"; awarenessUpdate: string }
   | {
       type: "key_press";
       key: string;
@@ -213,6 +215,7 @@ export function useRoomSocket({
   onState,
   onError,
   onYjsUpdate,
+  onAwarenessUpdate,
   onCursorUpdate,
   onCandidateKey,
   onRecoveryStateSync,
@@ -258,7 +261,11 @@ export function useRoomSocket({
     lastPresenceRef.current = null;
 
     const shouldQueuePayload = (payload: ClientMessage) => {
-      return payload.type !== "cursor_update" && payload.type !== "presence_update" && payload.type !== "request_state_sync";
+      return (
+        payload.type !== "cursor_update" &&
+        payload.type !== "presence_update" &&
+        payload.type !== "request_state_sync"
+      );
     };
 
     const enqueuePayload = (payload: ClientMessage) => {
@@ -431,6 +438,16 @@ export function useRoomSocket({
           }
           return;
         }
+        if (message.type === "awareness_update") {
+          const payload = message.payload as { sessionId?: string; awarenessUpdate?: string };
+          if (payload?.sessionId && payload?.awarenessUpdate) {
+            onAwarenessUpdate?.({
+              sessionId: payload.sessionId,
+              awarenessUpdate: payload.awarenessUpdate
+            });
+          }
+          return;
+        }
         if (message.type === "cursor_update") {
           const payload = message.payload as unknown as CursorPayload;
           if (payload?.sessionId) {
@@ -513,7 +530,23 @@ export function useRoomSocket({
         enqueuePayload(payload);
       };
     };
-  }, [authToken, displayName, enabled, interviewerToken, inviteCode, onCandidateKey, onCursorUpdate, onError, onRecoveryStateSync, onRequireRecoverySync, onState, onYjsUpdate, ownerToken, sessionId]);
+  }, [
+    authToken,
+    displayName,
+    enabled,
+    interviewerToken,
+    inviteCode,
+    onAwarenessUpdate,
+    onCandidateKey,
+    onCursorUpdate,
+    onError,
+    onRecoveryStateSync,
+    onRequireRecoverySync,
+    onState,
+    onYjsUpdate,
+    ownerToken,
+    sessionId
+  ]);
 
   const send = (payload: ClientMessage) => {
     sendRef.current(payload);
@@ -563,6 +596,12 @@ export function useRoomSocket({
       selectionEndLineNumber: payload.selectionEndLineNumber,
       selectionEndColumn: payload.selectionEndColumn
     });
+  };
+
+  const sendAwarenessUpdate = (awarenessUpdate: string) => {
+    const trimmed = awarenessUpdate.trim();
+    if (!trimmed) return;
+    send({ type: "awareness_update", awarenessUpdate: trimmed });
   };
 
   const sendYjsUpdate = (
@@ -617,6 +656,7 @@ export function useRoomSocket({
     sendTaskRatingUpdate,
     sendNotesUpdate,
     sendCursorUpdate,
+    sendAwarenessUpdate,
     sendYjsUpdate,
     sendKeyPress
   };
