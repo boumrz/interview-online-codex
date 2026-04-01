@@ -582,7 +582,8 @@
 .remoteCursorCaret {
   position: relative;
   display: inline-block;
-  height: 1.2em;
+  height: 100%;
+  vertical-align: top;
   margin-left: -1px;
   border-left: 2px solid;
   pointer-events: none;
