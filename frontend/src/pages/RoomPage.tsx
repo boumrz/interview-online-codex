@@ -29,6 +29,7 @@ type CursorInfo = {
   displayName: string;
   role: "owner" | "interviewer" | "candidate";
   cursorSequence?: number | null;
+  lastSeenAtEpochMs?: number | null;
   lineNumber: number;
   column: number;
   selectionStartLineNumber?: number | null;
@@ -79,9 +80,36 @@ const MAX_RIGHT_WIDTH = 420;
 const LOG_HISTORY_LIMIT = 50;
 const NODEJS_LANGUAGE_ALIASES = new Set(["javascript", "typescript", "nodejs"]);
 const STATE_SYNC_CODE_SMOOTHING_WINDOW_MS = 480;
-const REMOTE_SELECTION_HIGHLIGHT_ENABLED = false;
-const REMOTE_CURSOR_RENDER_DEBOUNCE_MS = 170;
-const HARD_MODEL_RECONCILE_DEBOUNCE_MS = 220;
+const REMOTE_SELECTION_HIGHLIGHT_ENABLED = true;
+const REMOTE_CARET_HIGHLIGHT_ENABLED = true;
+const REMOTE_CURSOR_RENDER_DEBOUNCE_MS = 80;
+const HARD_MODEL_RECONCILE_DEBOUNCE_MS = 1200;
+const LOCAL_TYPING_GUARD_MS = 420;
+const CURSOR_UPDATE_THROTTLE_MS = 130;
+const REMOTE_APPLY_CURSOR_GUARD_MS = 650;
+const KEYBOARD_CARET_EMIT_WINDOW_MS = 180;
+const REMOTE_CARET_IDLE_SHOW_DELAY_MS = 500;
+const REMOTE_CURSOR_RENDER_TICK_MS = 120;
+const CURSOR_DEBUG_QUERY_PARAM = "cursorDebug";
+const CURSOR_DEBUG_STORAGE_KEY = "room_cursor_debug";
+
+function isCursorDebugEnabled(): boolean {
+  try {
+    if (typeof window === "undefined") return false;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get(CURSOR_DEBUG_QUERY_PARAM) === "1") return true;
+    return window.localStorage.getItem(CURSOR_DEBUG_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function debugCursorLog(event: string, payload: Record<string, unknown>) {
+  if (!isCursorDebugEnabled()) return;
+  const ts = new Date().toISOString();
+  // Keep logs structured so we can diff event flow between typing tab and observer tab.
+  console.debug(`[cursor-debug][${ts}] ${event}`, payload);
+}
 
 function normalizeRoomLanguage(language: string | null | undefined): string {
   const normalized = (language ?? "").trim().toLowerCase();
@@ -399,7 +427,7 @@ export function RoomPage() {
       ...participant,
       role: participant.role ?? "candidate"
     }));
-    const cursors = (incoming.cursors ?? []).map((cursor) => {
+    const cursorsFromSync = (incoming.cursors ?? []).map((cursor) => {
       const normalizedRole = cursor.role ?? "candidate";
       const nextCursorSequence = typeof cursor.cursorSequence === "number" ? cursor.cursorSequence : null;
       const previousCursor = previousCursorBySessionId.get(cursor.sessionId);
@@ -411,12 +439,30 @@ export function RoomPage() {
       if (shouldKeepPreviousCursor) {
         return previousCursor;
       }
+      // Trailing state_sync after Yjs snapshot often repeats the same cursorSequence as the last
+      // cursor_update but can carry stale line/column; prefer the live cursor we already merged.
+      const sameSequencePreferLive =
+        !!previousCursor &&
+        previousCursorSequence != null &&
+        nextCursorSequence != null &&
+        nextCursorSequence === previousCursorSequence;
+      if (sameSequencePreferLive) {
+        return {
+          ...previousCursor,
+          displayName: cursor.displayName ?? previousCursor.displayName,
+          role: normalizedRole
+        };
+      }
       return {
         ...cursor,
         role: normalizedRole,
-        cursorSequence: nextCursorSequence
+        cursorSequence: nextCursorSequence,
+        lastSeenAtEpochMs: previousCursor?.lastSeenAtEpochMs ?? null
       };
     });
+    const mergedCursorIds = new Set(cursorsFromSync.map((c) => c.sessionId));
+    const cursorsMissingFromSync = (previousState?.cursors ?? []).filter((c) => !mergedCursorIds.has(c.sessionId));
+    const cursors = [...cursorsFromSync, ...cursorsMissingFromSync];
     const taskScores = normalizeTaskScores(incoming.taskScores);
     const nextState: RealtimeState = {
       ...incoming,
@@ -472,6 +518,16 @@ export function RoomPage() {
   }, []);
 
   const onCursorUpdate = useCallback((incomingCursor: CursorInfo) => {
+    debugCursorLog("socket:cursor_update:incoming", {
+      sessionId: incomingCursor?.sessionId,
+      lineNumber: incomingCursor?.lineNumber,
+      column: incomingCursor?.column,
+      selectionStartLineNumber: incomingCursor?.selectionStartLineNumber ?? null,
+      selectionStartColumn: incomingCursor?.selectionStartColumn ?? null,
+      selectionEndLineNumber: incomingCursor?.selectionEndLineNumber ?? null,
+      selectionEndColumn: incomingCursor?.selectionEndColumn ?? null,
+      cursorSequence: incomingCursor?.cursorSequence ?? null
+    });
     setState((previous) => {
       if (!previous) return previous;
       if (!incomingCursor?.sessionId || incomingCursor.sessionId === sessionIdRef.current) {
@@ -481,7 +537,8 @@ export function RoomPage() {
       const normalizedCursor: CursorInfo = {
         ...incomingCursor,
         role: incomingCursor.role ?? "candidate",
-        cursorSequence: typeof incomingCursor.cursorSequence === "number" ? incomingCursor.cursorSequence : null
+        cursorSequence: typeof incomingCursor.cursorSequence === "number" ? incomingCursor.cursorSequence : null,
+        lastSeenAtEpochMs: Date.now()
       };
       const currentCursors = previous.cursors ?? [];
       const existingIndex = currentCursors.findIndex((cursor) => cursor.sessionId === normalizedCursor.sessionId);
@@ -496,6 +553,11 @@ export function RoomPage() {
         (previousSequence != null && nextSequence != null && nextSequence <= previousSequence) ||
         (previousSequence != null && nextSequence == null);
       if (staleBySequence) {
+        debugCursorLog("socket:cursor_update:dropped_stale", {
+          sessionId: normalizedCursor.sessionId,
+          nextSequence,
+          previousSequence
+        });
         return previous;
       }
 
@@ -510,6 +572,10 @@ export function RoomPage() {
         existing.selectionEndLineNumber === normalizedCursor.selectionEndLineNumber &&
         existing.selectionEndColumn === normalizedCursor.selectionEndColumn;
       if (unchanged) {
+        debugCursorLog("socket:cursor_update:dropped_unchanged", {
+          sessionId: normalizedCursor.sessionId,
+          cursorSequence: normalizedCursor.cursorSequence ?? null
+        });
         return previous;
       }
 
@@ -885,15 +951,7 @@ function TopBar({
   participants: Participant[];
   showParticipants: boolean;
 }) {
-  const normalizedParticipants = useMemo(() => {
-    const unique = new Map<string, Participant>();
-    participants.forEach((participant) => {
-      if (!unique.has(participant.sessionId)) {
-        unique.set(participant.sessionId, participant);
-      }
-    });
-    return Array.from(unique.values());
-  }, [participants]);
+  const normalizedParticipants = useMemo(() => participants, [participants]);
 
   const participantsHostRef = useRef<HTMLDivElement | null>(null);
   const [maxVisibleParticipants, setMaxVisibleParticipants] = useState(normalizedParticipants.length);
@@ -1568,12 +1626,12 @@ function colorThemeForSession(sessionId: string) {
   };
 }
 
-function cursorClassBySession(sessionId: string): string {
-  return `remote-cursor-caret-${sessionId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
-}
-
 function selectionClassBySession(sessionId: string): string {
   return `remote-selection-${sessionId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+}
+
+function caretClassBySession(sessionId: string): string {
+  return `remote-caret-${sessionId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
 }
 
 function RoomCodeEditor({
@@ -1620,8 +1678,10 @@ function RoomCodeEditor({
   const suppressEditorChangesRef = useRef(false);
   const lastHandledResyncSignalRef = useRef(0);
   const disposablesRef = useRef<Array<{ dispose: () => void }>>([]);
-  const decorationsCollectionRef = useRef<any | null>(null);
-  const lastRemoteCursorSignatureRef = useRef<string>("");
+  const caretDecorationsCollectionRef = useRef<any | null>(null);
+  const selectionDecorationsCollectionRef = useRef<any | null>(null);
+  const lastRemoteCaretSignatureRef = useRef<string>("");
+  const lastRemoteSelectionSignatureRef = useRef<string>("");
   const lastRemoteCursorStyleSignatureRef = useRef<string>("");
   const lastCursorSentRef = useRef<{
     lineNumber: number;
@@ -1643,6 +1703,8 @@ function RoomCodeEditor({
   const syncKeyRef = useRef(syncKey);
   const pendingHardReconcileTimerRef = useRef<number | null>(null);
   const pendingHardReconcileValueRef = useRef<string>("");
+  const lastLocalTypingAtRef = useRef(0);
+  const lastRemoteApplyAtRef = useRef(0);
 
   useEffect(() => {
     const styleNode = document.createElement("style");
@@ -1663,11 +1725,16 @@ function RoomCodeEditor({
         pendingHardReconcileTimerRef.current = null;
       }
       pendingHardReconcileValueRef.current = "";
-      if (decorationsCollectionRef.current) {
-        decorationsCollectionRef.current.set([]);
-        decorationsCollectionRef.current = null;
+      if (caretDecorationsCollectionRef.current) {
+        caretDecorationsCollectionRef.current.set([]);
+        caretDecorationsCollectionRef.current = null;
       }
-      lastRemoteCursorSignatureRef.current = "";
+      if (selectionDecorationsCollectionRef.current) {
+        selectionDecorationsCollectionRef.current.set([]);
+        selectionDecorationsCollectionRef.current = null;
+      }
+      lastRemoteCaretSignatureRef.current = "";
+      lastRemoteSelectionSignatureRef.current = "";
       lastRemoteCursorStyleSignatureRef.current = "";
 
       yDocRef.current?.destroy();
@@ -1697,46 +1764,65 @@ function RoomCodeEditor({
       };
 
       const remoteCursors = cursors.filter((cursor) => cursor.sessionId !== sessionId);
-      const remoteCursorSignature = remoteCursors
+      debugCursorLog("render:remote_selection:start", {
+        ownSessionId: sessionId,
+        remoteCursorCount: remoteCursors.length
+      });
+      const nowEpochMs = Date.now();
+      const remoteCaretSignature = remoteCursors
         .slice()
         .sort((a, b) => a.sessionId.localeCompare(b.sessionId))
         .map((cursor) => [
           cursor.sessionId,
+          nowEpochMs - (cursor.lastSeenAtEpochMs ?? 0) >= REMOTE_CARET_IDLE_SHOW_DELAY_MS ? "idle" : "typing",
           cursor.lineNumber,
-          cursor.column,
+          cursor.column
+        ].join(":"))
+        .join("|");
+      const remoteSelectionSignature = remoteCursors
+        .slice()
+        .sort((a, b) => a.sessionId.localeCompare(b.sessionId))
+        .map((cursor) => [
+          cursor.sessionId,
           cursor.selectionStartLineNumber ?? "na",
           cursor.selectionStartColumn ?? "na",
           cursor.selectionEndLineNumber ?? "na",
           cursor.selectionEndColumn ?? "na"
         ].join(":"))
         .join("|");
-      if (remoteCursorSignature === lastRemoteCursorSignatureRef.current) {
+      if (remoteCaretSignature === lastRemoteCaretSignatureRef.current && remoteSelectionSignature === lastRemoteSelectionSignatureRef.current) {
+        debugCursorLog("render:remote_selection:skip_same_signature", {
+          signatureLength: remoteSelectionSignature.length
+        });
         return;
       }
-      lastRemoteCursorSignatureRef.current = remoteCursorSignature;
+      lastRemoteCaretSignatureRef.current = remoteCaretSignature;
+      lastRemoteSelectionSignatureRef.current = remoteSelectionSignature;
       const caretCssRules: string[] = [];
       const selectionCssRules: string[] = [];
-      const decorations: any[] = [];
+      const caretDecorations: any[] = [];
+      const selectionDecorations: any[] = [];
       remoteCursors.forEach((cursor) => {
-        const { lineNumber, column } = clampCursor(cursor.lineNumber, cursor.column);
+        const isTypingNow = nowEpochMs - (cursor.lastSeenAtEpochMs ?? 0) < REMOTE_CARET_IDLE_SHOW_DELAY_MS;
+        const clampedCaret = clampCursor(cursor.lineNumber, cursor.column);
+        const caretClassName = caretClassBySession(cursor.sessionId);
         const theme = colorThemeForSession(cursor.sessionId);
-        const caretClassName = cursorClassBySession(cursor.sessionId);
         const selectionClassName = selectionClassBySession(cursor.sessionId);
-
-        caretCssRules.push(`.${caretClassName} { border-left-color: ${theme.caret} !important; }`);
+        if (REMOTE_CARET_HIGHLIGHT_ENABLED && !isTypingNow) {
+          caretCssRules.push(`.${caretClassName} { border-left-color: ${theme.caret} !important; }`);
+          caretDecorations.push({
+            range: new monaco.Range(clampedCaret.lineNumber, clampedCaret.column, clampedCaret.lineNumber, clampedCaret.column),
+            options: {
+              afterContentClassName: `${styles.remoteCursorCaret} ${caretClassName}`,
+              hoverMessage: { value: `${cursor.displayName} (${cursor.role})` }
+            }
+          });
+        }
         if (REMOTE_SELECTION_HIGHLIGHT_ENABLED) {
           selectionCssRules.push(
             `.${selectionClassName} { background-color: ${theme.selection} !important; box-shadow: inset 0 0 0 1px ${theme.selectionBorder}; border-radius: 2px; }`
           );
         }
-
-        decorations.push({
-          range: new monaco.Range(lineNumber, column, lineNumber, column),
-          options: {
-            afterContentClassName: `${styles.remoteCursorCaret} ${caretClassName}`,
-            hoverMessage: { value: `${cursor.displayName} (${cursor.role})` }
-          }
-        });
 
         const hasSelection =
           REMOTE_SELECTION_HIGHLIGHT_ENABLED &&
@@ -1756,7 +1842,7 @@ function RoomCodeEditor({
           selectionStart.column === selectionEnd.column;
         if (isCollapsed) return;
 
-        decorations.push({
+        selectionDecorations.push({
           range: new monaco.Range(
             selectionStart.lineNumber,
             selectionStart.column,
@@ -1778,13 +1864,23 @@ function RoomCodeEditor({
         }
       }
 
-      if (decorationsCollectionRef.current) {
-        decorationsCollectionRef.current.set(decorations);
+      if (caretDecorationsCollectionRef.current) {
+        debugCursorLog("render:remote_selection:apply", {
+          decorationCount: caretDecorations.length + selectionDecorations.length
+        });
+        caretDecorationsCollectionRef.current.set(caretDecorations);
+      }
+      if (selectionDecorationsCollectionRef.current) {
+        selectionDecorationsCollectionRef.current.set(selectionDecorations);
       }
     };
 
     const timer = window.setTimeout(renderRemoteCursors, REMOTE_CURSOR_RENDER_DEBOUNCE_MS);
-    return () => window.clearTimeout(timer);
+    const interval = window.setInterval(renderRemoteCursors, REMOTE_CURSOR_RENDER_TICK_MS);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearInterval(interval);
+    };
   }, [cursors, sessionId]);
 
   useEffect(() => {
@@ -1832,7 +1928,8 @@ function RoomCodeEditor({
 
         const model = editor.getModel();
         if (!model) return;
-        decorationsCollectionRef.current = editor.createDecorationsCollection();
+        caretDecorationsCollectionRef.current = editor.createDecorationsCollection();
+        selectionDecorationsCollectionRef.current = editor.createDecorationsCollection();
         onEditorValueChange(model.getValue());
 
         const yDoc = new Y.Doc();
@@ -1849,8 +1946,10 @@ function RoomCodeEditor({
         };
         yDoc.on("update", handleDocUpdate);
 
+
         const handleYTextChange = (event: Y.YTextEvent, transaction: Y.Transaction) => {
           if (transaction.origin === "editor") return;
+          lastRemoteApplyAtRef.current = Date.now();
           const activeEditor = editorRef.current;
           const activeMonaco = monacoRef.current;
           const activeModel = activeEditor?.getModel();
@@ -1863,6 +1962,8 @@ function RoomCodeEditor({
           try {
             const scrollTop = activeEditor.getScrollTop();
             const scrollLeft = activeEditor.getScrollLeft();
+            const shouldProtectCaret = Date.now() - lastLocalTypingAtRef.current < LOCAL_TYPING_GUARD_MS;
+            const previousPosition = shouldProtectCaret ? activeEditor.getPosition?.() : null;
             const delta = Array.isArray((event as any)?.delta) ? ((event as any).delta as Array<any>) : [];
             if (delta.length > 0) {
               let offset = 0;
@@ -1899,10 +2000,20 @@ function RoomCodeEditor({
               });
             }
             const scheduleHardReconcile = () => {
+              if (Date.now() - lastLocalTypingAtRef.current < LOCAL_TYPING_GUARD_MS) {
+                debugCursorLog("reconcile:skip_local_typing_guard", {
+                  guardMs: LOCAL_TYPING_GUARD_MS
+                });
+                return;
+              }
               if (pendingHardReconcileTimerRef.current != null) {
                 window.clearTimeout(pendingHardReconcileTimerRef.current);
               }
               pendingHardReconcileValueRef.current = expectedValue;
+              debugCursorLog("reconcile:scheduled", {
+                debounceMs: HARD_MODEL_RECONCILE_DEBOUNCE_MS,
+                expectedLength: expectedValue.length
+              });
               pendingHardReconcileTimerRef.current = window.setTimeout(() => {
                 pendingHardReconcileTimerRef.current = null;
                 const latestEditor = editorRef.current;
@@ -1911,8 +2022,12 @@ function RoomCodeEditor({
                 const targetValue = pendingHardReconcileValueRef.current;
                 pendingHardReconcileValueRef.current = "";
                 if (latestModel.getValue() === targetValue) return;
+                const previousPosition = latestEditor.getPosition?.();
                 suppressEditorChangesRef.current = true;
                 try {
+                  debugCursorLog("reconcile:apply_full_model_replace", {
+                    targetLength: targetValue.length
+                  });
                   latestEditor.executeEdits("yjs-remote-sync-fallback", [
                     {
                       range: latestModel.getFullModelRange(),
@@ -1920,6 +2035,10 @@ function RoomCodeEditor({
                       forceMoveMarkers: true
                     }
                   ]);
+                  if (previousPosition) {
+                    const validated = latestModel.validatePosition(previousPosition);
+                    latestEditor.setPosition(validated);
+                  }
                 } finally {
                   suppressEditorChangesRef.current = false;
                 }
@@ -1931,6 +2050,10 @@ function RoomCodeEditor({
               window.clearTimeout(pendingHardReconcileTimerRef.current);
               pendingHardReconcileTimerRef.current = null;
               pendingHardReconcileValueRef.current = "";
+            }
+            if (previousPosition) {
+              const validated = activeModel.validatePosition(previousPosition);
+              activeEditor.setPosition(validated);
             }
             activeEditor.setScrollTop(scrollTop);
             activeEditor.setScrollLeft(scrollLeft);
@@ -1948,35 +2071,63 @@ function RoomCodeEditor({
           Y.applyUpdate(activeDoc, updateBytes, "remote");
         });
 
-        const emitCursorSync = (position: any, selectionLike: any) => {
+        const emitCursorSync = (position: any, selectionLike: any, source: string) => {
           const isVisible = typeof document === "undefined" || document.visibilityState === "visible";
           const hasFocus =
             typeof document === "undefined" || typeof document.hasFocus !== "function"
               ? true
               : document.hasFocus();
           if (!isVisible || !hasFocus) {
+            debugCursorLog("cursor:emit:skip_window_unfocused", {
+              isVisible,
+              hasFocus
+            });
             return;
           }
 
-          const lineNumber = position?.lineNumber ?? selectionLike?.endLineNumber ?? 1;
-          const column = position?.column ?? selectionLike?.endColumn ?? 1;
+          const activeEditor = editorRef.current;
+          const activeSelection = activeEditor?.getSelection?.() ?? null;
+          const activePosition = activeEditor?.getPosition?.() ?? null;
+          const resolvedSelection = activeSelection ?? selectionLike ?? null;
+          const lineNumber = activePosition?.lineNumber ?? position?.lineNumber ?? resolvedSelection?.endLineNumber ?? 1;
+          const column = activePosition?.column ?? position?.column ?? resolvedSelection?.endColumn ?? 1;
           const isSelectionEmpty =
-            !selectionLike
+            !resolvedSelection
               ? true
-              : typeof selectionLike.isEmpty === "function"
-                ? selectionLike.isEmpty()
-                : typeof selectionLike.isEmpty === "boolean"
-                  ? selectionLike.isEmpty
-                  : selectionLike.startLineNumber === selectionLike.endLineNumber &&
-                    selectionLike.startColumn === selectionLike.endColumn;
+              : typeof resolvedSelection.isEmpty === "function"
+                ? resolvedSelection.isEmpty()
+                : typeof resolvedSelection.isEmpty === "boolean"
+                  ? resolvedSelection.isEmpty
+                  : resolvedSelection.startLineNumber === resolvedSelection.endLineNumber &&
+                    resolvedSelection.startColumn === resolvedSelection.endColumn;
           const hasSelection = !isSelectionEmpty;
-          const selectionStartLineNumber = hasSelection ? selectionLike.startLineNumber : null;
-          const selectionStartColumn = hasSelection ? selectionLike.startColumn : null;
-          const selectionEndLineNumber = hasSelection ? selectionLike.endLineNumber : null;
-          const selectionEndColumn = hasSelection ? selectionLike.endColumn : null;
+          const selectionStartLineNumber = hasSelection ? resolvedSelection.startLineNumber : null;
+          const selectionStartColumn = hasSelection ? resolvedSelection.startColumn : null;
+          const selectionEndLineNumber = hasSelection ? resolvedSelection.endLineNumber : null;
+          const selectionEndColumn = hasSelection ? resolvedSelection.endColumn : null;
 
           const now = Date.now();
           const prev = lastCursorSentRef.current;
+          const keyboardDriven = source.includes("keyboard") || source.includes("delete");
+          const mouseDriven = source.includes("mouse");
+          // Prevent post-typing phantom cursor jumps: collapsed caret updates are allowed
+          // only during active typing burst or explicit mouse interaction.
+          if (!hasSelection && !mouseDriven && (!keyboardDriven || now - lastLocalTypingAtRef.current > KEYBOARD_CARET_EMIT_WINDOW_MS)) {
+            debugCursorLog("cursor:emit:skip_keyboard_without_recent_typing", {
+              lineNumber,
+              column,
+              elapsedSinceTypingMs: now - lastLocalTypingAtRef.current
+            });
+            return;
+          }
+          if (!hasSelection && now - lastRemoteApplyAtRef.current < REMOTE_APPLY_CURSOR_GUARD_MS) {
+            debugCursorLog("cursor:emit:skip_remote_apply_guard", {
+              lineNumber,
+              column,
+              guardMs: REMOTE_APPLY_CURSOR_GUARD_MS
+            });
+            return;
+          }
           if (
             prev.lineNumber === lineNumber &&
             prev.column === column &&
@@ -1984,8 +2135,17 @@ function RoomCodeEditor({
             prev.selectionStartColumn === selectionStartColumn &&
             prev.selectionEndLineNumber === selectionEndLineNumber &&
             prev.selectionEndColumn === selectionEndColumn &&
-            now - prev.ts < 85
+            now - prev.ts < CURSOR_UPDATE_THROTTLE_MS
           ) {
+            debugCursorLog("cursor:emit:skip_same_payload", {
+              lineNumber,
+              column,
+              selectionStartLineNumber,
+              selectionStartColumn,
+              selectionEndLineNumber,
+              selectionEndColumn,
+              elapsedMs: now - prev.ts
+            });
             return;
           }
 
@@ -2006,10 +2166,21 @@ function RoomCodeEditor({
             selectionEndLineNumber,
             selectionEndColumn
           });
+          debugCursorLog("cursor:emit:sent", {
+            lineNumber,
+            column,
+            selectionStartLineNumber,
+            selectionStartColumn,
+            selectionEndLineNumber,
+            selectionEndColumn
+          });
         };
 
         disposablesRef.current.push(
           editor.onDidChangeCursorSelection((event: any) => {
+            if (suppressEditorChangesRef.current) {
+              return;
+            }
             const source = typeof event?.source === "string" ? event.source.toLowerCase() : "";
             const reason = typeof event?.reason === "number" ? event.reason : null;
             const cursorChangeReason = monacoRef.current?.editor?.CursorChangeReason;
@@ -2019,11 +2190,31 @@ function RoomCodeEditor({
             const isContentFlush =
               typeof cursorChangeReason?.ContentFlush === "number" &&
               reason === cursorChangeReason.ContentFlush;
+            const isUserDrivenSource =
+              source.includes("keyboard") ||
+              source.includes("mouse") ||
+              source.includes("paste") ||
+              source.includes("delete") ||
+              source.includes("undo") ||
+              source.includes("redo");
             // Ignore service-driven cursor shifts produced by remote edits to avoid ping-pong and flicker.
-            if (source.includes("model") || source === "api" || isRecoverFromMarkers || isContentFlush) {
+            if (!isUserDrivenSource || source.includes("model") || source === "api" || isRecoverFromMarkers || isContentFlush) {
+              debugCursorLog("cursor:selection_event:ignored", {
+                source,
+                reason,
+                isUserDrivenSource,
+                isRecoverFromMarkers,
+                isContentFlush
+              });
               return;
             }
-            emitCursorSync(event.position, event.selection);
+            debugCursorLog("cursor:selection_event:accepted", {
+              source,
+              reason,
+              lineNumber: event?.position?.lineNumber ?? null,
+              column: event?.position?.column ?? null
+            });
+            emitCursorSync(event.position, event.selection, source);
           })
         );
 
@@ -2031,6 +2222,10 @@ function RoomCodeEditor({
           editor.onDidChangeModelContent((event: any) => {
             onEditorValueChange(editor.getModel()?.getValue?.() ?? "");
             if (suppressEditorChangesRef.current) return;
+            lastLocalTypingAtRef.current = Date.now();
+            debugCursorLog("editor:model_content:local_change", {
+              changesCount: Array.isArray(event?.changes) ? event.changes.length : 0
+            });
             const activeText = yTextRef.current;
             const activeDoc = yDocRef.current;
             if (!activeText || !activeDoc) return;
@@ -2087,11 +2282,44 @@ function RoomCodeEditor({
         formatOnType: false,
         formatOnPaste: false,
         quickSuggestions: false,
+        suggest: {
+          showWords: false,
+          showSnippets: false,
+          showMethods: false,
+          showFunctions: false,
+          showConstructors: false,
+          showFields: false,
+          showVariables: false,
+          showClasses: false,
+          showStructs: false,
+          showInterfaces: false,
+          showModules: false,
+          showProperties: false,
+          showEvents: false,
+          showOperators: false,
+          showUnits: false,
+          showValues: false,
+          showConstants: false,
+          showEnums: false,
+          showEnumMembers: false,
+          showKeywords: false,
+          showColors: false,
+          showFiles: false,
+          showReferences: false,
+          showFolders: false,
+          showTypeParameters: false,
+          showIssues: false,
+          showUsers: false
+        },
         suggestOnTriggerCharacters: false,
+        snippetSuggestions: "none",
+        tabCompletion: "off",
+        wordBasedSuggestionsOnlySameLanguage: false,
         acceptSuggestionOnEnter: "off",
         wordBasedSuggestions: "off",
         parameterHints: { enabled: false },
         inlineSuggest: { enabled: false },
+        codeLens: false,
         "semanticHighlighting.enabled": false
       }}
     />
