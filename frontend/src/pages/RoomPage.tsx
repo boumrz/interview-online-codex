@@ -1,9 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Editor from "@monaco-editor/react";
 import { ActionIcon, Badge, Box, Button, Group, Menu, Modal, Select, Stack, Text, TextInput, Textarea, ThemeIcon } from "@mantine/core";
 import { IconChevronLeft, IconChevronRight, IconCode, IconGripVertical, IconHome2, IconLayoutDashboard, IconMenu2, IconUsers } from "@tabler/icons-react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import * as Y from "yjs";
+import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate, removeAwarenessStates } from "y-protocols/awareness";
+import { yCollab } from "y-codemirror.next";
+import { EditorSelection, EditorState, Compartment } from "@codemirror/state";
+import { EditorView, keymap, drawSelection, highlightActiveLine, lineNumbers } from "@codemirror/view";
+import { history, historyKeymap, defaultKeymap } from "@codemirror/commands";
+import { indentOnInput, bracketMatching, foldGutter, syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
+import { oneDark } from "@codemirror/theme-one-dark";
+import { javascript } from "@codemirror/lang-javascript";
+import { python } from "@codemirror/lang-python";
+import { java } from "@codemirror/lang-java";
+import { sql } from "@codemirror/lang-sql";
 import { useAppSelector } from "../app/hooks";
 import { useGetRoomQuery } from "../services/api";
 import { useRoomSocket } from "../features/room/useRoomSocket";
@@ -28,6 +38,8 @@ type CursorInfo = {
   sessionId: string;
   displayName: string;
   role: "owner" | "interviewer" | "candidate";
+  cursorSequence?: number | null;
+  lastSeenAtEpochMs?: number | null;
   lineNumber: number;
   column: number;
   selectionStartLineNumber?: number | null;
@@ -53,6 +65,8 @@ type RealtimeState = {
   language: string;
   code: string;
   lastCodeUpdatedBySessionId: string | null;
+  yjsDocumentBase64?: string | null;
+  lastYjsSequence?: number;
   currentStep: number;
   notes: string;
   taskScores: Record<string, number | null>;
@@ -70,12 +84,69 @@ type RealtimeState = {
 
 type ResizeSide = "left" | "right";
 
-const MIN_LEFT_WIDTH = 220;
-const MAX_LEFT_WIDTH = 440;
-const MIN_RIGHT_WIDTH = 250;
-const MAX_RIGHT_WIDTH = 520;
+const MIN_LEFT_WIDTH = 200;
+const MAX_LEFT_WIDTH = 360;
+const MIN_RIGHT_WIDTH = 240;
+const MAX_RIGHT_WIDTH = 420;
 const LOG_HISTORY_LIMIT = 50;
 const NODEJS_LANGUAGE_ALIASES = new Set(["javascript", "typescript", "nodejs"]);
+const REMOTE_SELECTION_HIGHLIGHT_ENABLED = true;
+const REMOTE_CARET_HIGHLIGHT_ENABLED = true;
+const REMOTE_CURSOR_RENDER_DEBOUNCE_MS = 80;
+const HARD_MODEL_RECONCILE_DEBOUNCE_MS = 1200;
+const LOCAL_TYPING_GUARD_MS = 420;
+const CURSOR_UPDATE_THROTTLE_MS = 130;
+const REMOTE_APPLY_CURSOR_GUARD_MS = 650;
+const KEYBOARD_CARET_EMIT_WINDOW_MS = 180;
+const REMOTE_CARET_IDLE_SHOW_DELAY_MS = 500;
+const REMOTE_CURSOR_RENDER_TICK_MS = 120;
+const CURSOR_DEBUG_QUERY_PARAM = "cursorDebug";
+const CURSOR_DEBUG_STORAGE_KEY = "room_cursor_debug";
+const ROOM_SYNC_LOG_QUERY_PARAM = "syncLog";
+const ROOM_SYNC_LOG_STORAGE_KEY = "room_sync_log";
+
+/** Off: ?syncLog=0 or localStorage room_sync_log = "0" */
+function isRoomSyncLogEnabled(): boolean {
+  try {
+    if (typeof window === "undefined") return true;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get(ROOM_SYNC_LOG_QUERY_PARAM) === "0") return false;
+    if (params.get(ROOM_SYNC_LOG_QUERY_PARAM) === "1") return true;
+    return window.localStorage.getItem(ROOM_SYNC_LOG_STORAGE_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function roomSyncLog(event: string, payload?: Record<string, unknown>) {
+  if (!isRoomSyncLogEnabled()) return;
+  const ts = new Date().toISOString();
+  if (payload && Object.keys(payload).length > 0) {
+    console.info(`[room-sync][${ts}] ${event}`, payload);
+  } else {
+    console.info(`[room-sync][${ts}] ${event}`);
+  }
+}
+
+/** Off: ?cursorDebug=0 or localStorage room_cursor_debug = "0" */
+function isCursorDebugEnabled(): boolean {
+  try {
+    if (typeof window === "undefined") return true;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get(CURSOR_DEBUG_QUERY_PARAM) === "0") return false;
+    if (params.get(CURSOR_DEBUG_QUERY_PARAM) === "1") return true;
+    return window.localStorage.getItem(CURSOR_DEBUG_STORAGE_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function debugCursorLog(event: string, payload: Record<string, unknown>) {
+  if (!isCursorDebugEnabled()) return;
+  const ts = new Date().toISOString();
+  // Keep logs structured so we can diff event flow between typing tab and observer tab.
+  console.debug(`[cursor-debug][${ts}] ${event}`, payload);
+}
 
 function normalizeRoomLanguage(language: string | null | undefined): string {
   const normalized = (language ?? "").trim().toLowerCase();
@@ -235,6 +306,7 @@ export function RoomPage() {
   });
 
   const [state, setState] = useState<RealtimeState | null>(null);
+  const stateRef = useRef<RealtimeState | null>(null);
   const [error, setError] = useState("");
   const [displayName, setDisplayName] = useState(() => initialStoredName);
   const [draftName, setDraftName] = useState(() => initialStoredName);
@@ -247,10 +319,10 @@ export function RoomPage() {
   const [notesDirty, setNotesDirty] = useState(false);
   const [copiedHint, setCopiedHint] = useState("");
   const [notesLockTick, setNotesLockTick] = useState(0);
-  const [editorHydrated, setEditorHydrated] = useState(false);
   const [resyncSignal, setResyncSignal] = useState(0);
-  const yjsPendingUpdatesRef = useRef<string[]>([]);
-  const yjsApplyUpdateRef = useRef<((yjsUpdate: string) => void) | null>(null);
+  const [awaitingRecoverySync, setAwaitingRecoverySync] = useState(false);
+  const awaitingRecoverySyncRef = useRef(false);
+  const editorValueRef = useRef("");
 
   useEffect(() => {
     const isGuestInterviewerMode = !!interviewerToken && !authToken;
@@ -310,6 +382,8 @@ export function RoomPage() {
       language: normalizeRoomLanguage(room.language),
       code: room.code,
       lastCodeUpdatedBySessionId: null,
+      yjsDocumentBase64: null,
+      lastYjsSequence: 0,
       currentStep: room.currentStep,
       notes: room.notes ?? "",
       taskScores: taskScoresFromTasks(room.tasks ?? []),
@@ -333,22 +407,51 @@ export function RoomPage() {
     return `${merged.inviteCode}:${merged.currentStep}:${merged.language}`;
   }, [inviteCode, merged]);
   const syncKeyRef = useRef(currentSyncKey);
-  const previousParticipantsCountRef = useRef<number | null>(null);
   const sessionIdRef = useRef<string>("");
+  const yjsPendingUpdatesRef = useRef<Array<{ syncKey: string; update: string }>>([]);
+  const yjsApplyUpdateRef = useRef<((yjsUpdate: string) => void) | null>(null);
+  const awarenessApplyRef = useRef<((b64: string) => void) | null>(null);
+  /** Awareness may arrive over SSE before RoomCodeEditor registers the applier (same race as yjs). */
+  const awarenessPendingRef = useRef<string[]>([]);
   const recentLocalYjsUpdatesRef = useRef<Map<string, number>>(new Map());
+  const recoverySyncTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     syncKeyRef.current = currentSyncKey;
+    yjsPendingUpdatesRef.current = [];
+    awarenessPendingRef.current = [];
   }, [currentSyncKey]);
 
   useEffect(() => {
-    const participantsCount = merged?.participants.length ?? 0;
-    const previous = previousParticipantsCountRef.current;
-    if (previous !== null && participantsCount > previous) {
-      setResyncSignal((value) => value + 1);
+    return () => {
+      if (recoverySyncTimeoutRef.current != null) {
+        window.clearTimeout(recoverySyncTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    awaitingRecoverySyncRef.current = awaitingRecoverySync;
+  }, [awaitingRecoverySync]);
+
+  const markRecoverySyncPending = useCallback(() => {
+    setAwaitingRecoverySync(true);
+    if (recoverySyncTimeoutRef.current != null) {
+      window.clearTimeout(recoverySyncTimeoutRef.current);
     }
-    previousParticipantsCountRef.current = participantsCount;
-  }, [merged?.participants.length]);
+    recoverySyncTimeoutRef.current = window.setTimeout(() => {
+      setAwaitingRecoverySync(false);
+      recoverySyncTimeoutRef.current = null;
+    }, 4000);
+  }, []);
+
+  const clearRecoverySyncPending = useCallback(() => {
+    if (recoverySyncTimeoutRef.current != null) {
+      window.clearTimeout(recoverySyncTimeoutRef.current);
+      recoverySyncTimeoutRef.current = null;
+    }
+    setAwaitingRecoverySync(false);
+  }, []);
 
   useEffect(() => {
     if (!notesDirty) {
@@ -357,65 +460,301 @@ export function RoomPage() {
   }, [mergedNotes, notesDirty]);
 
   const onState = useCallback((incoming: RealtimeState) => {
+    const previousState = stateRef.current;
+    const previousCursorBySessionId = new Map((previousState?.cursors ?? []).map((cursor) => [cursor.sessionId, cursor]));
     const participants = (incoming.participants ?? []).map((participant) => ({
       ...participant,
       role: participant.role ?? "candidate"
     }));
+    const cursorsFromSync = (incoming.cursors ?? []).map((cursor) => {
+      const normalizedRole = cursor.role ?? "candidate";
+      const nextCursorSequence = typeof cursor.cursorSequence === "number" ? cursor.cursorSequence : null;
+      const previousCursor = previousCursorBySessionId.get(cursor.sessionId);
+      const previousCursorSequence = typeof previousCursor?.cursorSequence === "number" ? previousCursor.cursorSequence : null;
+      const shouldKeepPreviousCursor =
+        !!previousCursor &&
+        ((previousCursorSequence != null && nextCursorSequence != null && nextCursorSequence < previousCursorSequence) ||
+          (previousCursorSequence != null && nextCursorSequence == null));
+      if (shouldKeepPreviousCursor) {
+        return previousCursor;
+      }
+      // Trailing state_sync after Yjs snapshot often repeats the same cursorSequence as the last
+      // cursor_update but can carry stale line/column; prefer the live cursor we already merged.
+      const sameSequencePreferLive =
+        !!previousCursor &&
+        previousCursorSequence != null &&
+        nextCursorSequence != null &&
+        nextCursorSequence === previousCursorSequence;
+      if (sameSequencePreferLive) {
+        return {
+          ...previousCursor,
+          displayName: cursor.displayName ?? previousCursor.displayName,
+          role: normalizedRole
+        };
+      }
+      return {
+        ...cursor,
+        role: normalizedRole,
+        cursorSequence: nextCursorSequence,
+        lastSeenAtEpochMs: previousCursor?.lastSeenAtEpochMs ?? null
+      };
+    });
+    const mergedCursorIds = new Set(cursorsFromSync.map((c) => c.sessionId));
+    const cursorsMissingFromSync = (previousState?.cursors ?? []).filter((c) => !mergedCursorIds.has(c.sessionId));
+    const cursors = [...cursorsFromSync, ...cursorsMissingFromSync];
     const taskScores = normalizeTaskScores(incoming.taskScores);
-    setState({
+    const nextState: RealtimeState = {
       ...incoming,
       language: normalizeRoomLanguage(incoming.language),
       participants,
+      cursors,
       taskScores,
       lastCodeUpdatedBySessionId: incoming.lastCodeUpdatedBySessionId ?? null,
+      yjsDocumentBase64: typeof incoming.yjsDocumentBase64 === "string" ? incoming.yjsDocumentBase64 : null,
+      lastYjsSequence: typeof incoming.lastYjsSequence === "number" ? incoming.lastYjsSequence : 0,
       lastCandidateKey: incoming.lastCandidateKey ?? null,
       candidateKeyHistory: Array.isArray(incoming.candidateKeyHistory)
         ? incoming.candidateKeyHistory
         : incoming.lastCandidateKey
           ? [incoming.lastCandidateKey]
           : []
-    });
+    };
+    const previousSyncKey = previousState ? `${previousState.inviteCode}:${previousState.currentStep}:${previousState.language}` : null;
+    const nextSyncKey = `${nextState.inviteCode}:${nextState.currentStep}:${nextState.language}`;
+    const syncContextChanged = previousSyncKey !== null && previousSyncKey !== nextSyncKey;
+    const shouldForceHydrateFromState = awaitingRecoverySyncRef.current || syncContextChanged;
+    if (
+      !previousState ||
+      previousState.lastYjsSequence !== nextState.lastYjsSequence ||
+      previousState.code !== nextState.code ||
+      previousState.yjsDocumentBase64 !== nextState.yjsDocumentBase64
+    ) {
+      roomSyncLog("state_sync", {
+        codeLen: nextState.code?.length ?? 0,
+        lastYjsSequence: nextState.lastYjsSequence,
+        yjsDocLen: nextState.yjsDocumentBase64?.length ?? 0,
+        syncKey: nextSyncKey,
+        fromSession: nextState.lastCodeUpdatedBySessionId
+      });
+    }
+    // Do not bump resync on mere code drift during live Yjs typing — server string can lag merged CRDT and would clobber peers.
+    if (
+      previousState &&
+      previousState.code !== nextState.code &&
+      nextState.lastCodeUpdatedBySessionId !== sessionIdRef.current &&
+      shouldForceHydrateFromState
+    ) {
+      setResyncSignal((value) => value + 1);
+    }
+    clearRecoverySyncPending();
+    stateRef.current = nextState;
+    setState(nextState);
+  }, [clearRecoverySyncPending]);
+
+  const onEditorValueChange = useCallback((value: string) => {
+    editorValueRef.current = value;
   }, []);
 
   const onError = useCallback((message: string) => {
     setError(message);
   }, []);
 
-  const onYjsUpdate = useCallback((payload: { sessionId: string; yjsUpdate: string; syncKey?: string | null }) => {
+  const onCursorUpdate = useCallback((incomingCursor: CursorInfo) => {
+    debugCursorLog("socket:cursor_update:incoming", {
+      sessionId: incomingCursor?.sessionId,
+      lineNumber: incomingCursor?.lineNumber,
+      column: incomingCursor?.column,
+      selectionStartLineNumber: incomingCursor?.selectionStartLineNumber ?? null,
+      selectionStartColumn: incomingCursor?.selectionStartColumn ?? null,
+      selectionEndLineNumber: incomingCursor?.selectionEndLineNumber ?? null,
+      selectionEndColumn: incomingCursor?.selectionEndColumn ?? null,
+      cursorSequence: incomingCursor?.cursorSequence ?? null
+    });
+    setState((previous) => {
+      if (!previous) return previous;
+      if (!incomingCursor?.sessionId || incomingCursor.sessionId === sessionIdRef.current) {
+        return previous;
+      }
+
+      const normalizedCursor: CursorInfo = {
+        ...incomingCursor,
+        role: incomingCursor.role ?? "candidate",
+        cursorSequence: typeof incomingCursor.cursorSequence === "number" ? incomingCursor.cursorSequence : null,
+        lastSeenAtEpochMs: Date.now()
+      };
+      const currentCursors = previous.cursors ?? [];
+      const existingIndex = currentCursors.findIndex((cursor) => cursor.sessionId === normalizedCursor.sessionId);
+      if (existingIndex < 0) {
+        return { ...previous, cursors: [...currentCursors, normalizedCursor] };
+      }
+
+      const existing = currentCursors[existingIndex];
+      const nextSequence = typeof normalizedCursor.cursorSequence === "number" ? normalizedCursor.cursorSequence : null;
+      const previousSequence = typeof existing.cursorSequence === "number" ? existing.cursorSequence : null;
+      const staleBySequence =
+        (previousSequence != null && nextSequence != null && nextSequence <= previousSequence) ||
+        (previousSequence != null && nextSequence == null);
+      if (staleBySequence) {
+        debugCursorLog("socket:cursor_update:dropped_stale", {
+          sessionId: normalizedCursor.sessionId,
+          nextSequence,
+          previousSequence
+        });
+        return previous;
+      }
+
+      const unchanged =
+        existing.displayName === normalizedCursor.displayName &&
+        existing.role === normalizedCursor.role &&
+        existing.cursorSequence === normalizedCursor.cursorSequence &&
+        existing.lineNumber === normalizedCursor.lineNumber &&
+        existing.column === normalizedCursor.column &&
+        existing.selectionStartLineNumber === normalizedCursor.selectionStartLineNumber &&
+        existing.selectionStartColumn === normalizedCursor.selectionStartColumn &&
+        existing.selectionEndLineNumber === normalizedCursor.selectionEndLineNumber &&
+        existing.selectionEndColumn === normalizedCursor.selectionEndColumn;
+      if (unchanged) {
+        debugCursorLog("socket:cursor_update:dropped_unchanged", {
+          sessionId: normalizedCursor.sessionId,
+          cursorSequence: normalizedCursor.cursorSequence ?? null
+        });
+        return previous;
+      }
+
+      const nextCursors = [...currentCursors];
+      nextCursors[existingIndex] = normalizedCursor;
+      return { ...previous, cursors: nextCursors };
+    });
+  }, []);
+
+  const onCandidateKey = useCallback((incomingKey: CandidateKeyInfo) => {
+    setState((previous) => {
+      if (!previous || !incomingKey?.sessionId) {
+        return previous;
+      }
+      if (!previous.canManageRoom) {
+        return previous;
+      }
+
+      const timestampEpochMs = typeof incomingKey.timestampEpochMs === "number" ? incomingKey.timestampEpochMs : Date.now();
+      const normalizedKey: CandidateKeyInfo = {
+        ...incomingKey,
+        timestampEpochMs
+      };
+      const dedupeToken = [
+        normalizedKey.sessionId,
+        normalizedKey.timestampEpochMs,
+        normalizedKey.key,
+        normalizedKey.keyCode,
+        normalizedKey.ctrlKey ? "1" : "0",
+        normalizedKey.altKey ? "1" : "0",
+        normalizedKey.shiftKey ? "1" : "0",
+        normalizedKey.metaKey ? "1" : "0"
+      ].join(":");
+
+      const hasDuplicate = (previous.candidateKeyHistory ?? []).some((entry) => {
+        const entryToken = [
+          entry.sessionId,
+          entry.timestampEpochMs,
+          entry.key,
+          entry.keyCode,
+          entry.ctrlKey ? "1" : "0",
+          entry.altKey ? "1" : "0",
+          entry.shiftKey ? "1" : "0",
+          entry.metaKey ? "1" : "0"
+        ].join(":");
+        return entryToken === dedupeToken;
+      });
+
+      const currentHistory = previous.candidateKeyHistory ?? [];
+      const nextHistory = hasDuplicate
+        ? currentHistory
+        : [normalizedKey, ...currentHistory].slice(0, LOG_HISTORY_LIMIT);
+      const previousLastTimestamp = previous.lastCandidateKey?.timestampEpochMs ?? 0;
+      const nextLastCandidateKey = timestampEpochMs >= previousLastTimestamp ? normalizedKey : previous.lastCandidateKey;
+
+      if (hasDuplicate && nextLastCandidateKey === previous.lastCandidateKey) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        lastCandidateKey: nextLastCandidateKey,
+        candidateKeyHistory: nextHistory
+      };
+    });
+  }, []);
+
+  const onRecoveryStateSync = useCallback((lastYjsSequence: number) => {
+    void lastYjsSequence;
+    clearRecoverySyncPending();
+    setResyncSignal((value) => value + 1);
+  }, [clearRecoverySyncPending]);
+
+  /** Peers: incremental Yjs relay. Server still owns DB + state_sync snapshots (recovery / tabs). */
+  const onYjsUpdate = useCallback((payload: { sessionId: string; yjsUpdate: string; syncKey?: string | null; yjsSequence?: number | null }) => {
     const update = payload.yjsUpdate?.trim();
     if (!update) return;
-    const incomingSyncKey = payload.syncKey?.trim();
-    if (incomingSyncKey && incomingSyncKey !== syncKeyRef.current) {
+    const incomingSyncKey = payload.syncKey?.trim() || syncKeyRef.current;
+    if (incomingSyncKey !== syncKeyRef.current) {
       return;
     }
-
-    const dedupeKey = `${incomingSyncKey ?? ""}::${update}`;
-    const now = Date.now();
-    const recentSentAt = recentLocalYjsUpdatesRef.current.get(dedupeKey);
-    if (recentSentAt && now - recentSentAt < 10_000) {
-      recentLocalYjsUpdatesRef.current.delete(dedupeKey);
-      return;
-    }
-
-    setEditorHydrated(true);
+    roomSyncLog("sse:yjs_update_incremental", {
+      fromSession: payload.sessionId,
+      yjsSequence: payload.yjsSequence ?? null
+    });
     if (yjsApplyUpdateRef.current) {
       yjsApplyUpdateRef.current(update);
       return;
     }
-    yjsPendingUpdatesRef.current.push(update);
+    yjsPendingUpdatesRef.current.push({ syncKey: incomingSyncKey, update });
   }, []);
 
   const onYjsBridgeReady = useCallback((applyUpdate: ((yjsUpdate: string) => void) | null) => {
     yjsApplyUpdateRef.current = applyUpdate;
     if (!applyUpdate) return;
+    const targetSyncKey = syncKeyRef.current;
     const pending = yjsPendingUpdatesRef.current.splice(0, yjsPendingUpdatesRef.current.length);
-    pending.forEach((update) => applyUpdate(update));
+    pending
+      .filter((item) => item.syncKey === targetSyncKey)
+      .forEach((item) => applyUpdate(item.update));
+  }, []);
+
+  const onAwarenessBridgeReady = useCallback((applyFn: ((b64: string) => void) | null) => {
+    awarenessApplyRef.current = applyFn;
+    if (!applyFn) return;
+    const pending = awarenessPendingRef.current.splice(0, awarenessPendingRef.current.length);
+    pending.forEach((b64) => applyFn(b64));
+  }, []);
+
+  const onAwarenessUpdateSocket = useCallback((payload: { sessionId: string; awarenessUpdate: string }) => {
+    if (payload.sessionId === sessionIdRef.current) return;
+    const b64 = payload.awarenessUpdate?.trim() ?? "";
+    if (!b64) return;
+    if (awarenessApplyRef.current) {
+      awarenessApplyRef.current(b64);
+      return;
+    }
+    awarenessPendingRef.current.push(b64);
+    if (awarenessPendingRef.current.length > 200) {
+      awarenessPendingRef.current.splice(0, awarenessPendingRef.current.length - 200);
+    }
   }, []);
 
   const fallbackDisplayName = authUser?.nickname?.trim() || (interviewerToken ? "Интервьюер" : "Участник");
   const effectiveDisplayName = displayName.trim() || fallbackDisplayName;
   const canConnect = Boolean(inviteCode);
-  const { connected, sessionId, sendCodeUpdate, sendLanguageUpdate, sendSetStep, sendTaskRatingUpdate, sendNotesUpdate, sendCursorUpdate, sendYjsUpdate, sendKeyPress } = useRoomSocket({
+  const {
+    connected,
+    sessionId,
+    sendLanguageUpdate,
+    sendSetStep,
+    sendTaskRatingUpdate,
+    sendNotesUpdate,
+    sendAwarenessUpdate,
+    sendYjsUpdate,
+    sendKeyPress
+  } = useRoomSocket({
     enabled: canConnect,
     inviteCode,
     authToken,
@@ -424,47 +763,46 @@ export function RoomPage() {
     interviewerToken,
     onState,
     onError,
-    onYjsUpdate
+    onCursorUpdate,
+    onCandidateKey,
+    onYjsUpdate,
+    onAwarenessUpdate: onAwarenessUpdateSocket,
+    onRecoveryStateSync,
+    onRequireRecoverySync: markRecoverySyncPending
   });
   useEffect(() => {
     sessionIdRef.current = sessionId;
   }, [sessionId]);
 
-  const sendYjsUpdateTracked = useCallback((yjsUpdate: string, syncKey?: string | null) => {
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  const sendYjsUpdateTracked = useCallback(
+    (yjsUpdate: string, syncKey?: string | null, codeSnapshot?: string | null, yjsDocumentBase64?: string | null) => {
     const update = yjsUpdate.trim();
-    if (!update) return;
+    const docSnap = yjsDocumentBase64?.trim() ?? "";
+    if (!update && !docSnap) return;
     const normalizedSyncKey = syncKey?.trim() ?? "";
     const now = Date.now();
-    const dedupeKey = `${normalizedSyncKey}::${update}`;
+    const dedupeKey = docSnap ? `${normalizedSyncKey}::snap::${docSnap.length}::${docSnap.slice(0, 120)}` : `${normalizedSyncKey}::${update}`;
     recentLocalYjsUpdatesRef.current.set(dedupeKey, now);
     recentLocalYjsUpdatesRef.current.forEach((timestamp, key) => {
       if (now - timestamp > 15_000) {
         recentLocalYjsUpdatesRef.current.delete(key);
       }
     });
-    sendYjsUpdate(update, normalizedSyncKey || null);
-  }, [sendYjsUpdate]);
+    sendYjsUpdate(update, normalizedSyncKey || null, codeSnapshot ?? null, docSnap || null);
+  },
+  [sendYjsUpdate]
+);
 
   const hasRealtimeState = Boolean(state);
   const participantsCount = state?.participants.length ?? 0;
 
-  useEffect(() => {
-    if (!hasRealtimeState) {
-      setEditorHydrated(false);
-      return;
-    }
-    if (participantsCount <= 1) {
-      setEditorHydrated(true);
-      return;
-    }
-    setEditorHydrated(false);
-    const timer = window.setTimeout(() => {
-      setEditorHydrated(true);
-    }, 1200);
-    return () => window.clearTimeout(timer);
-  }, [currentSyncKey, hasRealtimeState, participantsCount]);
-
-  const editorReady = !hasRealtimeState || editorHydrated;
+  // Editing must not wait for SSE: readOnly blocked y-codemirror + Yjs until first state_sync.
+  // `readOnly` blocks user input; merged Yjs updates still apply once the editor is mounted.
+  const editorReady = Boolean(merged);
 
   const notesLockActive = (merged?.notesLockedUntilEpochMs ?? 0) > Date.now();
   const notesLockedByOther =
@@ -611,19 +949,26 @@ export function RoomPage() {
             notesStatus={notesStatus}
             notesLockedByOther={notesLockedByOther}
             sessionId={sessionId}
-            cursors={merged.cursors}
+            participantLabel={effectiveDisplayName}
+            sendAwarenessUpdate={sendAwarenessUpdate}
+            onAwarenessBridgeReady={onAwarenessBridgeReady}
             lastCandidateKey={merged.lastCandidateKey}
             candidateKeyHistory={merged.candidateKeyHistory ?? []}
             syncKey={currentSyncKey}
             resyncSignal={resyncSignal}
             editorReady={editorReady}
-            onCodeChange={(value) => sendCodeUpdate(value ?? "")}
             onLanguageChange={(value) => value && sendLanguageUpdate(value)}
             onSelectStep={(stepIndex) => sendSetStep(stepIndex)}
-            onCursorChange={(payload) => sendCursorUpdate(payload)}
-            onYjsUpdate={(yjsUpdate, syncKey) => sendYjsUpdateTracked(yjsUpdate, syncKey)}
+            onYjsUpdate={(yjsUpdate, syncKey, codeSnapshot, yjsDoc) =>
+              sendYjsUpdateTracked(yjsUpdate, syncKey, codeSnapshot, yjsDoc)
+            }
             onYjsBridgeReady={onYjsBridgeReady}
-            onKeyPress={(payload) => sendKeyPress(payload)}
+            onEditorValueChange={onEditorValueChange}
+            onKeyPress={(payload) => {
+              if (merged.role === "candidate") {
+                sendKeyPress(payload);
+              }
+            }}
             onTaskRatingChange={(rating) => sendTaskRatingUpdate(merged.currentStep, rating)}
             onNotesChange={(value) => {
               setNotesDraft(value);
@@ -639,15 +984,22 @@ export function RoomPage() {
             stepTitle={step?.title ?? "-"}
             stepDescription={step?.description ?? ""}
             sessionId={sessionId}
-            cursors={merged.cursors}
+            participantLabel={effectiveDisplayName}
+            sendAwarenessUpdate={sendAwarenessUpdate}
+            onAwarenessBridgeReady={onAwarenessBridgeReady}
             syncKey={currentSyncKey}
             resyncSignal={resyncSignal}
             editorReady={editorReady}
-            onCodeChange={(value) => sendCodeUpdate(value ?? "")}
-            onCursorChange={(payload) => sendCursorUpdate(payload)}
-            onYjsUpdate={(yjsUpdate, syncKey) => sendYjsUpdateTracked(yjsUpdate, syncKey)}
+            onYjsUpdate={(yjsUpdate, syncKey, codeSnapshot, yjsDoc) =>
+              sendYjsUpdateTracked(yjsUpdate, syncKey, codeSnapshot, yjsDoc)
+            }
             onYjsBridgeReady={onYjsBridgeReady}
-            onKeyPress={(payload) => sendKeyPress(payload)}
+            onEditorValueChange={onEditorValueChange}
+            onKeyPress={(payload) => {
+              if (merged.role === "candidate") {
+                sendKeyPress(payload);
+              }
+            }}
             error={error}
           />
         )}
@@ -669,15 +1021,7 @@ function TopBar({
   participants: Participant[];
   showParticipants: boolean;
 }) {
-  const normalizedParticipants = useMemo(() => {
-    const unique = new Map<string, Participant>();
-    participants.forEach((participant) => {
-      if (!unique.has(participant.sessionId)) {
-        unique.set(participant.sessionId, participant);
-      }
-    });
-    return Array.from(unique.values());
-  }, [participants]);
+  const normalizedParticipants = useMemo(() => participants, [participants]);
 
   const participantsHostRef = useRef<HTMLDivElement | null>(null);
   const [maxVisibleParticipants, setMaxVisibleParticipants] = useState(normalizedParticipants.length);
@@ -839,18 +1183,19 @@ function OwnerLayout({
   notesStatus,
   notesLockedByOther,
   sessionId,
-  cursors,
+  participantLabel,
+  sendAwarenessUpdate,
+  onAwarenessBridgeReady,
   lastCandidateKey,
   candidateKeyHistory,
   syncKey,
   resyncSignal,
   editorReady,
-  onCodeChange,
   onLanguageChange,
   onSelectStep,
-  onCursorChange,
   onYjsUpdate,
   onYjsBridgeReady,
+  onEditorValueChange,
   onKeyPress,
   onTaskRatingChange,
   onNotesChange
@@ -866,25 +1211,19 @@ function OwnerLayout({
   notesStatus: string;
   notesLockedByOther: boolean;
   sessionId: string;
-  cursors: CursorInfo[];
+  participantLabel: string;
+  sendAwarenessUpdate: (awarenessUpdate: string) => void;
+  onAwarenessBridgeReady: (applyFn: ((b64: string) => void) | null) => void;
   lastCandidateKey: CandidateKeyInfo | null;
   candidateKeyHistory: CandidateKeyInfo[];
   syncKey: string;
   resyncSignal: number;
   editorReady: boolean;
-  onCodeChange: (value: string | undefined) => void;
   onLanguageChange: (value: string | null) => void;
   onSelectStep: (stepIndex: number) => void;
-  onCursorChange: (payload: {
-    lineNumber: number;
-    column: number;
-    selectionStartLineNumber?: number | null;
-    selectionStartColumn?: number | null;
-    selectionEndLineNumber?: number | null;
-    selectionEndColumn?: number | null;
-  }) => void;
-  onYjsUpdate: (yjsUpdate: string, syncKey: string) => void;
+  onYjsUpdate: (yjsUpdate: string, syncKey: string, codeSnapshot?: string | null, yjsDocumentBase64?: string | null) => void;
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
+  onEditorValueChange: (value: string) => void;
   onKeyPress: (payload: { key: string; keyCode: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void;
   onTaskRatingChange: (rating: number | null) => void;
   onNotesChange: (value: string) => void;
@@ -892,10 +1231,11 @@ function OwnerLayout({
   const [leftSidebarVisible, setLeftSidebarVisible] = useState(true);
   const [rightSidebarVisible, setRightSidebarVisible] = useState(true);
   const [rightPanelTab, setRightPanelTab] = useState<"notes" | "logs">("notes");
-  const [leftWidth, setLeftWidth] = useState(280);
-  const [rightWidth, setRightWidth] = useState(320);
+  const [leftWidth, setLeftWidth] = useState(240);
+  const [rightWidth, setRightWidth] = useState(288);
   const ownerBodyRef = useRef<HTMLDivElement | null>(null);
   const [ownerBodyWidth, setOwnerBodyWidth] = useState(0);
+  const compactAutoCollapsedRef = useRef(false);
 
   const dragStateRef = useRef<{ side: ResizeSide; startX: number; startWidth: number } | null>(null);
   const [dragging, setDragging] = useState<ResizeSide | null>(null);
@@ -960,11 +1300,27 @@ function OwnerLayout({
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    if (ownerBodyWidth <= 0) return;
+    if (ownerBodyWidth < 1080) {
+      if (!compactAutoCollapsedRef.current && leftSidebarVisible) {
+        compactAutoCollapsedRef.current = true;
+        setLeftSidebarVisible(false);
+      }
+      return;
+    }
+    if (ownerBodyWidth >= 1160) {
+      compactAutoCollapsedRef.current = false;
+    }
+  }, [leftSidebarVisible, ownerBodyWidth]);
+
+  const showLeftSidebar = leftSidebarVisible;
+  const showRightSidebar = rightSidebarVisible;
   const baseInset = 10;
   const toggleHandleWidth = 20;
   const maxOffset = Math.max(baseInset, ownerBodyWidth - toggleHandleWidth - 4);
-  const leftToggleOffset = clamp(leftSidebarVisible ? leftWidth + 10 : baseInset, baseInset, maxOffset);
-  const rightToggleOffset = clamp(rightSidebarVisible ? rightWidth + 10 : baseInset, baseInset, maxOffset);
+  const leftToggleOffset = clamp(showLeftSidebar ? leftWidth + 10 : baseInset, baseInset, maxOffset);
+  const rightToggleOffset = clamp(showRightSidebar ? rightWidth + 10 : baseInset, baseInset, maxOffset);
   const candidateParticipants = merged.participants.filter((participant) => participant.role === "candidate");
   const candidateOutOfFocus = candidateParticipants.some((participant) => participant.presenceStatus === "away");
   const candidatePresenceState = candidateParticipants.length === 0 ? "offline" : candidateOutOfFocus ? "away" : "active";
@@ -986,27 +1342,27 @@ function OwnerLayout({
         type="button"
         className={`${styles.edgeToggle} ${styles.leftEdgeToggle}`}
         style={{ left: leftToggleOffset }}
-        data-open={leftSidebarVisible}
+        data-open={showLeftSidebar}
         onClick={() => setLeftSidebarVisible((current) => !current)}
-        aria-label={leftSidebarVisible ? "Скрыть левый сайдбар" : "Показать левый сайдбар"}
+        aria-label={showLeftSidebar ? "Скрыть левый сайдбар" : "Показать левый сайдбар"}
       >
-        {leftSidebarVisible ? <IconChevronLeft size={14} className={styles.edgeToggleIcon} /> : <IconChevronRight size={14} className={styles.edgeToggleIcon} />}
+        {showLeftSidebar ? <IconChevronLeft size={14} className={styles.edgeToggleIcon} /> : <IconChevronRight size={14} className={styles.edgeToggleIcon} />}
       </button>
 
       <button
         type="button"
         className={`${styles.edgeToggle} ${styles.rightEdgeToggle}`}
         style={{ right: rightToggleOffset }}
-        data-open={rightSidebarVisible}
+        data-open={showRightSidebar}
         onClick={() => setRightSidebarVisible((current) => !current)}
-        aria-label={rightSidebarVisible ? "Скрыть правый сайдбар" : "Показать правый сайдбар"}
+        aria-label={showRightSidebar ? "Скрыть правый сайдбар" : "Показать правый сайдбар"}
       >
-        {rightSidebarVisible ? <IconChevronRight size={14} className={styles.edgeToggleIcon} /> : <IconChevronLeft size={14} className={styles.edgeToggleIcon} />}
+        {showRightSidebar ? <IconChevronRight size={14} className={styles.edgeToggleIcon} /> : <IconChevronLeft size={14} className={styles.edgeToggleIcon} />}
       </button>
 
-      {leftSidebarVisible && (
+      {showLeftSidebar && (
         <>
-          <Box className={styles.sidebar} style={{ width: leftWidth }}>
+          <Box className={styles.sidebar} style={{ width: clamp(leftWidth, MIN_LEFT_WIDTH, MAX_LEFT_WIDTH) }}>
             <Text size="xs" c="#8b919b">
               шаг {merged.currentStep + 1}/{Math.max(tasks.length, 1)}
             </Text>
@@ -1068,22 +1424,25 @@ function OwnerLayout({
                 height="100%"
                 language={toEditorLanguage(merged.language)}
                 value={merged.code}
-                syncKey={syncKey}
+                serverYjsBase64={merged.yjsDocumentBase64 ?? null}
+                serverYjsSequence={merged.lastYjsSequence ?? 0}
                 resyncSignal={resyncSignal}
+                syncKey={syncKey}
                 readOnly={!editorReady}
                 sessionId={sessionId}
-                cursors={cursors}
-                onChange={onCodeChange}
-                onCursorChange={onCursorChange}
+                participantLabel={participantLabel}
+                sendAwarenessUpdate={sendAwarenessUpdate}
+                onAwarenessBridgeReady={onAwarenessBridgeReady}
                 onYjsUpdate={onYjsUpdate}
                 onYjsBridgeReady={onYjsBridgeReady}
+                onEditorValueChange={onEditorValueChange}
                 onKeyPress={onKeyPress}
               />
             </div>
           </Box>
         </Box>
 
-        {rightSidebarVisible && (
+        {showRightSidebar && (
           <>
             <div
               className={styles.resizeHandle}
@@ -1094,7 +1453,7 @@ function OwnerLayout({
               <IconGripVertical size={14} />
             </div>
 
-            <Box className={styles.outputPanel} style={{ width: rightWidth }}>
+            <Box className={styles.outputPanel} style={{ width: clamp(rightWidth, MIN_RIGHT_WIDTH, MAX_RIGHT_WIDTH) }}>
               <div className={styles.panelTabs}>
                 <div className={styles.ownerPresenceBanner} aria-label="Статус кандидата">
                   <div className={styles.ownerPresenceCopy}>
@@ -1216,14 +1575,15 @@ function CandidateLayout({
   stepTitle,
   stepDescription,
   sessionId,
-  cursors,
+  participantLabel,
+  sendAwarenessUpdate,
+  onAwarenessBridgeReady,
   syncKey,
   resyncSignal,
   editorReady,
-  onCodeChange,
-  onCursorChange,
   onYjsUpdate,
   onYjsBridgeReady,
+  onEditorValueChange,
   onKeyPress,
   error
 }: {
@@ -1231,21 +1591,15 @@ function CandidateLayout({
   stepTitle: string;
   stepDescription: string;
   sessionId: string;
-  cursors: CursorInfo[];
+  participantLabel: string;
+  sendAwarenessUpdate: (awarenessUpdate: string) => void;
+  onAwarenessBridgeReady: (applyFn: ((b64: string) => void) | null) => void;
   syncKey: string;
   resyncSignal: number;
   editorReady: boolean;
-  onCodeChange: (value: string | undefined) => void;
-  onCursorChange: (payload: {
-    lineNumber: number;
-    column: number;
-    selectionStartLineNumber?: number | null;
-    selectionStartColumn?: number | null;
-    selectionEndLineNumber?: number | null;
-    selectionEndColumn?: number | null;
-  }) => void;
-  onYjsUpdate: (yjsUpdate: string, syncKey: string) => void;
+  onYjsUpdate: (yjsUpdate: string, syncKey: string, codeSnapshot?: string | null, yjsDocumentBase64?: string | null) => void;
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
+  onEditorValueChange: (value: string) => void;
   onKeyPress: (payload: { key: string; keyCode: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void;
   error: string;
 }) {
@@ -1275,15 +1629,18 @@ function CandidateLayout({
             height="calc(100vh - 170px)"
             language={toEditorLanguage(merged.language)}
             value={merged.code}
-            syncKey={syncKey}
+            serverYjsBase64={merged.yjsDocumentBase64 ?? null}
+            serverYjsSequence={merged.lastYjsSequence ?? 0}
             resyncSignal={resyncSignal}
+            syncKey={syncKey}
             readOnly={!editorReady}
             sessionId={sessionId}
-            cursors={cursors}
-            onChange={onCodeChange}
-            onCursorChange={onCursorChange}
+            participantLabel={participantLabel}
+            sendAwarenessUpdate={sendAwarenessUpdate}
+            onAwarenessBridgeReady={onAwarenessBridgeReady}
             onYjsUpdate={onYjsUpdate}
             onYjsBridgeReady={onYjsBridgeReady}
+            onEditorValueChange={onEditorValueChange}
             onKeyPress={onKeyPress}
           />
         </div>
@@ -1326,591 +1683,508 @@ function hashSessionId(sessionId: string): number {
   return hash;
 }
 
-function colorThemeForSession(sessionId: string) {
+function awarenessUserColors(sessionId: string): { color: string; colorLight: string } {
   const hue = hashSessionId(sessionId) % 360;
   return {
-    caret: `hsl(${hue} 88% 60%)`,
-    selection: `hsl(${hue} 88% 60% / 0.18)`,
-    selectionBorder: `hsl(${hue} 88% 60% / 0.45)`,
-    labelBackground: `hsl(${hue} 58% 42% / 0.24)`,
-    labelText: "rgba(247, 249, 252, 0.82)"
+    color: `hsl(${hue} 68% 58%)`,
+    colorLight: `hsla(${hue} 68% 58% / 0.24)`
   };
 }
 
-function cursorClassBySession(sessionId: string): string {
-  return `remote-cursor-caret-${sessionId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+/**
+ * After a tab refresh, Yjs assigns a new clientID while the realtime sessionId stays the same.
+ * Peers briefly keep both awareness entries → duplicate remote carets.
+ *
+ * Do not pick the winner by `clock` alone: the old tab's client keeps a large frozen clock while the new tab's
+ * clock resets — we would keep the dead entry and drop live updates. Prefer `meta.lastUpdated` (refreshed on each
+ * inbound awareness message for that clientId); the disconnected client stops receiving bumps.
+ */
+function dedupeRemoteAwarenessEntries(awareness: Awareness) {
+  const localId = awareness.clientID;
+
+  const clockOf = (clientId: number) => awareness.meta.get(clientId)?.clock ?? 0;
+  const lastUpdatedOf = (clientId: number) => awareness.meta.get(clientId)?.lastUpdated ?? 0;
+
+  const hasSessionIdInUser = (st: { user?: unknown } | undefined) => {
+    const sid = (st?.user as { sessionId?: string } | undefined)?.sessionId;
+    return typeof sid === "string" && sid.trim().length > 0;
+  };
+
+  const remoteWinsOver = (newId: number, oldId: number) => {
+    const luN = lastUpdatedOf(newId);
+    const luO = lastUpdatedOf(oldId);
+    if (luN !== luO) {
+      return luN > luO;
+    }
+    const stN = awareness.states.get(newId);
+    const stO = awareness.states.get(oldId);
+    const sidN = hasSessionIdInUser(stN);
+    const sidO = hasSessionIdInUser(stO);
+    if (sidN !== sidO) {
+      return sidN;
+    }
+    const cN = clockOf(newId);
+    const cO = clockOf(oldId);
+    if (cN !== cO) {
+      return cN > cO;
+    }
+    return newId > oldId;
+  };
+
+  const winnerByKey = new Map<string, number>();
+  awareness.states.forEach((_state, clientId) => {
+    if (clientId === localId) return;
+    const st = awareness.states.get(clientId);
+    const u = st?.user as { sessionId?: string; name?: string; color?: string } | undefined;
+    if (!u) return;
+    const key =
+      typeof u.sessionId === "string" && u.sessionId.trim()
+        ? `sid:${u.sessionId.trim()}`
+        : `legacy:${String(u.name ?? "")}|${String(u.color ?? "")}`;
+    const prev = winnerByKey.get(key);
+    if (prev === undefined || remoteWinsOver(clientId, prev)) {
+      winnerByKey.set(key, clientId);
+    }
+  });
+
+  const toRemove = new Set<number>();
+  awareness.states.forEach((_state, clientId) => {
+    if (clientId === localId) return;
+    const st = awareness.states.get(clientId);
+    const u = st?.user as { sessionId?: string; name?: string; color?: string } | undefined;
+    if (!u) return;
+    const key =
+      typeof u.sessionId === "string" && u.sessionId.trim()
+        ? `sid:${u.sessionId.trim()}`
+        : `legacy:${String(u.name ?? "")}|${String(u.color ?? "")}`;
+    if (winnerByKey.get(key) !== clientId) {
+      toRemove.add(clientId);
+    }
+  });
+
+  // Drop pre-sessionId ghosts when the same participant already has sessionId in awareness.
+  const hasSessionId = new Set<string>();
+  awareness.states.forEach((st, id) => {
+    if (id === localId) return;
+    const sid = (st?.user as { sessionId?: string } | undefined)?.sessionId;
+    if (typeof sid === "string" && sid.trim()) {
+      hasSessionId.add(`${String((st?.user as { name?: string }).name ?? "")}|${String((st?.user as { color?: string }).color ?? "")}`);
+    }
+  });
+  awareness.states.forEach((_state, clientId) => {
+    if (clientId === localId) return;
+    const st = awareness.states.get(clientId);
+    const u = st?.user as { sessionId?: string; name?: string; color?: string } | undefined;
+    if (!u || (typeof u.sessionId === "string" && u.sessionId.trim())) return;
+    const legacyKey = `${String(u.name ?? "")}|${String(u.color ?? "")}`;
+    if (hasSessionId.has(legacyKey) && !toRemove.has(clientId)) {
+      toRemove.add(clientId);
+    }
+  });
+
+  if (toRemove.size > 0) {
+    removeAwarenessStates(awareness, Array.from(toRemove), "local");
+  }
 }
 
-function selectionClassBySession(sessionId: string): string {
-  return `remote-selection-${sessionId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
-}
+/** Remote carets on one-dark background (y-codemirror defaults assume light theme). */
+const remoteCursorDarkTheme = EditorView.baseTheme({
+  ".cm-ySelectionCaret": {
+    borderLeft: "2px solid rgba(255,255,255,0.88)",
+    borderRight: "2px solid rgba(255,255,255,0.88)"
+  },
+  ".cm-ySelectionInfo": {
+    color: "#0c0e12",
+    fontFamily: "system-ui, sans-serif",
+    fontSize: "11px"
+  }
+});
 
 function RoomCodeEditor({
   height,
   language,
   value,
+  serverYjsBase64 = null,
+  serverYjsSequence = 0,
   syncKey,
   resyncSignal,
   readOnly,
   sessionId,
-  cursors,
-  onChange,
-  onCursorChange,
+  participantLabel,
+  sendAwarenessUpdate,
+  onAwarenessBridgeReady,
   onYjsUpdate,
   onYjsBridgeReady,
+  onEditorValueChange,
   onKeyPress
 }: {
   height: string;
   language: string;
   value: string;
+  serverYjsBase64?: string | null;
+  serverYjsSequence?: number;
   syncKey: string;
   resyncSignal: number;
   readOnly: boolean;
   sessionId: string;
-  cursors: CursorInfo[];
-  onChange: (value: string | undefined) => void;
-  onCursorChange: (payload: {
-    lineNumber: number;
-    column: number;
-    selectionStartLineNumber?: number | null;
-    selectionStartColumn?: number | null;
-    selectionEndLineNumber?: number | null;
-    selectionEndColumn?: number | null;
-  }) => void;
-  onYjsUpdate: (yjsUpdate: string, syncKey: string) => void;
+  participantLabel: string;
+  sendAwarenessUpdate: (awarenessUpdate: string) => void;
+  onAwarenessBridgeReady: (applyFn: ((b64: string) => void) | null) => void;
+  onYjsUpdate: (yjsUpdate: string, syncKey: string, codeSnapshot?: string | null, yjsDocumentBase64?: string | null) => void;
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
+  onEditorValueChange: (value: string) => void;
   onKeyPress: (payload: { key: string; keyCode: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void;
 }) {
-  const editorRef = useRef<any>(null);
-  const monacoRef = useRef<any>(null);
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const viewRef = useRef<EditorView | null>(null);
   const yDocRef = useRef<Y.Doc | null>(null);
   const yTextRef = useRef<Y.Text | null>(null);
-  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const styleElementRef = useRef<HTMLStyleElement | null>(null);
-  const suppressEditorChangesRef = useRef(false);
-  const disposablesRef = useRef<Array<{ dispose: () => void }>>([]);
-  const decorationsRef = useRef<string[]>([]);
-  const cursorWidgetsRef = useRef<Map<string, {
-    widget: any;
-    node: HTMLDivElement;
-    setPosition: (lineNumber: number, column: number) => void;
-  }>>(new Map());
-  const lastCursorSentRef = useRef<{
-    lineNumber: number;
-    column: number;
-    selectionStartLineNumber: number | null;
-    selectionStartColumn: number | null;
-    selectionEndLineNumber: number | null;
-    selectionEndColumn: number | null;
-    ts: number;
-  }>({
-    lineNumber: 0,
-    column: 0,
-    selectionStartLineNumber: null,
-    selectionStartColumn: null,
-    selectionEndLineNumber: null,
-    selectionEndColumn: null,
-    ts: 0
-  });
-  const syncKeyRef = useRef(syncKey);
-  const lastLocalEditAtRef = useRef(0);
+  const lastHandledResyncSignalRef = useRef(0);
+  const syncKeyRef = useRef<string>(syncKey);
+  const onYjsUpdateRef = useRef(onYjsUpdate);
+  const onEditorValueChangeRef = useRef(onEditorValueChange);
+  const onKeyPressRef = useRef(onKeyPress);
+  const readOnlyCompartmentRef = useRef(new Compartment());
+  const languageCompartmentRef = useRef(new Compartment());
+  const lastAppliedServerYjsSeqRef = useRef(-1);
+  const lastAppliedServerYjsSnapRef = useRef<string | null>(null);
+  const lastSyncKeyForServerSeqRef = useRef(syncKey);
+  const sendAwarenessUpdateRef = useRef(sendAwarenessUpdate);
+  const awarenessRef = useRef<Awareness | null>(null);
 
-  const schedulePersistCode = useCallback((nextCode: string) => {
-    if (persistTimerRef.current) {
-      clearTimeout(persistTimerRef.current);
-    }
-    persistTimerRef.current = setTimeout(() => {
-      onChange(nextCode);
-    }, 450);
-  }, [onChange]);
+  /** After remote Yjs merges (reload / resync), re-anchor local cursor in Awareness and refresh remote carets. */
+  const bumpLocalAwarenessAfterRemoteDocChange = useCallback(() => {
+    requestAnimationFrame(() => {
+      const v = viewRef.current;
+      const awareness = awarenessRef.current;
+      const yText = yTextRef.current;
+      if (!v || !awareness || !yText) return;
+      try {
+        const docLen = yText.length;
+        const sel = v.state.selection.main;
+        const anchor = Math.min(Math.max(sel.anchor, 0), docLen);
+        const head = Math.min(Math.max(sel.head, 0), docLen);
+        if (anchor !== sel.anchor || head !== sel.head) {
+          v.dispatch({ selection: EditorSelection.single(anchor, head) });
+        }
+        const next = v.state.selection.main;
+        awareness.setLocalStateField("cursor", {
+          anchor: Y.createRelativePositionFromTypeIndex(yText, next.anchor),
+          head: Y.createRelativePositionFromTypeIndex(yText, next.head)
+        });
+      } catch {
+        /* selection can be adjusting after applyUpdate */
+      }
+      dedupeRemoteAwarenessEntries(awareness);
+      v.dispatch({});
+    });
+  }, []);
 
   useEffect(() => {
-    const styleNode = document.createElement("style");
-    styleNode.setAttribute("data-room-cursor-style", sessionId);
-    document.head.appendChild(styleNode);
-    styleElementRef.current = styleNode;
-    return () => {
-      styleElementRef.current?.remove();
-      styleElementRef.current = null;
-    };
-  }, [sessionId]);
+    sendAwarenessUpdateRef.current = sendAwarenessUpdate;
+  }, [sendAwarenessUpdate]);
+
+  useEffect(() => {
+    onYjsUpdateRef.current = onYjsUpdate;
+    onEditorValueChangeRef.current = onEditorValueChange;
+    onKeyPressRef.current = onKeyPress;
+  }, [onEditorValueChange, onKeyPress, onYjsUpdate]);
+
+  useEffect(() => {
+    const awareness = awarenessRef.current;
+    if (!awareness) return;
+    const st = awareness.getLocalState();
+    if (!st?.user) return;
+    const name = participantLabel.trim() || "Участник";
+    if (st.user.name === name && (st.user as { sessionId?: string }).sessionId === sessionId) return;
+    awareness.setLocalState({
+      ...st,
+      user: { ...st.user, name, sessionId }
+    });
+  }, [participantLabel, sessionId]);
+
+  const languageExtension = useMemo(() => {
+    const normalized = normalizeRoomLanguage(language);
+    if (normalized === "python") return python();
+    if (normalized === "java" || normalized === "kotlin") return java();
+    if (normalized === "sql") return sql();
+    return javascript();
+  }, [language]);
 
   useEffect(() => {
     return () => {
       onYjsBridgeReady(null);
-
-      if (persistTimerRef.current) {
-        clearTimeout(persistTimerRef.current);
-        persistTimerRef.current = null;
-      }
-
-      const editor = editorRef.current;
-      if (editor) {
-        cursorWidgetsRef.current.forEach((state) => {
-          editor.removeContentWidget(state.widget);
-        });
-      }
-      cursorWidgetsRef.current.clear();
-      decorationsRef.current = [];
-
+      onAwarenessBridgeReady(null);
+      viewRef.current?.destroy();
+      viewRef.current = null;
       yDocRef.current?.destroy();
       yDocRef.current = null;
       yTextRef.current = null;
-
-      disposablesRef.current.forEach((disposable) => disposable.dispose());
-      disposablesRef.current = [];
+      awarenessRef.current = null;
     };
-  }, [onYjsBridgeReady]);
+  }, [onAwarenessBridgeReady, onYjsBridgeReady]);
 
   useEffect(() => {
-    const editor = editorRef.current;
-    const monaco = monacoRef.current;
-    if (!editor || !monaco) return;
+    if (!hostRef.current || viewRef.current) return;
 
-    const model = editor.getModel();
-    if (!model) return;
-
-    const clampCursor = (lineNumber: number, column: number) => {
-      const maxLine = model.getLineCount();
-      const nextLine = Math.min(Math.max(lineNumber, 1), maxLine);
-      const lineMaxColumn = model.getLineMaxColumn(nextLine);
-      const nextColumn = Math.min(Math.max(column, 1), lineMaxColumn);
-      return { lineNumber: nextLine, column: nextColumn };
-    };
-
-    const createCursorWidget = (widgetId: string, lineNumber: number, column: number) => {
-      const node = document.createElement("div");
-      let position = new monaco.Position(lineNumber, column);
-      const widget = {
-        getId: () => widgetId,
-        getDomNode: () => node,
-        getPosition: () => ({
-          position,
-          preference: [
-            monaco.editor.ContentWidgetPositionPreference.ABOVE,
-            monaco.editor.ContentWidgetPositionPreference.BELOW
-          ]
-        })
-      };
-
-      return {
-        widget,
-        node,
-        setPosition: (nextLine: number, nextColumn: number) => {
-          position = new monaco.Position(nextLine, nextColumn);
+    const readOnlyCompartment = readOnlyCompartmentRef.current;
+    const languageCompartment = languageCompartmentRef.current;
+    const targetCode = value ?? "";
+    const snap = serverYjsBase64?.trim();
+    let yDoc = new Y.Doc();
+    if (snap) {
+      try {
+        const raw = base64ToBytes(snap);
+        if (raw.length > 0) {
+          Y.applyUpdate(yDoc, raw, "bootstrap");
         }
-      };
-    };
-
-    const remoteCursors = cursors.filter((cursor) => cursor.sessionId !== sessionId);
-    const caretCssRules: string[] = [];
-    const selectionCssRules: string[] = [];
-    const decorations: any[] = [];
-    remoteCursors.forEach((cursor) => {
-      const { lineNumber, column } = clampCursor(cursor.lineNumber, cursor.column);
-      const label = cursor.displayName.trim().slice(0, 18) || "Участник";
-      const theme = colorThemeForSession(cursor.sessionId);
-      const widgetId = `remote-cursor-${cursor.sessionId}`;
-      const widgetState = cursorWidgetsRef.current.get(widgetId) ?? createCursorWidget(widgetId, lineNumber, column);
-      const caretClassName = cursorClassBySession(cursor.sessionId);
-      const selectionClassName = selectionClassBySession(cursor.sessionId);
-
-      widgetState.node.textContent = label;
-      widgetState.node.className = styles.remoteCursorLabel;
-      widgetState.node.style.backgroundColor = theme.labelBackground;
-      widgetState.node.style.color = theme.labelText;
-      widgetState.setPosition(lineNumber, column);
-
-      caretCssRules.push(`.${caretClassName} { border-left-color: ${theme.caret} !important; }`);
-      selectionCssRules.push(
-        `.${selectionClassName} { background-color: ${theme.selection} !important; box-shadow: inset 0 0 0 1px ${theme.selectionBorder}; border-radius: 2px; }`
-      );
-
-      if (!cursorWidgetsRef.current.has(widgetId)) {
-        cursorWidgetsRef.current.set(widgetId, widgetState);
-        editor.addContentWidget(widgetState.widget);
-      } else {
-        editor.layoutContentWidget(widgetState.widget);
+      } catch {
+        /* invalid snapshot */
       }
+    } else {
+      Y.applyUpdate(yDoc, createDeterministicBootstrapUpdate(targetCode), "bootstrap");
+    }
+    let yText = yDoc.getText("room-code");
+    // Server CRDT snapshot can disagree with `merged.code` (last writer / ordering); never replace a merged doc with the plain string.
+    if (yText.toString() !== targetCode && !snap) {
+      yDoc.destroy();
+      yDoc = new Y.Doc();
+      Y.applyUpdate(yDoc, createDeterministicBootstrapUpdate(targetCode), "bootstrap");
+      yText = yDoc.getText("room-code");
+    }
+    yDocRef.current = yDoc;
+    yTextRef.current = yText;
 
-      decorations.push({
-        range: new monaco.Range(lineNumber, column, lineNumber, column),
-        options: {
-          afterContentClassName: `${styles.remoteCursorCaret} ${caretClassName}`,
-          hoverMessage: { value: `${cursor.displayName} (${cursor.role})` }
-        }
-      });
-
-      const hasSelection =
-        typeof cursor.selectionStartLineNumber === "number" &&
-        typeof cursor.selectionStartColumn === "number" &&
-        typeof cursor.selectionEndLineNumber === "number" &&
-        typeof cursor.selectionEndColumn === "number";
-      if (!hasSelection) return;
-
-      const start = clampCursor(cursor.selectionStartLineNumber as number, cursor.selectionStartColumn as number);
-      const end = clampCursor(cursor.selectionEndLineNumber as number, cursor.selectionEndColumn as number);
-      const isBackward = start.lineNumber > end.lineNumber || (start.lineNumber === end.lineNumber && start.column > end.column);
-      const selectionStart = isBackward ? end : start;
-      const selectionEnd = isBackward ? start : end;
-      const isCollapsed =
-        selectionStart.lineNumber === selectionEnd.lineNumber &&
-        selectionStart.column === selectionEnd.column;
-      if (isCollapsed) return;
-
-      decorations.push({
-        range: new monaco.Range(
-          selectionStart.lineNumber,
-          selectionStart.column,
-          selectionEnd.lineNumber,
-          selectionEnd.column
-        ),
-        options: {
-          inlineClassName: selectionClassName,
-          hoverMessage: { value: `${cursor.displayName} выделяет фрагмент` }
-        }
-      });
+    const awareness = new Awareness(yDoc);
+    awarenessRef.current = awareness;
+    const { color, colorLight } = awarenessUserColors(sessionId);
+    awareness.setLocalState({
+      user: {
+        name: participantLabel.trim() || "Участник",
+        color,
+        colorLight,
+        sessionId
+      }
     });
 
-    const activeWidgetIds = new Set(remoteCursors.map((cursor) => `remote-cursor-${cursor.sessionId}`));
-    cursorWidgetsRef.current.forEach((state, widgetId) => {
-      if (activeWidgetIds.has(widgetId)) return;
-      editor.removeContentWidget(state.widget);
-      cursorWidgetsRef.current.delete(widgetId);
+    let awarenessFlushTimer: number | null = null;
+    const flushAwareness = () => {
+      awarenessFlushTimer = null;
+      try {
+        const u = encodeAwarenessUpdate(awareness, [awareness.clientID]);
+        sendAwarenessUpdateRef.current(bytesToBase64(u));
+      } catch {
+        /* ignore */
+      }
+    };
+    const onAwarenessChanged = (
+      { added, updated, removed }: { added: number[]; updated: number[]; removed: number[] },
+      origin: unknown
+    ) => {
+      if (origin === "remote") return;
+      const touched = new Set([...added, ...updated, ...removed]);
+      if (!touched.has(awareness.clientID)) return;
+      if (awarenessFlushTimer != null) window.clearTimeout(awarenessFlushTimer);
+      awarenessFlushTimer = window.setTimeout(flushAwareness, 48);
+    };
+    awareness.on("update", onAwarenessChanged);
+
+    onAwarenessBridgeReady((b64) => {
+      try {
+        if (!b64) return;
+        applyAwarenessUpdate(awareness, base64ToBytes(b64), "remote");
+        dedupeRemoteAwarenessEntries(awareness);
+      } catch {
+        /* ignore malformed */
+      }
     });
 
-    if (styleElementRef.current) {
-      styleElementRef.current.textContent = [...caretCssRules, ...selectionCssRules].join("\n");
-    }
-
-    decorationsRef.current = editor.deltaDecorations(decorationsRef.current, decorations);
-  }, [cursors, sessionId]);
-
-  useEffect(() => {
-    const yDoc = yDocRef.current;
-    const yText = yTextRef.current;
-    if (!yDoc || !yText) return;
-
-    const current = yText.toString();
-    const next = value ?? "";
-    const syncKeyChanged = syncKeyRef.current !== syncKey;
-    if (!syncKeyChanged) return;
-    if (current === next) {
-      syncKeyRef.current = syncKey;
-      return;
-    }
+    const view = new EditorView({
+      state: EditorState.create({
+        doc: yText.toString(),
+        extensions: [
+          oneDark,
+          lineNumbers(),
+          highlightActiveLine(),
+          drawSelection(),
+          history(),
+          foldGutter(),
+          indentOnInput(),
+          bracketMatching(),
+          syntaxHighlighting(defaultHighlightStyle),
+          keymap.of([...defaultKeymap, ...historyKeymap]),
+          readOnlyCompartment.of(EditorState.readOnly.of(readOnly)),
+          languageCompartment.of(languageExtension),
+          yCollab(yText, awareness, { undoManager: false }),
+          remoteCursorDarkTheme,
+          EditorView.updateListener.of((update) => {
+            if (!update.docChanged) return;
+            onEditorValueChangeRef.current(update.state.doc.toString());
+          }),
+          EditorView.domEventHandlers({
+            keydown: (_event, viewInstance) => {
+              const event = _event as KeyboardEvent;
+              onKeyPressRef.current({
+                key: event.key,
+                keyCode: event.code,
+                ctrlKey: event.ctrlKey,
+                altKey: event.altKey,
+                shiftKey: event.shiftKey,
+                metaKey: event.metaKey
+              });
+              if (viewInstance.state.readOnly) {
+                event.preventDefault();
+                return true;
+              }
+              return false;
+            }
+          })
+        ]
+      }),
+      parent: hostRef.current
+    });
+    viewRef.current = view;
+    onEditorValueChangeRef.current(view.state.doc.toString());
 
     syncKeyRef.current = syncKey;
-    yDoc.transact(() => {
-      yText.delete(0, yText.length);
-      if (next) {
-        yText.insert(0, next);
+
+    const handleDocUpdate = (updateBytes: Uint8Array, origin: unknown) => {
+      if (origin === "remote" || origin === "bootstrap") return;
+      const encodedUpdate = bytesToBase64(updateBytes);
+      // Always send full Yjs state with each local edit so the server snapshot stays current.
+      // After a tab refresh, missed SSE increments cannot be replayed; reconnecting clients rely on state_sync yjsDocumentBase64.
+      const fullDoc = bytesToBase64(Y.encodeStateAsUpdate(yDoc));
+      onYjsUpdateRef.current(encodedUpdate, syncKeyRef.current, yText.toString(), fullDoc);
+    };
+    yDoc.on("update", handleDocUpdate);
+
+    // Idle tabs still refresh the server snapshot so a reloaded peer does not bootstrap from stale CRDT state.
+    const heartbeatId = window.setInterval(() => {
+      const d = yDocRef.current;
+      const t = yTextRef.current;
+      if (!d || !t) return;
+      const full = bytesToBase64(Y.encodeStateAsUpdate(d));
+      onYjsUpdateRef.current("", syncKeyRef.current, t.toString(), full);
+    }, 2500);
+
+    onYjsBridgeReady((encodedYjsUpdate: string) => {
+      const activeDoc = yDocRef.current;
+      if (!activeDoc) return;
+      const updateBytes = base64ToBytes(encodedYjsUpdate);
+      if (updateBytes.length === 0) return;
+      Y.applyUpdate(activeDoc, updateBytes, "remote");
+    });
+
+    const snapshotTimerId = window.setTimeout(() => {
+      const d = yDocRef.current;
+      const t = yTextRef.current;
+      if (!d || !t) return;
+      const full = bytesToBase64(Y.encodeStateAsUpdate(d));
+      onYjsUpdateRef.current("", syncKeyRef.current, t.toString(), full);
+    }, 400);
+
+    return () => {
+      window.clearTimeout(snapshotTimerId);
+      window.clearInterval(heartbeatId);
+      yDoc.off("update", handleDocUpdate);
+      awareness.off("update", onAwarenessChanged);
+      if (awarenessFlushTimer != null) window.clearTimeout(awarenessFlushTimer);
+      onAwarenessBridgeReady(null);
+      awareness.destroy();
+      awarenessRef.current = null;
+    };
+    // IMPORTANT: do not depend on `value` or `serverYjsBase64` here. When those change every state_sync,
+    // this effect's cleanup ran yDoc.off("update") while viewRef stayed set → early return on next run
+    // never re-attached the listener, so outbound Yjs updates stopped after the first remote sync.
+  }, [onYjsBridgeReady, syncKey]);
+
+  /** Merge server CRDT when `lastYjsSequence` advances (same step); passive tabs and late snapshots. */
+  useEffect(() => {
+    const activeDoc = yDocRef.current;
+    if (!activeDoc) return;
+    if (lastSyncKeyForServerSeqRef.current !== syncKey) {
+      lastSyncKeyForServerSeqRef.current = syncKey;
+      lastAppliedServerYjsSeqRef.current = -1;
+      lastAppliedServerYjsSnapRef.current = null;
+    }
+    const seq = typeof serverYjsSequence === "number" && !Number.isNaN(serverYjsSequence) ? serverYjsSequence : 0;
+    const snap = serverYjsBase64?.trim() ?? "";
+    const seqAdvanced = seq > lastAppliedServerYjsSeqRef.current;
+    const snapChangedAtSameSeq = seq === lastAppliedServerYjsSeqRef.current && snap !== lastAppliedServerYjsSnapRef.current;
+    if (!seqAdvanced && !snapChangedAtSameSeq) return;
+    try {
+      if (snap) {
+        const raw = base64ToBytes(snap);
+        if (raw.length > 0) {
+          Y.applyUpdate(activeDoc, raw, "remote");
+        }
       }
-    }, "remote");
-  }, [syncKey, value]);
+    } catch (e) {
+      roomSyncLog("merge_server_yjs_seq_failed", { error: String(e) });
+    }
+    lastAppliedServerYjsSeqRef.current = seq;
+    lastAppliedServerYjsSnapRef.current = snap || null;
+    onEditorValueChangeRef.current(activeDoc.getText("room-code").toString());
+    bumpLocalAwarenessAfterRemoteDocChange();
+  }, [bumpLocalAwarenessAfterRemoteDocChange, serverYjsBase64, serverYjsSequence, syncKey]);
+
+  /** Step change or explicit resync (focus/reconnect): merge server Y snapshot or plain code fallback. */
+  useEffect(() => {
+    const activeDoc = yDocRef.current;
+    if (!activeDoc) return;
+    const syncKeyChanged = syncKeyRef.current !== syncKey;
+    syncKeyRef.current = syncKey;
+    const forceHydrateFromState = resyncSignal > lastHandledResyncSignalRef.current;
+    if (forceHydrateFromState) {
+      lastHandledResyncSignalRef.current = resyncSignal;
+    }
+    if (!syncKeyChanged && !forceHydrateFromState) return;
+
+    const t = activeDoc.getText("room-code");
+    const next = value ?? "";
+    const snap = serverYjsBase64?.trim() ?? "";
+
+    roomSyncLog("hydrate_from_server", {
+      syncKeyChanged,
+      resync: forceHydrateFromState,
+      hasYjsSnap: Boolean(snap),
+      codeLen: next.length
+    });
+    try {
+      if (snap) {
+        const raw = base64ToBytes(snap);
+        if (raw.length > 0) {
+          Y.applyUpdate(activeDoc, raw, "remote");
+        }
+      }
+      if (!snap && t.toString() !== next) {
+        activeDoc.transact(() => {
+          t.delete(0, t.length);
+          if (next) t.insert(0, next);
+        }, "remote");
+      }
+    } catch (e) {
+      roomSyncLog("hydrate_from_server_failed", { error: String(e) });
+    }
+    onEditorValueChangeRef.current(activeDoc.getText("room-code").toString());
+    bumpLocalAwarenessAfterRemoteDocChange();
+  }, [bumpLocalAwarenessAfterRemoteDocChange, resyncSignal, serverYjsBase64, syncKey, value]);
 
   useEffect(() => {
-    if (resyncSignal <= 0) return;
-    const yDoc = yDocRef.current;
-    if (!yDoc) return;
-    const encodedUpdate = bytesToBase64(Y.encodeStateAsUpdate(yDoc));
-    onYjsUpdate(encodedUpdate, syncKeyRef.current);
-  }, [onYjsUpdate, resyncSignal]);
+    const activeView = viewRef.current;
+    if (!activeView) return;
+    activeView.dispatch({
+      effects: readOnlyCompartmentRef.current.reconfigure(EditorState.readOnly.of(readOnly))
+    });
+  }, [readOnly]);
 
-  return (
-    <Editor
-      height={height}
-      language={language}
-      defaultValue={value}
-      theme="vs-dark"
-      onMount={(editor, monaco) => {
-        editorRef.current = editor;
-        monacoRef.current = monaco;
+  useEffect(() => {
+    const activeView = viewRef.current;
+    if (!activeView) return;
+    activeView.dispatch({
+      effects: languageCompartmentRef.current.reconfigure(languageExtension)
+    });
+  }, [languageExtension]);
 
-        disposablesRef.current.forEach((disposable) => disposable.dispose());
-        disposablesRef.current = [];
-
-        yDocRef.current?.destroy();
-        yDocRef.current = null;
-        yTextRef.current = null;
-
-        const model = editor.getModel();
-        if (!model) return;
-
-        const yDoc = new Y.Doc();
-        Y.applyUpdate(yDoc, createDeterministicBootstrapUpdate(value), "bootstrap");
-        const yText = yDoc.getText("room-code");
-
-        yDocRef.current = yDoc;
-        yTextRef.current = yText;
-
-        const handleDocUpdate = (_update: Uint8Array, origin: unknown) => {
-          if (origin === "remote" || origin === "bootstrap") return;
-          const encodedUpdate = bytesToBase64(Y.encodeStateAsUpdate(yDoc));
-          onYjsUpdate(encodedUpdate, syncKeyRef.current);
-          schedulePersistCode(yText.toString());
-        };
-        yDoc.on("update", handleDocUpdate);
-
-        const handleYTextChange = (event: Y.YTextEvent, transaction: Y.Transaction) => {
-          if (transaction.origin === "editor") return;
-          const activeEditor = editorRef.current;
-          const activeMonaco = monacoRef.current;
-          const activeModel = activeEditor?.getModel();
-          if (!activeEditor || !activeMonaco || !activeModel) return;
-
-          const draftEdits: Array<{ offset: number; deleteLength: number; text: string }> = [];
-          let sourceOffset = 0;
-          let pendingDeleteOffset: number | null = null;
-          let pendingDeleteLength = 0;
-
-          const pushDraftEdit = (offset: number, deleteLength: number, text: string) => {
-            if (deleteLength <= 0 && text.length === 0) return;
-            const lastEdit = draftEdits[draftEdits.length - 1];
-            if (lastEdit && lastEdit.offset === offset) {
-              if (lastEdit.deleteLength === 0 && deleteLength === 0) {
-                lastEdit.text += text;
-                return;
-              }
-              // merge "delete + insert" and chained inserts at same anchor into a single replacement
-              if (deleteLength === 0 && lastEdit.deleteLength >= 0) {
-                lastEdit.text += text;
-                return;
-              }
-            }
-            draftEdits.push({ offset, deleteLength, text });
-          };
-
-          const flushPendingDelete = () => {
-            if (pendingDeleteOffset === null || pendingDeleteLength <= 0) return;
-            pushDraftEdit(pendingDeleteOffset, pendingDeleteLength, "");
-            pendingDeleteOffset = null;
-            pendingDeleteLength = 0;
-          };
-
-          event.delta.forEach((part: { retain?: number; delete?: number; insert?: unknown }) => {
-            if (typeof part.retain === "number") {
-              flushPendingDelete();
-              sourceOffset += part.retain;
-              return;
-            }
-
-            if (typeof part.delete === "number" && part.delete > 0) {
-              if (pendingDeleteOffset === null) {
-                pendingDeleteOffset = sourceOffset;
-                pendingDeleteLength = part.delete;
-              } else if (pendingDeleteOffset + pendingDeleteLength === sourceOffset) {
-                pendingDeleteLength += part.delete;
-              } else {
-                flushPendingDelete();
-                pendingDeleteOffset = sourceOffset;
-                pendingDeleteLength = part.delete;
-              }
-              sourceOffset += part.delete;
-              return;
-            }
-
-            if (typeof part.insert === "string" && part.insert.length > 0) {
-              if (pendingDeleteOffset !== null) {
-                pushDraftEdit(pendingDeleteOffset, pendingDeleteLength, part.insert);
-                pendingDeleteOffset = null;
-                pendingDeleteLength = 0;
-              } else {
-                flushPendingDelete();
-                pushDraftEdit(sourceOffset, 0, part.insert);
-              }
-              return;
-            }
-          });
-          flushPendingDelete();
-
-          const edits = draftEdits.map((edit) => {
-            const start = activeModel.getPositionAt(edit.offset);
-            const end = activeModel.getPositionAt(edit.offset + edit.deleteLength);
-            return {
-              range: new activeMonaco.Range(start.lineNumber, start.column, end.lineNumber, end.column),
-              text: edit.text,
-              forceMoveMarkers: true
-            };
-          });
-
-          if (edits.length === 0) return;
-
-          suppressEditorChangesRef.current = true;
-          try {
-            const expectedValue = yText.toString();
-            const selection = activeEditor.getSelection();
-            const scrollTop = activeEditor.getScrollTop();
-            const scrollLeft = activeEditor.getScrollLeft();
-            try {
-              activeEditor.executeEdits("yjs-remote", edits);
-            } catch {
-              activeEditor.executeEdits("yjs-remote-fallback", [
-                {
-                  range: activeModel.getFullModelRange(),
-                  text: yText.toString(),
-                  forceMoveMarkers: true
-                }
-              ]);
-            }
-            if (activeModel.getValue() !== expectedValue) {
-              activeEditor.executeEdits("yjs-remote-repair", [
-                {
-                  range: activeModel.getFullModelRange(),
-                  text: expectedValue,
-                  forceMoveMarkers: true
-                }
-              ]);
-            }
-            if (selection) {
-              activeEditor.setSelection(selection);
-            }
-            activeEditor.setScrollTop(scrollTop);
-            activeEditor.setScrollLeft(scrollLeft);
-          } finally {
-            suppressEditorChangesRef.current = false;
-          }
-        };
-        yText.observe(handleYTextChange);
-
-        onYjsBridgeReady((encodedYjsUpdate: string) => {
-          const activeDoc = yDocRef.current;
-          const activeText = yTextRef.current;
-          if (!activeDoc || !activeText) return;
-          const updateBytes = base64ToBytes(encodedYjsUpdate);
-          if (updateBytes.length === 0) return;
-          try {
-            // Guard against stale full-state echoes after refresh:
-            // if incoming snapshot text already equals current text, skip update.
-            const previewDoc = new Y.Doc();
-            Y.applyUpdate(previewDoc, updateBytes, "preview");
-            const incomingText = previewDoc.getText("room-code").toString();
-            previewDoc.destroy();
-            if (incomingText === activeText.toString()) {
-              return;
-            }
-          } catch {
-            // fall through and try applying directly
-          }
-          Y.applyUpdate(activeDoc, updateBytes, "remote");
-        });
-
-        const emitCursorSync = (position: any, selectionLike: any) => {
-          const lineNumber = position?.lineNumber ?? selectionLike?.endLineNumber ?? 1;
-          const column = position?.column ?? selectionLike?.endColumn ?? 1;
-          const isSelectionEmpty =
-            !selectionLike
-              ? true
-              : typeof selectionLike.isEmpty === "function"
-                ? selectionLike.isEmpty()
-                : typeof selectionLike.isEmpty === "boolean"
-                  ? selectionLike.isEmpty
-                  : selectionLike.startLineNumber === selectionLike.endLineNumber &&
-                    selectionLike.startColumn === selectionLike.endColumn;
-          const hasSelection = !isSelectionEmpty;
-          const selectionStartLineNumber = hasSelection ? selectionLike.startLineNumber : null;
-          const selectionStartColumn = hasSelection ? selectionLike.startColumn : null;
-          const selectionEndLineNumber = hasSelection ? selectionLike.endLineNumber : null;
-          const selectionEndColumn = hasSelection ? selectionLike.endColumn : null;
-
-          const now = Date.now();
-          const prev = lastCursorSentRef.current;
-          if (
-            prev.lineNumber === lineNumber &&
-            prev.column === column &&
-            prev.selectionStartLineNumber === selectionStartLineNumber &&
-            prev.selectionStartColumn === selectionStartColumn &&
-            prev.selectionEndLineNumber === selectionEndLineNumber &&
-            prev.selectionEndColumn === selectionEndColumn &&
-            now - prev.ts < 40
-          ) {
-            return;
-          }
-
-          lastCursorSentRef.current = {
-            lineNumber,
-            column,
-            selectionStartLineNumber,
-            selectionStartColumn,
-            selectionEndLineNumber,
-            selectionEndColumn,
-            ts: now
-          };
-          onCursorChange({
-            lineNumber,
-            column,
-            selectionStartLineNumber,
-            selectionStartColumn,
-            selectionEndLineNumber,
-            selectionEndColumn
-          });
-        };
-
-        disposablesRef.current.push(
-          editor.onDidChangeCursorSelection((event: any) => {
-            emitCursorSync(event.position, event.selection);
-          })
-        );
-
-        disposablesRef.current.push(
-          editor.onDidChangeCursorPosition((event: any) => {
-            const selection = editor.getSelection();
-            emitCursorSync(event.position, selection);
-          })
-        );
-
-        disposablesRef.current.push(
-          editor.onDidChangeModelContent((event: any) => {
-            if (suppressEditorChangesRef.current) return;
-            const activeText = yTextRef.current;
-            const activeDoc = yDocRef.current;
-            if (!activeText || !activeDoc) return;
-            lastLocalEditAtRef.current = Date.now();
-
-            const changes = [...event.changes].sort((a, b) => b.rangeOffset - a.rangeOffset);
-            activeDoc.transact(() => {
-              changes.forEach((change) => {
-                if (change.rangeLength > 0) {
-                  activeText.delete(change.rangeOffset, change.rangeLength);
-                }
-                if (change.text && change.text.length > 0) {
-                  activeText.insert(change.rangeOffset, change.text);
-                }
-              });
-            }, "editor");
-          })
-        );
-
-        disposablesRef.current.push(
-          editor.onKeyDown((event: any) => {
-            const browserEvent = event.browserEvent as KeyboardEvent;
-            onKeyPress({
-              key: browserEvent.key,
-              keyCode: browserEvent.code,
-              ctrlKey: browserEvent.ctrlKey,
-              altKey: browserEvent.altKey,
-              shiftKey: browserEvent.shiftKey,
-              metaKey: browserEvent.metaKey
-            });
-          })
-        );
-
-        disposablesRef.current.push({
-          dispose: () => {
-            yDoc.off("update", handleDocUpdate);
-            yText.unobserve(handleYTextChange);
-          }
-        });
-      }}
-      options={{
-        minimap: { enabled: false },
-        fontSize: 14,
-        lineNumbersMinChars: 3,
-        smoothScrolling: true,
-        scrollBeyondLastLine: false,
-        renderValidationDecorations: "off",
-        readOnly
-      }}
-    />
-  );
+  return <div className="cm-host" style={{ height, overflow: "hidden" }} ref={hostRef} />;
 }

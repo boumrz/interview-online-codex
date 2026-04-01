@@ -93,11 +93,11 @@ try {
   };
   attachTrafficListener(page);
 
-  await page.goto(interviewerRoomLink, { waitUntil: "networkidle" });
+  await page.goto(interviewerRoomLink, { waitUntil: "domcontentloaded" });
   await page.locator(".monaco-editor").waitFor({ timeout: 15000 });
   await page.getByRole("button", { name: "Приглашения", exact: true }).waitFor({ timeout: 8000 });
 
-  await page.goto(`${webBaseUrl}/dashboard/rooms`, { waitUntil: "networkidle" });
+  await page.goto(`${webBaseUrl}/dashboard/rooms`, { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "Выйти", exact: true }).click();
   await page.waitForURL(`${webBaseUrl}/`, { timeout: 10000 });
   const storageAfterLogout = await page.evaluate((inviteCode) => {
@@ -124,7 +124,7 @@ try {
   traffic.roomRequests = [];
   captureUnauthorizedPhase = true;
 
-  await page.goto(plainRoomLink, { waitUntil: "networkidle" });
+  await page.goto(plainRoomLink, { waitUntil: "domcontentloaded" });
   const plainModalVisible = await page
     .getByText("Представьтесь перед входом в комнату")
     .isVisible()
@@ -145,7 +145,7 @@ try {
     throw new Error("PLAIN_LINK_SHOULD_NOT_GRANT_INTERVIEWER_ACCESS");
   }
 
-  await page.goto(interviewerRoomLink, { waitUntil: "networkidle" });
+  await page.goto(interviewerRoomLink, { waitUntil: "domcontentloaded" });
   const interviewerModalVisible = await page
     .getByText("Представьтесь перед входом в комнату")
     .isVisible()

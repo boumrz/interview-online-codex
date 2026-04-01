@@ -17,11 +17,13 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
-import org.springframework.web.socket.TextMessage
-import org.springframework.web.socket.WebSocketSession
 import java.time.Instant
 import java.util.Collections
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
 
 @Service
 class CollaborationService(
@@ -34,6 +36,8 @@ class CollaborationService(
     private val notesLockMillis = 3_000L
     private val keyEventBroadcastThrottleMs = 20L
     private val candidateKeyHistoryMaxSize = 50
+    private val maxYjsDocumentBase64Chars = 400_000
+    private val maxAwarenessUpdateBase64Chars = 24_000
 
     private enum class RoomRole(val wireValue: String) {
         OWNER("owner"),
@@ -75,6 +79,8 @@ class CollaborationService(
         var language: String,
         var code: String,
         var lastCodeUpdatedBySessionId: String? = null,
+        var yjsDocumentBase64: String? = null,
+        var lastYjsSequence: Long = 0,
         var currentStep: Int,
         var notes: String,
         var notesLockedBySessionId: String? = null,
@@ -82,6 +88,9 @@ class CollaborationService(
         var notesLockedUntilEpochMs: Long? = null,
         val taskScoresByStepIndex: MutableMap<Int, Int?> = Collections.synchronizedMap(mutableMapOf()),
         val cursorsBySessionId: MutableMap<String, CursorState> = ConcurrentHashMap(),
+        val lastCursorSequenceBySessionId: MutableMap<String, Long> = ConcurrentHashMap(),
+        val lastCodeSequenceBySessionId: MutableMap<String, Long> = ConcurrentHashMap(),
+        val lastYjsSnapshotSequenceBySessionId: MutableMap<String, Long> = ConcurrentHashMap(),
         var lastCandidateKey: CandidateKeyPayload? = null,
         val candidateKeyHistory: MutableList<CandidateKeyPayload> = mutableListOf(),
         var lastCandidateKeyAtEpochMs: Long = 0L,
@@ -96,53 +105,39 @@ class CollaborationService(
         var selectionEndColumn: Int? = null,
     )
 
-    private val roomSockets = ConcurrentHashMap<String, MutableSet<WebSocketSession>>()
     private val roomSseConnections = ConcurrentHashMap<String, MutableSet<String>>()
-    private val wsConnections = ConcurrentHashMap<String, WebSocketSession>()
     private val sseConnections = ConcurrentHashMap<String, SseEmitter>()
     private val participants = ConcurrentHashMap<String, ParticipantMeta>()
     private val roomState = ConcurrentHashMap<String, RealtimeState>()
     private val connectionByRoomSession = ConcurrentHashMap<String, String>()
+    private val yjsStateBroadcastScheduler = Executors.newSingleThreadScheduledExecutor()
+    private val pendingYjsStateBroadcastByRoom = ConcurrentHashMap<String, ScheduledFuture<*>>()
+    private val roomCodeDbSaveScheduler = Executors.newSingleThreadScheduledExecutor()
+    private val pendingRoomCodeDbSaveByRoom = ConcurrentHashMap<String, ScheduledFuture<*>>()
+    private val latestCodeForDebouncedDbSaveByRoom = ConcurrentHashMap<String, String>()
 
     fun bootstrapRoom(room: Room) {
         roomState[room.inviteCode] = toRealtimeState(room)
     }
 
     fun syncFromRoom(room: Room) {
-        roomState[room.inviteCode] = toRealtimeState(room)
-        broadcastState(room.inviteCode)
-    }
-
-    @Transactional
-    fun joinRoom(
-        inviteCode: String,
-        socket: WebSocketSession,
-        sessionId: String,
-        displayName: String,
-        ownerToken: String?,
-        interviewerToken: String?,
-        user: User?,
-    ) {
-        val room = roomRepository.findByInviteCode(inviteCode)
-            ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
-        roomState.computeIfAbsent(inviteCode) {
-            toRealtimeState(room)
-        }
-
-        wsConnections[socket.id] = socket
-        roomSockets.computeIfAbsent(inviteCode) { ConcurrentHashMap.newKeySet() }.add(socket)
-        evictDuplicateSession(inviteCode, sessionId, socket.id)
-
-        val role = resolveRole(room, ownerToken, interviewerToken, user)
-        participants[socket.id] = ParticipantMeta(
-            inviteCode = inviteCode,
-            sessionId = sessionId,
-            displayName = displayName,
-            role = role,
-            presenceStatus = PresenceStatus.ACTIVE,
+        val currentState = roomState[room.inviteCode]
+        val nextState = toRealtimeState(room)
+        roomState[room.inviteCode] = nextState.copy(
+            notesLockedBySessionId = currentState?.notesLockedBySessionId,
+            notesLockedByDisplayName = currentState?.notesLockedByDisplayName,
+            notesLockedUntilEpochMs = currentState?.notesLockedUntilEpochMs,
+            cursorsBySessionId = currentState?.cursorsBySessionId ?: ConcurrentHashMap(),
+            lastCursorSequenceBySessionId = currentState?.lastCursorSequenceBySessionId ?: ConcurrentHashMap(),
+            lastCodeSequenceBySessionId = currentState?.lastCodeSequenceBySessionId ?: ConcurrentHashMap(),
+            lastYjsSnapshotSequenceBySessionId = currentState?.lastYjsSnapshotSequenceBySessionId ?: ConcurrentHashMap(),
+            lastYjsSequence = currentState?.lastYjsSequence ?: 0,
+            yjsDocumentBase64 = currentState?.yjsDocumentBase64,
+            lastCandidateKey = currentState?.lastCandidateKey,
+            candidateKeyHistory = currentState?.candidateKeyHistory?.toMutableList() ?: mutableListOf(),
+            lastCandidateKeyAtEpochMs = currentState?.lastCandidateKeyAtEpochMs ?: 0L,
         )
-        connectionByRoomSession[roomSessionKey(inviteCode, sessionId)] = socket.id
-        broadcastState(inviteCode)
+        broadcastState(room.inviteCode)
     }
 
     @Transactional
@@ -162,10 +157,6 @@ class CollaborationService(
 
         val connectionId = sseConnectionId(sessionId)
         val emitter = SseEmitter(0L)
-        sseConnections[connectionId] = emitter
-        roomSseConnections.computeIfAbsent(inviteCode) { ConcurrentHashMap.newKeySet() }.add(connectionId)
-        evictDuplicateSession(inviteCode, sessionId, connectionId)
-
         val role = resolveRole(room, ownerToken, interviewerToken, user)
         participants[connectionId] = ParticipantMeta(
             inviteCode = inviteCode,
@@ -175,6 +166,9 @@ class CollaborationService(
             presenceStatus = PresenceStatus.ACTIVE,
         )
         connectionByRoomSession[roomSessionKey(inviteCode, sessionId)] = connectionId
+        sseConnections[connectionId] = emitter
+        roomSseConnections.computeIfAbsent(inviteCode) { ConcurrentHashMap.newKeySet() }.add(connectionId)
+        evictDuplicateSession(inviteCode, sessionId, connectionId)
 
         emitter.onCompletion { leaveRoomConnection(connectionId) }
         emitter.onTimeout { leaveRoomConnection(connectionId) }
@@ -182,10 +176,6 @@ class CollaborationService(
 
         broadcastState(inviteCode)
         return emitter
-    }
-
-    fun leaveRoom(socket: WebSocketSession) {
-        leaveRoomConnection(socket.id)
     }
 
     fun leaveRoomConnection(connectionId: String) {
@@ -199,7 +189,7 @@ class CollaborationService(
     fun handleRealtimeEvent(inviteCode: String, request: RealtimeEventRequest) {
         val connectionId = requireConnectionId(inviteCode, request.sessionId)
         when (request.type) {
-            "code_update" -> updateCode(connectionId, request.code.orEmpty())
+            "code_update" -> updateCode(connectionId, request.code.orEmpty(), request.codeSequence)
             "language_update" -> updateLanguage(connectionId, request.language.orEmpty())
             "next_step" -> nextStep(connectionId)
             "set_step" -> setStep(connectionId, request.stepIndex ?: -1)
@@ -214,8 +204,18 @@ class CollaborationService(
                 selectionStartColumn = request.selectionStartColumn,
                 selectionEndLineNumber = request.selectionEndLineNumber,
                 selectionEndColumn = request.selectionEndColumn,
+                cursorSequence = request.cursorSequence,
             )
-            "yjs_update" -> relayYjsUpdate(connectionId, request.yjsUpdate.orEmpty(), request.syncKey)
+            "awareness_update" -> relayAwarenessUpdate(connectionId, request.awarenessUpdate.orEmpty())
+            "yjs_update" -> relayYjsUpdate(
+                connectionId = connectionId,
+                yjsUpdate = request.yjsUpdate.orEmpty(),
+                syncKey = request.syncKey,
+                codeSnapshot = request.code,
+                yjsClientSequence = request.yjsClientSequence,
+                yjsDocumentBase64 = request.yjsDocumentBase64,
+            )
+            "request_state_sync" -> sendStateToConnection(connectionId)
             "key_press" -> trackKeyPress(
                 connectionId = connectionId,
                 key = request.key,
@@ -229,16 +229,70 @@ class CollaborationService(
         }
     }
 
-    fun updateCode(socket: WebSocketSession, code: String) {
-        updateCode(socket.id, code)
+    private fun sendStateToConnection(connectionId: String) {
+        val participant = participants[connectionId] ?: return
+        val inviteCode = participant.inviteCode
+        val state = roomState[inviteCode] ?: return
+        val emitter = sseConnections[connectionId] ?: return
+
+        val roomParticipants = participants.values
+            .asSequence()
+            .filter { it.inviteCode == inviteCode }
+            .sortedBy { it.displayName.lowercase() }
+            .distinctBy { it.sessionId }
+            .toList()
+        val participantsPayload = roomParticipants
+            .map { ParticipantPayload(it.sessionId, it.displayName, it.role.wireValue, it.presenceStatus.wireValue) }
+        val participantBySessionId = roomParticipants.associateBy { it.sessionId }
+        val cursorsPayload = state.cursorsBySessionId.entries
+            .asSequence()
+            .mapNotNull { (sessionId, cursor) ->
+                val participantMeta = participantBySessionId[sessionId] ?: return@mapNotNull null
+                CursorPayload(
+                    sessionId = sessionId,
+                    displayName = participantMeta.displayName,
+                    role = participantMeta.role.wireValue,
+                    cursorSequence = state.lastCursorSequenceBySessionId[sessionId],
+                    lineNumber = cursor.lineNumber,
+                    column = cursor.column,
+                    selectionStartLineNumber = cursor.selectionStartLineNumber,
+                    selectionStartColumn = cursor.selectionStartColumn,
+                    selectionEndLineNumber = cursor.selectionEndLineNumber,
+                    selectionEndColumn = cursor.selectionEndColumn,
+                )
+            }
+            .toList()
+
+        try {
+            val payload = buildPayload(inviteCode, state, participantsPayload, cursorsPayload, participant)
+            val message = WsOutgoingMessage(type = "state_sync", payload = payload)
+            sendSseMessage(emitter, objectMapper.writeValueAsString(message))
+        } catch (ex: Exception) {
+            logger.warn("Failed to send room state via sse", ex)
+            detachConnection(connectionId, closeTransport = true)
+        }
     }
 
-    private fun updateCode(connectionId: String, code: String) {
+    private fun updateCode(connectionId: String, code: String, codeSequence: Long?) {
         val participant = participants[connectionId] ?: return
-        markParticipantActive(participant)
-        roomState[participant.inviteCode]?.apply {
-            this.code = code
-            this.lastCodeUpdatedBySessionId = participant.sessionId
+        val state = roomState[participant.inviteCode] ?: return
+        synchronized(state) {
+            if (codeSequence != null) {
+                val lastSequence = state.lastCodeSequenceBySessionId[participant.sessionId]
+                if (lastSequence != null && codeSequence <= lastSequence) {
+                    logger.debug(
+                        "Skipping stale code_update for room {} session {}: sequence {} <= {}",
+                        participant.inviteCode,
+                        participant.sessionId,
+                        codeSequence,
+                        lastSequence,
+                    )
+                    return
+                }
+                state.lastCodeSequenceBySessionId[participant.sessionId] = codeSequence
+            }
+            state.code = code
+            state.lastCodeUpdatedBySessionId = participant.sessionId
         }
         roomRepository.findByInviteCode(participant.inviteCode)?.let {
             it.code = code
@@ -248,33 +302,163 @@ class CollaborationService(
         broadcastState(participant.inviteCode)
     }
 
-    fun relayYjsUpdate(socket: WebSocketSession, yjsUpdate: String, syncKey: String?) {
-        relayYjsUpdate(socket.id, yjsUpdate, syncKey)
+    private fun relayAwarenessUpdate(connectionId: String, awarenessBase64: String) {
+        val participant = participants[connectionId] ?: return
+        val trimmed = awarenessBase64.trim()
+        if (trimmed.isEmpty() || trimmed.length > maxAwarenessUpdateBase64Chars) {
+            return
+        }
+        broadcastTransportMessage(
+            inviteCode = participant.inviteCode,
+            type = "awareness_update",
+            payload = mapOf(
+                "sessionId" to participant.sessionId,
+                "awarenessUpdate" to trimmed,
+            ),
+            excludeConnectionId = connectionId,
+        )
     }
 
-    private fun relayYjsUpdate(connectionId: String, yjsUpdate: String, syncKey: String?) {
+    private fun relayYjsUpdate(
+        connectionId: String,
+        yjsUpdate: String,
+        syncKey: String?,
+        codeSnapshot: String?,
+        yjsClientSequence: Long?,
+        yjsDocumentBase64: String?,
+    ) {
         val participant = participants[connectionId] ?: return
-        if (yjsUpdate.isBlank()) return
-        markParticipantActive(participant)
+        val state = roomState[participant.inviteCode] ?: return
+
+        val trimmedDocCandidate = yjsDocumentBase64?.trim().orEmpty()
+        val safeDocSnap =
+            if (trimmedDocCandidate.isNotEmpty() && trimmedDocCandidate.length <= maxYjsDocumentBase64Chars) trimmedDocCandidate else null
+
+        fun resolveOutboundSyncKey(): String? {
+            val normalizedSyncKey = syncKey?.trim().orEmpty()
+            val expectedSyncKey = "${participant.inviteCode}:${state.currentStep}:${state.language}"
+            if (normalizedSyncKey.isNotEmpty() && normalizedSyncKey != expectedSyncKey) {
+                logger.debug(
+                    "Dropping stale yjs update for room {} session {}: syncKey {} != {}",
+                    participant.inviteCode,
+                    participant.sessionId,
+                    normalizedSyncKey,
+                    expectedSyncKey,
+                )
+                return null
+            }
+            return if (normalizedSyncKey.isNotEmpty()) normalizedSyncKey else expectedSyncKey
+        }
+
+        fun tryApplyCodeSnapshot(): String? {
+            if (codeSnapshot == null) return null
+            val canApplySnapshot = if (yjsClientSequence != null) {
+                val lastSnapshotSequence = state.lastYjsSnapshotSequenceBySessionId[participant.sessionId]
+                if (lastSnapshotSequence != null && yjsClientSequence < lastSnapshotSequence) {
+                    logger.debug(
+                        "Skipping stale yjs snapshot for room {} session {}: clientSequence {} < {}",
+                        participant.inviteCode,
+                        participant.sessionId,
+                        yjsClientSequence,
+                        lastSnapshotSequence,
+                    )
+                    false
+                } else {
+                    state.lastYjsSnapshotSequenceBySessionId[participant.sessionId] = yjsClientSequence
+                    true
+                }
+            } else {
+                true
+            }
+            if (!canApplySnapshot) return null
+            state.code = codeSnapshot
+            state.lastCodeUpdatedBySessionId = participant.sessionId
+            return codeSnapshot
+        }
+
+        // Full CRDT snapshot without incremental update (used so reconnecting clients get compatible state).
+        if (yjsUpdate.isBlank()) {
+            if (safeDocSnap == null) return
+            var acceptedCodeSnapshot: String? = null
+            synchronized(state) {
+                if (resolveOutboundSyncKey() == null) return
+                state.yjsDocumentBase64 = safeDocSnap
+                acceptedCodeSnapshot = tryApplyCodeSnapshot()
+            }
+            if (acceptedCodeSnapshot != null) {
+                scheduleDebouncedRoomCodeSave(participant.inviteCode, acceptedCodeSnapshot!!)
+            }
+            scheduleStateBroadcastFromYjs(participant.inviteCode)
+            return
+        }
+
+        var acceptedCodeSnapshot: String? = null
+        synchronized(state) {
+            if (resolveOutboundSyncKey() == null) return
+            if (safeDocSnap != null) {
+                state.yjsDocumentBase64 = safeDocSnap
+                // Only trust `code` together with a full Yjs snapshot. Incremental-only messages
+                // interleave across tabs: applying codeSnapshot here without updating the stored doc
+                // makes state_sync show one lastYjsSequence with inconsistent code vs yjsDocumentBase64.
+                acceptedCodeSnapshot = tryApplyCodeSnapshot()
+            }
+            state.lastYjsSequence += 1
+        }
+
+        if (acceptedCodeSnapshot != null) {
+            scheduleDebouncedRoomCodeSave(participant.inviteCode, acceptedCodeSnapshot!!)
+        }
+
+        // Authoritative snapshots + DB: always broadcast full room state (debounced).
+        scheduleStateBroadcastFromYjs(participant.inviteCode)
+
+        // JVM cannot merge Yjs CRDT; relay increments so peers converge in real time. state_sync remains for recovery.
+        val outboundSyncKey = resolveOutboundSyncKey() ?: return
         broadcastTransportMessage(
             inviteCode = participant.inviteCode,
             type = "yjs_update",
             payload = mapOf(
                 "sessionId" to participant.sessionId,
                 "yjsUpdate" to yjsUpdate,
-                "syncKey" to syncKey,
+                "syncKey" to outboundSyncKey,
+                "yjsSequence" to state.lastYjsSequence,
             ),
             excludeConnectionId = connectionId,
         )
     }
 
-    fun updateLanguage(socket: WebSocketSession, language: String) {
-        updateLanguage(socket.id, language)
+    /** Yjs can post full snapshots every keystroke; coalesce DB writes to avoid hammering the repository. */
+    private fun scheduleDebouncedRoomCodeSave(inviteCode: String, code: String) {
+        latestCodeForDebouncedDbSaveByRoom[inviteCode] = code
+        pendingRoomCodeDbSaveByRoom.remove(inviteCode)?.cancel(false)
+        val next = roomCodeDbSaveScheduler.schedule({
+            pendingRoomCodeDbSaveByRoom.remove(inviteCode)
+            val latest = latestCodeForDebouncedDbSaveByRoom.remove(inviteCode) ?: return@schedule
+            try {
+                roomRepository.findByInviteCode(inviteCode)?.let { room ->
+                    room.code = latest
+                    room.tasks.getOrNull(room.currentStep)?.solutionCode = latest
+                    roomRepository.save(room)
+                }
+            } catch (ex: Exception) {
+                logger.warn("Debounced room code save failed for {}", inviteCode, ex)
+            }
+        }, 750, TimeUnit.MILLISECONDS)
+        pendingRoomCodeDbSaveByRoom[inviteCode] = next
+    }
+
+    private fun scheduleStateBroadcastFromYjs(inviteCode: String) {
+        // Coalesce frequent Yjs snapshots into a trailing full-state sync to prevent UI jitter.
+        pendingYjsStateBroadcastByRoom.remove(inviteCode)?.cancel(false)
+        val next = yjsStateBroadcastScheduler.schedule({
+            pendingYjsStateBroadcastByRoom.remove(inviteCode)
+            broadcastState(inviteCode)
+        }, 110, TimeUnit.MILLISECONDS)
+        pendingYjsStateBroadcastByRoom[inviteCode] = next
     }
 
     private fun updateLanguage(connectionId: String, language: String) {
         val participant = participants[connectionId] ?: return
-        markParticipantActive(participant)
         if (!participant.canManageRoom) {
             throw ApiException(HttpStatus.FORBIDDEN, "Только интервьюер может менять язык")
         }
@@ -288,13 +472,8 @@ class CollaborationService(
         broadcastState(participant.inviteCode)
     }
 
-    fun updateNotes(socket: WebSocketSession, notes: String) {
-        updateNotes(socket.id, notes)
-    }
-
     private fun updateNotes(connectionId: String, notes: String) {
         val participant = participants[connectionId] ?: return
-        markParticipantActive(participant)
         if (!participant.canManageRoom) {
             throw ApiException(HttpStatus.FORBIDDEN, "Только интервьюер может редактировать заметки")
         }
@@ -313,13 +492,8 @@ class CollaborationService(
         broadcastState(participant.inviteCode)
     }
 
-    fun updateTaskRating(socket: WebSocketSession, stepIndex: Int?, rating: Int?) {
-        updateTaskRating(socket.id, stepIndex, rating)
-    }
-
     private fun updateTaskRating(connectionId: String, stepIndex: Int?, rating: Int?) {
         val participant = participants[connectionId] ?: return
-        markParticipantActive(participant)
         if (!participant.canManageRoom) {
             throw ApiException(HttpStatus.FORBIDDEN, "РўРѕР»СЊРєРѕ РёРЅС‚РµСЂРІСЊСЋРµСЂ РјРѕР¶РµС‚ РІС‹СЃС‚Р°РІР»СЏС‚СЊ РѕС†РµРЅРєСѓ РїРѕ С€Р°РіСѓ")
         }
@@ -347,36 +521,12 @@ class CollaborationService(
         broadcastState(participant.inviteCode)
     }
 
-    fun updatePresence(socket: WebSocketSession, presenceStatus: String?) {
-        updatePresence(socket.id, presenceStatus)
-    }
-
     private fun updatePresence(connectionId: String, presenceStatus: String?) {
         val participant = participants[connectionId] ?: return
         val nextStatus = PresenceStatus.fromWire(presenceStatus)
         if (participant.presenceStatus == nextStatus) return
         participant.presenceStatus = nextStatus
         broadcastState(participant.inviteCode)
-    }
-
-    fun updateCursor(
-        socket: WebSocketSession,
-        lineNumber: Int?,
-        column: Int?,
-        selectionStartLineNumber: Int? = null,
-        selectionStartColumn: Int? = null,
-        selectionEndLineNumber: Int? = null,
-        selectionEndColumn: Int? = null,
-    ) {
-        updateCursor(
-            connectionId = socket.id,
-            lineNumber = lineNumber,
-            column = column,
-            selectionStartLineNumber = selectionStartLineNumber,
-            selectionStartColumn = selectionStartColumn,
-            selectionEndLineNumber = selectionEndLineNumber,
-            selectionEndColumn = selectionEndColumn,
-        )
     }
 
     private fun updateCursor(
@@ -387,6 +537,7 @@ class CollaborationService(
         selectionStartColumn: Int?,
         selectionEndLineNumber: Int?,
         selectionEndColumn: Int?,
+        cursorSequence: Long?,
     ) {
         val participant = participants[connectionId] ?: return
         val nextLine = (lineNumber ?: 1).coerceAtLeast(1)
@@ -402,41 +553,66 @@ class CollaborationService(
         val nextSelectionEndColumn = if (hasCompleteSelection) selectionEndColumn!!.coerceAtLeast(1) else null
 
         val state = roomState[participant.inviteCode] ?: return
-        val currentCursor = state.cursorsBySessionId[participant.sessionId]
-        if (
-            currentCursor != null &&
-            currentCursor.lineNumber == nextLine &&
-            currentCursor.column == nextColumn &&
-            currentCursor.selectionStartLineNumber == nextSelectionStartLine &&
-            currentCursor.selectionStartColumn == nextSelectionStartColumn &&
-            currentCursor.selectionEndLineNumber == nextSelectionEndLine &&
-            currentCursor.selectionEndColumn == nextSelectionEndColumn
-        ) {
-            return
+        var appliedCursorSequence: Long? = null
+        synchronized(state) {
+            if (cursorSequence != null) {
+                val lastSequence = state.lastCursorSequenceBySessionId[participant.sessionId]
+                if (lastSequence != null && cursorSequence <= lastSequence) {
+                    logger.debug(
+                        "Skipping stale cursor_update for room {} session {}: sequence {} <= {}",
+                        participant.inviteCode,
+                        participant.sessionId,
+                        cursorSequence,
+                        lastSequence,
+                    )
+                    return
+                }
+                state.lastCursorSequenceBySessionId[participant.sessionId] = cursorSequence
+                appliedCursorSequence = cursorSequence
+            }
+
+            val currentCursor = state.cursorsBySessionId[participant.sessionId]
+            if (
+                currentCursor != null &&
+                currentCursor.lineNumber == nextLine &&
+                currentCursor.column == nextColumn &&
+                currentCursor.selectionStartLineNumber == nextSelectionStartLine &&
+                currentCursor.selectionStartColumn == nextSelectionStartColumn &&
+                currentCursor.selectionEndLineNumber == nextSelectionEndLine &&
+                currentCursor.selectionEndColumn == nextSelectionEndColumn
+            ) {
+                return
+            }
+
+            state.cursorsBySessionId[participant.sessionId] = CursorState(
+                lineNumber = nextLine,
+                column = nextColumn,
+                selectionStartLineNumber = nextSelectionStartLine,
+                selectionStartColumn = nextSelectionStartColumn,
+                selectionEndLineNumber = nextSelectionEndLine,
+                selectionEndColumn = nextSelectionEndColumn,
+            )
+            if (appliedCursorSequence == null) {
+                appliedCursorSequence = state.lastCursorSequenceBySessionId[participant.sessionId]
+            }
         }
-
-        state.cursorsBySessionId[participant.sessionId] = CursorState(
-            lineNumber = nextLine,
-            column = nextColumn,
-            selectionStartLineNumber = nextSelectionStartLine,
-            selectionStartColumn = nextSelectionStartColumn,
-            selectionEndLineNumber = nextSelectionEndLine,
-            selectionEndColumn = nextSelectionEndColumn,
+        broadcastTransportMessage(
+            inviteCode = participant.inviteCode,
+            type = "cursor_update",
+            payload = mapOf(
+                "sessionId" to participant.sessionId,
+                "displayName" to participant.displayName,
+                "role" to participant.role.wireValue,
+                "cursorSequence" to appliedCursorSequence,
+                "lineNumber" to nextLine,
+                "column" to nextColumn,
+                "selectionStartLineNumber" to nextSelectionStartLine,
+                "selectionStartColumn" to nextSelectionStartColumn,
+                "selectionEndLineNumber" to nextSelectionEndLine,
+                "selectionEndColumn" to nextSelectionEndColumn,
+            ),
+            excludeConnectionId = connectionId,
         )
-        markParticipantActive(participant)
-        broadcastState(participant.inviteCode)
-    }
-
-    fun trackKeyPress(
-        socket: WebSocketSession,
-        key: String?,
-        keyCode: String?,
-        ctrlKey: Boolean,
-        altKey: Boolean,
-        shiftKey: Boolean,
-        metaKey: Boolean,
-    ) {
-        trackKeyPress(socket.id, key, keyCode, ctrlKey, altKey, shiftKey, metaKey)
     }
 
     private fun trackKeyPress(
@@ -482,18 +658,25 @@ class CollaborationService(
             }
         }
         state.lastCandidateKeyAtEpochMs = now
-        markParticipantActive(participant)
-        broadcastState(participant.inviteCode)
-    }
-
-    @Transactional
-    fun nextStep(socket: WebSocketSession) {
-        nextStep(socket.id)
+        val keyEvent = state.lastCandidateKey ?: return
+        val managerConnectionIds = participants.entries
+            .asSequence()
+            .filter { (_, meta) -> meta.inviteCode == participant.inviteCode && meta.canManageRoom }
+            .map { (id, _) -> id }
+            .toSet()
+        if (managerConnectionIds.isEmpty()) {
+            return
+        }
+        broadcastTransportMessage(
+            inviteCode = participant.inviteCode,
+            type = "candidate_key",
+            payload = keyEvent,
+            includeConnectionIds = managerConnectionIds,
+        )
     }
 
     private fun nextStep(connectionId: String) {
         val participant = participants[connectionId] ?: return
-        markParticipantActive(participant)
         if (!participant.canManageRoom) {
             throw ApiException(HttpStatus.FORBIDDEN, "Только интервьюер может переключать шаги")
         }
@@ -506,14 +689,8 @@ class CollaborationService(
         setStepInternal(participant.inviteCode, room, (room.currentStep + 1).coerceAtMost(maxStep))
     }
 
-    @Transactional
-    fun setStep(socket: WebSocketSession, stepIndex: Int) {
-        setStep(socket.id, stepIndex)
-    }
-
     private fun setStep(connectionId: String, stepIndex: Int) {
         val participant = participants[connectionId] ?: return
-        markParticipantActive(participant)
         if (!participant.canManageRoom) {
             throw ApiException(HttpStatus.FORBIDDEN, "Только интервьюер может переключать шаги")
         }
@@ -529,6 +706,9 @@ class CollaborationService(
     }
 
     fun closeRoom(inviteCode: String) {
+        pendingYjsStateBroadcastByRoom.remove(inviteCode)?.cancel(false)
+        pendingRoomCodeDbSaveByRoom.remove(inviteCode)?.cancel(false)
+        latestCodeForDebouncedDbSaveByRoom.remove(inviteCode)
         roomState.remove(inviteCode)
         val connectionIds = participants.entries
             .asSequence()
@@ -538,7 +718,6 @@ class CollaborationService(
         connectionIds.forEach { connectionId ->
             detachConnection(connectionId, closeTransport = true)
         }
-        roomSockets.remove(inviteCode)
         roomSseConnections.remove(inviteCode)
     }
 
@@ -561,17 +740,16 @@ class CollaborationService(
             .toList()
         val participantsPayload = roomParticipants
             .map { ParticipantPayload(it.sessionId, it.displayName, it.role.wireValue, it.presenceStatus.wireValue) }
-        val roleBySessionId = roomParticipants.associate { it.sessionId to it.role.wireValue }
-        val displayNameBySessionId = roomParticipants.associate { it.sessionId to it.displayName }
+        val participantBySessionId = roomParticipants.associateBy { it.sessionId }
         val cursorsPayload = state.cursorsBySessionId.entries
             .asSequence()
             .mapNotNull { (sessionId, cursor) ->
-                val role = roleBySessionId[sessionId] ?: return@mapNotNull null
-                val displayName = displayNameBySessionId[sessionId] ?: return@mapNotNull null
+                val participantMeta = participantBySessionId[sessionId] ?: return@mapNotNull null
                 CursorPayload(
                     sessionId = sessionId,
-                    displayName = displayName,
-                    role = role,
+                    displayName = participantMeta.displayName,
+                    role = participantMeta.role.wireValue,
+                    cursorSequence = state.lastCursorSequenceBySessionId[sessionId],
                     lineNumber = cursor.lineNumber,
                     column = cursor.column,
                     selectionStartLineNumber = cursor.selectionStartLineNumber,
@@ -581,30 +759,6 @@ class CollaborationService(
                 )
             }
             .toList()
-
-        val sockets = roomSockets[inviteCode]?.toList().orEmpty()
-        sockets.filterNotNull().forEach { socket ->
-            val connectionId = socket.id
-            val participant = participants[connectionId]
-            if (participant == null) {
-                detachConnection(connectionId, closeTransport = false)
-                return@forEach
-            }
-            try {
-                val payload = buildPayload(inviteCode, state, participantsPayload, cursorsPayload, participant)
-                val message = WsOutgoingMessage(type = "state_sync", payload = payload)
-                if (socket.isOpen) {
-                    synchronized(socket) {
-                        if (socket.isOpen) {
-                            socket.sendMessage(TextMessage(objectMapper.writeValueAsString(message)))
-                        }
-                    }
-                }
-            } catch (ex: Exception) {
-                logger.warn("Failed to broadcast room state via websocket", ex)
-                detachConnection(connectionId, closeTransport = true)
-            }
-        }
 
         val sseConnectionIds = roomSseConnections[inviteCode]?.toList().orEmpty()
         sseConnectionIds.forEach { connectionId ->
@@ -633,6 +787,7 @@ class CollaborationService(
         type: String,
         payload: Any,
         excludeConnectionId: String? = null,
+        includeConnectionIds: Set<String>? = null,
     ) {
         val faultProfile = realtimeFaultInjectionService.profileFor(inviteCode)
         if (faultProfile != null && faultProfile.latencyMs > 0) {
@@ -646,25 +801,10 @@ class CollaborationService(
         val message = WsOutgoingMessage(type = type, payload = payload)
         val encoded = objectMapper.writeValueAsString(message)
 
-        val sockets = roomSockets[inviteCode]?.toList().orEmpty()
-        sockets.filterNotNull().forEach { socket ->
-            val connectionId = socket.id
-            if (excludeConnectionId != null && excludeConnectionId == connectionId) return@forEach
-            if (participants[connectionId] == null) {
-                detachConnection(connectionId, closeTransport = false)
-                return@forEach
-            }
-            try {
-                sendWsMessage(socket, encoded)
-            } catch (ex: Exception) {
-                logger.warn("Failed to broadcast realtime transport message via websocket", ex)
-                detachConnection(connectionId, closeTransport = true)
-            }
-        }
-
         val sseConnectionIds = roomSseConnections[inviteCode]?.toList().orEmpty()
         sseConnectionIds.forEach { connectionId ->
             if (excludeConnectionId != null && excludeConnectionId == connectionId) return@forEach
+            if (includeConnectionIds != null && !includeConnectionIds.contains(connectionId)) return@forEach
             val emitter = sseConnections[connectionId]
             if (participants[connectionId] == null || emitter == null) {
                 detachConnection(connectionId, closeTransport = false)
@@ -675,15 +815,6 @@ class CollaborationService(
             } catch (ex: Exception) {
                 logger.warn("Failed to broadcast realtime transport message via sse", ex)
                 detachConnection(connectionId, closeTransport = true)
-            }
-        }
-    }
-
-    private fun sendWsMessage(socket: WebSocketSession, encodedMessage: String) {
-        if (!socket.isOpen) return
-        synchronized(socket) {
-            if (socket.isOpen) {
-                socket.sendMessage(TextMessage(encodedMessage))
             }
         }
     }
@@ -707,6 +838,8 @@ class CollaborationService(
             language = state.language,
             code = state.code,
             lastCodeUpdatedBySessionId = state.lastCodeUpdatedBySessionId,
+            yjsDocumentBase64 = state.yjsDocumentBase64,
+            lastYjsSequence = state.lastYjsSequence,
             currentStep = state.currentStep,
             notes = state.notes,
             participants = participantsPayload,
@@ -746,6 +879,8 @@ class CollaborationService(
             language = normalizeLanguage(room.language),
             code = room.code,
             lastCodeUpdatedBySessionId = null,
+            yjsDocumentBase64 = null,
+            lastYjsSequence = 0,
             currentStep = room.currentStep,
             notes = room.notes.orEmpty(),
             notesLockedBySessionId = currentState?.notesLockedBySessionId,
@@ -753,17 +888,14 @@ class CollaborationService(
             notesLockedUntilEpochMs = currentState?.notesLockedUntilEpochMs,
             taskScoresByStepIndex = buildTaskScores(room),
             cursorsBySessionId = currentState?.cursorsBySessionId ?: ConcurrentHashMap(),
+            lastCursorSequenceBySessionId = currentState?.lastCursorSequenceBySessionId ?: ConcurrentHashMap(),
+            lastCodeSequenceBySessionId = currentState?.lastCodeSequenceBySessionId ?: ConcurrentHashMap(),
+            lastYjsSnapshotSequenceBySessionId = currentState?.lastYjsSnapshotSequenceBySessionId ?: ConcurrentHashMap(),
             lastCandidateKey = currentState?.lastCandidateKey,
             candidateKeyHistory = currentState?.candidateKeyHistory?.toMutableList() ?: mutableListOf(),
             lastCandidateKeyAtEpochMs = currentState?.lastCandidateKeyAtEpochMs ?: 0L,
         )
         broadcastState(inviteCode)
-    }
-
-    private fun markParticipantActive(participant: ParticipantMeta) {
-        if (participant.presenceStatus != PresenceStatus.ACTIVE) {
-            participant.presenceStatus = PresenceStatus.ACTIVE
-        }
     }
 
     private fun evictDuplicateSession(inviteCode: String, sessionId: String, currentConnectionId: String) {
@@ -808,27 +940,15 @@ class CollaborationService(
             connectionByRoomSession.remove(roomSessionKey(participant.inviteCode, participant.sessionId), connectionId)
             roomState[participant.inviteCode]?.let { state ->
                 state.cursorsBySessionId.remove(participant.sessionId)
+                state.lastCursorSequenceBySessionId.remove(participant.sessionId)
+                state.lastCodeSequenceBySessionId.remove(participant.sessionId)
+                state.lastYjsSnapshotSequenceBySessionId.remove(participant.sessionId)
                 if (state.lastCandidateKey?.sessionId == participant.sessionId) {
                     state.candidateKeyHistory.removeAll { it.sessionId == participant.sessionId }
                     state.lastCandidateKey = state.candidateKeyHistory.lastOrNull()
                     state.lastCandidateKeyAtEpochMs = state.lastCandidateKey?.timestampEpochMs ?: 0L
                 } else if (state.candidateKeyHistory.isNotEmpty()) {
                     state.candidateKeyHistory.removeAll { it.sessionId == participant.sessionId }
-                }
-            }
-        }
-
-        wsConnections.remove(connectionId)?.let { socket ->
-            if (inviteCode != null) {
-                roomSockets[inviteCode]?.remove(socket)
-            } else {
-                roomSockets.values.forEach { it.remove(socket) }
-            }
-            if (closeTransport) {
-                runCatching {
-                    if (socket.isOpen) {
-                        socket.close()
-                    }
                 }
             }
         }
@@ -858,16 +978,24 @@ class CollaborationService(
     }
 
     private fun sseConnectionId(sessionId: String): String {
-        return "sse:$sessionId"
+        return "sse:$sessionId:${UUID.randomUUID()}"
     }
 
     private fun resolveRole(room: Room, ownerToken: String?, interviewerToken: String?, user: User?): RoomRole {
         if (room.ownerUser != null) {
+            val hasValidOwnerToken =
+                !ownerToken.isNullOrBlank() && room.ownerSessionToken == ownerToken
             val hasValidInterviewerToken =
                 !interviewerToken.isNullOrBlank() && room.interviewerSessionToken == interviewerToken
             if (user == null) {
-                return if (hasValidInterviewerToken) RoomRole.INTERVIEWER else RoomRole.CANDIDATE
+                return when {
+                    hasValidOwnerToken -> RoomRole.OWNER
+                    hasValidInterviewerToken -> RoomRole.INTERVIEWER
+                    else -> RoomRole.CANDIDATE
+                }
             }
+
+            if (hasValidOwnerToken) return RoomRole.OWNER
 
             val roomId = room.id ?: return if (hasValidInterviewerToken) RoomRole.INTERVIEWER else RoomRole.CANDIDATE
             val userId = user.id ?: return if (hasValidInterviewerToken) RoomRole.INTERVIEWER else RoomRole.CANDIDATE
@@ -913,12 +1041,17 @@ class CollaborationService(
             language = language,
             code = code,
             lastCodeUpdatedBySessionId = null,
+            yjsDocumentBase64 = null,
+            lastYjsSequence = 0,
             currentStep = room.currentStep,
             notes = notes,
             notesLockedBySessionId = null,
             notesLockedByDisplayName = null,
             notesLockedUntilEpochMs = null,
             taskScoresByStepIndex = buildTaskScores(room),
+            lastCursorSequenceBySessionId = ConcurrentHashMap(),
+            lastCodeSequenceBySessionId = ConcurrentHashMap(),
+            lastYjsSnapshotSequenceBySessionId = ConcurrentHashMap(),
         )
     }
 

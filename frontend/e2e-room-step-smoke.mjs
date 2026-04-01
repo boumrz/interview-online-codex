@@ -1,11 +1,13 @@
 import { chromium } from "playwright";
 
+const webBaseUrl = process.env.E2E_BASE_URL || "http://localhost:5173";
+
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext();
 const page = await context.newPage();
 
 try {
-  await page.goto("http://localhost:5173", { waitUntil: "networkidle" });
+  await page.goto(webBaseUrl, { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "Создать комнату" }).click();
   await page.waitForURL(/\/room\//, { timeout: 15000 });
 

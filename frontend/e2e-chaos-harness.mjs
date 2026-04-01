@@ -63,7 +63,7 @@ try {
   const ownerContext = await browser.newContext();
   const owner = await ownerContext.newPage();
 
-  await owner.goto(BASE_URL, { waitUntil: "networkidle" });
+  await owner.goto(BASE_URL, { waitUntil: "domcontentloaded" });
   await owner.getByRole("button", { name: "Создать комнату" }).click();
   await owner.waitForURL(/\/room\//, { timeout: 15000 });
   await owner.locator(".monaco-editor").waitFor({ timeout: 15000 });
@@ -71,7 +71,7 @@ try {
 
   const candidateAContext = await browser.newContext();
   const candidateA = await candidateAContext.newPage();
-  await candidateA.goto(roomUrl, { waitUntil: "networkidle" });
+  await candidateA.goto(roomUrl, { waitUntil: "domcontentloaded" });
   await candidateA.getByText("Представьтесь перед входом в комнату", { exact: true }).waitFor({ timeout: 15000 });
   await candidateA.getByLabel("Ваше имя").fill("Candidate A");
   await candidateA.getByRole("button", { name: "Войти в комнату" }).click();
@@ -79,7 +79,7 @@ try {
 
   const candidateBContext = await browser.newContext();
   const candidateB = await candidateBContext.newPage();
-  await candidateB.goto(roomUrl, { waitUntil: "networkidle" });
+  await candidateB.goto(roomUrl, { waitUntil: "domcontentloaded" });
   await candidateB.getByText("Представьтесь перед входом в комнату", { exact: true }).waitFor({ timeout: 15000 });
   await candidateB.getByLabel("Ваше имя").fill("Candidate B");
   await candidateB.getByRole("button", { name: "Войти в комнату" }).click();
@@ -107,7 +107,7 @@ try {
 
   const reconnectStart = now();
   await candidateBContext.setOffline(false);
-  await candidateB.reload({ waitUntil: "networkidle" });
+  await candidateB.reload({ waitUntil: "domcontentloaded" });
   await candidateB.locator(".monaco-editor").waitFor({ timeout: 15000 });
   await waitForEditorContains(candidateB, reconnectMarker, 12000);
   metrics.reconnectMs = now() - reconnectStart;
