@@ -13,18 +13,14 @@ export default defineConfig({
   },
   devServer: {
     port: 5173,
+    // SSE must stay uncompressed in dev; gzip buffering prevents EventSource from receiving updates promptly.
+    compress: false,
     historyApiFallback: true,
     proxy: [
       {
         context: ["/api"],
         target: process.env.DEV_API_PROXY_TARGET ?? "http://localhost:8080",
         changeOrigin: true
-      },
-      {
-        context: ["/ws/rooms"],
-        target: process.env.DEV_WS_PROXY_TARGET ?? "http://localhost:8080",
-        changeOrigin: true,
-        ws: true
       }
     ]
   },
@@ -66,8 +62,7 @@ export default defineConfig({
     new rspack.DefinePlugin({
       __FEATURE_AGENT_OPS__: JSON.stringify(process.env.FEATURE_AGENT_OPS ?? "false"),
       "process.env.FEATURE_AGENT_OPS": JSON.stringify(process.env.FEATURE_AGENT_OPS ?? "false"),
-      "process.env.VITE_API_BASE_URL": JSON.stringify(process.env.VITE_API_BASE_URL ?? "/api"),
-      "process.env.VITE_WS_BASE_URL": JSON.stringify(process.env.VITE_WS_BASE_URL ?? "")
+      "process.env.VITE_API_BASE_URL": JSON.stringify(process.env.VITE_API_BASE_URL ?? "/api")
     }),
     new rspack.HtmlRspackPlugin({
       template: "./public/index.html"

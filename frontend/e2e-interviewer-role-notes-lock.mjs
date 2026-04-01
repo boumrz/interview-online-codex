@@ -4,10 +4,20 @@ const webBaseUrl = process.env.E2E_BASE_URL || "http://localhost:5173";
 const apiBaseUrl = process.env.E2E_API_URL || "http://localhost:8080/api";
 
 async function enterNameIfPrompted(page, name) {
-  const promptVisible = await page.getByText("Представьтесь перед входом в комнату").isVisible().catch(() => false);
+  const promptTitle = page.getByText("Представьтесь перед входом в комнату");
+  const nameInput = page.getByLabel("Ваше имя");
+
+  const promptVisibleNow = await promptTitle.isVisible().catch(() => false);
+  if (!promptVisibleNow) {
+    await nameInput.waitFor({ state: "visible", timeout: 1200 }).catch(() => {});
+  }
+
+  const promptVisible = await promptTitle.isVisible().catch(() => false);
   if (!promptVisible) return;
-  await page.getByLabel("Ваше имя").fill(name);
+
+  await nameInput.fill(name);
   await page.getByRole("button", { name: "Войти в комнату", exact: true }).click();
+  await promptTitle.waitFor({ state: "hidden", timeout: 5000 }).catch(() => {});
 }
 
 async function createGuestRoom() {
@@ -51,19 +61,19 @@ try {
     ownerToken: room.ownerToken
   });
 
-  await ownerPage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "networkidle" });
-  await ownerPage.locator(".monaco-editor").waitFor({ timeout: 15000 });
+  await ownerPage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
+  await ownerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
   await ownerPage.getByRole("button", { name: "Приглашения", exact: true }).waitFor({ timeout: 10000 });
 
   await interviewerPage.goto(`${webBaseUrl}/room/${room.inviteCode}?interviewerToken=${encodeURIComponent(room.interviewerToken)}`, {
-    waitUntil: "networkidle"
+    waitUntil: "domcontentloaded"
   });
   await enterNameIfPrompted(interviewerPage, "Interviewer QA");
-  await interviewerPage.locator(".monaco-editor").waitFor({ timeout: 15000 });
+  await interviewerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
   await interviewerPage.getByRole("button", { name: "Приглашения", exact: true }).waitFor({ timeout: 10000 });
 
-  await interviewerPage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "networkidle" });
-  await interviewerPage.locator(".monaco-editor").waitFor({ timeout: 15000 });
+  await interviewerPage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
+  await interviewerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
   const invitationsVisibleInCandidateMode = await interviewerPage
     .getByRole("button", { name: "Приглашения", exact: true })
     .isVisible()
@@ -73,10 +83,10 @@ try {
   }
 
   await interviewerPage.goto(`${webBaseUrl}/room/${room.inviteCode}?interviewerToken=${encodeURIComponent(room.interviewerToken)}`, {
-    waitUntil: "networkidle"
+    waitUntil: "domcontentloaded"
   });
   await enterNameIfPrompted(interviewerPage, "Interviewer QA");
-  await interviewerPage.locator(".monaco-editor").waitFor({ timeout: 15000 });
+  await interviewerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
   await interviewerPage.getByRole("button", { name: "Приглашения", exact: true }).waitFor({ timeout: 10000 });
 
   await interviewerPage.getByRole("button", { name: /^2\./ }).first().click();
@@ -86,7 +96,7 @@ try {
   const interviewerNotes = interviewerPage.locator('[data-testid="room-notes-input"]');
 
   await ownerNotes.fill(`owner lock note ${Date.now()}`);
-  await interviewerPage.getByText(/Пишет /i).waitFor({ timeout: 8000 });
+  await interviewerPage.getByText(/(Пишет|Редактирует)/i).waitFor({ timeout: 8000 });
 
   const interviewerDisabledDuringLock = await interviewerNotes.isDisabled();
   if (!interviewerDisabledDuringLock) {

@@ -129,6 +129,7 @@
 
 .sidebar {
   height: 100%;
+  min-width: 0;
   overflow-y: auto;
   border-right: 1px solid #252a32;
   padding: 12px;
@@ -186,6 +187,7 @@
 .editorPanel,
 .outputPanel,
 .candidatePanel {
+  min-width: 0;
   border: 1px solid #252a32;
   border-radius: 12px;
   background: #11151c;
@@ -580,7 +582,8 @@
 .remoteCursorCaret {
   position: relative;
   display: inline-block;
-  height: 1.2em;
+  height: 100%;
+  vertical-align: top;
   margin-left: -1px;
   border-left: 2px solid;
   pointer-events: none;
@@ -603,38 +606,6 @@
   border-left-color: #6c9fff;
 }
 
-.remoteCursorLabel {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 5px;
-  padding: 1px 6px;
-  font-size: 14px;
-  line-height: 1.2;
-  font-weight: 700;
-  white-space: nowrap;
-  letter-spacing: 0.18px;
-  pointer-events: none;
-  opacity: 0.58;
-  backdrop-filter: blur(0.6px);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-}
-
-.remoteCursorLabelOwner {
-  background: rgba(255, 170, 77, 0.28);
-  color: #221708;
-}
-
-.remoteCursorLabelInterviewer {
-  background: rgba(95, 195, 160, 0.28);
-  color: #0f261f;
-}
-
-.remoteCursorLabelCandidate {
-  background: rgba(108, 159, 255, 0.28);
-  color: #0e1f43;
-}
-
 @media (max-width: 1180px) {
   .topInner {
     grid-template-columns: 1fr;
@@ -647,7 +618,22 @@
   }
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1280px) {
+  .workspace {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .sidebar {
+    padding: 10px;
+  }
+
+  .panelTabPanel {
+    padding: 10px;
+  }
+}
+
+@media (max-width: 760px) {
   .shell {
     height: auto;
     min-height: 100vh;

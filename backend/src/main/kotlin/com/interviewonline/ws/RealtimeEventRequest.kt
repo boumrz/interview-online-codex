@@ -4,6 +4,7 @@ data class RealtimeEventRequest(
     val sessionId: String,
     val type: String,
     val code: String? = null,
+    val codeSequence: Long? = null,
     val language: String? = null,
     val stepIndex: Int? = null,
     val rating: Int? = null,
@@ -15,6 +16,7 @@ data class RealtimeEventRequest(
     val selectionStartColumn: Int? = null,
     val selectionEndLineNumber: Int? = null,
     val selectionEndColumn: Int? = null,
+    val cursorSequence: Long? = null,
     val key: String? = null,
     val keyCode: String? = null,
     val ctrlKey: Boolean? = null,
@@ -23,4 +25,8 @@ data class RealtimeEventRequest(
     val metaKey: Boolean? = null,
     val yjsUpdate: String? = null,
     val syncKey: String? = null,
+    val yjsClientSequence: Long? = null,
+    val yjsDocumentBase64: String? = null,
+    /** Base64-encoded y-protocols awareness update (remote cursors / selections). */
+    val awarenessUpdate: String? = null,
 )

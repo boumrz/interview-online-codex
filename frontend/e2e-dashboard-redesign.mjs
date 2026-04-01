@@ -41,7 +41,7 @@ try {
   const createdTaskTitle = `UI Task ${Date.now()}`;
   const createdTaskDescription = "Task description for redesigned dashboard test";
 
-  await page.goto(`${webBaseUrl}/dashboard/tasks?lang=nodejs`, { waitUntil: "networkidle" });
+  await page.goto(`${webBaseUrl}/dashboard/tasks?lang=nodejs`, { waitUntil: "domcontentloaded" });
   await page.locator('[data-testid="task-bank-panel"]').waitFor({ timeout: 15000 });
 
   const taskBankWidthShare = await page.evaluate(() => {
@@ -72,7 +72,7 @@ try {
   await page.locator('[data-testid="create-task-submit-button"]').click();
   await page.locator(`[data-testid="task-bank-panel"] >> text=${createdTaskTitle}`).waitFor({ timeout: 15000 });
 
-  await page.goto(`${webBaseUrl}/dashboard/rooms`, { waitUntil: "networkidle" });
+  await page.goto(`${webBaseUrl}/dashboard/rooms`, { waitUntil: "domcontentloaded" });
   await page.locator('[data-testid="create-room-card"]').waitFor({ timeout: 15000 });
 
   const roomPanelWidthShare = await page.evaluate(() => {

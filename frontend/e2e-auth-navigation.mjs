@@ -60,7 +60,7 @@ try {
 
   const page = await context.newPage();
 
-  await page.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "networkidle" });
+  await page.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
   await page.getByText(room.title, { exact: true }).waitFor({ timeout: 15000 });
   await page.locator('a[href="/"]').first().click();
   await page.waitForURL(`${webBaseUrl}/`, { timeout: 15000 });
@@ -68,7 +68,7 @@ try {
   await page.locator('a[href="/dashboard/rooms"]').first().click();
   await page.waitForURL(/\/dashboard\/rooms/, { timeout: 15000 });
 
-  await page.goto(`${webBaseUrl}/login`, { waitUntil: "networkidle" });
+  await page.goto(`${webBaseUrl}/login`, { waitUntil: "domcontentloaded" });
   await page.waitForURL(/\/dashboard\/rooms/, { timeout: 15000 });
 
   console.log("AUTH_NAVIGATION_OK");

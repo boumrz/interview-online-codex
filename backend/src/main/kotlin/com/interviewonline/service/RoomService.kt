@@ -86,6 +86,8 @@ class RoomService(
         val room = roomRepository.findByInviteCode(inviteCode)
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
         if (room.ownerUser != null) {
+            val hasValidOwnerToken =
+                !ownerToken.isNullOrBlank() && room.ownerSessionToken == ownerToken
             val hasValidInterviewerToken =
                 !interviewerToken.isNullOrBlank() && room.interviewerSessionToken == interviewerToken
             var hasInterviewerAccess = user?.let { isParticipant(room, it) } ?: false
@@ -102,7 +104,7 @@ class RoomService(
             }
 
             val hasGuestInterviewerAccess = user == null && hasValidInterviewerToken
-            val includeInterviewerToken = isOwnerUser || hasInterviewerAccess || hasGuestInterviewerAccess
+            val includeInterviewerToken = hasValidOwnerToken || isOwnerUser || hasInterviewerAccess || hasGuestInterviewerAccess
             return toRoomResponse(room, includeOwnerToken = false, includeInterviewerToken = includeInterviewerToken)
         }
 
