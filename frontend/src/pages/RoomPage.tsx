@@ -907,6 +907,11 @@ export function RoomPage() {
             placeholder="Имя"
             value={draftName}
             onChange={(event) => setDraftName(event.currentTarget.value)}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter") return;
+              event.preventDefault();
+              submitCandidateName();
+            }}
             autoFocus
           />
           <Button onClick={submitCandidateName}>Войти в комнату</Button>
@@ -2186,5 +2191,7 @@ function RoomCodeEditor({
     });
   }, [languageExtension]);
 
-  return <div className="cm-host" style={{ height, overflow: "hidden" }} ref={hostRef} />;
+  // CodeMirror scroll relies on a constrained-height container. `overflow: auto` ensures
+  // vertical scrolling works when content grows (e.g. writing many new lines).
+  return <div className="cm-host" style={{ height, overflow: "auto", overflowX: "hidden" }} ref={hostRef} />;
 }
