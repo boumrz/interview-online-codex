@@ -192,6 +192,60 @@
   overflow: hidden;
 }
 
+.leftRail {
+  width: 56px;
+  flex-shrink: 0;
+  border-right: 1px solid #252a32;
+  background: #0e131a;
+  padding: 10px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.railButton {
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: #151b25;
+  color: #97a3b6;
+  width: 100%;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, transform 120ms ease;
+}
+
+.railButton:hover {
+  background: #1a2535;
+  color: #dbe5f4;
+  transform: translateY(-1px);
+}
+
+.railButton:focus-visible {
+  outline: none;
+  border-color: #5a7cae;
+  box-shadow: 0 0 0 2px rgba(90, 124, 174, 0.25);
+}
+
+.railButtonActive {
+  background: #20304a;
+  border-color: #34527b;
+  color: #f2f6ff;
+}
+
+.ownerSidePanel {
+  height: 100%;
+  min-width: 0;
+  flex-shrink: 0;
+  display: flex;
+}
+
+.ownerSidePanel > * {
+  width: 100%;
+}
+
 .edgeToggle {
   position: absolute;
   top: 50%;
@@ -251,11 +305,6 @@
 .stepList {
   display: grid;
   gap: 7px;
-}
-
-.stepMeta {
-  color: #a3aab5;
-  font-size: 12px;
 }
 
 .taskRatingCard {
@@ -339,27 +388,6 @@
   max-height: 62vh;
   resize: vertical;
   overflow: auto;
-}
-
-.briefingHeader {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  align-items: baseline;
-  margin-bottom: 8px;
-}
-
-.briefingTitle {
-  color: #d8e0ea;
-  font-size: 11px;
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
-  font-weight: 700;
-}
-
-.briefingHint {
-  color: #8d97a5;
-  font-size: 11px;
 }
 
 .briefingSplit {
@@ -947,13 +975,6 @@
   gap: 6px;
 }
 
-.candidateDescription {
-  color: #96a0af;
-  font-size: 12px;
-  line-height: 1.45;
-  margin: 0;
-}
-
 .error {
   color: #ff8484;
   font-size: 12px;
@@ -1043,6 +1064,30 @@
   .edgeToggle,
   .resizeHandle {
     display: none;
+  }
+
+  .leftRail {
+    width: auto;
+    border-right: 0;
+    border-bottom: 1px solid #252a32;
+    padding: 8px 10px;
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .railButton {
+    min-height: 36px;
+    width: 42px;
+  }
+
+  .ownerSidePanel {
+    width: auto !important;
+    max-height: 360px;
+  }
+
+  .ownerSidePanel > .outputPanel {
+    width: auto !important;
+    max-height: 360px;
   }
 
   .sidebar {
