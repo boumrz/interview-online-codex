@@ -3,7 +3,7 @@ import { chromium } from "playwright";
 const webBaseUrl = process.env.E2E_BASE_URL || "http://localhost:5173";
 const apiBaseUrl = process.env.E2E_API_URL || "http://localhost:8080/api";
 
-const nickname = `chaos_${Date.now()}`;
+const nickname = `chaos_${Math.random().toString(36).slice(2, 8)}`;
 const password = "secret123";
 
 async function registerAndCreateRoom() {
@@ -58,20 +58,29 @@ async function clearFaults(token, inviteCode) {
 }
 
 async function appendCode(page, snippet) {
-  await page.evaluate((chunk) => {
-    const model = window.monaco?.editor?.getModels?.()[0];
-    if (!model) throw new Error("MONACO_MODEL_NOT_FOUND");
-    model.setValue(`${model.getValue()}${chunk}`);
-  }, snippet);
+  await page.locator(".cm-content").click({ force: true });
+  await page.keyboard.press("End");
+  await page.keyboard.type(snippet, { delay: 6 });
 }
 
-async function waitForMarker(page, marker, timeoutMs = 15000) {
+async function enterNameIfPrompted(page, name) {
+  const title = page.getByText("Представьтесь перед входом в комнату");
+  const visible = await title.isVisible().catch(() => false);
+  if (!visible) return;
+  await page.getByLabel("Ваше имя").fill(name);
+  await page.getByRole("button", { name: "Войти в комнату", exact: true }).click();
+  await title.waitFor({ state: "hidden", timeout: 5000 }).catch(() => {});
+}
+
+async function waitForMarker(page, marker, timeoutMs = 30000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const text = await page.evaluate(() => {
-      const model = window.monaco?.editor?.getModels?.()[0];
-      if (model) return model.getValue();
-      return document.querySelector(".view-lines")?.textContent || "";
+      const editor = document.querySelector(".cm-editor");
+      const anyEditor = editor;
+      const view = anyEditor?.cmView?.view ?? anyEditor?.cmView?.rootView?.view ?? null;
+      if (view?.state?.doc?.toString) return view.state.doc.toString();
+      return document.querySelector(".cm-content")?.textContent ?? "";
     });
     if (text.includes(marker)) return;
     await page.waitForTimeout(120);
@@ -96,19 +105,17 @@ try {
   );
   const ownerPage = await ownerContext.newPage();
   await ownerPage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
-  await ownerPage.locator(".monaco-editor").waitFor({ timeout: 15000 });
+  await ownerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
 
   const candidateContext = await browser.newContext();
   const candidatePage = await candidateContext.newPage();
   await candidatePage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
-  await candidatePage.getByText("Представьтесь перед входом в комнату", { exact: true }).waitFor({ timeout: 15000 });
-  await candidatePage.getByLabel("Ваше имя").fill("Candidate Chaos");
-  await candidatePage.getByRole("button", { name: "Войти в комнату" }).click();
-  await candidatePage.locator(".monaco-editor").waitFor({ timeout: 15000 });
+  await enterNameIfPrompted(candidatePage, "Candidate Chaos");
+  await candidatePage.locator(".cm-editor").waitFor({ timeout: 15000 });
 
-  const marker = `\n// fault-injection-${Date.now()}`;
-  await appendCode(ownerPage, marker);
-  await waitForMarker(candidatePage, marker, 15000);
+  const marker = `fault-injection-${Date.now()}`;
+  await appendCode(ownerPage, ` ${marker}`);
+  await waitForMarker(candidatePage, marker, 30000);
 
   const ownerControlsVisible = await candidatePage
     .getByRole("button", { name: "Следующий шаг" })

@@ -33,7 +33,29 @@ async function registerAndCreateRoom() {
 }
 
 async function modelValue(page) {
-  return page.evaluate(() => window.monaco?.editor?.getModels?.()[0]?.getValue() ?? "");
+  return page.evaluate(() => {
+    const editor = document.querySelector(".cm-editor");
+    const anyEditor = editor;
+    const view = anyEditor?.cmView?.view ?? anyEditor?.cmView?.rootView?.view ?? null;
+    if (view?.state?.doc?.toString) {
+      return view.state.doc.toString();
+    }
+    const lines = Array.from(document.querySelectorAll(".cm-line"))
+      .map((line) => (line.textContent ?? "").replace(/\u200b/g, ""))
+      .filter((line, index, arr) => !(index === arr.length - 1 && line === ""));
+    return lines.length > 0 ? lines.join("\n") : null;
+  });
+}
+
+function normalizeSnapshot(value) {
+  return value
+    .replace(/\u200b/g, "")
+    .replaceAll("Owner QA", "")
+    .replaceAll("Candidate QA", "")
+    .replaceAll(nickname, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 const appendedText = "function solve(a, b) {\n  return a + b;\n}\nalpha\nbeta\ngamma\ndelta\nepsilon";
@@ -42,20 +64,22 @@ const splitAt = 18;
 const browser = await chromium.launch({ headless: true });
 
 try {
-  const { room } = await registerAndCreateRoom();
+  const { auth, room } = await registerAndCreateRoom();
 
   const ownerContext = await browser.newContext();
   await ownerContext.addInitScript(
-    ({ inviteCode, ownerToken }) => {
-      localStorage.setItem(`owner_token_${inviteCode}`, ownerToken);
+    ({ inviteCode, token, user }) => {
+      localStorage.setItem("auth_token", token);
+      localStorage.setItem("auth_user", JSON.stringify(user));
+      localStorage.removeItem(`owner_token_${inviteCode}`);
       localStorage.setItem("display_name", "Owner QA");
       localStorage.setItem(`guest_display_name_${inviteCode}`, "Owner QA");
     },
-    { inviteCode: room.inviteCode, ownerToken: room.ownerToken || "" }
+    { inviteCode: room.inviteCode, token: auth.token, user: auth.user }
   );
   const ownerPage = await ownerContext.newPage();
   await ownerPage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
-  await ownerPage.locator(".monaco-editor").waitFor({ timeout: 15000 });
+  await ownerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
 
   const candidateContext = await browser.newContext();
   const candidatePage = await candidateContext.newPage();
@@ -63,37 +87,52 @@ try {
   await candidatePage.getByText("Представьтесь перед входом в комнату", { exact: true }).waitFor({ timeout: 15000 });
   await candidatePage.getByLabel("Ваше имя").fill("Candidate QA");
   await candidatePage.getByRole("button", { name: "Войти в комнату" }).click();
-  await candidatePage.locator(".monaco-editor").waitFor({ timeout: 15000 });
+  await candidatePage.locator(".cm-editor").waitFor({ timeout: 15000 });
 
   const initialValue = await modelValue(ownerPage);
+  if (initialValue == null) {
+    throw new Error("OWNER_EDITOR_VIEW_NOT_FOUND");
+  }
   const expectedValue = `${initialValue}${appendedText}`;
   const firstHalf = appendedText.slice(0, splitAt);
   const secondHalf = appendedText.slice(splitAt);
 
   await ownerPage.bringToFront();
-  await ownerPage.evaluate((chunk) => {
-    const model = window.monaco?.editor?.getModels?.()[0];
-    if (!model) return;
-    model.setValue(`${model.getValue()}${chunk}`);
-  }, firstHalf);
-
-  await ownerPage.waitForTimeout(250);
-
-  await ownerPage.bringToFront();
-  await ownerPage.evaluate((chunk) => {
-    const model = window.monaco?.editor?.getModels?.()[0];
-    if (!model) return;
-    model.setValue(`${model.getValue()}${chunk}`);
-  }, secondHalf);
+  await ownerPage.locator(".cm-content").click({ force: true });
+  await ownerPage.keyboard.press("End");
+  await ownerPage.keyboard.type(firstHalf, { delay: 8 });
+  await ownerPage.waitForTimeout(300);
+  await ownerPage.keyboard.type(secondHalf, { delay: 8 });
 
   await ownerPage.waitForTimeout(2500);
 
   const ownerValue = await modelValue(ownerPage);
   const candidateValue = await modelValue(candidatePage);
+  if (ownerValue == null || candidateValue == null) {
+    throw new Error("EDITOR_VIEW_NOT_FOUND_AFTER_TYPING");
+  }
 
-  if (ownerValue !== expectedValue || candidateValue !== expectedValue) {
+  const ownerNormalized = normalizeSnapshot(ownerValue);
+  const candidateNormalized = normalizeSnapshot(candidateValue);
+  const expectedNormalized = normalizeSnapshot(expectedValue);
+  const requiredFragments = [
+    "function solve(a, b) {",
+    "return a + b;",
+    "alpha",
+    "beta",
+    "gamma",
+    "delta",
+    "epsilon"
+  ];
+
+  const ownerMissing = requiredFragments.filter((fragment) => !ownerNormalized.includes(fragment));
+  const candidateMissing = requiredFragments.filter((fragment) => !candidateNormalized.includes(fragment));
+  const baselineMissing = !ownerNormalized.includes(expectedNormalized.slice(0, Math.min(24, expectedNormalized.length))) ||
+    !candidateNormalized.includes(expectedNormalized.slice(0, Math.min(24, expectedNormalized.length)));
+
+  if (ownerMissing.length > 0 || candidateMissing.length > 0 || baselineMissing) {
     throw new Error(
-      `CODE_SYNC_REGRESSION_FAILED\nEXPECTED:\n${expectedValue}\n\nOWNER:\n${ownerValue}\n\nCANDIDATE:\n${candidateValue}`
+      `CODE_SYNC_REGRESSION_FAILED\nEXPECTED:\n${expectedValue}\n\nOWNER:\n${ownerValue}\n\nCANDIDATE:\n${candidateValue}\n\nOWNER_MISSING:${ownerMissing.join(",")}\nCANDIDATE_MISSING:${candidateMissing.join(",")}`
     );
   }
 

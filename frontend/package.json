@@ -15,9 +15,12 @@
     "e2e:account-binding": "node e2e-account-room-binding.mjs",
     "e2e:presence": "node e2e-participants-presence.mjs",
     "e2e:sse-reconnect": "node e2e-sse-reconnect-sync.mjs",
+    "e2e:hidden-tab": "node e2e-hidden-tab-sync.mjs",
+    "e2e:cursor": "node e2e-cursor-no-dot.mjs",
+    "e2e:markdown": "node e2e-markdown-explainer-smoke.mjs",
     "e2e:yjs-multi": "node e2e-yjs-multi-participant-sync.mjs",
     "e2e:join-race": "node e2e-join-race-sync.mjs",
-    "e2e:all": "npm run e2e:smoke && npm run e2e:dashboard && npm run e2e:auth && npm run e2e:room && npm run e2e:roles && npm run e2e:presence && npm run e2e:sse-reconnect && npm run e2e:yjs-multi",
+    "e2e:all": "npm run e2e:smoke && npm run e2e:dashboard && npm run e2e:auth && npm run e2e:room && npm run e2e:roles && npm run e2e:presence && npm run e2e:sse-reconnect && npm run e2e:hidden-tab && npm run e2e:cursor && npm run e2e:yjs-multi",
     "e2e:dashboard-redesign": "node e2e-dashboard-redesign.mjs",
     "chaos:test": "node e2e-chaos-harness.mjs",
     "chaos:faults": "node e2e-chaos-fault-injection.mjs"

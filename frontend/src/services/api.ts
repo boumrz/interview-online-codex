@@ -42,12 +42,11 @@ export const api = createApi({
       query: (body) => ({ url: "/rooms", method: "POST", body }),
       invalidatesTags: ["MyRooms"]
     }),
-    getRoom: builder.query<Room, { inviteCode: string; ownerToken?: string; interviewerToken?: string }>({
-      query: ({ inviteCode, ownerToken, interviewerToken }) => ({
+    getRoom: builder.query<Room, { inviteCode: string; ownerToken?: string }>({
+      query: ({ inviteCode, ownerToken }) => ({
         url: `/rooms/${inviteCode}`,
         headers: {
-          ...(ownerToken ? { "X-Room-Owner-Token": ownerToken } : {}),
-          ...(interviewerToken ? { "X-Room-Interviewer-Token": interviewerToken } : {})
+          ...(ownerToken ? { "X-Room-Owner-Token": ownerToken } : {})
         }
       }),
       providesTags: ["Room"]

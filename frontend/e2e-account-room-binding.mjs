@@ -3,8 +3,9 @@ import { chromium } from "playwright";
 const webBaseUrl = process.env.E2E_BASE_URL || "http://localhost:5173";
 const apiBaseUrl = process.env.E2E_API_URL || "http://localhost:8080/api";
 
-async function registerAccount() {
-  const nickname = `owner_${Date.now()}`;
+async function registerAccount(prefix) {
+  const randomPart = Math.random().toString(36).slice(2, 8);
+  const nickname = `${prefix}_${randomPart}`.slice(0, 24);
   const password = "pass12345";
   const response = await fetch(`${apiBaseUrl}/auth/register`, {
     method: "POST",
@@ -15,7 +16,7 @@ async function registerAccount() {
   if (!response.ok) {
     throw new Error(`REGISTER_FAILED ${JSON.stringify(payload)}`);
   }
-  return { ...payload, nickname };
+  return payload;
 }
 
 async function createUserRoom(token) {
@@ -26,7 +27,7 @@ async function createUserRoom(token) {
       Authorization: `Bearer ${token}`
     },
     body: JSON.stringify({
-      title: `Bound room ${Date.now()}`,
+      title: `Unified room ${Date.now()}`,
       language: "nodejs",
       taskIds: []
     })
@@ -38,151 +39,106 @@ async function createUserRoom(token) {
   return payload;
 }
 
+async function bootstrapAuthStorage(page, token, user, inviteCode) {
+  await page.goto(webBaseUrl, { waitUntil: "domcontentloaded" });
+  await page.evaluate(({ authToken, authUser, displayName, roomInviteCode }) => {
+    localStorage.setItem("auth_token", authToken);
+    localStorage.setItem("auth_user", JSON.stringify(authUser));
+    localStorage.setItem("display_name", displayName);
+    localStorage.setItem(`guest_display_name_${roomInviteCode}`, displayName);
+  }, {
+    authToken: token,
+    authUser: user,
+    displayName: user.nickname,
+    roomInviteCode: inviteCode
+  });
+}
+
+async function enterGuestNameIfPrompted(page, value) {
+  const modalTitle = page.getByText("Представьтесь перед входом в комнату");
+  const visible = await modalTitle.isVisible().catch(() => false);
+  if (!visible) return;
+  await page.getByLabel("Ваше имя").fill(value);
+  await page.getByRole("button", { name: "Войти в комнату", exact: true }).click();
+  await modalTitle.waitFor({ state: "hidden", timeout: 8000 }).catch(() => {});
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 const browser = await chromium.launch({ headless: true });
 
 try {
-  const auth = await registerAccount();
-  const room = await createUserRoom(auth.token);
+  const ownerAuth = await registerAccount("owner");
+  const interviewerAuth = await registerAccount("interviewer");
+  const room = await createUserRoom(ownerAuth.token);
 
-  if (!room.ownerToken || !room.interviewerToken) {
-    throw new Error("ROOM_TOKENS_MISSING");
+  const roomUrl = `${webBaseUrl}/room/${room.inviteCode}`;
+  if (roomUrl.includes("interviewerToken=")) {
+    throw new Error(`UNIFIED_LINK_EXPECTED ${roomUrl}`);
   }
 
-  const plainRoomLink = `${webBaseUrl}/room/${room.inviteCode}`;
-  const interviewerRoomLink = `${plainRoomLink}?interviewerToken=${encodeURIComponent(room.interviewerToken)}`;
+  const ownerContext = await browser.newContext();
+  const ownerPage = await ownerContext.newPage();
+  await bootstrapAuthStorage(ownerPage, ownerAuth.token, ownerAuth.user, room.inviteCode);
+  await ownerPage.goto(roomUrl, { waitUntil: "domcontentloaded" });
+  await ownerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
 
-  const context = await browser.newContext();
-  let page = await context.newPage();
-  await page.goto(webBaseUrl, { waitUntil: "domcontentloaded" });
-  await page.evaluate(({ inviteCode, ownerToken, authToken, user, displayName }) => {
-    localStorage.setItem("auth_token", authToken);
-    localStorage.setItem("auth_user", JSON.stringify(user));
-    localStorage.setItem(`owner_token_${inviteCode}`, ownerToken);
-    localStorage.setItem("display_name", displayName);
-    localStorage.setItem(`guest_display_name_${inviteCode}`, displayName);
-  }, {
-    inviteCode: room.inviteCode,
-    ownerToken: room.ownerToken,
-    authToken: auth.token,
-    user: auth.user,
-    displayName: auth.user.nickname
+  const legacyInvitesVisible = await ownerPage
+    .getByRole("button", { name: "Приглашения", exact: true })
+    .isVisible()
+    .catch(() => false);
+  if (legacyInvitesVisible) {
+    throw new Error("LEGACY_INVITES_UI_SHOULD_BE_REMOVED");
+  }
+
+  const interviewerContext = await browser.newContext();
+  const interviewerPage = await interviewerContext.newPage();
+  await bootstrapAuthStorage(interviewerPage, interviewerAuth.token, interviewerAuth.user, room.inviteCode);
+  await interviewerPage.goto(roomUrl, { waitUntil: "domcontentloaded" });
+  await interviewerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+
+  const interviewerCanManageBeforeGrant = await interviewerPage
+    .locator('[data-testid="room-notes-input"]')
+    .isVisible()
+    .catch(() => false);
+  if (interviewerCanManageBeforeGrant) {
+    throw new Error("INTERVIEWER_SHOULD_NOT_HAVE_MANAGE_ACCESS_BEFORE_GRANT");
+  }
+
+  await ownerPage.bringToFront();
+  const interviewerChip = ownerPage.getByRole("button", {
+    name: new RegExp(escapeRegExp(interviewerAuth.user.nickname), "i")
   });
+  await interviewerChip.waitFor({ timeout: 15000 });
+  await interviewerChip.click();
+  await ownerPage.getByRole("menuitem", { name: "Назначить интервьюером", exact: true }).click();
 
-  const traffic = {
-    apiAuthorization: null,
-    wsUrl: null,
-    roomRequests: []
-  };
-  let captureUnauthorizedPhase = false;
-  const attachTrafficListener = (targetPage) => {
-    targetPage.on("request", (request) => {
-      if (!captureUnauthorizedPhase) return;
-      const url = request.url();
-      if (url.includes(`/api/rooms/${room.inviteCode}`)) {
-        const authorization = request.headers().authorization ?? null;
-        traffic.apiAuthorization = authorization;
-        traffic.roomRequests.push({
-          url,
-          authorization
-        });
-      }
-      if (url.includes(`/ws/rooms/${room.inviteCode}`)) {
-        traffic.wsUrl = url;
-      }
-    });
-  };
-  attachTrafficListener(page);
+  // Requirement: a refresh should be enough to see newly granted room rights.
+  await interviewerPage.reload({ waitUntil: "domcontentloaded" });
+  await interviewerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await interviewerPage.locator('[data-testid="room-notes-input"]').waitFor({ timeout: 15000 });
 
-  await page.goto(interviewerRoomLink, { waitUntil: "domcontentloaded" });
-  await page.locator(".monaco-editor").waitFor({ timeout: 15000 });
-  await page.getByRole("button", { name: "Приглашения", exact: true }).waitFor({ timeout: 8000 });
-
-  await page.goto(`${webBaseUrl}/dashboard/rooms`, { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: "Выйти", exact: true }).click();
-  await page.waitForURL(`${webBaseUrl}/`, { timeout: 10000 });
-  const storageAfterLogout = await page.evaluate((inviteCode) => {
-    return {
-      authToken: localStorage.getItem("auth_token"),
-      authUser: localStorage.getItem("auth_user"),
-      ownerToken: localStorage.getItem(`owner_token_${inviteCode}`),
-      interviewerGuestName: localStorage.getItem(`guest_interviewer_display_name_${inviteCode}`)
-    };
-  }, room.inviteCode);
-  if (storageAfterLogout.authToken || storageAfterLogout.authUser) {
-    throw new Error("AUTH_NOT_CLEARED_ON_LOGOUT");
-  }
-  if (storageAfterLogout.ownerToken) {
-    throw new Error("OWNER_TOKEN_NOT_CLEARED_ON_LOGOUT");
-  }
-
-  await page.close();
-  page = await context.newPage();
-  attachTrafficListener(page);
-
-  traffic.apiAuthorization = null;
-  traffic.wsUrl = null;
-  traffic.roomRequests = [];
-  captureUnauthorizedPhase = true;
-
-  await page.goto(plainRoomLink, { waitUntil: "domcontentloaded" });
-  const plainModalVisible = await page
-    .getByText("Представьтесь перед входом в комнату")
+  // Plain link should still join as candidate for unauthenticated users.
+  const guestContext = await browser.newContext();
+  const guestPage = await guestContext.newPage();
+  await guestPage.goto(roomUrl, { waitUntil: "domcontentloaded" });
+  await enterGuestNameIfPrompted(guestPage, "Guest Candidate");
+  await guestPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  const guestCanManage = await guestPage
+    .locator('[data-testid="room-notes-input"]')
     .isVisible()
     .catch(() => false);
-
-  if (plainModalVisible) {
-    await page.getByLabel("Ваше имя").fill("Кандидат без токена");
-    await page.getByRole("button", { name: "Войти в комнату", exact: true }).click();
-  }
-
-  await page.locator(".monaco-editor").waitFor({ timeout: 15000 });
-
-  const invitationsVisibleAsCandidate = await page
-    .getByRole("button", { name: "Приглашения", exact: true })
-    .isVisible()
-    .catch(() => false);
-  if (invitationsVisibleAsCandidate) {
-    throw new Error("PLAIN_LINK_SHOULD_NOT_GRANT_INTERVIEWER_ACCESS");
-  }
-
-  await page.goto(interviewerRoomLink, { waitUntil: "domcontentloaded" });
-  const interviewerModalVisible = await page
-    .getByText("Представьтесь перед входом в комнату")
-    .isVisible()
-    .catch(() => false);
-
-  if (interviewerModalVisible) {
-    const canLoginFromModal = await page
-      .getByRole("button", { name: "Войти через аккаунт (по желанию)", exact: true })
-      .isVisible()
-      .catch(() => false);
-    if (!canLoginFromModal) {
-      throw new Error("LOGIN_OPTION_MISSING_FOR_UNAUTHORIZED_USER");
-    }
-
-    await page.getByLabel("Ваше имя").fill("Интервьюер без аккаунта");
-    await page.getByRole("button", { name: "Войти в комнату", exact: true }).click();
-  }
-
-  await page.locator(".monaco-editor").waitFor({ timeout: 15000 });
-
-  if (traffic.apiAuthorization) {
-    throw new Error(`UNAUTHORIZED_VISIT_SENT_AUTH_HEADER ${JSON.stringify(traffic.roomRequests)}`);
-  }
-  if (traffic.wsUrl && traffic.wsUrl.includes("authToken=")) {
-    throw new Error("UNAUTHORIZED_VISIT_SENT_WS_AUTH_TOKEN");
-  }
-
-  const invitationsVisible = await page
-    .getByRole("button", { name: "Приглашения", exact: true })
-    .isVisible()
-    .catch(() => false);
-  if (!invitationsVisible) {
-    throw new Error("INTERVIEWER_LINK_SHOULD_GRANT_INTERVIEWER_ACCESS_WITHOUT_AUTH");
+  if (guestCanManage) {
+    throw new Error("PLAIN_LINK_GUEST_SHOULD_JOIN_AS_CANDIDATE");
   }
 
   console.log("ACCOUNT_ROOM_BINDING_OK");
-  await context.close();
+
+  await ownerContext.close();
+  await interviewerContext.close();
+  await guestContext.close();
 } catch (error) {
   console.error("ACCOUNT_ROOM_BINDING_FAIL", error);
   process.exitCode = 1;

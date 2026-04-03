@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActionIcon, Badge, Box, Button, Group, Menu, Modal, Select, Stack, Text, TextInput, Textarea, ThemeIcon } from "@mantine/core";
-import { IconChevronLeft, IconChevronRight, IconCode, IconGripVertical, IconHome2, IconLayoutDashboard, IconMenu2, IconUsers } from "@tabler/icons-react";
+import { Badge, Box, Button, Group, Menu, Modal, Select, Stack, Text, TextInput, Textarea, ThemeIcon } from "@mantine/core";
+import { IconChevronLeft, IconChevronRight, IconCode, IconGripVertical, IconHome2, IconLayoutDashboard, IconUsers } from "@tabler/icons-react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import * as Y from "yjs";
 import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate, removeAwarenessStates } from "y-protocols/awareness";
@@ -30,8 +30,11 @@ const LANGUAGES = [
 type Participant = {
   sessionId: string;
   displayName: string;
+  userId?: string | null;
   role: "owner" | "interviewer" | "candidate";
   presenceStatus: "active" | "away";
+  isAuthenticated?: boolean;
+  canBeGrantedInterviewerAccess?: boolean;
 };
 
 type CursorInfo = {
@@ -69,11 +72,14 @@ type RealtimeState = {
   lastYjsSequence?: number;
   currentStep: number;
   notes: string;
+  notesMessages?: NoteMessage[];
+  briefingMarkdown?: string;
   taskScores: Record<string, number | null>;
   participants: Participant[];
   isOwner: boolean;
   role: "owner" | "interviewer" | "candidate";
   canManageRoom: boolean;
+  canGrantAccess?: boolean;
   notesLockedBySessionId: string | null;
   notesLockedByDisplayName: string | null;
   notesLockedUntilEpochMs: number | null;
@@ -82,12 +88,29 @@ type RealtimeState = {
   candidateKeyHistory: CandidateKeyInfo[];
 };
 
+type NoteMessage = {
+  id: string;
+  sessionId: string;
+  displayName: string;
+  role: "owner" | "interviewer" | "candidate";
+  text: string;
+  timestampEpochMs: number;
+};
+
+type PendingNoteMessage = NoteMessage & {
+  pending: true;
+};
+
+type MarkdownToolId = "bold" | "italic" | "code" | "link" | "h1" | "h2" | "ul" | "ol" | "quote";
+
 type ResizeSide = "left" | "right";
 
 const MIN_LEFT_WIDTH = 200;
 const MAX_LEFT_WIDTH = 360;
 const MIN_RIGHT_WIDTH = 240;
 const MAX_RIGHT_WIDTH = 420;
+const MIN_BRIEFING_HEIGHT = 120;
+const MAX_BRIEFING_HEIGHT = 420;
 const LOG_HISTORY_LIMIT = 50;
 const NODEJS_LANGUAGE_ALIASES = new Set(["javascript", "typescript", "nodejs"]);
 const REMOTE_SELECTION_HIGHLIGHT_ENABLED = true;
@@ -253,6 +276,163 @@ function taskScoresFromTasks(tasks: Array<{ stepIndex: number; score?: number | 
   return result;
 }
 
+function normalizeNoteMessage(value: unknown): NoteMessage | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<NoteMessage> & { text?: unknown; timestampEpochMs?: unknown };
+  const id = typeof candidate.id === "string" && candidate.id.trim() ? candidate.id.trim() : "";
+  const sessionId = typeof candidate.sessionId === "string" && candidate.sessionId.trim() ? candidate.sessionId.trim() : "";
+  const displayName = typeof candidate.displayName === "string" && candidate.displayName.trim() ? candidate.displayName.trim() : "";
+  const role = candidate.role === "owner" || candidate.role === "interviewer" || candidate.role === "candidate" ? candidate.role : null;
+  const text = typeof candidate.text === "string" ? candidate.text : "";
+  const timestampEpochMs = typeof candidate.timestampEpochMs === "number" && Number.isFinite(candidate.timestampEpochMs)
+    ? Math.max(0, Math.floor(candidate.timestampEpochMs))
+    : null;
+
+  if (!id || !sessionId || !displayName || !role || timestampEpochMs == null) {
+    return null;
+  }
+
+  return {
+    id,
+    sessionId,
+    displayName,
+    role,
+    text,
+    timestampEpochMs
+  };
+}
+
+function parseNotesThread(rawNotes: string | null | undefined): NoteMessage[] {
+  const raw = rawNotes?.trim() ?? "";
+  if (!raw) return [];
+
+  const legacyMessage = {
+    id: `legacy-${hashString(raw)}`,
+    sessionId: "legacy-notes",
+    displayName: "Старые заметки",
+    role: "interviewer" as const,
+    text: raw,
+    timestampEpochMs: 0
+  };
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(parsed)) {
+      return parsed.map(normalizeNoteMessage).filter((item): item is NoteMessage => Boolean(item));
+    }
+    if (parsed && typeof parsed === "object") {
+      const messages = (parsed as { messages?: unknown }).messages;
+      if (Array.isArray(messages)) {
+        return messages.map(normalizeNoteMessage).filter((item): item is NoteMessage => Boolean(item));
+      }
+    }
+  } catch {
+    return [legacyMessage];
+  }
+
+  return [legacyMessage];
+}
+
+function hashString(value: string): number {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+  }
+  return hash;
+}
+
+function formatNoteTimestamp(timestampEpochMs: number): string {
+  if (!timestampEpochMs) return "—";
+  return new Date(timestampEpochMs).toLocaleTimeString("ru-RU", {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function getParticipantRoleMeta(role: Participant["role"] | NoteMessage["role"]) {
+  if (role === "owner") {
+    return {
+      label: "Владелец",
+      color: "#ffaa4d"
+    };
+  }
+  if (role === "interviewer") {
+    return {
+      label: "Интервьюер",
+      color: "#5fc3a0"
+    };
+  }
+  return {
+    label: "Кандидат",
+    color: "#6c9fff"
+  };
+}
+
+function getParticipantPresenceLabel(status: Participant["presenceStatus"]) {
+  return status === "active" ? "В фокусе" : "Вне фокуса";
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll("\"", "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function markdownInlineToHtml(value: string): string {
+  const escaped = escapeHtml(value);
+  return escaped
+    .replaceAll(/`([^`]+)`/g, "<code>$1</code>")
+    .replaceAll(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replaceAll(/\*([^*]+)\*/g, "<em>$1</em>")
+    .replaceAll(/\[(.+?)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
+}
+
+function markdownToHtml(markdown: string): string {
+  const lines = markdown.replaceAll("\r\n", "\n").split("\n");
+  const chunks: string[] = [];
+  let listBuffer: string[] = [];
+
+  const flushList = () => {
+    if (listBuffer.length === 0) return;
+    chunks.push(`<ul>${listBuffer.join("")}</ul>`);
+    listBuffer = [];
+  };
+
+  lines.forEach((rawLine) => {
+    const line = rawLine.trimEnd();
+    const bulletMatch = line.match(/^\s*[-*]\s+(.+)$/);
+    if (bulletMatch) {
+      listBuffer.push(`<li>${markdownInlineToHtml(bulletMatch[1])}</li>`);
+      return;
+    }
+
+    flushList();
+    if (!line.trim()) {
+      chunks.push("<p><br/></p>");
+      return;
+    }
+    if (line.startsWith("### ")) {
+      chunks.push(`<h3>${markdownInlineToHtml(line.slice(4))}</h3>`);
+      return;
+    }
+    if (line.startsWith("## ")) {
+      chunks.push(`<h2>${markdownInlineToHtml(line.slice(3))}</h2>`);
+      return;
+    }
+    if (line.startsWith("# ")) {
+      chunks.push(`<h1>${markdownInlineToHtml(line.slice(2))}</h1>`);
+      return;
+    }
+    chunks.push(`<p>${markdownInlineToHtml(line)}</p>`);
+  });
+
+  flushList();
+  return chunks.join("");
+}
+
 function createDeterministicBootstrapUpdate(code: string): Uint8Array {
   const bootstrapDoc = new Y.Doc();
   // Use a fixed bootstrap client id so every participant starts from the same CRDT history.
@@ -264,16 +444,12 @@ function createDeterministicBootstrapUpdate(code: string): Uint8Array {
   return Y.encodeStateAsUpdate(bootstrapDoc);
 }
 
-function guestNameKey(inviteCode: string, role: "candidate" | "interviewer-guest" = "candidate") {
-  return role === "interviewer-guest" ? `guest_interviewer_display_name_${inviteCode}` : `guest_display_name_${inviteCode}`;
+function guestNameKey(inviteCode: string) {
+  return `guest_display_name_${inviteCode}`;
 }
 
-function readStoredDisplayName(
-  inviteCode: string,
-  options: { role?: "candidate" | "interviewer-guest"; includeGlobalFallback?: boolean } = {}
-) {
-  const role = options.role ?? "candidate";
-  const roomScoped = (localStorage.getItem(guestNameKey(inviteCode, role)) ?? "").trim();
+function readStoredDisplayName(inviteCode: string, options: { includeGlobalFallback?: boolean } = {}) {
+  const roomScoped = (localStorage.getItem(guestNameKey(inviteCode)) ?? "").trim();
   if (roomScoped) return roomScoped;
   if (options.includeGlobalFallback === false) return "";
   return (localStorage.getItem("display_name") ?? "").trim();
@@ -288,21 +464,14 @@ export function RoomPage() {
   const authUser = auth.user;
 
   const ownerToken = localStorage.getItem(`owner_token_${inviteCode}`);
-  const interviewerToken = useMemo(() => {
-    const fromUrl = new URLSearchParams(location.search).get("interviewerToken")?.trim() ?? "";
-    return fromUrl || null;
-  }, [location.search]);
 
   const { data: room, isLoading } = useGetRoomQuery({
     inviteCode,
-    ownerToken: ownerToken ?? undefined,
-    interviewerToken: interviewerToken ?? undefined
+    ownerToken: ownerToken ?? undefined
   });
 
-  const isGuestInterviewer = !!interviewerToken && !authToken;
   const initialStoredName = readStoredDisplayName(inviteCode, {
-    role: isGuestInterviewer ? "interviewer-guest" : "candidate",
-    includeGlobalFallback: !isGuestInterviewer
+    includeGlobalFallback: true
   });
 
   const [state, setState] = useState<RealtimeState | null>(null);
@@ -310,69 +479,37 @@ export function RoomPage() {
   const [error, setError] = useState("");
   const [displayName, setDisplayName] = useState(() => initialStoredName);
   const [draftName, setDraftName] = useState(() => initialStoredName);
-  const [nameModalOpened, setNameModalOpened] = useState(() => {
-    if (ownerToken) return false;
-    if (interviewerToken) return !authToken && !initialStoredName;
-    return !initialStoredName;
-  });
-  const [notesDraft, setNotesDraft] = useState("");
-  const [notesDirty, setNotesDirty] = useState(false);
-  const [copiedHint, setCopiedHint] = useState("");
-  const [notesLockTick, setNotesLockTick] = useState(0);
+  const [nameModalOpened, setNameModalOpened] = useState(() => !initialStoredName);
+  const [noteComposer, setNoteComposer] = useState("");
+  const [pendingNotes, setPendingNotes] = useState<PendingNoteMessage[]>([]);
+  const [briefingDraft, setBriefingDraft] = useState("");
+  const [briefingDirty, setBriefingDirty] = useState(false);
   const [resyncSignal, setResyncSignal] = useState(0);
   const [awaitingRecoverySync, setAwaitingRecoverySync] = useState(false);
   const awaitingRecoverySyncRef = useRef(false);
   const editorValueRef = useRef("");
+  const briefingDebounceTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const isGuestInterviewerMode = !!interviewerToken && !authToken;
     const stored = readStoredDisplayName(inviteCode, {
-      role: isGuestInterviewerMode ? "interviewer-guest" : "candidate",
-      includeGlobalFallback: !isGuestInterviewerMode
+      includeGlobalFallback: true
     });
     const authNickname = authUser?.nickname?.trim() || "";
 
-    let resolved = stored;
-    let shouldAskName = false;
-
-    if (ownerToken) {
-      resolved = authNickname || stored || "Интервьюер";
-      shouldAskName = false;
-    } else if (interviewerToken) {
-      if (authToken) {
-        resolved = authNickname || stored || "Интервьюер";
-        shouldAskName = false;
-      } else {
-        resolved = readStoredDisplayName(inviteCode, {
-          role: "interviewer-guest",
-          includeGlobalFallback: false
-        });
-        shouldAskName = !resolved;
-      }
-    } else {
-      if (authToken) {
-        resolved = authNickname || stored || "Участник";
-        shouldAskName = false;
-      } else {
-        resolved = stored;
-        shouldAskName = !resolved;
-      }
-    }
+    const resolved = authToken ? authNickname || stored || "Участник" : stored;
+    const shouldAskName = !resolved;
 
     if (resolved) {
-      if (!isGuestInterviewerMode) {
-        localStorage.setItem("display_name", resolved);
-      }
-      localStorage.setItem(guestNameKey(inviteCode, isGuestInterviewerMode ? "interviewer-guest" : "candidate"), resolved);
+      localStorage.setItem("display_name", resolved);
+      localStorage.setItem(guestNameKey(inviteCode), resolved);
     }
 
     setDisplayName(resolved);
     setDraftName(resolved);
     setNameModalOpened(shouldAskName);
-    setNotesDraft("");
-    setNotesDirty(false);
-    setCopiedHint("");
-  }, [authToken, authUser?.nickname, interviewerToken, inviteCode, ownerToken]);
+    setNoteComposer("");
+    setPendingNotes([]);
+  }, [authToken, authUser?.nickname, inviteCode]);
 
   const merged = useMemo<RealtimeState | null>(() => {
     if (state) return state;
@@ -386,11 +523,16 @@ export function RoomPage() {
       lastYjsSequence: 0,
       currentStep: room.currentStep,
       notes: room.notes ?? "",
+      notesMessages: (room.notesMessages ?? [])
+        .map(normalizeNoteMessage)
+        .filter((item): item is NoteMessage => Boolean(item)),
+      briefingMarkdown: room.briefingMarkdown ?? "",
       taskScores: taskScoresFromTasks(room.tasks ?? []),
       participants: [] as Participant[],
-      isOwner: false,
-      role: "candidate" as const,
-      canManageRoom: false,
+      isOwner: Boolean(room.isOwner),
+      role: (room.role === "owner" || room.role === "interviewer" ? room.role : "candidate") as "owner" | "interviewer" | "candidate",
+      canManageRoom: Boolean(room.canManageRoom),
+      canGrantAccess: Boolean(room.canGrantAccess),
       notesLockedBySessionId: null,
       notesLockedByDisplayName: null,
       notesLockedUntilEpochMs: null,
@@ -401,7 +543,26 @@ export function RoomPage() {
   }, [room, state]);
 
   const mergedNotes = merged?.notes ?? "";
+  const mergedBriefingMarkdown = merged?.briefingMarkdown ?? "";
   const canManageRoom = merged?.canManageRoom ?? false;
+  const notesMessages = useMemo(() => {
+    const direct = merged?.notesMessages;
+    if (Array.isArray(direct) && direct.length > 0) {
+      return direct.map(normalizeNoteMessage).filter((item): item is NoteMessage => Boolean(item));
+    }
+    return parseNotesThread(mergedNotes);
+  }, [merged?.notesMessages, mergedNotes]);
+
+  useEffect(() => {
+    if (!briefingDirty) {
+      setBriefingDraft(mergedBriefingMarkdown);
+    }
+  }, [briefingDirty, mergedBriefingMarkdown]);
+  const visibleNotes = useMemo(() => {
+    const serverIds = new Set(notesMessages.map((message) => message.id));
+    const next = [...notesMessages, ...pendingNotes.filter((message) => !serverIds.has(message.id))];
+    return next.sort((a, b) => a.timestampEpochMs - b.timestampEpochMs || a.id.localeCompare(b.id));
+  }, [notesMessages, pendingNotes]);
   const currentSyncKey = useMemo(() => {
     if (!merged) return `${inviteCode}:0:nodejs`;
     return `${merged.inviteCode}:${merged.currentStep}:${merged.language}`;
@@ -426,6 +587,9 @@ export function RoomPage() {
     return () => {
       if (recoverySyncTimeoutRef.current != null) {
         window.clearTimeout(recoverySyncTimeoutRef.current);
+      }
+      if (briefingDebounceTimerRef.current != null) {
+        window.clearTimeout(briefingDebounceTimerRef.current);
       }
     };
   }, []);
@@ -452,12 +616,6 @@ export function RoomPage() {
     }
     setAwaitingRecoverySync(false);
   }, []);
-
-  useEffect(() => {
-    if (!notesDirty) {
-      setNotesDraft(mergedNotes);
-    }
-  }, [mergedNotes, notesDirty]);
 
   const onState = useCallback((incoming: RealtimeState) => {
     const previousState = stateRef.current;
@@ -512,6 +670,11 @@ export function RoomPage() {
       lastCodeUpdatedBySessionId: incoming.lastCodeUpdatedBySessionId ?? null,
       yjsDocumentBase64: typeof incoming.yjsDocumentBase64 === "string" ? incoming.yjsDocumentBase64 : null,
       lastYjsSequence: typeof incoming.lastYjsSequence === "number" ? incoming.lastYjsSequence : 0,
+      notesMessages: Array.isArray(incoming.notesMessages)
+        ? incoming.notesMessages.map(normalizeNoteMessage).filter((item): item is NoteMessage => Boolean(item))
+        : [],
+      briefingMarkdown: typeof incoming.briefingMarkdown === "string" ? incoming.briefingMarkdown : "",
+      canGrantAccess: Boolean(incoming.canGrantAccess),
       lastCandidateKey: incoming.lastCandidateKey ?? null,
       candidateKeyHistory: Array.isArray(incoming.candidateKeyHistory)
         ? incoming.candidateKeyHistory
@@ -741,7 +904,7 @@ export function RoomPage() {
     }
   }, []);
 
-  const fallbackDisplayName = authUser?.nickname?.trim() || (interviewerToken ? "Интервьюер" : "Участник");
+  const fallbackDisplayName = authUser?.nickname?.trim() || "Участник";
   const effectiveDisplayName = displayName.trim() || fallbackDisplayName;
   const canConnect = Boolean(inviteCode);
   const {
@@ -750,7 +913,10 @@ export function RoomPage() {
     sendLanguageUpdate,
     sendSetStep,
     sendTaskRatingUpdate,
-    sendNotesUpdate,
+    sendNoteMessage,
+    sendBriefingUpdate,
+    sendGrantInterviewerAccess,
+    sendRevokeInterviewerAccess,
     sendAwarenessUpdate,
     sendYjsUpdate,
     sendKeyPress
@@ -760,7 +926,6 @@ export function RoomPage() {
     authToken,
     displayName: effectiveDisplayName,
     ownerToken,
-    interviewerToken,
     onState,
     onError,
     onCursorUpdate,
@@ -777,6 +942,19 @@ export function RoomPage() {
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
+
+  useEffect(() => {
+    if (pendingNotes.length === 0) return;
+    const serverIds = new Set(notesMessages.map((message) => message.id));
+    if (serverIds.size === 0) return;
+    setPendingNotes((current) => current.filter((message) => !serverIds.has(message.id)));
+  }, [notesMessages, pendingNotes]);
+
+  useEffect(() => {
+    if (briefingDirty && briefingDraft === mergedBriefingMarkdown) {
+      setBriefingDirty(false);
+    }
+  }, [briefingDirty, briefingDraft, mergedBriefingMarkdown]);
 
   const sendYjsUpdateTracked = useCallback(
     (yjsUpdate: string, syncKey?: string | null, codeSnapshot?: string | null, yjsDocumentBase64?: string | null) => {
@@ -804,41 +982,54 @@ export function RoomPage() {
   // `readOnly` blocks user input; merged Yjs updates still apply once the editor is mounted.
   const editorReady = Boolean(merged);
 
-  const notesLockActive = (merged?.notesLockedUntilEpochMs ?? 0) > Date.now();
-  const notesLockedByOther =
-    notesLockActive &&
-    !!merged?.notesLockedBySessionId &&
-    merged.notesLockedBySessionId !== sessionId;
+  const submitNoteMessage = useCallback(() => {
+    if (!merged || !canManageRoom) return;
+    const text = noteComposer.trim();
+    if (!text) return;
+    const timestampEpochMs = Date.now();
+    const noteId = crypto.randomUUID();
+    const optimisticMessage: PendingNoteMessage = {
+      id: noteId,
+      sessionId,
+      displayName: effectiveDisplayName,
+      role: merged.role,
+      text,
+      timestampEpochMs,
+      pending: true
+    };
+    setPendingNotes((current) => [...current, optimisticMessage]);
+    setNoteComposer("");
+    sendNoteMessage(noteId, text, timestampEpochMs);
+  }, [canManageRoom, effectiveDisplayName, merged, noteComposer, sendNoteMessage, sessionId]);
 
-  useEffect(() => {
-    const lockUntil = merged?.notesLockedUntilEpochMs ?? 0;
-    if (lockUntil <= Date.now()) return;
-    const timer = window.setTimeout(() => {
-      setNotesLockTick((current) => current + 1);
-    }, lockUntil - Date.now() + 40);
-    return () => window.clearTimeout(timer);
-  }, [merged?.notesLockedUntilEpochMs, notesLockTick]);
-
-  useEffect(() => {
-    if (notesDirty && notesDraft === mergedNotes) {
-      setNotesDirty(false);
+  const changeBriefingMarkdown = useCallback((value: string) => {
+    setBriefingDraft(value);
+    setBriefingDirty(true);
+    if (!canManageRoom) return;
+    if (briefingDebounceTimerRef.current != null) {
+      window.clearTimeout(briefingDebounceTimerRef.current);
     }
-  }, [mergedNotes, notesDirty, notesDraft]);
+    briefingDebounceTimerRef.current = window.setTimeout(() => {
+      sendBriefingUpdate(value);
+      briefingDebounceTimerRef.current = null;
+    }, 160);
+  }, [canManageRoom, sendBriefingUpdate]);
 
-  useEffect(() => {
-    if (!copiedHint) return;
-    const timer = window.setTimeout(() => setCopiedHint(""), 2200);
-    return () => window.clearTimeout(timer);
-  }, [copiedHint]);
+  const toggleParticipantInterviewerRole = useCallback((participant: Participant) => {
+    if (!merged?.canGrantAccess || participant.role === "owner") return;
+    const targetUserId = participant.userId?.trim() ?? "";
+    if (participant.role === "candidate") {
+      sendGrantInterviewerAccess(participant.sessionId, targetUserId || undefined);
+      return;
+    }
+    sendRevokeInterviewerAccess(participant.sessionId, targetUserId || undefined);
+  }, [merged?.canGrantAccess, sendGrantInterviewerAccess, sendRevokeInterviewerAccess]);
 
   const submitCandidateName = () => {
     const normalized = draftName.trim();
     if (!normalized) return;
-    const isGuestInterviewerMode = !!interviewerToken && !authToken;
-    if (!isGuestInterviewerMode) {
-      localStorage.setItem("display_name", normalized);
-    }
-    localStorage.setItem(guestNameKey(inviteCode, isGuestInterviewerMode ? "interviewer-guest" : "candidate"), normalized);
+    localStorage.setItem("display_name", normalized);
+    localStorage.setItem(guestNameKey(inviteCode), normalized);
     setDisplayName(normalized);
     setNameModalOpened(false);
   };
@@ -847,27 +1038,6 @@ export function RoomPage() {
     const next = `${location.pathname}${location.search}`;
     navigate(`/login?next=${encodeURIComponent(next)}`);
   };
-
-  const candidateInviteLink = useMemo(() => {
-    if (!inviteCode) return "";
-    return `${window.location.origin}/room/${inviteCode}`;
-  }, [inviteCode]);
-
-  const effectiveInterviewerToken = room?.interviewerToken ?? interviewerToken ?? "";
-  const interviewerInviteLink = useMemo(() => {
-    if (!candidateInviteLink || !effectiveInterviewerToken) return "";
-    return `${candidateInviteLink}?interviewerToken=${encodeURIComponent(effectiveInterviewerToken)}`;
-  }, [candidateInviteLink, effectiveInterviewerToken]);
-
-  const copyInviteLink = useCallback(async (label: string, value: string) => {
-    if (!value) return;
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopiedHint(`${label} скопирована`);
-    } catch {
-      setCopiedHint(`Не удалось скопировать: ${label.toLowerCase()}`);
-    }
-  }, []);
 
   if (isLoading || !merged) {
     return (
@@ -879,8 +1049,6 @@ export function RoomPage() {
 
   const step = room?.tasks.find((task) => task.stepIndex === merged.currentStep);
   const currentTaskRating = merged.taskScores[String(merged.currentStep)] ?? step?.score ?? null;
-  const notesLockName = merged.notesLockedByDisplayName?.trim() || "другой интервьюер";
-  const notesStatus = notesLockedByOther ? `Редактирует ${notesLockName}` : notesDirty ? "Сохраняем" : "Сохранено";
 
   return (
     <>
@@ -897,11 +1065,6 @@ export function RoomPage() {
           <Text size="sm" c="dimmed">
             Это имя увидит собеседующий в списке участников.
           </Text>
-          {interviewerToken && !authToken && (
-            <Text size="sm" c="yellow.3">
-              По ссылке интервьюера можно войти по имени без аккаунта. Авторизация по желанию.
-            </Text>
-          )}
           <TextInput
             label="Ваше имя"
             placeholder="Имя"
@@ -930,16 +1093,12 @@ export function RoomPage() {
           connected={connected}
           participants={merged.participants}
           showParticipants={canManageRoom}
+          showLanguageControl={canManageRoom}
+          currentLanguage={normalizeRoomLanguage(merged.language)}
+          onLanguageChange={(value) => value && sendLanguageUpdate(value)}
+          canGrantAccess={Boolean(merged.canGrantAccess)}
+          onToggleInterviewerRole={toggleParticipantInterviewerRole}
         />
-
-        {canManageRoom && (
-          <InvitationsMenu
-            candidateInviteLink={candidateInviteLink}
-            interviewerInviteLink={interviewerInviteLink}
-            copiedHint={copiedHint}
-            onCopy={copyInviteLink}
-          />
-        )}
 
         {canManageRoom ? (
           <OwnerLayout
@@ -950,9 +1109,12 @@ export function RoomPage() {
             error={error}
             taskScores={merged.taskScores}
             currentTaskRating={currentTaskRating}
-            notesDraft={notesDraft}
-            notesStatus={notesStatus}
-            notesLockedByOther={notesLockedByOther}
+            notesMessages={visibleNotes}
+            noteComposer={noteComposer}
+            onNoteComposerChange={setNoteComposer}
+            onSendNote={submitNoteMessage}
+            briefingMarkdown={briefingDraft}
+            onBriefingChange={changeBriefingMarkdown}
             sessionId={sessionId}
             participantLabel={effectiveDisplayName}
             sendAwarenessUpdate={sendAwarenessUpdate}
@@ -962,7 +1124,6 @@ export function RoomPage() {
             syncKey={currentSyncKey}
             resyncSignal={resyncSignal}
             editorReady={editorReady}
-            onLanguageChange={(value) => value && sendLanguageUpdate(value)}
             onSelectStep={(stepIndex) => sendSetStep(stepIndex)}
             onYjsUpdate={(yjsUpdate, syncKey, codeSnapshot, yjsDoc) =>
               sendYjsUpdateTracked(yjsUpdate, syncKey, codeSnapshot, yjsDoc)
@@ -975,19 +1136,13 @@ export function RoomPage() {
               }
             }}
             onTaskRatingChange={(rating) => sendTaskRatingUpdate(merged.currentStep, rating)}
-            onNotesChange={(value) => {
-              setNotesDraft(value);
-              setNotesDirty(true);
-              if (!notesLockedByOther) {
-                sendNotesUpdate(value);
-              }
-            }}
           />
         ) : (
           <CandidateLayout
             merged={merged}
             stepTitle={step?.title ?? "-"}
             stepDescription={step?.description ?? ""}
+            briefingMarkdown={mergedBriefingMarkdown}
             sessionId={sessionId}
             participantLabel={effectiveDisplayName}
             sendAwarenessUpdate={sendAwarenessUpdate}
@@ -1018,59 +1173,24 @@ function TopBar({
   authToken,
   connected,
   participants,
-  showParticipants
+  showParticipants,
+  showLanguageControl,
+  currentLanguage,
+  onLanguageChange,
+  canGrantAccess,
+  onToggleInterviewerRole
 }: {
   roomTitle: string;
   authToken: string | null;
   connected: boolean;
   participants: Participant[];
   showParticipants: boolean;
+  showLanguageControl: boolean;
+  currentLanguage: string;
+  onLanguageChange: (value: string | null) => void;
+  canGrantAccess: boolean;
+  onToggleInterviewerRole: (participant: Participant) => void;
 }) {
-  const normalizedParticipants = useMemo(() => participants, [participants]);
-
-  const participantsHostRef = useRef<HTMLDivElement | null>(null);
-  const [maxVisibleParticipants, setMaxVisibleParticipants] = useState(normalizedParticipants.length);
-
-  useEffect(() => {
-    if (!showParticipants) return;
-    const host = participantsHostRef.current;
-    if (!host) return;
-
-    const recalc = () => {
-      const total = normalizedParticipants.length;
-      if (total === 0) {
-        setMaxVisibleParticipants(0);
-        return;
-      }
-
-      const width = host.clientWidth;
-      const chipWidth = 112;
-      const calculateVisible = (reserveForMenu: boolean) => {
-        const reserved = reserveForMenu ? 40 : 0;
-        return Math.max(0, Math.floor((width - reserved) / chipWidth));
-      };
-
-      let visible = calculateVisible(false);
-      if (visible < total) {
-        visible = calculateVisible(true);
-      }
-      setMaxVisibleParticipants(Math.min(total, visible));
-    };
-
-    recalc();
-    const observer = new ResizeObserver(recalc);
-    observer.observe(host);
-    window.addEventListener("resize", recalc);
-
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", recalc);
-    };
-  }, [normalizedParticipants.length, showParticipants]);
-
-  const visibleParticipants = normalizedParticipants.slice(0, maxVisibleParticipants);
-  const hiddenParticipants = normalizedParticipants.slice(visibleParticipants.length);
-
   return (
     <Box className={styles.topBar}>
       <Box className={styles.topInner}>
@@ -1082,96 +1202,108 @@ function TopBar({
         </Box>
 
         {showParticipants ? (
-          <Box className={styles.participantsHost} ref={participantsHostRef}>
-            <Group className={styles.participantsInline} gap={6} wrap="nowrap">
-              {visibleParticipants.map((participant) => (
-                <Badge
-                  key={participant.sessionId}
-                  variant="light"
-                  color={participant.presenceStatus === "active" ? "teal" : "gray"}
-                  className={styles.participantBadge}
-                  data-testid={`participant-badge-${participant.presenceStatus}`}
-                >
-                  {participant.displayName}
-                </Badge>
-              ))}
+          <Box className={styles.participantsHost}>
+            <div className={styles.participantsInline} aria-label="Участники комнаты">
+              {participants.map((participant) => {
+                const roleMeta = getParticipantRoleMeta(participant.role);
+                const presenceLabel = getParticipantPresenceLabel(participant.presenceStatus);
+                const canOpenMenu = canGrantAccess && participant.role !== "owner" && (participant.canBeGrantedInterviewerAccess ?? true);
+                const isInterviewer = participant.role === "interviewer";
+                const menuActionLabel = isInterviewer ? "Снять роль интервьюера" : "Назначить интервьюером";
+                const participantCard = (
+                  <span className={styles.participantNameRow}>
+                    <span className={styles.participantName}>{participant.displayName}</span>
+                    {isInterviewer ? (
+                      <span className={styles.participantInterviewerStar} aria-label="Интервьюер" title="Интервьюер">
+                        *
+                      </span>
+                    ) : null}
+                  </span>
+                );
+                const participantStyle = {
+                  "--participant-role-color": roleMeta.color
+                } as React.CSSProperties;
 
-              {hiddenParticipants.length > 0 && (
-                <Menu withinPortal position="bottom-end" shadow="md">
-                  <Menu.Target>
-                    <ActionIcon variant="subtle" color="gray" size="sm" aria-label="Скрытые участники">
-                      <IconMenu2 size={16} />
-                    </ActionIcon>
-                  </Menu.Target>
-                  <Menu.Dropdown>
-                    {hiddenParticipants.map((participant) => (
-                      <Menu.Item key={participant.sessionId} leftSection={<IconUsers size={14} />}>
-                        {participant.displayName} {participant.presenceStatus === "active" ? "• в фокусе" : "• вне фокуса"}
+                if (!canOpenMenu) {
+                  return (
+                    <div
+                      key={participant.sessionId}
+                      className={styles.participantCard}
+                      data-presence={participant.presenceStatus}
+                      data-testid={`participant-badge-${participant.presenceStatus}`}
+                      style={participantStyle}
+                      title={presenceLabel}
+                    >
+                      {participantCard}
+                    </div>
+                  );
+                }
+
+                return (
+                  <Menu key={participant.sessionId} withinPortal position="bottom" shadow="md" offset={8}>
+                    <Menu.Target>
+                      <button
+                        type="button"
+                        className={`${styles.participantCard} ${styles.participantCardButton}`}
+                        data-presence={participant.presenceStatus}
+                        data-testid={`participant-badge-${participant.presenceStatus}`}
+                        style={participantStyle}
+                        aria-label={`${participant.displayName}, ${presenceLabel}`}
+                      >
+                        {participantCard}
+                      </button>
+                    </Menu.Target>
+                    <Menu.Dropdown>
+                      <Menu.Item onClick={() => onToggleInterviewerRole(participant)}>
+                        {menuActionLabel}
                       </Menu.Item>
-                    ))}
-                  </Menu.Dropdown>
-                </Menu>
-              )}
-            </Group>
+                    </Menu.Dropdown>
+                  </Menu>
+                );
+              })}
+            </div>
           </Box>
         ) : (
           <Box className={styles.participantsHost} />
         )}
 
-        <Group className={styles.topActions}>
-          <Badge color={connected ? "teal" : "gray"} variant="light">
-            {connected ? "Подключено" : "Подключение"}
-          </Badge>
-          <Button
-            component={Link}
-            to={authToken ? "/dashboard/rooms" : "/login"}
-            size="xs"
-            variant="light"
-            color="gray"
-            leftSection={<IconLayoutDashboard size={14} />}
-          >
-            Кабинет
-          </Button>
-          <Button component={Link} to="/" size="xs" variant="outline" color="gray" leftSection={<IconHome2 size={14} />}>
-            Главная
-          </Button>
-        </Group>
-      </Box>
-    </Box>
-  );
-}
-
-function InvitationsMenu({
-  candidateInviteLink,
-  interviewerInviteLink,
-  copiedHint,
-  onCopy
-}: {
-  candidateInviteLink: string;
-  interviewerInviteLink: string;
-  copiedHint: string;
-  onCopy: (label: string, value: string) => Promise<void>;
-}) {
-  return (
-    <Box className={styles.invitesBar}>
-      <Group justify="space-between" align="center">
-        <Menu withinPortal position="bottom-start" shadow="md">
-          <Menu.Target>
-            <Button size="xs" variant="light" color="gray">
-              Приглашения
+        <div className={styles.topActions}>
+          {showLanguageControl ? (
+            <div className={styles.topLanguageControl}>
+              <Select
+                id="room-language-select"
+                size="xs"
+                data={LANGUAGES}
+                value={normalizeRoomLanguage(currentLanguage)}
+                onChange={(value) => onLanguageChange(value ? normalizeRoomLanguage(value) : null)}
+                className={styles.topLanguageSelect}
+                classNames={{ input: styles.topLanguageInput, dropdown: styles.topLanguageDropdown, option: styles.topLanguageOption }}
+                aria-label="Язык комнаты"
+                allowDeselect={false}
+                comboboxProps={{ withinPortal: false }}
+              />
+            </div>
+          ) : null}
+          <div className={styles.topActionButtons}>
+            <Badge color={connected ? "teal" : "gray"} variant="light">
+              {connected ? "Подключено" : "Подключение"}
+            </Badge>
+            <Button
+              component={Link}
+              to={authToken ? "/dashboard/rooms" : "/login"}
+              size="xs"
+              variant="light"
+              color="gray"
+              leftSection={<IconLayoutDashboard size={14} />}
+            >
+              Кабинет
             </Button>
-          </Menu.Target>
-          <Menu.Dropdown>
-            <Menu.Item onClick={() => onCopy("Ссылка кандидата", candidateInviteLink)}>Скопировать ссылку кандидата</Menu.Item>
-            <Menu.Item disabled={!interviewerInviteLink} onClick={() => onCopy("Ссылка интервьюера", interviewerInviteLink)}>
-              Скопировать ссылку интервьюера
-            </Menu.Item>
-          </Menu.Dropdown>
-        </Menu>
-        <Text size="xs" c={copiedHint ? "#8fd6a8" : "#7f8896"}>
-          {copiedHint || "Ссылка из адресной строки ведёт кандидата по умолчанию"}
-        </Text>
-      </Group>
+            <Button component={Link} to="/" size="xs" variant="outline" color="gray" leftSection={<IconHome2 size={14} />}>
+              Главная
+            </Button>
+          </div>
+        </div>
+      </Box>
     </Box>
   );
 }
@@ -1184,9 +1316,12 @@ function OwnerLayout({
   error,
   taskScores,
   currentTaskRating,
-  notesDraft,
-  notesStatus,
-  notesLockedByOther,
+  notesMessages,
+  noteComposer,
+  onNoteComposerChange,
+  onSendNote,
+  briefingMarkdown,
+  onBriefingChange,
   sessionId,
   participantLabel,
   sendAwarenessUpdate,
@@ -1196,14 +1331,12 @@ function OwnerLayout({
   syncKey,
   resyncSignal,
   editorReady,
-  onLanguageChange,
   onSelectStep,
   onYjsUpdate,
   onYjsBridgeReady,
   onEditorValueChange,
   onKeyPress,
-  onTaskRatingChange,
-  onNotesChange
+  onTaskRatingChange
 }: {
   merged: RealtimeState;
   tasks: Array<{ stepIndex: number; title: string; language: string; score: number | null }>;
@@ -1212,9 +1345,12 @@ function OwnerLayout({
   error: string;
   taskScores: Record<string, number | null>;
   currentTaskRating: number | null;
-  notesDraft: string;
-  notesStatus: string;
-  notesLockedByOther: boolean;
+  notesMessages: Array<NoteMessage | PendingNoteMessage>;
+  noteComposer: string;
+  onNoteComposerChange: (value: string) => void;
+  onSendNote: () => void;
+  briefingMarkdown: string;
+  onBriefingChange: (value: string) => void;
   sessionId: string;
   participantLabel: string;
   sendAwarenessUpdate: (awarenessUpdate: string) => void;
@@ -1224,14 +1360,12 @@ function OwnerLayout({
   syncKey: string;
   resyncSignal: number;
   editorReady: boolean;
-  onLanguageChange: (value: string | null) => void;
   onSelectStep: (stepIndex: number) => void;
   onYjsUpdate: (yjsUpdate: string, syncKey: string, codeSnapshot?: string | null, yjsDocumentBase64?: string | null) => void;
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
   onEditorValueChange: (value: string) => void;
   onKeyPress: (payload: { key: string; keyCode: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void;
   onTaskRatingChange: (rating: number | null) => void;
-  onNotesChange: (value: string) => void;
 }) {
   const [leftSidebarVisible, setLeftSidebarVisible] = useState(true);
   const [rightSidebarVisible, setRightSidebarVisible] = useState(true);
@@ -1241,6 +1375,7 @@ function OwnerLayout({
   const ownerBodyRef = useRef<HTMLDivElement | null>(null);
   const [ownerBodyWidth, setOwnerBodyWidth] = useState(0);
   const compactAutoCollapsedRef = useRef(false);
+  const notesFeedRef = useRef<HTMLDivElement | null>(null);
 
   const dragStateRef = useRef<{ side: ResizeSide; startX: number; startWidth: number } | null>(null);
   const [dragging, setDragging] = useState<ResizeSide | null>(null);
@@ -1319,6 +1454,13 @@ function OwnerLayout({
     }
   }, [leftSidebarVisible, ownerBodyWidth]);
 
+  useEffect(() => {
+    if (rightPanelTab !== "notes") return;
+    const host = notesFeedRef.current;
+    if (!host) return;
+    host.scrollTop = host.scrollHeight;
+  }, [notesMessages.length, rightPanelTab]);
+
   const showLeftSidebar = leftSidebarVisible;
   const showRightSidebar = rightSidebarVisible;
   const baseInset = 10;
@@ -1395,18 +1537,32 @@ function OwnerLayout({
             </Text>
             <Text className={styles.stepMeta}>{stepDescription}</Text>
 
-            <Select
-              label="Язык"
-              data={LANGUAGES}
-              value={normalizeRoomLanguage(merged.language)}
-              onChange={(value) => onLanguageChange(value ? normalizeRoomLanguage(value) : null)}
-              styles={{
-                label: { color: "#9ba0a8", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6 },
-                input: { backgroundColor: "#14171d", borderColor: "#262a31", color: "#f3f5f7" },
-                dropdown: { backgroundColor: "#14171d", borderColor: "#262a31" },
-                option: { color: "#f3f5f7" }
-              }}
-            />
+            <Box className={styles.taskRatingCard}>
+              <Select
+                className={styles.taskRating}
+                classNames={{ option: styles.taskRatingOption }}
+                label="Оценка шага"
+                placeholder="Нет оценки"
+                value={currentTaskRating ? String(currentTaskRating) : null}
+                onChange={(value) => onTaskRatingChange(value ? Number.parseInt(value, 10) : null)}
+                withCheckIcon={false}
+                clearable
+                data={[
+                  { value: "1", label: "1" },
+                  { value: "2", label: "2" },
+                  { value: "3", label: "3" },
+                  { value: "4", label: "4" },
+                  { value: "5", label: "5" }
+                ]}
+                styles={{
+                  label: { color: "#9ba0a8", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6 },
+                  input: { backgroundColor: "#11161f", borderColor: "#273242", color: "#d6dce6", fontSize: 12 },
+                  dropdown: { backgroundColor: "#11161f", borderColor: "#273242" },
+                  option: { color: "#d6dce6" }
+                }}
+              />
+            </Box>
+
           </Box>
 
           <div
@@ -1422,6 +1578,11 @@ function OwnerLayout({
 
       <Box className={styles.workspace}>
         <Box className={styles.editorColumn}>
+          <BriefingBoard
+            mode="interviewer"
+            value={briefingMarkdown}
+            onChange={onBriefingChange}
+          />
           <Box className={styles.editorPanel}>
             <div className={styles.editorWrap}>
               <RoomCodeEditor
@@ -1490,48 +1651,69 @@ function OwnerLayout({
                 </div>
 
                 {rightPanelTab === "notes" ? (
-                  <div className={styles.panelTabPanel} role="tabpanel" aria-label="Заметки">
-                  <Text className={styles.panelSectionTitle}>Заметки по комнате</Text>
-                  <div className={styles.notesTopRow}>
-                    <div
-                      className={styles.notesStatusBanner}
-                      data-state={notesLockedByOther ? "locked" : notesStatus === "Сохраняем" ? "saving" : "saved"}
-                      aria-label={`Статус заметок: ${notesStatus}`}
-                    >
-                      <Text className={styles.notesStatusValue}>{notesStatus}</Text>
+                  <div className={`${styles.panelTabPanel} ${styles.notesTabPanel}`} role="tabpanel" aria-label="Чат заметок">
+                    <div className={styles.notesHeader}>
+                      <div className={styles.notesHeaderCopy}>
+                        <Text className={styles.panelSectionTitle}>Чат</Text>
+                      </div>
                     </div>
-                    <Select
-                      className={styles.notesRating}
-                      classNames={{ option: styles.notesRatingOption }}
-                      label="Оценка"
-                      placeholder="Нет оценки"
-                      value={currentTaskRating ? String(currentTaskRating) : null}
-                      onChange={(value) => onTaskRatingChange(value ? Number.parseInt(value, 10) : null)}
-                      withCheckIcon={false}
-                      clearable
-                      data={[
-                        { value: "1", label: "1" },
-                        { value: "2", label: "2" },
-                        { value: "3", label: "3" },
-                        { value: "4", label: "4" },
-                        { value: "5", label: "5" }
-                      ]}
-                      styles={{
-                        label: { color: "#9ba0a8", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6 },
-                        input: { backgroundColor: "#11161f", borderColor: "#273242", color: "#d6dce6", fontSize: 12 },
-                        dropdown: { backgroundColor: "#11161f", borderColor: "#273242" },
-                        option: { color: "#d6dce6" }
-                      }}
-                    />
-                  </div>
-                  <Textarea
-                    value={notesDraft}
-                    onChange={(event) => onNotesChange(event.currentTarget.value)}
-                    minRows={14}
-                    disabled={notesLockedByOther}
-                    data-testid="room-notes-input"
-                    classNames={{ input: styles.notesInput }}
-                  />
+
+                    <div className={styles.notesMessagesList} ref={notesFeedRef} role="log" aria-label="Сообщения заметок">
+                      {notesMessages.length > 0 ? (
+                        notesMessages.map((message) => {
+                          const isOwnMessage = message.sessionId === sessionId;
+                          return (
+                            <article
+                              key={message.id}
+                              className={`${styles.noteBubble} ${isOwnMessage ? styles.noteBubbleOwn : ""}`}
+                              data-pending={Boolean((message as PendingNoteMessage).pending)}
+                            >
+                              <header className={styles.noteBubbleHeader}>
+                                <div className={styles.noteBubbleAuthorWrap}>
+                                  <span className={styles.noteBubbleAuthor}>{message.displayName}</span>
+                                </div>
+                                <time className={styles.noteBubbleTime}>{formatNoteTimestamp(message.timestampEpochMs)}</time>
+                              </header>
+                              <Text className={styles.noteBubbleText}>{message.text}</Text>
+                            </article>
+                          );
+                        })
+                      ) : (
+                        <div className={styles.notesEmpty}>
+                          <Text className={styles.notesEmptyTitle}>Пока пусто</Text>
+                          <Text className={styles.notesEmptyText}>Здесь появятся сообщения интервьюеров.</Text>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className={styles.notesComposer}>
+                      <Textarea
+                        value={noteComposer}
+                        onChange={(event) => onNoteComposerChange(event.currentTarget.value)}
+                        onKeyDown={(event) => {
+                          if (event.key !== "Enter" || event.shiftKey) return;
+                          event.preventDefault();
+                          onSendNote();
+                        }}
+                        autosize
+                        minRows={3}
+                        maxRows={14}
+                        data-testid="room-notes-input"
+                        placeholder="Напишите сообщение для интервьюеров"
+                        classNames={{ input: styles.notesComposerInput }}
+                      />
+                      <Group justify="flex-end" align="center" className={styles.notesComposerFooter}>
+                        <Button
+                          type="button"
+                          size="xs"
+                          onClick={onSendNote}
+                          disabled={!noteComposer.trim()}
+                          data-testid="room-notes-send"
+                        >
+                          Отправить
+                        </Button>
+                      </Group>
+                    </div>
                   </div>
                 ) : (
                   <div className={styles.panelTabPanel} role="tabpanel" aria-label="Логи">
@@ -1579,6 +1761,7 @@ function CandidateLayout({
   merged,
   stepTitle,
   stepDescription,
+  briefingMarkdown,
   sessionId,
   participantLabel,
   sendAwarenessUpdate,
@@ -1595,6 +1778,7 @@ function CandidateLayout({
   merged: RealtimeState;
   stepTitle: string;
   stepDescription: string;
+  briefingMarkdown: string;
   sessionId: string;
   participantLabel: string;
   sendAwarenessUpdate: (awarenessUpdate: string) => void;
@@ -1627,6 +1811,8 @@ function CandidateLayout({
         {stepDescription ? <Text className={styles.candidateDescription}>{stepDescription}</Text> : null}
       </Box>
 
+      <BriefingBoard mode="candidate" value={briefingMarkdown} />
+
       <Box className={styles.candidatePanel}>
         <div className={styles.editorWrap}>
           <RoomCodeEditor
@@ -1652,6 +1838,155 @@ function CandidateLayout({
       </Box>
 
       {error && <Text className={styles.error}>{error}</Text>}
+    </Box>
+  );
+}
+
+function BriefingBoard({
+  mode,
+  value,
+  onChange
+}: {
+  mode: "interviewer" | "candidate";
+  value: string;
+  onChange?: (value: string) => void;
+}) {
+  const editorRef = useRef<HTMLTextAreaElement | null>(null);
+  const html = useMemo(() => markdownToHtml(value), [value]);
+  const emptyText =
+    mode === "interviewer"
+      ? "Напишите объяснение или подсказки для кандидата."
+      : "Интервьюер еще не добавил пояснение.";
+
+  const applyWrap = useCallback(
+    (prefix: string, suffix: string, placeholder: string) => {
+      if (!onChange) return;
+      const textarea = editorRef.current;
+      const selectionStart = textarea?.selectionStart ?? 0;
+      const selectionEnd = textarea?.selectionEnd ?? 0;
+      const selected = value.slice(selectionStart, selectionEnd);
+      const content = selected || placeholder;
+      const next = `${value.slice(0, selectionStart)}${prefix}${content}${suffix}${value.slice(selectionEnd)}`;
+      onChange(next);
+      const rangeStart = selectionStart + prefix.length;
+      const rangeEnd = rangeStart + content.length;
+      requestAnimationFrame(() => {
+        textarea?.focus();
+        textarea?.setSelectionRange(rangeStart, rangeEnd);
+      });
+    },
+    [onChange, value]
+  );
+
+  const applyLinePrefix = useCallback(
+    (prefix: string) => {
+      if (!onChange) return;
+      const textarea = editorRef.current;
+      const selectionStart = textarea?.selectionStart ?? 0;
+      const selectionEnd = textarea?.selectionEnd ?? 0;
+      const blockStart = value.lastIndexOf("\n", Math.max(0, selectionStart - 1)) + 1;
+      const blockEndCandidate = value.indexOf("\n", selectionEnd);
+      const blockEnd = blockEndCandidate < 0 ? value.length : blockEndCandidate;
+      const original = value.slice(blockStart, blockEnd);
+      const updated = original
+        .split("\n")
+        .map((line) => (line.startsWith(prefix) ? line : `${prefix}${line}`))
+        .join("\n");
+      const next = `${value.slice(0, blockStart)}${updated}${value.slice(blockEnd)}`;
+      onChange(next);
+      requestAnimationFrame(() => {
+        textarea?.focus();
+        textarea?.setSelectionRange(blockStart, blockStart + updated.length);
+      });
+    },
+    [onChange, value]
+  );
+
+  const applyMarkdownTool = useCallback(
+    (tool: MarkdownToolId) => {
+      if (tool === "bold") return applyWrap("**", "**", "текст");
+      if (tool === "italic") return applyWrap("*", "*", "текст");
+      if (tool === "code") return applyWrap("`", "`", "code");
+      if (tool === "link") return applyWrap("[", "](https://)", "ссылка");
+      if (tool === "h1") return applyLinePrefix("# ");
+      if (tool === "h2") return applyLinePrefix("## ");
+      if (tool === "ul") return applyLinePrefix("- ");
+      if (tool === "ol") return applyLinePrefix("1. ");
+      if (tool === "quote") return applyLinePrefix("> ");
+    },
+    [applyLinePrefix, applyWrap]
+  );
+
+  return (
+    <Box className={styles.briefingPanel} data-mode={mode}>
+      <div className={styles.briefingHeader}>
+        <Text className={styles.briefingTitle}>Пояснение для кандидата</Text>
+        <Text className={styles.briefingHint}>
+          {mode === "interviewer" ? "Markdown · слева редактирование, справа отображение" : "Markdown preview"}
+        </Text>
+      </div>
+
+      {mode === "interviewer" ? (
+        <div className={styles.briefingSplit}>
+          <div className={styles.briefingEditorPane}>
+            <div className={styles.briefingToolbar}>
+              <button type="button" className={styles.briefingToolButton} onClick={() => applyMarkdownTool("bold")}>
+                B
+              </button>
+              <button type="button" className={styles.briefingToolButton} onClick={() => applyMarkdownTool("italic")}>
+                I
+              </button>
+              <button type="button" className={styles.briefingToolButton} onClick={() => applyMarkdownTool("code")}>
+                {"</>"}
+              </button>
+              <button type="button" className={styles.briefingToolButton} onClick={() => applyMarkdownTool("link")}>
+                Link
+              </button>
+              <button type="button" className={styles.briefingToolButton} onClick={() => applyMarkdownTool("h1")}>
+                H1
+              </button>
+              <button type="button" className={styles.briefingToolButton} onClick={() => applyMarkdownTool("h2")}>
+                H2
+              </button>
+              <button type="button" className={styles.briefingToolButton} onClick={() => applyMarkdownTool("ul")}>
+                • List
+              </button>
+              <button type="button" className={styles.briefingToolButton} onClick={() => applyMarkdownTool("ol")}>
+                1. List
+              </button>
+              <button type="button" className={styles.briefingToolButton} onClick={() => applyMarkdownTool("quote")}>
+                Quote
+              </button>
+            </div>
+            <Textarea
+              value={value}
+              onChange={(event) => onChange?.(event.currentTarget.value)}
+              autosize
+              minRows={6}
+              maxRows={24}
+              placeholder="Например: # План\n- Что делаем\n- На что смотреть"
+              data-testid="room-markdown-editor"
+              classNames={{ input: styles.briefingEditorInput }}
+              ref={editorRef}
+            />
+          </div>
+          <div className={styles.briefingPreviewPane} data-testid="room-markdown-preview">
+            {html ? (
+              <div className={styles.briefingMarkdown} dangerouslySetInnerHTML={{ __html: html }} />
+            ) : (
+              <Text className={styles.briefingEmpty}>{emptyText}</Text>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className={styles.briefingPreviewPane} data-testid="room-markdown-preview">
+          {html ? (
+            <div className={styles.briefingMarkdown} dangerouslySetInnerHTML={{ __html: html }} />
+          ) : (
+            <Text className={styles.briefingEmpty}>{emptyText}</Text>
+          )}
+        </div>
+      )}
     </Box>
   );
 }
@@ -1796,12 +2131,24 @@ function dedupeRemoteAwarenessEntries(awareness: Awareness) {
 const remoteCursorDarkTheme = EditorView.baseTheme({
   ".cm-ySelectionCaret": {
     borderLeft: "2px solid rgba(255,255,255,0.88)",
-    borderRight: "2px solid rgba(255,255,255,0.88)"
+    borderRight: "none"
+  },
+  ".cm-ySelectionCaret::after": {
+    display: "none !important",
+    content: "none"
+  },
+  ".cm-ySelectionCaret::before": {
+    display: "none !important",
+    content: "none"
   },
   ".cm-ySelectionInfo": {
-    color: "#0c0e12",
-    fontFamily: "system-ui, sans-serif",
-    fontSize: "11px"
+    display: "none !important"
+  },
+  ".cm-ySelectionInfo::before": {
+    display: "none !important"
+  },
+  ".cm-ySelectionCaretDot": {
+    display: "none !important"
   }
 });
 

@@ -24,6 +24,22 @@ data class RoomTaskDto(
     val score: Int?,
 )
 
+data class RoomAccessMemberDto(
+    val userId: String,
+    val nickname: String,
+    val role: String,
+    val isOwner: Boolean = false,
+)
+
+data class RoomNoteMessageDto(
+    val id: String,
+    val sessionId: String,
+    val displayName: String,
+    val role: String,
+    val text: String,
+    val timestampEpochMs: Long,
+)
+
 data class RoomResponse(
     val id: String,
     val title: String,
@@ -32,8 +48,15 @@ data class RoomResponse(
     val currentStep: Int,
     val code: String,
     val notes: String,
+    val notesMessages: List<RoomNoteMessageDto> = emptyList(),
+    val briefingMarkdown: String = "",
     val ownerToken: String?,
     val interviewerToken: String?,
+    val role: String = "candidate",
+    val isOwner: Boolean = false,
+    val canManageRoom: Boolean = false,
+    val canGrantAccess: Boolean = false,
+    val accessMembers: List<RoomAccessMemberDto> = emptyList(),
     val tasks: List<RoomTaskDto>,
 )
 
@@ -55,6 +78,10 @@ data class RunCodeRequest(
 
 data class UpdateRoomRequest(
     @field:NotBlank val title: String,
+)
+
+data class UpdateRoomParticipantRoleRequest(
+    @field:NotBlank val role: String,
 )
 
 data class RunCodeResponse(

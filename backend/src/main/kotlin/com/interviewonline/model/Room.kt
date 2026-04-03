@@ -49,6 +49,12 @@ class Room(
     @Column(columnDefinition = "TEXT")
     var notes: String? = "",
 
+    @Column(name = "interviewer_chat", columnDefinition = "TEXT")
+    var interviewerChat: String? = "[]",
+
+    @Column(name = "briefing_markdown", columnDefinition = "TEXT")
+    var briefingMarkdown: String? = "",
+
     @Column(name = "created_at", nullable = false)
     var createdAt: Instant = Instant.now(),
 

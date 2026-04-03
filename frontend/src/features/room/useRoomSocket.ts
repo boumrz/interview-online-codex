@@ -27,8 +27,11 @@ function roomSyncTransportLog(event: string, detail?: Record<string, unknown>) {
 type Participant = {
   sessionId: string;
   displayName: string;
+  userId?: string | null;
   role: "owner" | "interviewer" | "candidate";
   presenceStatus: "active" | "away";
+  isAuthenticated?: boolean;
+  canBeGrantedInterviewerAccess?: boolean;
 };
 
 type CursorPayload = {
@@ -56,6 +59,15 @@ type CandidateKeyPayload = {
   timestampEpochMs: number;
 };
 
+type NoteMessagePayload = {
+  id: string;
+  sessionId: string;
+  displayName: string;
+  role: "owner" | "interviewer" | "candidate";
+  text: string;
+  timestampEpochMs: number;
+};
+
 type RealtimeState = {
   inviteCode: string;
   language: string;
@@ -66,11 +78,14 @@ type RealtimeState = {
   lastYjsSequence?: number;
   currentStep: number;
   notes: string;
+  notesMessages?: NoteMessagePayload[];
+  briefingMarkdown?: string;
   taskScores: Record<string, number | null>;
   participants: Participant[];
   isOwner: boolean;
   role: "owner" | "interviewer" | "candidate";
   canManageRoom: boolean;
+  canGrantAccess?: boolean;
   notesLockedBySessionId: string | null;
   notesLockedByDisplayName: string | null;
   notesLockedUntilEpochMs: number | null;
@@ -90,7 +105,6 @@ type Options = {
   displayName: string;
   authToken?: string | null;
   ownerToken?: string | null;
-  interviewerToken?: string | null;
   onState: (state: RealtimeState) => void;
   onError: (message: string) => void;
   onYjsUpdate?: (payload: { sessionId: string; yjsUpdate: string; syncKey?: string | null; yjsSequence?: number | null }) => void;
@@ -107,6 +121,10 @@ type ClientMessage =
   | { type: "set_step"; stepIndex: number }
   | { type: "task_rating_update"; stepIndex: number; rating: number | null }
   | { type: "notes_update"; notes: string }
+  | { type: "note_message"; noteId: string; noteText: string; noteTimestampEpochMs: number }
+  | { type: "briefing_markdown_update"; briefingMarkdown: string }
+  | { type: "grant_interviewer_access"; targetSessionId?: string; targetUserId?: string }
+  | { type: "revoke_interviewer_access"; targetSessionId?: string; targetUserId?: string }
   | { type: "presence_update"; presenceStatus: "active" | "away" }
   | {
       type: "cursor_update";
@@ -211,7 +229,6 @@ export function useRoomSocket({
   displayName,
   authToken,
   ownerToken,
-  interviewerToken,
   onState,
   onError,
   onYjsUpdate,
@@ -281,7 +298,6 @@ export function useRoomSocket({
       params.set("displayNameEncoded", displayName);
       if (authToken) params.set("authToken", authToken);
       if (ownerToken) params.set("ownerToken", ownerToken);
-      if (interviewerToken) params.set("interviewerToken", interviewerToken);
       return params;
     };
 
@@ -534,7 +550,6 @@ export function useRoomSocket({
     authToken,
     displayName,
     enabled,
-    interviewerToken,
     inviteCode,
     onAwarenessUpdate,
     onCandidateKey,
@@ -573,6 +588,38 @@ export function useRoomSocket({
 
   const sendNotesUpdate = (notes: string) => {
     send({ type: "notes_update", notes });
+  };
+
+  const sendNoteMessage = (noteId: string, noteText: string, noteTimestampEpochMs: number) => {
+    send({
+      type: "note_message",
+      noteId,
+      noteText,
+      noteTimestampEpochMs
+    });
+  };
+
+  const sendBriefingUpdate = (briefingMarkdown: string) => {
+    send({
+      type: "briefing_markdown_update",
+      briefingMarkdown
+    });
+  };
+
+  const sendGrantInterviewerAccess = (targetSessionId?: string, targetUserId?: string) => {
+    send({
+      type: "grant_interviewer_access",
+      targetSessionId,
+      targetUserId
+    });
+  };
+
+  const sendRevokeInterviewerAccess = (targetSessionId?: string, targetUserId?: string) => {
+    send({
+      type: "revoke_interviewer_access",
+      targetSessionId,
+      targetUserId
+    });
   };
 
   const sendCursorUpdate = (payload: {
@@ -655,6 +702,10 @@ export function useRoomSocket({
     sendSetStep,
     sendTaskRatingUpdate,
     sendNotesUpdate,
+    sendNoteMessage,
+    sendBriefingUpdate,
+    sendGrantInterviewerAccess,
+    sendRevokeInterviewerAccess,
     sendCursorUpdate,
     sendAwarenessUpdate,
     sendYjsUpdate,

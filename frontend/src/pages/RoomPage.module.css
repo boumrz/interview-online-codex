@@ -52,20 +52,128 @@
   width: 100%;
   display: flex;
   align-items: center;
-  overflow: hidden;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 0 4px;
+  scrollbar-width: none;
 }
 
-.participantBadge {
-  max-width: 140px;
+.participantsInline::-webkit-scrollbar {
+  display: none;
+}
+
+.participantCard {
+  --participant-role-color: #d6dce6;
+  min-width: 0;
+  max-width: 148px;
+  flex: 0 0 auto;
+  display: grid;
+  gap: 1px;
+  padding: 6px 10px 7px;
+  border-radius: 12px;
+  border: 1px solid #55606f;
+  background: linear-gradient(180deg, rgba(22, 28, 37, 0.96) 0%, rgba(16, 21, 29, 0.98) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.participantCard[data-presence="active"] {
+  border-color: rgba(95, 195, 160, 0.9);
+}
+
+.participantCard[data-presence="away"] {
+  border-color: rgba(128, 136, 148, 0.72);
+}
+
+.participantCardButton {
+  text-align: left;
+  cursor: pointer;
+  transition: transform 140ms ease, border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.participantCardButton:hover {
+  transform: translateY(-1px);
+  background: linear-gradient(180deg, rgba(26, 34, 44, 0.98) 0%, rgba(18, 24, 33, 1) 100%);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+}
+
+.participantCardButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(108, 159, 255, 0.28), 0 10px 24px rgba(0, 0, 0, 0.2);
+}
+
+.participantName {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  opacity: 0.84;
+  color: var(--participant-role-color);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.participantNameRow {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.participantInterviewerStar {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #5fc3a0;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 700;
 }
 
 .topActions {
   display: flex;
   align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.topLanguageControl {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.topLanguageSelect {
+  width: 132px;
+  flex-shrink: 0;
+}
+
+.topLanguageInput {
+  background-color: #131922;
+  border-color: #2a3342;
+  color: #e3e9f3;
+  font-size: 12px;
+  min-height: 30px;
+  font-weight: 600;
+}
+
+.topLanguageDropdown {
+  background-color: #121823;
+  border-color: #2a3342;
+}
+
+.topLanguageOption {
+  color: #d8dfeb;
+}
+
+.topActionButtons {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -150,6 +258,31 @@
   font-size: 12px;
 }
 
+.taskRatingCard {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid #252a32;
+  border-radius: 10px;
+  background: #10151c;
+}
+
+.taskRating {
+  min-width: 0;
+}
+
+.taskRatingOption[data-combobox-selected],
+.taskRatingOption[data-checked] {
+  background: #1f2f45;
+  color: #f3f5f7;
+  font-weight: 700;
+}
+
+.taskRatingHint {
+  color: #6f7a88;
+  font-size: 10px;
+}
+
 .resizeHandle {
   width: 10px;
   flex-shrink: 0;
@@ -182,6 +315,8 @@
   min-width: 0;
   min-height: 0;
   display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .editorPanel,
@@ -192,6 +327,157 @@
   border-radius: 12px;
   background: #11151c;
   overflow: hidden;
+}
+
+.briefingPanel {
+  flex-shrink: 0;
+  border: 1px solid #252a32;
+  border-radius: 12px;
+  background: #11151c;
+  padding: 10px;
+  min-height: 180px;
+  max-height: 62vh;
+  resize: vertical;
+  overflow: auto;
+}
+
+.briefingHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.briefingTitle {
+  color: #d8e0ea;
+  font-size: 11px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.briefingHint {
+  color: #8d97a5;
+  font-size: 11px;
+}
+
+.briefingSplit {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-height: 132px;
+}
+
+.briefingEditorPane {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.briefingToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.briefingToolButton {
+  border: 1px solid #2c394b;
+  border-radius: 8px;
+  background: #141d2a;
+  color: #d4deeb;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  height: 28px;
+  min-width: 34px;
+  padding: 0 10px;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.briefingToolButton:hover {
+  background: #1b2738;
+  border-color: #3a4d67;
+  color: #f3f5f7;
+}
+
+.briefingToolButton:focus-visible {
+  outline: none;
+  border-color: #5a7cae;
+  box-shadow: 0 0 0 2px rgba(90, 124, 174, 0.25);
+}
+
+.briefingEditorInput {
+  min-height: 132px;
+  max-height: none;
+  background-color: #11161f;
+  border-color: #273242;
+  color: #d6dce6;
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  line-height: 1.45;
+  font-size: 12px;
+  resize: vertical;
+}
+
+.briefingPreviewPane {
+  border: 1px solid #273242;
+  border-radius: 10px;
+  background: #0f141c;
+  padding: 10px;
+  overflow: auto;
+}
+
+.briefingPanel[data-mode="candidate"] .briefingPreviewPane {
+  border: none;
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+}
+
+.briefingMarkdown {
+  color: #d4deeb;
+  font-size: 13px;
+  line-height: 1.52;
+}
+
+.briefingMarkdown h1,
+.briefingMarkdown h2,
+.briefingMarkdown h3 {
+  margin: 0 0 8px;
+  color: #f3f5f7;
+}
+
+.briefingMarkdown p {
+  margin: 0 0 10px;
+}
+
+.briefingMarkdown ul,
+.briefingMarkdown ol {
+  margin: 0 0 10px 18px;
+  padding: 0;
+}
+
+.briefingMarkdown code {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: rgba(46, 66, 93, 0.55);
+  border-radius: 6px;
+  padding: 1px 4px;
+}
+
+.briefingMarkdown pre {
+  margin: 0 0 10px;
+  padding: 10px;
+  border-radius: 8px;
+  overflow: auto;
+  background: #0b1017;
+  border: 1px solid #273242;
+}
+
+.briefingEmpty {
+  color: #8d97a5;
+  font-size: 12px;
 }
 
 .editorPanel {
@@ -243,10 +529,11 @@
 
 .ownerPresenceLabel {
   color: #87909d;
-  font-size: 10px;
-  letter-spacing: 0.7px;
+  font-size: 9px;
+  letter-spacing: 0.5px;
   text-transform: uppercase;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .ownerPresenceDetail {
@@ -327,67 +614,16 @@
   overflow: hidden;
 }
 
+.notesTabPanel {
+  overflow-y: auto;
+}
+
 .panelSectionTitle {
   color: #d8e0ea;
   font-size: 11px;
   letter-spacing: 0.6px;
   text-transform: uppercase;
   font-weight: 700;
-}
-
-.notesTopRow {
-  display: grid;
-  gap: 12px;
-}
-
-.notesStatusBanner {
-  justify-self: start;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 22px;
-  max-width: 100%;
-  padding: 1px 7px;
-  border: 1px solid rgba(64, 82, 102, 0.16);
-  border-radius: 999px;
-  background: rgba(16, 23, 31, 0.14);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.015);
-}
-
-.notesStatusBanner[data-state="saving"] {
-  border-color: rgba(123, 98, 49, 0.18);
-  background: rgba(48, 38, 22, 0.16);
-}
-
-.notesStatusBanner[data-state="saved"] {
-  border-color: rgba(54, 81, 102, 0.16);
-  background: rgba(19, 29, 40, 0.15);
-}
-
-.notesStatusBanner[data-state="locked"] {
-  border-color: rgba(118, 68, 68, 0.18);
-  background: rgba(48, 25, 25, 0.15);
-}
-
-.notesStatusLabel {
-  color: rgba(138, 148, 160, 0.34);
-  font-size: 7px;
-  letter-spacing: 0.18px;
-  text-transform: none;
-  font-weight: 600;
-  line-height: 1;
-}
-
-.notesStatusValue {
-  min-height: 1em;
-  max-width: 180px;
-  color: rgba(216, 224, 235, 0.64);
-  font-size: 9px;
-  line-height: 1.1;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .notesRating {
@@ -401,13 +637,158 @@
   font-weight: 700;
 }
 
-.notesInput {
-  min-height: 280px;
+.notesHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.notesHeaderCopy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.notesHeaderHint {
+  color: #8d97a5;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.notesMessagesList {
+  flex: 1 1 auto;
+  min-height: 120px;
+  max-height: none;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 4px;
+  resize: none;
+  scrollbar-width: thin;
+  scrollbar-color: #3a4658 transparent;
+}
+
+.notesMessagesList::-webkit-scrollbar {
+  width: 8px;
+}
+
+.notesMessagesList::-webkit-scrollbar-thumb {
+  background: #3a4658;
+  border-radius: 8px;
+}
+
+.noteBubble {
+  max-width: min(100%, 92%);
+  align-self: flex-start;
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px 11px;
+  border-radius: 14px;
+  border: 1px solid #273242;
+  background: linear-gradient(180deg, #141b24 0%, #11161f 100%);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.noteBubble[data-pending="true"] {
+  opacity: 0.72;
+}
+
+.noteBubbleOwn {
+  align-self: flex-end;
+  border-color: rgba(92, 134, 214, 0.36);
+  background: linear-gradient(180deg, rgba(26, 39, 61, 0.96) 0%, rgba(18, 27, 41, 0.98) 100%);
+}
+
+.noteBubbleHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.noteBubbleAuthorWrap {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.noteBubbleAuthor {
+  color: #edf2f8;
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.noteBubbleTime {
+  color: #8c97a8;
+  font-size: 9px;
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.noteBubbleText {
+  margin: 0;
+  color: #d5deeb;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.notesComposer {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid #273242;
+}
+
+.notesComposerInput {
+  min-height: 88px;
   background-color: #11161f;
   border-color: #273242;
   color: #d6dce6;
   font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   line-height: 1.45;
+  font-size: 12px;
+  resize: vertical;
+}
+
+.notesComposerFooter {
+  gap: 10px;
+}
+
+.notesComposerHint {
+  color: #8d97a5;
+  font-size: 11px;
+}
+
+.notesEmpty {
+  margin: 0;
+  min-height: 144px;
+  border: 1px dashed #303c4d;
+  border-radius: 12px;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  background: #111821;
+  padding: 16px;
+}
+
+.notesEmptyTitle {
+  margin: 0;
+  color: #c2cddd;
+  font-size: 13px;
+}
+
+.notesEmptyText {
+  margin: 4px 0 0;
+  color: #7f8ca1;
   font-size: 12px;
 }
 
@@ -613,8 +994,20 @@
     align-items: flex-start;
   }
 
+  .participantsHost {
+    width: 100%;
+  }
+
   .topActions {
-    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+
+  .topLanguageControl {
+    flex: 1 1 180px;
+  }
+
+  .topActionButtons {
+    flex: 1 1 auto;
   }
 }
 
@@ -674,5 +1067,32 @@
   .outputPanel {
     width: auto !important;
     max-height: 360px;
+  }
+
+  .participantCard {
+    max-width: 132px;
+    padding-inline: 8px;
+  }
+
+  .topActions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .topLanguageControl,
+  .topActionButtons {
+    width: 100%;
+  }
+
+  .topLanguageSelect {
+    width: 100%;
+  }
+
+  .topActionButtons {
+    justify-content: space-between;
+  }
+
+  .briefingSplit {
+    grid-template-columns: 1fr;
   }
 }

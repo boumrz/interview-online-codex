@@ -20,17 +20,22 @@ try {
   await page.waitForTimeout(300);
   await page.getByRole("button", { name: /1\./ }).first().click();
 
-  await page.getByRole("button", { name: "Приглашения", exact: true }).click();
-  await page.getByText("Скопировать ссылку кандидата", { exact: true }).waitFor({ timeout: 5000 });
-  await page.keyboard.press("Escape");
+  // Notes are now an interviewer chat: sending should append a bubble with timestamp.
+  await page.getByRole("tab", { name: "Заметки", exact: true }).click();
+  await page.getByRole("tabpanel", { name: "Чат заметок" }).waitFor({ timeout: 5000 });
 
-  const noteValue = `smoke note ${Date.now()}`;
+  const messageValue = `smoke message ${Date.now()}`;
   const notesInput = page.locator('[data-testid="room-notes-input"]');
-  await notesInput.fill(noteValue);
-  await page.waitForTimeout(1000);
+  const sendButton = page.locator('[data-testid="room-notes-send"]');
+  await notesInput.fill(messageValue);
+  await sendButton.click();
+
+  // Bubble should appear (optimistic or server-confirmed).
+  await page.getByText(messageValue, { exact: true }).waitFor({ timeout: 8000 });
+  // Composer should clear after sending.
   const actualValue = await notesInput.inputValue();
-  if (actualValue !== noteValue) {
-    throw new Error(`ROOM_NOTES_NOT_SAVED:${actualValue}`);
+  if (actualValue.trim() !== "") {
+    throw new Error(`ROOM_NOTES_COMPOSER_NOT_CLEARED:${actualValue}`);
   }
 
   const errorVisible = await page.getByText("Некорректный формат WebSocket сообщения").isVisible().catch(() => false);

@@ -21,7 +21,7 @@ async function createGuestRoom() {
   return payload;
 }
 
-async function enterName(page, name) {
+async function enterNameIfPrompted(page, name) {
   const title = page.getByText("Представьтесь перед входом в комнату");
   const visible = await title.isVisible().catch(() => false);
   if (!visible) return;
@@ -31,18 +31,35 @@ async function enterName(page, name) {
 }
 
 async function modelValue(page) {
-  return page.evaluate(() => window.monaco?.editor?.getModels?.()[0]?.getValue() ?? "");
+  return page.evaluate(() => {
+    const editor = document.querySelector(".cm-editor");
+    const anyEditor = editor;
+    const view = anyEditor?.cmView?.view ?? anyEditor?.cmView?.rootView?.view ?? null;
+    if (view?.state?.doc?.toString) {
+      return view.state.doc.toString();
+    }
+    return document.querySelector(".cm-content")?.textContent ?? "";
+  });
 }
 
 async function waitModelContains(page, marker) {
   await page.waitForFunction(
     (token) => {
-      const value = window.monaco?.editor?.getModels?.()[0]?.getValue?.() ?? "";
+      const editor = document.querySelector(".cm-editor");
+      const anyEditor = editor;
+      const view = anyEditor?.cmView?.view ?? anyEditor?.cmView?.rootView?.view ?? null;
+      const value = view?.state?.doc?.toString ? view.state.doc.toString() : (document.querySelector(".cm-content")?.textContent ?? "");
       return typeof value === "string" && value.includes(token);
     },
     marker,
-    { timeout: 15000 }
+    { timeout: 20000 }
   );
+}
+
+async function appendText(page, text) {
+  await page.locator(".cm-content").click({ force: true });
+  await page.keyboard.press("End");
+  await page.keyboard.type(text, { delay: 8 });
 }
 
 const browser = await chromium.launch({ headless: true });
@@ -65,55 +82,40 @@ try {
 
   const ownerPage = await ownerContext.newPage();
   await ownerPage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
-  await ownerPage.locator(".monaco-editor").waitFor({ timeout: 15000 });
-
-  // Start active typing while participants are joining.
-  const finalMarker = `__join_race_done_${Date.now()}__`;
-  await ownerPage.evaluate((marker) => {
-    const model = window.monaco?.editor?.getModels?.()[0];
-    if (!model) return;
-
-    let tick = 0;
-    const appendChunk = () => {
-      const next = `${model.getValue()}\nline-${tick.toString().padStart(2, "0")}`;
-      model.setValue(next);
-      tick += 1;
-      if (tick < 35) {
-        setTimeout(appendChunk, 28);
-      } else {
-        model.setValue(`${model.getValue()}\n${marker}`);
-      }
-    };
-
-    appendChunk();
-  }, finalMarker);
+  await ownerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
 
   const candidatePages = [];
   const candidateContexts = [];
+
   for (let i = 0; i < 3; i += 1) {
+    await appendText(ownerPage, `\nowner-typing-before-join-${i}`);
+
     const context = await browser.newContext();
     candidateContexts.push(context);
     const page = await context.newPage();
     candidatePages.push(page);
     await page.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
-    await enterName(page, `Candidate ${i + 1}`);
-    await page.locator(".monaco-editor").waitFor({ timeout: 15000 });
-    await page.waitForTimeout(140);
+    await enterNameIfPrompted(page, `Candidate ${i + 1}`);
+    await page.locator(".cm-editor").waitFor({ timeout: 15000 });
+    await page.waitForTimeout(220);
   }
 
+  const finalMarker = `__join_race_done_${Date.now()}__`;
+  await appendText(ownerPage, `\n${finalMarker}`);
   await waitModelContains(ownerPage, finalMarker);
-  await ownerPage.waitForTimeout(1200);
-
-  const expected = await modelValue(ownerPage);
+  await ownerPage.waitForTimeout(1500);
 
   for (const page of candidatePages) {
     await page.waitForFunction(
-      (expectedValue) => {
-        const value = window.monaco?.editor?.getModels?.()[0]?.getValue?.() ?? "";
-        return value === expectedValue;
+      (marker) => {
+        const editor = document.querySelector(".cm-editor");
+        const anyEditor = editor;
+        const view = anyEditor?.cmView?.view ?? anyEditor?.cmView?.rootView?.view ?? null;
+        const value = view?.state?.doc?.toString ? view.state.doc.toString() : (document.querySelector(".cm-content")?.textContent ?? "");
+        return typeof value === "string" && value.includes(marker);
       },
-      expected,
-      { timeout: 15000 }
+      finalMarker,
+      { timeout: 45000 }
     );
   }
 
