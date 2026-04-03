@@ -9,6 +9,11 @@ data class RealtimeEventRequest(
     val stepIndex: Int? = null,
     val rating: Int? = null,
     val notes: String? = null,
+    val noteId: String? = null,
+    val noteText: String? = null,
+    val noteTimestampEpochMs: Long? = null,
+    val presentationMarkdown: String? = null,
+    val briefingMarkdown: String? = null,
     val presenceStatus: String? = null,
     val lineNumber: Int? = null,
     val column: Int? = null,
@@ -29,4 +34,7 @@ data class RealtimeEventRequest(
     val yjsDocumentBase64: String? = null,
     /** Base64-encoded y-protocols awareness update (remote cursors / selections). */
     val awarenessUpdate: String? = null,
+    val targetSessionId: String? = null,
+    val targetUserId: String? = null,
+    val role: String? = null,
 )

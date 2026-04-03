@@ -42,7 +42,7 @@ async function waitParticipantCount(ownerPage, displayName, expectedCount) {
   await ownerPage.waitForFunction(
     ({ displayName, expectedCount }) => {
       const badges = Array.from(document.querySelectorAll('[data-testid^="participant-badge-"]'));
-      const count = badges.filter((item) => item.textContent?.trim() === displayName).length;
+      const count = badges.filter((item) => item.textContent?.includes(displayName)).length;
       return count === expectedCount;
     },
     { displayName, expectedCount },

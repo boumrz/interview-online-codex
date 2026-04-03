@@ -18,9 +18,9 @@ try {
   await candidatePage.getByText("Представьтесь перед входом в комнату", { exact: true }).waitFor({ timeout: 15000 });
   await candidatePage.getByLabel("Ваше имя").fill("Кандидат");
   await candidatePage.getByRole("button", { name: "Войти в комнату" }).click();
-  await candidatePage.locator(".monaco-editor").waitFor({ timeout: 15000 });
+  await candidatePage.locator(".cm-editor").waitFor({ timeout: 15000 });
   await candidatePage.reload({ waitUntil: "domcontentloaded" });
-  await candidatePage.locator(".monaco-editor").waitFor({ timeout: 15000 });
+  await candidatePage.locator(".cm-editor").waitFor({ timeout: 15000 });
   const modalVisibleAfterRefresh = await candidatePage
     .getByText("Представьтесь перед входом в комнату", { exact: true })
     .isVisible()

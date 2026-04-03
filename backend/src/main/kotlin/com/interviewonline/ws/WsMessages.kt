@@ -15,10 +15,13 @@ data class RoomRealtimePayload(
     val lastYjsSequence: Long = 0,
     val currentStep: Int,
     val notes: String,
+    val notesMessages: List<NoteMessagePayload> = emptyList(),
+    val briefingMarkdown: String = "",
     val participants: List<ParticipantPayload>,
     val isOwner: Boolean = false,
     val role: String = "candidate",
     val canManageRoom: Boolean = false,
+    val canGrantAccess: Boolean = false,
     val notesLockedBySessionId: String? = null,
     val notesLockedByDisplayName: String? = null,
     val notesLockedUntilEpochMs: Long? = null,
@@ -28,11 +31,23 @@ data class RoomRealtimePayload(
     val candidateKeyHistory: List<CandidateKeyPayload> = emptyList(),
 )
 
+data class NoteMessagePayload(
+    val id: String,
+    val sessionId: String,
+    val displayName: String,
+    val role: String,
+    val text: String,
+    val timestampEpochMs: Long,
+)
+
 data class ParticipantPayload(
     val sessionId: String,
     val displayName: String,
+    val userId: String? = null,
     val role: String = "candidate",
     val presenceStatus: String = "active",
+    val isAuthenticated: Boolean = false,
+    val canBeGrantedInterviewerAccess: Boolean = false,
 )
 
 data class CursorPayload(

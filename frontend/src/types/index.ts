@@ -19,6 +19,22 @@ export type RoomTask = {
   score: number | null;
 };
 
+export type RoomNoteMessage = {
+  id: string;
+  sessionId: string;
+  displayName: string;
+  role: "owner" | "interviewer" | "candidate" | string;
+  text: string;
+  timestampEpochMs: number;
+};
+
+export type RoomAccessMember = {
+  userId: string;
+  nickname: string;
+  role: "owner" | "interviewer" | "candidate" | string;
+  isOwner: boolean;
+};
+
 export type Room = {
   id: string;
   title: string;
@@ -27,8 +43,15 @@ export type Room = {
   currentStep: number;
   code: string;
   notes: string;
+  notesMessages: RoomNoteMessage[];
+  briefingMarkdown: string;
   ownerToken: string | null;
   interviewerToken: string | null;
+  role: "owner" | "interviewer" | "candidate" | string;
+  isOwner: boolean;
+  canManageRoom: boolean;
+  canGrantAccess: boolean;
+  accessMembers: RoomAccessMember[];
   tasks: RoomTask[];
 };
 

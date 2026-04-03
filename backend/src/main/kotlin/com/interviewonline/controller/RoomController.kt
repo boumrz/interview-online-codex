@@ -5,6 +5,8 @@ import com.interviewonline.dto.CreateRoomRequest
 import com.interviewonline.dto.RoomResponse
 import com.interviewonline.dto.RunCodeRequest
 import com.interviewonline.dto.RunCodeResponse
+import com.interviewonline.dto.RoomAccessMemberDto
+import com.interviewonline.dto.UpdateRoomParticipantRoleRequest
 import com.interviewonline.service.AuthService
 import com.interviewonline.service.CodeExecutionService
 import com.interviewonline.service.RoomService
@@ -55,18 +57,52 @@ class RoomController(
     fun nextStep(
         @PathVariable inviteCode: String,
         @RequestHeader("X-Room-Owner-Token", required = false) ownerToken: String?,
+        @RequestHeader("X-Room-Interviewer-Token", required = false) interviewerToken: String?,
+        @RequestHeader("Authorization", required = false) authorization: String?,
     ): RoomResponse {
-        return roomService.nextStep(inviteCode, ownerToken.orEmpty())
+        val authToken = authorization?.removePrefix("Bearer ")?.trim()
+        val user = authService.resolveUserByToken(authToken)
+        return roomService.nextStep(inviteCode, ownerToken, interviewerToken, user)
     }
 
     @PostMapping("/rooms/{inviteCode}/run")
     fun runCode(
         @PathVariable inviteCode: String,
         @RequestHeader("X-Room-Owner-Token", required = false) ownerToken: String?,
+        @RequestHeader("X-Room-Interviewer-Token", required = false) interviewerToken: String?,
+        @RequestHeader("Authorization", required = false) authorization: String?,
         @RequestBody request: RunCodeRequest,
     ): RunCodeResponse {
+        val authToken = authorization?.removePrefix("Bearer ")?.trim()
+        val user = authService.resolveUserByToken(authToken)
         val room = roomService.getByInviteCodeEntity(inviteCode)
-        roomService.verifyOwner(room, ownerToken)
+        roomService.verifyManager(room, user, ownerToken, interviewerToken)
         return codeExecutionService.run(request)
+    }
+
+    @GetMapping("/rooms/{inviteCode}/participants")
+    fun listRoomParticipants(
+        @PathVariable inviteCode: String,
+        @RequestHeader("X-Room-Owner-Token", required = false) ownerToken: String?,
+        @RequestHeader("X-Room-Interviewer-Token", required = false) interviewerToken: String?,
+        @RequestHeader("Authorization", required = false) authorization: String?,
+    ): List<RoomAccessMemberDto> {
+        val authToken = authorization?.removePrefix("Bearer ")?.trim()
+        val user = authService.resolveUserByToken(authToken)
+        return roomService.listAccessMembers(inviteCode, ownerToken, interviewerToken, user)
+    }
+
+    @PostMapping("/rooms/{inviteCode}/participants/{userId}/role")
+    fun updateRoomParticipantRole(
+        @PathVariable inviteCode: String,
+        @PathVariable userId: String,
+        @RequestHeader("X-Room-Owner-Token", required = false) ownerToken: String?,
+        @RequestHeader("X-Room-Interviewer-Token", required = false) interviewerToken: String?,
+        @RequestHeader("Authorization", required = false) authorization: String?,
+        @RequestBody request: UpdateRoomParticipantRoleRequest,
+    ): List<RoomAccessMemberDto> {
+        val authToken = authorization?.removePrefix("Bearer ")?.trim()
+        val user = authService.resolveUserByToken(authToken)
+        return roomService.updateParticipantRole(inviteCode, request, userId, ownerToken, interviewerToken, user)
     }
 }

@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
@@ -30,8 +31,10 @@ class RealtimeController(
         @RequestParam(required = false) ownerToken: String?,
         @RequestParam(required = false) interviewerToken: String?,
         @RequestParam(required = false) authToken: String?,
+        @RequestHeader("Authorization", required = false) authorization: String?,
     ): SseEmitter {
-        val user = authService.resolveUserByToken(authToken)
+        val bearerToken = authorization?.removePrefix("Bearer ")?.trim()
+        val user = authService.resolveUserByToken(bearerToken ?: authToken)
         return collaborationService.joinRoomSse(
             inviteCode = inviteCode,
             sessionId = sessionId,

@@ -465,7 +465,6 @@ export function DashboardPage() {
   const openRoomFromDashboard = (room: RoomSummary) => {
     const ownerStorageKey = `owner_token_${room.inviteCode}`;
     const ownerToken = room.ownerToken?.trim() ?? "";
-    const interviewerToken = room.interviewerToken?.trim() ?? "";
 
     if (ownerToken) {
       localStorage.setItem(ownerStorageKey, ownerToken);
@@ -473,11 +472,7 @@ export function DashboardPage() {
       localStorage.removeItem(ownerStorageKey);
     }
 
-    const destination =
-      room.accessRole === "participant" && interviewerToken
-        ? `/room/${room.inviteCode}?interviewerToken=${encodeURIComponent(interviewerToken)}`
-        : `/room/${room.inviteCode}`;
-    navigate(destination);
+    navigate(`/room/${room.inviteCode}`);
   };
 
   const onStartAgentRun = async (e: FormEvent) => {

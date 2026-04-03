@@ -42,80 +42,84 @@ const browser = await chromium.launch({ headless: true });
 
 try {
   const room = await createGuestRoom();
-  if (!room.ownerToken || !room.interviewerToken) {
+  if (!room.ownerToken) {
     throw new Error("ROOM_TOKENS_MISSING");
   }
 
-  const ownerContext = await browser.newContext();
-  const interviewerContext = await browser.newContext();
+  const ownerContext1 = await browser.newContext();
+  const ownerContext2 = await browser.newContext();
+  const candidateContext = await browser.newContext();
 
-  const ownerPage = await ownerContext.newPage();
-  const interviewerPage = await interviewerContext.newPage();
-  await ownerPage.goto(webBaseUrl, { waitUntil: "domcontentloaded" });
-  await ownerPage.evaluate(({ inviteCode, ownerToken }) => {
+  const ownerPage1 = await ownerContext1.newPage();
+  const ownerPage2 = await ownerContext2.newPage();
+  const candidatePage = await candidateContext.newPage();
+
+  await ownerPage1.goto(webBaseUrl, { waitUntil: "domcontentloaded" });
+  await ownerPage1.evaluate(({ inviteCode, ownerToken }) => {
     localStorage.setItem(`owner_token_${inviteCode}`, ownerToken);
-    localStorage.setItem("display_name", "Host QA");
-    localStorage.setItem(`guest_display_name_${inviteCode}`, "Host QA");
+    localStorage.setItem("display_name", "Host QA 1");
+    localStorage.setItem(`guest_display_name_${inviteCode}`, "Host QA 1");
   }, {
     inviteCode: room.inviteCode,
     ownerToken: room.ownerToken
   });
+  await ownerPage1.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
+  await ownerPage1.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await ownerPage1.getByRole("tab", { name: "Заметки", exact: true }).waitFor({ timeout: 10000 });
 
-  await ownerPage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
-  await ownerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
-  await ownerPage.getByRole("button", { name: "Приглашения", exact: true }).waitFor({ timeout: 10000 });
-
-  await interviewerPage.goto(`${webBaseUrl}/room/${room.inviteCode}?interviewerToken=${encodeURIComponent(room.interviewerToken)}`, {
-    waitUntil: "domcontentloaded"
+  await ownerPage2.goto(webBaseUrl, { waitUntil: "domcontentloaded" });
+  await ownerPage2.evaluate(({ inviteCode, ownerToken }) => {
+    localStorage.setItem(`owner_token_${inviteCode}`, ownerToken);
+    localStorage.setItem("display_name", "Host QA 2");
+    localStorage.setItem(`guest_display_name_${inviteCode}`, "Host QA 2");
+  }, {
+    inviteCode: room.inviteCode,
+    ownerToken: room.ownerToken
   });
-  await enterNameIfPrompted(interviewerPage, "Interviewer QA");
-  await interviewerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
-  await interviewerPage.getByRole("button", { name: "Приглашения", exact: true }).waitFor({ timeout: 10000 });
+  await ownerPage2.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
+  await ownerPage2.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await ownerPage2.getByRole("tab", { name: "Заметки", exact: true }).waitFor({ timeout: 10000 });
 
-  await interviewerPage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
-  await interviewerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
-  const invitationsVisibleInCandidateMode = await interviewerPage
-    .getByRole("button", { name: "Приглашения", exact: true })
-    .isVisible()
-    .catch(() => false);
-  if (invitationsVisibleInCandidateMode) {
-    throw new Error("CANDIDATE_LINK_SHOULD_NOT_HAVE_INTERVIEWER_ACCESS");
+  await candidatePage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
+  await enterNameIfPrompted(candidatePage, "Candidate QA");
+  await candidatePage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  const candidateHasChatComposer = await candidatePage.locator('[data-testid="room-notes-input"]').isVisible().catch(() => false);
+  if (candidateHasChatComposer) {
+    throw new Error("CANDIDATE_SHOULD_NOT_HAVE_INTERVIEWER_CHAT");
   }
 
-  await interviewerPage.goto(`${webBaseUrl}/room/${room.inviteCode}?interviewerToken=${encodeURIComponent(room.interviewerToken)}`, {
-    waitUntil: "domcontentloaded"
-  });
-  await enterNameIfPrompted(interviewerPage, "Interviewer QA");
-  await interviewerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
-  await interviewerPage.getByRole("button", { name: "Приглашения", exact: true }).waitFor({ timeout: 10000 });
+  await ownerPage1.getByRole("tab", { name: "Заметки", exact: true }).click();
+  await ownerPage2.getByRole("tab", { name: "Заметки", exact: true }).click();
 
-  await interviewerPage.getByRole("button", { name: /^2\./ }).first().click();
-  await ownerPage.getByText(/шаг 2\//i).waitFor({ timeout: 8000 });
+  const ownerNotes1 = ownerPage1.locator('[data-testid="room-notes-input"]');
+  const ownerNotes2 = ownerPage2.locator('[data-testid="room-notes-input"]');
+  const ownerSend1 = ownerPage1.locator('[data-testid="room-notes-send"]');
+  const ownerSend2 = ownerPage2.locator('[data-testid="room-notes-send"]');
 
-  const ownerNotes = ownerPage.locator('[data-testid="room-notes-input"]');
-  const interviewerNotes = interviewerPage.locator('[data-testid="room-notes-input"]');
+  const ownerMessage = `owner chat note ${Date.now()}`;
+  const collaboratorMessage = `collaborator chat note ${Date.now()}`;
 
-  await ownerNotes.fill(`owner lock note ${Date.now()}`);
-  await interviewerPage.getByText(/(Пишет|Редактирует)/i).waitFor({ timeout: 8000 });
+  await ownerNotes1.fill(ownerMessage);
+  await ownerSend1.click();
+  await ownerPage2.getByText(ownerMessage, { exact: false }).waitFor({ timeout: 8000 });
 
-  const interviewerDisabledDuringLock = await interviewerNotes.isDisabled();
-  if (!interviewerDisabledDuringLock) {
-    throw new Error("INTERVIEWER_NOTES_SHOULD_BE_LOCKED");
+  await ownerNotes2.fill(collaboratorMessage);
+  await ownerSend2.click();
+  await ownerPage1.getByText(collaboratorMessage, { exact: false }).waitFor({ timeout: 8000 });
+
+  const ownerComposerValue = await ownerNotes1.inputValue();
+  const collaboratorComposerValue = await ownerNotes2.inputValue();
+  if (ownerComposerValue.trim() !== "" || collaboratorComposerValue.trim() !== "") {
+    throw new Error("ROOM_NOTES_COMPOSER_SHOULD_CLEAR_AFTER_SEND");
   }
 
-  await interviewerPage.waitForTimeout(3300);
+  console.log("INTERVIEWER_ROLE_NOTES_CHAT_OK");
 
-  const interviewerStillDisabled = await interviewerNotes.isDisabled();
-  if (interviewerStillDisabled) {
-    throw new Error("INTERVIEWER_NOTES_SHOULD_BE_UNLOCKED_AFTER_3S");
-  }
-
-  console.log("INTERVIEWER_ROLE_NOTES_LOCK_OK");
-
-  await ownerContext.close();
-  await interviewerContext.close();
+  await ownerContext1.close();
+  await ownerContext2.close();
+  await candidateContext.close();
 } catch (error) {
-  console.error("INTERVIEWER_ROLE_NOTES_LOCK_FAIL", error);
+  console.error("INTERVIEWER_ROLE_NOTES_CHAT_FAIL", error);
   process.exitCode = 1;
 } finally {
   await browser.close();
