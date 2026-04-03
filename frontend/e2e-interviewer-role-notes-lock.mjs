@@ -38,6 +38,17 @@ async function createGuestRoom() {
   return payload;
 }
 
+async function openRoomToolsPanelIfNeeded(page) {
+  const chatTab = page.getByRole("tab", { name: /^(Заметки|Чат)$/ }).first();
+  const hasChatTab = await chatTab.isVisible().catch(() => false);
+  if (hasChatTab) return;
+
+  const roomToolsButton = page.getByRole("button", { name: "Открыть панель чата и логов" });
+  const hasRoomToolsButton = await roomToolsButton.isVisible().catch(() => false);
+  if (!hasRoomToolsButton) return;
+  await roomToolsButton.click();
+}
+
 const browser = await chromium.launch({ headless: true });
 
 try {
@@ -65,7 +76,8 @@ try {
   });
   await ownerPage1.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
   await ownerPage1.locator(".cm-editor").waitFor({ timeout: 15000 });
-  await ownerPage1.getByRole("tab", { name: "Заметки", exact: true }).waitFor({ timeout: 10000 });
+  await openRoomToolsPanelIfNeeded(ownerPage1);
+  await ownerPage1.getByRole("tab", { name: /^(Заметки|Чат)$/ }).waitFor({ timeout: 10000 });
 
   await ownerPage2.goto(webBaseUrl, { waitUntil: "domcontentloaded" });
   await ownerPage2.evaluate(({ inviteCode, ownerToken }) => {
@@ -78,7 +90,8 @@ try {
   });
   await ownerPage2.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
   await ownerPage2.locator(".cm-editor").waitFor({ timeout: 15000 });
-  await ownerPage2.getByRole("tab", { name: "Заметки", exact: true }).waitFor({ timeout: 10000 });
+  await openRoomToolsPanelIfNeeded(ownerPage2);
+  await ownerPage2.getByRole("tab", { name: /^(Заметки|Чат)$/ }).waitFor({ timeout: 10000 });
 
   await candidatePage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
   await enterNameIfPrompted(candidatePage, "Candidate QA");
@@ -88,8 +101,8 @@ try {
     throw new Error("CANDIDATE_SHOULD_NOT_HAVE_INTERVIEWER_CHAT");
   }
 
-  await ownerPage1.getByRole("tab", { name: "Заметки", exact: true }).click();
-  await ownerPage2.getByRole("tab", { name: "Заметки", exact: true }).click();
+  await ownerPage1.getByRole("tab", { name: /^(Заметки|Чат)$/ }).click();
+  await ownerPage2.getByRole("tab", { name: /^(Заметки|Чат)$/ }).click();
 
   const ownerNotes1 = ownerPage1.locator('[data-testid="room-notes-input"]');
   const ownerNotes2 = ownerPage2.locator('[data-testid="room-notes-input"]');

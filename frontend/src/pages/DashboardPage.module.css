@@ -52,3 +52,71 @@
   border-color: #2a3039 !important;
   background: rgba(18, 23, 32, 0.9);
 }
+
+.markdownEditorGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.markdownPreview {
+  border: 1px solid #27456f;
+  border-radius: 8px;
+  background: #0b1529;
+  min-height: 180px;
+  max-height: 420px;
+  overflow: auto;
+  padding: 10px;
+}
+
+.markdownPreviewContent {
+  color: #cbd5e1;
+  font-size: 13px;
+  line-height: 1.52;
+}
+
+.markdownPreviewContent h1,
+.markdownPreviewContent h2,
+.markdownPreviewContent h3 {
+  margin: 0 0 8px;
+  color: #f8fafc;
+}
+
+.markdownPreviewContent p {
+  margin: 0 0 8px;
+}
+
+.markdownPreviewContent ul,
+.markdownPreviewContent ol {
+  margin: 0 0 8px 16px;
+  padding: 0;
+}
+
+.markdownPreviewContent code {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: rgba(38, 68, 108, 0.45);
+  border-radius: 6px;
+  padding: 1px 4px;
+}
+
+.taskDescriptionMarkdown {
+  color: #9aa5b5;
+  font-size: 13px;
+  line-height: 1.46;
+}
+
+.taskDescriptionMarkdown p,
+.taskDescriptionMarkdown ul,
+.taskDescriptionMarkdown ol {
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .markdownEditorGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .markdownPreview {
+    min-height: 140px;
+  }
+}

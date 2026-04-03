@@ -67,6 +67,13 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+async function openRoomToolsPanelIfAvailable(page) {
+  const roomToolsButton = page.getByRole("button", { name: "Открыть панель чата и логов" });
+  const isVisible = await roomToolsButton.isVisible().catch(() => false);
+  if (!isVisible) return;
+  await roomToolsButton.click();
+}
+
 const browser = await chromium.launch({ headless: true });
 
 try {
@@ -98,6 +105,7 @@ try {
   await bootstrapAuthStorage(interviewerPage, interviewerAuth.token, interviewerAuth.user, room.inviteCode);
   await interviewerPage.goto(roomUrl, { waitUntil: "domcontentloaded" });
   await interviewerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await openRoomToolsPanelIfAvailable(interviewerPage);
 
   const interviewerCanManageBeforeGrant = await interviewerPage
     .locator('[data-testid="room-notes-input"]')
@@ -118,6 +126,7 @@ try {
   // Requirement: a refresh should be enough to see newly granted room rights.
   await interviewerPage.reload({ waitUntil: "domcontentloaded" });
   await interviewerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await openRoomToolsPanelIfAvailable(interviewerPage);
   await interviewerPage.locator('[data-testid="room-notes-input"]').waitFor({ timeout: 15000 });
 
   // Plain link should still join as candidate for unauthenticated users.
@@ -126,6 +135,7 @@ try {
   await guestPage.goto(roomUrl, { waitUntil: "domcontentloaded" });
   await enterGuestNameIfPrompted(guestPage, "Guest Candidate");
   await guestPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await openRoomToolsPanelIfAvailable(guestPage);
   const guestCanManage = await guestPage
     .locator('[data-testid="room-notes-input"]')
     .isVisible()

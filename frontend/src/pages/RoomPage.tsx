@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Box, Button, Group, Menu, Modal, Select, Stack, Text, TextInput, Textarea, ThemeIcon } from "@mantine/core";
-import { IconChevronLeft, IconChevronRight, IconCode, IconGripVertical, IconHome2, IconLayoutDashboard, IconUsers } from "@tabler/icons-react";
+import { IconCode, IconGripVertical, IconHome2, IconLayoutDashboard, IconUsers } from "@tabler/icons-react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import * as Y from "yjs";
 import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate, removeAwarenessStates } from "y-protocols/awareness";
@@ -15,6 +15,7 @@ import { python } from "@codemirror/lang-python";
 import { java } from "@codemirror/lang-java";
 import { sql } from "@codemirror/lang-sql";
 import { useAppSelector } from "../app/hooks";
+import { markdownToHtml } from "../components/markdown";
 import { useGetRoomQuery } from "../services/api";
 import { useRoomSocket } from "../features/room/useRoomSocket";
 import styles from "./RoomPage.module.css";
@@ -103,12 +104,8 @@ type PendingNoteMessage = NoteMessage & {
 
 type MarkdownToolId = "bold" | "italic" | "code" | "link" | "h1" | "h2" | "ul" | "ol" | "quote";
 
-type ResizeSide = "left" | "right";
-
-const MIN_LEFT_WIDTH = 200;
-const MAX_LEFT_WIDTH = 360;
-const MIN_RIGHT_WIDTH = 240;
-const MAX_RIGHT_WIDTH = 420;
+const MIN_OWNER_PANEL_WIDTH = 220;
+const MAX_OWNER_PANEL_WIDTH = 420;
 const MIN_BRIEFING_HEIGHT = 120;
 const MAX_BRIEFING_HEIGHT = 420;
 const LOG_HISTORY_LIMIT = 50;
@@ -370,67 +367,6 @@ function getParticipantRoleMeta(role: Participant["role"] | NoteMessage["role"])
 
 function getParticipantPresenceLabel(status: Participant["presenceStatus"]) {
   return status === "active" ? "В фокусе" : "Вне фокуса";
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll("\"", "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-function markdownInlineToHtml(value: string): string {
-  const escaped = escapeHtml(value);
-  return escaped
-    .replaceAll(/`([^`]+)`/g, "<code>$1</code>")
-    .replaceAll(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replaceAll(/\*([^*]+)\*/g, "<em>$1</em>")
-    .replaceAll(/\[(.+?)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
-}
-
-function markdownToHtml(markdown: string): string {
-  const lines = markdown.replaceAll("\r\n", "\n").split("\n");
-  const chunks: string[] = [];
-  let listBuffer: string[] = [];
-
-  const flushList = () => {
-    if (listBuffer.length === 0) return;
-    chunks.push(`<ul>${listBuffer.join("")}</ul>`);
-    listBuffer = [];
-  };
-
-  lines.forEach((rawLine) => {
-    const line = rawLine.trimEnd();
-    const bulletMatch = line.match(/^\s*[-*]\s+(.+)$/);
-    if (bulletMatch) {
-      listBuffer.push(`<li>${markdownInlineToHtml(bulletMatch[1])}</li>`);
-      return;
-    }
-
-    flushList();
-    if (!line.trim()) {
-      chunks.push("<p><br/></p>");
-      return;
-    }
-    if (line.startsWith("### ")) {
-      chunks.push(`<h3>${markdownInlineToHtml(line.slice(4))}</h3>`);
-      return;
-    }
-    if (line.startsWith("## ")) {
-      chunks.push(`<h2>${markdownInlineToHtml(line.slice(3))}</h2>`);
-      return;
-    }
-    if (line.startsWith("# ")) {
-      chunks.push(`<h1>${markdownInlineToHtml(line.slice(2))}</h1>`);
-      return;
-    }
-    chunks.push(`<p>${markdownInlineToHtml(line)}</p>`);
-  });
-
-  flushList();
-  return chunks.join("");
 }
 
 function createDeterministicBootstrapUpdate(code: string): Uint8Array {
@@ -1015,6 +951,23 @@ export function RoomPage() {
     }, 160);
   }, [canManageRoom, sendBriefingUpdate]);
 
+  const briefingSeededStepRef = useRef<string>("");
+
+  useEffect(() => {
+    if (!merged || !canManageRoom) return;
+    if (briefingDirty) return;
+
+    const step = room?.tasks.find((task) => task.stepIndex === merged.currentStep);
+    const description = step?.description ?? "";
+    if (!description.trim()) return;
+    if (mergedBriefingMarkdown.trim()) return;
+
+    const seedKey = `${merged.currentStep}:${normalizeRoomLanguage(merged.language)}`;
+    if (briefingSeededStepRef.current === seedKey) return;
+    briefingSeededStepRef.current = seedKey;
+    changeBriefingMarkdown(description);
+  }, [canManageRoom, changeBriefingMarkdown, briefingDirty, merged, mergedBriefingMarkdown, room?.tasks]);
+
   const toggleParticipantInterviewerRole = useCallback((participant: Participant) => {
     if (!merged?.canGrantAccess || participant.role === "owner") return;
     const targetUserId = participant.userId?.trim() ?? "";
@@ -1049,6 +1002,10 @@ export function RoomPage() {
 
   const step = room?.tasks.find((task) => task.stepIndex === merged.currentStep);
   const currentTaskRating = merged.taskScores[String(merged.currentStep)] ?? step?.score ?? null;
+  const taskDescriptionMarkdown = step?.description ?? "";
+  const stepStarterCode = step?.starterCode ?? "";
+  const ownerBriefingValue = briefingDirty ? briefingDraft : (briefingDraft || taskDescriptionMarkdown);
+  const candidateBriefingValue = mergedBriefingMarkdown || taskDescriptionMarkdown;
 
   return (
     <>
@@ -1105,7 +1062,7 @@ export function RoomPage() {
             merged={merged}
             tasks={room?.tasks ?? []}
             stepTitle={step?.title ?? "-"}
-            stepDescription={step?.description ?? ""}
+            stepStarterCode={stepStarterCode}
             error={error}
             taskScores={merged.taskScores}
             currentTaskRating={currentTaskRating}
@@ -1113,7 +1070,7 @@ export function RoomPage() {
             noteComposer={noteComposer}
             onNoteComposerChange={setNoteComposer}
             onSendNote={submitNoteMessage}
-            briefingMarkdown={briefingDraft}
+            briefingMarkdown={ownerBriefingValue}
             onBriefingChange={changeBriefingMarkdown}
             sessionId={sessionId}
             participantLabel={effectiveDisplayName}
@@ -1141,8 +1098,8 @@ export function RoomPage() {
           <CandidateLayout
             merged={merged}
             stepTitle={step?.title ?? "-"}
-            stepDescription={step?.description ?? ""}
-            briefingMarkdown={mergedBriefingMarkdown}
+            stepStarterCode={stepStarterCode}
+            briefingMarkdown={candidateBriefingValue}
             sessionId={sessionId}
             participantLabel={effectiveDisplayName}
             sendAwarenessUpdate={sendAwarenessUpdate}
@@ -1312,7 +1269,7 @@ function OwnerLayout({
   merged,
   tasks,
   stepTitle,
-  stepDescription,
+  stepStarterCode,
   error,
   taskScores,
   currentTaskRating,
@@ -1341,7 +1298,7 @@ function OwnerLayout({
   merged: RealtimeState;
   tasks: Array<{ stepIndex: number; title: string; language: string; score: number | null }>;
   stepTitle: string;
-  stepDescription: string;
+  stepStarterCode: string;
   error: string;
   taskScores: Record<string, number | null>;
   currentTaskRating: number | null;
@@ -1367,49 +1324,39 @@ function OwnerLayout({
   onKeyPress: (payload: { key: string; keyCode: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void;
   onTaskRatingChange: (rating: number | null) => void;
 }) {
-  const [leftSidebarVisible, setLeftSidebarVisible] = useState(true);
-  const [rightSidebarVisible, setRightSidebarVisible] = useState(true);
-  const [rightPanelTab, setRightPanelTab] = useState<"notes" | "logs">("notes");
-  const [leftWidth, setLeftWidth] = useState(240);
-  const [rightWidth, setRightWidth] = useState(288);
-  const ownerBodyRef = useRef<HTMLDivElement | null>(null);
-  const [ownerBodyWidth, setOwnerBodyWidth] = useState(0);
-  const compactAutoCollapsedRef = useRef(false);
+  const [activeRailPanel, setActiveRailPanel] = useState<"tasks" | "roomTools" | null>("tasks");
+  const [roomToolsTab, setRoomToolsTab] = useState<"notes" | "logs">("notes");
+  const [leftPanelWidth, setLeftPanelWidth] = useState(288);
   const notesFeedRef = useRef<HTMLDivElement | null>(null);
 
-  const dragStateRef = useRef<{ side: ResizeSide; startX: number; startWidth: number } | null>(null);
-  const [dragging, setDragging] = useState<ResizeSide | null>(null);
+  const dragStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
-  const startDrag = useCallback(
-    (side: ResizeSide) => (event: React.MouseEvent<HTMLDivElement>) => {
-      event.preventDefault();
-      dragStateRef.current = {
-        side,
-        startX: event.clientX,
-        startWidth: side === "left" ? leftWidth : rightWidth
-      };
-      setDragging(side);
-    },
-    [leftWidth, rightWidth]
-  );
+  const startDrag = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    dragStateRef.current = {
+      startX: event.clientX,
+      startWidth: leftPanelWidth
+    };
+    setIsDragging(true);
+  }, [leftPanelWidth]);
+
+  const toggleRailPanel = useCallback((panel: "tasks" | "roomTools") => {
+    setActiveRailPanel((current) => (current === panel ? null : panel));
+  }, []);
 
   useEffect(() => {
-    if (!dragging) return;
+    if (!isDragging) return;
 
     const handleMouseMove = (event: MouseEvent) => {
       const dragState = dragStateRef.current;
       if (!dragState) return;
       const delta = event.clientX - dragState.startX;
-
-      if (dragState.side === "left") {
-        setLeftWidth(clamp(dragState.startWidth + delta, MIN_LEFT_WIDTH, MAX_LEFT_WIDTH));
-      } else {
-        setRightWidth(clamp(dragState.startWidth - delta, MIN_RIGHT_WIDTH, MAX_RIGHT_WIDTH));
-      }
+      setLeftPanelWidth(clamp(dragState.startWidth + delta, MIN_OWNER_PANEL_WIDTH, MAX_OWNER_PANEL_WIDTH));
     };
 
     const handleMouseUp = () => {
-      setDragging(null);
+      setIsDragging(false);
       dragStateRef.current = null;
       document.body.style.userSelect = "";
       document.body.style.cursor = "";
@@ -1426,48 +1373,27 @@ function OwnerLayout({
       document.body.style.userSelect = "";
       document.body.style.cursor = "";
     };
-  }, [dragging]);
+  }, [isDragging]);
 
   useEffect(() => {
-    const host = ownerBodyRef.current;
-    if (!host) return;
-
-    const recalc = () => setOwnerBodyWidth(host.clientWidth);
-    recalc();
-
-    const observer = new ResizeObserver(recalc);
-    observer.observe(host);
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    if (ownerBodyWidth <= 0) return;
-    if (ownerBodyWidth < 1080) {
-      if (!compactAutoCollapsedRef.current && leftSidebarVisible) {
-        compactAutoCollapsedRef.current = true;
-        setLeftSidebarVisible(false);
-      }
-      return;
-    }
-    if (ownerBodyWidth >= 1160) {
-      compactAutoCollapsedRef.current = false;
-    }
-  }, [leftSidebarVisible, ownerBodyWidth]);
-
-  useEffect(() => {
-    if (rightPanelTab !== "notes") return;
+    if (activeRailPanel !== "roomTools" || roomToolsTab !== "notes") return;
     const host = notesFeedRef.current;
     if (!host) return;
     host.scrollTop = host.scrollHeight;
-  }, [notesMessages.length, rightPanelTab]);
+  }, [activeRailPanel, notesMessages.length, roomToolsTab]);
 
-  const showLeftSidebar = leftSidebarVisible;
-  const showRightSidebar = rightSidebarVisible;
-  const baseInset = 10;
-  const toggleHandleWidth = 20;
-  const maxOffset = Math.max(baseInset, ownerBodyWidth - toggleHandleWidth - 4);
-  const leftToggleOffset = clamp(showLeftSidebar ? leftWidth + 10 : baseInset, baseInset, maxOffset);
-  const rightToggleOffset = clamp(showRightSidebar ? rightWidth + 10 : baseInset, baseInset, maxOffset);
+  useEffect(() => {
+    if (activeRailPanel === null) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setActiveRailPanel(null);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [activeRailPanel]);
+
+  const showLeftPanel = activeRailPanel !== null;
   const candidateParticipants = merged.participants.filter((participant) => participant.role === "candidate");
   const candidateOutOfFocus = candidateParticipants.some((participant) => participant.presenceStatus === "away");
   const candidatePresenceState = candidateParticipants.length === 0 ? "offline" : candidateOutOfFocus ? "away" : "active";
@@ -1484,92 +1410,232 @@ function OwnerLayout({
   }
 
   return (
-    <Box className={styles.ownerBody} ref={ownerBodyRef}>
-      <button
-        type="button"
-        className={`${styles.edgeToggle} ${styles.leftEdgeToggle}`}
-        style={{ left: leftToggleOffset }}
-        data-open={showLeftSidebar}
-        onClick={() => setLeftSidebarVisible((current) => !current)}
-        aria-label={showLeftSidebar ? "Скрыть левый сайдбар" : "Показать левый сайдбар"}
-      >
-        {showLeftSidebar ? <IconChevronLeft size={14} className={styles.edgeToggleIcon} /> : <IconChevronRight size={14} className={styles.edgeToggleIcon} />}
-      </button>
+    <Box className={styles.ownerBody}>
+      <nav className={styles.leftRail} aria-label="Панели владельца комнаты">
+        <button
+          type="button"
+          className={`${styles.railButton} ${activeRailPanel === "tasks" ? styles.railButtonActive : ""}`}
+          aria-label="Открыть панель задач"
+          aria-pressed={activeRailPanel === "tasks"}
+          aria-controls="owner-side-panel"
+          onClick={() => toggleRailPanel("tasks")}
+          title="Панель задач"
+        >
+          <IconLayoutDashboard size={16} />
+        </button>
+        <button
+          type="button"
+          className={`${styles.railButton} ${activeRailPanel === "roomTools" ? styles.railButtonActive : ""}`}
+          aria-label="Открыть панель чата и логов"
+          aria-pressed={activeRailPanel === "roomTools"}
+          aria-controls="owner-side-panel"
+          onClick={() => toggleRailPanel("roomTools")}
+          title="Панель чата и статуса"
+        >
+          <IconUsers size={16} />
+        </button>
+      </nav>
 
-      <button
-        type="button"
-        className={`${styles.edgeToggle} ${styles.rightEdgeToggle}`}
-        style={{ right: rightToggleOffset }}
-        data-open={showRightSidebar}
-        onClick={() => setRightSidebarVisible((current) => !current)}
-        aria-label={showRightSidebar ? "Скрыть правый сайдбар" : "Показать правый сайдбар"}
-      >
-        {showRightSidebar ? <IconChevronRight size={14} className={styles.edgeToggleIcon} /> : <IconChevronLeft size={14} className={styles.edgeToggleIcon} />}
-      </button>
-
-      {showLeftSidebar && (
+      {showLeftPanel && (
         <>
-          <Box className={styles.sidebar} style={{ width: clamp(leftWidth, MIN_LEFT_WIDTH, MAX_LEFT_WIDTH) }}>
-            <Text size="xs" c="#8b919b">
-              шаг {merged.currentStep + 1}/{Math.max(tasks.length, 1)}
-            </Text>
+          <Box
+            id="owner-side-panel"
+            className={styles.ownerSidePanel}
+            style={{ width: clamp(leftPanelWidth, MIN_OWNER_PANEL_WIDTH, MAX_OWNER_PANEL_WIDTH) }}
+            aria-label={activeRailPanel === "tasks" ? "Панель задач" : "Панель чата и логов"}
+          >
+            {activeRailPanel === "tasks" ? (
+              <Box className={styles.sidebar}>
+                <Text size="xs" c="#8b919b">
+                  шаг {merged.currentStep + 1}/{Math.max(tasks.length, 1)}
+                </Text>
 
-            <Box className={styles.stepList}>
-              {tasks.map((task) => {
-                const taskRating = taskScores[String(task.stepIndex)] ?? task.score ?? null;
-                return (
-                  <Button
-                    key={task.stepIndex}
-                    size="xs"
-                    variant={task.stepIndex === merged.currentStep ? "filled" : "light"}
-                    color={task.stepIndex === merged.currentStep ? "gray" : "dark"}
-                    justify="space-between"
-                    onClick={() => onSelectStep(task.stepIndex)}
-                  >
-                    {`${task.stepIndex + 1}. ${task.title}${taskRating ? ` · ★${taskRating}` : ""}`}
-                  </Button>
-                );
-              })}
-            </Box>
+                <Box className={styles.stepList}>
+                  {tasks.map((task) => {
+                    const taskRating = taskScores[String(task.stepIndex)] ?? task.score ?? null;
+                    return (
+                      <Button
+                        key={task.stepIndex}
+                        size="xs"
+                        variant={task.stepIndex === merged.currentStep ? "filled" : "light"}
+                        color={task.stepIndex === merged.currentStep ? "gray" : "dark"}
+                        justify="space-between"
+                        onClick={() => onSelectStep(task.stepIndex)}
+                      >
+                        {`${task.stepIndex + 1}. ${task.title}${taskRating ? ` · ★${taskRating}` : ""}`}
+                      </Button>
+                    );
+                  })}
+                </Box>
 
-            <Text size="sm" c="#e1e6ef" fw={600}>
-              {stepTitle}
-            </Text>
-            <Text className={styles.stepMeta}>{stepDescription}</Text>
+                <Text size="sm" c="#e1e6ef" fw={600}>
+                  {stepTitle}
+                </Text>
 
-            <Box className={styles.taskRatingCard}>
-              <Select
-                className={styles.taskRating}
-                classNames={{ option: styles.taskRatingOption }}
-                label="Оценка шага"
-                placeholder="Нет оценки"
-                value={currentTaskRating ? String(currentTaskRating) : null}
-                onChange={(value) => onTaskRatingChange(value ? Number.parseInt(value, 10) : null)}
-                withCheckIcon={false}
-                clearable
-                data={[
-                  { value: "1", label: "1" },
-                  { value: "2", label: "2" },
-                  { value: "3", label: "3" },
-                  { value: "4", label: "4" },
-                  { value: "5", label: "5" }
-                ]}
-                styles={{
-                  label: { color: "#9ba0a8", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6 },
-                  input: { backgroundColor: "#11161f", borderColor: "#273242", color: "#d6dce6", fontSize: 12 },
-                  dropdown: { backgroundColor: "#11161f", borderColor: "#273242" },
-                  option: { color: "#d6dce6" }
-                }}
-              />
-            </Box>
+                <Box className={styles.taskRatingCard}>
+                  <Select
+                    className={styles.taskRating}
+                    classNames={{ option: styles.taskRatingOption }}
+                    label="Оценка шага"
+                    placeholder="Нет оценки"
+                    value={currentTaskRating ? String(currentTaskRating) : null}
+                    onChange={(value) => onTaskRatingChange(value ? Number.parseInt(value, 10) : null)}
+                    withCheckIcon={false}
+                    clearable
+                    data={[
+                      { value: "1", label: "1" },
+                      { value: "2", label: "2" },
+                      { value: "3", label: "3" },
+                      { value: "4", label: "4" },
+                      { value: "5", label: "5" }
+                    ]}
+                    styles={{
+                      label: { color: "#9ba0a8", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6 },
+                      input: { backgroundColor: "#11161f", borderColor: "#273242", color: "#d6dce6", fontSize: 12 },
+                      dropdown: { backgroundColor: "#11161f", borderColor: "#273242" },
+                      option: { color: "#d6dce6" }
+                    }}
+                  />
+                </Box>
+              </Box>
+            ) : (
+              <Box className={styles.outputPanel}>
+                <div className={styles.panelTabs}>
+                  <div className={styles.ownerPresenceBanner} aria-label="Кандидат">
+                    <div className={styles.ownerPresenceCopy}>
+                      <Text className={styles.ownerPresenceLabel}>Кандидат</Text>
+                    </div>
+                    <Badge className={styles.ownerPresenceBadge} variant="light" data-state={candidatePresenceState}>
+                      {candidatePresenceLabel}
+                    </Badge>
+                  </div>
+                  <div className={styles.panelTabsList} role="tablist" aria-label="Панель комнаты">
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={roomToolsTab === "notes"}
+                      className={`${styles.panelTab} ${roomToolsTab === "notes" ? styles.panelTabActive : ""}`}
+                      onClick={() => setRoomToolsTab("notes")}
+                    >
+                      Чат
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={roomToolsTab === "logs"}
+                      className={`${styles.panelTab} ${roomToolsTab === "logs" ? styles.panelTabActive : ""}`}
+                      onClick={() => setRoomToolsTab("logs")}
+                    >
+                      Логи
+                    </button>
+                  </div>
 
+                  {roomToolsTab === "notes" ? (
+                    <div className={`${styles.panelTabPanel} ${styles.notesTabPanel}`} role="tabpanel" aria-label="Чат заметок">
+                      <div className={styles.notesHeader}>
+                        <div className={styles.notesHeaderCopy}>
+                          <Text className={styles.panelSectionTitle}>Чат</Text>
+                        </div>
+                      </div>
+
+                      <div className={styles.notesMessagesList} ref={notesFeedRef} role="log" aria-label="Сообщения заметок">
+                        {notesMessages.length > 0 ? (
+                          notesMessages.map((message) => {
+                            const isOwnMessage = message.sessionId === sessionId;
+                            return (
+                              <article
+                                key={message.id}
+                                className={`${styles.noteBubble} ${isOwnMessage ? styles.noteBubbleOwn : ""}`}
+                                data-pending={Boolean((message as PendingNoteMessage).pending)}
+                              >
+                                <header className={styles.noteBubbleHeader}>
+                                  <div className={styles.noteBubbleAuthorWrap}>
+                                    <span className={styles.noteBubbleAuthor}>{message.displayName}</span>
+                                  </div>
+                                  <time className={styles.noteBubbleTime}>{formatNoteTimestamp(message.timestampEpochMs)}</time>
+                                </header>
+                                <Text className={styles.noteBubbleText}>{message.text}</Text>
+                              </article>
+                            );
+                          })
+                        ) : (
+                          <div className={styles.notesEmpty}>
+                            <Text className={styles.notesEmptyTitle}>Пока пусто</Text>
+                            <Text className={styles.notesEmptyText}>Здесь появятся сообщения интервьюеров.</Text>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className={styles.notesComposer}>
+                        <Textarea
+                          value={noteComposer}
+                          onChange={(event) => onNoteComposerChange(event.currentTarget.value)}
+                          onKeyDown={(event) => {
+                            if (event.key !== "Enter" || event.shiftKey) return;
+                            event.preventDefault();
+                            onSendNote();
+                          }}
+                          autosize
+                          minRows={3}
+                          maxRows={14}
+                          data-testid="room-notes-input"
+                          placeholder="Напишите сообщение для интервьюеров"
+                          classNames={{ input: styles.notesComposerInput }}
+                        />
+                        <Group justify="flex-end" align="center" className={styles.notesComposerFooter}>
+                          <Button
+                            type="button"
+                            size="xs"
+                            onClick={onSendNote}
+                            disabled={!noteComposer.trim()}
+                            data-testid="room-notes-send"
+                          >
+                            Отправить
+                          </Button>
+                        </Group>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={styles.panelTabPanel} role="tabpanel" aria-label="Логи">
+                      <header className={styles.logsHeader}>
+                        <div className={styles.logsTitleWrap}>
+                          <Text component="h3" className={styles.logsTitle}>
+                            Логи кандидата
+                          </Text>
+                          <span className={styles.logsCount}>{recentCandidateKeyHistory.length}</span>
+                        </div>
+                        <Text className={styles.logsCounter}>Лимит {LOG_HISTORY_LIMIT}</Text>
+                      </header>
+
+                      <div className={styles.logsList} role="log" aria-label="Логи кандидата">
+                        {recentCandidateKeyHistory.length > 0 ? (
+                          recentCandidateKeyHistory.map((event, index) => (
+                            <div key={`${event.sessionId}-${event.timestampEpochMs}-${index}`} className={styles.logItem}>
+                              <time className={styles.logTime}>{formatCandidateKeyHistoryTimestamp(event)}</time>
+                              <p className={styles.logMessage}>
+                                {event.displayName}: {formatCandidateKey(event)}
+                              </p>
+                            </div>
+                          ))
+                        ) : (
+                          <div className={styles.logsEmpty}>
+                            <Text className={styles.logsEmptyTitle}>Пока пусто</Text>
+                            <Text className={styles.logsEmptyText}>События клавиатуры появятся здесь.</Text>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </Box>
+            )}
           </Box>
 
           <div
             className={styles.resizeHandle}
             role="separator"
             aria-label="Изменить ширину левой панели"
-            onMouseDown={startDrag("left")}
+            onMouseDown={startDrag}
           >
             <IconGripVertical size={14} />
           </div>
@@ -1589,7 +1655,7 @@ function OwnerLayout({
                 key={syncKey}
                 height="100%"
                 language={toEditorLanguage(merged.language)}
-                value={merged.code}
+                value={merged.code || (merged.lastCodeUpdatedBySessionId ? "" : stepStarterCode)}
                 serverYjsBase64={merged.yjsDocumentBase64 ?? null}
                 serverYjsSequence={merged.lastYjsSequence ?? 0}
                 resyncSignal={resyncSignal}
@@ -1606,152 +1672,8 @@ function OwnerLayout({
               />
             </div>
           </Box>
+          {error && <Text className={styles.error}>{error}</Text>}
         </Box>
-
-        {showRightSidebar && (
-          <>
-            <div
-              className={styles.resizeHandle}
-              role="separator"
-              aria-label="Изменить ширину правой панели"
-              onMouseDown={startDrag("right")}
-            >
-              <IconGripVertical size={14} />
-            </div>
-
-            <Box className={styles.outputPanel} style={{ width: clamp(rightWidth, MIN_RIGHT_WIDTH, MAX_RIGHT_WIDTH) }}>
-              <div className={styles.panelTabs}>
-                <div className={styles.ownerPresenceBanner} aria-label="Статус кандидата">
-                  <div className={styles.ownerPresenceCopy}>
-                    <Text className={styles.ownerPresenceLabel}>Статус кандидата</Text>
-                  </div>
-                  <Badge className={styles.ownerPresenceBadge} variant="light" data-state={candidatePresenceState}>
-                    {candidatePresenceLabel}
-                  </Badge>
-                </div>
-                <div className={styles.panelTabsList} role="tablist" aria-label="Правая панель">
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={rightPanelTab === "notes"}
-                    className={`${styles.panelTab} ${rightPanelTab === "notes" ? styles.panelTabActive : ""}`}
-                    onClick={() => setRightPanelTab("notes")}
-                  >
-                    Заметки
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={rightPanelTab === "logs"}
-                    className={`${styles.panelTab} ${rightPanelTab === "logs" ? styles.panelTabActive : ""}`}
-                    onClick={() => setRightPanelTab("logs")}
-                  >
-                    Логи
-                  </button>
-                </div>
-
-                {rightPanelTab === "notes" ? (
-                  <div className={`${styles.panelTabPanel} ${styles.notesTabPanel}`} role="tabpanel" aria-label="Чат заметок">
-                    <div className={styles.notesHeader}>
-                      <div className={styles.notesHeaderCopy}>
-                        <Text className={styles.panelSectionTitle}>Чат</Text>
-                      </div>
-                    </div>
-
-                    <div className={styles.notesMessagesList} ref={notesFeedRef} role="log" aria-label="Сообщения заметок">
-                      {notesMessages.length > 0 ? (
-                        notesMessages.map((message) => {
-                          const isOwnMessage = message.sessionId === sessionId;
-                          return (
-                            <article
-                              key={message.id}
-                              className={`${styles.noteBubble} ${isOwnMessage ? styles.noteBubbleOwn : ""}`}
-                              data-pending={Boolean((message as PendingNoteMessage).pending)}
-                            >
-                              <header className={styles.noteBubbleHeader}>
-                                <div className={styles.noteBubbleAuthorWrap}>
-                                  <span className={styles.noteBubbleAuthor}>{message.displayName}</span>
-                                </div>
-                                <time className={styles.noteBubbleTime}>{formatNoteTimestamp(message.timestampEpochMs)}</time>
-                              </header>
-                              <Text className={styles.noteBubbleText}>{message.text}</Text>
-                            </article>
-                          );
-                        })
-                      ) : (
-                        <div className={styles.notesEmpty}>
-                          <Text className={styles.notesEmptyTitle}>Пока пусто</Text>
-                          <Text className={styles.notesEmptyText}>Здесь появятся сообщения интервьюеров.</Text>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className={styles.notesComposer}>
-                      <Textarea
-                        value={noteComposer}
-                        onChange={(event) => onNoteComposerChange(event.currentTarget.value)}
-                        onKeyDown={(event) => {
-                          if (event.key !== "Enter" || event.shiftKey) return;
-                          event.preventDefault();
-                          onSendNote();
-                        }}
-                        autosize
-                        minRows={3}
-                        maxRows={14}
-                        data-testid="room-notes-input"
-                        placeholder="Напишите сообщение для интервьюеров"
-                        classNames={{ input: styles.notesComposerInput }}
-                      />
-                      <Group justify="flex-end" align="center" className={styles.notesComposerFooter}>
-                        <Button
-                          type="button"
-                          size="xs"
-                          onClick={onSendNote}
-                          disabled={!noteComposer.trim()}
-                          data-testid="room-notes-send"
-                        >
-                          Отправить
-                        </Button>
-                      </Group>
-                    </div>
-                  </div>
-                ) : (
-                  <div className={styles.panelTabPanel} role="tabpanel" aria-label="Логи">
-                  <header className={styles.logsHeader}>
-                    <div className={styles.logsTitleWrap}>
-                      <Text component="h3" className={styles.logsTitle}>
-                        Логи кандидата
-                      </Text>
-                      <span className={styles.logsCount}>{recentCandidateKeyHistory.length}</span>
-                    </div>
-                    <Text className={styles.logsCounter}>Лимит {LOG_HISTORY_LIMIT}</Text>
-                  </header>
-
-                  <div className={styles.logsList} role="log" aria-label="Логи кандидата">
-                    {recentCandidateKeyHistory.length > 0 ? (
-                      recentCandidateKeyHistory.map((event, index) => (
-                        <div key={`${event.sessionId}-${event.timestampEpochMs}-${index}`} className={styles.logItem}>
-                          <time className={styles.logTime}>{formatCandidateKeyHistoryTimestamp(event)}</time>
-                          <p className={styles.logMessage}>
-                            {event.displayName}: {formatCandidateKey(event)}
-                          </p>
-                        </div>
-                      ))
-                    ) : (
-                      <div className={styles.logsEmpty}>
-                        <Text className={styles.logsEmptyTitle}>Пока пусто</Text>
-                        <Text className={styles.logsEmptyText}>События клавиатуры появятся здесь.</Text>
-                      </div>
-                    )}
-                  </div>
-                  </div>
-                )}
-              </div>
-
-              {error && <Text className={styles.error}>{error}</Text>}
-            </Box>
-          </>
-        )}
       </Box>
     </Box>
   );
@@ -1760,7 +1682,7 @@ function OwnerLayout({
 function CandidateLayout({
   merged,
   stepTitle,
-  stepDescription,
+  stepStarterCode,
   briefingMarkdown,
   sessionId,
   participantLabel,
@@ -1777,7 +1699,7 @@ function CandidateLayout({
 }: {
   merged: RealtimeState;
   stepTitle: string;
-  stepDescription: string;
+  stepStarterCode: string;
   briefingMarkdown: string;
   sessionId: string;
   participantLabel: string;
@@ -1808,7 +1730,6 @@ function CandidateLayout({
             Совместный режим
           </Badge>
         </Group>
-        {stepDescription ? <Text className={styles.candidateDescription}>{stepDescription}</Text> : null}
       </Box>
 
       <BriefingBoard mode="candidate" value={briefingMarkdown} />
@@ -1819,7 +1740,7 @@ function CandidateLayout({
             key={syncKey}
             height="calc(100vh - 170px)"
             language={toEditorLanguage(merged.language)}
-            value={merged.code}
+            value={merged.code || (merged.lastCodeUpdatedBySessionId ? "" : stepStarterCode)}
             serverYjsBase64={merged.yjsDocumentBase64 ?? null}
             serverYjsSequence={merged.lastYjsSequence ?? 0}
             resyncSignal={resyncSignal}
@@ -1919,13 +1840,6 @@ function BriefingBoard({
 
   return (
     <Box className={styles.briefingPanel} data-mode={mode}>
-      <div className={styles.briefingHeader}>
-        <Text className={styles.briefingTitle}>Пояснение для кандидата</Text>
-        <Text className={styles.briefingHint}>
-          {mode === "interviewer" ? "Markdown · слева редактирование, справа отображение" : "Markdown preview"}
-        </Text>
-      </div>
-
       {mode === "interviewer" ? (
         <div className={styles.briefingSplit}>
           <div className={styles.briefingEditorPane}>

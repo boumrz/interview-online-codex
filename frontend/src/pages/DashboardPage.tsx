@@ -39,6 +39,7 @@ import {
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../app/hooks";
 import { clearAuth } from "../features/auth/authSlice";
+import { markdownToHtml } from "../components/markdown";
 import {
   useCreateRoomMutation,
   useCreateTaskTemplateMutation,
@@ -61,6 +62,7 @@ import {
   useUpdateTaskTemplateMutation
 } from "../services/api";
 import type { AdminUser, RoomSummary, TaskTemplate } from "../types";
+import styles from "./DashboardPage.module.css";
 
 type DashboardSection = "rooms" | "tasks" | "manage" | "agents" | "admin";
 type RoomSaveStatus = "idle" | "saving" | "saved" | "error";
@@ -86,6 +88,28 @@ const LANGUAGE_OPTIONS = [
 const darkFieldStyles = {
   label: { color: "#cbd5e1" },
   input: { backgroundColor: "#0b1529", borderColor: "#27456f", color: "#e2e8f0" }
+};
+
+const markdownInputStyles = {
+  ...darkFieldStyles,
+  input: {
+    ...darkFieldStyles.input,
+    fontFamily: "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Menlo, monospace",
+    fontSize: "12px",
+    lineHeight: 1.45,
+    resize: "vertical" as const
+  }
+};
+
+const codeInputStyles = {
+  ...darkFieldStyles,
+  input: {
+    ...darkFieldStyles.input,
+    fontFamily: "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Menlo, monospace",
+    fontSize: "12px",
+    lineHeight: 1.45,
+    resize: "vertical" as const
+  }
 };
 
 const darkSelectStyles = {
@@ -154,6 +178,8 @@ export function DashboardPage() {
   const dashboardSections = BASE_DASHBOARD_SECTIONS.filter(
     (dashboardSection) => agentOpsEnabled || dashboardSection.value !== "agents"
   ).concat(isAdmin ? [ADMIN_DASHBOARD_SECTION] : []);
+
+  const editTaskDescriptionHtml = useMemo(() => markdownToHtml(editTaskDescription), [editTaskDescription]);
 
   const { data: rooms = [] } = useMyRoomsQuery(undefined, { skip: !auth.token, refetchOnMountOrArgChange: true });
   const { data: groupedTasks = [] } = useTasksGroupedQuery(undefined, { skip: !auth.token });
@@ -594,19 +620,34 @@ export function DashboardPage() {
             onChange={(e) => setEditTaskTitle(e.currentTarget.value)}
             styles={darkFieldStyles}
           />
-          <Textarea
-            label="Описание"
-            value={editTaskDescription}
-            onChange={(e) => setEditTaskDescription(e.currentTarget.value)}
-            minRows={3}
-            styles={darkFieldStyles}
-          />
+          <Stack gap={6}>
+            <Text size="sm" fw={600}>
+              Описание (Markdown)
+            </Text>
+            <div className={styles.markdownEditorGrid}>
+              <Textarea
+                value={editTaskDescription}
+                onChange={(e) => setEditTaskDescription(e.currentTarget.value)}
+                minRows={8}
+                styles={markdownInputStyles}
+              />
+              <div className={styles.markdownPreview}>
+                {editTaskDescriptionHtml ? (
+                  <div className={styles.markdownPreviewContent} dangerouslySetInnerHTML={{ __html: editTaskDescriptionHtml }} />
+                ) : (
+                  <Text size="sm" c="dimmed">
+                    Предпросмотр markdown-описания
+                  </Text>
+                )}
+              </div>
+            </div>
+          </Stack>
           <Textarea
             label="Стартовый код"
             value={editTaskStarterCode}
             onChange={(e) => setEditTaskStarterCode(e.currentTarget.value)}
-            minRows={8}
-            styles={darkFieldStyles}
+            minRows={12}
+            styles={codeInputStyles}
           />
           <Select
             label="Язык"
@@ -642,11 +683,11 @@ export function DashboardPage() {
             <Textarea
               id="create-task-description"
               data-testid="create-task-description-input"
-              label="Описание"
+              label="Описание (Markdown)"
               value={taskDescription}
               onChange={(e) => setTaskDescription(e.currentTarget.value)}
-              minRows={4}
-              styles={darkFieldStyles}
+              minRows={8}
+              styles={markdownInputStyles}
               required
             />
             <Textarea
@@ -655,8 +696,8 @@ export function DashboardPage() {
               label="Стартовый код"
               value={taskStarterCode}
               onChange={(e) => setTaskStarterCode(e.currentTarget.value)}
-              minRows={10}
-              styles={darkFieldStyles}
+              minRows={12}
+              styles={codeInputStyles}
               required
             />
             <Select
@@ -824,9 +865,10 @@ export function DashboardPage() {
                               <Card key={task.id} withBorder radius="md" padding="sm" bg="#121720" style={{ borderColor: "#2a3039" }}>
                                 <Stack gap={4}>
                                   <Text fw={700}>{task.title}</Text>
-                                  <Text size="sm" c="gray.4">
-                                    {task.description}
-                                  </Text>
+                                  <div
+                                    className={styles.markdownPreviewContent}
+                                    dangerouslySetInnerHTML={{ __html: markdownToHtml(task.description) }}
+                                  />
                                 </Stack>
                               </Card>
                             ))
@@ -941,9 +983,10 @@ export function DashboardPage() {
                                   {labelForLanguage(task.language)}
                                 </Badge>
                               </Group>
-                              <Text size="sm" c="gray.4">
-                                {task.description}
-                              </Text>
+                              <div
+                                className={styles.taskDescriptionMarkdown}
+                                dangerouslySetInnerHTML={{ __html: markdownToHtml(task.description) }}
+                              />
                               <Group justify="flex-end">
                                 <Button
                                   size="xs"

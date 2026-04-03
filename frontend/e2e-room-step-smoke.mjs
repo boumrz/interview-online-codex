@@ -21,7 +21,11 @@ try {
   await page.getByRole("button", { name: /1\./ }).first().click();
 
   // Notes are now an interviewer chat: sending should append a bubble with timestamp.
-  await page.getByRole("tab", { name: "Заметки", exact: true }).click();
+  const roomToolsButton = page.getByRole("button", { name: "Открыть панель чата и логов" });
+  if (await roomToolsButton.isVisible().catch(() => false)) {
+    await roomToolsButton.click();
+  }
+  await page.getByRole("tab", { name: /^(Заметки|Чат)$/ }).click();
   await page.getByRole("tabpanel", { name: "Чат заметок" }).waitFor({ timeout: 5000 });
 
   const messageValue = `smoke message ${Date.now()}`;
