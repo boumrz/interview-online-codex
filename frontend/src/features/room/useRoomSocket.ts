@@ -86,6 +86,7 @@ type RealtimeState = {
   role: "owner" | "interviewer" | "candidate";
   canManageRoom: boolean;
   canGrantAccess?: boolean;
+  eventToken?: string | null;
   notesLockedBySessionId: string | null;
   notesLockedByDisplayName: string | null;
   notesLockedUntilEpochMs: number | null;
@@ -243,6 +244,7 @@ export function useRoomSocket({
   const cursorSequenceRef = useRef(0);
   const codeSequenceRef = useRef(0);
   const yjsSequenceRef = useRef(0);
+  const eventTokenRef = useRef<string | null>(null);
   const lastPresenceRef = useRef<"active" | "away" | null>(null);
   const lastKeyPressSentAtRef = useRef(0);
   const sendRef = useRef<(payload: ClientMessage) => void>((payload: ClientMessage) => {
@@ -283,6 +285,10 @@ export function useRoomSocket({
         payload.type !== "presence_update" &&
         payload.type !== "request_state_sync"
       );
+    };
+
+    const requiresEventToken = (payload: ClientMessage) => {
+      return payload.type !== "request_state_sync" && payload.type !== "presence_update";
     };
 
     const enqueuePayload = (payload: ClientMessage) => {
@@ -326,6 +332,7 @@ export function useRoomSocket({
         },
         body: JSON.stringify({
           sessionId,
+          eventToken: eventTokenRef.current,
           ...payload
         })
       })
@@ -353,6 +360,12 @@ export function useRoomSocket({
     // outbound events were only queued — no fetch ran, so DevTools showed no POSTs after a few keystrokes.
     // Server validates sessionId; failed POSTs are queued when queueOnFailure allows it.
     const sendViaPost = (payload: ClientMessage, queueOnFailure = true) => {
+      if (requiresEventToken(payload) && !eventTokenRef.current) {
+        if (queueOnFailure && shouldQueuePayload(payload)) {
+          enqueuePayload(payload);
+        }
+        return;
+      }
       postEvent(payload, queueOnFailure);
     };
 
@@ -389,6 +402,7 @@ export function useRoomSocket({
     function connectSse() {
       if (disposed) return;
 
+      eventTokenRef.current = null;
       const params = buildParams();
       const source = new EventSource(`${API_BASE_URL}/realtime/rooms/${inviteCode}/stream?${params.toString()}`);
       sseRef.current = source;
@@ -434,9 +448,13 @@ export function useRoomSocket({
         const message = JSON.parse(raw) as WsMessage;
         if (message.type === "state_sync") {
           const payload = message.payload as RealtimeState;
+          eventTokenRef.current = payload.eventToken?.trim() || null;
           const shouldHydrateFromState = expectRecoveryStateSync;
           expectRecoveryStateSync = false;
           onState(payload);
+          if (eventTokenRef.current) {
+            flushPendingMessages();
+          }
           if (shouldHydrateFromState) {
             onRecoveryStateSync?.(typeof payload.lastYjsSequence === "number" ? payload.lastYjsSequence : 0);
           }
@@ -541,6 +559,7 @@ export function useRoomSocket({
       }
       reconnectTimerId = null;
       reconnectScheduled = false;
+      eventTokenRef.current = null;
 
       sendRef.current = (payload: ClientMessage) => {
         enqueuePayload(payload);

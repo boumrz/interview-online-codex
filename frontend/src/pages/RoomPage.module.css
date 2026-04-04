@@ -1,5 +1,7 @@
 .shell {
+  min-height: 100vh;
   height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -348,6 +350,13 @@
 .resizeHandle:hover {
   color: #8f99a6;
   background: #121824;
+}
+
+.resizeHandle:focus-visible {
+  outline: none;
+  color: #9eb0ca;
+  background: #172135;
+  box-shadow: inset 0 0 0 1px rgba(108, 159, 255, 0.55);
 }
 
 .workspace {
@@ -1048,8 +1057,13 @@
 }
 
 @media (max-width: 760px) {
+  :root {
+    --room-mobile-panel-max-height: min(44dvh, 360px);
+  }
+
   .shell {
     height: auto;
+    min-height: 100dvh;
     min-height: 100vh;
     overflow: visible;
   }
@@ -1082,19 +1096,19 @@
 
   .ownerSidePanel {
     width: auto !important;
-    max-height: 360px;
+    max-height: var(--room-mobile-panel-max-height);
   }
 
   .ownerSidePanel > .outputPanel {
     width: auto !important;
-    max-height: 360px;
+    max-height: var(--room-mobile-panel-max-height);
   }
 
   .sidebar {
     width: auto !important;
     border-right: 0;
     border-bottom: 1px solid #252a32;
-    max-height: 330px;
+    max-height: min(40dvh, 330px);
   }
 
   .workspace {
@@ -1106,12 +1120,12 @@
   }
 
   .editorColumn {
-    min-height: 520px;
+    min-height: clamp(320px, 50dvh, 520px);
   }
 
   .outputPanel {
     width: auto !important;
-    max-height: 360px;
+    max-height: var(--room-mobile-panel-max-height);
   }
 
   .participantCard {

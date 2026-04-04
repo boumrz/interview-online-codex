@@ -21,7 +21,7 @@ class User(
     @Column(name = "password_hash", nullable = false)
     var passwordHash: String = "",
 
-    @Column(name = "role", nullable = false, columnDefinition = "VARCHAR(32) DEFAULT 'user'")
+    @Column(name = "role", nullable = false, length = 32)
     var role: String = "user",
 
     @Column(name = "created_at", nullable = false)

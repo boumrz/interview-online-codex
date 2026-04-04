@@ -2,6 +2,7 @@ package com.interviewonline.ws
 
 data class RealtimeEventRequest(
     val sessionId: String,
+    val eventToken: String? = null,
     val type: String,
     val code: String? = null,
     val codeSequence: Long? = null,

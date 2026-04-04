@@ -48,6 +48,12 @@
   box-shadow: 0 12px 28px rgba(3, 6, 12, 0.36);
 }
 
+.manageRoomCardInteractive:focus-visible {
+  outline: none;
+  border-color: #5a7cae !important;
+  box-shadow: 0 0 0 2px rgba(90, 124, 174, 0.3), 0 12px 28px rgba(3, 6, 12, 0.36);
+}
+
 .previewTaskCard {
   border-color: #2a3039 !important;
   background: rgba(18, 23, 32, 0.9);

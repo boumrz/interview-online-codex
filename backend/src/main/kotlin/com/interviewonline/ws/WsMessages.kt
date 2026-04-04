@@ -22,6 +22,7 @@ data class RoomRealtimePayload(
     val role: String = "candidate",
     val canManageRoom: Boolean = false,
     val canGrantAccess: Boolean = false,
+    val eventToken: String? = null,
     val notesLockedBySessionId: String? = null,
     val notesLockedByDisplayName: String? = null,
     val notesLockedUntilEpochMs: Long? = null,
