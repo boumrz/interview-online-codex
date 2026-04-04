@@ -59,8 +59,35 @@ wait_for_url() {
   return 1
 }
 
+run_privileged() {
+  if [ "$(id -u)" -eq 0 ]; then
+    "$@"
+  else
+    sudo "$@"
+  fi
+}
+
+ensure_repo_writable() {
+  local marker="${REPO_DIR}/.git/.permission-check.$$"
+  if touch "${marker}" >/dev/null 2>&1; then
+    rm -f "${marker}"
+  else
+    echo "==> Repairing repository permissions for ${REPO_DIR}"
+    run_privileged chown -R "$(id -u):$(id -g)" "${REPO_DIR}"
+  fi
+
+  # Cleanup stale locks from interrupted git operations.
+  rm -f \
+    "${REPO_DIR}/.git/index.lock" \
+    "${REPO_DIR}/.git/shallow.lock" \
+    "${REPO_DIR}/.git/packed-refs.lock" \
+    "${REPO_DIR}/.git/HEAD.lock" || true
+}
+
 timestamp="$(date +%Y%m%d%H%M%S)"
 release_dir="${RELEASES_DIR}/${timestamp}"
+
+ensure_repo_writable
 
 echo "==> Fetching source (${BRANCH})"
 cd "${REPO_DIR}"
