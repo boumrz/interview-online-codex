@@ -1,6 +1,7 @@
 package com.interviewonline.controller
 
 import com.interviewonline.dto.AgentPolicyGateResultDto
+import com.interviewonline.dto.AgentArtifactDto
 import com.interviewonline.dto.AgentReviewVerdictDto
 import com.interviewonline.dto.AgentRunResponse
 import com.interviewonline.dto.AgentRunTransitionRequest
@@ -118,7 +119,10 @@ class AgentController(
         @RequestHeader("Authorization", required = false) authorization: String?,
         @PathVariable linearIssueId: String,
         @RequestParam(required = false) type: String?,
-    ) = orchestratorService.listArtifactsByIssue(linearIssueId, type)
+    ): List<AgentArtifactDto> {
+        resolveActor(authorization)
+        return orchestratorService.listArtifactsByIssue(linearIssueId, type)
+    }
 
     @GetMapping("/runs/{runId}/policy")
     fun evaluatePolicy(
@@ -139,7 +143,10 @@ class AgentController(
     }
 
     @GetMapping("/environment/doctor")
-    fun runEnvironmentDoctor(): EnvironmentDoctorReportDto {
+    fun runEnvironmentDoctor(
+        @RequestHeader("Authorization", required = false) authorization: String?,
+    ): EnvironmentDoctorReportDto {
+        resolveActor(authorization)
         return environmentDoctorService.run()
     }
 

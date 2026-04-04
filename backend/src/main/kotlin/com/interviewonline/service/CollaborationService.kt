@@ -61,6 +61,7 @@ class CollaborationService(
     private data class ParticipantMeta(
         val inviteCode: String,
         val sessionId: String,
+        val eventToken: String,
         val displayName: String,
         val userId: String?,
         var role: RoomAccessService.RoomRole,
@@ -172,6 +173,7 @@ class CollaborationService(
         participants[connectionId] = ParticipantMeta(
             inviteCode = inviteCode,
             sessionId = sessionId,
+            eventToken = "evt_${UUID.randomUUID()}",
             displayName = displayName.trim().ifBlank { "Участник" }.take(64),
             userId = user?.id,
             role = effectiveRole,
@@ -199,7 +201,13 @@ class CollaborationService(
 
     @Transactional
     fun handleRealtimeEvent(inviteCode: String, request: RealtimeEventRequest) {
-        val connectionId = requireConnectionId(inviteCode, request.sessionId)
+        val requiresEventToken = request.type != "request_state_sync" && request.type != "presence_update"
+        val connectionId = requireConnectionId(
+            inviteCode = inviteCode,
+            sessionId = request.sessionId,
+            eventToken = request.eventToken,
+            requireEventToken = requiresEventToken,
+        )
         when (request.type) {
             "code_update" -> updateCode(connectionId, request.code.orEmpty(), request.codeSequence)
             "language_update" -> updateLanguage(connectionId, request.language.orEmpty())
@@ -415,14 +423,13 @@ class CollaborationService(
 
         if (yjsUpdate.isBlank()) {
             if (safeDocSnap == null) return
-            var acceptedCodeSnapshot: String? = null
-            synchronized(state) {
+            val acceptedCodeSnapshot = synchronized(state) {
                 if (resolveOutboundSyncKey() == null) return
                 state.yjsDocumentBase64 = safeDocSnap
-                acceptedCodeSnapshot = tryApplyCodeSnapshot()
+                tryApplyCodeSnapshot()
             }
             if (acceptedCodeSnapshot != null) {
-                scheduleDebouncedRoomCodeSave(participant.inviteCode, acceptedCodeSnapshot!!)
+                scheduleDebouncedRoomCodeSave(participant.inviteCode, acceptedCodeSnapshot)
             }
             scheduleStateBroadcastFromYjs(participant.inviteCode)
             return
@@ -1023,6 +1030,7 @@ class CollaborationService(
             role = participant.role.wireValue,
             canManageRoom = participant.canManageRoom,
             canGrantAccess = participant.canGrantAccess,
+            eventToken = participant.eventToken,
             notesLockedBySessionId = state.notesLockedBySessionId,
             notesLockedByDisplayName = state.notesLockedByDisplayName,
             notesLockedUntilEpochMs = state.notesLockedUntilEpochMs,
@@ -1140,7 +1148,12 @@ class CollaborationService(
         }
     }
 
-    private fun requireConnectionId(inviteCode: String, sessionId: String): String {
+    private fun requireConnectionId(
+        inviteCode: String,
+        sessionId: String,
+        eventToken: String?,
+        requireEventToken: Boolean,
+    ): String {
         if (sessionId.isBlank()) {
             throw ApiException(HttpStatus.BAD_REQUEST, "Отсутствует sessionId")
         }
@@ -1152,6 +1165,12 @@ class CollaborationService(
         if (participant == null || participant.inviteCode != inviteCode || participant.sessionId != sessionId) {
             connectionByRoomSession.remove(key, connectionId)
             throw ApiException(HttpStatus.FORBIDDEN, "Нет активного подключения для этой сессии")
+        }
+        if (requireEventToken) {
+            val providedToken = eventToken?.trim().orEmpty()
+            if (providedToken.isBlank() || participant.eventToken != providedToken) {
+                throw ApiException(HttpStatus.FORBIDDEN, "Недействительный eventToken для этой сессии")
+            }
         }
         return connectionId
     }

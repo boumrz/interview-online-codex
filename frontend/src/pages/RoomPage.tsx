@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Badge, Box, Button, Group, Menu, Modal, Select, Stack, Text, TextInput, Textarea, ThemeIcon } from "@mantine/core";
 import { IconCode, IconGripVertical, IconHome2, IconLayoutDashboard, IconUsers } from "@tabler/icons-react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
@@ -415,6 +415,7 @@ export function RoomPage() {
   const [error, setError] = useState("");
   const [displayName, setDisplayName] = useState(() => initialStoredName);
   const [draftName, setDraftName] = useState(() => initialStoredName);
+  const [candidateNameError, setCandidateNameError] = useState("");
   const [nameModalOpened, setNameModalOpened] = useState(() => !initialStoredName);
   const [noteComposer, setNoteComposer] = useState("");
   const [pendingNotes, setPendingNotes] = useState<PendingNoteMessage[]>([]);
@@ -442,6 +443,7 @@ export function RoomPage() {
 
     setDisplayName(resolved);
     setDraftName(resolved);
+    setCandidateNameError("");
     setNameModalOpened(shouldAskName);
     setNoteComposer("");
     setPendingNotes([]);
@@ -807,6 +809,9 @@ export function RoomPage() {
       return;
     }
     yjsPendingUpdatesRef.current.push({ syncKey: incomingSyncKey, update });
+    if (yjsPendingUpdatesRef.current.length > 200) {
+      yjsPendingUpdatesRef.current.splice(0, yjsPendingUpdatesRef.current.length - 200);
+    }
   }, []);
 
   const onYjsBridgeReady = useCallback((applyUpdate: ((yjsUpdate: string) => void) | null) => {
@@ -883,8 +888,11 @@ export function RoomPage() {
     if (pendingNotes.length === 0) return;
     const serverIds = new Set(notesMessages.map((message) => message.id));
     if (serverIds.size === 0) return;
-    setPendingNotes((current) => current.filter((message) => !serverIds.has(message.id)));
-  }, [notesMessages, pendingNotes]);
+    setPendingNotes((current) => {
+      const next = current.filter((message) => !serverIds.has(message.id));
+      return next.length === current.length ? current : next;
+    });
+  }, [notesMessages, pendingNotes.length]);
 
   useEffect(() => {
     if (briefingDirty && briefingDraft === mergedBriefingMarkdown) {
@@ -980,9 +988,13 @@ export function RoomPage() {
 
   const submitCandidateName = () => {
     const normalized = draftName.trim();
-    if (!normalized) return;
+    if (!normalized) {
+      setCandidateNameError("Введите имя");
+      return;
+    }
     localStorage.setItem("display_name", normalized);
     localStorage.setItem(guestNameKey(inviteCode), normalized);
+    setCandidateNameError("");
     setDisplayName(normalized);
     setNameModalOpened(false);
   };
@@ -1026,7 +1038,13 @@ export function RoomPage() {
             label="Ваше имя"
             placeholder="Имя"
             value={draftName}
-            onChange={(event) => setDraftName(event.currentTarget.value)}
+            error={candidateNameError || undefined}
+            onChange={(event) => {
+              setDraftName(event.currentTarget.value);
+              if (candidateNameError) {
+                setCandidateNameError("");
+              }
+            }}
             onKeyDown={(event) => {
               if (event.key !== "Enter") return;
               event.preventDefault();
@@ -1034,7 +1052,9 @@ export function RoomPage() {
             }}
             autoFocus
           />
-          <Button onClick={submitCandidateName}>Войти в комнату</Button>
+          <Button onClick={submitCandidateName} disabled={!draftName.trim()}>
+            Войти в комнату
+          </Button>
           {!authToken && (
             <Button variant="outline" color="gray" onClick={goToLoginAndReturn}>
               Войти через аккаунт (по желанию)
@@ -1327,6 +1347,11 @@ function OwnerLayout({
   const [activeRailPanel, setActiveRailPanel] = useState<"tasks" | "roomTools" | null>("tasks");
   const [roomToolsTab, setRoomToolsTab] = useState<"notes" | "logs">("notes");
   const [leftPanelWidth, setLeftPanelWidth] = useState(288);
+  const roomToolsTabsId = useId();
+  const notesTabId = `${roomToolsTabsId}-notes-tab`;
+  const logsTabId = `${roomToolsTabsId}-logs-tab`;
+  const notesPanelId = `${roomToolsTabsId}-notes-panel`;
+  const logsPanelId = `${roomToolsTabsId}-logs-panel`;
   const notesFeedRef = useRef<HTMLDivElement | null>(null);
 
   const dragStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
@@ -1343,6 +1368,53 @@ function OwnerLayout({
 
   const toggleRailPanel = useCallback((panel: "tasks" | "roomTools") => {
     setActiveRailPanel((current) => (current === panel ? null : panel));
+  }, []);
+
+  const handleRoomToolsTabKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLButtonElement>, currentTab: "notes" | "logs") => {
+      if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+        event.preventDefault();
+        setRoomToolsTab(currentTab === "notes" ? "logs" : "notes");
+        return;
+      }
+      if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+        event.preventDefault();
+        setRoomToolsTab(currentTab === "notes" ? "logs" : "notes");
+        return;
+      }
+      if (event.key === "Home") {
+        event.preventDefault();
+        setRoomToolsTab("notes");
+        return;
+      }
+      if (event.key === "End") {
+        event.preventDefault();
+        setRoomToolsTab("logs");
+      }
+    },
+    []
+  );
+
+  const handleResizeHandleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      setLeftPanelWidth((current) => clamp(current - 16, MIN_OWNER_PANEL_WIDTH, MAX_OWNER_PANEL_WIDTH));
+      return;
+    }
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      setLeftPanelWidth((current) => clamp(current + 16, MIN_OWNER_PANEL_WIDTH, MAX_OWNER_PANEL_WIDTH));
+      return;
+    }
+    if (event.key === "Home") {
+      event.preventDefault();
+      setLeftPanelWidth(MIN_OWNER_PANEL_WIDTH);
+      return;
+    }
+    if (event.key === "End") {
+      event.preventDefault();
+      setLeftPanelWidth(MAX_OWNER_PANEL_WIDTH);
+    }
   }, []);
 
   useEffect(() => {
@@ -1394,6 +1466,7 @@ function OwnerLayout({
   }, [activeRailPanel]);
 
   const showLeftPanel = activeRailPanel !== null;
+  const clampedLeftPanelWidth = clamp(leftPanelWidth, MIN_OWNER_PANEL_WIDTH, MAX_OWNER_PANEL_WIDTH);
   const candidateParticipants = merged.participants.filter((participant) => participant.role === "candidate");
   const candidateOutOfFocus = candidateParticipants.some((participant) => participant.presenceStatus === "away");
   const candidatePresenceState = candidateParticipants.length === 0 ? "offline" : candidateOutOfFocus ? "away" : "active";
@@ -1441,7 +1514,7 @@ function OwnerLayout({
           <Box
             id="owner-side-panel"
             className={styles.ownerSidePanel}
-            style={{ width: clamp(leftPanelWidth, MIN_OWNER_PANEL_WIDTH, MAX_OWNER_PANEL_WIDTH) }}
+            style={{ width: clampedLeftPanelWidth }}
             aria-label={activeRailPanel === "tasks" ? "Панель задач" : "Панель чата и логов"}
           >
             {activeRailPanel === "tasks" ? (
@@ -1511,27 +1584,38 @@ function OwnerLayout({
                   </div>
                   <div className={styles.panelTabsList} role="tablist" aria-label="Панель комнаты">
                     <button
+                      id={notesTabId}
                       type="button"
                       role="tab"
                       aria-selected={roomToolsTab === "notes"}
+                      aria-controls={notesPanelId}
                       className={`${styles.panelTab} ${roomToolsTab === "notes" ? styles.panelTabActive : ""}`}
                       onClick={() => setRoomToolsTab("notes")}
+                      onKeyDown={(event) => handleRoomToolsTabKeyDown(event, "notes")}
                     >
                       Чат
                     </button>
                     <button
+                      id={logsTabId}
                       type="button"
                       role="tab"
                       aria-selected={roomToolsTab === "logs"}
+                      aria-controls={logsPanelId}
                       className={`${styles.panelTab} ${roomToolsTab === "logs" ? styles.panelTabActive : ""}`}
                       onClick={() => setRoomToolsTab("logs")}
+                      onKeyDown={(event) => handleRoomToolsTabKeyDown(event, "logs")}
                     >
                       Логи
                     </button>
                   </div>
 
                   {roomToolsTab === "notes" ? (
-                    <div className={`${styles.panelTabPanel} ${styles.notesTabPanel}`} role="tabpanel" aria-label="Чат заметок">
+                    <div
+                      id={notesPanelId}
+                      className={`${styles.panelTabPanel} ${styles.notesTabPanel}`}
+                      role="tabpanel"
+                      aria-labelledby={notesTabId}
+                    >
                       <div className={styles.notesHeader}>
                         <div className={styles.notesHeaderCopy}>
                           <Text className={styles.panelSectionTitle}>Чат</Text>
@@ -1596,7 +1680,7 @@ function OwnerLayout({
                       </div>
                     </div>
                   ) : (
-                    <div className={styles.panelTabPanel} role="tabpanel" aria-label="Логи">
+                    <div id={logsPanelId} className={styles.panelTabPanel} role="tabpanel" aria-labelledby={logsTabId}>
                       <header className={styles.logsHeader}>
                         <div className={styles.logsTitleWrap}>
                           <Text component="h3" className={styles.logsTitle}>
@@ -1634,8 +1718,14 @@ function OwnerLayout({
           <div
             className={styles.resizeHandle}
             role="separator"
+            tabIndex={0}
+            aria-orientation="vertical"
+            aria-valuemin={MIN_OWNER_PANEL_WIDTH}
+            aria-valuemax={MAX_OWNER_PANEL_WIDTH}
+            aria-valuenow={Math.round(clampedLeftPanelWidth)}
             aria-label="Изменить ширину левой панели"
             onMouseDown={startDrag}
+            onKeyDown={handleResizeHandleKeyDown}
           >
             <IconGripVertical size={14} />
           </div>
@@ -1738,7 +1828,7 @@ function CandidateLayout({
         <div className={styles.editorWrap}>
           <RoomCodeEditor
             key={syncKey}
-            height="calc(100vh - 170px)"
+            height="calc(100dvh - 170px)"
             language={toEditorLanguage(merged.language)}
             value={merged.code || (merged.lastCodeUpdatedBySessionId ? "" : stepStarterCode)}
             serverYjsBase64={merged.yjsDocumentBase64 ?? null}
@@ -1844,31 +1934,85 @@ function BriefingBoard({
         <div className={styles.briefingSplit}>
           <div className={styles.briefingEditorPane}>
             <div className={styles.briefingToolbar}>
-              <button type="button" className={styles.briefingToolButton} onClick={() => applyMarkdownTool("bold")}>
+              <button
+                type="button"
+                className={styles.briefingToolButton}
+                aria-label="Жирный текст"
+                title="Жирный текст"
+                onClick={() => applyMarkdownTool("bold")}
+              >
                 B
               </button>
-              <button type="button" className={styles.briefingToolButton} onClick={() => applyMarkdownTool("italic")}>
+              <button
+                type="button"
+                className={styles.briefingToolButton}
+                aria-label="Курсив"
+                title="Курсив"
+                onClick={() => applyMarkdownTool("italic")}
+              >
                 I
               </button>
-              <button type="button" className={styles.briefingToolButton} onClick={() => applyMarkdownTool("code")}>
+              <button
+                type="button"
+                className={styles.briefingToolButton}
+                aria-label="Вставить код"
+                title="Вставить код"
+                onClick={() => applyMarkdownTool("code")}
+              >
                 {"</>"}
               </button>
-              <button type="button" className={styles.briefingToolButton} onClick={() => applyMarkdownTool("link")}>
+              <button
+                type="button"
+                className={styles.briefingToolButton}
+                aria-label="Вставить ссылку"
+                title="Вставить ссылку"
+                onClick={() => applyMarkdownTool("link")}
+              >
                 Link
               </button>
-              <button type="button" className={styles.briefingToolButton} onClick={() => applyMarkdownTool("h1")}>
+              <button
+                type="button"
+                className={styles.briefingToolButton}
+                aria-label="Заголовок H1"
+                title="Заголовок H1"
+                onClick={() => applyMarkdownTool("h1")}
+              >
                 H1
               </button>
-              <button type="button" className={styles.briefingToolButton} onClick={() => applyMarkdownTool("h2")}>
+              <button
+                type="button"
+                className={styles.briefingToolButton}
+                aria-label="Заголовок H2"
+                title="Заголовок H2"
+                onClick={() => applyMarkdownTool("h2")}
+              >
                 H2
               </button>
-              <button type="button" className={styles.briefingToolButton} onClick={() => applyMarkdownTool("ul")}>
+              <button
+                type="button"
+                className={styles.briefingToolButton}
+                aria-label="Маркированный список"
+                title="Маркированный список"
+                onClick={() => applyMarkdownTool("ul")}
+              >
                 • List
               </button>
-              <button type="button" className={styles.briefingToolButton} onClick={() => applyMarkdownTool("ol")}>
+              <button
+                type="button"
+                className={styles.briefingToolButton}
+                aria-label="Нумерованный список"
+                title="Нумерованный список"
+                onClick={() => applyMarkdownTool("ol")}
+              >
                 1. List
               </button>
-              <button type="button" className={styles.briefingToolButton} onClick={() => applyMarkdownTool("quote")}>
+              <button
+                type="button"
+                className={styles.briefingToolButton}
+                aria-label="Цитата"
+                title="Цитата"
+                onClick={() => applyMarkdownTool("quote")}
+              >
                 Quote
               </button>
             </div>

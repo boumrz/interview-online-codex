@@ -141,7 +141,7 @@ export function DashboardPage() {
   const [error, setError] = useState("");
   const agentOpsEnabled =
     (typeof __FEATURE_AGENT_OPS__ !== "undefined" ? __FEATURE_AGENT_OPS__ : "false") === "true";
-  const isAdmin = auth.user?.role === "admin" || auth.user?.nickname?.trim().toLowerCase() === "boumrz";
+  const isAdmin = auth.user?.role === "admin";
 
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDescription, setTaskDescription] = useState("");
@@ -156,6 +156,7 @@ export function DashboardPage() {
   const [roomTitleDrafts, setRoomTitleDrafts] = useState<Record<string, string>>({});
   const [roomSaveStatus, setRoomSaveStatus] = useState<Record<string, RoomSaveStatus>>({});
   const roomSaveTimersRef = useRef<Record<string, number>>({});
+  const roomStatusTimersRef = useRef<Record<string, number>>({});
 
   const [editingTask, setEditingTask] = useState<TaskTemplate | null>(null);
   const [editTaskTitle, setEditTaskTitle] = useState("");
@@ -219,6 +220,7 @@ export function DashboardPage() {
   useEffect(() => {
     return () => {
       Object.values(roomSaveTimersRef.current).forEach((timerId) => window.clearTimeout(timerId));
+      Object.values(roomStatusTimersRef.current).forEach((timerId) => window.clearTimeout(timerId));
     };
   }, []);
 
@@ -293,12 +295,18 @@ export function DashboardPage() {
 
   useEffect(() => {
     const allowed = new Set(currentLanguageTasks.map((task) => task.id));
-    setRoomTaskIds((prev) => prev.filter((id) => allowed.has(id)));
+    setRoomTaskIds((prev) => {
+      const next = prev.filter((id) => allowed.has(id));
+      return next.length === prev.length && next.every((id, index) => id === prev[index]) ? prev : next;
+    });
   }, [currentLanguageTasks]);
 
   useEffect(() => {
     setRoomTitleDrafts((prev) => {
-      const next = { ...prev };
+      const allowedRoomIds = new Set(rooms.map((room) => room.id));
+      const next = Object.fromEntries(
+        Object.entries(prev).filter(([roomId]) => allowedRoomIds.has(roomId))
+      ) as Record<string, string>;
       rooms.forEach((room) => {
         if (!next[room.id]) {
           next[room.id] = room.title;
@@ -309,9 +317,19 @@ export function DashboardPage() {
   }, [rooms]);
 
   useEffect(() => {
+    const allowedRoomIds = new Set(rooms.map((room) => room.id));
+    setRoomSaveStatus((prev) =>
+      Object.fromEntries(Object.entries(prev).filter(([roomId]) => allowedRoomIds.has(roomId))) as Record<string, RoomSaveStatus>
+    );
+  }, [rooms]);
+
+  useEffect(() => {
     if (!isAdmin) return;
     setAdminRoleDrafts((prev) => {
-      const next = { ...prev };
+      const allowedUserIds = new Set(adminUsers.map((user) => user.id));
+      const next = Object.fromEntries(
+        Object.entries(prev).filter(([userId]) => allowedUserIds.has(userId))
+      ) as Record<string, string>;
       adminUsers.forEach((user) => {
         if (!next[user.id]) {
           next[user.id] = user.role;
@@ -440,11 +458,15 @@ export function DashboardPage() {
       await updateRoom({ roomId, title: normalized }).unwrap();
       setRoomTitleDrafts((prev) => ({ ...prev, [roomId]: normalized }));
       setRoomSaveStatus((prev) => ({ ...prev, [roomId]: "saved" }));
-      window.setTimeout(() => {
+      if (roomStatusTimersRef.current[roomId]) {
+        window.clearTimeout(roomStatusTimersRef.current[roomId]);
+      }
+      roomStatusTimersRef.current[roomId] = window.setTimeout(() => {
         setRoomSaveStatus((prev) => {
           if (prev[roomId] !== "saved") return prev;
           return { ...prev, [roomId]: "idle" };
         });
+        delete roomStatusTimersRef.current[roomId];
       }, 1200);
     } catch {
       setRoomSaveStatus((prev) => ({ ...prev, [roomId]: "error" }));
@@ -463,6 +485,7 @@ export function DashboardPage() {
     }
 
     roomSaveTimersRef.current[roomId] = window.setTimeout(() => {
+      delete roomSaveTimersRef.current[roomId];
       const latestOriginal = rooms.find((room) => room.id === roomId)?.title ?? originalTitle;
       void persistRoomTitle(roomId, latestOriginal, nextTitle);
     }, 600);
@@ -1032,7 +1055,17 @@ export function DashboardPage() {
                         padding="sm"
                         bg="#121720"
                         style={{ borderColor: "#2a3039", cursor: "pointer" }}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Открыть комнату ${room.title}`}
+                        className={styles.manageRoomCardInteractive}
                         onClick={() => openRoomFromDashboard(room)}
+                        onKeyDown={(event) => {
+                          if (event.target !== event.currentTarget) return;
+                          if (event.key !== "Enter" && event.key !== " ") return;
+                          event.preventDefault();
+                          openRoomFromDashboard(room);
+                        }}
                       >
                         <Stack gap="sm">
                           <Group justify="space-between">
@@ -1055,6 +1088,8 @@ export function DashboardPage() {
                                 variant="light"
                                 color="red"
                                 disabled={room.accessRole !== "owner"}
+                                aria-label={`Удалить комнату ${room.title}`}
+                                title="Удалить комнату"
                                 onClick={(event) => {
                                   event.stopPropagation();
                                   if (room.accessRole !== "owner") return;

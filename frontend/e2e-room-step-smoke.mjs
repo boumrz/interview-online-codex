@@ -26,7 +26,7 @@ try {
     await roomToolsButton.click();
   }
   await page.getByRole("tab", { name: /^(Заметки|Чат)$/ }).click();
-  await page.getByRole("tabpanel", { name: "Чат заметок" }).waitFor({ timeout: 5000 });
+  await page.locator('[data-testid="room-notes-input"]').waitFor({ timeout: 5000 });
 
   const messageValue = `smoke message ${Date.now()}`;
   const notesInput = page.locator('[data-testid="room-notes-input"]');
