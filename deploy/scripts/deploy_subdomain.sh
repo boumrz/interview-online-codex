@@ -97,8 +97,8 @@ sudo systemctl restart "${SERVICE_NAME}"
 sudo systemctl reload nginx
 
 echo "==> Running smoke checks"
-wait_for_url "Backend health" "http://127.0.0.1:${BACKEND_HEALTH_PORT}/api/agent/environment/doctor" 45 2
-wait_for_url "Public healthz" "https://${DOMAIN}/healthz" 30 2
+wait_for_url "Backend health" "http://127.0.0.1:${BACKEND_HEALTH_PORT}/api/public/health" 45 2
+wait_for_url "Public backend health" "https://${DOMAIN}/api/public/health" 30 2
 wait_for_url "Public index" "https://${DOMAIN}/" 15 2
 
 echo "Deployment completed: ${release_dir}"
