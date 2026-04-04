@@ -84,10 +84,21 @@ ensure_repo_writable() {
     "${REPO_DIR}/.git/HEAD.lock" || true
 }
 
+ensure_git_safe_directory() {
+  local repo_realpath
+  repo_realpath="$(cd "${REPO_DIR}" && pwd -P)"
+
+  if ! git config --global --get-all safe.directory | grep -Fxq "${repo_realpath}"; then
+    echo "==> Marking git safe.directory: ${repo_realpath}"
+    git config --global --add safe.directory "${repo_realpath}"
+  fi
+}
+
 timestamp="$(date +%Y%m%d%H%M%S)"
 release_dir="${RELEASES_DIR}/${timestamp}"
 
 ensure_repo_writable
+ensure_git_safe_directory
 
 echo "==> Fetching source (${BRANCH})"
 cd "${REPO_DIR}"
