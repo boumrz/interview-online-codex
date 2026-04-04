@@ -67,13 +67,39 @@ run_privileged() {
   fi
 }
 
-ensure_repo_writable() {
+repo_write_access_ok() {
   local marker="${REPO_DIR}/.git/.permission-check.$$"
-  if touch "${marker}" >/dev/null 2>&1; then
-    rm -f "${marker}"
-  else
+  local must_be_writable=(
+    "${REPO_DIR}/.git/FETCH_HEAD"
+    "${REPO_DIR}/.git/index"
+    "${REPO_DIR}/.git/packed-refs"
+  )
+  local path
+
+  if ! touch "${marker}" >/dev/null 2>&1; then
+    return 1
+  fi
+  rm -f "${marker}" || true
+
+  for path in "${must_be_writable[@]}"; do
+    if [ -e "${path}" ] && [ ! -w "${path}" ]; then
+      return 1
+    fi
+  done
+
+  return 0
+}
+
+ensure_repo_writable() {
+  if ! repo_write_access_ok; then
     echo "==> Repairing repository permissions for ${REPO_DIR}"
     run_privileged chown -R "$(id -u):$(id -g)" "${REPO_DIR}"
+
+    if ! repo_write_access_ok; then
+      echo "Repository permissions are still invalid after chown."
+      echo "Please inspect ownership and ACLs for ${REPO_DIR}/.git"
+      exit 1
+    fi
   fi
 
   # Cleanup stale locks from interrupted git operations.
