@@ -70,7 +70,6 @@ run_privileged() {
 repo_write_access_ok() {
   local marker="${REPO_DIR}/.git/.permission-check.$$"
   local must_be_writable=(
-    "${REPO_DIR}/.git/FETCH_HEAD"
     "${REPO_DIR}/.git/index"
     "${REPO_DIR}/.git/packed-refs"
   )
@@ -128,7 +127,7 @@ ensure_git_safe_directory
 
 echo "==> Fetching source (${BRANCH})"
 cd "${REPO_DIR}"
-git fetch --all --tags
+git fetch --all --tags --no-write-fetch-head
 git checkout "${BRANCH}"
 git pull --ff-only origin "${BRANCH}"
 
