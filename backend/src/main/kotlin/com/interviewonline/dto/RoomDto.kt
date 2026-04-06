@@ -22,6 +22,7 @@ data class RoomTaskDto(
     val language: String,
     val categoryName: String?,
     val score: Int?,
+    val sourceTaskTemplateId: String? = null,
 )
 
 data class RoomAccessMemberDto(
@@ -78,6 +79,10 @@ data class RunCodeRequest(
 
 data class UpdateRoomRequest(
     @field:NotBlank val title: String,
+)
+
+data class AddRoomTasksRequest(
+    val taskIds: List<String> = emptyList(),
 )
 
 data class UpdateRoomParticipantRoleRequest(

@@ -1,0 +1,21 @@
+# Локальная PostgreSQL для разработки (см. scripts/dev-local.ps1 и README).
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: interview-online-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: interview
+      POSTGRES_PASSWORD: interview
+      POSTGRES_DB: interview_online
+    volumes:
+      - interview_online_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U interview -d interview_online"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  interview_online_pgdata:

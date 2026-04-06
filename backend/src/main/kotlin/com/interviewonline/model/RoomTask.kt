@@ -38,11 +38,17 @@ class RoomTask(
     @Column(name = "interviewer_notes", columnDefinition = "TEXT")
     var interviewerNotes: String? = null,
 
+    @Column(name = "briefing_markdown", columnDefinition = "TEXT")
+    var briefingMarkdown: String? = null,
+
     @Column(name = "solution_language")
     var solutionLanguage: String? = null,
 
     @Column(name = "score")
     var score: Int? = null,
+
+    @Column(name = "source_task_template_id")
+    var sourceTaskTemplateId: String? = null,
 
     @Column(nullable = false)
     var language: String = "nodejs",

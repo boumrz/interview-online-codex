@@ -93,6 +93,7 @@ class CollaborationService(
         val lastCursorSequenceBySessionId: MutableMap<String, Long> = ConcurrentHashMap(),
         val lastCodeSequenceBySessionId: MutableMap<String, Long> = ConcurrentHashMap(),
         val lastYjsSnapshotSequenceBySessionId: MutableMap<String, Long> = ConcurrentHashMap(),
+        val lastClientEventSequenceBySessionId: MutableMap<String, Long> = ConcurrentHashMap(),
         val grantedRoleBySessionId: MutableMap<String, RoomAccessService.RoomRole> = ConcurrentHashMap(),
         var lastCandidateKey: CandidateKeyPayload? = null,
         val candidateKeyHistory: MutableList<CandidateKeyPayload> = mutableListOf(),
@@ -139,6 +140,7 @@ class CollaborationService(
             lastCursorSequenceBySessionId = currentState?.lastCursorSequenceBySessionId ?: ConcurrentHashMap(),
             lastCodeSequenceBySessionId = currentState?.lastCodeSequenceBySessionId ?: ConcurrentHashMap(),
             lastYjsSnapshotSequenceBySessionId = currentState?.lastYjsSnapshotSequenceBySessionId ?: ConcurrentHashMap(),
+            lastClientEventSequenceBySessionId = currentState?.lastClientEventSequenceBySessionId ?: ConcurrentHashMap(),
             grantedRoleBySessionId = currentState?.grantedRoleBySessionId ?: ConcurrentHashMap(),
             lastYjsSequence = currentState?.lastYjsSequence ?: 0,
             yjsDocumentBase64 = currentState?.yjsDocumentBase64,
@@ -208,6 +210,27 @@ class CollaborationService(
             eventToken = request.eventToken,
             requireEventToken = requiresEventToken,
         )
+        val participant = participants[connectionId] ?: return
+        val state = roomState[participant.inviteCode] ?: return
+        if (requiresEventToken) {
+            val clientEventSequence = request.clientEventSequence
+            if (clientEventSequence != null) {
+                synchronized(state) {
+                    val lastSequence = state.lastClientEventSequenceBySessionId[participant.sessionId]
+                    if (lastSequence != null && clientEventSequence <= lastSequence) {
+                        logger.debug(
+                            "Skipping stale realtime event for room {} session {}: clientSequence {} <= {}",
+                            participant.inviteCode,
+                            participant.sessionId,
+                            clientEventSequence,
+                            lastSequence,
+                        )
+                        throw ApiException(HttpStatus.CONFLICT, "Устаревшая последовательность события для сессии")
+                    }
+                    state.lastClientEventSequenceBySessionId[participant.sessionId] = clientEventSequence
+                }
+            }
+        }
         when (request.type) {
             "code_update" -> updateCode(connectionId, request.code.orEmpty(), request.codeSequence)
             "language_update" -> updateLanguage(connectionId, request.language.orEmpty())
@@ -399,9 +422,9 @@ class CollaborationService(
             if (codeSnapshot == null) return null
             val canApplySnapshot = if (yjsClientSequence != null) {
                 val lastSnapshotSequence = state.lastYjsSnapshotSequenceBySessionId[participant.sessionId]
-                if (lastSnapshotSequence != null && yjsClientSequence < lastSnapshotSequence) {
+                if (lastSnapshotSequence != null && yjsClientSequence <= lastSnapshotSequence) {
                     logger.debug(
-                        "Skipping stale yjs snapshot for room {} session {}: clientSequence {} < {}",
+                        "Skipping stale yjs snapshot for room {} session {}: clientSequence {} <= {}",
                         participant.inviteCode,
                         participant.sessionId,
                         yjsClientSequence,
@@ -576,9 +599,10 @@ class CollaborationService(
         }
         val normalized = markdown.replace("\u0000", "").take(120_000)
         roomState[participant.inviteCode]?.briefingMarkdown = normalized
-        roomRepository.findByInviteCode(participant.inviteCode)?.let {
-            it.briefingMarkdown = normalized
-            roomRepository.save(it)
+        roomRepository.findWithTasksByInviteCode(participant.inviteCode)?.let { room ->
+            room.briefingMarkdown = normalized
+            room.tasks.getOrNull(room.currentStep)?.briefingMarkdown = normalized
+            roomRepository.save(room)
         }
         broadcastState(participant.inviteCode)
     }
@@ -1091,6 +1115,7 @@ class CollaborationService(
         currentTask?.let { current ->
             current.solutionCode = currentState?.code ?: room.code
             current.solutionLanguage = normalizeLanguage(currentState?.language ?: room.language)
+            current.briefingMarkdown = currentState?.briefingMarkdown ?: current.briefingMarkdown
         }
         if (room.notes.isNullOrBlank()) {
             room.notes = currentTask?.interviewerNotes?.takeIf { it.isNotBlank() }
@@ -1102,6 +1127,7 @@ class CollaborationService(
         val nextTask = room.tasks[stepIndex]
         room.language = normalizeLanguage(nextTask.solutionLanguage?.ifBlank { null } ?: nextTask.language)
         room.code = nextTask.solutionCode ?: nextTask.starterCode
+        room.briefingMarkdown = nextTask.briefingMarkdown.orEmpty()
         roomRepository.save(room)
 
         roomState[inviteCode] = RealtimeState(
@@ -1114,7 +1140,7 @@ class CollaborationService(
             notes = room.notes.orEmpty(),
             notesMessages = currentState?.notesMessages?.toMutableList()
                 ?: parseNotesMessages(room.interviewerChat, room.notes),
-            briefingMarkdown = currentState?.briefingMarkdown ?: room.briefingMarkdown.orEmpty(),
+            briefingMarkdown = nextTask.briefingMarkdown?.takeIf { it.isNotBlank() } ?: nextTask.description,
             notesLockedBySessionId = currentState?.notesLockedBySessionId,
             notesLockedByDisplayName = currentState?.notesLockedByDisplayName,
             notesLockedUntilEpochMs = currentState?.notesLockedUntilEpochMs,
@@ -1123,6 +1149,7 @@ class CollaborationService(
             lastCursorSequenceBySessionId = currentState?.lastCursorSequenceBySessionId ?: ConcurrentHashMap(),
             lastCodeSequenceBySessionId = currentState?.lastCodeSequenceBySessionId ?: ConcurrentHashMap(),
             lastYjsSnapshotSequenceBySessionId = currentState?.lastYjsSnapshotSequenceBySessionId ?: ConcurrentHashMap(),
+            lastClientEventSequenceBySessionId = currentState?.lastClientEventSequenceBySessionId ?: ConcurrentHashMap(),
             lastCandidateKey = currentState?.lastCandidateKey,
             candidateKeyHistory = currentState?.candidateKeyHistory?.toMutableList() ?: mutableListOf(),
             lastCandidateKeyAtEpochMs = currentState?.lastCandidateKeyAtEpochMs ?: 0L,
@@ -1186,6 +1213,7 @@ class CollaborationService(
                 state.lastCursorSequenceBySessionId.remove(participant.sessionId)
                 state.lastCodeSequenceBySessionId.remove(participant.sessionId)
                 state.lastYjsSnapshotSequenceBySessionId.remove(participant.sessionId)
+                state.lastClientEventSequenceBySessionId.remove(participant.sessionId)
                 if (state.lastCandidateKey?.sessionId == participant.sessionId) {
                     state.candidateKeyHistory.removeAll { it.sessionId == participant.sessionId }
                     state.lastCandidateKey = state.candidateKeyHistory.lastOrNull()
@@ -1272,7 +1300,7 @@ class CollaborationService(
             currentStep = room.currentStep,
             notes = notes,
             notesMessages = parseNotesMessages(room.interviewerChat, notes),
-            briefingMarkdown = room.briefingMarkdown.orEmpty(),
+            briefingMarkdown = currentTask?.briefingMarkdown?.takeIf { it.isNotBlank() } ?: currentTask?.description.orEmpty(),
             notesLockedBySessionId = null,
             notesLockedByDisplayName = null,
             notesLockedUntilEpochMs = null,
@@ -1280,6 +1308,7 @@ class CollaborationService(
             lastCursorSequenceBySessionId = ConcurrentHashMap(),
             lastCodeSequenceBySessionId = ConcurrentHashMap(),
             lastYjsSnapshotSequenceBySessionId = ConcurrentHashMap(),
+            lastClientEventSequenceBySessionId = ConcurrentHashMap(),
         )
     }
 

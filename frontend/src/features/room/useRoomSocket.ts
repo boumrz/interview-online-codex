@@ -157,6 +157,12 @@ type ClientMessage =
     }
   | { type: "request_state_sync" };
 
+type QueuedClientMessage = {
+  payload: ClientMessage;
+  queuedAtEpochMs: number;
+  clientEventSequence: number | null;
+};
+
 const MAX_PENDING_MESSAGES = 300;
 const KEY_PRESS_CLIENT_THROTTLE_MS = 120;
 
@@ -174,6 +180,10 @@ function codeSequenceKey(inviteCode: string) {
 
 function yjsSequenceKey(inviteCode: string) {
   return `room_yjs_sequence_${inviteCode}`;
+}
+
+function eventSequenceKey(inviteCode: string) {
+  return `room_event_sequence_${inviteCode}`;
 }
 
 function getOrCreateSessionId(inviteCode: string) {
@@ -215,6 +225,16 @@ function persistYjsSequence(inviteCode: string, sequence: number) {
   sessionStorage.setItem(yjsSequenceKey(inviteCode), String(sequence));
 }
 
+function getInitialEventSequence(inviteCode: string) {
+  const key = eventSequenceKey(inviteCode);
+  const parsed = Number(sessionStorage.getItem(key) ?? "0");
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 0;
+}
+
+function persistEventSequence(inviteCode: string, sequence: number) {
+  sessionStorage.setItem(eventSequenceKey(inviteCode), String(sequence));
+}
+
 function currentPresenceStatus(hasWindowFocusFallback: boolean): "active" | "away" {
   const hasFocus =
     typeof document !== "undefined" && typeof document.hasFocus === "function"
@@ -240,18 +260,54 @@ export function useRoomSocket({
   onRequireRecoverySync
 }: Options) {
   const sseRef = useRef<EventSource | null>(null);
-  const pendingMessagesRef = useRef<ClientMessage[]>([]);
+  const pendingMessagesRef = useRef<QueuedClientMessage[]>([]);
   const cursorSequenceRef = useRef(0);
   const codeSequenceRef = useRef(0);
   const yjsSequenceRef = useRef(0);
+  const eventSequenceRef = useRef(0);
   const eventTokenRef = useRef<string | null>(null);
   const lastPresenceRef = useRef<"active" | "away" | null>(null);
   const lastKeyPressSentAtRef = useRef(0);
-  const sendRef = useRef<(payload: ClientMessage) => void>((payload: ClientMessage) => {
-    pendingMessagesRef.current.push(payload);
+  const queueDrainInProgressRef = useRef(false);
+  const inFlightControllerRef = useRef<AbortController | null>(null);
+  const tryDrainQueueRef = useRef<(() => void) | null>(null);
+  const requiresEventSequence = (payload: ClientMessage) => payload.type !== "request_state_sync" && payload.type !== "presence_update";
+  const nextClientEventSequence = () => {
+    const next = eventSequenceRef.current + 1;
+    eventSequenceRef.current = next;
+    persistEventSequence(inviteCode, next);
+    return next;
+  };
+  const queuePayload = (payload: ClientMessage, options: { dedupeSameType?: boolean } = {}) => {
+    let abortAndReplaceInFlight = false;
+    if (options.dedupeSameType) {
+      const currentHead = pendingMessagesRef.current[0];
+      const hasInFlight = inFlightControllerRef.current != null;
+      const canReplaceInFlight =
+        (payload.type === "code_update" || payload.type === "yjs_update") &&
+        hasInFlight &&
+        currentHead?.payload.type === payload.type;
+      abortAndReplaceInFlight = canReplaceInFlight;
+      const preserveHead = (queueDrainInProgressRef.current || hasInFlight) && !abortAndReplaceInFlight;
+      const head = preserveHead ? pendingMessagesRef.current.slice(0, 1) : [];
+      const tail = preserveHead ? pendingMessagesRef.current.slice(1) : pendingMessagesRef.current;
+      const filteredTail = tail.filter((queued) => queued.payload.type !== payload.type);
+      pendingMessagesRef.current = [...head, ...filteredTail];
+    }
+    pendingMessagesRef.current.push({
+      payload,
+      queuedAtEpochMs: Date.now(),
+      clientEventSequence: requiresEventSequence(payload) ? nextClientEventSequence() : null
+    });
     if (pendingMessagesRef.current.length > MAX_PENDING_MESSAGES) {
       pendingMessagesRef.current.shift();
     }
+    if (abortAndReplaceInFlight) {
+      inFlightControllerRef.current?.abort();
+    }
+  };
+  const sendRef = useRef<(payload: ClientMessage) => void>((payload: ClientMessage) => {
+    queuePayload(payload);
   });
   const [connected, setConnected] = useState(false);
   const sessionId = useMemo(() => getOrCreateSessionId(inviteCode), [inviteCode]);
@@ -260,6 +316,7 @@ export function useRoomSocket({
     cursorSequenceRef.current = getInitialCursorSequence(inviteCode);
     codeSequenceRef.current = getInitialCodeSequence(inviteCode);
     yjsSequenceRef.current = getInitialYjsSequence(inviteCode);
+    eventSequenceRef.current = getInitialEventSequence(inviteCode);
   }, [inviteCode]);
 
   useEffect(() => {
@@ -267,6 +324,12 @@ export function useRoomSocket({
       setConnected(false);
       sseRef.current?.close();
       sseRef.current = null;
+      pendingMessagesRef.current = [];
+      eventTokenRef.current = null;
+      queueDrainInProgressRef.current = false;
+      inFlightControllerRef.current = null;
+      tryDrainQueueRef.current = null;
+      sendRef.current = () => {};
       return;
     }
 
@@ -279,24 +342,8 @@ export function useRoomSocket({
     let reconnectScheduled = false;
     lastPresenceRef.current = null;
 
-    const shouldQueuePayload = (payload: ClientMessage) => {
-      return (
-        payload.type !== "cursor_update" &&
-        payload.type !== "presence_update" &&
-        payload.type !== "request_state_sync"
-      );
-    };
-
     const requiresEventToken = (payload: ClientMessage) => {
       return payload.type !== "request_state_sync" && payload.type !== "presence_update";
-    };
-
-    const enqueuePayload = (payload: ClientMessage) => {
-      if (!shouldQueuePayload(payload)) return;
-      pendingMessagesRef.current.push(payload);
-      if (pendingMessagesRef.current.length > MAX_PENDING_MESSAGES) {
-        pendingMessagesRef.current.shift();
-      }
     };
 
     const buildParams = () => {
@@ -307,10 +354,22 @@ export function useRoomSocket({
       return params;
     };
 
+    const abortInFlightRequest = () => {
+      if (inFlightControllerRef.current != null) {
+        inFlightControllerRef.current.abort();
+        inFlightControllerRef.current = null;
+      }
+    };
+
+    const dropPendingQueue = () => {
+      pendingMessagesRef.current = [];
+    };
+
     const scheduleReconnect = () => {
       if (disposed || reconnectScheduled) return;
       reconnectScheduled = true;
       setConnected(false);
+      abortInFlightRequest();
       const activeSource = sseRef.current;
       sseRef.current = null;
       activeSource?.close();
@@ -323,58 +382,111 @@ export function useRoomSocket({
         connectSse();
       }, 180);
     };
-
-    const postEvent = (payload: ClientMessage, queueOnFailure = true) => {
-      void fetch(`${API_BASE_URL}/realtime/rooms/${inviteCode}/events`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          sessionId,
-          eventToken: eventTokenRef.current,
-          ...payload
-        })
-      })
-        .then(async (response) => {
-          if (response.ok) return;
-          const data = (await response.json().catch(() => ({}))) as { error?: string };
-          if (queueOnFailure && shouldQueuePayload(payload)) {
-            enqueuePayload(payload);
-          }
-          if (response.status === 403) {
-            scheduleReconnect();
-          }
-          onError(data.error || "Не удалось отправить действие в комнату");
-        })
-        .catch(() => {
-          if (queueOnFailure && shouldQueuePayload(payload)) {
-            enqueuePayload(payload);
-          }
-          scheduleReconnect();
-          onError("Не удалось отправить действие в комнату");
-        });
+    const findNextProcessableQueueIndex = () => {
+      if (pendingMessagesRef.current.length === 0) return -1;
+      if (eventTokenRef.current) return 0;
+      return pendingMessagesRef.current.findIndex(({ payload }) => !requiresEventToken(payload));
     };
 
-    // Do not gate POST on EventSource.OPEN: during CONNECTING/reconnect the socket is not OPEN yet
-    // outbound events were only queued — no fetch ran, so DevTools showed no POSTs after a few keystrokes.
-    // Server validates sessionId; failed POSTs are queued when queueOnFailure allows it.
-    const sendViaPost = (payload: ClientMessage, queueOnFailure = true) => {
-      if (requiresEventToken(payload) && !eventTokenRef.current) {
-        if (queueOnFailure && shouldQueuePayload(payload)) {
-          enqueuePayload(payload);
-        }
-        return;
-      }
-      postEvent(payload, queueOnFailure);
-    };
-
-    const flushPendingMessages = () => {
+    const dropQueuedRecoveryMutations = () => {
       if (pendingMessagesRef.current.length === 0) return;
-      const pending = [...pendingMessagesRef.current];
-      pendingMessagesRef.current = [];
-      pending.forEach((payload) => sendViaPost(payload, true));
+      const before = pendingMessagesRef.current.length;
+      pendingMessagesRef.current = pendingMessagesRef.current.filter(({ payload }) => {
+        return payload.type !== "yjs_update" && payload.type !== "code_update";
+      });
+      const dropped = before - pendingMessagesRef.current.length;
+      if (dropped > 0) {
+        roomSyncTransportLog("drop_stale_pending_mutations_after_recovery", { dropped });
+      }
     };
+
+    const tryDrainQueue = () => {
+      if (queueDrainInProgressRef.current || disposed) return;
+      queueDrainInProgressRef.current = true;
+
+      void (async () => {
+        try {
+          while (!disposed) {
+            const nextIndex = findNextProcessableQueueIndex();
+            if (nextIndex < 0) break;
+            const head = pendingMessagesRef.current[nextIndex];
+
+            const controller = new AbortController();
+            inFlightControllerRef.current = controller;
+
+            let response: Response;
+            try {
+              response = await fetch(`${API_BASE_URL}/realtime/rooms/${inviteCode}/events`, {
+                method: "POST",
+                signal: controller.signal,
+                headers: {
+                  "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                  sessionId,
+                  eventToken: eventTokenRef.current,
+                  clientEventSequence: head.clientEventSequence,
+                  ...head.payload
+                })
+              });
+            } catch {
+              inFlightControllerRef.current = null;
+              if (disposed || controller.signal.aborted) break;
+              scheduleReconnect();
+              onError("Не удалось отправить действие в комнату");
+              break;
+            }
+            inFlightControllerRef.current = null;
+
+            if (response.ok) {
+              if (nextIndex === 0) {
+                pendingMessagesRef.current.shift();
+              } else {
+                pendingMessagesRef.current.splice(nextIndex, 1);
+              }
+              continue;
+            }
+
+            const data = (await response.json().catch(() => ({}))) as { error?: string };
+            if (response.status === 403) {
+              // Stale event token/session after reconnect. Keep head for retry with a fresh token.
+              scheduleReconnect();
+              break;
+            }
+            if (response.status === 409) {
+              // Out-of-order or stale client sequence; safe to drop.
+              if (nextIndex === 0) {
+                pendingMessagesRef.current.shift();
+              } else {
+                pendingMessagesRef.current.splice(nextIndex, 1);
+              }
+              continue;
+            }
+            if (response.status >= 400 && response.status < 500) {
+              // Invalid payload should not block the whole queue forever.
+              if (nextIndex === 0) {
+                pendingMessagesRef.current.shift();
+              } else {
+                pendingMessagesRef.current.splice(nextIndex, 1);
+              }
+            } else {
+              scheduleReconnect();
+            }
+            onError(data.error || "Не удалось отправить действие в комнату");
+            break;
+          }
+        } finally {
+          queueDrainInProgressRef.current = false;
+          const next = pendingMessagesRef.current[0];
+          if (next && !(requiresEventToken(next.payload) && !eventTokenRef.current)) {
+            queueMicrotask(() => {
+              tryDrainQueueRef.current?.();
+            });
+          }
+        }
+      })();
+    };
+    tryDrainQueueRef.current = tryDrainQueue;
 
     const requestStateSync = (options: { expectHydration?: boolean } = {}) => {
       if (options.expectHydration) {
@@ -386,13 +498,15 @@ export function useRoomSocket({
       // until someone else forces a full state broadcast.
       if (!options.expectHydration && now - lastStateSyncRequestAt < 300) return;
       lastStateSyncRequestAt = now;
-      sendViaPost({ type: "request_state_sync" }, false);
+      queuePayload({ type: "request_state_sync" }, { dedupeSameType: true });
+      tryDrainQueueRef.current?.();
     };
 
     const sendPresence = (status: "active" | "away", options: { force?: boolean } = {}) => {
       if (!options.force && lastPresenceRef.current === status) return;
       lastPresenceRef.current = status;
-      sendViaPost({ type: "presence_update", presenceStatus: status }, false);
+      queuePayload({ type: "presence_update", presenceStatus: status }, { dedupeSameType: true });
+      tryDrainQueueRef.current?.();
     };
 
     const publishCurrentPresence = (options: { force?: boolean } = {}) => {
@@ -421,7 +535,6 @@ export function useRoomSocket({
         setConnected(true);
         roomSyncTransportLog("sse_open", { inviteCode });
         onError("");
-        flushPendingMessages();
         publishCurrentPresence({ force: true });
         requestStateSync({ expectHydration: true });
       };
@@ -452,8 +565,13 @@ export function useRoomSocket({
           const shouldHydrateFromState = expectRecoveryStateSync;
           expectRecoveryStateSync = false;
           onState(payload);
+          if (shouldHydrateFromState) {
+            // After a recovery sync, discard stale queued code/yjs writes so we do not replay
+            // a partial local snapshot over the fresh server state.
+            dropQueuedRecoveryMutations();
+          }
           if (eventTokenRef.current) {
-            flushPendingMessages();
+            tryDrainQueueRef.current?.();
           }
           if (shouldHydrateFromState) {
             onRecoveryStateSync?.(typeof payload.lastYjsSequence === "number" ? payload.lastYjsSequence : 0);
@@ -532,7 +650,8 @@ export function useRoomSocket({
     };
 
     sendRef.current = (payload: ClientMessage) => {
-      sendViaPost(payload, true);
+      queuePayload(payload);
+      tryDrainQueueRef.current?.();
     };
     connectSse();
 
@@ -559,11 +678,15 @@ export function useRoomSocket({
       }
       reconnectTimerId = null;
       reconnectScheduled = false;
+      abortInFlightRequest();
+      dropPendingQueue();
+      queueDrainInProgressRef.current = false;
+      inFlightControllerRef.current = null;
       eventTokenRef.current = null;
+      lastPresenceRef.current = null;
+      tryDrainQueueRef.current = null;
 
-      sendRef.current = (payload: ClientMessage) => {
-        enqueuePayload(payload);
-      };
+      sendRef.current = () => {};
     };
   }, [
     authToken,
@@ -590,7 +713,8 @@ export function useRoomSocket({
     const codeSequence = codeSequenceRef.current + 1;
     codeSequenceRef.current = codeSequence;
     persistCodeSequence(inviteCode, codeSequence);
-    send({ type: "code_update", code, codeSequence, syncKey: syncKey ?? null });
+    queuePayload({ type: "code_update", code, codeSequence, syncKey: syncKey ?? null }, { dedupeSameType: true });
+    tryDrainQueueRef.current?.();
   };
 
   const sendLanguageUpdate = (language: string) => {
@@ -679,14 +803,15 @@ export function useRoomSocket({
     const yjsClientSequence = yjsSequenceRef.current + 1;
     yjsSequenceRef.current = yjsClientSequence;
     persistYjsSequence(inviteCode, yjsClientSequence);
-    send({
+    queuePayload({
       type: "yjs_update",
       yjsUpdate,
       syncKey: syncKey ?? null,
       code: codeSnapshot ?? null,
       yjsClientSequence,
       yjsDocumentBase64: yjsDocumentBase64?.trim() || null
-    });
+    }, { dedupeSameType: true });
+    tryDrainQueueRef.current?.();
   };
 
   const sendKeyPress = (payload: {

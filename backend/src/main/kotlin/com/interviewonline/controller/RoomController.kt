@@ -6,6 +6,7 @@ import com.interviewonline.dto.RoomResponse
 import com.interviewonline.dto.RunCodeRequest
 import com.interviewonline.dto.RunCodeResponse
 import com.interviewonline.dto.RoomAccessMemberDto
+import com.interviewonline.dto.AddRoomTasksRequest
 import com.interviewonline.dto.UpdateRoomParticipantRoleRequest
 import com.interviewonline.service.AuthService
 import com.interviewonline.service.CodeExecutionService
@@ -63,6 +64,19 @@ class RoomController(
         val authToken = authorization?.removePrefix("Bearer ")?.trim()
         val user = authService.resolveUserByToken(authToken)
         return roomService.nextStep(inviteCode, ownerToken, interviewerToken, user)
+    }
+
+    @PostMapping("/rooms/{inviteCode}/tasks")
+    fun addRoomTasks(
+        @PathVariable inviteCode: String,
+        @RequestHeader("X-Room-Owner-Token", required = false) ownerToken: String?,
+        @RequestHeader("X-Room-Interviewer-Token", required = false) interviewerToken: String?,
+        @RequestHeader("Authorization", required = false) authorization: String?,
+        @RequestBody request: AddRoomTasksRequest,
+    ): RoomResponse {
+        val authToken = authorization?.removePrefix("Bearer ")?.trim()
+        val user = authService.resolveUserByToken(authToken)
+        return roomService.addTasksToRoom(inviteCode, request, ownerToken, interviewerToken, user)
     }
 
     @PostMapping("/rooms/{inviteCode}/run")

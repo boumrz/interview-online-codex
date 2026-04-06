@@ -512,6 +512,29 @@
   border: 1px solid #273242;
 }
 
+.briefingMarkdown table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 10px;
+}
+
+.briefingMarkdown th,
+.briefingMarkdown td {
+  border: 1px solid #2d3b4f;
+  padding: 6px 8px;
+  vertical-align: top;
+}
+
+.briefingMarkdown th {
+  background: #121b28;
+  color: #f3f5f7;
+  font-weight: 600;
+}
+
+.briefingMarkdown tbody tr:nth-child(even) td {
+  background: rgba(24, 34, 49, 0.35);
+}
+
 .briefingEmpty {
   color: #8d97a5;
   font-size: 12px;
@@ -541,6 +564,7 @@
 .panelTabs {
   height: 100%;
   min-height: 0;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -984,6 +1008,46 @@
   gap: 6px;
 }
 
+.mobileRoomTabs {
+  display: none;
+  width: 100%;
+}
+
+.mobileRoomTab {
+  border: 1px solid #2b3646;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #151c26 0%, #111720 100%);
+  color: #d4deec;
+  min-height: 48px;
+  height: 48px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0 10px;
+  transition: border-color 120ms ease, background-color 120ms ease, transform 120ms ease;
+}
+
+.mobileRoomTab:hover {
+  border-color: #3e546f;
+}
+
+.mobileRoomTabActive {
+  border-color: #5a7faa;
+  background: linear-gradient(180deg, #1f2d40 0%, #152131 100%);
+}
+
+.mobileRoomTabLabel {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.mobileRoomPanel {
+  min-height: 0;
+  width: 100%;
+}
+
 .error {
   color: #ff8484;
   font-size: 12px;
@@ -1069,10 +1133,12 @@
   }
 
   .ownerBody {
-    display: grid;
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    flex: 1;
     min-height: 0;
-    overflow: visible;
+    overflow: hidden;
   }
 
   .edgeToggle,
@@ -1081,51 +1147,69 @@
   }
 
   .leftRail {
-    width: auto;
-    border-right: 0;
-    border-bottom: 1px solid #252a32;
-    padding: 8px 10px;
-    flex-direction: row;
-    align-items: center;
+    display: none;
   }
 
-  .railButton {
-    min-height: 36px;
-    width: 42px;
+  .mobileRoomTabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    padding: 10px 10px 0;
+    align-items: stretch;
+    flex: 0 0 auto;
+  }
+
+  .mobileRoomTab {
+    min-height: 48px;
+    height: 48px;
   }
 
   .ownerSidePanel {
-    width: auto !important;
-    max-height: var(--room-mobile-panel-max-height);
+    width: 100% !important;
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 0;
+    justify-self: stretch;
+    align-self: stretch;
   }
 
-  .ownerSidePanel > .outputPanel {
-    width: auto !important;
-    max-height: var(--room-mobile-panel-max-height);
+  .ownerSidePanel > * {
+    width: 100% !important;
+    flex: 1 1 auto;
+    min-height: 0;
   }
 
   .sidebar {
-    width: auto !important;
+    width: 100% !important;
+    height: 100%;
     border-right: 0;
-    border-bottom: 1px solid #252a32;
-    max-height: min(40dvh, 330px);
+    border-bottom: 0;
+    border-radius: 12px;
+    max-height: none;
+    min-height: 0;
   }
 
   .workspace {
+    flex: 1 1 auto;
     display: grid;
     grid-template-columns: 1fr;
-    padding: 10px;
+    padding: 0;
     gap: 10px;
-    overflow: visible;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .editorColumn {
-    min-height: clamp(320px, 50dvh, 520px);
+    min-height: 0;
   }
 
   .outputPanel {
-    width: auto !important;
-    max-height: var(--room-mobile-panel-max-height);
+    width: 100% !important;
+    height: 100%;
+    max-height: none;
+    min-height: 0;
   }
 
   .participantCard {

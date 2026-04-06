@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Badge, Box, Button, Group, Menu, Modal, Select, Stack, Text, TextInput, Textarea, ThemeIcon } from "@mantine/core";
-import { IconCode, IconGripVertical, IconHome2, IconLayoutDashboard, IconUsers } from "@tabler/icons-react";
+import { Badge, Box, Button, Group, Menu, Modal, MultiSelect, Select, Stack, Text, TextInput, Textarea, ThemeIcon } from "@mantine/core";
+import { IconCode, IconGripVertical, IconHome2, IconLayoutDashboard, IconPlus, IconUsers } from "@tabler/icons-react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import * as Y from "yjs";
 import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate, removeAwarenessStates } from "y-protocols/awareness";
@@ -16,8 +16,9 @@ import { java } from "@codemirror/lang-java";
 import { sql } from "@codemirror/lang-sql";
 import { useAppSelector } from "../app/hooks";
 import { markdownToHtml } from "../components/markdown";
-import { useGetRoomQuery } from "../services/api";
+import { useAddRoomTasksMutation, useGetRoomQuery, useTasksGroupedQuery } from "../services/api";
 import { useRoomSocket } from "../features/room/useRoomSocket";
+import type { RoomTask, TaskTemplate } from "../types";
 import styles from "./RoomPage.module.css";
 
 const LANGUAGES = [
@@ -102,7 +103,8 @@ type PendingNoteMessage = NoteMessage & {
   pending: true;
 };
 
-type MarkdownToolId = "bold" | "italic" | "code" | "link" | "h1" | "h2" | "ul" | "ol" | "quote";
+type MarkdownToolId = "bold" | "italic" | "code" | "link" | "h1" | "h2" | "ul" | "ol" | "quote" | "table";
+type MobileRoomTab = "editor" | "collaboration" | "tasks";
 
 const MIN_OWNER_PANEL_WIDTH = 220;
 const MAX_OWNER_PANEL_WIDTH = 420;
@@ -183,6 +185,52 @@ function toEditorLanguage(language: string | null | undefined): string {
     return "javascript";
   }
   return normalizeRoomLanguage(normalized);
+}
+
+function normalizeTaskText(value: string | null | undefined): string {
+  return (value ?? "").replaceAll("\r\n", "\n").trim();
+}
+
+function taskSignature(task: Pick<TaskTemplate, "title" | "description" | "starterCode" | "language">): string {
+  return [
+    normalizeRoomLanguage(task.language),
+    normalizeTaskText(task.title).toLowerCase(),
+    normalizeTaskText(task.description),
+    normalizeTaskText(task.starterCode)
+  ].join("::");
+}
+
+function roomTaskSignature(task: Pick<RoomTask, "title" | "description" | "starterCode" | "language">): string {
+  return taskSignature(task);
+}
+
+function useIsCompactRoomLayout(maxWidth: number): boolean {
+  const query = `(max-width: ${maxWidth}px)`;
+  const [isCompact, setIsCompact] = useState(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return false;
+    }
+    return window.matchMedia(query).matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return;
+    }
+    const mediaQuery = window.matchMedia(query);
+    const handleChange = (event: MediaQueryListEvent) => {
+      setIsCompact(event.matches);
+    };
+    setIsCompact(mediaQuery.matches);
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", handleChange);
+      return () => mediaQuery.removeEventListener("change", handleChange);
+    }
+    mediaQuery.addListener(handleChange);
+    return () => mediaQuery.removeListener(handleChange);
+  }, [query]);
+
+  return isCompact;
 }
 
 function normalizeKeyCodeLabel(code: string): string {
@@ -426,6 +474,7 @@ export function RoomPage() {
   const awaitingRecoverySyncRef = useRef(false);
   const editorValueRef = useRef("");
   const briefingDebounceTimerRef = useRef<number | null>(null);
+  const briefingStepKeyRef = useRef<string>("");
 
   useEffect(() => {
     const stored = readStoredDisplayName(inviteCode, {
@@ -483,6 +532,26 @@ export function RoomPage() {
   const mergedNotes = merged?.notes ?? "";
   const mergedBriefingMarkdown = merged?.briefingMarkdown ?? "";
   const canManageRoom = merged?.canManageRoom ?? false;
+  const { data: taskCatalogGroups = [] } = useTasksGroupedQuery(undefined, {
+    skip: !authToken || !canManageRoom
+  });
+  const [addRoomTasks, addRoomTasksState] = useAddRoomTasksMutation();
+  const availableCatalogTasks = useMemo(() => {
+    if (!merged) return [];
+    const roomTasks = room?.tasks ?? [];
+    const existingTemplateIds = new Set(
+      roomTasks
+        .map((task) => task.sourceTaskTemplateId?.trim())
+        .filter((value): value is string => Boolean(value))
+    );
+    const existingSignatures = new Set(roomTasks.map((task) => roomTaskSignature(task)));
+    const activeLanguage = normalizeRoomLanguage(merged.language);
+    return taskCatalogGroups
+      .flatMap((group) => group.tasks)
+      .filter((task) => normalizeRoomLanguage(task.language) === activeLanguage)
+      .filter((task) => !existingTemplateIds.has(task.id))
+      .filter((task) => !existingSignatures.has(taskSignature(task)));
+  }, [merged, room?.tasks, taskCatalogGroups]);
   const notesMessages = useMemo(() => {
     const direct = merged?.notesMessages;
     if (Array.isArray(direct) && direct.length > 0) {
@@ -492,10 +561,23 @@ export function RoomPage() {
   }, [merged?.notesMessages, mergedNotes]);
 
   useEffect(() => {
+    if (!merged) return;
+    const stepKey = `${merged.inviteCode}:${merged.currentStep}`;
+    const stepChanged = briefingStepKeyRef.current !== stepKey;
+    if (stepChanged) {
+      briefingStepKeyRef.current = stepKey;
+      if (briefingDebounceTimerRef.current != null) {
+        window.clearTimeout(briefingDebounceTimerRef.current);
+        briefingDebounceTimerRef.current = null;
+      }
+      setBriefingDirty(false);
+      setBriefingDraft(mergedBriefingMarkdown);
+      return;
+    }
     if (!briefingDirty) {
       setBriefingDraft(mergedBriefingMarkdown);
     }
-  }, [briefingDirty, mergedBriefingMarkdown]);
+  }, [briefingDirty, merged, mergedBriefingMarkdown]);
   const visibleNotes = useMemo(() => {
     const serverIds = new Set(notesMessages.map((message) => message.id));
     const next = [...notesMessages, ...pendingNotes.filter((message) => !serverIds.has(message.id))];
@@ -537,6 +619,7 @@ export function RoomPage() {
   }, [awaitingRecoverySync]);
 
   const markRecoverySyncPending = useCallback(() => {
+    awaitingRecoverySyncRef.current = true;
     setAwaitingRecoverySync(true);
     if (recoverySyncTimeoutRef.current != null) {
       window.clearTimeout(recoverySyncTimeoutRef.current);
@@ -548,6 +631,7 @@ export function RoomPage() {
   }, []);
 
   const clearRecoverySyncPending = useCallback(() => {
+    awaitingRecoverySyncRef.current = false;
     if (recoverySyncTimeoutRef.current != null) {
       window.clearTimeout(recoverySyncTimeoutRef.current);
       recoverySyncTimeoutRef.current = null;
@@ -959,6 +1043,25 @@ export function RoomPage() {
     }, 160);
   }, [canManageRoom, sendBriefingUpdate]);
 
+  const addTasksFromCatalog = useCallback(async (taskIds: string[]) => {
+    if (!merged) return;
+    const normalizedTaskIds = Array.from(
+      new Set(taskIds.map((taskId) => taskId.trim()).filter((taskId) => taskId.length > 0))
+    );
+    if (normalizedTaskIds.length === 0) return;
+    try {
+      setError("");
+      await addRoomTasks({
+        inviteCode: merged.inviteCode,
+        taskIds: normalizedTaskIds,
+        ownerToken: ownerToken ?? undefined
+      }).unwrap();
+    } catch {
+      setError("Не удалось добавить задачи в комнату");
+      throw new Error("room_task_append_failed");
+    }
+  }, [addRoomTasks, merged, ownerToken]);
+
   const briefingSeededStepRef = useRef<string>("");
 
   useEffect(() => {
@@ -1014,10 +1117,9 @@ export function RoomPage() {
 
   const step = room?.tasks.find((task) => task.stepIndex === merged.currentStep);
   const currentTaskRating = merged.taskScores[String(merged.currentStep)] ?? step?.score ?? null;
-  const taskDescriptionMarkdown = step?.description ?? "";
   const stepStarterCode = step?.starterCode ?? "";
-  const ownerBriefingValue = briefingDirty ? briefingDraft : (briefingDraft || taskDescriptionMarkdown);
-  const candidateBriefingValue = mergedBriefingMarkdown || taskDescriptionMarkdown;
+  const ownerBriefingValue = briefingDirty ? briefingDraft : mergedBriefingMarkdown;
+  const candidateBriefingValue = mergedBriefingMarkdown;
 
   return (
     <>
@@ -1081,6 +1183,7 @@ export function RoomPage() {
           <OwnerLayout
             merged={merged}
             tasks={room?.tasks ?? []}
+            availableCatalogTasks={availableCatalogTasks}
             stepTitle={step?.title ?? "-"}
             stepStarterCode={stepStarterCode}
             error={error}
@@ -1102,6 +1205,8 @@ export function RoomPage() {
             resyncSignal={resyncSignal}
             editorReady={editorReady}
             onSelectStep={(stepIndex) => sendSetStep(stepIndex)}
+            onAddTasksFromCatalog={addTasksFromCatalog}
+            isAddingTasksFromCatalog={addRoomTasksState.isLoading}
             onYjsUpdate={(yjsUpdate, syncKey, codeSnapshot, yjsDoc) =>
               sendYjsUpdateTracked(yjsUpdate, syncKey, codeSnapshot, yjsDoc)
             }
@@ -1288,6 +1393,7 @@ function TopBar({
 function OwnerLayout({
   merged,
   tasks,
+  availableCatalogTasks,
   stepTitle,
   stepStarterCode,
   error,
@@ -1309,6 +1415,8 @@ function OwnerLayout({
   resyncSignal,
   editorReady,
   onSelectStep,
+  onAddTasksFromCatalog,
+  isAddingTasksFromCatalog,
   onYjsUpdate,
   onYjsBridgeReady,
   onEditorValueChange,
@@ -1317,6 +1425,7 @@ function OwnerLayout({
 }: {
   merged: RealtimeState;
   tasks: Array<{ stepIndex: number; title: string; language: string; score: number | null }>;
+  availableCatalogTasks: TaskTemplate[];
   stepTitle: string;
   stepStarterCode: string;
   error: string;
@@ -1338,24 +1447,58 @@ function OwnerLayout({
   resyncSignal: number;
   editorReady: boolean;
   onSelectStep: (stepIndex: number) => void;
+  onAddTasksFromCatalog: (taskIds: string[]) => Promise<void>;
+  isAddingTasksFromCatalog: boolean;
   onYjsUpdate: (yjsUpdate: string, syncKey: string, codeSnapshot?: string | null, yjsDocumentBase64?: string | null) => void;
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
   onEditorValueChange: (value: string) => void;
   onKeyPress: (payload: { key: string; keyCode: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void;
   onTaskRatingChange: (rating: number | null) => void;
 }) {
+  const isCompactLayout = useIsCompactRoomLayout(760);
   const [activeRailPanel, setActiveRailPanel] = useState<"tasks" | "roomTools" | null>("tasks");
   const [roomToolsTab, setRoomToolsTab] = useState<"notes" | "logs">("notes");
+  const [activeMobileTab, setActiveMobileTab] = useState<MobileRoomTab>("editor");
+  const [addTaskModalOpened, setAddTaskModalOpened] = useState(false);
+  const [selectedCatalogTaskIds, setSelectedCatalogTaskIds] = useState<string[]>([]);
   const [leftPanelWidth, setLeftPanelWidth] = useState(288);
   const roomToolsTabsId = useId();
+  const mobileTabsId = useId();
   const notesTabId = `${roomToolsTabsId}-notes-tab`;
   const logsTabId = `${roomToolsTabsId}-logs-tab`;
   const notesPanelId = `${roomToolsTabsId}-notes-panel`;
   const logsPanelId = `${roomToolsTabsId}-logs-panel`;
+  const mobileEditorTabId = `${mobileTabsId}-editor-tab`;
+  const mobileCollaborationTabId = `${mobileTabsId}-collaboration-tab`;
+  const mobileTasksTabId = `${mobileTabsId}-tasks-tab`;
+  const mobileEditorPanelId = `${mobileTabsId}-editor-panel`;
+  const mobileCollaborationPanelId = `${mobileTabsId}-collaboration-panel`;
+  const mobileTasksPanelId = `${mobileTabsId}-tasks-panel`;
   const notesFeedRef = useRef<HTMLDivElement | null>(null);
+  const catalogTaskOptions = useMemo(() => {
+    return availableCatalogTasks.map((task) => ({
+      value: task.id,
+      label: task.title
+    }));
+  }, [availableCatalogTasks]);
+  const selectedCatalogTasks = useMemo(() => {
+    const selected = new Set(selectedCatalogTaskIds);
+    return availableCatalogTasks.filter((task) => selected.has(task.id));
+  }, [availableCatalogTasks, selectedCatalogTaskIds]);
 
   const dragStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+
+  const submitAddTasksToRoom = useCallback(async () => {
+    if (selectedCatalogTaskIds.length === 0) return;
+    try {
+      await onAddTasksFromCatalog(selectedCatalogTaskIds);
+      setSelectedCatalogTaskIds([]);
+      setAddTaskModalOpened(false);
+    } catch {
+      // Parent sets user-facing error.
+    }
+  }, [onAddTasksFromCatalog, selectedCatalogTaskIds]);
 
   const startDrag = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -1448,14 +1591,22 @@ function OwnerLayout({
   }, [isDragging]);
 
   useEffect(() => {
-    if (activeRailPanel !== "roomTools" || roomToolsTab !== "notes") return;
+    const canScrollNotes = isCompactLayout
+      ? activeMobileTab === "collaboration" && roomToolsTab === "notes"
+      : activeRailPanel === "roomTools" && roomToolsTab === "notes";
+    if (!canScrollNotes) return;
     const host = notesFeedRef.current;
     if (!host) return;
     host.scrollTop = host.scrollHeight;
-  }, [activeRailPanel, notesMessages.length, roomToolsTab]);
+  }, [activeMobileTab, activeRailPanel, isCompactLayout, notesMessages.length, roomToolsTab]);
 
   useEffect(() => {
-    if (activeRailPanel === null) return;
+    const allowedTaskIds = new Set(availableCatalogTasks.map((task) => task.id));
+    setSelectedCatalogTaskIds((prev) => prev.filter((taskId) => allowedTaskIds.has(taskId)));
+  }, [availableCatalogTasks]);
+
+  useEffect(() => {
+    if (activeRailPanel === null || isCompactLayout) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setActiveRailPanel(null);
@@ -1463,9 +1614,14 @@ function OwnerLayout({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [activeRailPanel]);
+  }, [activeRailPanel, isCompactLayout]);
 
-  const showLeftPanel = activeRailPanel !== null;
+  const currentSidePanel = isCompactLayout
+    ? activeMobileTab === "tasks"
+      ? "tasks"
+      : "roomTools"
+    : activeRailPanel;
+  const showLeftPanel = isCompactLayout ? activeMobileTab !== "editor" : currentSidePanel !== null;
   const clampedLeftPanelWidth = clamp(leftPanelWidth, MIN_OWNER_PANEL_WIDTH, MAX_OWNER_PANEL_WIDTH);
   const candidateParticipants = merged.participants.filter((participant) => participant.role === "candidate");
   const candidateOutOfFocus = candidateParticipants.some((participant) => participant.presenceStatus === "away");
@@ -1482,8 +1638,52 @@ function OwnerLayout({
     recentCandidateKeyHistory.push(lastCandidateKey);
   }
 
+  const handleTaskStepSelect = useCallback((stepIndex: number) => {
+    onSelectStep(stepIndex);
+    if (isCompactLayout) {
+      setActiveMobileTab("editor");
+    }
+  }, [isCompactLayout, onSelectStep]);
+
   return (
     <Box className={styles.ownerBody}>
+      <Modal
+        opened={addTaskModalOpened}
+        onClose={() => {
+          setAddTaskModalOpened(false);
+          setSelectedCatalogTaskIds([]);
+        }}
+        title="Добавить задачи из каталога"
+        centered
+      >
+        <Stack>
+          <Text size="sm" c="dimmed">
+            Выберите задачи, которые ещё не добавлены в эту комнату.
+          </Text>
+          <MultiSelect
+            value={selectedCatalogTaskIds}
+            onChange={setSelectedCatalogTaskIds}
+            data={catalogTaskOptions}
+            searchable
+            nothingFoundMessage="Задачи не найдены"
+            placeholder="Выберите задачи"
+            disabled={catalogTaskOptions.length === 0 || isAddingTasksFromCatalog}
+          />
+          {selectedCatalogTasks.length > 0 ? (
+            <Text size="xs" c="dimmed">
+              {`Выбрано задач: ${selectedCatalogTasks.length}`}
+            </Text>
+          ) : null}
+          <Button
+            leftSection={<IconPlus size={14} />}
+            onClick={() => void submitAddTasksToRoom()}
+            disabled={selectedCatalogTaskIds.length === 0 || isAddingTasksFromCatalog}
+            loading={isAddingTasksFromCatalog}
+          >
+            Добавить в комнату
+          </Button>
+        </Stack>
+      </Modal>
       <nav className={styles.leftRail} aria-label="Панели владельца комнаты">
         <button
           type="button"
@@ -1509,19 +1709,82 @@ function OwnerLayout({
         </button>
       </nav>
 
+      {isCompactLayout && (
+        <nav className={styles.mobileRoomTabs} role="tablist" aria-label="Room panels">
+          <button
+            id={mobileEditorTabId}
+            type="button"
+            role="tab"
+            aria-selected={activeMobileTab === "editor"}
+            aria-controls={mobileEditorPanelId}
+            className={`${styles.mobileRoomTab} ${activeMobileTab === "editor" ? styles.mobileRoomTabActive : ""}`}
+            onClick={() => setActiveMobileTab("editor")}
+          >
+            <span className={styles.mobileRoomTabLabel}>Editor</span>
+          </button>
+          <button
+            id={mobileCollaborationTabId}
+            type="button"
+            role="tab"
+            aria-selected={activeMobileTab === "collaboration"}
+            aria-controls={mobileCollaborationPanelId}
+            className={`${styles.mobileRoomTab} ${activeMobileTab === "collaboration" ? styles.mobileRoomTabActive : ""}`}
+            onClick={() => setActiveMobileTab("collaboration")}
+          >
+            <span className={styles.mobileRoomTabLabel}>Team</span>
+          </button>
+          <button
+            id={mobileTasksTabId}
+            type="button"
+            role="tab"
+            aria-selected={activeMobileTab === "tasks"}
+            aria-controls={mobileTasksPanelId}
+            className={`${styles.mobileRoomTab} ${activeMobileTab === "tasks" ? styles.mobileRoomTabActive : ""}`}
+            onClick={() => setActiveMobileTab("tasks")}
+          >
+            <span className={styles.mobileRoomTabLabel}>Tasks</span>
+          </button>
+        </nav>
+      )}
+
       {showLeftPanel && (
         <>
           <Box
-            id="owner-side-panel"
-            className={styles.ownerSidePanel}
-            style={{ width: clampedLeftPanelWidth }}
-            aria-label={activeRailPanel === "tasks" ? "Панель задач" : "Панель чата и логов"}
+            id={isCompactLayout ? (activeMobileTab === "tasks" ? mobileTasksPanelId : mobileCollaborationPanelId) : "owner-side-panel"}
+            role={isCompactLayout ? "tabpanel" : undefined}
+            aria-labelledby={
+              isCompactLayout
+                ? activeMobileTab === "tasks"
+                  ? mobileTasksTabId
+                  : mobileCollaborationTabId
+                : undefined
+            }
+            className={`${styles.ownerSidePanel} ${isCompactLayout ? styles.mobileRoomPanel : ""}`}
+            style={isCompactLayout ? undefined : { width: clampedLeftPanelWidth }}
+            aria-label={currentSidePanel === "tasks" ? "Панель задач" : "Панель чата и логов"}
           >
-            {activeRailPanel === "tasks" ? (
+            {currentSidePanel === "tasks" ? (
               <Box className={styles.sidebar}>
-                <Text size="xs" c="#8b919b">
-                  шаг {merged.currentStep + 1}/{Math.max(tasks.length, 1)}
-                </Text>
+                <Group justify="space-between" align="center" gap={8}>
+                  <Text size="xs" c="#8b919b">
+                    шаг {merged.currentStep + 1}/{Math.max(tasks.length, 1)}
+                  </Text>
+                  <Button
+                    size="xs"
+                    variant="light"
+                    color="dark"
+                    leftSection={<IconPlus size={12} />}
+                    onClick={() => setAddTaskModalOpened(true)}
+                    disabled={availableCatalogTasks.length === 0}
+                  >
+                    + Задача
+                  </Button>
+                </Group>
+                {availableCatalogTasks.length === 0 && (
+                  <Text size="xs" c="#7f8896">
+                    Все доступные задачи из каталога уже добавлены в комнату.
+                  </Text>
+                )}
 
                 <Box className={styles.stepList}>
                   {tasks.map((task) => {
@@ -1533,7 +1796,7 @@ function OwnerLayout({
                         variant={task.stepIndex === merged.currentStep ? "filled" : "light"}
                         color={task.stepIndex === merged.currentStep ? "gray" : "dark"}
                         justify="space-between"
-                        onClick={() => onSelectStep(task.stepIndex)}
+                        onClick={() => handleTaskStepSelect(task.stepIndex)}
                       >
                         {`${task.stepIndex + 1}. ${task.title}${taskRating ? ` · ★${taskRating}` : ""}`}
                       </Button>
@@ -1715,56 +1978,69 @@ function OwnerLayout({
             )}
           </Box>
 
-          <div
-            className={styles.resizeHandle}
-            role="separator"
-            tabIndex={0}
-            aria-orientation="vertical"
-            aria-valuemin={MIN_OWNER_PANEL_WIDTH}
-            aria-valuemax={MAX_OWNER_PANEL_WIDTH}
-            aria-valuenow={Math.round(clampedLeftPanelWidth)}
-            aria-label="Изменить ширину левой панели"
-            onMouseDown={startDrag}
-            onKeyDown={handleResizeHandleKeyDown}
-          >
-            <IconGripVertical size={14} />
-          </div>
+          {!isCompactLayout && (
+            <div
+              className={styles.resizeHandle}
+              role="separator"
+              tabIndex={0}
+              aria-orientation="vertical"
+              aria-valuemin={MIN_OWNER_PANEL_WIDTH}
+              aria-valuemax={MAX_OWNER_PANEL_WIDTH}
+              aria-valuenow={Math.round(clampedLeftPanelWidth)}
+              aria-label="Изменить ширину левой панели"
+              onMouseDown={startDrag}
+              onKeyDown={handleResizeHandleKeyDown}
+            >
+              <IconGripVertical size={14} />
+            </div>
+          )}
         </>
       )}
 
-      <Box className={styles.workspace}>
-        <Box className={styles.editorColumn}>
-          <BriefingBoard
-            mode="interviewer"
-            value={briefingMarkdown}
-            onChange={onBriefingChange}
-          />
-          <Box className={styles.editorPanel}>
-            <div className={styles.editorWrap}>
-              <RoomCodeEditor
-                key={syncKey}
-                height="100%"
-                language={toEditorLanguage(merged.language)}
-                value={merged.code || (merged.lastCodeUpdatedBySessionId ? "" : stepStarterCode)}
-                serverYjsBase64={merged.yjsDocumentBase64 ?? null}
-                serverYjsSequence={merged.lastYjsSequence ?? 0}
-                resyncSignal={resyncSignal}
-                syncKey={syncKey}
-                readOnly={!editorReady}
-                sessionId={sessionId}
-                participantLabel={participantLabel}
-                sendAwarenessUpdate={sendAwarenessUpdate}
-                onAwarenessBridgeReady={onAwarenessBridgeReady}
-                onYjsUpdate={onYjsUpdate}
-                onYjsBridgeReady={onYjsBridgeReady}
-                onEditorValueChange={onEditorValueChange}
-                onKeyPress={onKeyPress}
+      {(!isCompactLayout || activeMobileTab === "editor") && (
+        <Box
+          id={mobileEditorPanelId}
+          role={isCompactLayout ? "tabpanel" : undefined}
+          aria-labelledby={isCompactLayout ? mobileEditorTabId : undefined}
+          hidden={isCompactLayout && activeMobileTab !== "editor"}
+          className={isCompactLayout ? styles.mobileRoomPanel : undefined}
+        >
+          <Box className={styles.workspace}>
+            <Box className={styles.editorColumn}>
+              <BriefingBoard
+                key={`briefing-${merged.currentStep}`}
+                mode="interviewer"
+                value={briefingMarkdown}
+                onChange={onBriefingChange}
               />
-            </div>
+              <Box className={styles.editorPanel}>
+                <div className={styles.editorWrap}>
+                  <RoomCodeEditor
+                    key={syncKey}
+                    height="100%"
+                    language={toEditorLanguage(merged.language)}
+                    value={merged.code || (merged.lastCodeUpdatedBySessionId ? "" : stepStarterCode)}
+                    serverYjsBase64={merged.yjsDocumentBase64 ?? null}
+                    serverYjsSequence={merged.lastYjsSequence ?? 0}
+                    resyncSignal={resyncSignal}
+                    syncKey={syncKey}
+                    readOnly={!editorReady}
+                    sessionId={sessionId}
+                    participantLabel={participantLabel}
+                    sendAwarenessUpdate={sendAwarenessUpdate}
+                    onAwarenessBridgeReady={onAwarenessBridgeReady}
+                    onYjsUpdate={onYjsUpdate}
+                    onYjsBridgeReady={onYjsBridgeReady}
+                    onEditorValueChange={onEditorValueChange}
+                    onKeyPress={onKeyPress}
+                  />
+                </div>
+              </Box>
+              {error && <Text className={styles.error}>{error}</Text>}
+            </Box>
           </Box>
-          {error && <Text className={styles.error}>{error}</Text>}
         </Box>
-      </Box>
+      )}
     </Box>
   );
 }
@@ -1822,7 +2098,7 @@ function CandidateLayout({
         </Group>
       </Box>
 
-      <BriefingBoard mode="candidate" value={briefingMarkdown} />
+      <BriefingBoard key={`briefing-${merged.currentStep}`} mode="candidate" value={briefingMarkdown} />
 
       <Box className={styles.candidatePanel}>
         <div className={styles.editorWrap}>
@@ -1913,6 +2189,28 @@ function BriefingBoard({
     [onChange, value]
   );
 
+  const insertSnippet = useCallback(
+    (snippet: string) => {
+      if (!onChange) return;
+      const textarea = editorRef.current;
+      const selectionStart = textarea?.selectionStart ?? value.length;
+      const selectionEnd = textarea?.selectionEnd ?? selectionStart;
+      const needsLeadingLineBreak = selectionStart > 0 && value[selectionStart - 1] !== "\n";
+      const needsTrailingLineBreak = selectionEnd < value.length && value[selectionEnd] !== "\n";
+      const prefix = needsLeadingLineBreak ? "\n" : "";
+      const suffix = needsTrailingLineBreak ? "\n" : "";
+      const next = `${value.slice(0, selectionStart)}${prefix}${snippet}${suffix}${value.slice(selectionEnd)}`;
+      onChange(next);
+      const nextSelectionStart = selectionStart + prefix.length;
+      const nextSelectionEnd = nextSelectionStart + snippet.length;
+      requestAnimationFrame(() => {
+        textarea?.focus();
+        textarea?.setSelectionRange(nextSelectionStart, nextSelectionEnd);
+      });
+    },
+    [onChange, value]
+  );
+
   const applyMarkdownTool = useCallback(
     (tool: MarkdownToolId) => {
       if (tool === "bold") return applyWrap("**", "**", "текст");
@@ -1924,8 +2222,13 @@ function BriefingBoard({
       if (tool === "ul") return applyLinePrefix("- ");
       if (tool === "ol") return applyLinePrefix("1. ");
       if (tool === "quote") return applyLinePrefix("> ");
+      if (tool === "table") {
+        return insertSnippet(
+          "| Left columns  | Right columns |\n| ------------- |:-------------:|\n| left foo      | right foo     |\n| left bar      | right bar     |\n| left baz      | right baz     |"
+        );
+      }
     },
-    [applyLinePrefix, applyWrap]
+    [applyLinePrefix, applyWrap, insertSnippet]
   );
 
   return (
@@ -2014,6 +2317,15 @@ function BriefingBoard({
                 onClick={() => applyMarkdownTool("quote")}
               >
                 Quote
+              </button>
+              <button
+                type="button"
+                className={styles.briefingToolButton}
+                aria-label="Table"
+                title="Table"
+                onClick={() => applyMarkdownTool("table")}
+              >
+                Table
               </button>
             </div>
             <Textarea
@@ -2245,6 +2557,7 @@ function RoomCodeEditor({
   onEditorValueChange: (value: string) => void;
   onKeyPress: (payload: { key: string; keyCode: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void;
 }) {
+  type CmHostElement = HTMLDivElement & { __roomEditorView?: EditorView | null };
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const yDocRef = useRef<Y.Doc | null>(null);
@@ -2327,6 +2640,10 @@ function RoomCodeEditor({
       onAwarenessBridgeReady(null);
       viewRef.current?.destroy();
       viewRef.current = null;
+      const hostElement = hostRef.current as CmHostElement | null;
+      if (hostElement) {
+        hostElement.__roomEditorView = null;
+      }
       yDocRef.current?.destroy();
       yDocRef.current = null;
       yTextRef.current = null;
@@ -2454,6 +2771,10 @@ function RoomCodeEditor({
       parent: hostRef.current
     });
     viewRef.current = view;
+    const hostElement = hostRef.current as CmHostElement | null;
+    if (hostElement) {
+      hostElement.__roomEditorView = view;
+    }
     onEditorValueChangeRef.current(view.state.doc.toString());
 
     syncKeyRef.current = syncKey;
@@ -2502,6 +2823,10 @@ function RoomCodeEditor({
       onAwarenessBridgeReady(null);
       awareness.destroy();
       awarenessRef.current = null;
+      const nextHost = hostRef.current as CmHostElement | null;
+      if (nextHost) {
+        nextHost.__roomEditorView = null;
+      }
     };
     // IMPORTANT: do not depend on `value` or `serverYjsBase64` here. When those change every state_sync,
     // this effect's cleanup ran yDoc.off("update") while viewRef stayed set → early return on next run
