@@ -1,6 +1,6 @@
 import { chromium } from "playwright";
 
-const webBaseUrl = process.env.E2E_BASE_URL || "http://127.0.0.1:5173";
+const webBaseUrl = process.env.E2E_BASE_URL || "http://localhost:5173";
 
 async function gotoWithRetry(page, url) {
   let lastError;
@@ -60,6 +60,17 @@ try {
 **bold** and list:
 - a
 - b
+
+| Left columns  | Right columns |
+| ------------- |:-------------:|
+| left foo      | right foo     |
+| left bar      | right bar     |
+| left baz      | right baz     |
+
+| Column | qweqweqwe |
+| - | - |
+| - | - |
+| - | - |
 `;
   await markdownEditor.fill(content);
 
@@ -80,6 +91,10 @@ try {
 
   await candidatePage.getByRole("heading", { name: "Header", exact: true }).waitFor({ timeout: 12000 });
   await candidatePage.getByText("bold", { exact: false }).waitFor({ timeout: 12000 });
+  await candidatePreview.locator("table").first().waitFor({ state: "visible", timeout: 12000 });
+  await candidatePage.getByText("left baz", { exact: false }).waitFor({ timeout: 12000 });
+  await candidatePage.getByText("right baz", { exact: false }).waitFor({ timeout: 12000 });
+  await candidatePage.getByText("qweqweqwe", { exact: false }).waitFor({ timeout: 12000 });
 
   console.log("MARKDOWN_EXPLAINER_SMOKE_OK", inviteCode);
 

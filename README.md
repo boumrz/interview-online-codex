@@ -29,6 +29,8 @@ brew services start postgresql@16
 
 ### 2. Backend
 
+**Вариант A — PostgreSQL (как в проде):** поднимите БД (см. шаг 1) и:
+
 ```bash
 cd backend
 JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home \
@@ -37,6 +39,17 @@ DB_USER=interview \
 DB_PASSWORD=interview \
 mvn spring-boot:run
 ```
+
+На Windows с Docker: `docker compose -f docker-compose.dev.yml up -d`, затем те же переменные `DB_*` и `mvn spring-boot:run`.
+
+**Вариант B — без PostgreSQL (встроенная H2, только для локальной разработки):**
+
+```powershell
+# из корня репозитория
+powershell -ExecutionPolicy Bypass -File .\scripts\start-backend-local.ps1
+```
+
+Профиль `local` задаётся в `application-local.yml` (in-memory H2). API всё так же: `http://localhost:8080`.
 
 Backend default URL: `http://localhost:8080`
 

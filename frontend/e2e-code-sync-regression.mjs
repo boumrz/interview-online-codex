@@ -34,16 +34,17 @@ async function registerAndCreateRoom() {
 
 async function modelValue(page) {
   return page.evaluate(() => {
-    const editor = document.querySelector(".cm-editor");
-    const anyEditor = editor;
-    const view = anyEditor?.cmView?.view ?? anyEditor?.cmView?.rootView?.view ?? null;
+    const host = document.querySelector(".cm-host");
+    const view = host?.__roomEditorView ?? null;
     if (view?.state?.doc?.toString) {
       return view.state.doc.toString();
     }
-    const lines = Array.from(document.querySelectorAll(".cm-line"))
-      .map((line) => (line.textContent ?? "").replace(/\u200b/g, ""))
-      .filter((line, index, arr) => !(index === arr.length - 1 && line === ""));
-    return lines.length > 0 ? lines.join("\n") : null;
+    const content = document.querySelector(".cm-content");
+    if (!content) return null;
+    const raw = content.innerText ?? "";
+    return raw
+      .replace(/[\u200b\u200c\u200d\u200e\u200f\u2060-\u206f\ufeff]/g, "")
+      .replace(/\n+$/g, "");
   });
 }
 
@@ -56,6 +57,28 @@ function normalizeSnapshot(value) {
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+async function waitForFragments(page, fragments, timeout = 12000) {
+  await page.waitForFunction(
+    ({ fragments }) => {
+      const host = document.querySelector(".cm-host");
+      const view = host?.__roomEditorView ?? null;
+      const raw =
+        (view?.state?.doc?.toString ? view.state.doc.toString() : null) ??
+        (document.querySelector(".cm-content")?.innerText ?? "");
+      const normalized = raw
+        .replace(/[\u200b\u200c\u200d\u200e\u200f\u2060-\u206f\ufeff]/g, "")
+        .replaceAll("Owner QA", "")
+        .replaceAll("Candidate QA", "")
+        .replace(/[ \t]+\n/g, "\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+      return fragments.every((fragment) => normalized.includes(fragment));
+    },
+    { fragments },
+    { timeout }
+  );
 }
 
 const appendedText = "function solve(a, b) {\n  return a + b;\n}\nalpha\nbeta\ngamma\ndelta\nepsilon";
@@ -104,7 +127,17 @@ try {
   await ownerPage.waitForTimeout(300);
   await ownerPage.keyboard.type(secondHalf, { delay: 8 });
 
-  await ownerPage.waitForTimeout(2500);
+  const requiredFragments = [
+    "function solve(a, b) {",
+    "return a + b;",
+    "alpha",
+    "beta",
+    "gamma",
+    "delta",
+    "epsilon"
+  ];
+  await waitForFragments(ownerPage, requiredFragments, 12000);
+  await waitForFragments(candidatePage, requiredFragments, 12000);
 
   const ownerValue = await modelValue(ownerPage);
   const candidateValue = await modelValue(candidatePage);
@@ -115,15 +148,6 @@ try {
   const ownerNormalized = normalizeSnapshot(ownerValue);
   const candidateNormalized = normalizeSnapshot(candidateValue);
   const expectedNormalized = normalizeSnapshot(expectedValue);
-  const requiredFragments = [
-    "function solve(a, b) {",
-    "return a + b;",
-    "alpha",
-    "beta",
-    "gamma",
-    "delta",
-    "epsilon"
-  ];
 
   const ownerMissing = requiredFragments.filter((fragment) => !ownerNormalized.includes(fragment));
   const candidateMissing = requiredFragments.filter((fragment) => !candidateNormalized.includes(fragment));

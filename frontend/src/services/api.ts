@@ -59,6 +59,17 @@ export const api = createApi({
       }),
       invalidatesTags: ["Room"]
     }),
+    addRoomTasks: builder.mutation<Room, { inviteCode: string; taskIds: string[]; ownerToken?: string }>({
+      query: ({ inviteCode, taskIds, ownerToken }) => ({
+        url: `/rooms/${inviteCode}/tasks`,
+        method: "POST",
+        headers: {
+          ...(ownerToken ? { "X-Room-Owner-Token": ownerToken } : {})
+        },
+        body: { taskIds }
+      }),
+      invalidatesTags: ["Room"]
+    }),
     runCode: builder.mutation<
       RunCodeResponse,
       { inviteCode: string; ownerToken: string; language: string; code: string }
@@ -213,6 +224,7 @@ export const {
   useCreateRoomMutation,
   useGetRoomQuery,
   useNextStepMutation,
+  useAddRoomTasksMutation,
   useRunCodeMutation,
   useMyRoomsQuery,
   useUpdateRoomMutation,

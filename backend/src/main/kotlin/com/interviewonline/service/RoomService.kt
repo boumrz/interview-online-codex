@@ -1,6 +1,7 @@
 package com.interviewonline.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.interviewonline.dto.AddRoomTasksRequest
 import com.interviewonline.dto.CreateGuestRoomRequest
 import com.interviewonline.dto.CreateRoomRequest
 import com.interviewonline.dto.RoomAccessMemberDto
@@ -83,8 +84,10 @@ class RoomService(
                 title = task.title,
                 description = task.description,
                 starterCode = task.starterCode,
+                briefingMarkdown = null,
                 language = normalizeLanguage(task.language),
                 categoryName = normalizeLanguage(task.language),
+                sourceTaskTemplateId = task.id,
             )
         }.toMutableList()
         tasks.forEach { it.room = room }
@@ -132,6 +135,75 @@ class RoomService(
         saveCurrentStepSnapshot(room)
         room.currentStep = (room.currentStep + 1).coerceAtMost(maxStep)
         applyCurrentStepSnapshot(room)
+        val saved = roomRepository.save(room)
+        collaborationService.syncFromRoom(saved)
+        return toRoomResponse(saved, access = access, includeOwnerToken = false, includeInterviewerToken = false)
+    }
+
+    @Transactional
+    fun addTasksToRoom(
+        inviteCode: String,
+        request: AddRoomTasksRequest,
+        ownerToken: String?,
+        interviewerToken: String?,
+        user: User?,
+    ): RoomResponse {
+        val room = roomRepository.findByInviteCode(inviteCode)
+            ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+        val access = roomAccessService.requireManager(room, user, ownerToken, interviewerToken)
+        val authorizedUser = user ?: throw ApiException(
+            HttpStatus.UNAUTHORIZED,
+            "Для добавления задач из каталога нужна авторизация",
+        )
+
+        val requestedTaskIds = request.taskIds
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+        if (requestedTaskIds.isEmpty()) {
+            throw ApiException(HttpStatus.BAD_REQUEST, "Нужно передать хотя бы один taskId")
+        }
+
+        val roomLanguage = normalizeLanguage(room.language)
+        val selectedTasks = userTaskService.resolveTasksForRoom(authorizedUser, requestedTaskIds, roomLanguage)
+
+        val existingTemplateIds = room.tasks
+            .mapNotNull { it.sourceTaskTemplateId?.trim() }
+            .filter { it.isNotBlank() }
+            .toSet()
+        val existingSignatures = room.tasks
+            .map { normalizeTaskSignature(it.title, it.description, it.starterCode, it.language) }
+            .toSet()
+
+        val tasksToAppend = selectedTasks.filter { task ->
+            val taskId = task.id ?: return@filter false
+            if (existingTemplateIds.contains(taskId)) return@filter false
+            val signature = normalizeTaskSignature(task.title, task.description, task.starterCode, task.language)
+            !existingSignatures.contains(signature)
+        }
+
+        if (tasksToAppend.isNotEmpty()) {
+            val baseStepIndex = room.tasks.size
+            tasksToAppend.forEachIndexed { index, task ->
+                room.tasks.add(
+                    RoomTask(
+                        room = room,
+                        stepIndex = baseStepIndex + index,
+                        title = task.title,
+                        description = task.description,
+                        starterCode = task.starterCode,
+                        briefingMarkdown = null,
+                        language = normalizeLanguage(task.language),
+                        categoryName = normalizeLanguage(task.language),
+                        sourceTaskTemplateId = task.id,
+                    ),
+                )
+            }
+            if (room.currentStep >= room.tasks.size) {
+                room.currentStep = 0
+            }
+        }
+
         val saved = roomRepository.save(room)
         collaborationService.syncFromRoom(saved)
         return toRoomResponse(saved, access = access, includeOwnerToken = false, includeInterviewerToken = false)
@@ -294,7 +366,7 @@ class RoomService(
                     timestampEpochMs = note.timestampEpochMs,
                 )
             },
-            briefingMarkdown = room.briefingMarkdown.orEmpty(),
+            briefingMarkdown = activeTask?.briefingMarkdown?.takeIf { it.isNotBlank() } ?: activeTask?.description.orEmpty(),
             ownerToken = if (includeOwnerToken) room.ownerSessionToken else null,
             interviewerToken = if (includeInterviewerToken) room.interviewerSessionToken else null,
             role = access.role.wireValue,
@@ -311,6 +383,7 @@ class RoomService(
                     language = normalizeLanguage(it.language),
                     categoryName = it.categoryName?.let(::normalizeLanguage),
                     score = it.score,
+                    sourceTaskTemplateId = it.sourceTaskTemplateId,
                 )
             },
         )
@@ -320,18 +393,23 @@ class RoomService(
         val firstTask = room.tasks.getOrNull(room.currentStep) ?: room.tasks.firstOrNull() ?: return
         firstTask.solutionCode = firstTask.solutionCode ?: firstTask.starterCode
         firstTask.solutionLanguage = firstTask.solutionLanguage?.ifBlank { null } ?: firstTask.language
+        if (firstTask.briefingMarkdown.isNullOrBlank() && !room.briefingMarkdown.isNullOrBlank()) {
+            firstTask.briefingMarkdown = room.briefingMarkdown
+        }
         if (room.notes.isNullOrBlank() && !firstTask.interviewerNotes.isNullOrBlank()) {
             room.notes = firstTask.interviewerNotes
         }
         room.tasks.forEach { it.interviewerNotes = null }
         room.code = firstTask.solutionCode.orEmpty()
         room.language = normalizeLanguage(firstTask.solutionLanguage.orEmpty().ifBlank { firstTask.language })
+        room.briefingMarkdown = firstTask.briefingMarkdown.orEmpty()
     }
 
     private fun saveCurrentStepSnapshot(room: Room) {
         val currentTask = room.tasks.getOrNull(room.currentStep) ?: return
         currentTask.solutionCode = room.code
         currentTask.solutionLanguage = normalizeLanguage(room.language)
+        currentTask.briefingMarkdown = room.briefingMarkdown.orEmpty()
         if (room.notes.isNullOrBlank() && !currentTask.interviewerNotes.isNullOrBlank()) {
             room.notes = currentTask.interviewerNotes
         }
@@ -342,6 +420,7 @@ class RoomService(
         val currentTask = room.tasks.getOrNull(room.currentStep) ?: return
         room.code = currentTask.solutionCode ?: currentTask.starterCode
         room.language = normalizeLanguage(currentTask.solutionLanguage?.ifBlank { null } ?: currentTask.language)
+        room.briefingMarkdown = currentTask.briefingMarkdown.orEmpty()
     }
 
     private fun normalizeLanguage(language: String): String {
@@ -353,6 +432,14 @@ class RoomService(
             "sql" -> "sql"
             else -> "nodejs"
         }
+    }
+
+    private fun normalizeTaskSignature(title: String, description: String, starterCode: String, language: String): String {
+        val normalizedLanguage = normalizeLanguage(language)
+        val normalizedTitle = title.trim().lowercase()
+        val normalizedDescription = description.replace("\r\n", "\n").trim()
+        val normalizedStarterCode = starterCode.replace("\r\n", "\n").trim()
+        return listOf(normalizedLanguage, normalizedTitle, normalizedDescription, normalizedStarterCode).joinToString("::")
     }
 
     private fun buildAccessMembers(room: Room): List<RoomAccessMemberDto> {

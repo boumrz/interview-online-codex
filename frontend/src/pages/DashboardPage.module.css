@@ -105,6 +105,34 @@
   padding: 1px 4px;
 }
 
+.markdownPreviewContent table,
+.taskDescriptionMarkdown table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 10px;
+}
+
+.markdownPreviewContent th,
+.markdownPreviewContent td,
+.taskDescriptionMarkdown th,
+.taskDescriptionMarkdown td {
+  border: 1px solid #2d3b4f;
+  padding: 6px 8px;
+  vertical-align: top;
+}
+
+.markdownPreviewContent th,
+.taskDescriptionMarkdown th {
+  background: #10213a;
+  color: #f8fafc;
+  font-weight: 600;
+}
+
+.markdownPreviewContent tbody tr:nth-child(even) td,
+.taskDescriptionMarkdown tbody tr:nth-child(even) td {
+  background: rgba(22, 37, 60, 0.35);
+}
+
 .taskDescriptionMarkdown {
   color: #9aa5b5;
   font-size: 13px;

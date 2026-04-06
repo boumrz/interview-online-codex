@@ -17,6 +17,7 @@ export type RoomTask = {
   language: string;
   categoryName: string | null;
   score: number | null;
+  sourceTaskTemplateId?: string | null;
 };
 
 export type RoomNoteMessage = {

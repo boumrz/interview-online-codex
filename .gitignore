@@ -5,6 +5,7 @@ backend/build
 .gradle
 .idea
 .vscode
+.m2/
 
 # Build artifacts
 backend/target/
