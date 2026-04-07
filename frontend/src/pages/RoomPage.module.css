@@ -67,6 +67,8 @@
 
 .participantCard {
   --participant-role-color: #d6dce6;
+  --participant-cursor-color: #6c9fff;
+  --participant-cursor-color-light: rgba(108, 159, 255, 0.22);
   min-width: 0;
   max-width: 148px;
   flex: 0 0 auto;
@@ -76,7 +78,7 @@
   border-radius: 12px;
   border: 1px solid #55606f;
   background: linear-gradient(180deg, rgba(22, 28, 37, 0.96) 0%, rgba(16, 21, 29, 0.98) 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 0 0 1px var(--participant-cursor-color-light);
 }
 
 .participantCard[data-presence="active"] {
@@ -127,7 +129,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #5fc3a0;
+  color: var(--participant-role-color);
   font-size: 10px;
   line-height: 1;
   font-weight: 700;
@@ -363,15 +365,25 @@
   flex: 1;
   min-width: 0;
   min-height: 0;
+  height: 100%;
   display: flex;
   overflow: hidden;
   padding: 10px;
+}
+
+.editorViewport {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
 }
 
 .editorColumn {
   flex: 1;
   min-width: 0;
   min-height: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -388,13 +400,14 @@
 }
 
 .briefingPanel {
+  flex: 0 1 auto;
   flex-shrink: 0;
   border: 1px solid #252a32;
   border-radius: 12px;
   background: #11151c;
   padding: 10px;
-  min-height: 180px;
-  max-height: 62vh;
+  min-height: 132px;
+  max-height: min(42dvh, 360px);
   resize: vertical;
   overflow: auto;
 }
@@ -549,6 +562,24 @@
 .editorWrap {
   height: 100%;
   min-height: 0;
+}
+
+.codeEditorHost {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.codeEditorHost :global(.cm-editor) {
+  height: 100%;
+}
+
+.codeEditorHost :global(.cm-scroller) {
+  overflow: auto !important;
+}
+
+.codeEditorHost :global(.cm-content) {
+  min-height: 100%;
 }
 
 .outputPanel {
@@ -989,12 +1020,16 @@
 }
 
 .candidateBody {
+  flex: 1;
+  min-height: 0;
   padding: 14px;
   max-width: 1400px;
   margin: 0 auto;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
   width: 100%;
+  overflow: hidden;
 }
 
 .candidateMeta {
@@ -1046,6 +1081,17 @@
 .mobileRoomPanel {
   min-height: 0;
   width: 100%;
+}
+
+.candidatePanel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.candidatePanel .editorWrap {
+  flex: 1;
+  min-height: 0;
 }
 
 .error {
@@ -1120,6 +1166,17 @@
   }
 }
 
+@media (max-height: 820px) {
+  .briefingPanel {
+    min-height: 110px;
+    max-height: min(34dvh, 260px);
+  }
+
+  .briefingEditorInput {
+    min-height: 104px;
+  }
+}
+
 @media (max-width: 760px) {
   :root {
     --room-mobile-panel-max-height: min(44dvh, 360px);
@@ -1138,7 +1195,7 @@
     gap: 0;
     flex: 1;
     min-height: 0;
-    overflow: hidden;
+    overflow: auto;
   }
 
   .edgeToggle,
@@ -1198,7 +1255,8 @@
     padding: 0;
     gap: 10px;
     min-height: 0;
-    overflow: hidden;
+    overflow: auto;
+    height: auto;
   }
 
   .editorColumn {

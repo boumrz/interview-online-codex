@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Badge, Box, Button, Group, Menu, Modal, MultiSelect, Select, Stack, Text, TextInput, Textarea, ThemeIcon } from "@mantine/core";
+import { Badge, Box, Button, Group, Menu, Modal, MultiSelect, Select, Stack, Text, TextInput, Textarea, ThemeIcon, Tooltip } from "@mantine/core";
 import { IconCode, IconGripVertical, IconHome2, IconLayoutDashboard, IconPlus, IconUsers } from "@tabler/icons-react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import * as Y from "yjs";
@@ -392,25 +392,6 @@ function formatNoteTimestamp(timestampEpochMs: number): string {
     hour: "2-digit",
     minute: "2-digit"
   });
-}
-
-function getParticipantRoleMeta(role: Participant["role"] | NoteMessage["role"]) {
-  if (role === "owner") {
-    return {
-      label: "Владелец",
-      color: "#ffaa4d"
-    };
-  }
-  if (role === "interviewer") {
-    return {
-      label: "Интервьюер",
-      color: "#5fc3a0"
-    };
-  }
-  return {
-    label: "Кандидат",
-    color: "#6c9fff"
-  };
 }
 
 function getParticipantPresenceLabel(status: Participant["presenceStatus"]) {
@@ -1287,11 +1268,11 @@ function TopBar({
           <Box className={styles.participantsHost}>
             <div className={styles.participantsInline} aria-label="Участники комнаты">
               {participants.map((participant) => {
-                const roleMeta = getParticipantRoleMeta(participant.role);
                 const presenceLabel = getParticipantPresenceLabel(participant.presenceStatus);
                 const canOpenMenu = canGrantAccess && participant.role !== "owner" && (participant.canBeGrantedInterviewerAccess ?? true);
                 const isInterviewer = participant.role === "interviewer";
                 const menuActionLabel = isInterviewer ? "Снять роль интервьюера" : "Назначить интервьюером";
+                const { color: cursorColor, colorLight: cursorColorLight } = awarenessUserColors(participant.sessionId);
                 const participantCard = (
                   <span className={styles.participantNameRow}>
                     <span className={styles.participantName}>{participant.displayName}</span>
@@ -1303,7 +1284,9 @@ function TopBar({
                   </span>
                 );
                 const participantStyle = {
-                  "--participant-role-color": roleMeta.color
+                  "--participant-role-color": cursorColor,
+                  "--participant-cursor-color": cursorColor,
+                  "--participant-cursor-color-light": cursorColorLight
                 } as React.CSSProperties;
 
                 if (!canOpenMenu) {
@@ -1637,6 +1620,8 @@ function OwnerLayout({
   if (recentCandidateKeyHistory.length === 0 && lastCandidateKey) {
     recentCandidateKeyHistory.push(lastCandidateKey);
   }
+  const addTaskDisabled = availableCatalogTasks.length === 0;
+  const addTaskDisabledReason = "Все доступные задачи из каталога уже добавлены в комнату.";
 
   const handleTaskStepSelect = useCallback((stepIndex: number) => {
     onSelectStep(stepIndex);
@@ -1769,20 +1754,24 @@ function OwnerLayout({
                   <Text size="xs" c="#8b919b">
                     шаг {merged.currentStep + 1}/{Math.max(tasks.length, 1)}
                   </Text>
-                  <Button
-                    size="xs"
-                    variant="light"
-                    color="dark"
-                    leftSection={<IconPlus size={12} />}
-                    onClick={() => setAddTaskModalOpened(true)}
-                    disabled={availableCatalogTasks.length === 0}
-                  >
-                    + Задача
-                  </Button>
+                  <Tooltip label={addTaskDisabledReason} withArrow disabled={!addTaskDisabled} position="bottom-end" openDelay={120}>
+                    <span>
+                      <Button
+                        size="xs"
+                        variant="filled"
+                        color="blue"
+                        leftSection={<IconPlus size={12} />}
+                        onClick={() => setAddTaskModalOpened(true)}
+                        disabled={addTaskDisabled}
+                      >
+                        Задача
+                      </Button>
+                    </span>
+                  </Tooltip>
                 </Group>
-                {availableCatalogTasks.length === 0 && (
+                {addTaskDisabled && (
                   <Text size="xs" c="#7f8896">
-                    Все доступные задачи из каталога уже добавлены в комнату.
+                    {addTaskDisabledReason}
                   </Text>
                 )}
 
@@ -2003,7 +1992,7 @@ function OwnerLayout({
           role={isCompactLayout ? "tabpanel" : undefined}
           aria-labelledby={isCompactLayout ? mobileEditorTabId : undefined}
           hidden={isCompactLayout && activeMobileTab !== "editor"}
-          className={isCompactLayout ? styles.mobileRoomPanel : undefined}
+          className={`${styles.editorViewport} ${isCompactLayout ? styles.mobileRoomPanel : ""}`.trim()}
         >
           <Box className={styles.workspace}>
             <Box className={styles.editorColumn}>
@@ -2921,7 +2910,5 @@ function RoomCodeEditor({
     });
   }, [languageExtension]);
 
-  // CodeMirror scroll relies on a constrained-height container. `overflow: auto` ensures
-  // vertical scrolling works when content grows (e.g. writing many new lines).
-  return <div className="cm-host" style={{ height, overflow: "auto", overflowX: "hidden" }} ref={hostRef} />;
+  return <div className={styles.codeEditorHost} style={{ height }} ref={hostRef} />;
 }
