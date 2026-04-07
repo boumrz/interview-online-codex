@@ -42,3 +42,19 @@ test-results/
 
 # Local debug tooling output
 .playwright-cli/
+
+# Local AI tooling configs (not for server/repo)
+.mcp.json
+.opencode.json
+.cursor/
+.claude/
+.cursorrules
+.windsurfrules
+CLAUDE.md
+GEMINI.md
+AGENTS.md
+
+# Local vendored toolchain and ad-hoc debug files
+.tools/
+frontend/tmp-notes-chat-smoke.mjs
+frontend/smoke-debug.png
