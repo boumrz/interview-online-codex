@@ -26,10 +26,22 @@ data class RoomRealtimePayload(
     val notesLockedBySessionId: String? = null,
     val notesLockedByDisplayName: String? = null,
     val notesLockedUntilEpochMs: Long? = null,
+    val tasks: List<RoomTaskPayload> = emptyList(),
     val taskScores: Map<Int, Int?> = emptyMap(),
     val cursors: List<CursorPayload> = emptyList(),
     val lastCandidateKey: CandidateKeyPayload? = null,
     val candidateKeyHistory: List<CandidateKeyPayload> = emptyList(),
+)
+
+data class RoomTaskPayload(
+    val stepIndex: Int,
+    val title: String,
+    val description: String,
+    val starterCode: String,
+    val language: String,
+    val categoryName: String?,
+    val score: Int?,
+    val sourceTaskTemplateId: String? = null,
 )
 
 data class NoteMessagePayload(

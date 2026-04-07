@@ -76,6 +76,7 @@ type RealtimeState = {
   notes: string;
   notesMessages?: NoteMessage[];
   briefingMarkdown?: string;
+  tasks?: RoomTask[];
   taskScores: Record<string, number | null>;
   participants: Participant[];
   isOwner: boolean;
@@ -236,13 +237,14 @@ function useIsCompactRoomLayout(maxWidth: number): boolean {
 function normalizeKeyCodeLabel(code: string): string {
   const normalizedCode = code.trim();
   if (!normalizedCode) return "";
+  if (normalizedCode === "Unidentified") return "";
   if (normalizedCode.startsWith("Key")) {
     return normalizedCode.slice(3);
   }
   if (normalizedCode.startsWith("Digit")) {
     return normalizedCode.slice(5);
   }
-  if (normalizedCode === "Space") {
+  if (normalizedCode === "Space" || normalizedCode === "Spacebar") {
     return "Space";
   }
   if (normalizedCode.startsWith("Numpad")) {
@@ -252,8 +254,20 @@ function normalizeKeyCodeLabel(code: string): string {
 }
 
 function normalizeKeyLabel(key: string, keyCode: string): string {
+  if (key === " " || key === "\u00A0") {
+    return "Space";
+  }
+  if (key === "\t") {
+    return "Tab";
+  }
+  if (key === "\n" || key === "\r" || key === "\r\n") {
+    return "Enter";
+  }
   const normalized = key.trim();
   if (!normalized) {
+    return normalizeKeyCodeLabel(keyCode) || "Unknown";
+  }
+  if (normalized === "Unidentified") {
     return normalizeKeyCodeLabel(keyCode) || "Unknown";
   }
 
@@ -263,7 +277,7 @@ function normalizeKeyLabel(key: string, keyCode: string): string {
     Command: "Cmd",
     OS: "Cmd",
     Escape: "Esc",
-    " ": "Space"
+    Spacebar: "Space"
   };
   if (aliases[normalized]) {
     return aliases[normalized];
@@ -319,6 +333,33 @@ function taskScoresFromTasks(tasks: Array<{ stepIndex: number; score?: number | 
     result[String(task.stepIndex)] = typeof score === "number" && score >= 1 && score <= 5 ? score : null;
   });
   return result;
+}
+
+function normalizeRealtimeTask(value: unknown): RoomTask | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<RoomTask>;
+  const stepIndex = typeof candidate.stepIndex === "number" ? Math.floor(candidate.stepIndex) : -1;
+  if (!Number.isInteger(stepIndex) || stepIndex < 0) {
+    return null;
+  }
+  const title = typeof candidate.title === "string" ? candidate.title.trim() : "";
+  const description = typeof candidate.description === "string" ? candidate.description : "";
+  const starterCode = typeof candidate.starterCode === "string" ? candidate.starterCode : "";
+  const language = normalizeRoomLanguage(typeof candidate.language === "string" ? candidate.language : "nodejs");
+  const categoryName = typeof candidate.categoryName === "string" ? candidate.categoryName : null;
+  const score = typeof candidate.score === "number" && candidate.score >= 1 && candidate.score <= 5 ? candidate.score : null;
+  const sourceTaskTemplateId = typeof candidate.sourceTaskTemplateId === "string" ? candidate.sourceTaskTemplateId : null;
+  if (!title) return null;
+  return {
+    stepIndex,
+    title,
+    description,
+    starterCode,
+    language,
+    categoryName,
+    score,
+    sourceTaskTemplateId
+  };
 }
 
 function normalizeNoteMessage(value: unknown): NoteMessage | null {
@@ -495,6 +536,7 @@ export function RoomPage() {
         .map(normalizeNoteMessage)
         .filter((item): item is NoteMessage => Boolean(item)),
       briefingMarkdown: room.briefingMarkdown ?? "",
+      tasks: [...(room.tasks ?? [])].sort((left, right) => left.stepIndex - right.stepIndex),
       taskScores: taskScoresFromTasks(room.tasks ?? []),
       participants: [] as Participant[],
       isOwner: Boolean(room.isOwner),
@@ -510,6 +552,13 @@ export function RoomPage() {
     };
   }, [room, state]);
 
+  const mergedTasks = useMemo(() => {
+    if (Array.isArray(merged?.tasks) && merged.tasks.length > 0) {
+      return [...merged.tasks].sort((left, right) => left.stepIndex - right.stepIndex);
+    }
+    return [...(room?.tasks ?? [])].sort((left, right) => left.stepIndex - right.stepIndex);
+  }, [merged?.tasks, room?.tasks]);
+
   const mergedNotes = merged?.notes ?? "";
   const mergedBriefingMarkdown = merged?.briefingMarkdown ?? "";
   const canManageRoom = merged?.canManageRoom ?? false;
@@ -519,7 +568,7 @@ export function RoomPage() {
   const [addRoomTasks, addRoomTasksState] = useAddRoomTasksMutation();
   const availableCatalogTasks = useMemo(() => {
     if (!merged) return [];
-    const roomTasks = room?.tasks ?? [];
+    const roomTasks = mergedTasks;
     const existingTemplateIds = new Set(
       roomTasks
         .map((task) => task.sourceTaskTemplateId?.trim())
@@ -532,7 +581,7 @@ export function RoomPage() {
       .filter((task) => normalizeRoomLanguage(task.language) === activeLanguage)
       .filter((task) => !existingTemplateIds.has(task.id))
       .filter((task) => !existingSignatures.has(taskSignature(task)));
-  }, [merged, room?.tasks, taskCatalogGroups]);
+  }, [merged, mergedTasks, taskCatalogGroups]);
   const notesMessages = useMemo(() => {
     const direct = merged?.notesMessages;
     if (Array.isArray(direct) && direct.length > 0) {
@@ -664,9 +713,16 @@ export function RoomPage() {
     const cursorsMissingFromSync = (previousState?.cursors ?? []).filter((c) => !mergedCursorIds.has(c.sessionId));
     const cursors = [...cursorsFromSync, ...cursorsMissingFromSync];
     const taskScores = normalizeTaskScores(incoming.taskScores);
+    const nextTasks = Array.isArray(incoming.tasks)
+      ? incoming.tasks
+        .map(normalizeRealtimeTask)
+        .filter((item): item is RoomTask => Boolean(item))
+        .sort((left, right) => left.stepIndex - right.stepIndex)
+      : previousState?.tasks ?? [];
     const nextState: RealtimeState = {
       ...incoming,
       language: normalizeRoomLanguage(incoming.language),
+      tasks: nextTasks,
       participants,
       cursors,
       taskScores,
@@ -1049,7 +1105,7 @@ export function RoomPage() {
     if (!merged || !canManageRoom) return;
     if (briefingDirty) return;
 
-    const step = room?.tasks.find((task) => task.stepIndex === merged.currentStep);
+    const step = mergedTasks.find((task) => task.stepIndex === merged.currentStep);
     const description = step?.description ?? "";
     if (!description.trim()) return;
     if (mergedBriefingMarkdown.trim()) return;
@@ -1058,7 +1114,7 @@ export function RoomPage() {
     if (briefingSeededStepRef.current === seedKey) return;
     briefingSeededStepRef.current = seedKey;
     changeBriefingMarkdown(description);
-  }, [canManageRoom, changeBriefingMarkdown, briefingDirty, merged, mergedBriefingMarkdown, room?.tasks]);
+  }, [canManageRoom, changeBriefingMarkdown, briefingDirty, merged, mergedBriefingMarkdown, mergedTasks]);
 
   const toggleParticipantInterviewerRole = useCallback((participant: Participant) => {
     if (!merged?.canGrantAccess || participant.role === "owner") return;
@@ -1096,7 +1152,7 @@ export function RoomPage() {
     );
   }
 
-  const step = room?.tasks.find((task) => task.stepIndex === merged.currentStep);
+  const step = mergedTasks.find((task) => task.stepIndex === merged.currentStep);
   const currentTaskRating = merged.taskScores[String(merged.currentStep)] ?? step?.score ?? null;
   const stepStarterCode = step?.starterCode ?? "";
   const ownerBriefingValue = briefingDirty ? briefingDraft : mergedBriefingMarkdown;
@@ -1163,7 +1219,7 @@ export function RoomPage() {
         {canManageRoom ? (
           <OwnerLayout
             merged={merged}
-            tasks={room?.tasks ?? []}
+            tasks={mergedTasks}
             availableCatalogTasks={availableCatalogTasks}
             stepTitle={step?.title ?? "-"}
             stepStarterCode={stepStarterCode}

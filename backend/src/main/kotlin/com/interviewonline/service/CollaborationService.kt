@@ -13,6 +13,7 @@ import com.interviewonline.ws.NoteMessagePayload
 import com.interviewonline.ws.ParticipantPayload
 import com.interviewonline.ws.RealtimeEventRequest
 import com.interviewonline.ws.RoomRealtimePayload
+import com.interviewonline.ws.RoomTaskPayload
 import com.interviewonline.ws.WsOutgoingMessage
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
@@ -85,6 +86,7 @@ class CollaborationService(
         var notes: String,
         val notesMessages: MutableList<NoteMessagePayload> = mutableListOf(),
         var briefingMarkdown: String = "",
+        val tasks: MutableList<RoomTaskPayload> = mutableListOf(),
         var notesLockedBySessionId: String? = null,
         var notesLockedByDisplayName: String? = null,
         var notesLockedUntilEpochMs: Long? = null,
@@ -124,6 +126,9 @@ class CollaborationService(
     private val roomCodeDbSaveScheduler = Executors.newSingleThreadScheduledExecutor()
     private val pendingRoomCodeDbSaveByRoom = ConcurrentHashMap<String, ScheduledFuture<*>>()
     private val latestCodeForDebouncedDbSaveByRoom = ConcurrentHashMap<String, String>()
+    private val roomCandidateKeyHistorySaveScheduler = Executors.newSingleThreadScheduledExecutor()
+    private val pendingCandidateKeyHistorySaveByRoom = ConcurrentHashMap<String, ScheduledFuture<*>>()
+    private val latestCandidateKeyHistoryJsonByRoom = ConcurrentHashMap<String, String>()
 
     fun bootstrapRoom(room: Room) {
         roomState[room.inviteCode] = toRealtimeState(room)
@@ -132,6 +137,11 @@ class CollaborationService(
     fun syncFromRoom(room: Room) {
         val currentState = roomState[room.inviteCode]
         val nextState = toRealtimeState(room)
+        val mergedCandidateKeyHistory = mergeCandidateKeyHistory(
+            inMemory = currentState?.candidateKeyHistory.orEmpty(),
+            persisted = nextState.candidateKeyHistory,
+        )
+        val mergedLastCandidateKey = mergedCandidateKeyHistory.lastOrNull()
         roomState[room.inviteCode] = nextState.copy(
             notesLockedBySessionId = currentState?.notesLockedBySessionId,
             notesLockedByDisplayName = currentState?.notesLockedByDisplayName,
@@ -144,10 +154,13 @@ class CollaborationService(
             grantedRoleBySessionId = currentState?.grantedRoleBySessionId ?: ConcurrentHashMap(),
             lastYjsSequence = currentState?.lastYjsSequence ?: 0,
             yjsDocumentBase64 = currentState?.yjsDocumentBase64,
-            lastCandidateKey = currentState?.lastCandidateKey,
-            candidateKeyHistory = currentState?.candidateKeyHistory?.toMutableList() ?: mutableListOf(),
-            lastCandidateKeyAtEpochMs = currentState?.lastCandidateKeyAtEpochMs ?: 0L,
+            lastCandidateKey = mergedLastCandidateKey,
+            candidateKeyHistory = mergedCandidateKeyHistory.toMutableList(),
+            lastCandidateKeyAtEpochMs = mergedLastCandidateKey?.timestampEpochMs ?: 0L,
         )
+        if (mergedCandidateKeyHistory.isNotEmpty()) {
+            scheduleCandidateKeyHistorySave(room.inviteCode, mergedCandidateKeyHistory)
+        }
         broadcastState(room.inviteCode)
     }
 
@@ -507,6 +520,25 @@ class CollaborationService(
         pendingRoomCodeDbSaveByRoom[inviteCode] = next
     }
 
+    private fun scheduleCandidateKeyHistorySave(inviteCode: String, history: List<CandidateKeyPayload>) {
+        val serializedHistory = serializeCandidateKeyHistory(history)
+        latestCandidateKeyHistoryJsonByRoom[inviteCode] = serializedHistory
+        pendingCandidateKeyHistorySaveByRoom.remove(inviteCode)?.cancel(false)
+        val next = roomCandidateKeyHistorySaveScheduler.schedule({
+            pendingCandidateKeyHistorySaveByRoom.remove(inviteCode)
+            val latest = latestCandidateKeyHistoryJsonByRoom.remove(inviteCode) ?: return@schedule
+            try {
+                roomRepository.findByInviteCode(inviteCode)?.let { room ->
+                    room.candidateKeyHistory = latest
+                    roomRepository.save(room)
+                }
+            } catch (ex: Exception) {
+                logger.warn("Debounced candidate key history save failed for {}", inviteCode, ex)
+            }
+        }, 260, TimeUnit.MILLISECONDS)
+        pendingCandidateKeyHistorySaveByRoom[inviteCode] = next
+    }
+
     private fun scheduleStateBroadcastFromYjs(inviteCode: String) {
         pendingYjsStateBroadcastByRoom.remove(inviteCode)?.cancel(false)
         val next = yjsStateBroadcastScheduler.schedule({
@@ -522,7 +554,13 @@ class CollaborationService(
             throw ApiException(HttpStatus.FORBIDDEN, "Только интервьюер может менять язык")
         }
         val normalizedLanguage = normalizeLanguage(language)
-        roomState[participant.inviteCode]?.language = normalizedLanguage
+        roomState[participant.inviteCode]?.let { state ->
+            state.language = normalizedLanguage
+            val currentTaskIndex = state.tasks.indexOfFirst { it.stepIndex == state.currentStep }
+            if (currentTaskIndex >= 0) {
+                state.tasks[currentTaskIndex] = state.tasks[currentTaskIndex].copy(language = normalizedLanguage)
+            }
+        }
         roomRepository.findByInviteCode(participant.inviteCode)?.let {
             it.language = normalizedLanguage
             it.tasks.getOrNull(it.currentStep)?.solutionLanguage = normalizedLanguage
@@ -632,7 +670,13 @@ class CollaborationService(
 
         room.tasks[targetStep].score = normalizedRating
         roomRepository.save(room)
-        roomState[participant.inviteCode]?.taskScoresByStepIndex?.set(targetStep, normalizedRating)
+        roomState[participant.inviteCode]?.let { state ->
+            state.taskScoresByStepIndex[targetStep] = normalizedRating
+            val taskPosition = state.tasks.indexOfFirst { task -> task.stepIndex == targetStep }
+            if (taskPosition >= 0) {
+                state.tasks[taskPosition] = state.tasks[taskPosition].copy(score = normalizedRating)
+            }
+        }
         broadcastState(participant.inviteCode)
     }
 
@@ -832,39 +876,44 @@ class CollaborationService(
         val participant = participants[connectionId] ?: return
         if (participant.role != RoomAccessService.RoomRole.CANDIDATE) return
 
-        val normalizedKey = key.orEmpty().trim().take(32)
-        val normalizedCode = keyCode.orEmpty().trim().take(32)
+        val normalizedKey = normalizeIncomingKey(key)
+        val normalizedCode = normalizeIncomingKeyCode(keyCode)
         if (normalizedKey.isBlank() && normalizedCode.isBlank()) return
 
         val state = roomState[participant.inviteCode] ?: return
-        val now = Instant.now().toEpochMilli()
-        if (now - state.lastCandidateKeyAtEpochMs < keyEventBroadcastThrottleMs) {
-            return
-        }
+        val keyEvent: CandidateKeyPayload
+        val historySnapshot: List<CandidateKeyPayload>
+        synchronized(state) {
+            val now = Instant.now().toEpochMilli()
+            if (now - state.lastCandidateKeyAtEpochMs < keyEventBroadcastThrottleMs) {
+                return
+            }
 
-        state.lastCandidateKey = CandidateKeyPayload(
-            sessionId = participant.sessionId,
-            displayName = participant.displayName,
-            key = normalizedKey.ifBlank { "Unknown" },
-            keyCode = normalizedCode.ifBlank { "Unknown" },
-            ctrlKey = ctrlKey,
-            altKey = altKey,
-            shiftKey = shiftKey,
-            metaKey = metaKey,
-            timestampEpochMs = now,
-        )
-        state.lastCandidateKey?.let { event ->
-            state.candidateKeyHistory.add(event)
+            keyEvent = CandidateKeyPayload(
+                sessionId = participant.sessionId,
+                displayName = participant.displayName,
+                key = normalizedKey.ifBlank { normalizedCode.ifBlank { "Unknown" } },
+                keyCode = normalizedCode.ifBlank { normalizedKey.ifBlank { "Unknown" } },
+                ctrlKey = ctrlKey,
+                altKey = altKey,
+                shiftKey = shiftKey,
+                metaKey = metaKey,
+                timestampEpochMs = now,
+            )
+            state.lastCandidateKey = keyEvent
+            state.candidateKeyHistory.add(keyEvent)
             if (state.candidateKeyHistory.size > candidateKeyHistoryMaxSize) {
                 val overflow = state.candidateKeyHistory.size - candidateKeyHistoryMaxSize
                 repeat(overflow) {
                     state.candidateKeyHistory.removeAt(0)
                 }
             }
+            state.lastCandidateKeyAtEpochMs = now
+            historySnapshot = state.candidateKeyHistory.toList()
         }
-        state.lastCandidateKeyAtEpochMs = now
 
-        val keyEvent = state.lastCandidateKey ?: return
+        scheduleCandidateKeyHistorySave(participant.inviteCode, historySnapshot)
+
         val managerConnectionIds = participants.entries
             .asSequence()
             .filter { (_, meta) -> meta.inviteCode == participant.inviteCode && meta.canManageRoom }
@@ -915,6 +964,8 @@ class CollaborationService(
         pendingYjsStateBroadcastByRoom.remove(inviteCode)?.cancel(false)
         pendingRoomCodeDbSaveByRoom.remove(inviteCode)?.cancel(false)
         latestCodeForDebouncedDbSaveByRoom.remove(inviteCode)
+        pendingCandidateKeyHistorySaveByRoom.remove(inviteCode)?.cancel(false)
+        latestCandidateKeyHistoryJsonByRoom.remove(inviteCode)
         roomState.remove(inviteCode)
         val connectionIds = participants.entries
             .asSequence()
@@ -1058,6 +1109,7 @@ class CollaborationService(
             notesLockedBySessionId = state.notesLockedBySessionId,
             notesLockedByDisplayName = state.notesLockedByDisplayName,
             notesLockedUntilEpochMs = state.notesLockedUntilEpochMs,
+            tasks = state.tasks.toList(),
             taskScores = state.taskScoresByStepIndex.toMap(),
             cursors = cursorsPayload,
             lastCandidateKey = state.lastCandidateKey,
@@ -1129,6 +1181,11 @@ class CollaborationService(
         room.code = nextTask.solutionCode ?: nextTask.starterCode
         room.briefingMarkdown = nextTask.briefingMarkdown.orEmpty()
         roomRepository.save(room)
+        val mergedCandidateKeyHistory = mergeCandidateKeyHistory(
+            inMemory = currentState?.candidateKeyHistory.orEmpty(),
+            persisted = parseCandidateKeyHistory(room.candidateKeyHistory),
+        )
+        val mergedLastCandidateKey = mergedCandidateKeyHistory.lastOrNull()
 
         roomState[inviteCode] = RealtimeState(
             language = normalizeLanguage(room.language),
@@ -1141,6 +1198,7 @@ class CollaborationService(
             notesMessages = currentState?.notesMessages?.toMutableList()
                 ?: parseNotesMessages(room.interviewerChat, room.notes),
             briefingMarkdown = nextTask.briefingMarkdown?.takeIf { it.isNotBlank() } ?: nextTask.description,
+            tasks = buildTaskPayloads(room),
             notesLockedBySessionId = currentState?.notesLockedBySessionId,
             notesLockedByDisplayName = currentState?.notesLockedByDisplayName,
             notesLockedUntilEpochMs = currentState?.notesLockedUntilEpochMs,
@@ -1150,9 +1208,9 @@ class CollaborationService(
             lastCodeSequenceBySessionId = currentState?.lastCodeSequenceBySessionId ?: ConcurrentHashMap(),
             lastYjsSnapshotSequenceBySessionId = currentState?.lastYjsSnapshotSequenceBySessionId ?: ConcurrentHashMap(),
             lastClientEventSequenceBySessionId = currentState?.lastClientEventSequenceBySessionId ?: ConcurrentHashMap(),
-            lastCandidateKey = currentState?.lastCandidateKey,
-            candidateKeyHistory = currentState?.candidateKeyHistory?.toMutableList() ?: mutableListOf(),
-            lastCandidateKeyAtEpochMs = currentState?.lastCandidateKeyAtEpochMs ?: 0L,
+            lastCandidateKey = mergedLastCandidateKey,
+            candidateKeyHistory = mergedCandidateKeyHistory.toMutableList(),
+            lastCandidateKeyAtEpochMs = mergedLastCandidateKey?.timestampEpochMs ?: 0L,
         )
         broadcastState(inviteCode)
     }
@@ -1214,13 +1272,6 @@ class CollaborationService(
                 state.lastCodeSequenceBySessionId.remove(participant.sessionId)
                 state.lastYjsSnapshotSequenceBySessionId.remove(participant.sessionId)
                 state.lastClientEventSequenceBySessionId.remove(participant.sessionId)
-                if (state.lastCandidateKey?.sessionId == participant.sessionId) {
-                    state.candidateKeyHistory.removeAll { it.sessionId == participant.sessionId }
-                    state.lastCandidateKey = state.candidateKeyHistory.lastOrNull()
-                    state.lastCandidateKeyAtEpochMs = state.lastCandidateKey?.timestampEpochMs ?: 0L
-                } else if (state.candidateKeyHistory.isNotEmpty()) {
-                    state.candidateKeyHistory.removeAll { it.sessionId == participant.sessionId }
-                }
             }
         }
 
@@ -1286,11 +1337,116 @@ class CollaborationService(
         return scores
     }
 
+    private fun buildTaskPayloads(room: Room): MutableList<RoomTaskPayload> {
+        return room.tasks
+            .sortedBy { it.stepIndex }
+            .map { task ->
+                RoomTaskPayload(
+                    stepIndex = task.stepIndex,
+                    title = task.title,
+                    description = task.description,
+                    starterCode = task.starterCode,
+                    language = normalizeLanguage(task.language),
+                    categoryName = task.categoryName?.takeIf { it.isNotBlank() }?.let(::normalizeLanguage),
+                    score = task.score,
+                    sourceTaskTemplateId = task.sourceTaskTemplateId,
+                )
+            }
+            .toMutableList()
+    }
+
+    private fun parseCandidateKeyHistory(raw: String?): List<CandidateKeyPayload> {
+        val normalized = raw.orEmpty().trim()
+        if (normalized.isBlank()) return emptyList()
+        val parsed = runCatching {
+            val root = objectMapper.readTree(normalized)
+            val eventsNode = when {
+                root.isArray -> root
+                root.isObject && root.has("events") -> root["events"]
+                else -> null
+            }
+            if (eventsNode == null || !eventsNode.isArray) {
+                emptyList()
+            } else {
+                eventsNode.mapNotNull { node ->
+                    runCatching { objectMapper.treeToValue(node, CandidateKeyPayload::class.java) }.getOrNull()
+                }
+            }
+        }.getOrElse { emptyList() }
+        return parsed
+            .sortedBy { it.timestampEpochMs }
+            .takeLast(candidateKeyHistoryMaxSize)
+    }
+
+    private fun serializeCandidateKeyHistory(history: List<CandidateKeyPayload>): String {
+        val normalized = history
+            .sortedBy { it.timestampEpochMs }
+            .takeLast(candidateKeyHistoryMaxSize)
+        return objectMapper.writeValueAsString(mapOf("version" to 1, "events" to normalized))
+    }
+
+    private fun mergeCandidateKeyHistory(
+        inMemory: List<CandidateKeyPayload>,
+        persisted: List<CandidateKeyPayload>,
+    ): List<CandidateKeyPayload> {
+        if (inMemory.isEmpty()) return persisted.sortedBy { it.timestampEpochMs }.takeLast(candidateKeyHistoryMaxSize)
+        if (persisted.isEmpty()) return inMemory.sortedBy { it.timestampEpochMs }.takeLast(candidateKeyHistoryMaxSize)
+        val merged = linkedMapOf<String, CandidateKeyPayload>()
+        (persisted + inMemory)
+            .sortedBy { it.timestampEpochMs }
+            .forEach { event ->
+                val dedupeKey = listOf(
+                    event.sessionId,
+                    event.timestampEpochMs.toString(),
+                    event.key,
+                    event.keyCode,
+                    if (event.ctrlKey) "1" else "0",
+                    if (event.altKey) "1" else "0",
+                    if (event.shiftKey) "1" else "0",
+                    if (event.metaKey) "1" else "0",
+                ).joinToString(":")
+                merged[dedupeKey] = event
+            }
+        return merged.values
+            .sortedBy { it.timestampEpochMs }
+            .takeLast(candidateKeyHistoryMaxSize)
+    }
+
+    private fun normalizeIncomingKey(rawKey: String?): String {
+        val raw = rawKey?.take(64) ?: return ""
+        if (raw == " " || raw == "\u00A0") return "Space"
+        if (raw == "\t") return "Tab"
+        if (raw == "\n" || raw == "\r" || raw == "\r\n") return "Enter"
+        val trimmed = raw.trim()
+        if (trimmed.isBlank()) return ""
+        val normalized = when (trimmed) {
+            "Spacebar" -> "Space"
+            "Esc" -> "Escape"
+            "OS" -> "Meta"
+            else -> trimmed
+        }
+        return normalized.take(32)
+    }
+
+    private fun normalizeIncomingKeyCode(rawCode: String?): String {
+        val trimmed = rawCode?.trim().orEmpty()
+        if (trimmed.isBlank()) return ""
+        val normalized = when (trimmed) {
+            "Spacebar" -> "Space"
+            "Esc" -> "Escape"
+            "OSLeft", "OSRight", "OS" -> "Meta"
+            else -> trimmed
+        }
+        return normalized.take(32)
+    }
+
     private fun toRealtimeState(room: Room): RealtimeState {
         val currentTask = room.tasks.getOrNull(room.currentStep)
         val language = normalizeLanguage(currentTask?.solutionLanguage?.ifBlank { null } ?: room.language)
         val code = currentTask?.solutionCode ?: room.code.ifBlank { currentTask?.starterCode.orEmpty() }
         val notes = room.notes.orEmpty().ifBlank { currentTask?.interviewerNotes.orEmpty() }
+        val candidateKeyHistory = parseCandidateKeyHistory(room.candidateKeyHistory)
+        val lastCandidateKey = candidateKeyHistory.lastOrNull()
         return RealtimeState(
             language = language,
             code = code,
@@ -1301,6 +1457,7 @@ class CollaborationService(
             notes = notes,
             notesMessages = parseNotesMessages(room.interviewerChat, notes),
             briefingMarkdown = currentTask?.briefingMarkdown?.takeIf { it.isNotBlank() } ?: currentTask?.description.orEmpty(),
+            tasks = buildTaskPayloads(room),
             notesLockedBySessionId = null,
             notesLockedByDisplayName = null,
             notesLockedUntilEpochMs = null,
@@ -1309,6 +1466,9 @@ class CollaborationService(
             lastCodeSequenceBySessionId = ConcurrentHashMap(),
             lastYjsSnapshotSequenceBySessionId = ConcurrentHashMap(),
             lastClientEventSequenceBySessionId = ConcurrentHashMap(),
+            lastCandidateKey = lastCandidateKey,
+            candidateKeyHistory = candidateKeyHistory.toMutableList(),
+            lastCandidateKeyAtEpochMs = lastCandidateKey?.timestampEpochMs ?: 0L,
         )
     }
 
