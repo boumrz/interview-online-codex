@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE_URL } from "../../config/runtime";
+import type { RoomTask } from "../../types";
 
 /** Same opt-out as RoomPage: localStorage room_sync_log = "0" or ?syncLog=0 */
 function isRoomSyncTransportLogEnabled(): boolean {
@@ -80,6 +81,7 @@ type RealtimeState = {
   notes: string;
   notesMessages?: NoteMessagePayload[];
   briefingMarkdown?: string;
+  tasks?: RoomTask[];
   taskScores: Record<string, number | null>;
   participants: Participant[];
   isOwner: boolean;
