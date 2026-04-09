@@ -42,11 +42,29 @@ async function registerAndCreateRoom() {
   const registerResponse = await fetch(`${apiBaseUrl}/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ nickname, password })
+    body: JSON.stringify({ nickname, displayName: nickname, password })
   });
   const auth = await registerResponse.json();
   if (!registerResponse.ok) {
     throw new Error(`REGISTER_FAILED ${JSON.stringify(auth)}`);
+  }
+
+  const seedTaskResponse = await fetch(`${apiBaseUrl}/me/tasks`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${auth.token}`
+    },
+    body: JSON.stringify({
+      title: `Seed ${nickname}`,
+      description: "Refresh sync seed task",
+      starterCode: "function solve() {\n  return null;\n}\n",
+      language: "nodejs"
+    })
+  });
+  const seedTask = await seedTaskResponse.json();
+  if (!seedTaskResponse.ok) {
+    throw new Error(`SEED_TASK_FAILED ${JSON.stringify(seedTask)}`);
   }
 
   const createRoomResponse = await fetch(`${apiBaseUrl}/rooms`, {
@@ -55,7 +73,7 @@ async function registerAndCreateRoom() {
       "Content-Type": "application/json",
       Authorization: `Bearer ${auth.token}`
     },
-    body: JSON.stringify({ title: "Refresh Server Source Sync", language: "nodejs", taskIds: [] })
+    body: JSON.stringify({ title: "Refresh Server Source Sync", language: "nodejs", taskIds: [seedTask.id] })
   });
   const room = await createRoomResponse.json();
   if (!createRoomResponse.ok) {

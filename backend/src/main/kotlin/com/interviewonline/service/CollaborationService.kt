@@ -28,6 +28,10 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 
+internal fun isHeartbeatOnlyYjsUpdate(yjsUpdate: String?): Boolean {
+    return yjsUpdate.isNullOrBlank()
+}
+
 @Service
 class CollaborationService(
     private val roomRepository: RoomRepository,
@@ -121,6 +125,7 @@ class CollaborationService(
     private val participants = ConcurrentHashMap<String, ParticipantMeta>()
     private val roomState = ConcurrentHashMap<String, RealtimeState>()
     private val connectionByRoomSession = ConcurrentHashMap<String, String>()
+    private val sseHeartbeatScheduler = Executors.newSingleThreadScheduledExecutor()
     private val yjsStateBroadcastScheduler = Executors.newSingleThreadScheduledExecutor()
     private val pendingYjsStateBroadcastByRoom = ConcurrentHashMap<String, ScheduledFuture<*>>()
     private val roomCodeDbSaveScheduler = Executors.newSingleThreadScheduledExecutor()
@@ -129,6 +134,15 @@ class CollaborationService(
     private val roomCandidateKeyHistorySaveScheduler = Executors.newSingleThreadScheduledExecutor()
     private val pendingCandidateKeyHistorySaveByRoom = ConcurrentHashMap<String, ScheduledFuture<*>>()
     private val latestCandidateKeyHistoryJsonByRoom = ConcurrentHashMap<String, String>()
+
+    init {
+        sseHeartbeatScheduler.scheduleWithFixedDelay(
+            { sendSseHeartbeats() },
+            5,
+            5,
+            TimeUnit.SECONDS,
+        )
+    }
 
     fun bootstrapRoom(room: Room) {
         roomState[room.inviteCode] = toRealtimeState(room)
@@ -216,13 +230,20 @@ class CollaborationService(
 
     @Transactional
     fun handleRealtimeEvent(inviteCode: String, request: RealtimeEventRequest) {
-        val requiresEventToken = request.type != "request_state_sync" && request.type != "presence_update"
+        val requiresEventToken =
+            request.type != "request_state_sync" &&
+                request.type != "presence_update" &&
+                request.type != "leave_room"
         val connectionId = requireConnectionId(
             inviteCode = inviteCode,
             sessionId = request.sessionId,
             eventToken = request.eventToken,
             requireEventToken = requiresEventToken,
         )
+        if (request.type == "leave_room") {
+            leaveRoomConnection(connectionId)
+            return
+        }
         val participant = participants[connectionId] ?: return
         val state = roomState[participant.inviteCode] ?: return
         if (requiresEventToken) {
@@ -410,6 +431,15 @@ class CollaborationService(
     ) {
         val participant = participants[connectionId] ?: return
         val state = roomState[participant.inviteCode] ?: return
+
+        if (isHeartbeatOnlyYjsUpdate(yjsUpdate)) {
+            logger.debug(
+                "Ignoring heartbeat-only yjs update for room {} session {} to avoid stale snapshot overwrite",
+                participant.inviteCode,
+                participant.sessionId,
+            )
+            return
+        }
 
         val trimmedDocCandidate = yjsDocumentBase64?.trim().orEmpty()
         val safeDocSnap =
@@ -1038,6 +1068,27 @@ class CollaborationService(
         }
     }
 
+    private fun sendSseHeartbeats() {
+        val activeRooms = roomSseConnections.entries
+            .asSequence()
+            .filter { it.value.isNotEmpty() }
+            .map { it.key }
+            .toList()
+        if (activeRooms.isEmpty()) return
+        val payload = mapOf("ts" to Instant.now().toEpochMilli())
+        activeRooms.forEach { inviteCode ->
+            runCatching {
+                broadcastTransportMessage(
+                    inviteCode = inviteCode,
+                    type = "heartbeat",
+                    payload = payload,
+                )
+            }.onFailure { ex ->
+                logger.debug("SSE heartbeat sweep failed for room {}", inviteCode, ex)
+            }
+        }
+    }
+
     private fun broadcastTransportMessage(
         inviteCode: String,
         type: String,
@@ -1208,6 +1259,7 @@ class CollaborationService(
             lastCodeSequenceBySessionId = currentState?.lastCodeSequenceBySessionId ?: ConcurrentHashMap(),
             lastYjsSnapshotSequenceBySessionId = currentState?.lastYjsSnapshotSequenceBySessionId ?: ConcurrentHashMap(),
             lastClientEventSequenceBySessionId = currentState?.lastClientEventSequenceBySessionId ?: ConcurrentHashMap(),
+            grantedRoleBySessionId = currentState?.grantedRoleBySessionId ?: ConcurrentHashMap(),
             lastCandidateKey = mergedLastCandidateKey,
             candidateKeyHistory = mergedCandidateKeyHistory.toMutableList(),
             lastCandidateKeyAtEpochMs = mergedLastCandidateKey?.timestampEpochMs ?: 0L,
@@ -1435,6 +1487,7 @@ class CollaborationService(
             "Spacebar" -> "Space"
             "Esc" -> "Escape"
             "OSLeft", "OSRight", "OS" -> "Meta"
+            "Tab", "Enter", "Backspace", "Delete", "Space" -> trimmed
             else -> trimmed
         }
         return normalized.take(32)

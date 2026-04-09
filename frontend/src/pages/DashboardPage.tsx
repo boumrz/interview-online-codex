@@ -11,6 +11,8 @@ import {
   Group,
   Modal,
   MultiSelect,
+  Notification,
+  Portal,
   Select,
   SimpleGrid,
   Stack,
@@ -38,7 +40,7 @@ import {
 } from "@tabler/icons-react";
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../app/hooks";
-import { clearAuth } from "../features/auth/authSlice";
+import { clearAuth, updateProfile as updateAuthProfile } from "../features/auth/authSlice";
 import { markdownToHtml } from "../components/markdown";
 import {
   useCreateRoomMutation,
@@ -57,6 +59,7 @@ import {
   useMyRoomsQuery,
   useStartAgentRunMutation,
   useTransitionAgentRunMutation,
+  useUpdateProfileMutation,
   useTasksGroupedQuery,
   useUpdateRoomMutation,
   useUpdateTaskTemplateMutation
@@ -152,6 +155,9 @@ export function DashboardPage() {
   const [roomTitle, setRoomTitle] = useState("Техническое интервью");
   const [roomLanguage, setRoomLanguage] = useState("nodejs");
   const [roomTaskIds, setRoomTaskIds] = useState<string[]>([]);
+  const [profileDisplayName, setProfileDisplayName] = useState(auth.user?.displayName ?? "");
+  const [profileSaveToast, setProfileSaveToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const profileSaveToastTimerRef = useRef<number | null>(null);
 
   const [roomTitleDrafts, setRoomTitleDrafts] = useState<Record<string, string>>({});
   const [roomSaveStatus, setRoomSaveStatus] = useState<Record<string, RoomSaveStatus>>({});
@@ -182,6 +188,10 @@ export function DashboardPage() {
 
   const editTaskDescriptionHtml = useMemo(() => markdownToHtml(editTaskDescription), [editTaskDescription]);
 
+  useEffect(() => {
+    setProfileDisplayName(auth.user?.displayName ?? "");
+  }, [auth.user?.displayName]);
+
   const { data: rooms = [] } = useMyRoomsQuery(undefined, { skip: !auth.token, refetchOnMountOrArgChange: true });
   const { data: groupedTasks = [] } = useTasksGroupedQuery(undefined, { skip: !auth.token });
   const { data: adminUsers = [], refetch: refetchAdminUsers } = useAdminUsersQuery(undefined, {
@@ -201,6 +211,7 @@ export function DashboardPage() {
   const [executeAllRunReviewers, executeAllRunReviewersState] = useExecuteAllRunReviewersMutation();
   const [configureRealtimeFaults, configureRealtimeFaultsState] = useConfigureRealtimeFaultsMutation();
   const [clearRealtimeFaults, clearRealtimeFaultsState] = useClearRealtimeFaultsMutation();
+  const [updateProfile, updateProfileState] = useUpdateProfileMutation();
 
   const normalizedIssueId = agentIssueId.trim().toUpperCase();
   const issueIdLooksValid = /^[A-Z]+-\d+$/.test(normalizedIssueId);
@@ -223,6 +234,25 @@ export function DashboardPage() {
       Object.values(roomStatusTimersRef.current).forEach((timerId) => window.clearTimeout(timerId));
     };
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (profileSaveToastTimerRef.current != null) {
+        window.clearTimeout(profileSaveToastTimerRef.current);
+      }
+    };
+  }, []);
+
+  const showProfileSaveToast = (type: "success" | "error", message: string) => {
+    setProfileSaveToast({ type, message });
+    if (profileSaveToastTimerRef.current != null) {
+      window.clearTimeout(profileSaveToastTimerRef.current);
+    }
+    profileSaveToastTimerRef.current = window.setTimeout(() => {
+      setProfileSaveToast(null);
+      profileSaveToastTimerRef.current = null;
+    }, 3200);
+  };
 
   if (!auth.token) return <Navigate to="/login" replace />;
   if (!isDashboardSection(section, agentOpsEnabled, isAdmin)) return <Navigate to="/dashboard/rooms" replace />;
@@ -374,7 +404,7 @@ export function DashboardPage() {
         language: roomLanguage,
         taskIds: normalizedTaskIds
       }).unwrap();
-      const ownerName = auth.user?.nickname ?? "Интервьюер";
+      const ownerName = auth.user?.displayName?.trim() || "Интервьюер";
       localStorage.setItem(`owner_token_${room.inviteCode}`, room.ownerToken ?? "");
       localStorage.setItem("display_name", ownerName);
       localStorage.setItem(`guest_display_name_${room.inviteCode}`, ownerName);
@@ -511,6 +541,26 @@ export function DashboardPage() {
     }
   };
 
+  const saveProfileDisplayName = async () => {
+    const normalized = profileDisplayName.trim();
+    if (!normalized) {
+      setError("Имя для комнаты обязательно");
+      showProfileSaveToast("error", "Введите имя для отображения");
+      return;
+    }
+    try {
+      setError("");
+      const updated = await updateProfile({ displayName: normalized }).unwrap();
+      dispatch(updateAuthProfile({ displayName: updated.displayName }));
+      localStorage.setItem("display_name", updated.displayName);
+      setProfileDisplayName(updated.displayName);
+      showProfileSaveToast("success", "Имя для комнаты успешно сохранено");
+    } catch {
+      setError("Не удалось обновить имя профиля");
+      showProfileSaveToast("error", "Не удалось сохранить имя для комнаты");
+    }
+  };
+
   const openRoomFromDashboard = (room: RoomSummary) => {
     const ownerStorageKey = `owner_token_${room.inviteCode}`;
     const ownerToken = room.ownerToken?.trim() ?? "";
@@ -613,7 +663,8 @@ export function DashboardPage() {
     transitionAgentRunState.isLoading ||
     executeAllRunReviewersState.isLoading ||
     configureRealtimeFaultsState.isLoading ||
-    clearRealtimeFaultsState.isLoading;
+    clearRealtimeFaultsState.isLoading ||
+    updateProfileState.isLoading;
 
   const switchSection = (nextSection: DashboardSection) => {
     if (nextSection === "agents" && !agentOpsEnabled) {
@@ -738,6 +789,30 @@ export function DashboardPage() {
         </form>
       </Modal>
 
+      {profileSaveToast ? (
+        <Portal>
+          <Box
+            style={{
+              position: "fixed",
+              top: 16,
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: "min(480px, calc(100vw - 24px))",
+              zIndex: 5000
+            }}
+          >
+            <Notification
+              color={profileSaveToast.type === "success" ? "teal" : "red"}
+              title={profileSaveToast.type === "success" ? "Имя сохранено" : "Ошибка сохранения"}
+              withCloseButton
+              onClose={() => setProfileSaveToast(null)}
+            >
+              {profileSaveToast.message}
+            </Notification>
+          </Box>
+        </Portal>
+      ) : null}
+
       <AppShell padding={0} header={{ height: 72 }}>
         <AppShell.Header bg="#101318" c="white" style={{ borderBottom: "1px solid #272b34" }}>
           <Container size="xl" h="100%">
@@ -782,6 +857,40 @@ export function DashboardPage() {
             }}
           >
             <Container size="xl" py={20}>
+              <Card withBorder bg="#11151c" c="gray.1" style={{ borderColor: "#272b34" }} mb="md">
+                <Group justify="space-between" align="flex-start" gap="xl" wrap="wrap">
+                  <Box style={{ flex: "1 1 320px", minWidth: 280 }}>
+                    <Text c="gray.4" size="sm">
+                      Профиль
+                    </Text>
+                    <Title order={3} mt={4}>
+                      Имя для комнаты
+                    </Title>
+                    <Text c="gray.5" size="sm" mt={4}>
+                      Это имя увидят другие участники комнаты. Никнейм остаётся приватным и используется только для входа.
+                    </Text>
+                  </Box>
+                  <Box style={{ flex: "1 1 320px", minWidth: 280 }}>
+                    <Stack gap="xs">
+                      <TextInput
+                        value={profileDisplayName}
+                        onChange={(event) => setProfileDisplayName(event.currentTarget.value)}
+                        styles={darkFieldStyles}
+                        label="Имя для отображения"
+                      />
+                      <Group justify="space-between" align="center">
+                        <Text size="xs" c="gray.5">
+                          Ник для входа: @{auth.user?.nickname}
+                        </Text>
+                        <Button loading={updateProfileState.isLoading} onClick={saveProfileDisplayName}>
+                          Сохранить имя
+                        </Button>
+                      </Group>
+                    </Stack>
+                  </Box>
+                </Group>
+              </Card>
+
               <SimpleGrid cols={{ base: 1, md: 3 }} spacing="md" mb="md">
                 <Card withBorder bg="#11151c" c="gray.1" style={{ borderColor: "#272b34" }}>
                   <Group justify="space-between">
@@ -845,7 +954,7 @@ export function DashboardPage() {
                           <Title order={4}>Создать комнату</Title>
                         </Group>
                         <Text size="sm" c="gray.4">
-                          Выбери язык и нужные шаги. Если шаги не выбраны, в комнату попадут все задачи выбранного языка из вашего банка.
+                          Выбери язык и нужные шаги. Если шаги не выбраны, комната создастся пустой — задачи можно добавить уже внутри.
                         </Text>
                         <TextInput
                           label="Название комнаты"
@@ -881,7 +990,7 @@ export function DashboardPage() {
                           <Text fw={600}>Выбранные задачи</Text>
                           {selectedRoomTasks.length === 0 ? (
                             <Text size="sm" c="gray.4">
-                              Пока ничего не выбрано. Будут использованы все задачи из банка для этого языка.
+                              Пока ничего не выбрано. Комната будет создана без задач.
                             </Text>
                           ) : (
                             selectedRoomTasks.map((task) => (

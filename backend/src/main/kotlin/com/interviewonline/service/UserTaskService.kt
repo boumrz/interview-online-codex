@@ -21,8 +21,14 @@ class UserTaskService(
 ) {
     @Transactional
     fun initializeTaskBank(user: User) {
-        if (taskRepository.existsByOwnerUserId(user.id!!)) return
-        seedDefaultTaskBank(user)
+        clearTaskBank(user)
+    }
+
+    @Transactional
+    fun clearTaskBank(user: User) {
+        val userId = user.id ?: return
+        taskRepository.deleteAllByOwnerUserId(userId)
+        categoryRepository.deleteAllByOwnerUserId(userId)
     }
 
     @Transactional
@@ -75,6 +81,7 @@ class UserTaskService(
 
     @Transactional
     fun listTasksGrouped(user: User): List<TaskLanguageGroupDto> {
+        cleanupLegacySeedTasks(user)
         val tasks = taskRepository.findAllByOwnerUserIdOrderByCreatedAtDesc(user.id!!)
         val tasksByLanguage = tasks.groupBy { normalizeLanguage(it.language) }
         val languageOrder = listOf("nodejs", "python", "kotlin", "java", "sql")
@@ -88,14 +95,11 @@ class UserTaskService(
 
     @Transactional
     fun resolveTasksForRoom(user: User, taskIds: List<String>, language: String): List<UserTaskTemplate> {
+        cleanupLegacySeedTasks(user)
         val normalizedLanguage = normalizeLanguage(language)
         val normalized = taskIds.map { it.trim() }.filter { it.isNotBlank() }.distinct()
         if (normalized.isEmpty()) {
-            return taskRepository.findAllByOwnerUserIdOrderByCreatedAtDesc(user.id!!)
-                .asSequence()
-                .filter { normalizeLanguage(it.language) == normalizedLanguage }
-                .sortedBy { it.createdAt }
-                .toList()
+            return emptyList()
         }
         val tasks = taskRepository.findAllByIdInAndOwnerUserId(normalized, user.id!!)
         if (tasks.size != normalized.size) {
@@ -111,27 +115,38 @@ class UserTaskService(
         return normalized.mapNotNull { tasksById[it] }
     }
 
-    private fun seedDefaultTaskBank(user: User) {
-        val entities = mutableListOf<UserTaskTemplate>()
-        taskTemplateService.catalogByLanguage().forEach { (language, seeds) ->
-            val category = ensureLanguageCategory(user, language)
-            seeds.forEach { seed ->
-                entities += UserTaskTemplate(
-                    ownerUser = user,
-                    category = category,
-                    title = seed.title,
-                    description = seed.description,
-                    starterCode = seed.starterCode,
-                    language = language,
+    private fun cleanupLegacySeedTasks(user: User) {
+        val userId = user.id ?: return
+        val seedSignatures = taskTemplateService.catalogByLanguage()
+            .flatMap { (language, seeds) ->
+                seeds.map { seed ->
+                    normalizeTaskSignature(seed.title, seed.description, seed.starterCode, language)
+                }
+            }
+            .toSet()
+
+        val legacyTasks = taskRepository.findAllByOwnerUserIdOrderByCreatedAtDesc(userId)
+            .filter { task ->
+                seedSignatures.contains(
+                    normalizeTaskSignature(task.title, task.description, task.starterCode, task.language),
                 )
             }
-        }
-        taskRepository.saveAll(entities)
+
+        if (legacyTasks.isEmpty()) return
+        taskRepository.deleteAll(legacyTasks)
     }
 
     private fun ensureLanguageCategory(user: User, language: String): UserTaskCategory {
         return categoryRepository.findByOwnerUserIdAndNameIgnoreCase(user.id!!, language)
             ?: categoryRepository.save(UserTaskCategory(ownerUser = user, name = language))
+    }
+
+    private fun normalizeTaskSignature(title: String, description: String, starterCode: String, language: String): String {
+        val normalizedLanguage = normalizeLanguage(language)
+        val normalizedTitle = title.trim().lowercase()
+        val normalizedDescription = description.replace("\r\n", "\n").trim()
+        val normalizedStarterCode = starterCode.replace("\r\n", "\n").trim()
+        return listOf(normalizedLanguage, normalizedTitle, normalizedDescription, normalizedStarterCode).joinToString("::")
     }
 
     private fun normalizeLanguage(language: String): String {

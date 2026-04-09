@@ -68,6 +68,7 @@ class AdminUserService(
             val roomId = room.id
             if (!roomId.isNullOrBlank()) {
                 roomParticipantRepository.deleteAllByRoomId(roomId)
+                roomParticipantRepository.flush()
             }
             roomRepository.delete(room)
             collaborationService.closeRoom(room.inviteCode)

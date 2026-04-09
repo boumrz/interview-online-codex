@@ -1,14 +1,65 @@
-import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Badge, Box, Button, Group, Menu, Modal, MultiSelect, Select, Stack, Text, TextInput, Textarea, ThemeIcon, Tooltip } from "@mantine/core";
-import { IconCode, IconGripVertical, IconHome2, IconLayoutDashboard, IconPlus, IconUsers } from "@tabler/icons-react";
+import React, {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  Badge,
+  Box,
+  Button,
+  Group,
+  Menu,
+  Modal,
+  MultiSelect,
+  SegmentedControl,
+  Select,
+  Stack,
+  Text,
+  TextInput,
+  Textarea,
+  ThemeIcon,
+} from "@mantine/core";
+import {
+  IconCode,
+  IconGripVertical,
+  IconHome2,
+  IconLayoutDashboard,
+  IconPlus,
+  IconUsers,
+} from "@tabler/icons-react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import * as Y from "yjs";
-import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate, removeAwarenessStates } from "y-protocols/awareness";
+import {
+  Awareness,
+  applyAwarenessUpdate,
+  encodeAwarenessUpdate,
+  removeAwarenessStates,
+} from "y-protocols/awareness";
 import { yCollab } from "y-codemirror.next";
 import { EditorSelection, EditorState, Compartment } from "@codemirror/state";
-import { EditorView, keymap, drawSelection, highlightActiveLine, lineNumbers } from "@codemirror/view";
-import { history, historyKeymap, defaultKeymap, indentWithTab } from "@codemirror/commands";
-import { indentOnInput, bracketMatching, foldGutter, syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
+import {
+  EditorView,
+  keymap,
+  drawSelection,
+  highlightActiveLine,
+  lineNumbers,
+} from "@codemirror/view";
+import {
+  history,
+  historyKeymap,
+  defaultKeymap,
+  indentWithTab,
+} from "@codemirror/commands";
+import {
+  indentOnInput,
+  bracketMatching,
+  foldGutter,
+  syntaxHighlighting,
+  defaultHighlightStyle,
+} from "@codemirror/language";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { javascript } from "@codemirror/lang-javascript";
 import { python } from "@codemirror/lang-python";
@@ -16,7 +67,11 @@ import { java } from "@codemirror/lang-java";
 import { sql } from "@codemirror/lang-sql";
 import { useAppSelector } from "../app/hooks";
 import { markdownToHtml } from "../components/markdown";
-import { useAddRoomTasksMutation, useGetRoomQuery, useTasksGroupedQuery } from "../services/api";
+import {
+  useAddRoomTasksMutation,
+  useGetRoomQuery,
+  useTasksGroupedQuery,
+} from "../services/api";
 import { useRoomSocket } from "../features/room/useRoomSocket";
 import type { RoomTask, TaskTemplate } from "../types";
 import styles from "./RoomPage.module.css";
@@ -26,7 +81,7 @@ const LANGUAGES = [
   { value: "python", label: "Python" },
   { value: "kotlin", label: "Kotlin" },
   { value: "java", label: "Java" },
-  { value: "sql", label: "SQL" }
+  { value: "sql", label: "SQL" },
 ];
 
 type Participant = {
@@ -104,7 +159,23 @@ type PendingNoteMessage = NoteMessage & {
   pending: true;
 };
 
-type MarkdownToolId = "bold" | "italic" | "code" | "link" | "h1" | "h2" | "ul" | "ol" | "quote" | "table";
+type RoomCustomTaskDraft = {
+  title: string;
+  description: string;
+  starterCode: string;
+};
+
+type MarkdownToolId =
+  | "bold"
+  | "italic"
+  | "code"
+  | "link"
+  | "h1"
+  | "h2"
+  | "ul"
+  | "ol"
+  | "quote"
+  | "table";
 type MobileRoomTab = "editor" | "collaboration" | "tasks";
 
 const MIN_OWNER_PANEL_WIDTH = 220;
@@ -192,30 +263,43 @@ function normalizeTaskText(value: string | null | undefined): string {
   return (value ?? "").replaceAll("\r\n", "\n").trim();
 }
 
-function taskSignature(task: Pick<TaskTemplate, "title" | "description" | "starterCode" | "language">): string {
+function taskSignature(
+  task: Pick<
+    TaskTemplate,
+    "title" | "description" | "starterCode" | "language"
+  >,
+): string {
   return [
     normalizeRoomLanguage(task.language),
     normalizeTaskText(task.title).toLowerCase(),
     normalizeTaskText(task.description),
-    normalizeTaskText(task.starterCode)
+    normalizeTaskText(task.starterCode),
   ].join("::");
 }
 
-function roomTaskSignature(task: Pick<RoomTask, "title" | "description" | "starterCode" | "language">): string {
+function roomTaskSignature(
+  task: Pick<RoomTask, "title" | "description" | "starterCode" | "language">,
+): string {
   return taskSignature(task);
 }
 
 function useIsCompactRoomLayout(maxWidth: number): boolean {
   const query = `(max-width: ${maxWidth}px)`;
   const [isCompact, setIsCompact] = useState(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    if (
+      typeof window === "undefined" ||
+      typeof window.matchMedia !== "function"
+    ) {
       return false;
     }
     return window.matchMedia(query).matches;
   });
 
   useEffect(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    if (
+      typeof window === "undefined" ||
+      typeof window.matchMedia !== "function"
+    ) {
       return;
     }
     const mediaQuery = window.matchMedia(query);
@@ -247,6 +331,15 @@ function normalizeKeyCodeLabel(code: string): string {
   if (normalizedCode === "Space" || normalizedCode === "Spacebar") {
     return "Space";
   }
+  if (
+    normalizedCode === "Tab" ||
+    normalizedCode === "Enter" ||
+    normalizedCode === "Escape" ||
+    normalizedCode === "Backspace" ||
+    normalizedCode === "Delete"
+  ) {
+    return normalizedCode;
+  }
   if (normalizedCode.startsWith("Numpad")) {
     return normalizedCode.replace("Numpad", "Num");
   }
@@ -270,6 +363,14 @@ function normalizeKeyLabel(key: string, keyCode: string): string {
   if (normalized === "Unidentified") {
     return normalizeKeyCodeLabel(keyCode) || "Unknown";
   }
+  if (
+    normalized === "Tab" ||
+    normalized === "Enter" ||
+    normalized === "Backspace" ||
+    normalized === "Delete"
+  ) {
+    return normalized;
+  }
 
   const aliases: Record<string, string> = {
     Control: "Ctrl",
@@ -277,7 +378,7 @@ function normalizeKeyLabel(key: string, keyCode: string): string {
     Command: "Cmd",
     OS: "Cmd",
     Escape: "Esc",
-    Spacebar: "Space"
+    Spacebar: "Space",
   };
   if (aliases[normalized]) {
     return aliases[normalized];
@@ -314,23 +415,32 @@ function base64ToBytes(base64: string): Uint8Array {
 function normalizeTaskScores(value: unknown): Record<string, number | null> {
   if (!value || typeof value !== "object") return {};
   const normalized: Record<string, number | null> = {};
-  Object.entries(value as Record<string, unknown>).forEach(([stepKey, scoreValue]) => {
-    const stepIndex = Number.parseInt(stepKey, 10);
-    if (!Number.isInteger(stepIndex) || stepIndex < 0) return;
-    if (typeof scoreValue === "number" && scoreValue >= 1 && scoreValue <= 5) {
-      normalized[String(stepIndex)] = scoreValue;
-      return;
-    }
-    normalized[String(stepIndex)] = null;
-  });
+  Object.entries(value as Record<string, unknown>).forEach(
+    ([stepKey, scoreValue]) => {
+      const stepIndex = Number.parseInt(stepKey, 10);
+      if (!Number.isInteger(stepIndex) || stepIndex < 0) return;
+      if (
+        typeof scoreValue === "number" &&
+        scoreValue >= 1 &&
+        scoreValue <= 5
+      ) {
+        normalized[String(stepIndex)] = scoreValue;
+        return;
+      }
+      normalized[String(stepIndex)] = null;
+    },
+  );
   return normalized;
 }
 
-function taskScoresFromTasks(tasks: Array<{ stepIndex: number; score?: number | null }>): Record<string, number | null> {
+function taskScoresFromTasks(
+  tasks: Array<{ stepIndex: number; score?: number | null }>,
+): Record<string, number | null> {
   const result: Record<string, number | null> = {};
   tasks.forEach((task) => {
     const score = task.score;
-    result[String(task.stepIndex)] = typeof score === "number" && score >= 1 && score <= 5 ? score : null;
+    result[String(task.stepIndex)] =
+      typeof score === "number" && score >= 1 && score <= 5 ? score : null;
   });
   return result;
 }
@@ -338,17 +448,34 @@ function taskScoresFromTasks(tasks: Array<{ stepIndex: number; score?: number | 
 function normalizeRealtimeTask(value: unknown): RoomTask | null {
   if (!value || typeof value !== "object") return null;
   const candidate = value as Partial<RoomTask>;
-  const stepIndex = typeof candidate.stepIndex === "number" ? Math.floor(candidate.stepIndex) : -1;
+  const stepIndex =
+    typeof candidate.stepIndex === "number"
+      ? Math.floor(candidate.stepIndex)
+      : -1;
   if (!Number.isInteger(stepIndex) || stepIndex < 0) {
     return null;
   }
-  const title = typeof candidate.title === "string" ? candidate.title.trim() : "";
-  const description = typeof candidate.description === "string" ? candidate.description : "";
-  const starterCode = typeof candidate.starterCode === "string" ? candidate.starterCode : "";
-  const language = normalizeRoomLanguage(typeof candidate.language === "string" ? candidate.language : "nodejs");
-  const categoryName = typeof candidate.categoryName === "string" ? candidate.categoryName : null;
-  const score = typeof candidate.score === "number" && candidate.score >= 1 && candidate.score <= 5 ? candidate.score : null;
-  const sourceTaskTemplateId = typeof candidate.sourceTaskTemplateId === "string" ? candidate.sourceTaskTemplateId : null;
+  const title =
+    typeof candidate.title === "string" ? candidate.title.trim() : "";
+  const description =
+    typeof candidate.description === "string" ? candidate.description : "";
+  const starterCode =
+    typeof candidate.starterCode === "string" ? candidate.starterCode : "";
+  const language = normalizeRoomLanguage(
+    typeof candidate.language === "string" ? candidate.language : "nodejs",
+  );
+  const categoryName =
+    typeof candidate.categoryName === "string" ? candidate.categoryName : null;
+  const score =
+    typeof candidate.score === "number" &&
+    candidate.score >= 1 &&
+    candidate.score <= 5
+      ? candidate.score
+      : null;
+  const sourceTaskTemplateId =
+    typeof candidate.sourceTaskTemplateId === "string"
+      ? candidate.sourceTaskTemplateId
+      : null;
   if (!title) return null;
   return {
     stepIndex,
@@ -358,21 +485,40 @@ function normalizeRealtimeTask(value: unknown): RoomTask | null {
     language,
     categoryName,
     score,
-    sourceTaskTemplateId
+    sourceTaskTemplateId,
   };
 }
 
 function normalizeNoteMessage(value: unknown): NoteMessage | null {
   if (!value || typeof value !== "object") return null;
-  const candidate = value as Partial<NoteMessage> & { text?: unknown; timestampEpochMs?: unknown };
-  const id = typeof candidate.id === "string" && candidate.id.trim() ? candidate.id.trim() : "";
-  const sessionId = typeof candidate.sessionId === "string" && candidate.sessionId.trim() ? candidate.sessionId.trim() : "";
-  const displayName = typeof candidate.displayName === "string" && candidate.displayName.trim() ? candidate.displayName.trim() : "";
-  const role = candidate.role === "owner" || candidate.role === "interviewer" || candidate.role === "candidate" ? candidate.role : null;
+  const candidate = value as Partial<NoteMessage> & {
+    text?: unknown;
+    timestampEpochMs?: unknown;
+  };
+  const id =
+    typeof candidate.id === "string" && candidate.id.trim()
+      ? candidate.id.trim()
+      : "";
+  const sessionId =
+    typeof candidate.sessionId === "string" && candidate.sessionId.trim()
+      ? candidate.sessionId.trim()
+      : "";
+  const displayName =
+    typeof candidate.displayName === "string" && candidate.displayName.trim()
+      ? candidate.displayName.trim()
+      : "";
+  const role =
+    candidate.role === "owner" ||
+    candidate.role === "interviewer" ||
+    candidate.role === "candidate"
+      ? candidate.role
+      : null;
   const text = typeof candidate.text === "string" ? candidate.text : "";
-  const timestampEpochMs = typeof candidate.timestampEpochMs === "number" && Number.isFinite(candidate.timestampEpochMs)
-    ? Math.max(0, Math.floor(candidate.timestampEpochMs))
-    : null;
+  const timestampEpochMs =
+    typeof candidate.timestampEpochMs === "number" &&
+    Number.isFinite(candidate.timestampEpochMs)
+      ? Math.max(0, Math.floor(candidate.timestampEpochMs))
+      : null;
 
   if (!id || !sessionId || !displayName || !role || timestampEpochMs == null) {
     return null;
@@ -384,7 +530,7 @@ function normalizeNoteMessage(value: unknown): NoteMessage | null {
     displayName,
     role,
     text,
-    timestampEpochMs
+    timestampEpochMs,
   };
 }
 
@@ -398,18 +544,22 @@ function parseNotesThread(rawNotes: string | null | undefined): NoteMessage[] {
     displayName: "Старые заметки",
     role: "interviewer" as const,
     text: raw,
-    timestampEpochMs: 0
+    timestampEpochMs: 0,
   };
 
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (Array.isArray(parsed)) {
-      return parsed.map(normalizeNoteMessage).filter((item): item is NoteMessage => Boolean(item));
+      return parsed
+        .map(normalizeNoteMessage)
+        .filter((item): item is NoteMessage => Boolean(item));
     }
     if (parsed && typeof parsed === "object") {
       const messages = (parsed as { messages?: unknown }).messages;
       if (Array.isArray(messages)) {
-        return messages.map(normalizeNoteMessage).filter((item): item is NoteMessage => Boolean(item));
+        return messages
+          .map(normalizeNoteMessage)
+          .filter((item): item is NoteMessage => Boolean(item));
       }
     }
   } catch {
@@ -431,7 +581,7 @@ function formatNoteTimestamp(timestampEpochMs: number): string {
   if (!timestampEpochMs) return "—";
   return new Date(timestampEpochMs).toLocaleTimeString("ru-RU", {
     hour: "2-digit",
-    minute: "2-digit"
+    minute: "2-digit",
   });
 }
 
@@ -454,8 +604,13 @@ function guestNameKey(inviteCode: string) {
   return `guest_display_name_${inviteCode}`;
 }
 
-function readStoredDisplayName(inviteCode: string, options: { includeGlobalFallback?: boolean } = {}) {
-  const roomScoped = (localStorage.getItem(guestNameKey(inviteCode)) ?? "").trim();
+function readStoredDisplayName(
+  inviteCode: string,
+  options: { includeGlobalFallback?: boolean } = {},
+) {
+  const roomScoped = (
+    localStorage.getItem(guestNameKey(inviteCode)) ?? ""
+  ).trim();
   if (roomScoped) return roomScoped;
   if (options.includeGlobalFallback === false) return "";
   return (localStorage.getItem("display_name") ?? "").trim();
@@ -473,11 +628,11 @@ export function RoomPage() {
 
   const { data: room, isLoading } = useGetRoomQuery({
     inviteCode,
-    ownerToken: ownerToken ?? undefined
+    ownerToken: ownerToken ?? undefined,
   });
 
   const initialStoredName = readStoredDisplayName(inviteCode, {
-    includeGlobalFallback: true
+    includeGlobalFallback: true,
   });
 
   const [state, setState] = useState<RealtimeState | null>(null);
@@ -486,7 +641,9 @@ export function RoomPage() {
   const [displayName, setDisplayName] = useState(() => initialStoredName);
   const [draftName, setDraftName] = useState(() => initialStoredName);
   const [candidateNameError, setCandidateNameError] = useState("");
-  const [nameModalOpened, setNameModalOpened] = useState(() => !initialStoredName);
+  const [nameModalOpened, setNameModalOpened] = useState(
+    () => !initialStoredName,
+  );
   const [noteComposer, setNoteComposer] = useState("");
   const [pendingNotes, setPendingNotes] = useState<PendingNoteMessage[]>([]);
   const [briefingDraft, setBriefingDraft] = useState("");
@@ -500,11 +657,16 @@ export function RoomPage() {
 
   useEffect(() => {
     const stored = readStoredDisplayName(inviteCode, {
-      includeGlobalFallback: true
+      includeGlobalFallback: true,
     });
+    const authDisplayName = authUser?.displayName?.trim() || "";
     const authNickname = authUser?.nickname?.trim() || "";
+    const safeStoredDisplayName =
+      stored && stored !== authNickname ? stored : "";
 
-    const resolved = authToken ? authNickname || stored || "Участник" : stored;
+    const resolved = authToken
+      ? authDisplayName || safeStoredDisplayName || "Участник"
+      : stored;
     const shouldAskName = !resolved;
 
     if (resolved) {
@@ -518,7 +680,7 @@ export function RoomPage() {
     setNameModalOpened(shouldAskName);
     setNoteComposer("");
     setPendingNotes([]);
-  }, [authToken, authUser?.nickname, inviteCode]);
+  }, [authToken, authUser?.displayName, authUser?.nickname, inviteCode]);
 
   const merged = useMemo<RealtimeState | null>(() => {
     if (state) return state;
@@ -536,11 +698,15 @@ export function RoomPage() {
         .map(normalizeNoteMessage)
         .filter((item): item is NoteMessage => Boolean(item)),
       briefingMarkdown: room.briefingMarkdown ?? "",
-      tasks: [...(room.tasks ?? [])].sort((left, right) => left.stepIndex - right.stepIndex),
+      tasks: [...(room.tasks ?? [])].sort(
+        (left, right) => left.stepIndex - right.stepIndex,
+      ),
       taskScores: taskScoresFromTasks(room.tasks ?? []),
       participants: [] as Participant[],
       isOwner: Boolean(room.isOwner),
-      role: (room.role === "owner" || room.role === "interviewer" ? room.role : "candidate") as "owner" | "interviewer" | "candidate",
+      role: (room.role === "owner" || room.role === "interviewer"
+        ? room.role
+        : "candidate") as "owner" | "interviewer" | "candidate",
       canManageRoom: Boolean(room.canManageRoom),
       canGrantAccess: Boolean(room.canGrantAccess),
       notesLockedBySessionId: null,
@@ -548,22 +714,26 @@ export function RoomPage() {
       notesLockedUntilEpochMs: null,
       cursors: [],
       lastCandidateKey: null,
-      candidateKeyHistory: []
+      candidateKeyHistory: [],
     };
   }, [room, state]);
 
   const mergedTasks = useMemo(() => {
     if (Array.isArray(merged?.tasks) && merged.tasks.length > 0) {
-      return [...merged.tasks].sort((left, right) => left.stepIndex - right.stepIndex);
+      return [...merged.tasks].sort(
+        (left, right) => left.stepIndex - right.stepIndex,
+      );
     }
-    return [...(room?.tasks ?? [])].sort((left, right) => left.stepIndex - right.stepIndex);
+    return [...(room?.tasks ?? [])].sort(
+      (left, right) => left.stepIndex - right.stepIndex,
+    );
   }, [merged?.tasks, room?.tasks]);
 
   const mergedNotes = merged?.notes ?? "";
   const mergedBriefingMarkdown = merged?.briefingMarkdown ?? "";
   const canManageRoom = merged?.canManageRoom ?? false;
   const { data: taskCatalogGroups = [] } = useTasksGroupedQuery(undefined, {
-    skip: !authToken || !canManageRoom
+    skip: !authToken || !canManageRoom,
   });
   const [addRoomTasks, addRoomTasksState] = useAddRoomTasksMutation();
   const availableCatalogTasks = useMemo(() => {
@@ -572,9 +742,11 @@ export function RoomPage() {
     const existingTemplateIds = new Set(
       roomTasks
         .map((task) => task.sourceTaskTemplateId?.trim())
-        .filter((value): value is string => Boolean(value))
+        .filter((value): value is string => Boolean(value)),
     );
-    const existingSignatures = new Set(roomTasks.map((task) => roomTaskSignature(task)));
+    const existingSignatures = new Set(
+      roomTasks.map((task) => roomTaskSignature(task)),
+    );
     const activeLanguage = normalizeRoomLanguage(merged.language);
     return taskCatalogGroups
       .flatMap((group) => group.tasks)
@@ -585,7 +757,9 @@ export function RoomPage() {
   const notesMessages = useMemo(() => {
     const direct = merged?.notesMessages;
     if (Array.isArray(direct) && direct.length > 0) {
-      return direct.map(normalizeNoteMessage).filter((item): item is NoteMessage => Boolean(item));
+      return direct
+        .map(normalizeNoteMessage)
+        .filter((item): item is NoteMessage => Boolean(item));
     }
     return parseNotesThread(mergedNotes);
   }, [merged?.notesMessages, mergedNotes]);
@@ -610,8 +784,14 @@ export function RoomPage() {
   }, [briefingDirty, merged, mergedBriefingMarkdown]);
   const visibleNotes = useMemo(() => {
     const serverIds = new Set(notesMessages.map((message) => message.id));
-    const next = [...notesMessages, ...pendingNotes.filter((message) => !serverIds.has(message.id))];
-    return next.sort((a, b) => a.timestampEpochMs - b.timestampEpochMs || a.id.localeCompare(b.id));
+    const next = [
+      ...notesMessages,
+      ...pendingNotes.filter((message) => !serverIds.has(message.id)),
+    ];
+    return next.sort(
+      (a, b) =>
+        a.timestampEpochMs - b.timestampEpochMs || a.id.localeCompare(b.id),
+    );
   }, [notesMessages, pendingNotes]);
   const currentSyncKey = useMemo(() => {
     if (!merged) return `${inviteCode}:0:nodejs`;
@@ -619,7 +799,9 @@ export function RoomPage() {
   }, [inviteCode, merged]);
   const syncKeyRef = useRef(currentSyncKey);
   const sessionIdRef = useRef<string>("");
-  const yjsPendingUpdatesRef = useRef<Array<{ syncKey: string; update: string }>>([]);
+  const yjsPendingUpdatesRef = useRef<
+    Array<{ syncKey: string; update: string }>
+  >([]);
   const yjsApplyUpdateRef = useRef<((yjsUpdate: string) => void) | null>(null);
   const awarenessApplyRef = useRef<((b64: string) => void) | null>(null);
   /** Awareness may arrive over SSE before RoomCodeEditor registers the applier (same race as yjs). */
@@ -669,109 +851,142 @@ export function RoomPage() {
     setAwaitingRecoverySync(false);
   }, []);
 
-  const onState = useCallback((incoming: RealtimeState) => {
-    const previousState = stateRef.current;
-    const previousCursorBySessionId = new Map((previousState?.cursors ?? []).map((cursor) => [cursor.sessionId, cursor]));
-    const participants = (incoming.participants ?? []).map((participant) => ({
-      ...participant,
-      role: participant.role ?? "candidate"
-    }));
-    const cursorsFromSync = (incoming.cursors ?? []).map((cursor) => {
-      const normalizedRole = cursor.role ?? "candidate";
-      const nextCursorSequence = typeof cursor.cursorSequence === "number" ? cursor.cursorSequence : null;
-      const previousCursor = previousCursorBySessionId.get(cursor.sessionId);
-      const previousCursorSequence = typeof previousCursor?.cursorSequence === "number" ? previousCursor.cursorSequence : null;
-      const shouldKeepPreviousCursor =
-        !!previousCursor &&
-        ((previousCursorSequence != null && nextCursorSequence != null && nextCursorSequence < previousCursorSequence) ||
-          (previousCursorSequence != null && nextCursorSequence == null));
-      if (shouldKeepPreviousCursor) {
-        return previousCursor;
-      }
-      // Trailing state_sync after Yjs snapshot often repeats the same cursorSequence as the last
-      // cursor_update but can carry stale line/column; prefer the live cursor we already merged.
-      const sameSequencePreferLive =
-        !!previousCursor &&
-        previousCursorSequence != null &&
-        nextCursorSequence != null &&
-        nextCursorSequence === previousCursorSequence;
-      if (sameSequencePreferLive) {
+  const onState = useCallback(
+    (incoming: RealtimeState) => {
+      const previousState = stateRef.current;
+      const previousCursorBySessionId = new Map(
+        (previousState?.cursors ?? []).map((cursor) => [
+          cursor.sessionId,
+          cursor,
+        ]),
+      );
+      const participants = (incoming.participants ?? []).map((participant) => ({
+        ...participant,
+        role: participant.role ?? "candidate",
+      }));
+      const cursorsFromSync = (incoming.cursors ?? []).map((cursor) => {
+        const normalizedRole = cursor.role ?? "candidate";
+        const nextCursorSequence =
+          typeof cursor.cursorSequence === "number"
+            ? cursor.cursorSequence
+            : null;
+        const previousCursor = previousCursorBySessionId.get(cursor.sessionId);
+        const previousCursorSequence =
+          typeof previousCursor?.cursorSequence === "number"
+            ? previousCursor.cursorSequence
+            : null;
+        const shouldKeepPreviousCursor =
+          !!previousCursor &&
+          ((previousCursorSequence != null &&
+            nextCursorSequence != null &&
+            nextCursorSequence < previousCursorSequence) ||
+            (previousCursorSequence != null && nextCursorSequence == null));
+        if (shouldKeepPreviousCursor) {
+          return previousCursor;
+        }
+        // Trailing state_sync after Yjs snapshot often repeats the same cursorSequence as the last
+        // cursor_update but can carry stale line/column; prefer the live cursor we already merged.
+        const sameSequencePreferLive =
+          !!previousCursor &&
+          previousCursorSequence != null &&
+          nextCursorSequence != null &&
+          nextCursorSequence === previousCursorSequence;
+        if (sameSequencePreferLive) {
+          return {
+            ...previousCursor,
+            displayName: cursor.displayName ?? previousCursor.displayName,
+            role: normalizedRole,
+          };
+        }
         return {
-          ...previousCursor,
-          displayName: cursor.displayName ?? previousCursor.displayName,
-          role: normalizedRole
+          ...cursor,
+          role: normalizedRole,
+          cursorSequence: nextCursorSequence,
+          lastSeenAtEpochMs: previousCursor?.lastSeenAtEpochMs ?? null,
         };
-      }
-      return {
-        ...cursor,
-        role: normalizedRole,
-        cursorSequence: nextCursorSequence,
-        lastSeenAtEpochMs: previousCursor?.lastSeenAtEpochMs ?? null
-      };
-    });
-    const mergedCursorIds = new Set(cursorsFromSync.map((c) => c.sessionId));
-    const cursorsMissingFromSync = (previousState?.cursors ?? []).filter((c) => !mergedCursorIds.has(c.sessionId));
-    const cursors = [...cursorsFromSync, ...cursorsMissingFromSync];
-    const taskScores = normalizeTaskScores(incoming.taskScores);
-    const nextTasks = Array.isArray(incoming.tasks)
-      ? incoming.tasks
-        .map(normalizeRealtimeTask)
-        .filter((item): item is RoomTask => Boolean(item))
-        .sort((left, right) => left.stepIndex - right.stepIndex)
-      : previousState?.tasks ?? [];
-    const nextState: RealtimeState = {
-      ...incoming,
-      language: normalizeRoomLanguage(incoming.language),
-      tasks: nextTasks,
-      participants,
-      cursors,
-      taskScores,
-      lastCodeUpdatedBySessionId: incoming.lastCodeUpdatedBySessionId ?? null,
-      yjsDocumentBase64: typeof incoming.yjsDocumentBase64 === "string" ? incoming.yjsDocumentBase64 : null,
-      lastYjsSequence: typeof incoming.lastYjsSequence === "number" ? incoming.lastYjsSequence : 0,
-      notesMessages: Array.isArray(incoming.notesMessages)
-        ? incoming.notesMessages.map(normalizeNoteMessage).filter((item): item is NoteMessage => Boolean(item))
-        : [],
-      briefingMarkdown: typeof incoming.briefingMarkdown === "string" ? incoming.briefingMarkdown : "",
-      canGrantAccess: Boolean(incoming.canGrantAccess),
-      lastCandidateKey: incoming.lastCandidateKey ?? null,
-      candidateKeyHistory: Array.isArray(incoming.candidateKeyHistory)
-        ? incoming.candidateKeyHistory
-        : incoming.lastCandidateKey
-          ? [incoming.lastCandidateKey]
-          : []
-    };
-    const previousSyncKey = previousState ? `${previousState.inviteCode}:${previousState.currentStep}:${previousState.language}` : null;
-    const nextSyncKey = `${nextState.inviteCode}:${nextState.currentStep}:${nextState.language}`;
-    const syncContextChanged = previousSyncKey !== null && previousSyncKey !== nextSyncKey;
-    const shouldForceHydrateFromState = awaitingRecoverySyncRef.current || syncContextChanged;
-    if (
-      !previousState ||
-      previousState.lastYjsSequence !== nextState.lastYjsSequence ||
-      previousState.code !== nextState.code ||
-      previousState.yjsDocumentBase64 !== nextState.yjsDocumentBase64
-    ) {
-      roomSyncLog("state_sync", {
-        codeLen: nextState.code?.length ?? 0,
-        lastYjsSequence: nextState.lastYjsSequence,
-        yjsDocLen: nextState.yjsDocumentBase64?.length ?? 0,
-        syncKey: nextSyncKey,
-        fromSession: nextState.lastCodeUpdatedBySessionId
       });
-    }
-    // Do not bump resync on mere code drift during live Yjs typing — server string can lag merged CRDT and would clobber peers.
-    if (
-      previousState &&
-      previousState.code !== nextState.code &&
-      nextState.lastCodeUpdatedBySessionId !== sessionIdRef.current &&
-      shouldForceHydrateFromState
-    ) {
-      setResyncSignal((value) => value + 1);
-    }
-    clearRecoverySyncPending();
-    stateRef.current = nextState;
-    setState(nextState);
-  }, [clearRecoverySyncPending]);
+      const mergedCursorIds = new Set(cursorsFromSync.map((c) => c.sessionId));
+      const cursorsMissingFromSync = (previousState?.cursors ?? []).filter(
+        (c) => !mergedCursorIds.has(c.sessionId),
+      );
+      const cursors = [...cursorsFromSync, ...cursorsMissingFromSync];
+      const taskScores = normalizeTaskScores(incoming.taskScores);
+      const nextTasks = Array.isArray(incoming.tasks)
+        ? incoming.tasks
+            .map(normalizeRealtimeTask)
+            .filter((item): item is RoomTask => Boolean(item))
+            .sort((left, right) => left.stepIndex - right.stepIndex)
+        : (previousState?.tasks ?? []);
+      const nextState: RealtimeState = {
+        ...incoming,
+        language: normalizeRoomLanguage(incoming.language),
+        tasks: nextTasks,
+        participants,
+        cursors,
+        taskScores,
+        lastCodeUpdatedBySessionId: incoming.lastCodeUpdatedBySessionId ?? null,
+        yjsDocumentBase64:
+          typeof incoming.yjsDocumentBase64 === "string"
+            ? incoming.yjsDocumentBase64
+            : null,
+        lastYjsSequence:
+          typeof incoming.lastYjsSequence === "number"
+            ? incoming.lastYjsSequence
+            : 0,
+        notesMessages: Array.isArray(incoming.notesMessages)
+          ? incoming.notesMessages
+              .map(normalizeNoteMessage)
+              .filter((item): item is NoteMessage => Boolean(item))
+          : [],
+        briefingMarkdown:
+          typeof incoming.briefingMarkdown === "string"
+            ? incoming.briefingMarkdown
+            : "",
+        canGrantAccess: Boolean(incoming.canGrantAccess),
+        lastCandidateKey: incoming.lastCandidateKey ?? null,
+        candidateKeyHistory: Array.isArray(incoming.candidateKeyHistory)
+          ? incoming.candidateKeyHistory
+          : incoming.lastCandidateKey
+            ? [incoming.lastCandidateKey]
+            : [],
+      };
+      const previousSyncKey = previousState
+        ? `${previousState.inviteCode}:${previousState.currentStep}:${previousState.language}`
+        : null;
+      const nextSyncKey = `${nextState.inviteCode}:${nextState.currentStep}:${nextState.language}`;
+      const syncContextChanged =
+        previousSyncKey !== null && previousSyncKey !== nextSyncKey;
+      const shouldForceHydrateFromState =
+        awaitingRecoverySyncRef.current || syncContextChanged;
+      if (
+        !previousState ||
+        previousState.lastYjsSequence !== nextState.lastYjsSequence ||
+        previousState.code !== nextState.code ||
+        previousState.yjsDocumentBase64 !== nextState.yjsDocumentBase64
+      ) {
+        roomSyncLog("state_sync", {
+          codeLen: nextState.code?.length ?? 0,
+          lastYjsSequence: nextState.lastYjsSequence,
+          yjsDocLen: nextState.yjsDocumentBase64?.length ?? 0,
+          syncKey: nextSyncKey,
+          fromSession: nextState.lastCodeUpdatedBySessionId,
+        });
+      }
+      // Do not bump resync on mere code drift during live Yjs typing — server string can lag merged CRDT and would clobber peers.
+      if (
+        previousState &&
+        previousState.code !== nextState.code &&
+        nextState.lastCodeUpdatedBySessionId !== sessionIdRef.current &&
+        shouldForceHydrateFromState
+      ) {
+        setResyncSignal((value) => value + 1);
+      }
+      clearRecoverySyncPending();
+      stateRef.current = nextState;
+      setState(nextState);
+    },
+    [clearRecoverySyncPending],
+  );
 
   const onEditorValueChange = useCallback((value: string) => {
     editorValueRef.current = value;
@@ -786,41 +1001,58 @@ export function RoomPage() {
       sessionId: incomingCursor?.sessionId,
       lineNumber: incomingCursor?.lineNumber,
       column: incomingCursor?.column,
-      selectionStartLineNumber: incomingCursor?.selectionStartLineNumber ?? null,
+      selectionStartLineNumber:
+        incomingCursor?.selectionStartLineNumber ?? null,
       selectionStartColumn: incomingCursor?.selectionStartColumn ?? null,
       selectionEndLineNumber: incomingCursor?.selectionEndLineNumber ?? null,
       selectionEndColumn: incomingCursor?.selectionEndColumn ?? null,
-      cursorSequence: incomingCursor?.cursorSequence ?? null
+      cursorSequence: incomingCursor?.cursorSequence ?? null,
     });
     setState((previous) => {
       if (!previous) return previous;
-      if (!incomingCursor?.sessionId || incomingCursor.sessionId === sessionIdRef.current) {
+      if (
+        !incomingCursor?.sessionId ||
+        incomingCursor.sessionId === sessionIdRef.current
+      ) {
         return previous;
       }
 
       const normalizedCursor: CursorInfo = {
         ...incomingCursor,
         role: incomingCursor.role ?? "candidate",
-        cursorSequence: typeof incomingCursor.cursorSequence === "number" ? incomingCursor.cursorSequence : null,
-        lastSeenAtEpochMs: Date.now()
+        cursorSequence:
+          typeof incomingCursor.cursorSequence === "number"
+            ? incomingCursor.cursorSequence
+            : null,
+        lastSeenAtEpochMs: Date.now(),
       };
       const currentCursors = previous.cursors ?? [];
-      const existingIndex = currentCursors.findIndex((cursor) => cursor.sessionId === normalizedCursor.sessionId);
+      const existingIndex = currentCursors.findIndex(
+        (cursor) => cursor.sessionId === normalizedCursor.sessionId,
+      );
       if (existingIndex < 0) {
         return { ...previous, cursors: [...currentCursors, normalizedCursor] };
       }
 
       const existing = currentCursors[existingIndex];
-      const nextSequence = typeof normalizedCursor.cursorSequence === "number" ? normalizedCursor.cursorSequence : null;
-      const previousSequence = typeof existing.cursorSequence === "number" ? existing.cursorSequence : null;
+      const nextSequence =
+        typeof normalizedCursor.cursorSequence === "number"
+          ? normalizedCursor.cursorSequence
+          : null;
+      const previousSequence =
+        typeof existing.cursorSequence === "number"
+          ? existing.cursorSequence
+          : null;
       const staleBySequence =
-        (previousSequence != null && nextSequence != null && nextSequence <= previousSequence) ||
+        (previousSequence != null &&
+          nextSequence != null &&
+          nextSequence <= previousSequence) ||
         (previousSequence != null && nextSequence == null);
       if (staleBySequence) {
         debugCursorLog("socket:cursor_update:dropped_stale", {
           sessionId: normalizedCursor.sessionId,
           nextSequence,
-          previousSequence
+          previousSequence,
         });
         return previous;
       }
@@ -831,14 +1063,17 @@ export function RoomPage() {
         existing.cursorSequence === normalizedCursor.cursorSequence &&
         existing.lineNumber === normalizedCursor.lineNumber &&
         existing.column === normalizedCursor.column &&
-        existing.selectionStartLineNumber === normalizedCursor.selectionStartLineNumber &&
-        existing.selectionStartColumn === normalizedCursor.selectionStartColumn &&
-        existing.selectionEndLineNumber === normalizedCursor.selectionEndLineNumber &&
+        existing.selectionStartLineNumber ===
+          normalizedCursor.selectionStartLineNumber &&
+        existing.selectionStartColumn ===
+          normalizedCursor.selectionStartColumn &&
+        existing.selectionEndLineNumber ===
+          normalizedCursor.selectionEndLineNumber &&
         existing.selectionEndColumn === normalizedCursor.selectionEndColumn;
       if (unchanged) {
         debugCursorLog("socket:cursor_update:dropped_unchanged", {
           sessionId: normalizedCursor.sessionId,
-          cursorSequence: normalizedCursor.cursorSequence ?? null
+          cursorSequence: normalizedCursor.cursorSequence ?? null,
         });
         return previous;
       }
@@ -858,10 +1093,13 @@ export function RoomPage() {
         return previous;
       }
 
-      const timestampEpochMs = typeof incomingKey.timestampEpochMs === "number" ? incomingKey.timestampEpochMs : Date.now();
+      const timestampEpochMs =
+        typeof incomingKey.timestampEpochMs === "number"
+          ? incomingKey.timestampEpochMs
+          : Date.now();
       const normalizedKey: CandidateKeyInfo = {
         ...incomingKey,
-        timestampEpochMs
+        timestampEpochMs,
       };
       const dedupeToken = [
         normalizedKey.sessionId,
@@ -871,29 +1109,35 @@ export function RoomPage() {
         normalizedKey.ctrlKey ? "1" : "0",
         normalizedKey.altKey ? "1" : "0",
         normalizedKey.shiftKey ? "1" : "0",
-        normalizedKey.metaKey ? "1" : "0"
+        normalizedKey.metaKey ? "1" : "0",
       ].join(":");
 
-      const hasDuplicate = (previous.candidateKeyHistory ?? []).some((entry) => {
-        const entryToken = [
-          entry.sessionId,
-          entry.timestampEpochMs,
-          entry.key,
-          entry.keyCode,
-          entry.ctrlKey ? "1" : "0",
-          entry.altKey ? "1" : "0",
-          entry.shiftKey ? "1" : "0",
-          entry.metaKey ? "1" : "0"
-        ].join(":");
-        return entryToken === dedupeToken;
-      });
+      const hasDuplicate = (previous.candidateKeyHistory ?? []).some(
+        (entry) => {
+          const entryToken = [
+            entry.sessionId,
+            entry.timestampEpochMs,
+            entry.key,
+            entry.keyCode,
+            entry.ctrlKey ? "1" : "0",
+            entry.altKey ? "1" : "0",
+            entry.shiftKey ? "1" : "0",
+            entry.metaKey ? "1" : "0",
+          ].join(":");
+          return entryToken === dedupeToken;
+        },
+      );
 
       const currentHistory = previous.candidateKeyHistory ?? [];
       const nextHistory = hasDuplicate
         ? currentHistory
         : [normalizedKey, ...currentHistory].slice(0, LOG_HISTORY_LIMIT);
-      const previousLastTimestamp = previous.lastCandidateKey?.timestampEpochMs ?? 0;
-      const nextLastCandidateKey = timestampEpochMs >= previousLastTimestamp ? normalizedKey : previous.lastCandidateKey;
+      const previousLastTimestamp =
+        previous.lastCandidateKey?.timestampEpochMs ?? 0;
+      const nextLastCandidateKey =
+        timestampEpochMs >= previousLastTimestamp
+          ? normalizedKey
+          : previous.lastCandidateKey;
 
       if (hasDuplicate && nextLastCandidateKey === previous.lastCandidateKey) {
         return previous;
@@ -902,71 +1146,103 @@ export function RoomPage() {
       return {
         ...previous,
         lastCandidateKey: nextLastCandidateKey,
-        candidateKeyHistory: nextHistory
+        candidateKeyHistory: nextHistory,
       };
     });
   }, []);
 
-  const onRecoveryStateSync = useCallback((lastYjsSequence: number) => {
-    void lastYjsSequence;
-    clearRecoverySyncPending();
-    setResyncSignal((value) => value + 1);
-  }, [clearRecoverySyncPending]);
+  const onRecoveryStateSync = useCallback(
+    (lastYjsSequence: number) => {
+      void lastYjsSequence;
+      clearRecoverySyncPending();
+      setResyncSignal((value) => value + 1);
+    },
+    [clearRecoverySyncPending],
+  );
 
   /** Peers: incremental Yjs relay. Server still owns DB + state_sync snapshots (recovery / tabs). */
-  const onYjsUpdate = useCallback((payload: { sessionId: string; yjsUpdate: string; syncKey?: string | null; yjsSequence?: number | null }) => {
-    const update = payload.yjsUpdate?.trim();
-    if (!update) return;
-    const incomingSyncKey = payload.syncKey?.trim() || syncKeyRef.current;
-    if (incomingSyncKey !== syncKeyRef.current) {
-      return;
-    }
-    roomSyncLog("sse:yjs_update_incremental", {
-      fromSession: payload.sessionId,
-      yjsSequence: payload.yjsSequence ?? null
-    });
-    if (yjsApplyUpdateRef.current) {
-      yjsApplyUpdateRef.current(update);
-      return;
-    }
-    yjsPendingUpdatesRef.current.push({ syncKey: incomingSyncKey, update });
-    if (yjsPendingUpdatesRef.current.length > 200) {
-      yjsPendingUpdatesRef.current.splice(0, yjsPendingUpdatesRef.current.length - 200);
-    }
-  }, []);
+  const onYjsUpdate = useCallback(
+    (payload: {
+      sessionId: string;
+      yjsUpdate: string;
+      syncKey?: string | null;
+      yjsSequence?: number | null;
+    }) => {
+      const update = payload.yjsUpdate?.trim();
+      if (!update) return;
+      const incomingSyncKey = payload.syncKey?.trim() || syncKeyRef.current;
+      if (incomingSyncKey !== syncKeyRef.current) {
+        return;
+      }
+      roomSyncLog("sse:yjs_update_incremental", {
+        fromSession: payload.sessionId,
+        yjsSequence: payload.yjsSequence ?? null,
+      });
+      if (yjsApplyUpdateRef.current) {
+        yjsApplyUpdateRef.current(update);
+        return;
+      }
+      yjsPendingUpdatesRef.current.push({ syncKey: incomingSyncKey, update });
+      if (yjsPendingUpdatesRef.current.length > 200) {
+        yjsPendingUpdatesRef.current.splice(
+          0,
+          yjsPendingUpdatesRef.current.length - 200,
+        );
+      }
+    },
+    [],
+  );
 
-  const onYjsBridgeReady = useCallback((applyUpdate: ((yjsUpdate: string) => void) | null) => {
-    yjsApplyUpdateRef.current = applyUpdate;
-    if (!applyUpdate) return;
-    const targetSyncKey = syncKeyRef.current;
-    const pending = yjsPendingUpdatesRef.current.splice(0, yjsPendingUpdatesRef.current.length);
-    pending
-      .filter((item) => item.syncKey === targetSyncKey)
-      .forEach((item) => applyUpdate(item.update));
-  }, []);
+  const onYjsBridgeReady = useCallback(
+    (applyUpdate: ((yjsUpdate: string) => void) | null) => {
+      yjsApplyUpdateRef.current = applyUpdate;
+      if (!applyUpdate) return;
+      const targetSyncKey = syncKeyRef.current;
+      const pending = yjsPendingUpdatesRef.current.splice(
+        0,
+        yjsPendingUpdatesRef.current.length,
+      );
+      pending
+        .filter((item) => item.syncKey === targetSyncKey)
+        .forEach((item) => applyUpdate(item.update));
+    },
+    [],
+  );
 
-  const onAwarenessBridgeReady = useCallback((applyFn: ((b64: string) => void) | null) => {
-    awarenessApplyRef.current = applyFn;
-    if (!applyFn) return;
-    const pending = awarenessPendingRef.current.splice(0, awarenessPendingRef.current.length);
-    pending.forEach((b64) => applyFn(b64));
-  }, []);
+  const onAwarenessBridgeReady = useCallback(
+    (applyFn: ((b64: string) => void) | null) => {
+      awarenessApplyRef.current = applyFn;
+      if (!applyFn) return;
+      const pending = awarenessPendingRef.current.splice(
+        0,
+        awarenessPendingRef.current.length,
+      );
+      pending.forEach((b64) => applyFn(b64));
+    },
+    [],
+  );
 
-  const onAwarenessUpdateSocket = useCallback((payload: { sessionId: string; awarenessUpdate: string }) => {
-    if (payload.sessionId === sessionIdRef.current) return;
-    const b64 = payload.awarenessUpdate?.trim() ?? "";
-    if (!b64) return;
-    if (awarenessApplyRef.current) {
-      awarenessApplyRef.current(b64);
-      return;
-    }
-    awarenessPendingRef.current.push(b64);
-    if (awarenessPendingRef.current.length > 200) {
-      awarenessPendingRef.current.splice(0, awarenessPendingRef.current.length - 200);
-    }
-  }, []);
+  const onAwarenessUpdateSocket = useCallback(
+    (payload: { sessionId: string; awarenessUpdate: string }) => {
+      if (payload.sessionId === sessionIdRef.current) return;
+      const b64 = payload.awarenessUpdate?.trim() ?? "";
+      if (!b64) return;
+      if (awarenessApplyRef.current) {
+        awarenessApplyRef.current(b64);
+        return;
+      }
+      awarenessPendingRef.current.push(b64);
+      if (awarenessPendingRef.current.length > 200) {
+        awarenessPendingRef.current.splice(
+          0,
+          awarenessPendingRef.current.length - 200,
+        );
+      }
+    },
+    [],
+  );
 
-  const fallbackDisplayName = authUser?.nickname?.trim() || "Участник";
+  const fallbackDisplayName = authUser?.displayName?.trim() || "Участник";
   const effectiveDisplayName = displayName.trim() || fallbackDisplayName;
   const canConnect = Boolean(inviteCode);
   const {
@@ -981,7 +1257,7 @@ export function RoomPage() {
     sendRevokeInterviewerAccess,
     sendAwarenessUpdate,
     sendYjsUpdate,
-    sendKeyPress
+    sendKeyPress,
   } = useRoomSocket({
     enabled: canConnect,
     inviteCode,
@@ -995,7 +1271,7 @@ export function RoomPage() {
     onYjsUpdate,
     onAwarenessUpdate: onAwarenessUpdateSocket,
     onRecoveryStateSync,
-    onRequireRecoverySync: markRecoverySyncPending
+    onRequireRecoverySync: markRecoverySyncPending,
   });
   useEffect(() => {
     sessionIdRef.current = sessionId;
@@ -1022,23 +1298,35 @@ export function RoomPage() {
   }, [briefingDirty, briefingDraft, mergedBriefingMarkdown]);
 
   const sendYjsUpdateTracked = useCallback(
-    (yjsUpdate: string, syncKey?: string | null, codeSnapshot?: string | null, yjsDocumentBase64?: string | null) => {
-    const update = yjsUpdate.trim();
-    const docSnap = yjsDocumentBase64?.trim() ?? "";
-    if (!update && !docSnap) return;
-    const normalizedSyncKey = syncKey?.trim() ?? "";
-    const now = Date.now();
-    const dedupeKey = docSnap ? `${normalizedSyncKey}::snap::${docSnap.length}::${docSnap.slice(0, 120)}` : `${normalizedSyncKey}::${update}`;
-    recentLocalYjsUpdatesRef.current.set(dedupeKey, now);
-    recentLocalYjsUpdatesRef.current.forEach((timestamp, key) => {
-      if (now - timestamp > 15_000) {
-        recentLocalYjsUpdatesRef.current.delete(key);
-      }
-    });
-    sendYjsUpdate(update, normalizedSyncKey || null, codeSnapshot ?? null, docSnap || null);
-  },
-  [sendYjsUpdate]
-);
+    (
+      yjsUpdate: string,
+      syncKey?: string | null,
+      codeSnapshot?: string | null,
+      yjsDocumentBase64?: string | null,
+    ) => {
+      const update = yjsUpdate.trim();
+      const docSnap = yjsDocumentBase64?.trim() ?? "";
+      if (!update && !docSnap) return;
+      const normalizedSyncKey = syncKey?.trim() ?? "";
+      const now = Date.now();
+      const dedupeKey = docSnap
+        ? `${normalizedSyncKey}::snap::${docSnap.length}::${docSnap.slice(0, 120)}`
+        : `${normalizedSyncKey}::${update}`;
+      recentLocalYjsUpdatesRef.current.set(dedupeKey, now);
+      recentLocalYjsUpdatesRef.current.forEach((timestamp, key) => {
+        if (now - timestamp > 15_000) {
+          recentLocalYjsUpdatesRef.current.delete(key);
+        }
+      });
+      sendYjsUpdate(
+        update,
+        normalizedSyncKey || null,
+        codeSnapshot ?? null,
+        docSnap || null,
+      );
+    },
+    [sendYjsUpdate],
+  );
 
   const hasRealtimeState = Boolean(state);
   const participantsCount = state?.participants.length ?? 0;
@@ -1060,44 +1348,92 @@ export function RoomPage() {
       role: merged.role,
       text,
       timestampEpochMs,
-      pending: true
+      pending: true,
     };
     setPendingNotes((current) => [...current, optimisticMessage]);
     setNoteComposer("");
     sendNoteMessage(noteId, text, timestampEpochMs);
-  }, [canManageRoom, effectiveDisplayName, merged, noteComposer, sendNoteMessage, sessionId]);
+  }, [
+    canManageRoom,
+    effectiveDisplayName,
+    merged,
+    noteComposer,
+    sendNoteMessage,
+    sessionId,
+  ]);
 
-  const changeBriefingMarkdown = useCallback((value: string) => {
-    setBriefingDraft(value);
-    setBriefingDirty(true);
-    if (!canManageRoom) return;
-    if (briefingDebounceTimerRef.current != null) {
-      window.clearTimeout(briefingDebounceTimerRef.current);
-    }
-    briefingDebounceTimerRef.current = window.setTimeout(() => {
-      sendBriefingUpdate(value);
-      briefingDebounceTimerRef.current = null;
-    }, 160);
-  }, [canManageRoom, sendBriefingUpdate]);
+  const changeBriefingMarkdown = useCallback(
+    (value: string) => {
+      setBriefingDraft(value);
+      setBriefingDirty(true);
+      if (!canManageRoom) return;
+      if (briefingDebounceTimerRef.current != null) {
+        window.clearTimeout(briefingDebounceTimerRef.current);
+      }
+      briefingDebounceTimerRef.current = window.setTimeout(() => {
+        sendBriefingUpdate(value);
+        briefingDebounceTimerRef.current = null;
+      }, 160);
+    },
+    [canManageRoom, sendBriefingUpdate],
+  );
 
-  const addTasksFromCatalog = useCallback(async (taskIds: string[]) => {
-    if (!merged) return;
-    const normalizedTaskIds = Array.from(
-      new Set(taskIds.map((taskId) => taskId.trim()).filter((taskId) => taskId.length > 0))
-    );
-    if (normalizedTaskIds.length === 0) return;
-    try {
-      setError("");
-      await addRoomTasks({
-        inviteCode: merged.inviteCode,
-        taskIds: normalizedTaskIds,
-        ownerToken: ownerToken ?? undefined
-      }).unwrap();
-    } catch {
-      setError("Не удалось добавить задачи в комнату");
-      throw new Error("room_task_append_failed");
-    }
-  }, [addRoomTasks, merged, ownerToken]);
+  const addTasksFromCatalog = useCallback(
+    async (taskIds: string[]) => {
+      if (!merged) return;
+      const normalizedTaskIds = Array.from(
+        new Set(
+          taskIds
+            .map((taskId) => taskId.trim())
+            .filter((taskId) => taskId.length > 0),
+        ),
+      );
+      if (normalizedTaskIds.length === 0) return;
+      try {
+        setError("");
+        await addRoomTasks({
+          inviteCode: merged.inviteCode,
+          taskIds: normalizedTaskIds,
+          customTasks: [],
+          ownerToken: ownerToken ?? undefined,
+        }).unwrap();
+      } catch {
+        setError("Не удалось добавить задачи в комнату");
+        throw new Error("room_task_append_failed");
+      }
+    },
+    [addRoomTasks, merged, ownerToken],
+  );
+
+  const addCustomTaskToRoom = useCallback(
+    async (task: RoomCustomTaskDraft) => {
+      if (!merged) return;
+      const title = task.title.trim();
+      const description = task.description.trim();
+      if (!title || !description) {
+        throw new Error("room_custom_task_validation_failed");
+      }
+      try {
+        setError("");
+        await addRoomTasks({
+          inviteCode: merged.inviteCode,
+          taskIds: [],
+          customTasks: [
+            {
+              title,
+              description,
+              starterCode: task.starterCode,
+            },
+          ],
+          ownerToken: ownerToken ?? undefined,
+        }).unwrap();
+      } catch {
+        setError("Не удалось добавить задачу в комнату");
+        throw new Error("room_custom_task_append_failed");
+      }
+    },
+    [addRoomTasks, merged, ownerToken],
+  );
 
   const briefingSeededStepRef = useRef<string>("");
 
@@ -1105,7 +1441,9 @@ export function RoomPage() {
     if (!merged || !canManageRoom) return;
     if (briefingDirty) return;
 
-    const step = mergedTasks.find((task) => task.stepIndex === merged.currentStep);
+    const step = mergedTasks.find(
+      (task) => task.stepIndex === merged.currentStep,
+    );
     const description = step?.description ?? "";
     if (!description.trim()) return;
     if (mergedBriefingMarkdown.trim()) return;
@@ -1114,17 +1452,37 @@ export function RoomPage() {
     if (briefingSeededStepRef.current === seedKey) return;
     briefingSeededStepRef.current = seedKey;
     changeBriefingMarkdown(description);
-  }, [canManageRoom, changeBriefingMarkdown, briefingDirty, merged, mergedBriefingMarkdown, mergedTasks]);
+  }, [
+    canManageRoom,
+    changeBriefingMarkdown,
+    briefingDirty,
+    merged,
+    mergedBriefingMarkdown,
+    mergedTasks,
+  ]);
 
-  const toggleParticipantInterviewerRole = useCallback((participant: Participant) => {
-    if (!merged?.canGrantAccess || participant.role === "owner") return;
-    const targetUserId = participant.userId?.trim() ?? "";
-    if (participant.role === "candidate") {
-      sendGrantInterviewerAccess(participant.sessionId, targetUserId || undefined);
-      return;
-    }
-    sendRevokeInterviewerAccess(participant.sessionId, targetUserId || undefined);
-  }, [merged?.canGrantAccess, sendGrantInterviewerAccess, sendRevokeInterviewerAccess]);
+  const toggleParticipantInterviewerRole = useCallback(
+    (participant: Participant) => {
+      if (!merged?.canGrantAccess || participant.role === "owner") return;
+      const targetUserId = participant.userId?.trim() ?? "";
+      if (participant.role === "candidate") {
+        sendGrantInterviewerAccess(
+          participant.sessionId,
+          targetUserId || undefined,
+        );
+        return;
+      }
+      sendRevokeInterviewerAccess(
+        participant.sessionId,
+        targetUserId || undefined,
+      );
+    },
+    [
+      merged?.canGrantAccess,
+      sendGrantInterviewerAccess,
+      sendRevokeInterviewerAccess,
+    ],
+  );
 
   const submitCandidateName = () => {
     const normalized = draftName.trim();
@@ -1152,10 +1510,15 @@ export function RoomPage() {
     );
   }
 
-  const step = mergedTasks.find((task) => task.stepIndex === merged.currentStep);
-  const currentTaskRating = merged.taskScores[String(merged.currentStep)] ?? step?.score ?? null;
+  const step = mergedTasks.find(
+    (task) => task.stepIndex === merged.currentStep,
+  );
+  const currentTaskRating =
+    merged.taskScores[String(merged.currentStep)] ?? step?.score ?? null;
   const stepStarterCode = step?.starterCode ?? "";
-  const ownerBriefingValue = briefingDirty ? briefingDraft : mergedBriefingMarkdown;
+  const ownerBriefingValue = briefingDirty
+    ? briefingDraft
+    : mergedBriefingMarkdown;
   const candidateBriefingValue = mergedBriefingMarkdown;
 
   return (
@@ -1175,7 +1538,6 @@ export function RoomPage() {
           </Text>
           <TextInput
             label="Ваше имя"
-            placeholder="Имя"
             value={draftName}
             error={candidateNameError || undefined}
             onChange={(event) => {
@@ -1202,7 +1564,13 @@ export function RoomPage() {
         </Stack>
       </Modal>
 
-      <Box className={styles.shell}>
+      <Box
+        className={
+          canManageRoom
+            ? styles.shell
+            : `${styles.shell} ${styles.shellCandidate}`
+        }
+      >
         <TopBar
           roomTitle={room?.title ?? "Комната"}
           authToken={authToken}
@@ -1243,6 +1611,7 @@ export function RoomPage() {
             editorReady={editorReady}
             onSelectStep={(stepIndex) => sendSetStep(stepIndex)}
             onAddTasksFromCatalog={addTasksFromCatalog}
+            onAddCustomTask={addCustomTaskToRoom}
             isAddingTasksFromCatalog={addRoomTasksState.isLoading}
             onYjsUpdate={(yjsUpdate, syncKey, codeSnapshot, yjsDoc) =>
               sendYjsUpdateTracked(yjsUpdate, syncKey, codeSnapshot, yjsDoc)
@@ -1254,7 +1623,9 @@ export function RoomPage() {
                 sendKeyPress(payload);
               }
             }}
-            onTaskRatingChange={(rating) => sendTaskRatingUpdate(merged.currentStep, rating)}
+            onTaskRatingChange={(rating) =>
+              sendTaskRatingUpdate(merged.currentStep, rating)
+            }
           />
         ) : (
           <CandidateLayout
@@ -1297,7 +1668,7 @@ function TopBar({
   currentLanguage,
   onLanguageChange,
   canGrantAccess,
-  onToggleInterviewerRole
+  onToggleInterviewerRole,
 }: {
   roomTitle: string;
   authToken: string | null;
@@ -1322,18 +1693,35 @@ function TopBar({
 
         {showParticipants ? (
           <Box className={styles.participantsHost}>
-            <div className={styles.participantsInline} aria-label="Участники комнаты">
+            <div
+              className={styles.participantsInline}
+              aria-label="Участники комнаты"
+            >
               {participants.map((participant) => {
-                const presenceLabel = getParticipantPresenceLabel(participant.presenceStatus);
-                const canOpenMenu = canGrantAccess && participant.role !== "owner" && (participant.canBeGrantedInterviewerAccess ?? true);
+                const presenceLabel = getParticipantPresenceLabel(
+                  participant.presenceStatus,
+                );
+                const canOpenMenu =
+                  canGrantAccess &&
+                  participant.role !== "owner" &&
+                  (participant.canBeGrantedInterviewerAccess ?? true);
                 const isInterviewer = participant.role === "interviewer";
-                const menuActionLabel = isInterviewer ? "Снять роль интервьюера" : "Назначить интервьюером";
-                const { color: cursorColor, colorLight: cursorColorLight } = awarenessUserColors(participant.sessionId);
+                const menuActionLabel = isInterviewer
+                  ? "Снять роль интервьюера"
+                  : "Назначить интервьюером";
+                const { color: cursorColor, colorLight: cursorColorLight } =
+                  awarenessUserColors(participant.sessionId);
                 const participantCard = (
                   <span className={styles.participantNameRow}>
-                    <span className={styles.participantName}>{participant.displayName}</span>
+                    <span className={styles.participantName}>
+                      {participant.displayName}
+                    </span>
                     {isInterviewer ? (
-                      <span className={styles.participantInterviewerStar} aria-label="Интервьюер" title="Интервьюер">
+                      <span
+                        className={styles.participantInterviewerStar}
+                        aria-label="Интервьюер"
+                        title="Интервьюер"
+                      >
                         *
                       </span>
                     ) : null}
@@ -1342,7 +1730,7 @@ function TopBar({
                 const participantStyle = {
                   "--participant-role-color": cursorColor,
                   "--participant-cursor-color": cursorColor,
-                  "--participant-cursor-color-light": cursorColorLight
+                  "--participant-cursor-color-light": cursorColorLight,
                 } as React.CSSProperties;
 
                 if (!canOpenMenu) {
@@ -1361,7 +1749,13 @@ function TopBar({
                 }
 
                 return (
-                  <Menu key={participant.sessionId} withinPortal position="bottom" shadow="md" offset={8}>
+                  <Menu
+                    key={participant.sessionId}
+                    withinPortal
+                    position="bottom"
+                    shadow="md"
+                    offset={8}
+                  >
                     <Menu.Target>
                       <button
                         type="button"
@@ -1375,7 +1769,9 @@ function TopBar({
                       </button>
                     </Menu.Target>
                     <Menu.Dropdown>
-                      <Menu.Item onClick={() => onToggleInterviewerRole(participant)}>
+                      <Menu.Item
+                        onClick={() => onToggleInterviewerRole(participant)}
+                      >
                         {menuActionLabel}
                       </Menu.Item>
                     </Menu.Dropdown>
@@ -1396,9 +1792,15 @@ function TopBar({
                 size="xs"
                 data={LANGUAGES}
                 value={normalizeRoomLanguage(currentLanguage)}
-                onChange={(value) => onLanguageChange(value ? normalizeRoomLanguage(value) : null)}
+                onChange={(value) =>
+                  onLanguageChange(value ? normalizeRoomLanguage(value) : null)
+                }
                 className={styles.topLanguageSelect}
-                classNames={{ input: styles.topLanguageInput, dropdown: styles.topLanguageDropdown, option: styles.topLanguageOption }}
+                classNames={{
+                  input: styles.topLanguageInput,
+                  dropdown: styles.topLanguageDropdown,
+                  option: styles.topLanguageOption,
+                }}
                 aria-label="Язык комнаты"
                 allowDeselect={false}
                 comboboxProps={{ withinPortal: false }}
@@ -1419,7 +1821,14 @@ function TopBar({
             >
               Кабинет
             </Button>
-            <Button component={Link} to="/" size="xs" variant="outline" color="gray" leftSection={<IconHome2 size={14} />}>
+            <Button
+              component={Link}
+              to="/"
+              size="xs"
+              variant="outline"
+              color="gray"
+              leftSection={<IconHome2 size={14} />}
+            >
               Главная
             </Button>
           </div>
@@ -1455,15 +1864,21 @@ function OwnerLayout({
   editorReady,
   onSelectStep,
   onAddTasksFromCatalog,
+  onAddCustomTask,
   isAddingTasksFromCatalog,
   onYjsUpdate,
   onYjsBridgeReady,
   onEditorValueChange,
   onKeyPress,
-  onTaskRatingChange
+  onTaskRatingChange,
 }: {
   merged: RealtimeState;
-  tasks: Array<{ stepIndex: number; title: string; language: string; score: number | null }>;
+  tasks: Array<{
+    stepIndex: number;
+    title: string;
+    language: string;
+    score: number | null;
+  }>;
   availableCatalogTasks: TaskTemplate[];
   stepTitle: string;
   stepStarterCode: string;
@@ -1487,19 +1902,43 @@ function OwnerLayout({
   editorReady: boolean;
   onSelectStep: (stepIndex: number) => void;
   onAddTasksFromCatalog: (taskIds: string[]) => Promise<void>;
+  onAddCustomTask: (task: RoomCustomTaskDraft) => Promise<void>;
   isAddingTasksFromCatalog: boolean;
-  onYjsUpdate: (yjsUpdate: string, syncKey: string, codeSnapshot?: string | null, yjsDocumentBase64?: string | null) => void;
+  onYjsUpdate: (
+    yjsUpdate: string,
+    syncKey: string,
+    codeSnapshot?: string | null,
+    yjsDocumentBase64?: string | null,
+  ) => void;
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
   onEditorValueChange: (value: string) => void;
-  onKeyPress: (payload: { key: string; keyCode: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void;
+  onKeyPress: (payload: {
+    key: string;
+    keyCode: string;
+    ctrlKey: boolean;
+    altKey: boolean;
+    shiftKey: boolean;
+    metaKey: boolean;
+  }) => void;
   onTaskRatingChange: (rating: number | null) => void;
 }) {
   const isCompactLayout = useIsCompactRoomLayout(760);
-  const [activeRailPanel, setActiveRailPanel] = useState<"tasks" | "roomTools" | null>("tasks");
+  const [activeRailPanel, setActiveRailPanel] = useState<
+    "tasks" | "roomTools" | null
+  >("tasks");
   const [roomToolsTab, setRoomToolsTab] = useState<"notes" | "logs">("notes");
-  const [activeMobileTab, setActiveMobileTab] = useState<MobileRoomTab>("editor");
+  const [activeMobileTab, setActiveMobileTab] =
+    useState<MobileRoomTab>("editor");
   const [addTaskModalOpened, setAddTaskModalOpened] = useState(false);
-  const [selectedCatalogTaskIds, setSelectedCatalogTaskIds] = useState<string[]>([]);
+  const [addTaskMode, setAddTaskMode] = useState<"catalog" | "custom">(
+    "catalog",
+  );
+  const [selectedCatalogTaskIds, setSelectedCatalogTaskIds] = useState<
+    string[]
+  >([]);
+  const [customTaskTitle, setCustomTaskTitle] = useState("");
+  const [customTaskDescription, setCustomTaskDescription] = useState("");
+  const [customTaskStarterCode, setCustomTaskStarterCode] = useState("");
   const [leftPanelWidth, setLeftPanelWidth] = useState(288);
   const roomToolsTabsId = useId();
   const mobileTabsId = useId();
@@ -1517,7 +1956,7 @@ function OwnerLayout({
   const catalogTaskOptions = useMemo(() => {
     return availableCatalogTasks.map((task) => ({
       value: task.id,
-      label: task.title
+      label: task.title,
     }));
   }, [availableCatalogTasks]);
   const selectedCatalogTasks = useMemo(() => {
@@ -1525,7 +1964,9 @@ function OwnerLayout({
     return availableCatalogTasks.filter((task) => selected.has(task.id));
   }, [availableCatalogTasks, selectedCatalogTaskIds]);
 
-  const dragStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const dragStateRef = useRef<{ startX: number; startWidth: number } | null>(
+    null,
+  );
   const [isDragging, setIsDragging] = useState(false);
 
   const submitAddTasksToRoom = useCallback(async () => {
@@ -1533,27 +1974,59 @@ function OwnerLayout({
     try {
       await onAddTasksFromCatalog(selectedCatalogTaskIds);
       setSelectedCatalogTaskIds([]);
+      setAddTaskMode("catalog");
       setAddTaskModalOpened(false);
     } catch {
       // Parent sets user-facing error.
     }
   }, [onAddTasksFromCatalog, selectedCatalogTaskIds]);
 
-  const startDrag = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    dragStateRef.current = {
-      startX: event.clientX,
-      startWidth: leftPanelWidth
-    };
-    setIsDragging(true);
-  }, [leftPanelWidth]);
+  const submitAddCustomTaskToRoom = useCallback(async () => {
+    const title = customTaskTitle.trim();
+    const description = customTaskDescription.trim();
+    if (!title || !description) return;
+    try {
+      await onAddCustomTask({
+        title,
+        description,
+        starterCode: customTaskStarterCode,
+      });
+      setCustomTaskTitle("");
+      setCustomTaskDescription("");
+      setCustomTaskStarterCode("");
+      setAddTaskMode("catalog");
+      setAddTaskModalOpened(false);
+    } catch {
+      // Parent sets user-facing error.
+    }
+  }, [
+    customTaskDescription,
+    customTaskStarterCode,
+    customTaskTitle,
+    onAddCustomTask,
+  ]);
+
+  const startDrag = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      dragStateRef.current = {
+        startX: event.clientX,
+        startWidth: leftPanelWidth,
+      };
+      setIsDragging(true);
+    },
+    [leftPanelWidth],
+  );
 
   const toggleRailPanel = useCallback((panel: "tasks" | "roomTools") => {
     setActiveRailPanel((current) => (current === panel ? null : panel));
   }, []);
 
   const handleRoomToolsTabKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLButtonElement>, currentTab: "notes" | "logs") => {
+    (
+      event: React.KeyboardEvent<HTMLButtonElement>,
+      currentTab: "notes" | "logs",
+    ) => {
       if (event.key === "ArrowRight" || event.key === "ArrowDown") {
         event.preventDefault();
         setRoomToolsTab(currentTab === "notes" ? "logs" : "notes");
@@ -1574,30 +2047,37 @@ function OwnerLayout({
         setRoomToolsTab("logs");
       }
     },
-    []
+    [],
   );
 
-  const handleResizeHandleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "ArrowLeft") {
-      event.preventDefault();
-      setLeftPanelWidth((current) => clamp(current - 16, MIN_OWNER_PANEL_WIDTH, MAX_OWNER_PANEL_WIDTH));
-      return;
-    }
-    if (event.key === "ArrowRight") {
-      event.preventDefault();
-      setLeftPanelWidth((current) => clamp(current + 16, MIN_OWNER_PANEL_WIDTH, MAX_OWNER_PANEL_WIDTH));
-      return;
-    }
-    if (event.key === "Home") {
-      event.preventDefault();
-      setLeftPanelWidth(MIN_OWNER_PANEL_WIDTH);
-      return;
-    }
-    if (event.key === "End") {
-      event.preventDefault();
-      setLeftPanelWidth(MAX_OWNER_PANEL_WIDTH);
-    }
-  }, []);
+  const handleResizeHandleKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        setLeftPanelWidth((current) =>
+          clamp(current - 16, MIN_OWNER_PANEL_WIDTH, MAX_OWNER_PANEL_WIDTH),
+        );
+        return;
+      }
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        setLeftPanelWidth((current) =>
+          clamp(current + 16, MIN_OWNER_PANEL_WIDTH, MAX_OWNER_PANEL_WIDTH),
+        );
+        return;
+      }
+      if (event.key === "Home") {
+        event.preventDefault();
+        setLeftPanelWidth(MIN_OWNER_PANEL_WIDTH);
+        return;
+      }
+      if (event.key === "End") {
+        event.preventDefault();
+        setLeftPanelWidth(MAX_OWNER_PANEL_WIDTH);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!isDragging) return;
@@ -1606,7 +2086,13 @@ function OwnerLayout({
       const dragState = dragStateRef.current;
       if (!dragState) return;
       const delta = event.clientX - dragState.startX;
-      setLeftPanelWidth(clamp(dragState.startWidth + delta, MIN_OWNER_PANEL_WIDTH, MAX_OWNER_PANEL_WIDTH));
+      setLeftPanelWidth(
+        clamp(
+          dragState.startWidth + delta,
+          MIN_OWNER_PANEL_WIDTH,
+          MAX_OWNER_PANEL_WIDTH,
+        ),
+      );
     };
 
     const handleMouseUp = () => {
@@ -1637,11 +2123,21 @@ function OwnerLayout({
     const host = notesFeedRef.current;
     if (!host) return;
     host.scrollTop = host.scrollHeight;
-  }, [activeMobileTab, activeRailPanel, isCompactLayout, notesMessages.length, roomToolsTab]);
+  }, [
+    activeMobileTab,
+    activeRailPanel,
+    isCompactLayout,
+    notesMessages.length,
+    roomToolsTab,
+  ]);
 
   useEffect(() => {
-    const allowedTaskIds = new Set(availableCatalogTasks.map((task) => task.id));
-    setSelectedCatalogTaskIds((prev) => prev.filter((taskId) => allowedTaskIds.has(taskId)));
+    const allowedTaskIds = new Set(
+      availableCatalogTasks.map((task) => task.id),
+    );
+    setSelectedCatalogTaskIds((prev) =>
+      prev.filter((taskId) => allowedTaskIds.has(taskId)),
+    );
   }, [availableCatalogTasks]);
 
   useEffect(() => {
@@ -1660,31 +2156,50 @@ function OwnerLayout({
       ? "tasks"
       : "roomTools"
     : activeRailPanel;
-  const showLeftPanel = isCompactLayout ? activeMobileTab !== "editor" : currentSidePanel !== null;
-  const clampedLeftPanelWidth = clamp(leftPanelWidth, MIN_OWNER_PANEL_WIDTH, MAX_OWNER_PANEL_WIDTH);
-  const candidateParticipants = merged.participants.filter((participant) => participant.role === "candidate");
-  const candidateOutOfFocus = candidateParticipants.some((participant) => participant.presenceStatus === "away");
-  const candidatePresenceState = candidateParticipants.length === 0 ? "offline" : candidateOutOfFocus ? "away" : "active";
-  const candidatePresenceLabel = candidatePresenceState === "offline"
-    ? "Не подключен"
-    : candidatePresenceState === "away"
-      ? "Вне фокуса"
-      : "В фокусе";
+  const showLeftPanel = isCompactLayout
+    ? activeMobileTab !== "editor"
+    : currentSidePanel !== null;
+  const clampedLeftPanelWidth = clamp(
+    leftPanelWidth,
+    MIN_OWNER_PANEL_WIDTH,
+    MAX_OWNER_PANEL_WIDTH,
+  );
+  const candidateParticipants = merged.participants.filter(
+    (participant) => participant.role === "candidate",
+  );
+  const candidateOutOfFocus = candidateParticipants.some(
+    (participant) => participant.presenceStatus === "away",
+  );
+  const candidatePresenceState =
+    candidateParticipants.length === 0
+      ? "offline"
+      : candidateOutOfFocus
+        ? "away"
+        : "active";
+  const candidatePresenceLabel =
+    candidatePresenceState === "offline"
+      ? "Не подключен"
+      : candidatePresenceState === "away"
+        ? "Вне фокуса"
+        : "В фокусе";
   const recentCandidateKeyHistory = [...(candidateKeyHistory ?? [])]
     .sort((a, b) => b.timestampEpochMs - a.timestampEpochMs)
     .slice(0, LOG_HISTORY_LIMIT);
   if (recentCandidateKeyHistory.length === 0 && lastCandidateKey) {
     recentCandidateKeyHistory.push(lastCandidateKey);
   }
-  const addTaskDisabled = availableCatalogTasks.length === 0;
-  const addTaskDisabledReason = "Все доступные задачи из каталога уже добавлены в комнату.";
+  const canSubmitCustomTask =
+    customTaskTitle.trim().length > 0 && customTaskDescription.trim().length > 0;
 
-  const handleTaskStepSelect = useCallback((stepIndex: number) => {
-    onSelectStep(stepIndex);
-    if (isCompactLayout) {
-      setActiveMobileTab("editor");
-    }
-  }, [isCompactLayout, onSelectStep]);
+  const handleTaskStepSelect = useCallback(
+    (stepIndex: number) => {
+      onSelectStep(stepIndex);
+      if (isCompactLayout) {
+        setActiveMobileTab("editor");
+      }
+    },
+    [isCompactLayout, onSelectStep],
+  );
 
   return (
     <Box className={styles.ownerBody}>
@@ -1692,37 +2207,113 @@ function OwnerLayout({
         opened={addTaskModalOpened}
         onClose={() => {
           setAddTaskModalOpened(false);
+          setAddTaskMode("catalog");
           setSelectedCatalogTaskIds([]);
+          setCustomTaskTitle("");
+          setCustomTaskDescription("");
+          setCustomTaskStarterCode("");
         }}
-        title="Добавить задачи из каталога"
+        title="Добавить задачу в комнату"
         centered
       >
         <Stack>
-          <Text size="sm" c="dimmed">
-            Выберите задачи, которые ещё не добавлены в эту комнату.
-          </Text>
-          <MultiSelect
-            value={selectedCatalogTaskIds}
-            onChange={setSelectedCatalogTaskIds}
-            data={catalogTaskOptions}
-            searchable
-            nothingFoundMessage="Задачи не найдены"
-            placeholder="Выберите задачи"
-            disabled={catalogTaskOptions.length === 0 || isAddingTasksFromCatalog}
+          <SegmentedControl
+            value={addTaskMode}
+            onChange={(value) =>
+              setAddTaskMode(value === "custom" ? "custom" : "catalog")
+            }
+            data={[
+              { label: "Из банка", value: "catalog" },
+              { label: "Новая задача", value: "custom" },
+            ]}
+            fullWidth
           />
-          {selectedCatalogTasks.length > 0 ? (
-            <Text size="xs" c="dimmed">
-              {`Выбрано задач: ${selectedCatalogTasks.length}`}
-            </Text>
-          ) : null}
-          <Button
-            leftSection={<IconPlus size={14} />}
-            onClick={() => void submitAddTasksToRoom()}
-            disabled={selectedCatalogTaskIds.length === 0 || isAddingTasksFromCatalog}
-            loading={isAddingTasksFromCatalog}
-          >
-            Добавить в комнату
-          </Button>
+
+          {addTaskMode === "catalog" ? (
+            <>
+              <Text size="sm" c="dimmed">
+                Выберите задачи из личного банка, которые ещё не добавлены в
+                комнату.
+              </Text>
+              <MultiSelect
+                value={selectedCatalogTaskIds}
+                onChange={setSelectedCatalogTaskIds}
+                data={catalogTaskOptions}
+                searchable
+                nothingFoundMessage="Задачи не найдены"
+                placeholder="Выберите задачи"
+                disabled={
+                  catalogTaskOptions.length === 0 || isAddingTasksFromCatalog
+                }
+              />
+              {catalogTaskOptions.length === 0 ? (
+                <Text size="xs" c="dimmed">
+                  В банке нет доступных задач для добавления.
+                </Text>
+              ) : null}
+              {selectedCatalogTasks.length > 0 ? (
+                <Text size="xs" c="dimmed">
+                  {`Выбрано задач: ${selectedCatalogTasks.length}`}
+                </Text>
+              ) : null}
+              <Button
+                leftSection={<IconPlus size={14} />}
+                onClick={() => void submitAddTasksToRoom()}
+                disabled={
+                  selectedCatalogTaskIds.length === 0 || isAddingTasksFromCatalog
+                }
+                loading={isAddingTasksFromCatalog}
+              >
+                Добавить в комнату
+              </Button>
+            </>
+          ) : (
+            <>
+              <TextInput
+                label="Название"
+                value={customTaskTitle}
+                onChange={(event) => setCustomTaskTitle(event.currentTarget.value)}
+                placeholder="Например, Реализовать LRU-кэш"
+                disabled={isAddingTasksFromCatalog}
+                required
+              />
+              <Textarea
+                label="Описание (Markdown)"
+                value={customTaskDescription}
+                onChange={(event) =>
+                  setCustomTaskDescription(event.currentTarget.value)
+                }
+                minRows={5}
+                autosize
+                disabled={isAddingTasksFromCatalog}
+                required
+              />
+              <Textarea
+                label="Стартовый код"
+                value={customTaskStarterCode}
+                onChange={(event) =>
+                  setCustomTaskStarterCode(event.currentTarget.value)
+                }
+                minRows={10}
+                autosize
+                styles={{
+                  input: {
+                    fontFamily:
+                      "IBM Plex Mono, ui-monospace, SFMono-Regular, Menlo, monospace",
+                  },
+                }}
+                disabled={isAddingTasksFromCatalog}
+              />
+              <Button
+                leftSection={<IconPlus size={14} />}
+                onClick={() => void submitAddCustomTaskToRoom()}
+                disabled={!canSubmitCustomTask || isAddingTasksFromCatalog}
+                loading={isAddingTasksFromCatalog}
+              >
+                Добавить в комнату
+              </Button>
+            </>
+          )}
         </Stack>
       </Modal>
       <nav className={styles.leftRail} aria-label="Панели владельца комнаты">
@@ -1751,7 +2342,11 @@ function OwnerLayout({
       </nav>
 
       {isCompactLayout && (
-        <nav className={styles.mobileRoomTabs} role="tablist" aria-label="Room panels">
+        <nav
+          className={styles.mobileRoomTabs}
+          role="tablist"
+          aria-label="Room panels"
+        >
           <button
             id={mobileEditorTabId}
             type="button"
@@ -1791,7 +2386,13 @@ function OwnerLayout({
       {showLeftPanel && (
         <>
           <Box
-            id={isCompactLayout ? (activeMobileTab === "tasks" ? mobileTasksPanelId : mobileCollaborationPanelId) : "owner-side-panel"}
+            id={
+              isCompactLayout
+                ? activeMobileTab === "tasks"
+                  ? mobileTasksPanelId
+                  : mobileCollaborationPanelId
+                : "owner-side-panel"
+            }
             role={isCompactLayout ? "tabpanel" : undefined}
             aria-labelledby={
               isCompactLayout
@@ -1801,8 +2402,14 @@ function OwnerLayout({
                 : undefined
             }
             className={`${styles.ownerSidePanel} ${isCompactLayout ? styles.mobileRoomPanel : ""}`}
-            style={isCompactLayout ? undefined : { width: clampedLeftPanelWidth }}
-            aria-label={currentSidePanel === "tasks" ? "Панель задач" : "Панель чата и логов"}
+            style={
+              isCompactLayout ? undefined : { width: clampedLeftPanelWidth }
+            }
+            aria-label={
+              currentSidePanel === "tasks"
+                ? "Панель задач"
+                : "Панель чата и логов"
+            }
           >
             {currentSidePanel === "tasks" ? (
               <Box className={styles.sidebar}>
@@ -1810,36 +2417,35 @@ function OwnerLayout({
                   <Text size="xs" c="#8b919b">
                     шаг {merged.currentStep + 1}/{Math.max(tasks.length, 1)}
                   </Text>
-                  <Tooltip label={addTaskDisabledReason} withArrow disabled={!addTaskDisabled} position="bottom-end" openDelay={120}>
-                    <span>
-                      <Button
-                        size="xs"
-                        variant="filled"
-                        color="blue"
-                        leftSection={<IconPlus size={12} />}
-                        onClick={() => setAddTaskModalOpened(true)}
-                        disabled={addTaskDisabled}
-                      >
-                        Задача
-                      </Button>
-                    </span>
-                  </Tooltip>
+                  <Button
+                    size="xs"
+                    variant="filled"
+                    color="blue"
+                    leftSection={<IconPlus size={12} />}
+                    onClick={() => setAddTaskModalOpened(true)}
+                  >
+                    Задача
+                  </Button>
                 </Group>
-                {addTaskDisabled && (
-                  <Text size="xs" c="#7f8896">
-                    {addTaskDisabledReason}
-                  </Text>
-                )}
 
                 <Box className={styles.stepList}>
                   {tasks.map((task) => {
-                    const taskRating = taskScores[String(task.stepIndex)] ?? task.score ?? null;
+                    const taskRating =
+                      taskScores[String(task.stepIndex)] ?? task.score ?? null;
                     return (
                       <Button
                         key={task.stepIndex}
                         size="xs"
-                        variant={task.stepIndex === merged.currentStep ? "filled" : "light"}
-                        color={task.stepIndex === merged.currentStep ? "gray" : "dark"}
+                        variant={
+                          task.stepIndex === merged.currentStep
+                            ? "filled"
+                            : "light"
+                        }
+                        color={
+                          task.stepIndex === merged.currentStep
+                            ? "gray"
+                            : "dark"
+                        }
                         justify="space-between"
                         onClick={() => handleTaskStepSelect(task.stepIndex)}
                       >
@@ -1860,7 +2466,11 @@ function OwnerLayout({
                     label="Оценка шага"
                     placeholder="Нет оценки"
                     value={currentTaskRating ? String(currentTaskRating) : null}
-                    onChange={(value) => onTaskRatingChange(value ? Number.parseInt(value, 10) : null)}
+                    onChange={(value) =>
+                      onTaskRatingChange(
+                        value ? Number.parseInt(value, 10) : null,
+                      )
+                    }
                     withCheckIcon={false}
                     clearable
                     data={[
@@ -1868,13 +2478,26 @@ function OwnerLayout({
                       { value: "2", label: "2" },
                       { value: "3", label: "3" },
                       { value: "4", label: "4" },
-                      { value: "5", label: "5" }
+                      { value: "5", label: "5" },
                     ]}
                     styles={{
-                      label: { color: "#9ba0a8", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6 },
-                      input: { backgroundColor: "#11161f", borderColor: "#273242", color: "#d6dce6", fontSize: 12 },
-                      dropdown: { backgroundColor: "#11161f", borderColor: "#273242" },
-                      option: { color: "#d6dce6" }
+                      label: {
+                        color: "#9ba0a8",
+                        fontSize: 11,
+                        textTransform: "uppercase",
+                        letterSpacing: 0.6,
+                      },
+                      input: {
+                        backgroundColor: "#11161f",
+                        borderColor: "#273242",
+                        color: "#d6dce6",
+                        fontSize: 12,
+                      },
+                      dropdown: {
+                        backgroundColor: "#11161f",
+                        borderColor: "#273242",
+                      },
+                      option: { color: "#d6dce6" },
                     }}
                   />
                 </Box>
@@ -1882,15 +2505,28 @@ function OwnerLayout({
             ) : (
               <Box className={styles.outputPanel}>
                 <div className={styles.panelTabs}>
-                  <div className={styles.ownerPresenceBanner} aria-label="Кандидат">
+                  <div
+                    className={styles.ownerPresenceBanner}
+                    aria-label="Кандидат"
+                  >
                     <div className={styles.ownerPresenceCopy}>
-                      <Text className={styles.ownerPresenceLabel}>Кандидат</Text>
+                      <Text className={styles.ownerPresenceLabel}>
+                        Кандидат
+                      </Text>
                     </div>
-                    <Badge className={styles.ownerPresenceBadge} variant="light" data-state={candidatePresenceState}>
+                    <Badge
+                      className={styles.ownerPresenceBadge}
+                      variant="light"
+                      data-state={candidatePresenceState}
+                    >
                       {candidatePresenceLabel}
                     </Badge>
                   </div>
-                  <div className={styles.panelTabsList} role="tablist" aria-label="Панель комнаты">
+                  <div
+                    className={styles.panelTabsList}
+                    role="tablist"
+                    aria-label="Панель комнаты"
+                  >
                     <button
                       id={notesTabId}
                       type="button"
@@ -1899,7 +2535,9 @@ function OwnerLayout({
                       aria-controls={notesPanelId}
                       className={`${styles.panelTab} ${roomToolsTab === "notes" ? styles.panelTabActive : ""}`}
                       onClick={() => setRoomToolsTab("notes")}
-                      onKeyDown={(event) => handleRoomToolsTabKeyDown(event, "notes")}
+                      onKeyDown={(event) =>
+                        handleRoomToolsTabKeyDown(event, "notes")
+                      }
                     >
                       Чат
                     </button>
@@ -1911,7 +2549,9 @@ function OwnerLayout({
                       aria-controls={logsPanelId}
                       className={`${styles.panelTab} ${roomToolsTab === "logs" ? styles.panelTabActive : ""}`}
                       onClick={() => setRoomToolsTab("logs")}
-                      onKeyDown={(event) => handleRoomToolsTabKeyDown(event, "logs")}
+                      onKeyDown={(event) =>
+                        handleRoomToolsTabKeyDown(event, "logs")
+                      }
                     >
                       Логи
                     </button>
@@ -1930,30 +2570,50 @@ function OwnerLayout({
                         </div>
                       </div>
 
-                      <div className={styles.notesMessagesList} ref={notesFeedRef} role="log" aria-label="Сообщения заметок">
+                      <div
+                        className={styles.notesMessagesList}
+                        ref={notesFeedRef}
+                        role="log"
+                        aria-label="Сообщения заметок"
+                      >
                         {notesMessages.length > 0 ? (
                           notesMessages.map((message) => {
-                            const isOwnMessage = message.sessionId === sessionId;
+                            const isOwnMessage =
+                              message.sessionId === sessionId;
                             return (
                               <article
                                 key={message.id}
                                 className={`${styles.noteBubble} ${isOwnMessage ? styles.noteBubbleOwn : ""}`}
-                                data-pending={Boolean((message as PendingNoteMessage).pending)}
+                                data-pending={Boolean(
+                                  (message as PendingNoteMessage).pending,
+                                )}
                               >
                                 <header className={styles.noteBubbleHeader}>
                                   <div className={styles.noteBubbleAuthorWrap}>
-                                    <span className={styles.noteBubbleAuthor}>{message.displayName}</span>
+                                    <span className={styles.noteBubbleAuthor}>
+                                      {message.displayName}
+                                    </span>
                                   </div>
-                                  <time className={styles.noteBubbleTime}>{formatNoteTimestamp(message.timestampEpochMs)}</time>
+                                  <time className={styles.noteBubbleTime}>
+                                    {formatNoteTimestamp(
+                                      message.timestampEpochMs,
+                                    )}
+                                  </time>
                                 </header>
-                                <Text className={styles.noteBubbleText}>{message.text}</Text>
+                                <Text className={styles.noteBubbleText}>
+                                  {message.text}
+                                </Text>
                               </article>
                             );
                           })
                         ) : (
                           <div className={styles.notesEmpty}>
-                            <Text className={styles.notesEmptyTitle}>Пока пусто</Text>
-                            <Text className={styles.notesEmptyText}>Здесь появятся сообщения интервьюеров.</Text>
+                            <Text className={styles.notesEmptyTitle}>
+                              Пока пусто
+                            </Text>
+                            <Text className={styles.notesEmptyText}>
+                              Здесь появятся сообщения интервьюеров.
+                            </Text>
                           </div>
                         )}
                       </div>
@@ -1961,7 +2621,9 @@ function OwnerLayout({
                       <div className={styles.notesComposer}>
                         <Textarea
                           value={noteComposer}
-                          onChange={(event) => onNoteComposerChange(event.currentTarget.value)}
+                          onChange={(event) =>
+                            onNoteComposerChange(event.currentTarget.value)
+                          }
                           onKeyDown={(event) => {
                             if (event.key !== "Enter" || event.shiftKey) return;
                             event.preventDefault();
@@ -1974,7 +2636,11 @@ function OwnerLayout({
                           placeholder="Напишите сообщение для интервьюеров"
                           classNames={{ input: styles.notesComposerInput }}
                         />
-                        <Group justify="flex-end" align="center" className={styles.notesComposerFooter}>
+                        <Group
+                          justify="flex-end"
+                          align="center"
+                          className={styles.notesComposerFooter}
+                        >
                           <Button
                             type="button"
                             size="xs"
@@ -1988,22 +2654,40 @@ function OwnerLayout({
                       </div>
                     </div>
                   ) : (
-                    <div id={logsPanelId} className={styles.panelTabPanel} role="tabpanel" aria-labelledby={logsTabId}>
+                    <div
+                      id={logsPanelId}
+                      className={styles.panelTabPanel}
+                      role="tabpanel"
+                      aria-labelledby={logsTabId}
+                    >
                       <header className={styles.logsHeader}>
                         <div className={styles.logsTitleWrap}>
                           <Text component="h3" className={styles.logsTitle}>
                             Логи кандидата
                           </Text>
-                          <span className={styles.logsCount}>{recentCandidateKeyHistory.length}</span>
+                          <span className={styles.logsCount}>
+                            {recentCandidateKeyHistory.length}
+                          </span>
                         </div>
-                        <Text className={styles.logsCounter}>Лимит {LOG_HISTORY_LIMIT}</Text>
+                        <Text className={styles.logsCounter}>
+                          Лимит {LOG_HISTORY_LIMIT}
+                        </Text>
                       </header>
 
-                      <div className={styles.logsList} role="log" aria-label="Логи кандидата">
+                      <div
+                        className={styles.logsList}
+                        role="log"
+                        aria-label="Логи кандидата"
+                      >
                         {recentCandidateKeyHistory.length > 0 ? (
                           recentCandidateKeyHistory.map((event, index) => (
-                            <div key={`${event.sessionId}-${event.timestampEpochMs}-${index}`} className={styles.logItem}>
-                              <time className={styles.logTime}>{formatCandidateKeyHistoryTimestamp(event)}</time>
+                            <div
+                              key={`${event.sessionId}-${event.timestampEpochMs}-${index}`}
+                              className={styles.logItem}
+                            >
+                              <time className={styles.logTime}>
+                                {formatCandidateKeyHistoryTimestamp(event)}
+                              </time>
                               <p className={styles.logMessage}>
                                 {event.displayName}: {formatCandidateKey(event)}
                               </p>
@@ -2011,8 +2695,12 @@ function OwnerLayout({
                           ))
                         ) : (
                           <div className={styles.logsEmpty}>
-                            <Text className={styles.logsEmptyTitle}>Пока пусто</Text>
-                            <Text className={styles.logsEmptyText}>События клавиатуры появятся здесь.</Text>
+                            <Text className={styles.logsEmptyTitle}>
+                              Пока пусто
+                            </Text>
+                            <Text className={styles.logsEmptyText}>
+                              События клавиатуры появятся здесь.
+                            </Text>
                           </div>
                         )}
                       </div>
@@ -2064,7 +2752,10 @@ function OwnerLayout({
                     key={syncKey}
                     height="100%"
                     language={toEditorLanguage(merged.language)}
-                    value={merged.code || (merged.lastCodeUpdatedBySessionId ? "" : stepStarterCode)}
+                    value={
+                      merged.code ||
+                      (merged.lastCodeUpdatedBySessionId ? "" : stepStarterCode)
+                    }
                     serverYjsBase64={merged.yjsDocumentBase64 ?? null}
                     serverYjsSequence={merged.lastYjsSequence ?? 0}
                     resyncSignal={resyncSignal}
@@ -2106,7 +2797,7 @@ function CandidateLayout({
   onYjsBridgeReady,
   onEditorValueChange,
   onKeyPress,
-  error
+  error,
 }: {
   merged: RealtimeState;
   stepTitle: string;
@@ -2119,10 +2810,22 @@ function CandidateLayout({
   syncKey: string;
   resyncSignal: number;
   editorReady: boolean;
-  onYjsUpdate: (yjsUpdate: string, syncKey: string, codeSnapshot?: string | null, yjsDocumentBase64?: string | null) => void;
+  onYjsUpdate: (
+    yjsUpdate: string,
+    syncKey: string,
+    codeSnapshot?: string | null,
+    yjsDocumentBase64?: string | null,
+  ) => void;
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
   onEditorValueChange: (value: string) => void;
-  onKeyPress: (payload: { key: string; keyCode: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void;
+  onKeyPress: (payload: {
+    key: string;
+    keyCode: string;
+    ctrlKey: boolean;
+    altKey: boolean;
+    shiftKey: boolean;
+    metaKey: boolean;
+  }) => void;
   error: string;
 }) {
   return (
@@ -2143,15 +2846,22 @@ function CandidateLayout({
         </Group>
       </Box>
 
-      <BriefingBoard key={`briefing-${merged.currentStep}`} mode="candidate" value={briefingMarkdown} />
+      <BriefingBoard
+        key={`briefing-${merged.currentStep}`}
+        mode="candidate"
+        value={briefingMarkdown}
+      />
 
       <Box className={styles.candidatePanel}>
         <div className={styles.editorWrap}>
           <RoomCodeEditor
             key={syncKey}
-            height="calc(100dvh - 170px)"
+            height="100%"
             language={toEditorLanguage(merged.language)}
-            value={merged.code || (merged.lastCodeUpdatedBySessionId ? "" : stepStarterCode)}
+            value={
+              merged.code ||
+              (merged.lastCodeUpdatedBySessionId ? "" : stepStarterCode)
+            }
             serverYjsBase64={merged.yjsDocumentBase64 ?? null}
             serverYjsSequence={merged.lastYjsSequence ?? 0}
             resyncSignal={resyncSignal}
@@ -2177,7 +2887,7 @@ function CandidateLayout({
 function BriefingBoard({
   mode,
   value,
-  onChange
+  onChange,
 }: {
   mode: "interviewer" | "candidate";
   value: string;
@@ -2207,7 +2917,7 @@ function BriefingBoard({
         textarea?.setSelectionRange(rangeStart, rangeEnd);
       });
     },
-    [onChange, value]
+    [onChange, value],
   );
 
   const applyLinePrefix = useCallback(
@@ -2216,7 +2926,8 @@ function BriefingBoard({
       const textarea = editorRef.current;
       const selectionStart = textarea?.selectionStart ?? 0;
       const selectionEnd = textarea?.selectionEnd ?? 0;
-      const blockStart = value.lastIndexOf("\n", Math.max(0, selectionStart - 1)) + 1;
+      const blockStart =
+        value.lastIndexOf("\n", Math.max(0, selectionStart - 1)) + 1;
       const blockEndCandidate = value.indexOf("\n", selectionEnd);
       const blockEnd = blockEndCandidate < 0 ? value.length : blockEndCandidate;
       const original = value.slice(blockStart, blockEnd);
@@ -2231,7 +2942,7 @@ function BriefingBoard({
         textarea?.setSelectionRange(blockStart, blockStart + updated.length);
       });
     },
-    [onChange, value]
+    [onChange, value],
   );
 
   const insertSnippet = useCallback(
@@ -2240,8 +2951,10 @@ function BriefingBoard({
       const textarea = editorRef.current;
       const selectionStart = textarea?.selectionStart ?? value.length;
       const selectionEnd = textarea?.selectionEnd ?? selectionStart;
-      const needsLeadingLineBreak = selectionStart > 0 && value[selectionStart - 1] !== "\n";
-      const needsTrailingLineBreak = selectionEnd < value.length && value[selectionEnd] !== "\n";
+      const needsLeadingLineBreak =
+        selectionStart > 0 && value[selectionStart - 1] !== "\n";
+      const needsTrailingLineBreak =
+        selectionEnd < value.length && value[selectionEnd] !== "\n";
       const prefix = needsLeadingLineBreak ? "\n" : "";
       const suffix = needsTrailingLineBreak ? "\n" : "";
       const next = `${value.slice(0, selectionStart)}${prefix}${snippet}${suffix}${value.slice(selectionEnd)}`;
@@ -2253,7 +2966,7 @@ function BriefingBoard({
         textarea?.setSelectionRange(nextSelectionStart, nextSelectionEnd);
       });
     },
-    [onChange, value]
+    [onChange, value],
   );
 
   const applyMarkdownTool = useCallback(
@@ -2269,11 +2982,11 @@ function BriefingBoard({
       if (tool === "quote") return applyLinePrefix("> ");
       if (tool === "table") {
         return insertSnippet(
-          "| Left columns  | Right columns |\n| ------------- |:-------------:|\n| left foo      | right foo     |\n| left bar      | right bar     |\n| left baz      | right baz     |"
+          "| Left columns  | Right columns |\n| ------------- |:-------------:|\n| left foo      | right foo     |\n| left bar      | right bar     |\n| left baz      | right baz     |",
         );
       }
     },
-    [applyLinePrefix, applyWrap, insertSnippet]
+    [applyLinePrefix, applyWrap, insertSnippet],
   );
 
   return (
@@ -2385,18 +3098,30 @@ function BriefingBoard({
               ref={editorRef}
             />
           </div>
-          <div className={styles.briefingPreviewPane} data-testid="room-markdown-preview">
+          <div
+            className={styles.briefingPreviewPane}
+            data-testid="room-markdown-preview"
+          >
             {html ? (
-              <div className={styles.briefingMarkdown} dangerouslySetInnerHTML={{ __html: html }} />
+              <div
+                className={styles.briefingMarkdown}
+                dangerouslySetInnerHTML={{ __html: html }}
+              />
             ) : (
               <Text className={styles.briefingEmpty}>{emptyText}</Text>
             )}
           </div>
         </div>
       ) : (
-        <div className={styles.briefingPreviewPane} data-testid="room-markdown-preview">
+        <div
+          className={styles.briefingPreviewPane}
+          data-testid="room-markdown-preview"
+        >
           {html ? (
-            <div className={styles.briefingMarkdown} dangerouslySetInnerHTML={{ __html: html }} />
+            <div
+              className={styles.briefingMarkdown}
+              dangerouslySetInnerHTML={{ __html: html }}
+            />
           ) : (
             <Text className={styles.briefingEmpty}>{emptyText}</Text>
           )}
@@ -2418,7 +3143,8 @@ function formatCandidateKey(event: CandidateKeyInfo): string {
   if (event.shiftKey && !isShiftKey) modifiers.push("Shift");
   if (event.metaKey && !isMetaKey) modifiers.push("Cmd");
 
-  const key = keyLabel || normalizeKeyCodeLabel(event.keyCode || "") || "Unknown";
+  const key =
+    keyLabel || normalizeKeyCodeLabel(event.keyCode || "") || "Unknown";
   return [...modifiers, key].join("+");
 }
 
@@ -2426,7 +3152,7 @@ function formatCandidateKeyHistoryTimestamp(event: CandidateKeyInfo): string {
   return new Date(event.timestampEpochMs).toLocaleTimeString("ru-RU", {
     hour: "2-digit",
     minute: "2-digit",
-    second: "2-digit"
+    second: "2-digit",
   });
 }
 
@@ -2438,11 +3164,14 @@ function hashSessionId(sessionId: string): number {
   return hash;
 }
 
-function awarenessUserColors(sessionId: string): { color: string; colorLight: string } {
+function awarenessUserColors(sessionId: string): {
+  color: string;
+  colorLight: string;
+} {
   const hue = hashSessionId(sessionId) % 360;
   return {
     color: `hsl(${hue} 68% 58%)`,
-    colorLight: `hsla(${hue} 68% 58% / 0.24)`
+    colorLight: `hsla(${hue} 68% 58% / 0.24)`,
   };
 }
 
@@ -2457,8 +3186,10 @@ function awarenessUserColors(sessionId: string): { color: string; colorLight: st
 function dedupeRemoteAwarenessEntries(awareness: Awareness) {
   const localId = awareness.clientID;
 
-  const clockOf = (clientId: number) => awareness.meta.get(clientId)?.clock ?? 0;
-  const lastUpdatedOf = (clientId: number) => awareness.meta.get(clientId)?.lastUpdated ?? 0;
+  const clockOf = (clientId: number) =>
+    awareness.meta.get(clientId)?.clock ?? 0;
+  const lastUpdatedOf = (clientId: number) =>
+    awareness.meta.get(clientId)?.lastUpdated ?? 0;
 
   const hasSessionIdInUser = (st: { user?: unknown } | undefined) => {
     const sid = (st?.user as { sessionId?: string } | undefined)?.sessionId;
@@ -2490,7 +3221,9 @@ function dedupeRemoteAwarenessEntries(awareness: Awareness) {
   awareness.states.forEach((_state, clientId) => {
     if (clientId === localId) return;
     const st = awareness.states.get(clientId);
-    const u = st?.user as { sessionId?: string; name?: string; color?: string } | undefined;
+    const u = st?.user as
+      | { sessionId?: string; name?: string; color?: string }
+      | undefined;
     if (!u) return;
     const key =
       typeof u.sessionId === "string" && u.sessionId.trim()
@@ -2506,7 +3239,9 @@ function dedupeRemoteAwarenessEntries(awareness: Awareness) {
   awareness.states.forEach((_state, clientId) => {
     if (clientId === localId) return;
     const st = awareness.states.get(clientId);
-    const u = st?.user as { sessionId?: string; name?: string; color?: string } | undefined;
+    const u = st?.user as
+      | { sessionId?: string; name?: string; color?: string }
+      | undefined;
     if (!u) return;
     const key =
       typeof u.sessionId === "string" && u.sessionId.trim()
@@ -2523,13 +3258,17 @@ function dedupeRemoteAwarenessEntries(awareness: Awareness) {
     if (id === localId) return;
     const sid = (st?.user as { sessionId?: string } | undefined)?.sessionId;
     if (typeof sid === "string" && sid.trim()) {
-      hasSessionId.add(`${String((st?.user as { name?: string }).name ?? "")}|${String((st?.user as { color?: string }).color ?? "")}`);
+      hasSessionId.add(
+        `${String((st?.user as { name?: string }).name ?? "")}|${String((st?.user as { color?: string }).color ?? "")}`,
+      );
     }
   });
   awareness.states.forEach((_state, clientId) => {
     if (clientId === localId) return;
     const st = awareness.states.get(clientId);
-    const u = st?.user as { sessionId?: string; name?: string; color?: string } | undefined;
+    const u = st?.user as
+      | { sessionId?: string; name?: string; color?: string }
+      | undefined;
     if (!u || (typeof u.sessionId === "string" && u.sessionId.trim())) return;
     const legacyKey = `${String(u.name ?? "")}|${String(u.color ?? "")}`;
     if (hasSessionId.has(legacyKey) && !toRemove.has(clientId)) {
@@ -2546,25 +3285,25 @@ function dedupeRemoteAwarenessEntries(awareness: Awareness) {
 const remoteCursorDarkTheme = EditorView.baseTheme({
   ".cm-ySelectionCaret": {
     borderLeft: "2px solid rgba(255,255,255,0.88)",
-    borderRight: "none"
+    borderRight: "none",
   },
   ".cm-ySelectionCaret::after": {
     display: "none !important",
-    content: "none"
+    content: "none",
   },
   ".cm-ySelectionCaret::before": {
     display: "none !important",
-    content: "none"
+    content: "none",
   },
   ".cm-ySelectionInfo": {
-    display: "none !important"
+    display: "none !important",
   },
   ".cm-ySelectionInfo::before": {
-    display: "none !important"
+    display: "none !important",
   },
   ".cm-ySelectionCaretDot": {
-    display: "none !important"
-  }
+    display: "none !important",
+  },
 });
 
 function RoomCodeEditor({
@@ -2583,7 +3322,7 @@ function RoomCodeEditor({
   onYjsUpdate,
   onYjsBridgeReady,
   onEditorValueChange,
-  onKeyPress
+  onKeyPress,
 }: {
   height: string;
   language: string;
@@ -2597,12 +3336,26 @@ function RoomCodeEditor({
   participantLabel: string;
   sendAwarenessUpdate: (awarenessUpdate: string) => void;
   onAwarenessBridgeReady: (applyFn: ((b64: string) => void) | null) => void;
-  onYjsUpdate: (yjsUpdate: string, syncKey: string, codeSnapshot?: string | null, yjsDocumentBase64?: string | null) => void;
+  onYjsUpdate: (
+    yjsUpdate: string,
+    syncKey: string,
+    codeSnapshot?: string | null,
+    yjsDocumentBase64?: string | null,
+  ) => void;
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
   onEditorValueChange: (value: string) => void;
-  onKeyPress: (payload: { key: string; keyCode: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }) => void;
+  onKeyPress: (payload: {
+    key: string;
+    keyCode: string;
+    ctrlKey: boolean;
+    altKey: boolean;
+    shiftKey: boolean;
+    metaKey: boolean;
+  }) => void;
 }) {
-  type CmHostElement = HTMLDivElement & { __roomEditorView?: EditorView | null };
+  type CmHostElement = HTMLDivElement & {
+    __roomEditorView?: EditorView | null;
+  };
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const yDocRef = useRef<Y.Doc | null>(null);
@@ -2638,7 +3391,7 @@ function RoomCodeEditor({
         const next = v.state.selection.main;
         awareness.setLocalStateField("cursor", {
           anchor: Y.createRelativePositionFromTypeIndex(yText, next.anchor),
-          head: Y.createRelativePositionFromTypeIndex(yText, next.head)
+          head: Y.createRelativePositionFromTypeIndex(yText, next.head),
         });
       } catch {
         /* selection can be adjusting after applyUpdate */
@@ -2664,10 +3417,14 @@ function RoomCodeEditor({
     const st = awareness.getLocalState();
     if (!st?.user) return;
     const name = participantLabel.trim() || "Участник";
-    if (st.user.name === name && (st.user as { sessionId?: string }).sessionId === sessionId) return;
+    if (
+      st.user.name === name &&
+      (st.user as { sessionId?: string }).sessionId === sessionId
+    )
+      return;
     awareness.setLocalState({
       ...st,
-      user: { ...st.user, name, sessionId }
+      user: { ...st.user, name, sessionId },
     });
   }, [participantLabel, sessionId]);
 
@@ -2714,14 +3471,22 @@ function RoomCodeEditor({
         /* invalid snapshot */
       }
     } else {
-      Y.applyUpdate(yDoc, createDeterministicBootstrapUpdate(targetCode), "bootstrap");
+      Y.applyUpdate(
+        yDoc,
+        createDeterministicBootstrapUpdate(targetCode),
+        "bootstrap",
+      );
     }
     let yText = yDoc.getText("room-code");
     // Server CRDT snapshot can disagree with `merged.code` (last writer / ordering); never replace a merged doc with the plain string.
     if (yText.toString() !== targetCode && !snap) {
       yDoc.destroy();
       yDoc = new Y.Doc();
-      Y.applyUpdate(yDoc, createDeterministicBootstrapUpdate(targetCode), "bootstrap");
+      Y.applyUpdate(
+        yDoc,
+        createDeterministicBootstrapUpdate(targetCode),
+        "bootstrap",
+      );
       yText = yDoc.getText("room-code");
     }
     yDocRef.current = yDoc;
@@ -2735,8 +3500,8 @@ function RoomCodeEditor({
         name: participantLabel.trim() || "Участник",
         color,
         colorLight,
-        sessionId
-      }
+        sessionId,
+      },
     });
 
     let awarenessFlushTimer: number | null = null;
@@ -2750,8 +3515,12 @@ function RoomCodeEditor({
       }
     };
     const onAwarenessChanged = (
-      { added, updated, removed }: { added: number[]; updated: number[]; removed: number[] },
-      origin: unknown
+      {
+        added,
+        updated,
+        removed,
+      }: { added: number[]; updated: number[]; removed: number[] },
+      origin: unknown,
     ) => {
       if (origin === "remote") return;
       const touched = new Set([...added, ...updated, ...removed]);
@@ -2802,18 +3571,18 @@ function RoomCodeEditor({
                 ctrlKey: event.ctrlKey,
                 altKey: event.altKey,
                 shiftKey: event.shiftKey,
-                metaKey: event.metaKey
+                metaKey: event.metaKey,
               });
               if (viewInstance.state.readOnly) {
                 event.preventDefault();
                 return true;
               }
               return false;
-            }
-          })
-        ]
+            },
+          }),
+        ],
       }),
-      parent: hostRef.current
+      parent: hostRef.current,
     });
     viewRef.current = view;
     const hostElement = hostRef.current as CmHostElement | null;
@@ -2830,7 +3599,12 @@ function RoomCodeEditor({
       // Always send full Yjs state with each local edit so the server snapshot stays current.
       // After a tab refresh, missed SSE increments cannot be replayed; reconnecting clients rely on state_sync yjsDocumentBase64.
       const fullDoc = bytesToBase64(Y.encodeStateAsUpdate(yDoc));
-      onYjsUpdateRef.current(encodedUpdate, syncKeyRef.current, yText.toString(), fullDoc);
+      onYjsUpdateRef.current(
+        encodedUpdate,
+        syncKeyRef.current,
+        yText.toString(),
+        fullDoc,
+      );
     };
     yDoc.on("update", handleDocUpdate);
 
@@ -2887,10 +3661,15 @@ function RoomCodeEditor({
       lastAppliedServerYjsSeqRef.current = -1;
       lastAppliedServerYjsSnapRef.current = null;
     }
-    const seq = typeof serverYjsSequence === "number" && !Number.isNaN(serverYjsSequence) ? serverYjsSequence : 0;
+    const seq =
+      typeof serverYjsSequence === "number" && !Number.isNaN(serverYjsSequence)
+        ? serverYjsSequence
+        : 0;
     const snap = serverYjsBase64?.trim() ?? "";
     const seqAdvanced = seq > lastAppliedServerYjsSeqRef.current;
-    const snapChangedAtSameSeq = seq === lastAppliedServerYjsSeqRef.current && snap !== lastAppliedServerYjsSnapRef.current;
+    const snapChangedAtSameSeq =
+      seq === lastAppliedServerYjsSeqRef.current &&
+      snap !== lastAppliedServerYjsSnapRef.current;
     if (!seqAdvanced && !snapChangedAtSameSeq) return;
     try {
       if (snap) {
@@ -2906,7 +3685,12 @@ function RoomCodeEditor({
     lastAppliedServerYjsSnapRef.current = snap || null;
     onEditorValueChangeRef.current(activeDoc.getText("room-code").toString());
     bumpLocalAwarenessAfterRemoteDocChange();
-  }, [bumpLocalAwarenessAfterRemoteDocChange, serverYjsBase64, serverYjsSequence, syncKey]);
+  }, [
+    bumpLocalAwarenessAfterRemoteDocChange,
+    serverYjsBase64,
+    serverYjsSequence,
+    syncKey,
+  ]);
 
   /** Step change or explicit resync (focus/reconnect): merge server Y snapshot or plain code fallback. */
   useEffect(() => {
@@ -2914,7 +3698,8 @@ function RoomCodeEditor({
     if (!activeDoc) return;
     const syncKeyChanged = syncKeyRef.current !== syncKey;
     syncKeyRef.current = syncKey;
-    const forceHydrateFromState = resyncSignal > lastHandledResyncSignalRef.current;
+    const forceHydrateFromState =
+      resyncSignal > lastHandledResyncSignalRef.current;
     if (forceHydrateFromState) {
       lastHandledResyncSignalRef.current = resyncSignal;
     }
@@ -2928,7 +3713,7 @@ function RoomCodeEditor({
       syncKeyChanged,
       resync: forceHydrateFromState,
       hasYjsSnap: Boolean(snap),
-      codeLen: next.length
+      codeLen: next.length,
     });
     try {
       if (snap) {
@@ -2948,13 +3733,21 @@ function RoomCodeEditor({
     }
     onEditorValueChangeRef.current(activeDoc.getText("room-code").toString());
     bumpLocalAwarenessAfterRemoteDocChange();
-  }, [bumpLocalAwarenessAfterRemoteDocChange, resyncSignal, serverYjsBase64, syncKey, value]);
+  }, [
+    bumpLocalAwarenessAfterRemoteDocChange,
+    resyncSignal,
+    serverYjsBase64,
+    syncKey,
+    value,
+  ]);
 
   useEffect(() => {
     const activeView = viewRef.current;
     if (!activeView) return;
     activeView.dispatch({
-      effects: readOnlyCompartmentRef.current.reconfigure(EditorState.readOnly.of(readOnly))
+      effects: readOnlyCompartmentRef.current.reconfigure(
+        EditorState.readOnly.of(readOnly),
+      ),
     });
   }, [readOnly]);
 
@@ -2962,9 +3755,11 @@ function RoomCodeEditor({
     const activeView = viewRef.current;
     if (!activeView) return;
     activeView.dispatch({
-      effects: languageCompartmentRef.current.reconfigure(languageExtension)
+      effects: languageCompartmentRef.current.reconfigure(languageExtension),
     });
   }, [languageExtension]);
 
-  return <div className={styles.codeEditorHost} style={{ height }} ref={hostRef} />;
+  return (
+    <div className={styles.codeEditorHost} style={{ height }} ref={hostRef} />
+  );
 }

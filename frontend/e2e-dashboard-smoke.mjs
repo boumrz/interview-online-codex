@@ -11,6 +11,7 @@ try {
   await page.goto(`${webBaseUrl}/login`, { waitUntil: "domcontentloaded" });
   await page.getByText("Регистрация", { exact: true }).click();
   await page.getByLabel("Ник").fill(nickname);
+  await page.getByLabel("Имя для комнаты").fill(nickname);
   await page.getByLabel("Пароль").fill("secret123");
   await page.getByRole("button", { name: "Создать аккаунт" }).click();
   await page.waitForURL(/\/dashboard\/rooms/, { timeout: 15000 });

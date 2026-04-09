@@ -18,6 +18,9 @@ class User(
     @Column(unique = true, nullable = false)
     var nickname: String = "",
 
+    @Column(name = "display_name")
+    var displayName: String? = null,
+
     @Column(name = "password_hash", nullable = false)
     var passwordHash: String = "",
 

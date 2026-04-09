@@ -27,7 +27,7 @@ data class RoomTaskDto(
 
 data class RoomAccessMemberDto(
     val userId: String,
-    val nickname: String,
+    val displayName: String,
     val role: String,
     val isOwner: Boolean = false,
 )
@@ -83,6 +83,13 @@ data class UpdateRoomRequest(
 
 data class AddRoomTasksRequest(
     val taskIds: List<String> = emptyList(),
+    val customTasks: List<AddRoomCustomTaskRequest> = emptyList(),
+)
+
+data class AddRoomCustomTaskRequest(
+    @field:NotBlank val title: String,
+    @field:NotBlank val description: String,
+    val starterCode: String = "",
 )
 
 data class UpdateRoomParticipantRoleRequest(
