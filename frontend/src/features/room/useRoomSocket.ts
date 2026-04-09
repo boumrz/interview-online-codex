@@ -342,6 +342,7 @@ export function useRoomSocket({
     let expectRecoveryStateSync = false;
     let reconnectTimerId: number | null = null;
     let reconnectScheduled = false;
+    let leaveNotified = false;
     lastPresenceRef.current = null;
 
     const requiresEventToken = (payload: ClientMessage) => {
@@ -515,6 +516,30 @@ export function useRoomSocket({
       sendPresence(currentPresenceStatus(hasWindowFocus), options);
     };
 
+    const notifyLeaveRoom = () => {
+      if (leaveNotified) return;
+      leaveNotified = true;
+      const payload = JSON.stringify({
+        sessionId,
+        eventToken: eventTokenRef.current,
+        type: "leave_room"
+      });
+      const url = `${API_BASE_URL}/realtime/rooms/${inviteCode}/events`;
+      const beaconQueued =
+        typeof navigator !== "undefined" &&
+        typeof navigator.sendBeacon === "function" &&
+        navigator.sendBeacon(url, new Blob([payload], { type: "application/json" }));
+      if (beaconQueued) return;
+      void fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: payload,
+        keepalive: true
+      }).catch(() => {});
+    };
+
     function connectSse() {
       if (disposed) return;
 
@@ -647,8 +672,13 @@ export function useRoomSocket({
       publishCurrentPresence();
     };
 
-    const handlePageHide = () => {
-      sendPresence("away");
+    const handlePageHide = (event: PageTransitionEvent) => {
+      if (event?.persisted) return;
+      notifyLeaveRoom();
+    };
+
+    const handleBeforeUnload = () => {
+      notifyLeaveRoom();
     };
 
     sendRef.current = (payload: ClientMessage) => {
@@ -661,14 +691,14 @@ export function useRoomSocket({
     window.addEventListener("blur", handleBlur);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("pagehide", handlePageHide);
-    window.addEventListener("beforeunload", handlePageHide);
+    window.addEventListener("beforeunload", handleBeforeUnload);
 
     return () => {
       window.removeEventListener("focus", handleFocus);
       window.removeEventListener("blur", handleBlur);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("pagehide", handlePageHide);
-      window.removeEventListener("beforeunload", handlePageHide);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
 
       disposed = true;
 

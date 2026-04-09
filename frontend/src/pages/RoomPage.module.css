@@ -9,6 +9,11 @@
   color: #f3f5f7;
 }
 
+.shellCandidate {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
 .topBar {
   min-height: 54px;
   border-bottom: 1px solid #252a32;
@@ -560,11 +565,17 @@
 }
 
 .editorWrap {
+  flex: 1;
+  min-width: 0;
   height: 100%;
   min-height: 0;
 }
 
 .codeEditorHost {
+  flex: 1;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -1091,6 +1102,7 @@
 
 .candidatePanel .editorWrap {
   flex: 1;
+  min-width: 0;
   min-height: 0;
 }
 
@@ -1187,6 +1199,25 @@
     min-height: 100dvh;
     min-height: 100vh;
     overflow: visible;
+  }
+
+  .shellCandidate {
+    height: 100dvh;
+    min-height: 100dvh;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+
+  .shellCandidate .candidateBody {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .shellCandidate .candidatePanel,
+  .shellCandidate .candidatePanel .editorWrap {
+    height: 100%;
+    min-height: 0;
   }
 
   .ownerBody {

@@ -12,6 +12,7 @@ const storedUser = localStorage.getItem("auth_user");
 function normalizeStoredUser(raw: User | null): User | null {
   if (!raw) return null;
   const nickname = raw.nickname ?? "";
+  const displayName = raw.displayName ?? "";
   const normalizedRole =
     typeof raw.role === "string" && raw.role.trim().length > 0
       ? raw.role
@@ -20,6 +21,7 @@ function normalizeStoredUser(raw: User | null): User | null {
       : "user";
   return {
     ...raw,
+    displayName,
     role: normalizedRole
   };
 }
@@ -39,12 +41,18 @@ const authSlice = createSlice({
       localStorage.setItem("auth_token", action.payload.token);
       localStorage.setItem("auth_user", JSON.stringify(action.payload.user));
     },
+    updateProfile(state, action: PayloadAction<{ displayName: string }>) {
+      if (!state.user) return;
+      state.user.displayName = action.payload.displayName;
+      localStorage.setItem("auth_user", JSON.stringify(state.user));
+    },
     clearAuth(state) {
       state.token = null;
       state.user = null;
       localStorage.removeItem("auth_token");
       localStorage.removeItem("auth_user");
       const scopedPrefixes = [
+        "display_name",
         "owner_token_",
         "interviewer_token_",
         "guest_display_name_",
@@ -61,5 +69,5 @@ const authSlice = createSlice({
   }
 });
 
-export const { setAuth, clearAuth } = authSlice.actions;
+export const { setAuth, updateProfile, clearAuth } = authSlice.actions;
 export default authSlice.reducer;

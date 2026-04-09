@@ -1,6 +1,7 @@
 export type User = {
   id: string;
   nickname: string;
+  displayName: string;
   role: "user" | "admin" | string;
 };
 
@@ -31,7 +32,7 @@ export type RoomNoteMessage = {
 
 export type RoomAccessMember = {
   userId: string;
-  nickname: string;
+  displayName: string;
   role: "owner" | "interviewer" | "candidate" | string;
   isOwner: boolean;
 };

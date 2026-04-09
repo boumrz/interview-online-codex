@@ -9,7 +9,8 @@ import type {
   RoomSummary,
   RunCodeResponse,
   TaskLanguageGroup,
-  TaskTemplate
+  TaskTemplate,
+  User
 } from "../types";
 import type { RootState } from "../app/store";
 import { API_BASE_URL } from "../config/runtime";
@@ -28,7 +29,7 @@ export const api = createApi({
   }),
   tagTypes: ["Room", "MyRooms", "Tasks", "AdminUsers"],
   endpoints: (builder) => ({
-    register: builder.mutation<AuthResponse, { nickname: string; password: string }>({
+    register: builder.mutation<AuthResponse, { nickname: string; displayName: string; password: string }>({
       query: (body) => ({ url: "/auth/register", method: "POST", body })
     }),
     login: builder.mutation<AuthResponse, { nickname: string; password: string }>({
@@ -59,14 +60,22 @@ export const api = createApi({
       }),
       invalidatesTags: ["Room"]
     }),
-    addRoomTasks: builder.mutation<Room, { inviteCode: string; taskIds: string[]; ownerToken?: string }>({
-      query: ({ inviteCode, taskIds, ownerToken }) => ({
+    addRoomTasks: builder.mutation<
+      Room,
+      {
+        inviteCode: string;
+        taskIds?: string[];
+        customTasks?: Array<{ title: string; description: string; starterCode: string }>;
+        ownerToken?: string;
+      }
+    >({
+      query: ({ inviteCode, taskIds = [], customTasks = [], ownerToken }) => ({
         url: `/rooms/${inviteCode}/tasks`,
         method: "POST",
         headers: {
           ...(ownerToken ? { "X-Room-Owner-Token": ownerToken } : {})
         },
-        body: { taskIds }
+        body: { taskIds, customTasks }
       }),
       invalidatesTags: ["Room"]
     }),
@@ -99,6 +108,13 @@ export const api = createApi({
         method: "DELETE"
       }),
       invalidatesTags: ["MyRooms"]
+    }),
+    updateProfile: builder.mutation<User, { displayName: string }>({
+      query: (body) => ({
+        url: "/me/profile",
+        method: "PATCH",
+        body
+      })
     }),
     tasksGrouped: builder.query<TaskLanguageGroup[], void>({
       query: () => "/me/tasks",
@@ -229,6 +245,7 @@ export const {
   useMyRoomsQuery,
   useUpdateRoomMutation,
   useDeleteRoomMutation,
+  useUpdateProfileMutation,
   useTasksGroupedQuery,
   useCreateTaskTemplateMutation,
   useUpdateTaskTemplateMutation,

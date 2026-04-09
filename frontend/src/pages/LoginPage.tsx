@@ -1,7 +1,6 @@
 import React, { FormEvent, useMemo, useState } from "react";
 import {
   Anchor,
-  Badge,
   Box,
   Button,
   Card,
@@ -37,6 +36,7 @@ export function LoginPage() {
   const authToken = useAppSelector((store) => store.auth.token);
   const [mode, setMode] = useState<"login" | "register">("login");
   const [nickname, setNickname] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [passwordError, setPasswordError] = useState("");
@@ -68,8 +68,29 @@ export function LoginPage() {
         setError(passwordValidationError);
         return;
       }
-      const fn = mode === "login" ? login : register;
-      const auth = await fn({ nickname, password }).unwrap();
+      if (isRegisterMode && !displayName.trim()) {
+        const displayNameValidationError = "Имя обязательно";
+        setError(displayNameValidationError);
+        return;
+      }
+      if (isRegisterMode && !nickname.trim()) {
+        const nicknameValidationError = "Ник обязателен";
+        setError(nicknameValidationError);
+        return;
+      }
+      if (isRegisterMode && nickname.trim().length < 3) {
+        const nicknameValidationError = "Ник должен быть от 3 до 32 символов";
+        setError(nicknameValidationError);
+        return;
+      }
+      if (isRegisterMode && /\s/.test(nickname.trim())) {
+        const nicknameValidationError = "Ник не должен содержать пробелы";
+        setError(nicknameValidationError);
+        return;
+      }
+      const auth = isRegisterMode
+        ? await register({ nickname: nickname.trim(), displayName, password }).unwrap()
+        : await login({ nickname, password }).unwrap();
       dispatch(setAuth(auth));
       navigate(nextPath, { replace: true });
     } catch (err) {
@@ -107,13 +128,10 @@ export function LoginPage() {
                   Личный кабинет
                 </Title>
               </Group>
-              <Badge variant="outline" color="gray">
-                nickname auth
-              </Badge>
             </Group>
 
             <Text c="#8b919b" size="sm">
-              Вход и регистрация только по никнейму и паролю.
+              Вход по нику и паролю. При регистрации укажите ник и имя для комнаты.
             </Text>
 
             <SegmentedControl
@@ -132,14 +150,37 @@ export function LoginPage() {
 
             <form onSubmit={onSubmit}>
               <Stack>
-                <TextInput
-                  label="Ник"
-                  leftSection={<IconUser size={15} />}
-                  value={nickname}
-                  onChange={(e) => setNickname(e.currentTarget.value)}
-                  styles={fieldStyles}
-                  required
-                />
+                {isRegisterMode ? (
+                  <>
+                    <TextInput
+                      label="Ник"
+                      description="Используется для входа в аккаунт"
+                      leftSection={<IconUser size={15} />}
+                      value={nickname}
+                      onChange={(e) => setNickname(e.currentTarget.value)}
+                      styles={fieldStyles}
+                      required
+                    />
+                    <TextInput
+                      label="Имя для комнаты"
+                      description="Это имя будет видно другим участникам комнаты"
+                      leftSection={<IconUser size={15} />}
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.currentTarget.value)}
+                      styles={fieldStyles}
+                      required
+                    />
+                  </>
+                ) : (
+                  <TextInput
+                    label="Ник"
+                    leftSection={<IconUser size={15} />}
+                    value={nickname}
+                    onChange={(e) => setNickname(e.currentTarget.value)}
+                    styles={fieldStyles}
+                    required
+                  />
+                )}
                 <PasswordInput
                   label="Пароль"
                   description={isRegisterMode ? "Минимум 6 символов" : undefined}

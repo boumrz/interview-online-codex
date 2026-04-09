@@ -95,6 +95,7 @@ try {
   await waitParticipantCount(ownerPage, "Candidate Presence", 1);
 
   await candidatePage.close();
+  await waitParticipantCount(ownerPage, "Candidate Presence", 0);
 
   console.log("PARTICIPANTS_PRESENCE_OK");
 

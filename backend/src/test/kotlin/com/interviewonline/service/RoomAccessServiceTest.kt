@@ -16,7 +16,7 @@ class RoomAccessServiceTest {
 
     @Test
     fun `room owner is resolved as owner without legacy room tokens`() {
-        val owner = User(id = "user-owner", nickname = "owner", passwordHash = "hash")
+        val owner = User(id = "user-owner", nickname = "owner", displayName = "Owner", passwordHash = "hash")
         val room = Room(
             id = "room-1",
             inviteCode = "r-1",
@@ -35,13 +35,13 @@ class RoomAccessServiceTest {
 
     @Test
     fun `persisted room participant is resolved as interviewer`() {
-        val user = User(id = "user-interviewer", nickname = "interviewer", passwordHash = "hash")
+        val user = User(id = "user-interviewer", nickname = "interviewer", displayName = "Interviewer", passwordHash = "hash")
         val room = Room(
             id = "room-2",
             inviteCode = "r-2",
             ownerSessionToken = "owner-token",
             interviewerSessionToken = "interviewer-token",
-            ownerUser = User(id = "owner-2", nickname = "owner", passwordHash = "hash"),
+            ownerUser = User(id = "owner-2", nickname = "owner", displayName = "Owner 2", passwordHash = "hash"),
         )
         Mockito.`when`(roomParticipantRepository.findByRoomIdAndUserId("room-2", "user-interviewer"))
             .thenReturn(

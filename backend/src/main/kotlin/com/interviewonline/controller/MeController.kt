@@ -1,7 +1,9 @@
 package com.interviewonline.controller
 
 import com.interviewonline.dto.RoomSummaryDto
+import com.interviewonline.dto.UpdateProfileRequest
 import com.interviewonline.dto.UpdateRoomRequest
+import com.interviewonline.dto.UserDto
 import com.interviewonline.service.AuthService
 import com.interviewonline.service.RoomService
 import jakarta.validation.Valid
@@ -49,5 +51,15 @@ class MeController(
         val user = authService.requireUserByToken(token)
         roomService.deleteRoomForUser(user, roomId)
         return mapOf("status" to "ok")
+    }
+
+    @PatchMapping("/profile")
+    fun updateProfile(
+        @RequestHeader("Authorization", required = false) authorization: String?,
+        @Valid @RequestBody request: UpdateProfileRequest,
+    ): UserDto {
+        val token = authorization?.removePrefix("Bearer ")?.trim()
+        val user = authService.requireUserByToken(token)
+        return authService.updateProfile(user, request)
     }
 }

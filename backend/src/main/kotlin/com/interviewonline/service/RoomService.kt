@@ -64,12 +64,6 @@ class RoomService(
     fun createUserRoom(request: CreateRoomRequest, user: User): RoomResponse {
         val language = normalizeLanguage(request.language.ifBlank { "nodejs" })
         val selectedTasks = userTaskService.resolveTasksForRoom(user, request.taskIds, language)
-        if (selectedTasks.isEmpty()) {
-            throw ApiException(
-                HttpStatus.BAD_REQUEST,
-                "В банке нет задач для выбранного языка. Добавьте задачи и повторите создание комнаты",
-            )
-        }
         val room = Room(
             title = request.title,
             inviteCode = "r-${UUID.randomUUID()}",
@@ -151,55 +145,105 @@ class RoomService(
         val room = roomRepository.findByInviteCode(inviteCode)
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
         val access = roomAccessService.requireManager(room, user, ownerToken, interviewerToken)
-        val authorizedUser = user ?: throw ApiException(
-            HttpStatus.UNAUTHORIZED,
-            "Для добавления задач из каталога нужна авторизация",
-        )
 
         val requestedTaskIds = request.taskIds
             .map { it.trim() }
             .filter { it.isNotBlank() }
             .distinct()
-        if (requestedTaskIds.isEmpty()) {
-            throw ApiException(HttpStatus.BAD_REQUEST, "Нужно передать хотя бы один taskId")
+        val customTasks = request.customTasks.map { raw ->
+            val title = raw.title.trim()
+            val description = raw.description.trim()
+            if (title.isBlank() || description.isBlank()) {
+                throw ApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "У новой задачи должны быть заполнены название и описание",
+                )
+            }
+            RoomCustomTaskDraft(
+                title = title,
+                description = description,
+                starterCode = raw.starterCode.replace("\r\n", "\n"),
+            )
+        }
+
+        if (requestedTaskIds.isEmpty() && customTasks.isEmpty()) {
+            throw ApiException(
+                HttpStatus.BAD_REQUEST,
+                "Передайте хотя бы один taskId или customTasks",
+            )
         }
 
         val roomLanguage = normalizeLanguage(room.language)
-        val selectedTasks = userTaskService.resolveTasksForRoom(authorizedUser, requestedTaskIds, roomLanguage)
+        val selectedTasks = if (requestedTaskIds.isNotEmpty()) {
+            val authorizedUser = user ?: throw ApiException(
+                HttpStatus.UNAUTHORIZED,
+                "Для добавления задач из банка нужна авторизация",
+            )
+            userTaskService.resolveTasksForRoom(authorizedUser, requestedTaskIds, roomLanguage)
+        } else {
+            emptyList()
+        }
 
         val existingTemplateIds = room.tasks
             .mapNotNull { it.sourceTaskTemplateId?.trim() }
             .filter { it.isNotBlank() }
-            .toSet()
+            .toMutableSet()
         val existingSignatures = room.tasks
             .map { normalizeTaskSignature(it.title, it.description, it.starterCode, it.language) }
-            .toSet()
+            .toMutableSet()
 
-        val tasksToAppend = selectedTasks.filter { task ->
-            val taskId = task.id ?: return@filter false
-            if (existingTemplateIds.contains(taskId)) return@filter false
+        val tasksToAppend = mutableListOf<RoomTask>()
+
+        selectedTasks.forEach { task ->
+            val taskId = task.id ?: return@forEach
             val signature = normalizeTaskSignature(task.title, task.description, task.starterCode, task.language)
-            !existingSignatures.contains(signature)
+            if (existingTemplateIds.contains(taskId) || existingSignatures.contains(signature)) {
+                return@forEach
+            }
+            existingTemplateIds.add(taskId)
+            existingSignatures.add(signature)
+            tasksToAppend += RoomTask(
+                stepIndex = -1,
+                title = task.title,
+                description = task.description,
+                starterCode = task.starterCode,
+                briefingMarkdown = null,
+                language = normalizeLanguage(task.language),
+                categoryName = normalizeLanguage(task.language),
+                sourceTaskTemplateId = task.id,
+            )
         }
 
+        customTasks.forEach { task ->
+            val signature = normalizeTaskSignature(task.title, task.description, task.starterCode, roomLanguage)
+            if (existingSignatures.contains(signature)) return@forEach
+            existingSignatures.add(signature)
+            tasksToAppend += RoomTask(
+                stepIndex = -1,
+                title = task.title,
+                description = task.description,
+                starterCode = task.starterCode,
+                briefingMarkdown = null,
+                language = roomLanguage,
+                categoryName = roomLanguage,
+                sourceTaskTemplateId = null,
+            )
+        }
+
+        val hadNoTasksBeforeAppend = room.tasks.isEmpty()
         if (tasksToAppend.isNotEmpty()) {
             val baseStepIndex = room.tasks.size
             tasksToAppend.forEachIndexed { index, task ->
+                task.stepIndex = baseStepIndex + index
+                task.room = room
                 room.tasks.add(
-                    RoomTask(
-                        room = room,
-                        stepIndex = baseStepIndex + index,
-                        title = task.title,
-                        description = task.description,
-                        starterCode = task.starterCode,
-                        briefingMarkdown = null,
-                        language = normalizeLanguage(task.language),
-                        categoryName = normalizeLanguage(task.language),
-                        sourceTaskTemplateId = task.id,
-                    ),
+                    task,
                 )
             }
-            if (room.currentStep >= room.tasks.size) {
+            if (hadNoTasksBeforeAppend) {
+                room.currentStep = 0
+                initializeCurrentStepSnapshot(room)
+            } else if (room.currentStep >= room.tasks.size) {
                 room.currentStep = 0
             }
         }
@@ -208,6 +252,12 @@ class RoomService(
         collaborationService.syncFromRoom(saved)
         return toRoomResponse(saved, access = access, includeOwnerToken = false, includeInterviewerToken = false)
     }
+
+    private data class RoomCustomTaskDraft(
+        val title: String,
+        val description: String,
+        val starterCode: String,
+    )
 
     @Transactional(readOnly = true)
     fun listRoomsForUser(user: User): List<RoomSummaryDto> {
@@ -273,6 +323,10 @@ class RoomService(
         val room = roomRepository.findByIdAndOwnerUserId(roomId, user.id!!)
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
         val inviteCode = room.inviteCode
+        room.id?.let {
+            roomParticipantRepository.deleteAllByRoomId(it)
+            roomParticipantRepository.flush()
+        }
         roomRepository.delete(room)
         collaborationService.closeRoom(inviteCode)
     }
@@ -448,7 +502,7 @@ class RoomService(
         room.ownerUser?.id?.let { ownerId ->
             members += RoomAccessMemberDto(
                 userId = ownerId,
-                nickname = room.ownerUser?.nickname.orEmpty().ifBlank { "Администратор" },
+                displayName = room.ownerUser?.displayName.orEmpty().ifBlank { "Администратор" },
                 role = RoomAccessService.RoomRole.OWNER.wireValue,
                 isOwner = true,
             )
@@ -460,12 +514,12 @@ class RoomService(
                 if (room.ownerUser?.id == memberUserId) return@mapNotNull null
                 RoomAccessMemberDto(
                     userId = memberUserId,
-                    nickname = memberUser.nickname,
+                    displayName = memberUser.displayName.orEmpty().ifBlank { "Участник" },
                     role = roomAccessService.normalizeRole(participant.role).wireValue,
                     isOwner = false,
                 )
             }
-        return members.sortedWith(compareByDescending<RoomAccessMemberDto> { it.isOwner }.thenBy { it.nickname.lowercase() })
+        return members.sortedWith(compareByDescending<RoomAccessMemberDto> { it.isOwner }.thenBy { it.displayName.lowercase() })
     }
 
     private fun parseNotesMessages(rawChatJson: String?, legacyNotes: String): List<NoteMessagePayload> {

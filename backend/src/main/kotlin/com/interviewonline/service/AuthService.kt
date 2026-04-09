@@ -3,6 +3,7 @@ package com.interviewonline.service
 import com.interviewonline.dto.AuthResponse
 import com.interviewonline.dto.LoginRequest
 import com.interviewonline.dto.RegisterRequest
+import com.interviewonline.dto.UpdateProfileRequest
 import com.interviewonline.dto.UserDto
 import com.interviewonline.model.User
 import com.interviewonline.model.UserSession
@@ -27,13 +28,24 @@ class AuthService(
     private val passwordEncoder = BCryptPasswordEncoder()
 
     fun register(request: RegisterRequest): AuthResponse {
+        val displayName = request.displayName.trim()
         val nickname = request.nickname.trim()
+        if (nickname.isBlank()) {
+            throw ApiException(HttpStatus.BAD_REQUEST, "Ник обязателен")
+        }
+        if (nickname.length < 3 || nickname.length > 32) {
+            throw ApiException(HttpStatus.BAD_REQUEST, "Ник должен быть от 3 до 32 символов")
+        }
+        if (nickname.any { it.isWhitespace() }) {
+            throw ApiException(HttpStatus.BAD_REQUEST, "Ник не должен содержать пробелы")
+        }
         if (userRepository.findByNickname(nickname) != null) {
-            throw ApiException(HttpStatus.CONFLICT, "Пользователь с таким ником уже существует")
+            throw ApiException(HttpStatus.CONFLICT, "Ник уже занят")
         }
         val user = userRepository.save(
             User(
                 nickname = nickname,
+                displayName = displayName,
                 passwordHash = passwordEncoder.encode(request.password),
                 role = ROLE_USER,
             ),
@@ -68,12 +80,31 @@ class AuthService(
         return user
     }
 
+    fun updateProfile(user: User, request: UpdateProfileRequest): UserDto {
+        val displayName = request.displayName.trim()
+        if (displayName.isBlank()) {
+            throw ApiException(HttpStatus.BAD_REQUEST, "Имя обязательно")
+        }
+        user.displayName = displayName
+        val saved = userRepository.save(user)
+        return saved.toDto()
+    }
+
     private fun createSession(user: User): AuthResponse {
         val token = "usr_${UUID.randomUUID()}"
         userSessionRepository.save(UserSession(user = user, token = token))
         return AuthResponse(
             token = token,
-            user = UserDto(id = user.id!!, nickname = user.nickname, role = user.role),
+            user = user.toDto(),
+        )
+    }
+
+    private fun User.toDto(): UserDto {
+        return UserDto(
+            id = id!!,
+            nickname = nickname,
+            displayName = displayName.orEmpty(),
+            role = role,
         )
     }
 }
