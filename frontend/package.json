@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "rspack serve --config rspack.config.mjs",
-    "build": "rspack build --config rspack.config.mjs",
+    "build": "rspack build --config rspack.config.mjs && npm run compress:dist",
+    "compress:dist": "node scripts/compress-dist.mjs",
     "typecheck": "tsc --noEmit",
     "e2e:smoke": "node e2e-smoke.mjs",
     "e2e:dashboard": "node e2e-dashboard-smoke.mjs",
