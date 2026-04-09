@@ -85,6 +85,24 @@ cd frontend
 FEATURE_AGENT_OPS=true npm run dev
 ```
 
+### Сжатие трафика (Brotli/Gzip)
+
+- При `npm run build` фронтенд дополнительно создаёт предварительно сжатые файлы:
+  - `*.br` (Brotli, quality 11)
+  - `*.gz` (Gzip, level 9)
+- Сжимаются в первую очередь текстовые ресурсы (`js/css/html/svg/json/map/xml/txt/wasm`) размером от 1 KiB.
+- Для backend включено HTTP-сжатие JSON/HTML/CSS/JS ответов Spring Boot (`server.compression.enabled=true`).
+- Для Nginx включено `gzip` с `Vary: Accept-Encoding`.
+- SSE трафик `/api/realtime/` не ломается, так как `text/event-stream` в типы сжатия не добавляется.
+
+Проверка:
+
+```bash
+curl -I -H "Accept-Encoding: gzip" https://<your-domain>/
+```
+
+В ответе должен быть заголовок `Content-Encoding: gzip`.
+
 ## Функциональность MVP
 
 - создание комнаты без регистрации и через личный кабинет
