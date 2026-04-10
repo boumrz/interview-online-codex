@@ -1,4 +1,4 @@
-import React, {
+﻿import React, {
   useCallback,
   useEffect,
   useId,
@@ -74,6 +74,7 @@ import {
 } from "../services/api";
 import { useRoomSocket } from "../features/room/useRoomSocket";
 import type { RoomTask, TaskTemplate } from "../types";
+
 import styles from "./RoomPage.module.css";
 
 const LANGUAGES = [
@@ -2189,7 +2190,8 @@ function OwnerLayout({
     recentCandidateKeyHistory.push(lastCandidateKey);
   }
   const canSubmitCustomTask =
-    customTaskTitle.trim().length > 0 && customTaskDescription.trim().length > 0;
+    customTaskTitle.trim().length > 0 &&
+    customTaskDescription.trim().length > 0;
 
   const handleTaskStepSelect = useCallback(
     (stepIndex: number) => {
@@ -2260,7 +2262,8 @@ function OwnerLayout({
                 leftSection={<IconPlus size={14} />}
                 onClick={() => void submitAddTasksToRoom()}
                 disabled={
-                  selectedCatalogTaskIds.length === 0 || isAddingTasksFromCatalog
+                  selectedCatalogTaskIds.length === 0 ||
+                  isAddingTasksFromCatalog
                 }
                 loading={isAddingTasksFromCatalog}
               >
@@ -2272,7 +2275,9 @@ function OwnerLayout({
               <TextInput
                 label="Название"
                 value={customTaskTitle}
-                onChange={(event) => setCustomTaskTitle(event.currentTarget.value)}
+                onChange={(event) =>
+                  setCustomTaskTitle(event.currentTarget.value)
+                }
                 placeholder="Например, Реализовать LRU-кэш"
                 disabled={isAddingTasksFromCatalog}
                 required
