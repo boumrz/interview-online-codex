@@ -27,16 +27,6 @@ if [ ! -d "${REPO_DIR}/.git" ]; then
   exit 1
 fi
 
-if [ "${SKIP_SUDO_CHECK}" != "true" ] && [ "$(id -u)" -ne 0 ]; then
-  # Check sudo non-interactively with a command this script already needs later.
-  if ! sudo -n /usr/bin/systemctl daemon-reload >/dev/null 2>&1; then
-    echo "sudo requires passwordless access for deploy automation."
-    echo "Configure /etc/sudoers.d/deploy-interview-online first."
-    echo "Expected: /usr/bin/systemctl daemon-reload, restart ${SERVICE_NAME}, reload nginx."
-    exit 1
-  fi
-fi
-
 wait_for_url() {
   local name="$1"
   local url="$2"
@@ -63,7 +53,7 @@ run_privileged() {
   if [ "$(id -u)" -eq 0 ]; then
     "$@"
   else
-    sudo "$@"
+    sudo -n "$@"
   fi
 }
 
@@ -119,9 +109,29 @@ ensure_git_safe_directory() {
   fi
 }
 
+require_deploy_sudo() {
+  if [ "${SKIP_SUDO_CHECK}" = "true" ] || [ "$(id -u)" -eq 0 ]; then
+    return 0
+  fi
+  if ! sudo -n /usr/bin/systemctl daemon-reload >/dev/null 2>&1; then
+    echo "sudo requires passwordless access for deploy automation."
+    echo "Configure /etc/sudoers.d/deploy-interview-online first."
+    echo "Expected: /usr/bin/systemctl daemon-reload, restart ${SERVICE_NAME}, reload nginx."
+    exit 1
+  fi
+  if ! repo_write_access_ok; then
+    if ! sudo -n chown "$(id -u):$(id -g)" "${REPO_DIR}" >/dev/null 2>&1; then
+      echo "sudo requires passwordless chown for ${REPO_DIR} when the repo is not writable (e.g. after operations as root)."
+      echo "Add NOPASSWD for chown on that path (see deploy/env/sudoers-deploy-interview-online.example; match command -v chown on the server)."
+      exit 1
+    fi
+  fi
+}
+
 timestamp="$(date +%Y%m%d%H%M%S)"
 release_dir="${RELEASES_DIR}/${timestamp}"
 
+require_deploy_sudo
 ensure_repo_writable
 ensure_git_safe_directory
 
