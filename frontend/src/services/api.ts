@@ -35,6 +35,9 @@ export const api = createApi({
     login: builder.mutation<AuthResponse, { nickname: string; password: string }>({
       query: (body) => ({ url: "/auth/login", method: "POST", body })
     }),
+    meProfile: builder.query<User, void>({
+      query: () => "/me/profile"
+    }),
     createGuestRoom: builder.mutation<Room, { title?: string; ownerDisplayName?: string; language: string }>({
       query: (body) => ({ url: "/public/rooms", method: "POST", body }),
       invalidatesTags: ["Room"]
@@ -236,6 +239,8 @@ export const api = createApi({
 export const {
   useRegisterMutation,
   useLoginMutation,
+  useMeProfileQuery,
+  useLazyMeProfileQuery,
   useCreateGuestRoomMutation,
   useCreateRoomMutation,
   useGetRoomQuery,

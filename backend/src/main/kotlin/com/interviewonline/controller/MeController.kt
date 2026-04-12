@@ -22,6 +22,20 @@ class MeController(
     private val authService: AuthService,
     private val roomService: RoomService,
 ) {
+    @GetMapping("/profile")
+    fun getMyProfile(
+        @RequestHeader("Authorization", required = false) authorization: String?,
+    ): UserDto {
+        val token = authorization?.removePrefix("Bearer ")?.trim()
+        val user = authService.requireUserByToken(token)
+        return UserDto(
+            id = user.id!!,
+            nickname = user.nickname,
+            displayName = user.displayName.orEmpty(),
+            role = user.role,
+        )
+    }
+
     @GetMapping("/rooms")
     fun getMyRooms(
         @RequestHeader("Authorization", required = false) authorization: String?,

@@ -7,10 +7,8 @@ type AuthState = {
 };
 
 const storedToken = localStorage.getItem("auth_token");
-const storedUser = localStorage.getItem("auth_user");
 
-function normalizeStoredUser(raw: User | null): User | null {
-  if (!raw) return null;
+function normalizeUser(raw: User): User {
   const nickname = raw.nickname ?? "";
   const displayName = raw.displayName ?? "";
   const normalizedRole =
@@ -28,23 +26,28 @@ function normalizeStoredUser(raw: User | null): User | null {
 
 const initialState: AuthState = {
   token: storedToken,
-  user: storedUser ? normalizeStoredUser(JSON.parse(storedUser) as User) : null
+  user: null
 };
 
 const authSlice = createSlice({
   name: "auth",
   initialState,
   reducers: {
-    setAuth(state, action: PayloadAction<{ token: string; user: User }>) {
-      state.token = action.payload.token;
-      state.user = action.payload.user;
-      localStorage.setItem("auth_token", action.payload.token);
-      localStorage.setItem("auth_user", JSON.stringify(action.payload.user));
+    setAuthToken(state, action: PayloadAction<string>) {
+      const nextToken = action.payload.trim();
+      if (!nextToken) return;
+      if (state.token !== nextToken) {
+        state.user = null;
+      }
+      state.token = nextToken;
+      localStorage.setItem("auth_token", nextToken);
+    },
+    setCurrentUser(state, action: PayloadAction<User>) {
+      state.user = normalizeUser(action.payload);
     },
     updateProfile(state, action: PayloadAction<{ displayName: string }>) {
       if (!state.user) return;
       state.user.displayName = action.payload.displayName;
-      localStorage.setItem("auth_user", JSON.stringify(state.user));
     },
     clearAuth(state) {
       state.token = null;
@@ -69,5 +72,5 @@ const authSlice = createSlice({
   }
 });
 
-export const { setAuth, updateProfile, clearAuth } = authSlice.actions;
+export const { setAuthToken, setCurrentUser, updateProfile, clearAuth } = authSlice.actions;
 export default authSlice.reducer;

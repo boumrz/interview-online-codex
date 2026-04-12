@@ -17,8 +17,8 @@ import {
 import { IconKey, IconUser } from "@tabler/icons-react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../app/hooks";
-import { setAuth } from "../features/auth/authSlice";
-import { useLoginMutation, useRegisterMutation } from "../services/api";
+import { clearAuth, setAuthToken, setCurrentUser } from "../features/auth/authSlice";
+import { api, useLazyMeProfileQuery, useLoginMutation, useRegisterMutation } from "../services/api";
 
 const fieldStyles = {
   label: { color: "#9ba0a8", fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.6 },
@@ -42,6 +42,7 @@ export function LoginPage() {
   const [passwordError, setPasswordError] = useState("");
   const [login, loginState] = useLoginMutation();
   const [register, registerState] = useRegisterMutation();
+  const [fetchMeProfile] = useLazyMeProfileQuery();
   const isLoading = loginState.isLoading || registerState.isLoading;
   const isRegisterMode = mode === "register";
   const feedbackText = error || " ";
@@ -91,9 +92,16 @@ export function LoginPage() {
       const auth = isRegisterMode
         ? await register({ nickname: nickname.trim(), displayName, password }).unwrap()
         : await login({ nickname, password }).unwrap();
-      dispatch(setAuth(auth));
+      dispatch(clearAuth());
+      dispatch(api.util.resetApiState());
+      dispatch(setAuthToken(auth.token));
+      const freshProfile = await fetchMeProfile().unwrap();
+      dispatch(setCurrentUser(freshProfile));
+      localStorage.setItem("display_name", freshProfile.displayName);
       navigate(nextPath, { replace: true });
     } catch (err) {
+      dispatch(clearAuth());
+      dispatch(api.util.resetApiState());
       const apiMessage = extractApiErrorMessage(err);
       if (isRegisterMode) {
         const registerMessage = apiMessage || "Не удалось зарегистрироваться. Проверьте данные и попробуйте снова.";
