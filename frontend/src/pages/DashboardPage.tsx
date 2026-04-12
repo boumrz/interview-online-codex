@@ -43,6 +43,7 @@ import { useAppDispatch, useAppSelector } from "../app/hooks";
 import { clearAuth, updateProfile as updateAuthProfile } from "../features/auth/authSlice";
 import { markdownToHtml } from "../components/markdown";
 import {
+  api,
   useCreateRoomMutation,
   useCreateTaskTemplateMutation,
   useAdminDeleteUserMutation,
@@ -838,6 +839,7 @@ export function DashboardPage() {
                   color="gray"
                   onClick={() => {
                     dispatch(clearAuth());
+                    dispatch(api.util.resetApiState());
                     navigate("/");
                   }}
                 >
