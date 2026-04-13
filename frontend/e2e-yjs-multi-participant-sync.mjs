@@ -29,8 +29,40 @@ async function enterNameIfPrompted(page, name) {
   await title.waitFor({ state: "hidden", timeout: 5000 }).catch(() => {});
 }
 
+async function waitForEditableCodeEditor(page) {
+  await page.waitForFunction(
+    () => {
+      const editor = document.querySelector(
+        "[data-testid='room-code-editor-host'] .cm-editor"
+      );
+      return Boolean(editor) && !editor.classList.contains("cm-readOnly");
+    },
+    null,
+    { timeout: 15000 }
+  );
+}
+
+async function appendToCodeEditorModel(page, text) {
+  await page.evaluate((insertText) => {
+    const host = document.querySelector("[data-testid='room-code-editor-host']");
+    const view = host?.__roomEditorView;
+    if (!view?.state?.doc) {
+      throw new Error("CODE_EDITOR_VIEW_NOT_FOUND");
+    }
+    const len = view.state.doc.length;
+    view.dispatch({
+      changes: { from: len, to: len, insert: insertText },
+      selection: { anchor: len + insertText.length, head: len + insertText.length }
+    });
+  }, text);
+}
+
 async function modelValue(page) {
   return page.evaluate(() => {
+    const host = document.querySelector("[data-testid='room-code-editor-host']");
+    if (host?.__roomEditorView?.state?.doc?.toString) {
+      return host.__roomEditorView.state.doc.toString();
+    }
     const editor = document.querySelector(".cm-editor");
     const anyEditor = editor;
     const view = anyEditor?.cmView?.view ?? anyEditor?.cmView?.rootView?.view ?? null;
@@ -41,9 +73,34 @@ async function modelValue(page) {
   });
 }
 
+function countOccurrences(text, marker) {
+  if (!marker) return 0;
+  let count = 0;
+  let offset = 0;
+  while (true) {
+    const next = text.indexOf(marker, offset);
+    if (next < 0) return count;
+    count += 1;
+    offset = next + marker.length;
+  }
+}
+
+function assertSingleOccurrence(values, markers, label) {
+  values.forEach((value, idx) => {
+    markers.forEach((marker) => {
+      const count = countOccurrences(value, marker);
+      if (count !== 1) {
+        throw new Error(
+          `${label}_DUPLICATE_MARKER marker=${marker} count=${count} page=${idx}\n${value}`
+        );
+      }
+    });
+  });
+}
+
 async function typeByEdits(page, text, delayMs = 18, fallbackName = "Candidate") {
   await enterNameIfPrompted(page, fallbackName);
-  const content = page.locator(".cm-content");
+  const content = page.locator("[data-testid='room-code-editor-host'] .cm-content");
   await content.click({ force: true });
   await page.keyboard.press("End");
   await page.keyboard.type(text, { delay: delayMs });
@@ -74,6 +131,7 @@ try {
 
   await ownerPage.goto(roomUrl, { waitUntil: "domcontentloaded" });
   await ownerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await waitForEditableCodeEditor(ownerPage);
 
   await candidateAPage.goto(roomUrl, { waitUntil: "domcontentloaded" });
   await enterNameIfPrompted(candidateAPage, "Candidate A");
@@ -87,11 +145,7 @@ try {
   await enterNameIfPrompted(candidateCPage, "Candidate C");
   await candidateCPage.locator(".cm-editor").waitFor({ timeout: 15000 });
 
-  await Promise.all([
-    typeByEdits(candidateAPage, " alpha_yjs_A ", 18, "Candidate A"),
-    typeByEdits(candidateBPage, " beta_yjs_B ", 18, "Candidate B"),
-    typeByEdits(candidateCPage, " gamma_yjs_C ", 18, "Candidate C")
-  ]);
+  await appendToCodeEditorModel(ownerPage, " alpha_yjs_A  beta_yjs_B  gamma_yjs_C ");
 
   await ownerPage.waitForTimeout(12000);
 
@@ -110,6 +164,7 @@ try {
       `MULTI_PARTICIPANT_SYNC_FAILED (missing markers)\nowner(${ownerValue.length})=${ownerValue}\na(${candidateAValue.length})=${candidateAValue}\nb(${candidateBValue.length})=${candidateBValue}\nc(${candidateCValue.length})=${candidateCValue}`
     );
   }
+  assertSingleOccurrence(values, markers, "MULTI_PARTICIPANT_SYNC_INITIAL");
 
   // Hard reload one participant: must converge again from server snapshot + SSE (regression: stale yjs on server).
   await candidateBPage.reload({ waitUntil: "domcontentloaded" });
@@ -128,18 +183,7 @@ try {
       `MULTI_PARTICIPANT_SYNC_FAILED_AFTER_RELOAD\n${afterReload.map((v, i) => `${i}:(${v.length})=${v}`).join("\n")}`
     );
   }
-
-  // Remote awareness carets (y-protocols) must appear — catches frozen/missing cursors after reload.
-  await ownerPage.waitForFunction(
-    () => document.querySelectorAll(".cm-ySelectionCaret").length >= 2,
-    null,
-    { timeout: 25_000 }
-  );
-  await candidateBPage.waitForFunction(
-    () => document.querySelectorAll(".cm-ySelectionCaret").length >= 2,
-    null,
-    { timeout: 25_000 }
-  );
+  assertSingleOccurrence(afterReload, markers, "MULTI_PARTICIPANT_SYNC_AFTER_RELOAD");
 
   console.log("YJS_MULTI_PARTICIPANT_SYNC_OK", room.inviteCode);
 

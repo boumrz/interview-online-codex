@@ -33,6 +33,19 @@ async function loginViaForm(page, nickname, password) {
   await page.waitForURL(/\/dashboard\//, { timeout: 20000 });
 }
 
+async function openTasksDashboard(page) {
+  if (!/\/dashboard\//.test(page.url())) {
+    await page.waitForURL(/\/dashboard\//, { timeout: 20000 });
+  }
+  if (!/\/dashboard\/tasks/.test(page.url())) {
+    const tasksButton = page.getByRole("button", { name: "Задачи", exact: true }).first();
+    await tasksButton.waitFor({ timeout: 15000 });
+    await tasksButton.click();
+    await page.waitForURL(/\/dashboard\/tasks/, { timeout: 20000 });
+  }
+  await page.locator('[data-testid="task-bank-panel"]').waitFor({ timeout: 30000 });
+}
+
 async function logoutFromDashboard(page) {
   const logoutByRole = page.getByRole("button", { name: /Выйти/i }).first();
   const hasRoleButton = await logoutByRole.isVisible().catch(() => false);
@@ -56,8 +69,7 @@ try {
 
   // Login as account A and create a unique task.
   await loginViaForm(page, accountA.nickname, accountA.password);
-  await page.goto(`${webBaseUrl}/dashboard/tasks?lang=nodejs`, { waitUntil: "networkidle" });
-  await page.locator('[data-testid="task-bank-panel"]').waitFor({ timeout: 15000 });
+  await openTasksDashboard(page);
   await page.locator('[data-testid="open-create-task-modal"]').click();
   await page.locator("#create-task-title").fill(uniqueTaskTitle);
   await page.locator("#create-task-description").fill("Account-switch regression test task");
@@ -68,8 +80,7 @@ try {
   // Switch to account B in the same browser session.
   await logoutFromDashboard(page);
   await loginViaForm(page, accountB.nickname, accountB.password);
-  await page.goto(`${webBaseUrl}/dashboard/tasks?lang=nodejs`, { waitUntil: "networkidle" });
-  await page.locator('[data-testid="task-bank-panel"]').waitFor({ timeout: 15000 });
+  await openTasksDashboard(page);
 
   // Unique task from account A must not leak into account B.
   const leakedTaskCount = await page.locator(`[data-testid="task-bank-panel"] >> text=${uniqueTaskTitle}`).count();

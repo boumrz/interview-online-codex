@@ -2763,6 +2763,9 @@ function OwnerLayout({
                     }
                     serverYjsBase64={merged.yjsDocumentBase64 ?? null}
                     serverYjsSequence={merged.lastYjsSequence ?? 0}
+                    lastCodeUpdatedBySessionId={
+                      merged.lastCodeUpdatedBySessionId ?? null
+                    }
                     resyncSignal={resyncSignal}
                     syncKey={syncKey}
                     readOnly={!editorReady}
@@ -2869,6 +2872,7 @@ function CandidateLayout({
             }
             serverYjsBase64={merged.yjsDocumentBase64 ?? null}
             serverYjsSequence={merged.lastYjsSequence ?? 0}
+            lastCodeUpdatedBySessionId={merged.lastCodeUpdatedBySessionId ?? null}
             resyncSignal={resyncSignal}
             syncKey={syncKey}
             readOnly={!editorReady}
@@ -3317,6 +3321,7 @@ function RoomCodeEditor({
   value,
   serverYjsBase64 = null,
   serverYjsSequence = 0,
+  lastCodeUpdatedBySessionId = null,
   syncKey,
   resyncSignal,
   readOnly,
@@ -3334,6 +3339,7 @@ function RoomCodeEditor({
   value: string;
   serverYjsBase64?: string | null;
   serverYjsSequence?: number;
+  lastCodeUpdatedBySessionId?: string | null;
   syncKey: string;
   resyncSignal: number;
   readOnly: boolean;
@@ -3465,17 +3471,23 @@ function RoomCodeEditor({
     const languageCompartment = languageCompartmentRef.current;
     const targetCode = value ?? "";
     const snap = serverYjsBase64?.trim();
+    const hasRemoteHistoryBeforeSnapshot =
+      typeof lastCodeUpdatedBySessionId === "string" &&
+      lastCodeUpdatedBySessionId.trim().length > 0;
     let yDoc = new Y.Doc();
+    let bootstrappedFromSnapshot = false;
     if (snap) {
       try {
         const raw = base64ToBytes(snap);
         if (raw.length > 0) {
           Y.applyUpdate(yDoc, raw, "bootstrap");
+          bootstrappedFromSnapshot = true;
         }
       } catch {
         /* invalid snapshot */
       }
-    } else {
+    }
+    if (!bootstrappedFromSnapshot && !hasRemoteHistoryBeforeSnapshot) {
       Y.applyUpdate(
         yDoc,
         createDeterministicBootstrapUpdate(targetCode),
@@ -3484,7 +3496,11 @@ function RoomCodeEditor({
     }
     let yText = yDoc.getText("room-code");
     // Server CRDT snapshot can disagree with `merged.code` (last writer / ordering); never replace a merged doc with the plain string.
-    if (yText.toString() !== targetCode && !snap) {
+    if (
+      yText.toString() !== targetCode &&
+      !snap &&
+      !hasRemoteHistoryBeforeSnapshot
+    ) {
       yDoc.destroy();
       yDoc = new Y.Doc();
       Y.applyUpdate(
@@ -3713,6 +3729,10 @@ function RoomCodeEditor({
     const t = activeDoc.getText("room-code");
     const next = value ?? "";
     const snap = serverYjsBase64?.trim() ?? "";
+    const hasRemoteHistoryWithoutSnapshot =
+      !snap &&
+      typeof lastCodeUpdatedBySessionId === "string" &&
+      lastCodeUpdatedBySessionId.trim().length > 0;
 
     roomSyncLog("hydrate_from_server", {
       syncKeyChanged,
@@ -3727,11 +3747,17 @@ function RoomCodeEditor({
           Y.applyUpdate(activeDoc, raw, "remote");
         }
       }
-      if (!snap && t.toString() !== next) {
+      if (!snap && t.toString() !== next && !hasRemoteHistoryWithoutSnapshot) {
         activeDoc.transact(() => {
           t.delete(0, t.length);
           if (next) t.insert(0, next);
         }, "remote");
+      }
+      if (!snap && hasRemoteHistoryWithoutSnapshot) {
+        roomSyncLog("skip_plain_hydrate_waiting_for_yjs_snapshot", {
+          syncKey,
+          codeLen: next.length,
+        });
       }
     } catch (e) {
       roomSyncLog("hydrate_from_server_failed", { error: String(e) });
@@ -3740,6 +3766,7 @@ function RoomCodeEditor({
     bumpLocalAwarenessAfterRemoteDocChange();
   }, [
     bumpLocalAwarenessAfterRemoteDocChange,
+    lastCodeUpdatedBySessionId,
     resyncSignal,
     serverYjsBase64,
     syncKey,
@@ -3765,6 +3792,11 @@ function RoomCodeEditor({
   }, [languageExtension]);
 
   return (
-    <div className={styles.codeEditorHost} style={{ height }} ref={hostRef} />
+    <div
+      className={styles.codeEditorHost}
+      data-testid="room-code-editor-host"
+      style={{ height }}
+      ref={hostRef}
+    />
   );
 }

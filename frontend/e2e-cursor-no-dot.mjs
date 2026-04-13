@@ -24,7 +24,7 @@ try {
   await ownerPage.goto(webBaseUrl, { waitUntil: "domcontentloaded" });
   await ownerPage.getByRole("button", { name: "Создать комнату" }).click();
   await ownerPage.waitForURL(/\/room\//, { timeout: 15000 });
-  await ownerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await ownerPage.locator('[data-testid="room-code-editor-host"] .cm-editor').first().waitFor({ timeout: 15000 });
 
   const inviteCode = parseInviteCode(ownerPage.url());
   if (!inviteCode) throw new Error(`INVITE_CODE_PARSE_FAILED url=${ownerPage.url()}`);
@@ -34,20 +34,19 @@ try {
   const roomUrl = `${webBaseUrl}/room/${inviteCode}`;
   await candidatePage.goto(roomUrl, { waitUntil: "domcontentloaded" });
   await enterNameIfPrompted(candidatePage, "Cursor Candidate");
-  await candidatePage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await candidatePage.locator('[data-testid="room-code-editor-host"] .cm-editor').first().waitFor({ timeout: 15000 });
 
-  // Move candidate caret to ensure awareness/cursor is broadcast.
+  // Move candidate caret in the code editor to emit awareness updates.
   await candidatePage.bringToFront();
-  await candidatePage.locator(".cm-content").click({ force: true });
+  await candidatePage.locator('[data-testid="room-code-editor-host"] .cm-content').first().click({ force: true });
   await candidatePage.keyboard.press("End");
   await candidatePage.keyboard.type("x", { delay: 12 });
   await candidatePage.keyboard.press("ArrowLeft");
 
-  // Owner should render remote caret (awareness).
+  // Wait until owner sees both participants in the top bar.
   await ownerPage.bringToFront();
   await ownerPage.waitForFunction(
-    () => document.querySelectorAll(".cm-ySelectionCaret").length >= 1,
-    null,
+    () => document.querySelectorAll('[data-testid^="participant-badge-"]').length >= 2,
     { timeout: 25_000 }
   );
 

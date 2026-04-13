@@ -255,10 +255,8 @@ export function DashboardPage() {
     }, 3200);
   };
 
-  if (!auth.token) return <Navigate to="/login" replace />;
-  if (!isDashboardSection(section, agentOpsEnabled, isAdmin)) return <Navigate to="/dashboard/rooms" replace />;
-
-  const activeSection = section;
+  const hasValidSection = isDashboardSection(section, agentOpsEnabled, isAdmin);
+  const activeSection: DashboardSection = hasValidSection ? section : "rooms";
   const activeTaskLanguage = normalizeLanguageKey(searchParams.get("lang"));
 
   const normalizedTaskGroups = useMemo(() => {
@@ -684,6 +682,13 @@ export function DashboardPage() {
     }
     navigate(`/dashboard/${nextSection}`);
   };
+
+  if (!auth.token) {
+    return <Navigate to="/login" replace />;
+  }
+  if (!hasValidSection) {
+    return <Navigate to="/dashboard/rooms" replace />;
+  }
 
   return (
     <>
