@@ -432,18 +432,18 @@ class CollaborationService(
         val participant = participants[connectionId] ?: return
         val state = roomState[participant.inviteCode] ?: return
 
-        if (isHeartbeatOnlyYjsUpdate(yjsUpdate)) {
+        val trimmedDocCandidate = yjsDocumentBase64?.trim().orEmpty()
+        val safeDocSnap =
+            if (trimmedDocCandidate.isNotEmpty() && trimmedDocCandidate.length <= maxYjsDocumentBase64Chars) trimmedDocCandidate else null
+
+        if (isHeartbeatOnlyYjsUpdate(yjsUpdate) && safeDocSnap == null) {
             logger.debug(
-                "Ignoring heartbeat-only yjs update for room {} session {} to avoid stale snapshot overwrite",
+                "Ignoring heartbeat-only yjs update without full snapshot for room {} session {}",
                 participant.inviteCode,
                 participant.sessionId,
             )
             return
         }
-
-        val trimmedDocCandidate = yjsDocumentBase64?.trim().orEmpty()
-        val safeDocSnap =
-            if (trimmedDocCandidate.isNotEmpty() && trimmedDocCandidate.length <= maxYjsDocumentBase64Chars) trimmedDocCandidate else null
 
         fun resolveOutboundSyncKey(): String? {
             val normalizedSyncKey = syncKey?.trim().orEmpty()

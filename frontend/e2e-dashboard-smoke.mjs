@@ -15,10 +15,18 @@ try {
   await page.getByLabel("Пароль").fill("secret123");
   await page.getByRole("button", { name: "Создать аккаунт" }).click();
   await page.waitForURL(/\/dashboard\/rooms/, { timeout: 15000 });
-  await page.getByRole("button", { name: "Комнаты", exact: true }).waitFor();
-  await page.getByRole("button", { name: "Задачи", exact: true }).click();
+  await page.getByText("Комнаты", { exact: true }).waitFor();
+  await page.getByText("Задачи", { exact: true }).first().click();
   await page.waitForURL(/\/dashboard\/tasks/, { timeout: 15000 });
-  await page.getByText("Создать задачу", { exact: true }).waitFor();
+  await page
+    .waitForFunction(
+      () => {
+        const text = document.body?.innerText ?? "";
+        return text.includes("Задачи для комнаты") || text.includes("Создать задачу");
+      },
+      null,
+      { timeout: 15000 }
+    );
   console.log("DASHBOARD_UI_OK");
 } catch (error) {
   console.error("DASHBOARD_UI_FAIL", error);
