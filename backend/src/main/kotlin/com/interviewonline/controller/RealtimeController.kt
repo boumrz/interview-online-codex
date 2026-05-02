@@ -27,6 +27,7 @@ class RealtimeController(
     fun streamRoomState(
         @PathVariable inviteCode: String,
         @RequestParam sessionId: String,
+        @RequestParam(required = false) participantId: String?,
         @RequestParam(required = false) displayNameEncoded: String?,
         @RequestParam(required = false) displayName: String?,
         @RequestParam(required = false) ownerToken: String?,
@@ -39,6 +40,7 @@ class RealtimeController(
         return collaborationService.joinRoomSse(
             inviteCode = inviteCode,
             sessionId = sessionId,
+            participantId = participantId,
             displayName = decodeDisplayName(displayNameEncoded, displayName),
             ownerToken = ownerToken,
             interviewerToken = interviewerToken,

@@ -29,6 +29,7 @@ type Participant = {
   sessionId: string;
   displayName: string;
   userId?: string | null;
+  participantId?: string | null;
   role: "owner" | "interviewer" | "candidate";
   presenceStatus: "active" | "away";
   isAuthenticated?: boolean;
@@ -38,6 +39,8 @@ type Participant = {
 type CursorPayload = {
   sessionId: string;
   displayName: string;
+  userId?: string | null;
+  participantId?: string | null;
   role: "owner" | "interviewer" | "candidate";
   cursorSequence?: number | null;
   lineNumber: number;
@@ -111,7 +114,7 @@ type Options = {
   onState: (state: RealtimeState) => void;
   onError: (message: string) => void;
   onYjsUpdate?: (payload: { sessionId: string; yjsUpdate: string; syncKey?: string | null; yjsSequence?: number | null }) => void;
-  onAwarenessUpdate?: (payload: { sessionId: string; awarenessUpdate: string }) => void;
+  onAwarenessUpdate?: (payload: { sessionId: string; userId?: string | null; participantId?: string | null; awarenessUpdate: string }) => void;
   onCursorUpdate?: (payload: CursorPayload) => void;
   onCandidateKey?: (payload: CandidateKeyPayload) => void;
   onRecoveryStateSync?: (lastYjsSequence: number) => void;
@@ -172,6 +175,10 @@ function sessionIdKey(inviteCode: string) {
   return `room_ws_session_id_${inviteCode}`;
 }
 
+function participantIdKey() {
+  return "room_participant_id";
+}
+
 function cursorSequenceKey(inviteCode: string) {
   return `room_cursor_sequence_${inviteCode}`;
 }
@@ -195,6 +202,19 @@ function getOrCreateSessionId(inviteCode: string) {
   const next = `s-${crypto.randomUUID()}`;
   sessionStorage.setItem(key, next);
   return next;
+}
+
+function getOrCreateParticipantId() {
+  try {
+    const key = participantIdKey();
+    const existing = localStorage.getItem(key)?.trim();
+    if (existing) return existing;
+    const next = `p-${crypto.randomUUID()}`;
+    localStorage.setItem(key, next);
+    return next;
+  } catch {
+    return `p-${crypto.randomUUID()}`;
+  }
 }
 
 function getInitialCursorSequence(inviteCode: string) {
@@ -312,6 +332,7 @@ export function useRoomSocket({
     queuePayload(payload);
   });
   const [connected, setConnected] = useState(false);
+  const participantId = useMemo(() => getOrCreateParticipantId(), []);
   const sessionId = useMemo(() => getOrCreateSessionId(inviteCode), [inviteCode]);
 
   useEffect(() => {
@@ -351,6 +372,7 @@ export function useRoomSocket({
 
     const buildParams = () => {
       const params = new URLSearchParams({ sessionId });
+      params.set("participantId", participantId);
       params.set("displayNameEncoded", displayName);
       if (authToken) params.set("authToken", authToken);
       if (ownerToken) params.set("ownerToken", ownerToken);
@@ -618,10 +640,17 @@ export function useRoomSocket({
           return;
         }
         if (message.type === "awareness_update") {
-          const payload = message.payload as { sessionId?: string; awarenessUpdate?: string };
+          const payload = message.payload as {
+            sessionId?: string;
+            userId?: string | null;
+            participantId?: string | null;
+            awarenessUpdate?: string;
+          };
           if (payload?.sessionId && payload?.awarenessUpdate) {
             onAwarenessUpdate?.({
               sessionId: payload.sessionId,
+              userId: payload.userId ?? null,
+              participantId: payload.participantId ?? null,
               awarenessUpdate: payload.awarenessUpdate
             });
           }
@@ -734,6 +763,7 @@ export function useRoomSocket({
     onState,
     onYjsUpdate,
     ownerToken,
+    participantId,
     sessionId
   ]);
 
@@ -872,6 +902,7 @@ export function useRoomSocket({
 
   return {
     connected,
+    participantId,
     sessionId,
     sendCodeUpdate,
     sendLanguageUpdate,

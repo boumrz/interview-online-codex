@@ -62,7 +62,6 @@ export function LandingPage() {
         language
       }).unwrap();
       localStorage.setItem(`owner_token_${room.inviteCode}`, room.ownerToken ?? "");
-      localStorage.setItem("display_name", displayName);
       localStorage.setItem(`guest_display_name_${room.inviteCode}`, displayName);
       navigate(`/room/${room.inviteCode}`);
     } catch {
@@ -75,7 +74,6 @@ export function LandingPage() {
     if (!inviteCode.trim()) return;
     const name = (displayName || "Участник").trim();
     const code = inviteCode.trim();
-    localStorage.setItem("display_name", name);
     localStorage.setItem(`guest_display_name_${code}`, name);
     navigate(`/room/${code}`);
   };

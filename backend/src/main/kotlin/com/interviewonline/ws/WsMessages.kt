@@ -57,6 +57,7 @@ data class ParticipantPayload(
     val sessionId: String,
     val displayName: String,
     val userId: String? = null,
+    val participantId: String? = null,
     val role: String = "candidate",
     val presenceStatus: String = "active",
     val isAuthenticated: Boolean = false,
@@ -66,6 +67,8 @@ data class ParticipantPayload(
 data class CursorPayload(
     val sessionId: String,
     val displayName: String,
+    val userId: String? = null,
+    val participantId: String? = null,
     val role: String,
     val cursorSequence: Long? = null,
     val lineNumber: Int,
