@@ -66,6 +66,7 @@ class CollaborationService(
     private data class ParticipantMeta(
         val inviteCode: String,
         val sessionId: String,
+        val participantId: String?,
         val eventToken: String,
         val displayName: String,
         val userId: String?,
@@ -182,6 +183,7 @@ class CollaborationService(
     fun joinRoomSse(
         inviteCode: String,
         sessionId: String,
+        participantId: String?,
         displayName: String,
         ownerToken: String?,
         interviewerToken: String?,
@@ -196,12 +198,24 @@ class CollaborationService(
         val connectionId = sseConnectionId(sessionId)
         val emitter = SseEmitter(0L)
         val resolvedRole = resolveRole(room, ownerToken, user)
+        val normalizedParticipantId = normalizeParticipantId(participantId)
+        val identityRoleOverride = resolveIdentityRoleOverride(
+            inviteCode = inviteCode,
+            userId = user?.id,
+            sessionId = sessionId,
+            participantId = normalizedParticipantId,
+        )
         val roleOverride = state.grantedRoleBySessionId[sessionId]
-        val effectiveRole = if (resolvedRole == RoomAccessService.RoomRole.OWNER) resolvedRole else roleOverride ?: resolvedRole
+        val effectiveRole = if (resolvedRole == RoomAccessService.RoomRole.OWNER) {
+            resolvedRole
+        } else {
+            roleOverride ?: identityRoleOverride ?: resolvedRole
+        }
 
         participants[connectionId] = ParticipantMeta(
             inviteCode = inviteCode,
             sessionId = sessionId,
+            participantId = normalizedParticipantId,
             eventToken = "evt_${UUID.randomUUID()}",
             displayName = displayName.trim().ifBlank { "Участник" }.take(64),
             userId = user?.id,
@@ -338,32 +352,10 @@ class CollaborationService(
         val state = roomState[inviteCode] ?: return
         val emitter = sseConnections[connectionId] ?: return
 
-        val roomParticipants = participants.values
-            .asSequence()
-            .filter { it.inviteCode == inviteCode }
-            .sortedBy { it.displayName.lowercase() }
-            .distinctBy { it.sessionId }
-            .toList()
+        val roomParticipants = aggregateRoomParticipants(inviteCode)
         val participantsPayload = roomParticipants.map { participantMetaToPayload(it) }
         val participantBySessionId = roomParticipants.associateBy { it.sessionId }
-        val cursorsPayload = state.cursorsBySessionId.entries
-            .asSequence()
-            .mapNotNull { (sessionId, cursor) ->
-                val participantMeta = participantBySessionId[sessionId] ?: return@mapNotNull null
-                CursorPayload(
-                    sessionId = sessionId,
-                    displayName = participantMeta.displayName,
-                    role = participantMeta.role.wireValue,
-                    cursorSequence = state.lastCursorSequenceBySessionId[sessionId],
-                    lineNumber = cursor.lineNumber,
-                    column = cursor.column,
-                    selectionStartLineNumber = cursor.selectionStartLineNumber,
-                    selectionStartColumn = cursor.selectionStartColumn,
-                    selectionEndLineNumber = cursor.selectionEndLineNumber,
-                    selectionEndColumn = cursor.selectionEndColumn,
-                )
-            }
-            .toList()
+        val cursorsPayload = buildCursorsPayload(state, participantBySessionId)
 
         try {
             val payload = buildPayload(inviteCode, state, participantsPayload, cursorsPayload, participant)
@@ -415,6 +407,8 @@ class CollaborationService(
             type = "awareness_update",
             payload = mapOf(
                 "sessionId" to participant.sessionId,
+                "userId" to participant.userId,
+                "participantId" to participant.participantId,
                 "awarenessUpdate" to trimmed,
             ),
             excludeConnectionId = connectionId,
@@ -785,8 +779,14 @@ class CollaborationService(
                 } else {
                     val target = activeTarget
                         ?: throw ApiException(HttpStatus.BAD_REQUEST, "Участник не найден в активной комнате")
-                    target.role = RoomAccessService.RoomRole.INTERVIEWER
-                    state?.grantedRoleBySessionId?.set(target.sessionId, RoomAccessService.RoomRole.INTERVIEWER)
+                    val targets = resolveGuestRoleTargets(participant.inviteCode, target)
+                    targets.forEach { guestTarget ->
+                        guestTarget.role = RoomAccessService.RoomRole.INTERVIEWER
+                        state?.grantedRoleBySessionId?.set(
+                            guestTarget.sessionId,
+                            RoomAccessService.RoomRole.INTERVIEWER,
+                        )
+                    }
                 }
             }
             RoomAccessService.RoomRole.CANDIDATE -> {
@@ -795,8 +795,14 @@ class CollaborationService(
                 } else {
                     val target = activeTarget
                         ?: throw ApiException(HttpStatus.BAD_REQUEST, "Участник не найден в активной комнате")
-                    target.role = RoomAccessService.RoomRole.CANDIDATE
-                    state?.grantedRoleBySessionId?.set(target.sessionId, RoomAccessService.RoomRole.CANDIDATE)
+                    val targets = resolveGuestRoleTargets(participant.inviteCode, target)
+                    targets.forEach { guestTarget ->
+                        guestTarget.role = RoomAccessService.RoomRole.CANDIDATE
+                        state?.grantedRoleBySessionId?.set(
+                            guestTarget.sessionId,
+                            RoomAccessService.RoomRole.CANDIDATE,
+                        )
+                    }
                 }
             }
         }
@@ -881,6 +887,8 @@ class CollaborationService(
             payload = mapOf(
                 "sessionId" to participant.sessionId,
                 "displayName" to participant.displayName,
+                "userId" to participant.userId,
+                "participantId" to participant.participantId,
                 "role" to participant.role.wireValue,
                 "cursorSequence" to appliedCursorSequence,
                 "lineNumber" to nextLine,
@@ -1019,32 +1027,10 @@ class CollaborationService(
         }
 
         val state = roomState[inviteCode] ?: return
-        val roomParticipants = participants.values
-            .asSequence()
-            .filter { it.inviteCode == inviteCode }
-            .sortedBy { it.displayName.lowercase() }
-            .distinctBy { it.sessionId }
-            .toList()
+        val roomParticipants = aggregateRoomParticipants(inviteCode)
         val participantsPayload = roomParticipants.map { participantMetaToPayload(it) }
         val participantBySessionId = roomParticipants.associateBy { it.sessionId }
-        val cursorsPayload = state.cursorsBySessionId.entries
-            .asSequence()
-            .mapNotNull { (sessionId, cursor) ->
-                val participantMeta = participantBySessionId[sessionId] ?: return@mapNotNull null
-                CursorPayload(
-                    sessionId = sessionId,
-                    displayName = participantMeta.displayName,
-                    role = participantMeta.role.wireValue,
-                    cursorSequence = state.lastCursorSequenceBySessionId[sessionId],
-                    lineNumber = cursor.lineNumber,
-                    column = cursor.column,
-                    selectionStartLineNumber = cursor.selectionStartLineNumber,
-                    selectionStartColumn = cursor.selectionStartColumn,
-                    selectionEndLineNumber = cursor.selectionEndLineNumber,
-                    selectionEndColumn = cursor.selectionEndColumn,
-                )
-            }
-            .toList()
+        val cursorsPayload = buildCursorsPayload(state, participantBySessionId)
 
         val sseConnectionIds = roomSseConnections[inviteCode]?.toList().orEmpty()
         sseConnectionIds.forEach { connectionId ->
@@ -1355,12 +1341,128 @@ class CollaborationService(
         return "sse:$sessionId:${UUID.randomUUID()}"
     }
 
+    private fun normalizeParticipantId(participantId: String?): String? {
+        val normalized = participantId?.trim().orEmpty()
+        if (normalized.isBlank()) return null
+        return normalized.take(128)
+    }
+
+    private fun participantIdentityKey(userId: String?, participantId: String?, sessionId: String): String {
+        val normalizedUserId = userId?.trim().orEmpty()
+        if (normalizedUserId.isNotBlank()) {
+            return "user:$normalizedUserId"
+        }
+        val normalizedParticipantId = normalizeParticipantId(participantId)
+        if (normalizedParticipantId != null) {
+            return "guest:$normalizedParticipantId"
+        }
+        return "session:$sessionId"
+    }
+
+    private fun participantIdentityKey(meta: ParticipantMeta): String {
+        return participantIdentityKey(meta.userId, meta.participantId, meta.sessionId)
+    }
+
+    private fun rolePriority(role: RoomAccessService.RoomRole): Int {
+        return when (role) {
+            RoomAccessService.RoomRole.OWNER -> 3
+            RoomAccessService.RoomRole.INTERVIEWER -> 2
+            RoomAccessService.RoomRole.CANDIDATE -> 1
+        }
+    }
+
+    private fun aggregateParticipantGroup(group: List<ParticipantMeta>): ParticipantMeta {
+        val representative = group
+            .sortedWith(
+                compareByDescending<ParticipantMeta> { rolePriority(it.role) }
+                    .thenByDescending { if (it.presenceStatus == PresenceStatus.ACTIVE) 1 else 0 }
+                    .thenBy { it.displayName.lowercase() }
+                    .thenBy { it.sessionId },
+            )
+            .first()
+        val mergedRole = group.maxByOrNull { rolePriority(it.role) }?.role ?: representative.role
+        val mergedPresence =
+            if (group.any { it.presenceStatus == PresenceStatus.ACTIVE }) PresenceStatus.ACTIVE else PresenceStatus.AWAY
+        return representative.copy(
+            role = mergedRole,
+            presenceStatus = mergedPresence,
+        )
+    }
+
+    private fun aggregateRoomParticipants(inviteCode: String): List<ParticipantMeta> {
+        val roomParticipants = participants.values
+            .asSequence()
+            .filter { it.inviteCode == inviteCode }
+            .toList()
+        if (roomParticipants.isEmpty()) return emptyList()
+
+        return roomParticipants
+            .groupBy { participantIdentityKey(it) }
+            .values
+            .map { aggregateParticipantGroup(it) }
+            .sortedBy { it.displayName.lowercase() }
+    }
+
+    private fun buildCursorsPayload(
+        state: RealtimeState,
+        participantBySessionId: Map<String, ParticipantMeta>,
+    ): List<CursorPayload> {
+        return state.cursorsBySessionId.entries
+            .asSequence()
+            .mapNotNull { (sessionId, cursor) ->
+                val participantMeta = participantBySessionId[sessionId] ?: return@mapNotNull null
+                CursorPayload(
+                    sessionId = sessionId,
+                    displayName = participantMeta.displayName,
+                    userId = participantMeta.userId,
+                    participantId = participantMeta.participantId,
+                    role = participantMeta.role.wireValue,
+                    cursorSequence = state.lastCursorSequenceBySessionId[sessionId],
+                    lineNumber = cursor.lineNumber,
+                    column = cursor.column,
+                    selectionStartLineNumber = cursor.selectionStartLineNumber,
+                    selectionStartColumn = cursor.selectionStartColumn,
+                    selectionEndLineNumber = cursor.selectionEndLineNumber,
+                    selectionEndColumn = cursor.selectionEndColumn,
+                )
+            }
+            .toList()
+    }
+
+    private fun resolveIdentityRoleOverride(
+        inviteCode: String,
+        userId: String?,
+        participantId: String?,
+        sessionId: String,
+    ): RoomAccessService.RoomRole? {
+        val identityKey = participantIdentityKey(userId, participantId, sessionId)
+        return participants.values
+            .asSequence()
+            .filter { it.inviteCode == inviteCode }
+            .filter { participantIdentityKey(it) == identityKey }
+            .map { it.role }
+            .maxByOrNull { rolePriority(it) }
+    }
+
+    private fun resolveGuestRoleTargets(inviteCode: String, target: ParticipantMeta): List<ParticipantMeta> {
+        val normalizedTargetParticipantId = normalizeParticipantId(target.participantId) ?: return listOf(target)
+        val sameGuestTargets = participants.values
+            .asSequence()
+            .filter { it.inviteCode == inviteCode }
+            .filter { it.userId.isNullOrBlank() }
+            .filter { normalizeParticipantId(it.participantId) == normalizedTargetParticipantId }
+            .toList()
+        if (sameGuestTargets.isEmpty()) return listOf(target)
+        return sameGuestTargets
+    }
+
     private fun participantMetaToPayload(meta: ParticipantMeta): ParticipantPayload {
         val isAuthenticated = !meta.userId.isNullOrBlank()
         return ParticipantPayload(
             sessionId = meta.sessionId,
             displayName = meta.displayName,
             userId = meta.userId,
+            participantId = meta.participantId,
             role = meta.role.wireValue,
             presenceStatus = meta.presenceStatus.wireValue,
             isAuthenticated = isAuthenticated,

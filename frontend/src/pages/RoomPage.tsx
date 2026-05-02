@@ -89,6 +89,7 @@ type Participant = {
   sessionId: string;
   displayName: string;
   userId?: string | null;
+  participantId?: string | null;
   role: "owner" | "interviewer" | "candidate";
   presenceStatus: "active" | "away";
   isAuthenticated?: boolean;
@@ -98,6 +99,8 @@ type Participant = {
 type CursorInfo = {
   sessionId: string;
   displayName: string;
+  userId?: string | null;
+  participantId?: string | null;
   role: "owner" | "interviewer" | "candidate";
   cursorSequence?: number | null;
   lastSeenAtEpochMs?: number | null;
@@ -605,16 +608,12 @@ function guestNameKey(inviteCode: string) {
   return `guest_display_name_${inviteCode}`;
 }
 
-function readStoredDisplayName(
-  inviteCode: string,
-  options: { includeGlobalFallback?: boolean } = {},
-) {
+function readStoredDisplayName(inviteCode: string) {
   const roomScoped = (
     localStorage.getItem(guestNameKey(inviteCode)) ?? ""
   ).trim();
   if (roomScoped) return roomScoped;
-  if (options.includeGlobalFallback === false) return "";
-  return (localStorage.getItem("display_name") ?? "").trim();
+  return "";
 }
 
 export function RoomPage() {
@@ -632,9 +631,9 @@ export function RoomPage() {
     ownerToken: ownerToken ?? undefined,
   });
 
-  const initialStoredName = readStoredDisplayName(inviteCode, {
-    includeGlobalFallback: true,
-  });
+  const initialStoredName = authToken
+    ? authUser?.displayName?.trim() || readStoredDisplayName(inviteCode)
+    : readStoredDisplayName(inviteCode);
 
   const [state, setState] = useState<RealtimeState | null>(null);
   const stateRef = useRef<RealtimeState | null>(null);
@@ -643,7 +642,7 @@ export function RoomPage() {
   const [draftName, setDraftName] = useState(() => initialStoredName);
   const [candidateNameError, setCandidateNameError] = useState("");
   const [nameModalOpened, setNameModalOpened] = useState(
-    () => !initialStoredName,
+    () => !authToken && !initialStoredName,
   );
   const [noteComposer, setNoteComposer] = useState("");
   const [pendingNotes, setPendingNotes] = useState<PendingNoteMessage[]>([]);
@@ -657,9 +656,7 @@ export function RoomPage() {
   const briefingStepKeyRef = useRef<string>("");
 
   useEffect(() => {
-    const stored = readStoredDisplayName(inviteCode, {
-      includeGlobalFallback: true,
-    });
+    const stored = readStoredDisplayName(inviteCode);
     const authDisplayName = authUser?.displayName?.trim() || "";
     const authNickname = authUser?.nickname?.trim() || "";
     const safeStoredDisplayName =
@@ -668,11 +665,14 @@ export function RoomPage() {
     const resolved = authToken
       ? authDisplayName || safeStoredDisplayName || "Участник"
       : stored;
-    const shouldAskName = !resolved;
+    const shouldAskName = !authToken && !resolved;
 
     if (resolved) {
-      localStorage.setItem("display_name", resolved);
-      localStorage.setItem(guestNameKey(inviteCode), resolved);
+      if (authToken) {
+        localStorage.setItem("display_name", resolved);
+      } else {
+        localStorage.setItem(guestNameKey(inviteCode), resolved);
+      }
     }
 
     setDisplayName(resolved);
@@ -800,6 +800,7 @@ export function RoomPage() {
   }, [inviteCode, merged]);
   const syncKeyRef = useRef(currentSyncKey);
   const sessionIdRef = useRef<string>("");
+  const localParticipantIdentityKeyRef = useRef<string | null>(null);
   const yjsPendingUpdatesRef = useRef<
     Array<{ syncKey: string; update: string }>
   >([]);
@@ -855,9 +856,9 @@ export function RoomPage() {
   const onState = useCallback(
     (incoming: RealtimeState) => {
       const previousState = stateRef.current;
-      const previousCursorBySessionId = new Map(
+      const previousCursorByIdentity = new Map(
         (previousState?.cursors ?? []).map((cursor) => [
-          cursor.sessionId,
+          participantIdentityKey(cursor) ?? `session:${cursor.sessionId}`,
           cursor,
         ]),
       );
@@ -865,13 +866,30 @@ export function RoomPage() {
         ...participant,
         role: participant.role ?? "candidate",
       }));
+      const participantBySessionId = new Map(
+        participants.map((participant) => [participant.sessionId, participant]),
+      );
       const cursorsFromSync = (incoming.cursors ?? []).map((cursor) => {
-        const normalizedRole = cursor.role ?? "candidate";
+        const participantMeta = participantBySessionId.get(cursor.sessionId);
+        const normalizedRole = cursor.role ?? participantMeta?.role ?? "candidate";
         const nextCursorSequence =
           typeof cursor.cursorSequence === "number"
             ? cursor.cursorSequence
             : null;
-        const previousCursor = previousCursorBySessionId.get(cursor.sessionId);
+        const normalizedCursor: CursorInfo = {
+          ...cursor,
+          role: normalizedRole,
+          userId: normalizeIdentityValue(cursor.userId ?? participantMeta?.userId),
+          participantId: normalizeIdentityValue(
+            cursor.participantId ?? participantMeta?.participantId,
+          ),
+          cursorSequence: nextCursorSequence,
+          lastSeenAtEpochMs: null,
+        };
+        const cursorIdentity =
+          participantIdentityKey(normalizedCursor) ??
+          `session:${normalizedCursor.sessionId}`;
+        const previousCursor = previousCursorByIdentity.get(cursorIdentity);
         const previousCursorSequence =
           typeof previousCursor?.cursorSequence === "number"
             ? previousCursor.cursorSequence
@@ -895,22 +913,38 @@ export function RoomPage() {
         if (sameSequencePreferLive) {
           return {
             ...previousCursor,
-            displayName: cursor.displayName ?? previousCursor.displayName,
+            displayName:
+              normalizedCursor.displayName ?? previousCursor.displayName,
+            userId: normalizedCursor.userId ?? previousCursor.userId ?? null,
+            participantId:
+              normalizedCursor.participantId ??
+              previousCursor.participantId ??
+              null,
             role: normalizedRole,
           };
         }
         return {
-          ...cursor,
-          role: normalizedRole,
-          cursorSequence: nextCursorSequence,
+          ...normalizedCursor,
           lastSeenAtEpochMs: previousCursor?.lastSeenAtEpochMs ?? null,
         };
       });
-      const mergedCursorIds = new Set(cursorsFromSync.map((c) => c.sessionId));
-      const cursorsMissingFromSync = (previousState?.cursors ?? []).filter(
-        (c) => !mergedCursorIds.has(c.sessionId),
+      const mergedCursorIds = new Set(
+        cursorsFromSync.map((c) => participantIdentityKey(c) ?? `session:${c.sessionId}`),
       );
-      const cursors = [...cursorsFromSync, ...cursorsMissingFromSync];
+      const cursorsMissingFromSync = (previousState?.cursors ?? []).filter(
+        (c) =>
+          !mergedCursorIds.has(
+            participantIdentityKey(c) ?? `session:${c.sessionId}`,
+          ),
+      );
+      const cursors = mergeCursorsByIdentity([
+        ...cursorsFromSync,
+        ...cursorsMissingFromSync,
+      ]).filter((cursor) => {
+        const identityKey = participantIdentityKey(cursor);
+        if (!identityKey) return true;
+        return identityKey !== localParticipantIdentityKeyRef.current;
+      });
       const taskScores = normalizeTaskScores(incoming.taskScores);
       const nextTasks = Array.isArray(incoming.tasks)
         ? incoming.tasks
@@ -1021,18 +1055,32 @@ export function RoomPage() {
       const normalizedCursor: CursorInfo = {
         ...incomingCursor,
         role: incomingCursor.role ?? "candidate",
+        userId: normalizeIdentityValue(incomingCursor.userId),
+        participantId: normalizeIdentityValue(incomingCursor.participantId),
         cursorSequence:
           typeof incomingCursor.cursorSequence === "number"
             ? incomingCursor.cursorSequence
             : null,
         lastSeenAtEpochMs: Date.now(),
       };
+      const incomingIdentityKey =
+        participantIdentityKey(normalizedCursor) ??
+        `session:${normalizedCursor.sessionId}`;
+      if (incomingIdentityKey === localParticipantIdentityKeyRef.current) {
+        return previous;
+      }
       const currentCursors = previous.cursors ?? [];
-      const existingIndex = currentCursors.findIndex(
-        (cursor) => cursor.sessionId === normalizedCursor.sessionId,
-      );
+      const existingIndex = currentCursors.findIndex((cursor) => {
+        const existingIdentityKey =
+          participantIdentityKey(cursor) ?? `session:${cursor.sessionId}`;
+        return existingIdentityKey === incomingIdentityKey;
+      });
       if (existingIndex < 0) {
-        return { ...previous, cursors: [...currentCursors, normalizedCursor] };
+        const nextCursors = mergeCursorsByIdentity([
+          ...currentCursors,
+          normalizedCursor,
+        ]);
+        return { ...previous, cursors: nextCursors };
       }
 
       const existing = currentCursors[existingIndex];
@@ -1080,8 +1128,8 @@ export function RoomPage() {
       }
 
       const nextCursors = [...currentCursors];
-      nextCursors[existingIndex] = normalizedCursor;
-      return { ...previous, cursors: nextCursors };
+      nextCursors[existingIndex] = pickPreferredCursor(existing, normalizedCursor);
+      return { ...previous, cursors: mergeCursorsByIdentity(nextCursors) };
     });
   }, []);
 
@@ -1224,8 +1272,24 @@ export function RoomPage() {
   );
 
   const onAwarenessUpdateSocket = useCallback(
-    (payload: { sessionId: string; awarenessUpdate: string }) => {
+    (payload: {
+      sessionId: string;
+      userId?: string | null;
+      participantId?: string | null;
+      awarenessUpdate: string;
+    }) => {
       if (payload.sessionId === sessionIdRef.current) return;
+      const incomingIdentityKey = participantIdentityKey({
+        userId: payload.userId ?? null,
+        participantId: payload.participantId ?? null,
+        sessionId: payload.sessionId,
+      });
+      if (
+        incomingIdentityKey &&
+        incomingIdentityKey === localParticipantIdentityKeyRef.current
+      ) {
+        return;
+      }
       const b64 = payload.awarenessUpdate?.trim() ?? "";
       if (!b64) return;
       if (awarenessApplyRef.current) {
@@ -1245,9 +1309,11 @@ export function RoomPage() {
 
   const fallbackDisplayName = authUser?.displayName?.trim() || "Участник";
   const effectiveDisplayName = displayName.trim() || fallbackDisplayName;
-  const canConnect = Boolean(inviteCode);
+  const canConnect =
+    Boolean(inviteCode) && (Boolean(authToken) || Boolean(displayName.trim()));
   const {
     connected,
+    participantId,
     sessionId,
     sendLanguageUpdate,
     sendSetStep,
@@ -1276,7 +1342,12 @@ export function RoomPage() {
   });
   useEffect(() => {
     sessionIdRef.current = sessionId;
-  }, [sessionId]);
+    localParticipantIdentityKeyRef.current = participantIdentityKey({
+      userId: authUser?.id ?? null,
+      participantId,
+      sessionId,
+    });
+  }, [authUser?.id, participantId, sessionId]);
 
   useEffect(() => {
     stateRef.current = state;
@@ -1491,7 +1562,6 @@ export function RoomPage() {
       setCandidateNameError("Введите имя");
       return;
     }
-    localStorage.setItem("display_name", normalized);
     localStorage.setItem(guestNameKey(inviteCode), normalized);
     setCandidateNameError("");
     setDisplayName(normalized);
@@ -1602,6 +1672,7 @@ export function RoomPage() {
             briefingMarkdown={ownerBriefingValue}
             onBriefingChange={changeBriefingMarkdown}
             sessionId={sessionId}
+            participantId={participantId}
             participantLabel={effectiveDisplayName}
             sendAwarenessUpdate={sendAwarenessUpdate}
             onAwarenessBridgeReady={onAwarenessBridgeReady}
@@ -1635,6 +1706,7 @@ export function RoomPage() {
             stepStarterCode={stepStarterCode}
             briefingMarkdown={candidateBriefingValue}
             sessionId={sessionId}
+            participantId={participantId}
             participantLabel={effectiveDisplayName}
             sendAwarenessUpdate={sendAwarenessUpdate}
             onAwarenessBridgeReady={onAwarenessBridgeReady}
@@ -1855,6 +1927,7 @@ function OwnerLayout({
   briefingMarkdown,
   onBriefingChange,
   sessionId,
+  participantId,
   participantLabel,
   sendAwarenessUpdate,
   onAwarenessBridgeReady,
@@ -1893,6 +1966,7 @@ function OwnerLayout({
   briefingMarkdown: string;
   onBriefingChange: (value: string) => void;
   sessionId: string;
+  participantId: string;
   participantLabel: string;
   sendAwarenessUpdate: (awarenessUpdate: string) => void;
   onAwarenessBridgeReady: (applyFn: ((b64: string) => void) | null) => void;
@@ -2770,6 +2844,7 @@ function OwnerLayout({
                     syncKey={syncKey}
                     readOnly={!editorReady}
                     sessionId={sessionId}
+                    participantId={participantId}
                     participantLabel={participantLabel}
                     sendAwarenessUpdate={sendAwarenessUpdate}
                     onAwarenessBridgeReady={onAwarenessBridgeReady}
@@ -2795,6 +2870,7 @@ function CandidateLayout({
   stepStarterCode,
   briefingMarkdown,
   sessionId,
+  participantId,
   participantLabel,
   sendAwarenessUpdate,
   onAwarenessBridgeReady,
@@ -2812,6 +2888,7 @@ function CandidateLayout({
   stepStarterCode: string;
   briefingMarkdown: string;
   sessionId: string;
+  participantId: string;
   participantLabel: string;
   sendAwarenessUpdate: (awarenessUpdate: string) => void;
   onAwarenessBridgeReady: (applyFn: ((b64: string) => void) | null) => void;
@@ -2877,6 +2954,7 @@ function CandidateLayout({
             syncKey={syncKey}
             readOnly={!editorReady}
             sessionId={sessionId}
+            participantId={participantId}
             participantLabel={participantLabel}
             sendAwarenessUpdate={sendAwarenessUpdate}
             onAwarenessBridgeReady={onAwarenessBridgeReady}
@@ -3165,6 +3243,64 @@ function formatCandidateKeyHistoryTimestamp(event: CandidateKeyInfo): string {
   });
 }
 
+function normalizeIdentityValue(value?: string | null): string | null {
+  const normalized = value?.trim() ?? "";
+  return normalized || null;
+}
+
+function participantIdentityKey(input: {
+  sessionId?: string | null;
+  participantId?: string | null;
+  userId?: string | null;
+}): string | null {
+  const userId = normalizeIdentityValue(input.userId);
+  if (userId) return `user:${userId}`;
+  const participantId = normalizeIdentityValue(input.participantId);
+  if (participantId) return `guest:${participantId}`;
+  const sessionId = normalizeIdentityValue(input.sessionId);
+  if (sessionId) return `session:${sessionId}`;
+  return null;
+}
+
+function pickPreferredCursor(existing: CursorInfo, candidate: CursorInfo): CursorInfo {
+  const existingSequence =
+    typeof existing.cursorSequence === "number" ? existing.cursorSequence : null;
+  const candidateSequence =
+    typeof candidate.cursorSequence === "number" ? candidate.cursorSequence : null;
+  if (existingSequence != null && candidateSequence != null) {
+    if (candidateSequence > existingSequence) return candidate;
+    if (candidateSequence < existingSequence) return existing;
+  } else if (existingSequence == null && candidateSequence != null) {
+    return candidate;
+  } else if (existingSequence != null && candidateSequence == null) {
+    return existing;
+  }
+
+  const existingSeenAt =
+    typeof existing.lastSeenAtEpochMs === "number" ? existing.lastSeenAtEpochMs : 0;
+  const candidateSeenAt =
+    typeof candidate.lastSeenAtEpochMs === "number" ? candidate.lastSeenAtEpochMs : 0;
+  if (candidateSeenAt !== existingSeenAt) {
+    return candidateSeenAt > existingSeenAt ? candidate : existing;
+  }
+
+  return candidate.sessionId > existing.sessionId ? candidate : existing;
+}
+
+function mergeCursorsByIdentity(cursors: CursorInfo[]): CursorInfo[] {
+  const byIdentity = new Map<string, CursorInfo>();
+  cursors.forEach((cursor) => {
+    const identityKey = participantIdentityKey(cursor) ?? `session:${cursor.sessionId}`;
+    const existing = byIdentity.get(identityKey);
+    if (!existing) {
+      byIdentity.set(identityKey, cursor);
+      return;
+    }
+    byIdentity.set(identityKey, pickPreferredCursor(existing, cursor));
+  });
+  return Array.from(byIdentity.values());
+}
+
 function hashSessionId(sessionId: string): number {
   let hash = 0;
   for (let i = 0; i < sessionId.length; i += 1) {
@@ -3194,6 +3330,15 @@ function awarenessUserColors(sessionId: string): {
  */
 function dedupeRemoteAwarenessEntries(awareness: Awareness) {
   const localId = awareness.clientID;
+  const localUser = (awareness.states.get(localId)?.user ?? undefined) as
+    | {
+        sessionId?: string;
+        participantId?: string;
+        userId?: string;
+        name?: string;
+        color?: string;
+      }
+    | undefined;
 
   const clockOf = (clientId: number) =>
     awareness.meta.get(clientId)?.clock ?? 0;
@@ -3226,18 +3371,45 @@ function dedupeRemoteAwarenessEntries(awareness: Awareness) {
     return newId > oldId;
   };
 
+  const awarenessIdentityKey = (
+    user:
+      | {
+          sessionId?: string;
+          participantId?: string;
+          userId?: string;
+          name?: string;
+          color?: string;
+        }
+      | undefined,
+  ): string | null => {
+    if (!user) return null;
+    return (
+      participantIdentityKey({
+        userId: user.userId,
+        participantId: user.participantId,
+        sessionId: user.sessionId,
+      }) ?? `legacy:${String(user.name ?? "")}|${String(user.color ?? "")}`
+    );
+  };
+  const localIdentityKey = awarenessIdentityKey(localUser);
+
   const winnerByKey = new Map<string, number>();
   awareness.states.forEach((_state, clientId) => {
     if (clientId === localId) return;
     const st = awareness.states.get(clientId);
     const u = st?.user as
-      | { sessionId?: string; name?: string; color?: string }
+      | {
+          sessionId?: string;
+          participantId?: string;
+          userId?: string;
+          name?: string;
+          color?: string;
+        }
       | undefined;
     if (!u) return;
-    const key =
-      typeof u.sessionId === "string" && u.sessionId.trim()
-        ? `sid:${u.sessionId.trim()}`
-        : `legacy:${String(u.name ?? "")}|${String(u.color ?? "")}`;
+    const key = awarenessIdentityKey(u);
+    if (!key) return;
+    if (localIdentityKey && key === localIdentityKey) return;
     const prev = winnerByKey.get(key);
     if (prev === undefined || remoteWinsOver(clientId, prev)) {
       winnerByKey.set(key, clientId);
@@ -3249,13 +3421,21 @@ function dedupeRemoteAwarenessEntries(awareness: Awareness) {
     if (clientId === localId) return;
     const st = awareness.states.get(clientId);
     const u = st?.user as
-      | { sessionId?: string; name?: string; color?: string }
+      | {
+          sessionId?: string;
+          participantId?: string;
+          userId?: string;
+          name?: string;
+          color?: string;
+        }
       | undefined;
     if (!u) return;
-    const key =
-      typeof u.sessionId === "string" && u.sessionId.trim()
-        ? `sid:${u.sessionId.trim()}`
-        : `legacy:${String(u.name ?? "")}|${String(u.color ?? "")}`;
+    const key = awarenessIdentityKey(u);
+    if (!key) return;
+    if (localIdentityKey && key === localIdentityKey) {
+      toRemove.add(clientId);
+      return;
+    }
     if (winnerByKey.get(key) !== clientId) {
       toRemove.add(clientId);
     }
@@ -3326,6 +3506,7 @@ function RoomCodeEditor({
   resyncSignal,
   readOnly,
   sessionId,
+  participantId,
   participantLabel,
   sendAwarenessUpdate,
   onAwarenessBridgeReady,
@@ -3344,6 +3525,7 @@ function RoomCodeEditor({
   resyncSignal: number;
   readOnly: boolean;
   sessionId: string;
+  participantId: string;
   participantLabel: string;
   sendAwarenessUpdate: (awarenessUpdate: string) => void;
   onAwarenessBridgeReady: (applyFn: ((b64: string) => void) | null) => void;
@@ -3430,14 +3612,15 @@ function RoomCodeEditor({
     const name = participantLabel.trim() || "Участник";
     if (
       st.user.name === name &&
-      (st.user as { sessionId?: string }).sessionId === sessionId
+      (st.user as { sessionId?: string }).sessionId === sessionId &&
+      (st.user as { participantId?: string }).participantId === participantId
     )
       return;
     awareness.setLocalState({
       ...st,
-      user: { ...st.user, name, sessionId },
+      user: { ...st.user, name, sessionId, participantId },
     });
-  }, [participantLabel, sessionId]);
+  }, [participantId, participantLabel, sessionId]);
 
   const languageExtension = useMemo(() => {
     const normalized = normalizeRoomLanguage(language);
@@ -3515,13 +3698,15 @@ function RoomCodeEditor({
 
     const awareness = new Awareness(yDoc);
     awarenessRef.current = awareness;
-    const { color, colorLight } = awarenessUserColors(sessionId);
+    const colorSeed = participantId.trim() || sessionId;
+    const { color, colorLight } = awarenessUserColors(colorSeed);
     awareness.setLocalState({
       user: {
         name: participantLabel.trim() || "Участник",
         color,
         colorLight,
         sessionId,
+        participantId,
       },
     });
 
