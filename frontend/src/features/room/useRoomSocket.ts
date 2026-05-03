@@ -148,6 +148,8 @@ type ClientMessage =
       syncKey?: string | null;
       code?: string | null;
       yjsClientSequence: number;
+      baseServerYjsSequence?: number | null;
+      operationId: string;
       yjsDocumentBase64?: string | null;
     }
   | { type: "awareness_update"; awarenessUpdate: string }
@@ -860,19 +862,27 @@ export function useRoomSocket({
     yjsUpdate: string,
     syncKey?: string | null,
     codeSnapshot?: string | null,
-    yjsDocumentBase64?: string | null
+    yjsDocumentBase64?: string | null,
+    baseServerYjsSequence?: number | null
   ) => {
+    const normalizedYjsUpdate = yjsUpdate.trim();
     const yjsClientSequence = yjsSequenceRef.current + 1;
     yjsSequenceRef.current = yjsClientSequence;
     persistYjsSequence(inviteCode, yjsClientSequence);
+    const normalizedBaseServerYjsSequence =
+      typeof baseServerYjsSequence === "number" && Number.isFinite(baseServerYjsSequence)
+        ? Math.max(0, Math.floor(baseServerYjsSequence))
+        : null;
     queuePayload({
       type: "yjs_update",
-      yjsUpdate,
+      yjsUpdate: normalizedYjsUpdate,
       syncKey: syncKey ?? null,
       code: codeSnapshot ?? null,
       yjsClientSequence,
+      baseServerYjsSequence: normalizedBaseServerYjsSequence,
+      operationId: `yjs-op-${crypto.randomUUID()}`,
       yjsDocumentBase64: yjsDocumentBase64?.trim() || null
-    }, { dedupeSameType: true });
+    }, { dedupeSameType: normalizedYjsUpdate.length === 0 });
     tryDrainQueueRef.current?.();
   };
 

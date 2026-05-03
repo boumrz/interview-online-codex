@@ -124,6 +124,31 @@ type CandidateKeyInfo = {
   timestampEpochMs: number;
 };
 
+type KeyPressPayload = {
+  key: string;
+  keyCode: string;
+  ctrlKey: boolean;
+  altKey: boolean;
+  shiftKey: boolean;
+  metaKey: boolean;
+};
+
+type YjsUpdateHandler = (
+  yjsUpdate: string,
+  syncKey: string,
+  codeSnapshot?: string | null,
+  yjsDocumentBase64?: string | null,
+  baseServerYjsSequence?: number | null,
+) => void;
+
+type AwarenessUser = {
+  sessionId?: string;
+  participantId?: string;
+  userId?: string;
+  name?: string;
+  color?: string;
+};
+
 type RealtimeState = {
   inviteCode: string;
   language: string;
@@ -805,6 +830,7 @@ export function RoomPage() {
     Array<{ syncKey: string; update: string }>
   >([]);
   const yjsApplyUpdateRef = useRef<((yjsUpdate: string) => void) | null>(null);
+  const lastKnownServerYjsSequenceRef = useRef(0);
   const awarenessApplyRef = useRef<((b64: string) => void) | null>(null);
   /** Awareness may arrive over SSE before RoomCodeEditor registers the applier (same race as yjs). */
   const awarenessPendingRef = useRef<string[]>([]);
@@ -816,6 +842,14 @@ export function RoomPage() {
     yjsPendingUpdatesRef.current = [];
     awarenessPendingRef.current = [];
   }, [currentSyncKey]);
+
+  useEffect(() => {
+    const nextSequence =
+      typeof merged?.lastYjsSequence === "number" && Number.isFinite(merged.lastYjsSequence)
+        ? Math.max(0, Math.floor(merged.lastYjsSequence))
+        : 0;
+    lastKnownServerYjsSequenceRef.current = nextSequence;
+  }, [merged?.lastYjsSequence]);
 
   useEffect(() => {
     return () => {
@@ -985,6 +1019,10 @@ export function RoomPage() {
             ? [incoming.lastCandidateKey]
             : [],
       };
+      lastKnownServerYjsSequenceRef.current =
+        typeof nextState.lastYjsSequence === "number" && Number.isFinite(nextState.lastYjsSequence)
+          ? Math.max(0, Math.floor(nextState.lastYjsSequence))
+          : 0;
       const previousSyncKey = previousState
         ? `${previousState.inviteCode}:${previousState.currentStep}:${previousState.language}`
         : null;
@@ -1375,6 +1413,7 @@ export function RoomPage() {
       syncKey?: string | null,
       codeSnapshot?: string | null,
       yjsDocumentBase64?: string | null,
+      baseServerYjsSequenceHint?: number | null,
     ) => {
       const update = yjsUpdate.trim();
       const docSnap = yjsDocumentBase64?.trim() ?? "";
@@ -1390,12 +1429,28 @@ export function RoomPage() {
           recentLocalYjsUpdatesRef.current.delete(key);
         }
       });
+      const normalizedBaseServerYjsSequenceHint =
+        typeof baseServerYjsSequenceHint === "number" &&
+        Number.isFinite(baseServerYjsSequenceHint)
+          ? Math.max(0, Math.floor(baseServerYjsSequenceHint))
+          : null;
+      let baseServerYjsSequence = lastKnownServerYjsSequenceRef.current;
+      if (
+        normalizedBaseServerYjsSequenceHint != null &&
+        normalizedBaseServerYjsSequenceHint > baseServerYjsSequence
+      ) {
+        baseServerYjsSequence = normalizedBaseServerYjsSequenceHint;
+      }
       sendYjsUpdate(
         update,
         normalizedSyncKey || null,
         codeSnapshot ?? null,
         docSnap || null,
+        baseServerYjsSequence,
       );
+      if (update) {
+        lastKnownServerYjsSequenceRef.current = baseServerYjsSequence + 1;
+      }
     },
     [sendYjsUpdate],
   );
@@ -1403,9 +1458,9 @@ export function RoomPage() {
   const hasRealtimeState = Boolean(state);
   const participantsCount = state?.participants.length ?? 0;
 
-  // Editing must not wait for SSE: readOnly blocked y-codemirror + Yjs until first state_sync.
-  // `readOnly` blocks user input; merged Yjs updates still apply once the editor is mounted.
-  const editorReady = Boolean(merged);
+  // Yjs bootstrap must start from authoritative realtime state to avoid CRDT duplicate inserts
+  // when REST `room.code` races with later state_sync snapshot delivery.
+  const editorReady = Boolean(state);
 
   const submitNoteMessage = useCallback(() => {
     if (!merged || !canManageRoom) return;
@@ -1573,6 +1628,34 @@ export function RoomPage() {
     navigate(`/login?next=${encodeURIComponent(next)}`);
   };
 
+  const forwardLocalYjsUpdate = useCallback<YjsUpdateHandler>(
+    (
+      yjsUpdate,
+      syncKey,
+      codeSnapshot,
+      yjsDocumentBase64,
+      baseServerYjsSequence,
+    ) => {
+      sendYjsUpdateTracked(
+        yjsUpdate,
+        syncKey,
+        codeSnapshot,
+        yjsDocumentBase64,
+        baseServerYjsSequence,
+      );
+    },
+    [sendYjsUpdateTracked],
+  );
+
+  const handleCandidateKeyPress = useCallback(
+    (payload: KeyPressPayload) => {
+      if (merged?.role === "candidate") {
+        sendKeyPress(payload);
+      }
+    },
+    [merged?.role, sendKeyPress],
+  );
+
   if (isLoading || !merged) {
     return (
       <Box className={styles.shell} p="xl">
@@ -1685,16 +1768,10 @@ export function RoomPage() {
             onAddTasksFromCatalog={addTasksFromCatalog}
             onAddCustomTask={addCustomTaskToRoom}
             isAddingTasksFromCatalog={addRoomTasksState.isLoading}
-            onYjsUpdate={(yjsUpdate, syncKey, codeSnapshot, yjsDoc) =>
-              sendYjsUpdateTracked(yjsUpdate, syncKey, codeSnapshot, yjsDoc)
-            }
+            onYjsUpdate={forwardLocalYjsUpdate}
             onYjsBridgeReady={onYjsBridgeReady}
             onEditorValueChange={onEditorValueChange}
-            onKeyPress={(payload) => {
-              if (merged.role === "candidate") {
-                sendKeyPress(payload);
-              }
-            }}
+            onKeyPress={handleCandidateKeyPress}
             onTaskRatingChange={(rating) =>
               sendTaskRatingUpdate(merged.currentStep, rating)
             }
@@ -1713,16 +1790,10 @@ export function RoomPage() {
             syncKey={currentSyncKey}
             resyncSignal={resyncSignal}
             editorReady={editorReady}
-            onYjsUpdate={(yjsUpdate, syncKey, codeSnapshot, yjsDoc) =>
-              sendYjsUpdateTracked(yjsUpdate, syncKey, codeSnapshot, yjsDoc)
-            }
+            onYjsUpdate={forwardLocalYjsUpdate}
             onYjsBridgeReady={onYjsBridgeReady}
             onEditorValueChange={onEditorValueChange}
-            onKeyPress={(payload) => {
-              if (merged.role === "candidate") {
-                sendKeyPress(payload);
-              }
-            }}
+            onKeyPress={handleCandidateKeyPress}
             error={error}
           />
         )}
@@ -1979,22 +2050,10 @@ function OwnerLayout({
   onAddTasksFromCatalog: (taskIds: string[]) => Promise<void>;
   onAddCustomTask: (task: RoomCustomTaskDraft) => Promise<void>;
   isAddingTasksFromCatalog: boolean;
-  onYjsUpdate: (
-    yjsUpdate: string,
-    syncKey: string,
-    codeSnapshot?: string | null,
-    yjsDocumentBase64?: string | null,
-  ) => void;
+  onYjsUpdate: YjsUpdateHandler;
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
   onEditorValueChange: (value: string) => void;
-  onKeyPress: (payload: {
-    key: string;
-    keyCode: string;
-    ctrlKey: boolean;
-    altKey: boolean;
-    shiftKey: boolean;
-    metaKey: boolean;
-  }) => void;
+  onKeyPress: (payload: KeyPressPayload) => void;
   onTaskRatingChange: (rating: number | null) => void;
 }) {
   const isCompactLayout = useIsCompactRoomLayout(760);
@@ -2825,36 +2884,23 @@ function OwnerLayout({
                 value={briefingMarkdown}
                 onChange={onBriefingChange}
               />
-              <Box className={styles.editorPanel}>
-                <div className={styles.editorWrap}>
-                  <RoomCodeEditor
-                    key={syncKey}
-                    height="100%"
-                    language={toEditorLanguage(merged.language)}
-                    value={
-                      merged.code ||
-                      (merged.lastCodeUpdatedBySessionId ? "" : stepStarterCode)
-                    }
-                    serverYjsBase64={merged.yjsDocumentBase64 ?? null}
-                    serverYjsSequence={merged.lastYjsSequence ?? 0}
-                    lastCodeUpdatedBySessionId={
-                      merged.lastCodeUpdatedBySessionId ?? null
-                    }
-                    resyncSignal={resyncSignal}
-                    syncKey={syncKey}
-                    readOnly={!editorReady}
-                    sessionId={sessionId}
-                    participantId={participantId}
-                    participantLabel={participantLabel}
-                    sendAwarenessUpdate={sendAwarenessUpdate}
-                    onAwarenessBridgeReady={onAwarenessBridgeReady}
-                    onYjsUpdate={onYjsUpdate}
-                    onYjsBridgeReady={onYjsBridgeReady}
-                    onEditorValueChange={onEditorValueChange}
-                    onKeyPress={onKeyPress}
-                  />
-                </div>
-              </Box>
+              <SharedRoomEditorPanel
+                merged={merged}
+                stepStarterCode={stepStarterCode}
+                editorReady={editorReady}
+                syncKey={syncKey}
+                resyncSignal={resyncSignal}
+                sessionId={sessionId}
+                participantId={participantId}
+                participantLabel={participantLabel}
+                sendAwarenessUpdate={sendAwarenessUpdate}
+                onAwarenessBridgeReady={onAwarenessBridgeReady}
+                onYjsUpdate={onYjsUpdate}
+                onYjsBridgeReady={onYjsBridgeReady}
+                onEditorValueChange={onEditorValueChange}
+                onKeyPress={onKeyPress}
+                panelClassName={styles.editorPanel}
+              />
               {error && <Text className={styles.error}>{error}</Text>}
             </Box>
           </Box>
@@ -2895,22 +2941,10 @@ function CandidateLayout({
   syncKey: string;
   resyncSignal: number;
   editorReady: boolean;
-  onYjsUpdate: (
-    yjsUpdate: string,
-    syncKey: string,
-    codeSnapshot?: string | null,
-    yjsDocumentBase64?: string | null,
-  ) => void;
+  onYjsUpdate: YjsUpdateHandler;
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
   onEditorValueChange: (value: string) => void;
-  onKeyPress: (payload: {
-    key: string;
-    keyCode: string;
-    ctrlKey: boolean;
-    altKey: boolean;
-    shiftKey: boolean;
-    metaKey: boolean;
-  }) => void;
+  onKeyPress: (payload: KeyPressPayload) => void;
   error: string;
 }) {
   return (
@@ -2937,15 +2971,72 @@ function CandidateLayout({
         value={briefingMarkdown}
       />
 
-      <Box className={styles.candidatePanel}>
-        <div className={styles.editorWrap}>
+      <SharedRoomEditorPanel
+        merged={merged}
+        stepStarterCode={stepStarterCode}
+        editorReady={editorReady}
+        syncKey={syncKey}
+        resyncSignal={resyncSignal}
+        sessionId={sessionId}
+        participantId={participantId}
+        participantLabel={participantLabel}
+        sendAwarenessUpdate={sendAwarenessUpdate}
+        onAwarenessBridgeReady={onAwarenessBridgeReady}
+        onYjsUpdate={onYjsUpdate}
+        onYjsBridgeReady={onYjsBridgeReady}
+        onEditorValueChange={onEditorValueChange}
+        onKeyPress={onKeyPress}
+        panelClassName={styles.candidatePanel}
+      />
+
+      {error && <Text className={styles.error}>{error}</Text>}
+    </Box>
+  );
+}
+
+function SharedRoomEditorPanel({
+  merged,
+  stepStarterCode,
+  editorReady,
+  syncKey,
+  resyncSignal,
+  sessionId,
+  participantId,
+  participantLabel,
+  sendAwarenessUpdate,
+  onAwarenessBridgeReady,
+  onYjsUpdate,
+  onYjsBridgeReady,
+  onEditorValueChange,
+  onKeyPress,
+  panelClassName,
+}: {
+  merged: RealtimeState;
+  stepStarterCode: string;
+  editorReady: boolean;
+  syncKey: string;
+  resyncSignal: number;
+  sessionId: string;
+  participantId: string;
+  participantLabel: string;
+  sendAwarenessUpdate: (awarenessUpdate: string) => void;
+  onAwarenessBridgeReady: (applyFn: ((b64: string) => void) | null) => void;
+  onYjsUpdate: YjsUpdateHandler;
+  onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
+  onEditorValueChange: (value: string) => void;
+  onKeyPress: (payload: KeyPressPayload) => void;
+  panelClassName: string;
+}) {
+  return (
+    <Box className={panelClassName}>
+      <div className={styles.editorWrap}>
+        {editorReady ? (
           <RoomCodeEditor
             key={syncKey}
             height="100%"
             language={toEditorLanguage(merged.language)}
             value={
-              merged.code ||
-              (merged.lastCodeUpdatedBySessionId ? "" : stepStarterCode)
+              merged.code || (merged.lastCodeUpdatedBySessionId ? "" : stepStarterCode)
             }
             serverYjsBase64={merged.yjsDocumentBase64 ?? null}
             serverYjsSequence={merged.lastYjsSequence ?? 0}
@@ -2963,10 +3054,21 @@ function CandidateLayout({
             onEditorValueChange={onEditorValueChange}
             onKeyPress={onKeyPress}
           />
-        </div>
-      </Box>
-
-      {error && <Text className={styles.error}>{error}</Text>}
+        ) : (
+          <Box
+            data-testid="room-code-editor-pending"
+            style={{
+              height: "100%",
+              display: "grid",
+              placeItems: "center",
+              color: "#8b919b",
+              fontSize: 13,
+            }}
+          >
+            Синхронизация редактора...
+          </Box>
+        )}
+      </div>
     </Box>
   );
 }
@@ -3372,15 +3474,7 @@ function dedupeRemoteAwarenessEntries(awareness: Awareness) {
   };
 
   const awarenessIdentityKey = (
-    user:
-      | {
-          sessionId?: string;
-          participantId?: string;
-          userId?: string;
-          name?: string;
-          color?: string;
-        }
-      | undefined,
+    user: AwarenessUser | undefined,
   ): string | null => {
     if (!user) return null;
     return (
@@ -3392,23 +3486,22 @@ function dedupeRemoteAwarenessEntries(awareness: Awareness) {
     );
   };
   const localIdentityKey = awarenessIdentityKey(localUser);
+  const forEachRemoteAwarenessUser = (
+    visitor: (clientId: number, key: string) => void,
+  ) => {
+    awareness.states.forEach((_state, clientId) => {
+      if (clientId === localId) return;
+      const st = awareness.states.get(clientId);
+      const user = st?.user as AwarenessUser | undefined;
+      if (!user) return;
+      const key = awarenessIdentityKey(user);
+      if (!key) return;
+      visitor(clientId, key);
+    });
+  };
 
   const winnerByKey = new Map<string, number>();
-  awareness.states.forEach((_state, clientId) => {
-    if (clientId === localId) return;
-    const st = awareness.states.get(clientId);
-    const u = st?.user as
-      | {
-          sessionId?: string;
-          participantId?: string;
-          userId?: string;
-          name?: string;
-          color?: string;
-        }
-      | undefined;
-    if (!u) return;
-    const key = awarenessIdentityKey(u);
-    if (!key) return;
+  forEachRemoteAwarenessUser((clientId, key) => {
     if (localIdentityKey && key === localIdentityKey) return;
     const prev = winnerByKey.get(key);
     if (prev === undefined || remoteWinsOver(clientId, prev)) {
@@ -3417,21 +3510,7 @@ function dedupeRemoteAwarenessEntries(awareness: Awareness) {
   });
 
   const toRemove = new Set<number>();
-  awareness.states.forEach((_state, clientId) => {
-    if (clientId === localId) return;
-    const st = awareness.states.get(clientId);
-    const u = st?.user as
-      | {
-          sessionId?: string;
-          participantId?: string;
-          userId?: string;
-          name?: string;
-          color?: string;
-        }
-      | undefined;
-    if (!u) return;
-    const key = awarenessIdentityKey(u);
-    if (!key) return;
+  forEachRemoteAwarenessUser((clientId, key) => {
     if (localIdentityKey && key === localIdentityKey) {
       toRemove.add(clientId);
       return;
@@ -3529,22 +3608,10 @@ function RoomCodeEditor({
   participantLabel: string;
   sendAwarenessUpdate: (awarenessUpdate: string) => void;
   onAwarenessBridgeReady: (applyFn: ((b64: string) => void) | null) => void;
-  onYjsUpdate: (
-    yjsUpdate: string,
-    syncKey: string,
-    codeSnapshot?: string | null,
-    yjsDocumentBase64?: string | null,
-  ) => void;
+  onYjsUpdate: YjsUpdateHandler;
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
   onEditorValueChange: (value: string) => void;
-  onKeyPress: (payload: {
-    key: string;
-    keyCode: string;
-    ctrlKey: boolean;
-    altKey: boolean;
-    shiftKey: boolean;
-    metaKey: boolean;
-  }) => void;
+  onKeyPress: (payload: KeyPressPayload) => void;
 }) {
   type CmHostElement = HTMLDivElement & {
     __roomEditorView?: EditorView | null;
@@ -3563,6 +3630,7 @@ function RoomCodeEditor({
   const lastAppliedServerYjsSeqRef = useRef(-1);
   const lastAppliedServerYjsSnapRef = useRef<string | null>(null);
   const lastSyncKeyForServerSeqRef = useRef(syncKey);
+  const latestServerYjsSequenceRef = useRef(0);
   const sendAwarenessUpdateRef = useRef(sendAwarenessUpdate);
   const awarenessRef = useRef<Awareness | null>(null);
 
@@ -3603,6 +3671,13 @@ function RoomCodeEditor({
     onEditorValueChangeRef.current = onEditorValueChange;
     onKeyPressRef.current = onKeyPress;
   }, [onEditorValueChange, onKeyPress, onYjsUpdate]);
+
+  useEffect(() => {
+    latestServerYjsSequenceRef.current =
+      typeof serverYjsSequence === "number" && Number.isFinite(serverYjsSequence)
+        ? Math.max(0, Math.floor(serverYjsSequence))
+        : 0;
+  }, [serverYjsSequence]);
 
   useEffect(() => {
     const awareness = awarenessRef.current;
@@ -3654,9 +3729,11 @@ function RoomCodeEditor({
     const languageCompartment = languageCompartmentRef.current;
     const targetCode = value ?? "";
     const snap = serverYjsBase64?.trim();
-    const hasRemoteHistoryBeforeSnapshot =
-      typeof lastCodeUpdatedBySessionId === "string" &&
-      lastCodeUpdatedBySessionId.trim().length > 0;
+    const normalizedServerYjsSequence =
+      typeof serverYjsSequence === "number" && Number.isFinite(serverYjsSequence)
+        ? Math.max(0, Math.floor(serverYjsSequence))
+        : 0;
+    const hasExistingServerYjsState = normalizedServerYjsSequence > 0;
     let yDoc = new Y.Doc();
     let bootstrappedFromSnapshot = false;
     if (snap) {
@@ -3670,7 +3747,7 @@ function RoomCodeEditor({
         /* invalid snapshot */
       }
     }
-    if (!bootstrappedFromSnapshot && !hasRemoteHistoryBeforeSnapshot) {
+    if (!bootstrappedFromSnapshot && !hasExistingServerYjsState) {
       Y.applyUpdate(
         yDoc,
         createDeterministicBootstrapUpdate(targetCode),
@@ -3682,7 +3759,7 @@ function RoomCodeEditor({
     if (
       yText.toString() !== targetCode &&
       !snap &&
-      !hasRemoteHistoryBeforeSnapshot
+      !hasExistingServerYjsState
     ) {
       yDoc.destroy();
       yDoc = new Y.Doc();
@@ -3810,17 +3887,28 @@ function RoomCodeEditor({
         syncKeyRef.current,
         yText.toString(),
         fullDoc,
+        latestServerYjsSequenceRef.current,
       );
     };
     yDoc.on("update", handleDocUpdate);
 
-    // Idle tabs still refresh the server snapshot so a reloaded peer does not bootstrap from stale CRDT state.
-    const heartbeatId = window.setInterval(() => {
+    const emitFullSnapshot = () => {
       const d = yDocRef.current;
       const t = yTextRef.current;
       if (!d || !t) return;
       const full = bytesToBase64(Y.encodeStateAsUpdate(d));
-      onYjsUpdateRef.current("", syncKeyRef.current, t.toString(), full);
+      onYjsUpdateRef.current(
+        "",
+        syncKeyRef.current,
+        t.toString(),
+        full,
+        latestServerYjsSequenceRef.current,
+      );
+    };
+
+    // Idle tabs still refresh the server snapshot so a reloaded peer does not bootstrap from stale CRDT state.
+    const heartbeatId = window.setInterval(() => {
+      emitFullSnapshot();
     }, 2500);
 
     onYjsBridgeReady((encodedYjsUpdate: string) => {
@@ -3832,11 +3920,7 @@ function RoomCodeEditor({
     });
 
     const snapshotTimerId = window.setTimeout(() => {
-      const d = yDocRef.current;
-      const t = yTextRef.current;
-      if (!d || !t) return;
-      const full = bytesToBase64(Y.encodeStateAsUpdate(d));
-      onYjsUpdateRef.current("", syncKeyRef.current, t.toString(), full);
+      emitFullSnapshot();
     }, 400);
 
     return () => {
@@ -3914,10 +3998,13 @@ function RoomCodeEditor({
     const t = activeDoc.getText("room-code");
     const next = value ?? "";
     const snap = serverYjsBase64?.trim() ?? "";
+    const normalizedServerYjsSequence =
+      typeof serverYjsSequence === "number" && Number.isFinite(serverYjsSequence)
+        ? Math.max(0, Math.floor(serverYjsSequence))
+        : 0;
     const hasRemoteHistoryWithoutSnapshot =
       !snap &&
-      typeof lastCodeUpdatedBySessionId === "string" &&
-      lastCodeUpdatedBySessionId.trim().length > 0;
+      normalizedServerYjsSequence > 0;
 
     roomSyncLog("hydrate_from_server", {
       syncKeyChanged,
@@ -3951,9 +4038,9 @@ function RoomCodeEditor({
     bumpLocalAwarenessAfterRemoteDocChange();
   }, [
     bumpLocalAwarenessAfterRemoteDocChange,
-    lastCodeUpdatedBySessionId,
     resyncSignal,
     serverYjsBase64,
+    serverYjsSequence,
     syncKey,
     value,
   ]);

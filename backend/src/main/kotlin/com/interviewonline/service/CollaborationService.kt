@@ -48,6 +48,9 @@ class CollaborationService(
     private val notesHistoryLimit = 500
     private val maxYjsDocumentBase64Chars = 400_000
     private val maxAwarenessUpdateBase64Chars = 24_000
+    private val appliedOperationIdTtlMillis = 15 * 60_000L
+    private val appliedOperationIdCacheMaxSize = 20_000
+    private val yjsSequenceAuthorHistoryLimit = 4_096L
 
     private enum class PresenceStatus(val wireValue: String) {
         ACTIVE("active"),
@@ -87,6 +90,7 @@ class CollaborationService(
         var lastCodeUpdatedBySessionId: String? = null,
         var yjsDocumentBase64: String? = null,
         var lastYjsSequence: Long = 0,
+        var lastIncrementalYjsSessionId: String? = null,
         var currentStep: Int,
         var notes: String,
         val notesMessages: MutableList<NoteMessagePayload> = mutableListOf(),
@@ -101,6 +105,8 @@ class CollaborationService(
         val lastCodeSequenceBySessionId: MutableMap<String, Long> = ConcurrentHashMap(),
         val lastYjsSnapshotSequenceBySessionId: MutableMap<String, Long> = ConcurrentHashMap(),
         val lastClientEventSequenceBySessionId: MutableMap<String, Long> = ConcurrentHashMap(),
+        val appliedOperationIds: MutableMap<String, Long> = ConcurrentHashMap(),
+        val yjsSequenceAuthorBySequence: MutableMap<Long, String> = ConcurrentHashMap(),
         val grantedRoleBySessionId: MutableMap<String, RoomAccessService.RoomRole> = ConcurrentHashMap(),
         var lastCandidateKey: CandidateKeyPayload? = null,
         val candidateKeyHistory: MutableList<CandidateKeyPayload> = mutableListOf(),
@@ -260,6 +266,15 @@ class CollaborationService(
         }
         val participant = participants[connectionId] ?: return
         val state = roomState[participant.inviteCode] ?: return
+        if (request.type == "yjs_update" && !markOperationApplied(state, request.operationId)) {
+            logger.debug(
+                "Skipping duplicate realtime operation for room {} session {} operationId={}",
+                participant.inviteCode,
+                participant.sessionId,
+                request.operationId,
+            )
+            return
+        }
         if (requiresEventToken) {
             val clientEventSequence = request.clientEventSequence
             if (clientEventSequence != null) {
@@ -312,6 +327,7 @@ class CollaborationService(
                 syncKey = request.syncKey,
                 codeSnapshot = request.code,
                 yjsClientSequence = request.yjsClientSequence,
+                baseServerYjsSequence = request.baseServerYjsSequence,
                 yjsDocumentBase64 = request.yjsDocumentBase64,
             )
             "request_state_sync" -> sendStateToConnection(connectionId)
@@ -421,6 +437,7 @@ class CollaborationService(
         syncKey: String?,
         codeSnapshot: String?,
         yjsClientSequence: Long?,
+        baseServerYjsSequence: Long?,
         yjsDocumentBase64: String?,
     ) {
         val participant = participants[connectionId] ?: return
@@ -429,6 +446,7 @@ class CollaborationService(
         val trimmedDocCandidate = yjsDocumentBase64?.trim().orEmpty()
         val safeDocSnap =
             if (trimmedDocCandidate.isNotEmpty() && trimmedDocCandidate.length <= maxYjsDocumentBase64Chars) trimmedDocCandidate else null
+        val normalizedBaseServerYjsSequence = baseServerYjsSequence?.coerceAtLeast(0)
 
         if (isHeartbeatOnlyYjsUpdate(yjsUpdate) && safeDocSnap == null) {
             logger.debug(
@@ -485,6 +503,31 @@ class CollaborationService(
             if (safeDocSnap == null) return
             val acceptedCodeSnapshot = synchronized(state) {
                 if (resolveOutboundSyncKey() == null) return
+                val currentSequence = state.lastYjsSequence
+                val canSessionPublishSnapshotOnly =
+                    currentSequence == 0L || state.lastIncrementalYjsSessionId == participant.sessionId
+                if (!canSessionPublishSnapshotOnly) {
+                    logger.debug(
+                        "Rejecting snapshot-only yjs payload from non-authoritative session for room {} session {}: currentSequence={} lastIncrementalSession={}",
+                        participant.inviteCode,
+                        participant.sessionId,
+                        currentSequence,
+                        state.lastIncrementalYjsSessionId,
+                    )
+                    return
+                }
+                val canApplySnapshot =
+                    normalizedBaseServerYjsSequence != null && normalizedBaseServerYjsSequence >= currentSequence
+                if (!canApplySnapshot) {
+                    logger.debug(
+                        "Rejecting stale Yjs snapshot-only payload for room {} session {}: baseServerYjsSequence={} < current={}",
+                        participant.inviteCode,
+                        participant.sessionId,
+                        normalizedBaseServerYjsSequence,
+                        currentSequence,
+                    )
+                    return
+                }
                 state.yjsDocumentBase64 = safeDocSnap
                 tryApplyCodeSnapshot()
             }
@@ -496,20 +539,49 @@ class CollaborationService(
         }
 
         var acceptedCodeSnapshot: String? = null
+        var shouldBroadcastStateFromYjs = safeDocSnap == null
         synchronized(state) {
             if (resolveOutboundSyncKey() == null) return
             if (safeDocSnap != null) {
-                state.yjsDocumentBase64 = safeDocSnap
-                acceptedCodeSnapshot = tryApplyCodeSnapshot()
+                val currentSequence = state.lastYjsSequence
+                val canApplySnapshot =
+                    normalizedBaseServerYjsSequence != null &&
+                        (
+                            normalizedBaseServerYjsSequence >= currentSequence ||
+                                canAcceptStaleSnapshotForLocalOnlyGap(
+                                    state = state,
+                                    baseServerYjsSequence = normalizedBaseServerYjsSequence,
+                                    currentServerYjsSequence = currentSequence,
+                                    sessionId = participant.sessionId,
+                                )
+                            )
+                if (canApplySnapshot) {
+                    state.yjsDocumentBase64 = safeDocSnap
+                    acceptedCodeSnapshot = tryApplyCodeSnapshot()
+                    shouldBroadcastStateFromYjs = true
+                } else {
+                    logger.debug(
+                        "Rejecting stale Yjs full snapshot for room {} session {}: baseServerYjsSequence={} < current={}",
+                        participant.inviteCode,
+                        participant.sessionId,
+                        normalizedBaseServerYjsSequence,
+                        currentSequence,
+                    )
+                }
             }
             state.lastYjsSequence += 1
+            state.lastIncrementalYjsSessionId = participant.sessionId
+            state.yjsSequenceAuthorBySequence[state.lastYjsSequence] = participant.sessionId
+            pruneYjsSequenceAuthorHistory(state, state.lastYjsSequence)
         }
 
         if (acceptedCodeSnapshot != null) {
             scheduleDebouncedRoomCodeSave(participant.inviteCode, acceptedCodeSnapshot!!)
         }
 
-        scheduleStateBroadcastFromYjs(participant.inviteCode)
+        if (shouldBroadcastStateFromYjs) {
+            scheduleStateBroadcastFromYjs(participant.inviteCode)
+        }
 
         val outboundSyncKey = resolveOutboundSyncKey() ?: return
         broadcastTransportMessage(
@@ -1230,6 +1302,7 @@ class CollaborationService(
             lastCodeUpdatedBySessionId = null,
             yjsDocumentBase64 = null,
             lastYjsSequence = 0,
+            lastIncrementalYjsSessionId = null,
             currentStep = room.currentStep,
             notes = room.notes.orEmpty(),
             notesMessages = currentState?.notesMessages?.toMutableList()
@@ -1306,10 +1379,6 @@ class CollaborationService(
             connectionByRoomSession.remove(roomSessionKey(participant.inviteCode, participant.sessionId), connectionId)
             roomState[participant.inviteCode]?.let { state ->
                 state.cursorsBySessionId.remove(participant.sessionId)
-                state.lastCursorSequenceBySessionId.remove(participant.sessionId)
-                state.lastCodeSequenceBySessionId.remove(participant.sessionId)
-                state.lastYjsSnapshotSequenceBySessionId.remove(participant.sessionId)
-                state.lastClientEventSequenceBySessionId.remove(participant.sessionId)
             }
         }
 
@@ -1339,6 +1408,71 @@ class CollaborationService(
 
     private fun sseConnectionId(sessionId: String): String {
         return "sse:$sessionId:${UUID.randomUUID()}"
+    }
+
+    private fun markOperationApplied(state: RealtimeState, operationIdRaw: String?): Boolean {
+        val operationId = operationIdRaw?.trim().orEmpty()
+        if (operationId.isEmpty()) return true
+
+        val now = Instant.now().toEpochMilli()
+        val staleBefore = now - appliedOperationIdTtlMillis
+        synchronized(state) {
+            if (state.appliedOperationIds.containsKey(operationId)) {
+                return false
+            }
+
+            if (state.appliedOperationIds.isNotEmpty()) {
+                val staleIds = state.appliedOperationIds.entries
+                    .asSequence()
+                    .filter { it.value < staleBefore }
+                    .map { it.key }
+                    .toList()
+                staleIds.forEach { staleId ->
+                    state.appliedOperationIds.remove(staleId)
+                }
+            }
+
+            state.appliedOperationIds[operationId] = now
+            val overflow = state.appliedOperationIds.size - appliedOperationIdCacheMaxSize
+            if (overflow > 0) {
+                val oldestIds = state.appliedOperationIds.entries
+                    .sortedBy { it.value }
+                    .take(overflow)
+                    .map { it.key }
+                oldestIds.forEach { staleId ->
+                    state.appliedOperationIds.remove(staleId)
+                }
+            }
+        }
+        return true
+    }
+
+    private fun canAcceptStaleSnapshotForLocalOnlyGap(
+        state: RealtimeState,
+        baseServerYjsSequence: Long,
+        currentServerYjsSequence: Long,
+        sessionId: String,
+    ): Boolean {
+        if (baseServerYjsSequence >= currentServerYjsSequence) return true
+        if (baseServerYjsSequence < 0) return false
+        var sequence = baseServerYjsSequence + 1
+        while (sequence <= currentServerYjsSequence) {
+            val authorSessionId = state.yjsSequenceAuthorBySequence[sequence] ?: return false
+            if (authorSessionId != sessionId) return false
+            sequence += 1
+        }
+        return true
+    }
+
+    private fun pruneYjsSequenceAuthorHistory(state: RealtimeState, currentServerYjsSequence: Long) {
+        val minSequenceToKeep = (currentServerYjsSequence - yjsSequenceAuthorHistoryLimit).coerceAtLeast(0)
+        if (state.yjsSequenceAuthorBySequence.isEmpty()) return
+        val staleSequences = state.yjsSequenceAuthorBySequence.keys
+            .filter { it < minSequenceToKeep }
+        if (staleSequences.isEmpty()) return
+        staleSequences.forEach { staleSequence ->
+            state.yjsSequenceAuthorBySequence.remove(staleSequence)
+        }
     }
 
     private fun normalizeParticipantId(participantId: String?): String? {
@@ -1608,6 +1742,7 @@ class CollaborationService(
             lastCodeUpdatedBySessionId = null,
             yjsDocumentBase64 = null,
             lastYjsSequence = 0,
+            lastIncrementalYjsSessionId = null,
             currentStep = room.currentStep,
             notes = notes,
             notesMessages = parseNotesMessages(room.interviewerChat, notes),

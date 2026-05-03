@@ -24,8 +24,10 @@
     "e2e:cursor": "node e2e-cursor-no-dot.mjs",
     "e2e:markdown": "node e2e-markdown-explainer-smoke.mjs",
     "e2e:yjs-multi": "node e2e-yjs-multi-participant-sync.mjs",
+    "e2e:yjs-refresh-api": "node e2e-yjs-refresh-stale-snapshot-api.mjs",
+    "e2e:yjs-abc-refresh-join": "node e2e-yjs-abc-refresh-join-api.mjs",
     "e2e:join-race": "node e2e-join-race-sync.mjs",
-    "e2e:all": "npm run e2e:smoke && npm run e2e:dashboard && npm run e2e:dashboard-redesign && npm run e2e:auth && npm run e2e:candidate-modal && npm run e2e:room && npm run e2e:roles && npm run e2e:account-binding && npm run e2e:account-switch && npm run e2e:markdown && npm run e2e:presence && npm run e2e:sse-reconnect && npm run e2e:refresh-sync && npm run e2e:join-race && npm run e2e:cursor && npm run e2e:code-sync && npm run e2e:yjs-multi && npm run e2e:hidden-tab",
+    "e2e:all": "npm run e2e:smoke && npm run e2e:dashboard && npm run e2e:dashboard-redesign && npm run e2e:auth && npm run e2e:candidate-modal && npm run e2e:room && npm run e2e:roles && npm run e2e:account-binding && npm run e2e:account-switch && npm run e2e:markdown && npm run e2e:presence && npm run e2e:sse-reconnect && npm run e2e:refresh-sync && npm run e2e:yjs-abc-refresh-join && npm run e2e:join-race && npm run e2e:cursor && npm run e2e:code-sync && npm run e2e:yjs-multi && npm run e2e:hidden-tab",
     "e2e:dashboard-redesign": "node e2e-dashboard-redesign.mjs",
     "chaos:test": "node e2e-chaos-harness.mjs",
     "chaos:faults": "node e2e-chaos-fault-injection.mjs"

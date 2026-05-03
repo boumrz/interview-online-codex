@@ -148,7 +148,11 @@ async function registerAndCreateRoom() {
 
 async function joinAsCandidate(page) {
   const modal = page.locator("[role='dialog']");
-  const hasVisibleModal = await modal.first().isVisible().catch(() => false);
+  const hasVisibleModal = await modal
+    .first()
+    .waitFor({ state: "visible", timeout: 2500 })
+    .then(() => true)
+    .catch(() => false);
   if (!hasVisibleModal) return;
   await modal.locator("input").first().fill("Candidate Refresh");
   await modal.locator("button").first().click();
