@@ -88,13 +88,6 @@ export type AdminUser = {
   createdAt: string;
 };
 
-export type RunCodeResponse = {
-  stdout: string;
-  stderr: string;
-  exitCode: number;
-  timedOut: boolean;
-};
-
 export type AgentArtifact = {
   id: string;
   type: string;

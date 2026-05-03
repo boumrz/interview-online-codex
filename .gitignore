@@ -40,6 +40,10 @@ coverage/
 playwright-report/
 test-results/
 
+# Load/performance artifacts and ad-hoc load scripts
+artifacts/
+runner/load-tests/
+
 # Local debug tooling output
 .playwright-cli/
 

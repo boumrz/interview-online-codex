@@ -9,7 +9,6 @@ const SUPPORTED_EXTENSIONS = new Set([
   ".html",
   ".svg",
   ".json",
-  ".map",
   ".txt",
   ".xml",
   ".wasm"
@@ -41,6 +40,12 @@ async function writeCompressedVariant(targetPath, bytes) {
   return bytes.length;
 }
 
+async function removePreviousCompressedArtifacts(files) {
+  await Promise.all(
+    files.flatMap((file) => [`${file}.gz`, `${file}.br`]).map((targetPath) => fs.rm(targetPath, { force: true }))
+  );
+}
+
 async function run() {
   const stat = await fs.stat(DIST_DIR).catch(() => null);
   if (!stat || !stat.isDirectory()) {
@@ -50,6 +55,8 @@ async function run() {
   }
 
   const files = await collectFiles(DIST_DIR);
+  await removePreviousCompressedArtifacts(files);
+
   const candidates = files.filter((file) => {
     if (file.endsWith(".br") || file.endsWith(".gz")) return false;
     const ext = path.extname(file).toLowerCase();

@@ -1,12 +1,13 @@
-import React, { useEffect } from "react";
+import React, { Suspense, lazy, useEffect } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "./hooks";
 import { clearAuth, setCurrentUser } from "../features/auth/authSlice";
-import { LandingPage } from "../pages/LandingPage";
-import { RoomPage } from "../pages/RoomPage";
-import { LoginPage } from "../pages/LoginPage";
-import { DashboardPage } from "../pages/DashboardPage";
 import { api, useMeProfileQuery } from "../services/api";
+
+const LandingPage = lazy(() => import("../pages/LandingPage").then((module) => ({ default: module.LandingPage })));
+const LoginPage = lazy(() => import("../pages/LoginPage").then((module) => ({ default: module.LoginPage })));
+const DashboardPage = lazy(() => import("../pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
+const RoomPage = lazy(() => import("../pages/RoomPage").then((module) => ({ default: module.RoomPage })));
 
 function AuthSessionSync() {
   const dispatch = useAppDispatch();
@@ -37,14 +38,16 @@ export function App() {
   return (
     <>
       <AuthSessionSync />
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/dashboard" element={<Navigate to="/dashboard/rooms" replace />} />
-        <Route path="/dashboard/:section" element={<DashboardPage />} />
-        <Route path="/room/:inviteCode" element={<RoomPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <Suspense fallback={<div style={{ padding: "24px" }}>Loading...</div>}>
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/dashboard" element={<Navigate to="/dashboard/rooms" replace />} />
+          <Route path="/dashboard/:section" element={<DashboardPage />} />
+          <Route path="/room/:inviteCode" element={<RoomPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </>
   );
 }

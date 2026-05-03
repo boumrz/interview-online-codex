@@ -3,13 +3,18 @@ import rspack from "@rspack/core";
 import path from "node:path";
 
 const isBuildCommand = process.argv.includes("build");
+const isProduction = isBuildCommand;
 
 export default defineConfig({
-  mode: isBuildCommand ? "production" : "development",
+  mode: isProduction ? "production" : "development",
   entry: "./src/main.tsx",
+  devtool: isProduction ? false : "cheap-module-source-map",
   output: {
     path: path.resolve(process.cwd(), "dist"),
-    publicPath: "/"
+    publicPath: "/",
+    clean: true,
+    filename: isProduction ? "[name].[contenthash:8].js" : "[name].js",
+    chunkFilename: isProduction ? "[name].[contenthash:8].chunk.js" : "[name].chunk.js"
   },
   devServer: {
     port: 5173,
@@ -58,6 +63,14 @@ export default defineConfig({
       }
     ]
   },
+  optimization: isProduction
+    ? {
+      splitChunks: {
+        chunks: "all"
+      },
+      runtimeChunk: "single"
+    }
+    : undefined,
   plugins: [
     new rspack.DefinePlugin({
       __FEATURE_AGENT_OPS__: JSON.stringify(process.env.FEATURE_AGENT_OPS ?? "false"),
@@ -78,6 +91,13 @@ export default defineConfig({
         }
       ]
     }),
-    new rspack.CssExtractRspackPlugin()
+    new rspack.CssExtractRspackPlugin(
+      isProduction
+        ? {
+          filename: "[name].[contenthash:8].css",
+          chunkFilename: "[name].[contenthash:8].chunk.css"
+        }
+        : {}
+    )
   ]
 });

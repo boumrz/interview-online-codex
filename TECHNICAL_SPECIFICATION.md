@@ -8,7 +8,6 @@ Key goals:
 - interviewer creates a room and sends a link to candidate;
 - both edit code in real time;
 - interviewer controls interview steps and can push the next prepared task;
-- only room owner can run code;
 - room creation is available without registration from landing page;
 - registered users have a personal dashboard with room history.
 
@@ -27,7 +26,6 @@ There is no full RBAC model. Ownership is room-scoped.
 - real-time collaborative code editor;
 - language switching by owner;
 - interview steps with preloaded tasks;
-- owner-only code execution;
 - login/register + dashboard;
 - guest room creation from root page.
 
@@ -56,10 +54,10 @@ There is no full RBAC model. Ownership is room-scoped.
 - owner can move to next task;
 - moving to next task replaces code editor content with starter code.
 
-### FR-4 Code Execution
-- run action available only to owner;
-- run endpoint validates owner token server-side;
-- execution result returns stdout, stderr, exit code and timeout flag.
+### FR-4 Room Permissions
+- owner-scoped actions are validated on backend;
+- room access role is resolved per user/session;
+- permission changes are propagated to active realtime participants.
 
 ### FR-5 Code Editor
 - syntax highlighting for modern languages (MVP: JavaScript, TypeScript, Python, Kotlin);
@@ -88,23 +86,22 @@ There is no full RBAC model. Ownership is room-scoped.
 - reconnect within 30s restores latest state.
 
 ### NFR-4 Security
-- owner-only execution validated on backend;
 - password hashing with BCrypt;
 - token-based auth for user session and room owner session;
-- execution sandbox timeout and output size limits.
+- permission checks for owner-scoped room actions.
 
 ### NFR-5 Observability
-- structured logs for room creation, join, step switch, code run.
+- structured logs for room creation, join, role updates and step switching.
 
 ## 6. Architecture Decisions
 
-- transport: WebSocket for collaborative updates;
+- transport: SSE stream + POST `/events` for collaborative updates;
 - sync model: server-authoritative full-document sync for MVP (CRDT-ready boundary);
 - backend: Kotlin + Spring Boot + PostgreSQL;
 - frontend: React + TypeScript + RTK + RTK Query + CSS Modules + Rspack;
 - runtime helper: in-memory room realtime state with periodic persistence hooks.
 
-WebRTC is deferred after stable WebSocket MVP.
+WebRTC is deferred after stable realtime MVP.
 
 ## 7. Data Model (High-level)
 
@@ -119,20 +116,10 @@ WebRTC is deferred after stable WebSocket MVP.
 - `POST /api/public/rooms`
 - `POST /api/rooms`
 - `GET /api/rooms/{inviteCode}`
-- `POST /api/rooms/{inviteCode}/run`
 - `POST /api/rooms/{inviteCode}/next-step`
 - `GET /api/me/rooms`
-
-WebSocket:
-- `WS /ws/rooms/{inviteCode}?sessionId=<id>&displayName=<name>&ownerToken=<token optional>`
-
-Message types:
-- `join`
-- `state_sync`
-- `code_update`
-- `language_update`
-- `next_step`
-- `presence_update`
+- `GET /api/realtime/rooms/{inviteCode}/stream`
+- `POST /api/realtime/rooms/{inviteCode}/events`
 
 ## 9. Acceptance Criteria
 
@@ -141,12 +128,10 @@ Message types:
 - AC-3: code changes from one user are visible to others in real time.
 - AC-4: owner can switch language and all participants see change.
 - AC-5: owner can switch to next task and code resets to starter template.
-- AC-6: non-owner cannot execute code.
-- AC-7: owner runs code and receives result.
+- AC-6: non-owner cannot perform owner-scoped room actions.
 - AC-8: registered user sees list of own rooms in dashboard.
 
 ## 10. Open Risks
 
 - full-document sync can conflict under simultaneous edits (acceptable for MVP);
-- local process code execution must remain heavily restricted;
 - future scaling requires distributed room state (Redis/pub-sub and CRDT upgrade path).
