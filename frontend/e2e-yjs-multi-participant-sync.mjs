@@ -22,7 +22,10 @@ async function createGuestRoom() {
 
 async function enterNameIfPrompted(page, name) {
   const title = page.getByText("Представьтесь перед входом в комнату");
-  const visible = await title.isVisible().catch(() => false);
+  const visible = await title
+    .waitFor({ state: "visible", timeout: 2500 })
+    .then(() => true)
+    .catch(() => false);
   if (!visible) return;
   await page.getByLabel("Ваше имя").fill(name);
   await page.getByRole("button", { name: "Войти в комнату", exact: true }).click();

@@ -4,6 +4,7 @@ data class RealtimeEventRequest(
     val sessionId: String,
     val eventToken: String? = null,
     val clientEventSequence: Long? = null,
+    val operationId: String? = null,
     val type: String,
     val code: String? = null,
     val codeSequence: Long? = null,
@@ -33,6 +34,7 @@ data class RealtimeEventRequest(
     val yjsUpdate: String? = null,
     val syncKey: String? = null,
     val yjsClientSequence: Long? = null,
+    val baseServerYjsSequence: Long? = null,
     val yjsDocumentBase64: String? = null,
     /** Base64-encoded y-protocols awareness update (remote cursors / selections). */
     val awarenessUpdate: String? = null,
