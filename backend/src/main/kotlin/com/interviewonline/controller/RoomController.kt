@@ -3,13 +3,10 @@ package com.interviewonline.controller
 import com.interviewonline.dto.CreateGuestRoomRequest
 import com.interviewonline.dto.CreateRoomRequest
 import com.interviewonline.dto.RoomResponse
-import com.interviewonline.dto.RunCodeRequest
-import com.interviewonline.dto.RunCodeResponse
 import com.interviewonline.dto.RoomAccessMemberDto
 import com.interviewonline.dto.AddRoomTasksRequest
 import com.interviewonline.dto.UpdateRoomParticipantRoleRequest
 import com.interviewonline.service.AuthService
-import com.interviewonline.service.CodeExecutionService
 import com.interviewonline.service.RoomService
 import jakarta.validation.Valid
 import org.springframework.web.bind.annotation.GetMapping
@@ -25,7 +22,6 @@ import org.springframework.web.bind.annotation.RestController
 class RoomController(
     private val roomService: RoomService,
     private val authService: AuthService,
-    private val codeExecutionService: CodeExecutionService,
 ) {
     @PostMapping("/public/rooms")
     fun createGuestRoom(@RequestBody request: CreateGuestRoomRequest): RoomResponse {
@@ -77,21 +73,6 @@ class RoomController(
         val authToken = authorization?.removePrefix("Bearer ")?.trim()
         val user = authService.resolveUserByToken(authToken)
         return roomService.addTasksToRoom(inviteCode, request, ownerToken, interviewerToken, user)
-    }
-
-    @PostMapping("/rooms/{inviteCode}/run")
-    fun runCode(
-        @PathVariable inviteCode: String,
-        @RequestHeader("X-Room-Owner-Token", required = false) ownerToken: String?,
-        @RequestHeader("X-Room-Interviewer-Token", required = false) interviewerToken: String?,
-        @RequestHeader("Authorization", required = false) authorization: String?,
-        @RequestBody request: RunCodeRequest,
-    ): RunCodeResponse {
-        val authToken = authorization?.removePrefix("Bearer ")?.trim()
-        val user = authService.resolveUserByToken(authToken)
-        val room = roomService.getByInviteCodeEntity(inviteCode)
-        roomService.verifyManager(room, user, ownerToken, interviewerToken)
-        return codeExecutionService.run(request)
     }
 
     @GetMapping("/rooms/{inviteCode}/participants")

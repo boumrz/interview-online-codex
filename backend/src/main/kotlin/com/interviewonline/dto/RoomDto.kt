@@ -72,11 +72,6 @@ data class RoomSummaryDto(
     val interviewerToken: String?,
 )
 
-data class RunCodeRequest(
-    val language: String,
-    val code: String,
-)
-
 data class UpdateRoomRequest(
     @field:NotBlank val title: String,
 )
@@ -96,9 +91,3 @@ data class UpdateRoomParticipantRoleRequest(
     @field:NotBlank val role: String,
 )
 
-data class RunCodeResponse(
-    val stdout: String,
-    val stderr: String,
-    val exitCode: Int,
-    val timedOut: Boolean,
-)

@@ -7,7 +7,6 @@ import type {
   EnvironmentDoctorReport,
   Room,
   RoomSummary,
-  RunCodeResponse,
   TaskLanguageGroup,
   TaskTemplate,
   User
@@ -81,17 +80,6 @@ export const api = createApi({
         body: { taskIds, customTasks }
       }),
       invalidatesTags: ["Room"]
-    }),
-    runCode: builder.mutation<
-      RunCodeResponse,
-      { inviteCode: string; ownerToken: string; language: string; code: string }
-    >({
-      query: ({ inviteCode, ownerToken, language, code }) => ({
-        url: `/rooms/${inviteCode}/run`,
-        method: "POST",
-        headers: { "X-Room-Owner-Token": ownerToken },
-        body: { language, code }
-      })
     }),
     myRooms: builder.query<RoomSummary[], void>({
       query: () => "/me/rooms",
@@ -246,7 +234,6 @@ export const {
   useGetRoomQuery,
   useNextStepMutation,
   useAddRoomTasksMutation,
-  useRunCodeMutation,
   useMyRoomsQuery,
   useUpdateRoomMutation,
   useDeleteRoomMutation,
