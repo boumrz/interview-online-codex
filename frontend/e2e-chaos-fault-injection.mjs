@@ -83,11 +83,44 @@ async function appendCode(page, snippet) {
 
 async function enterNameIfPrompted(page, name) {
   const title = page.getByText("Представьтесь перед входом в комнату");
-  const visible = await title.isVisible().catch(() => false);
-  if (!visible) return;
-  await page.getByLabel("Ваше имя").fill(name);
-  await page.getByRole("button", { name: "Войти в комнату", exact: true }).click();
-  await title.waitFor({ state: "hidden", timeout: 5000 }).catch(() => {});
+  const joinButton = page.getByRole("button", { name: "Войти в комнату", exact: true });
+  const nameInput = page.getByLabel("Ваше имя");
+
+  const shouldHandleModal = await Promise.race([
+    title.waitFor({ state: "visible", timeout: 3000 }).then(() => true).catch(() => false),
+    joinButton.waitFor({ state: "visible", timeout: 3000 }).then(() => true).catch(() => false),
+    nameInput.waitFor({ state: "visible", timeout: 3000 }).then(() => true).catch(() => false),
+  ]);
+  if (!shouldHandleModal) return;
+
+  await nameInput.fill(name);
+  await joinButton.click();
+  await title.waitFor({ state: "hidden", timeout: 8000 }).catch(() => {});
+}
+
+async function waitForEditor(page, timeoutMs = 15000) {
+  const editor = page.locator(".cm-editor");
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const visible = await editor.isVisible().catch(() => false);
+    if (visible) return;
+    await page.waitForTimeout(150);
+  }
+  await editor.waitFor({ timeout: 2000 });
+}
+
+async function ensureJoinedAndEditorReady(page, candidateName) {
+  await enterNameIfPrompted(page, candidateName);
+  await waitForEditor(page, 15000);
+
+  const stillAskingName = await page
+    .getByText("Представьтесь перед входом в комнату")
+    .isVisible()
+    .catch(() => false);
+  if (stillAskingName) {
+    await enterNameIfPrompted(page, candidateName);
+    await waitForEditor(page, 15000);
+  }
 }
 
 async function waitForMarker(page, marker, timeoutMs = 30000) {
@@ -107,9 +140,13 @@ async function waitForMarker(page, marker, timeoutMs = 30000) {
 }
 
 const browser = await chromium.launch({ headless: true });
+let activeFaultToken = null;
+let activeFaultInviteCode = null;
 
 try {
   const { auth, room } = await registerAndCreateRoom();
+  activeFaultToken = auth.token;
+  activeFaultInviteCode = room.inviteCode;
   await configureFaults(auth.token, room.inviteCode, { latencyMs: 350, dropEveryNthMessage: 0 });
 
   const ownerContext = await browser.newContext();
@@ -128,8 +165,7 @@ try {
   const candidateContext = await browser.newContext();
   const candidatePage = await candidateContext.newPage();
   await candidatePage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
-  await enterNameIfPrompted(candidatePage, "Candidate Chaos");
-  await candidatePage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await ensureJoinedAndEditorReady(candidatePage, "Candidate Chaos");
 
   const marker = `fault-injection-${Date.now()}`;
   await appendCode(ownerPage, ` ${marker}`);
@@ -152,5 +188,8 @@ try {
   console.error("CHAOS_FAULT_INJECTION_FAIL", error);
   process.exitCode = 1;
 } finally {
+  if (activeFaultToken && activeFaultInviteCode) {
+    await clearFaults(activeFaultToken, activeFaultInviteCode).catch(() => {});
+  }
   await browser.close();
 }

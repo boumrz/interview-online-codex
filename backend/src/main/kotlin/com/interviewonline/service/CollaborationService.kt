@@ -651,16 +651,18 @@ class CollaborationService(
         }
         val normalizedLanguage = normalizeLanguage(language)
         roomState[participant.inviteCode]?.let { state ->
-            state.language = normalizedLanguage
-            val currentTaskIndex = state.tasks.indexOfFirst { it.stepIndex == state.currentStep }
-            if (currentTaskIndex >= 0) {
-                state.tasks[currentTaskIndex] = state.tasks[currentTaskIndex].copy(language = normalizedLanguage)
+            synchronized(state) {
+                state.language = normalizedLanguage
+                val currentTaskIndex = state.tasks.indexOfFirst { it.stepIndex == state.currentStep }
+                if (currentTaskIndex >= 0) {
+                    state.tasks[currentTaskIndex] = state.tasks[currentTaskIndex].copy(language = normalizedLanguage)
+                }
             }
         }
-        roomRepository.findByInviteCode(participant.inviteCode)?.let {
-            it.language = normalizedLanguage
-            it.tasks.getOrNull(it.currentStep)?.solutionLanguage = normalizedLanguage
-            roomRepository.save(it)
+        roomRepository.findByInviteCode(participant.inviteCode)?.let { room ->
+            room.language = normalizedLanguage
+            room.tasks.getOrNull(room.currentStep)?.solutionLanguage = normalizedLanguage
+            roomRepository.save(room)
         }
         broadcastState(participant.inviteCode)
     }
