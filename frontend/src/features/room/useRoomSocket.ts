@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE_URL } from "../../config/runtime";
 import type { RoomTask } from "../../types";
+import { trackEvent } from "../../services/analytics";
 
 /** Same opt-out as RoomPage: localStorage room_sync_log = "0" or ?syncLog=0 */
 function isRoomSyncTransportLogEnabled(): boolean {
@@ -367,6 +368,23 @@ export function useRoomSocket({
     let reconnectScheduled = false;
     let leaveNotified = false;
     lastPresenceRef.current = null;
+    const metricLastSentAt = new Map<string, number>();
+    const emitMetric = (
+      eventName: string,
+      payload: Record<string, string | number | boolean | null> = {},
+      options: { minIntervalMs?: number; dedupeKey?: string } = {}
+    ) => {
+      const dedupeKey = options.dedupeKey ?? eventName;
+      const now = Date.now();
+      const minIntervalMs = options.minIntervalMs ?? 0;
+      const previous = metricLastSentAt.get(dedupeKey) ?? 0;
+      if (minIntervalMs > 0 && now - previous < minIntervalMs) return;
+      metricLastSentAt.set(dedupeKey, now);
+      trackEvent(eventName, {
+        invite_code_len: inviteCode.length,
+        ...payload
+      });
+    };
 
     const requiresEventToken = (payload: ClientMessage) => {
       return payload.type !== "request_state_sync" && payload.type !== "presence_update";
@@ -395,6 +413,11 @@ export function useRoomSocket({
     const scheduleReconnect = () => {
       if (disposed || reconnectScheduled) return;
       reconnectScheduled = true;
+      emitMetric(
+        "prod_realtime_reconnect_scheduled",
+        { pending_messages: pendingMessagesRef.current.length },
+        { minIntervalMs: 3000 }
+      );
       setConnected(false);
       abortInFlightRequest();
       const activeSource = sseRef.current;
@@ -459,6 +482,11 @@ export function useRoomSocket({
             } catch {
               inFlightControllerRef.current = null;
               if (disposed || controller.signal.aborted) break;
+              emitMetric(
+                "prod_realtime_post_failed",
+                { reason: "network_error" },
+                { minIntervalMs: 2000 }
+              );
               scheduleReconnect();
               onError("Не удалось отправить действие в комнату");
               break;
@@ -477,11 +505,21 @@ export function useRoomSocket({
             const data = (await response.json().catch(() => ({}))) as { error?: string };
             if (response.status === 403) {
               // Stale event token/session after reconnect. Keep head for retry with a fresh token.
+              emitMetric(
+                "prod_realtime_post_rejected",
+                { status_code: 403, payload_type: head.payload.type },
+                { minIntervalMs: 2000, dedupeKey: `post_rejected_403_${head.payload.type}` }
+              );
               scheduleReconnect();
               break;
             }
             if (response.status === 409) {
               // Out-of-order or stale client sequence; safe to drop.
+              emitMetric(
+                "prod_realtime_post_rejected",
+                { status_code: 409, payload_type: head.payload.type },
+                { minIntervalMs: 2000, dedupeKey: `post_rejected_409_${head.payload.type}` }
+              );
               if (nextIndex === 0) {
                 pendingMessagesRef.current.shift();
               } else {
@@ -491,12 +529,22 @@ export function useRoomSocket({
             }
             if (response.status >= 400 && response.status < 500) {
               // Invalid payload should not block the whole queue forever.
+              emitMetric(
+                "prod_realtime_post_rejected",
+                { status_code: response.status, payload_type: head.payload.type },
+                { minIntervalMs: 2000, dedupeKey: `post_rejected_${response.status}_${head.payload.type}` }
+              );
               if (nextIndex === 0) {
                 pendingMessagesRef.current.shift();
               } else {
                 pendingMessagesRef.current.splice(nextIndex, 1);
               }
             } else {
+              emitMetric(
+                "prod_realtime_post_failed",
+                { reason: "server_error", status_code: response.status },
+                { minIntervalMs: 2000 }
+              );
               scheduleReconnect();
             }
             onError(data.error || "Не удалось отправить действие в комнату");
@@ -525,6 +573,14 @@ export function useRoomSocket({
       // until someone else forces a full state broadcast.
       if (!options.expectHydration && now - lastStateSyncRequestAt < 300) return;
       lastStateSyncRequestAt = now;
+      emitMetric(
+        "prod_state_sync_requested",
+        { expect_hydration: Boolean(options.expectHydration) },
+        {
+          minIntervalMs: options.expectHydration ? 1000 : 4000,
+          dedupeKey: options.expectHydration ? "state_sync_hydration" : "state_sync_regular"
+        }
+      );
       queuePayload({ type: "request_state_sync" }, { dedupeSameType: true });
       tryDrainQueueRef.current?.();
     };
@@ -585,6 +641,7 @@ export function useRoomSocket({
         sseErrorNotified = false;
         setConnected(true);
         roomSyncTransportLog("sse_open", { inviteCode });
+        emitMetric("prod_realtime_connected", {}, { minIntervalMs: 1000 });
         onError("");
         publishCurrentPresence({ force: true });
         requestStateSync({ expectHydration: true });
@@ -602,6 +659,11 @@ export function useRoomSocket({
         }
         if (!sseErrorNotified) {
           sseErrorNotified = true;
+          emitMetric(
+            "prod_realtime_connection_lost",
+            { ready_state: source.readyState },
+            { minIntervalMs: 2000 }
+          );
           onError("Соединение с realtime временно потеряно. Пытаемся восстановить связь...");
         }
       };
@@ -615,6 +677,15 @@ export function useRoomSocket({
           eventTokenRef.current = payload.eventToken?.trim() || null;
           const shouldHydrateFromState = expectRecoveryStateSync;
           expectRecoveryStateSync = false;
+          emitMetric(
+            "prod_state_sync_received",
+            {
+              participants: payload.participants?.length ?? 0,
+              has_yjs_snapshot: Boolean(payload.yjsDocumentBase64),
+              yjs_sequence: typeof payload.lastYjsSequence === "number" ? payload.lastYjsSequence : 0
+            },
+            { minIntervalMs: 1000 }
+          );
           onState(payload);
           if (shouldHydrateFromState) {
             // After a recovery sync, discard stale queued code/yjs writes so we do not replay
@@ -625,6 +696,13 @@ export function useRoomSocket({
             tryDrainQueueRef.current?.();
           }
           if (shouldHydrateFromState) {
+            emitMetric(
+              "prod_recovery_state_sync_applied",
+              {
+                yjs_sequence: typeof payload.lastYjsSequence === "number" ? payload.lastYjsSequence : 0
+              },
+              { minIntervalMs: 1000 }
+            );
             onRecoveryStateSync?.(typeof payload.lastYjsSequence === "number" ? payload.lastYjsSequence : 0);
           }
           return;
@@ -673,9 +751,11 @@ export function useRoomSocket({
           return;
         }
         if (message.type === "error") {
+          emitMetric("prod_realtime_server_error_message", {}, { minIntervalMs: 2000 });
           onError((message.payload as { message: string }).message);
         }
       } catch {
+        emitMetric("prod_realtime_message_parse_failed", {}, { minIntervalMs: 2000 });
         onError("Ошибка чтения сообщения комнаты");
       }
     };

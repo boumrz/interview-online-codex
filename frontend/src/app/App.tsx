@@ -1,8 +1,9 @@
 import React, { Suspense, lazy, useEffect } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "./hooks";
 import { clearAuth, setCurrentUser } from "../features/auth/authSlice";
 import { api, useMeProfileQuery } from "../services/api";
+import { setUserParams, trackPageView } from "../services/analytics";
 
 const LandingPage = lazy(() => import("../pages/LandingPage").then((module) => ({ default: module.LandingPage })));
 const LoginPage = lazy(() => import("../pages/LoginPage").then((module) => ({ default: module.LoginPage })));
@@ -12,6 +13,7 @@ const RoomPage = lazy(() => import("../pages/RoomPage").then((module) => ({ defa
 function AuthSessionSync() {
   const dispatch = useAppDispatch();
   const token = useAppSelector((store) => store.auth.token);
+  const user = useAppSelector((store) => store.auth.user);
   const { data, error } = useMeProfileQuery(undefined, {
     skip: !token,
     refetchOnMountOrArgChange: true
@@ -31,6 +33,26 @@ function AuthSessionSync() {
     }
   }, [dispatch, error, token]);
 
+  useEffect(() => {
+    setUserParams({
+      UserID: user?.id ?? null,
+      auth_status: token ? "authenticated" : "anonymous",
+      role: user?.role ?? null
+    });
+  }, [token, user?.id, user?.role]);
+
+  return null;
+}
+
+function RoutePageTracker() {
+  const location = useLocation();
+
+  useEffect(() => {
+    trackPageView(`${location.pathname}${location.search}`, {
+      route: location.pathname
+    });
+  }, [location.pathname, location.search]);
+
   return null;
 }
 
@@ -38,6 +60,7 @@ export function App() {
   return (
     <>
       <AuthSessionSync />
+      <RoutePageTracker />
       <Suspense fallback={<div style={{ padding: "24px" }}>Loading...</div>}>
         <Routes>
           <Route path="/" element={<LandingPage />} />

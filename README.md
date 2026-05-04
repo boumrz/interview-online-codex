@@ -85,6 +85,13 @@ cd frontend
 FEATURE_AGENT_OPS=true npm run dev
 ```
 
+Опционально для Яндекс Метрики (события отправляются только с разрешённых хостов):
+
+```bash
+cd frontend
+VITE_METRIKA_ALLOWED_HOSTS=interview.domiknote.ru npm run dev
+```
+
 ### Сжатие трафика (Brotli/Gzip)
 
 - При `npm run build` фронтенд дополнительно создаёт предварительно сжатые файлы:

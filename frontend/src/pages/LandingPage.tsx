@@ -1,4 +1,4 @@
-import React, { FormEvent, useState } from "react";
+import React, { FormEvent, useEffect, useState } from "react";
 import {
   Badge,
   Box,
@@ -17,6 +17,7 @@ import { IconArrowRight, IconCode, IconDeviceLaptop, IconUsers } from "@tabler/i
 import { Link, useNavigate } from "react-router-dom";
 import { useAppSelector } from "../app/hooks";
 import { useCreateGuestRoomMutation } from "../services/api";
+import { setVisitParams, trackEvent } from "../services/analytics";
 
 const LANGUAGES = [
   { value: "nodejs", label: "Node JS" },
@@ -52,8 +53,23 @@ export function LandingPage() {
   const [error, setError] = useState("");
   const [createGuestRoom, { isLoading }] = useCreateGuestRoomMutation();
 
+  useEffect(() => {
+    trackEvent("mkt_landing_view", {
+      authenticated: Boolean(authToken)
+    });
+    setVisitParams({
+      entrypoint: "landing",
+      authenticated: Boolean(authToken)
+    });
+  }, [authToken]);
+
   const onCreate = async (e: FormEvent) => {
     e.preventDefault();
+    trackEvent("prod_guest_room_create_submit", {
+      language,
+      has_title: title.trim().length > 0,
+      has_display_name: displayName.trim().length > 0
+    });
     try {
       setError("");
       const room = await createGuestRoom({
@@ -63,9 +79,16 @@ export function LandingPage() {
       }).unwrap();
       localStorage.setItem(`owner_token_${room.inviteCode}`, room.ownerToken ?? "");
       localStorage.setItem(`guest_display_name_${room.inviteCode}`, displayName);
+      trackEvent("prod_guest_room_create_success", {
+        language,
+        room_invite_len: room.inviteCode.length
+      });
       navigate(`/room/${room.inviteCode}`);
     } catch {
       setError("Не удалось создать комнату. Повторите попытку.");
+      trackEvent("prod_guest_room_create_failed", {
+        language
+      });
     }
   };
 
@@ -74,6 +97,10 @@ export function LandingPage() {
     if (!inviteCode.trim()) return;
     const name = (displayName || "Участник").trim();
     const code = inviteCode.trim();
+    trackEvent("prod_room_join_submit", {
+      invite_code_len: code.length,
+      has_display_name: name.length > 0
+    });
     localStorage.setItem(`guest_display_name_${code}`, name);
     navigate(`/room/${code}`);
   };

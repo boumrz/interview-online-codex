@@ -65,6 +65,7 @@ import {
   useUpdateRoomMutation,
   useUpdateTaskTemplateMutation
 } from "../services/api";
+import { setVisitParams, trackEvent } from "../services/analytics";
 import type { AdminUser, RoomSummary, TaskTemplate } from "../types";
 import styles from "./DashboardPage.module.css";
 
@@ -259,6 +260,17 @@ export function DashboardPage() {
   const activeSection: DashboardSection = hasValidSection ? section : "rooms";
   const activeTaskLanguage = normalizeLanguageKey(searchParams.get("lang"));
 
+  useEffect(() => {
+    trackEvent("prod_dashboard_view", {
+      section: activeSection,
+      is_admin: isAdmin,
+      agent_ops_enabled: agentOpsEnabled
+    });
+    setVisitParams({
+      dashboard_section: activeSection
+    });
+  }, [activeSection, agentOpsEnabled, isAdmin]);
+
   const normalizedTaskGroups = useMemo(() => {
     const tasksByLanguage = new Map<string, TaskTemplate[]>();
     groupedTasks.forEach((group) => {
@@ -370,6 +382,10 @@ export function DashboardPage() {
 
   const onCreateTask = async (e: FormEvent) => {
     e.preventDefault();
+    trackEvent("prod_task_create_submit", {
+      language: taskLanguage,
+      has_title: taskTitle.trim().length > 0
+    });
     try {
       setError("");
       await createTask({
@@ -385,13 +401,23 @@ export function DashboardPage() {
       const params = new URLSearchParams(searchParams);
       params.set("lang", taskLanguage);
       setSearchParams(params, { replace: true });
+      trackEvent("prod_task_create_success", {
+        language: taskLanguage
+      });
     } catch {
       setError("Не удалось создать задачу");
+      trackEvent("prod_task_create_failed", {
+        language: taskLanguage
+      });
     }
   };
 
   const onCreateRoom = async (e: FormEvent) => {
     e.preventDefault();
+    trackEvent("prod_room_create_submit", {
+      language: roomLanguage,
+      selected_tasks: roomTaskIds.length
+    });
     try {
       setError("");
       const normalizedTaskIds = Array.from(new Set(roomTaskIds.filter((taskId) => allowedRoomTaskIds.has(taskId))));
@@ -407,9 +433,17 @@ export function DashboardPage() {
       localStorage.setItem(`owner_token_${room.inviteCode}`, room.ownerToken ?? "");
       localStorage.setItem("display_name", ownerName);
       localStorage.setItem(`guest_display_name_${room.inviteCode}`, ownerName);
+      trackEvent("prod_room_create_success", {
+        language: roomLanguage,
+        selected_tasks: normalizedTaskIds.length,
+        room_invite_len: room.inviteCode.length
+      });
       navigate(`/room/${room.inviteCode}`);
     } catch {
       setError("Не удалось создать комнату");
+      trackEvent("prod_room_create_failed", {
+        language: roomLanguage
+      });
     }
   };
 

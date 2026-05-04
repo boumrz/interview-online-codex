@@ -1,4 +1,4 @@
-import React, { FormEvent, useMemo, useState } from "react";
+import React, { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   Anchor,
   Box,
@@ -19,6 +19,7 @@ import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../app/hooks";
 import { clearAuth, setAuthToken, setCurrentUser } from "../features/auth/authSlice";
 import { api, useLazyMeProfileQuery, useLoginMutation, useRegisterMutation } from "../services/api";
+import { setVisitParams, trackEvent } from "../services/analytics";
 
 const fieldStyles = {
   label: { color: "#9ba0a8", fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.6 },
@@ -54,12 +55,26 @@ export function LoginPage() {
     return requested;
   }, [location.search]);
 
+  useEffect(() => {
+    trackEvent("mkt_login_view", {
+      next_path: nextPath
+    });
+    setVisitParams({
+      entrypoint: "login",
+      next_path: nextPath
+    });
+  }, [nextPath]);
+
   if (authToken) {
     return <Navigate to={nextPath} replace />;
   }
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    trackEvent(isRegisterMode ? "mkt_register_submit" : "mkt_login_submit", {
+      nickname_len: nickname.trim().length,
+      password_len: password.length
+    });
     try {
       setError("");
       setPasswordError("");
@@ -67,26 +82,31 @@ export function LoginPage() {
         const passwordValidationError = "Пароль должен быть не короче 6 символов";
         setPasswordError(passwordValidationError);
         setError(passwordValidationError);
+        trackEvent("mkt_register_validation_failed", { reason: "password_too_short" });
         return;
       }
       if (isRegisterMode && !displayName.trim()) {
         const displayNameValidationError = "Имя обязательно";
         setError(displayNameValidationError);
+        trackEvent("mkt_register_validation_failed", { reason: "display_name_required" });
         return;
       }
       if (isRegisterMode && !nickname.trim()) {
         const nicknameValidationError = "Ник обязателен";
         setError(nicknameValidationError);
+        trackEvent("mkt_register_validation_failed", { reason: "nickname_required" });
         return;
       }
       if (isRegisterMode && nickname.trim().length < 3) {
         const nicknameValidationError = "Ник должен быть от 3 до 32 символов";
         setError(nicknameValidationError);
+        trackEvent("mkt_register_validation_failed", { reason: "nickname_too_short" });
         return;
       }
       if (isRegisterMode && /\s/.test(nickname.trim())) {
         const nicknameValidationError = "Ник не должен содержать пробелы";
         setError(nicknameValidationError);
+        trackEvent("mkt_register_validation_failed", { reason: "nickname_has_space" });
         return;
       }
       const auth = isRegisterMode
@@ -98,6 +118,9 @@ export function LoginPage() {
       const freshProfile = await fetchMeProfile().unwrap();
       dispatch(setCurrentUser(freshProfile));
       localStorage.setItem("display_name", freshProfile.displayName);
+      trackEvent(isRegisterMode ? "mkt_register_success" : "mkt_login_success", {
+        next_path: nextPath
+      });
       navigate(nextPath, { replace: true });
     } catch (err) {
       dispatch(clearAuth());
@@ -109,9 +132,15 @@ export function LoginPage() {
         if (registerMessage.toLowerCase().includes("пароль")) {
           setPasswordError(registerMessage);
         }
+        trackEvent("mkt_register_failed", {
+          has_api_message: Boolean(apiMessage)
+        });
         return;
       }
       setError(apiMessage || "Не удалось выполнить вход. Проверьте ник и пароль.");
+      trackEvent("mkt_login_failed", {
+        has_api_message: Boolean(apiMessage)
+      });
     }
   };
 
@@ -148,6 +177,7 @@ export function LoginPage() {
                 setMode(value as "login" | "register");
                 setError("");
                 setPasswordError("");
+                trackEvent("mkt_auth_mode_changed", { mode: value });
               }}
               fullWidth
               data={[
