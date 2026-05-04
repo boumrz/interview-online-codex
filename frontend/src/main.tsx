@@ -5,8 +5,11 @@ import { BrowserRouter } from "react-router-dom";
 import { MantineProvider } from "@mantine/core";
 import { store } from "./app/store";
 import { App } from "./app/App";
+import { initAnalytics } from "./services/analytics";
 import "@mantine/core/styles.css";
 import "./styles/global.css";
+
+initAnalytics();
 
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

@@ -72,6 +72,7 @@ import {
   useGetRoomQuery,
   useTasksGroupedQuery,
 } from "../services/api";
+import { setVisitParams, trackEvent } from "../services/analytics";
 import { useRoomSocket } from "../features/room/useRoomSocket";
 import type { RoomTask, TaskTemplate } from "../types";
 
@@ -676,9 +677,33 @@ export function RoomPage() {
   const [resyncSignal, setResyncSignal] = useState(0);
   const [awaitingRecoverySync, setAwaitingRecoverySync] = useState(false);
   const awaitingRecoverySyncRef = useRef(false);
+  const roomOpenedTrackedInviteRef = useRef("");
+  const previousParticipantsCountRef = useRef<number | null>(null);
+  const firstCodeEditTrackedRef = useRef(false);
+  const lastErrorMetricRef = useRef<{ message: string; at: number }>({
+    message: "",
+    at: 0,
+  });
   const editorValueRef = useRef("");
   const briefingDebounceTimerRef = useRef<number | null>(null);
   const briefingStepKeyRef = useRef<string>("");
+
+  useEffect(() => {
+    trackEvent("prod_room_page_view", {
+      invite_code_len: inviteCode.length,
+      authenticated: Boolean(authToken),
+    });
+    setVisitParams({
+      entrypoint: "room",
+      invite_code_len: inviteCode.length,
+    });
+  }, [authToken, inviteCode]);
+
+  useEffect(() => {
+    firstCodeEditTrackedRef.current = false;
+    roomOpenedTrackedInviteRef.current = "";
+    previousParticipantsCountRef.current = null;
+  }, [inviteCode]);
 
   useEffect(() => {
     const stored = readStoredDisplayName(inviteCode);
@@ -1067,6 +1092,15 @@ export function RoomPage() {
 
   const onError = useCallback((message: string) => {
     setError(message);
+    const normalized = message.trim();
+    if (!normalized) return;
+    const now = Date.now();
+    const previous = lastErrorMetricRef.current;
+    if (previous.message === normalized && now - previous.at < 3000) return;
+    lastErrorMetricRef.current = { message: normalized, at: now };
+    trackEvent("prod_room_error", {
+      message: normalized.slice(0, 120),
+    });
   }, []);
 
   const onCursorUpdate = useCallback((incomingCursor: CursorInfo) => {
@@ -1240,7 +1274,9 @@ export function RoomPage() {
 
   const onRecoveryStateSync = useCallback(
     (lastYjsSequence: number) => {
-      void lastYjsSequence;
+      trackEvent("prod_recovery_sync_completed", {
+        yjs_sequence: lastYjsSequence,
+      });
       clearRecoverySyncPending();
       setResyncSignal((value) => value + 1);
     },
@@ -1449,14 +1485,54 @@ export function RoomPage() {
         baseServerYjsSequence,
       );
       if (update) {
+        if (!firstCodeEditTrackedRef.current) {
+          firstCodeEditTrackedRef.current = true;
+          trackEvent("prod_first_code_edit", {
+            invite_code_len: inviteCode.length,
+          });
+        }
         lastKnownServerYjsSequenceRef.current = baseServerYjsSequence + 1;
       }
     },
-    [sendYjsUpdate],
+    [inviteCode, sendYjsUpdate],
   );
 
   const hasRealtimeState = Boolean(state);
   const participantsCount = state?.participants.length ?? 0;
+
+  useEffect(() => {
+    if (!merged) return;
+    if (roomOpenedTrackedInviteRef.current === inviteCode) return;
+    roomOpenedTrackedInviteRef.current = inviteCode;
+    trackEvent("prod_room_opened", {
+      invite_code_len: inviteCode.length,
+      role: merged.role,
+      can_manage_room: merged.canManageRoom,
+      has_realtime_state: hasRealtimeState,
+      has_yjs_snapshot: Boolean(merged.yjsDocumentBase64),
+      step: merged.currentStep,
+    });
+  }, [hasRealtimeState, inviteCode, merged]);
+
+  useEffect(() => {
+    if (!hasRealtimeState) return;
+    const previousCount = previousParticipantsCountRef.current;
+    if (previousCount == null) {
+      previousParticipantsCountRef.current = participantsCount;
+      return;
+    }
+    if (previousCount === participantsCount) return;
+    trackEvent("prod_participants_count_changed", {
+      participants: participantsCount,
+      delta: participantsCount - previousCount,
+    });
+    if (previousCount < 2 && participantsCount >= 2) {
+      trackEvent("prod_second_participant_joined", {
+        participants: participantsCount,
+      });
+    }
+    previousParticipantsCountRef.current = participantsCount;
+  }, [hasRealtimeState, participantsCount]);
 
   // Yjs bootstrap must start from authoritative realtime state to avoid CRDT duplicate inserts
   // when REST `room.code` races with later state_sync snapshot delivery.
@@ -1480,6 +1556,10 @@ export function RoomPage() {
     setPendingNotes((current) => [...current, optimisticMessage]);
     setNoteComposer("");
     sendNoteMessage(noteId, text, timestampEpochMs);
+    trackEvent("prod_note_sent", {
+      role: merged.role,
+      text_len: text.length,
+    });
   }, [
     canManageRoom,
     effectiveDisplayName,
@@ -1516,6 +1596,9 @@ export function RoomPage() {
         ),
       );
       if (normalizedTaskIds.length === 0) return;
+      trackEvent("prod_room_tasks_add_submit", {
+        tasks_count: normalizedTaskIds.length,
+      });
       try {
         setError("");
         await addRoomTasks({
@@ -1524,8 +1607,14 @@ export function RoomPage() {
           customTasks: [],
           ownerToken: ownerToken ?? undefined,
         }).unwrap();
+        trackEvent("prod_room_tasks_add_success", {
+          tasks_count: normalizedTaskIds.length,
+        });
       } catch {
         setError("Не удалось добавить задачи в комнату");
+        trackEvent("prod_room_tasks_add_failed", {
+          tasks_count: normalizedTaskIds.length,
+        });
         throw new Error("room_task_append_failed");
       }
     },
@@ -1538,8 +1627,15 @@ export function RoomPage() {
       const title = task.title.trim();
       const description = task.description.trim();
       if (!title || !description) {
+        trackEvent("prod_room_custom_task_add_failed", {
+          reason: "validation_failed",
+        });
         throw new Error("room_custom_task_validation_failed");
       }
+      trackEvent("prod_room_custom_task_add_submit", {
+        title_len: title.length,
+        description_len: description.length,
+      });
       try {
         setError("");
         await addRoomTasks({
@@ -1554,8 +1650,14 @@ export function RoomPage() {
           ],
           ownerToken: ownerToken ?? undefined,
         }).unwrap();
+        trackEvent("prod_room_custom_task_add_success", {
+          title_len: title.length,
+        });
       } catch {
         setError("Не удалось добавить задачу в комнату");
+        trackEvent("prod_room_custom_task_add_failed", {
+          reason: "request_failed",
+        });
         throw new Error("room_custom_task_append_failed");
       }
     },
@@ -1593,12 +1695,20 @@ export function RoomPage() {
       if (!merged?.canGrantAccess || participant.role === "owner") return;
       const targetUserId = participant.userId?.trim() ?? "";
       if (participant.role === "candidate") {
+        trackEvent("prod_participant_role_grant_interviewer", {
+          target_role: participant.role,
+          has_target_user_id: Boolean(targetUserId),
+        });
         sendGrantInterviewerAccess(
           participant.sessionId,
           targetUserId || undefined,
         );
         return;
       }
+      trackEvent("prod_participant_role_revoke_interviewer", {
+        target_role: participant.role,
+        has_target_user_id: Boolean(targetUserId),
+      });
       sendRevokeInterviewerAccess(
         participant.sessionId,
         targetUserId || undefined,
@@ -1615,16 +1725,25 @@ export function RoomPage() {
     const normalized = draftName.trim();
     if (!normalized) {
       setCandidateNameError("Введите имя");
+      trackEvent("prod_candidate_name_submit_failed", {
+        reason: "empty_name",
+      });
       return;
     }
     localStorage.setItem(guestNameKey(inviteCode), normalized);
     setCandidateNameError("");
     setDisplayName(normalized);
     setNameModalOpened(false);
+    trackEvent("prod_candidate_name_submit_success", {
+      name_len: normalized.length,
+    });
   };
 
   const goToLoginAndReturn = () => {
     const next = `${location.pathname}${location.search}`;
+    trackEvent("prod_room_go_to_login", {
+      next_path: next,
+    });
     navigate(`/login?next=${encodeURIComponent(next)}`);
   };
 
@@ -3742,12 +3861,19 @@ function RoomCodeEditor({
         if (raw.length > 0) {
           Y.applyUpdate(yDoc, raw, "bootstrap");
           bootstrappedFromSnapshot = true;
+          trackEvent("prod_editor_bootstrap_server_snapshot", {
+            yjs_sequence: normalizedServerYjsSequence,
+          });
         }
       } catch {
         /* invalid snapshot */
       }
     }
     if (!bootstrappedFromSnapshot && !hasExistingServerYjsState) {
+      trackEvent("prod_editor_bootstrap_code_fallback", {
+        reason: "empty_server_state",
+        yjs_sequence: normalizedServerYjsSequence,
+      });
       Y.applyUpdate(
         yDoc,
         createDeterministicBootstrapUpdate(targetCode),
@@ -3761,6 +3887,10 @@ function RoomCodeEditor({
       !snap &&
       !hasExistingServerYjsState
     ) {
+      trackEvent("prod_editor_bootstrap_code_rebuild", {
+        reason: "code_mismatch_after_bootstrap",
+        yjs_sequence: normalizedServerYjsSequence,
+      });
       yDoc.destroy();
       yDoc = new Y.Doc();
       Y.applyUpdate(
@@ -3769,6 +3899,11 @@ function RoomCodeEditor({
         "bootstrap",
       );
       yText = yDoc.getText("room-code");
+    }
+    if (!bootstrappedFromSnapshot && hasExistingServerYjsState) {
+      trackEvent("prod_editor_bootstrap_missing_snapshot", {
+        yjs_sequence: normalizedServerYjsSequence,
+      });
     }
     yDocRef.current = yDoc;
     yTextRef.current = yText;
