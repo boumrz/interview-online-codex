@@ -62,15 +62,15 @@ class RoomService(
 
     @Transactional
     fun createUserRoom(request: CreateRoomRequest, user: User): RoomResponse {
-        val language = normalizeLanguage(request.language.ifBlank { "nodejs" })
-        val selectedTasks = userTaskService.resolveTasksForRoom(user, request.taskIds, language)
+        val selectedTasks = userTaskService.resolveTasksForRoom(user, request.taskIds)
+        val initialRoomLanguage = normalizeLanguage(selectedTasks.firstOrNull()?.language ?: "nodejs")
         val room = Room(
             title = request.title,
             inviteCode = "r-${UUID.randomUUID()}",
             ownerSessionToken = "owner_${UUID.randomUUID()}",
             interviewerSessionToken = "interviewer_${UUID.randomUUID()}",
             ownerUser = user,
-            language = language,
+            language = initialRoomLanguage,
         )
         val tasks = selectedTasks.mapIndexed { index, task ->
             RoomTask(
@@ -179,7 +179,7 @@ class RoomService(
                 HttpStatus.UNAUTHORIZED,
                 "Для добавления задач из банка нужна авторизация",
             )
-            userTaskService.resolveTasksForRoom(authorizedUser, requestedTaskIds, roomLanguage)
+            userTaskService.resolveTasksForRoom(authorizedUser, requestedTaskIds)
         } else {
             emptyList()
         }

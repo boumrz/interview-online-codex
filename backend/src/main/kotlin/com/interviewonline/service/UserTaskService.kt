@@ -94,9 +94,8 @@ class UserTaskService(
     }
 
     @Transactional
-    fun resolveTasksForRoom(user: User, taskIds: List<String>, language: String): List<UserTaskTemplate> {
+    fun resolveTasksForRoom(user: User, taskIds: List<String>): List<UserTaskTemplate> {
         cleanupLegacySeedTasks(user)
-        val normalizedLanguage = normalizeLanguage(language)
         val normalized = taskIds.map { it.trim() }.filter { it.isNotBlank() }.distinct()
         if (normalized.isEmpty()) {
             return emptyList()
@@ -104,12 +103,6 @@ class UserTaskService(
         val tasks = taskRepository.findAllByIdInAndOwnerUserId(normalized, user.id!!)
         if (tasks.size != normalized.size) {
             throw ApiException(HttpStatus.BAD_REQUEST, "Некоторые задачи не найдены или не принадлежат пользователю")
-        }
-        if (tasks.any { normalizeLanguage(it.language) != normalizedLanguage }) {
-            throw ApiException(
-                HttpStatus.BAD_REQUEST,
-                "Выбранные задачи должны соответствовать языку комнаты: $normalizedLanguage",
-            )
         }
         val tasksById = tasks.associateBy { it.id }
         return normalized.mapNotNull { tasksById[it] }

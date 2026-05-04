@@ -41,7 +41,7 @@ export const api = createApi({
       query: (body) => ({ url: "/public/rooms", method: "POST", body }),
       invalidatesTags: ["Room"]
     }),
-    createRoom: builder.mutation<Room, { title: string; language: string; taskIds: string[] }>({
+    createRoom: builder.mutation<Room, { title: string; taskIds: string[] }>({
       query: (body) => ({ url: "/rooms", method: "POST", body }),
       invalidatesTags: ["MyRooms"]
     }),
