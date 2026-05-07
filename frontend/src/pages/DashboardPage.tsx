@@ -905,22 +905,20 @@ export function DashboardPage() {
             <Textarea
               id="create-task-description"
               data-testid="create-task-description-input"
-              label="Описание (Markdown)"
+              label="Описание (Markdown, необязательно)"
               value={taskDescription}
               onChange={(e) => setTaskDescription(e.currentTarget.value)}
               minRows={8}
               styles={markdownInputStyles}
-              required
             />
             <Textarea
               id="create-task-code"
               data-testid="create-task-code-input"
-              label="Стартовый код"
+              label="Стартовый код (необязательно)"
               value={taskStarterCode}
               onChange={(e) => setTaskStarterCode(e.currentTarget.value)}
               minRows={12}
               styles={codeInputStyles}
-              required
             />
             <Select
               data-testid="create-task-language-select"

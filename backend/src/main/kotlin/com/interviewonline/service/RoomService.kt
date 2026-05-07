@@ -153,10 +153,10 @@ class RoomService(
         val customTasks = request.customTasks.map { raw ->
             val title = raw.title.trim()
             val description = raw.description.trim()
-            if (title.isBlank() || description.isBlank()) {
+            if (title.isBlank()) {
                 throw ApiException(
                     HttpStatus.BAD_REQUEST,
-                    "У новой задачи должны быть заполнены название и описание",
+                    "У новой задачи должно быть заполнено название",
                 )
             }
             RoomCustomTaskDraft(

@@ -59,7 +59,7 @@ export const api = createApi({
       {
         inviteCode: string;
         taskIds?: string[];
-        customTasks?: Array<{ title: string; description: string; starterCode: string }>;
+        customTasks?: Array<{ title: string; description?: string; starterCode?: string }>;
         ownerToken?: string;
       }
     >({
@@ -103,13 +103,13 @@ export const api = createApi({
       query: () => "/me/tasks",
       providesTags: ["Tasks"]
     }),
-    createTaskTemplate: builder.mutation<TaskTemplate, { title: string; description: string; starterCode: string; language: string }>({
+    createTaskTemplate: builder.mutation<TaskTemplate, { title: string; description?: string; starterCode?: string; language: string }>({
       query: (body) => ({ url: "/me/tasks", method: "POST", body }),
       invalidatesTags: ["Tasks"]
     }),
     updateTaskTemplate: builder.mutation<
       TaskTemplate,
-      { taskId: string; title: string; description: string; starterCode: string; language: string }
+      { taskId: string; title: string; description?: string; starterCode?: string; language: string }
     >({
       query: ({ taskId, ...body }) => ({
         url: `/me/tasks/${taskId}`,

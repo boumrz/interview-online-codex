@@ -83,11 +83,10 @@ data class AddRoomTasksRequest(
 
 data class AddRoomCustomTaskRequest(
     @field:NotBlank val title: String,
-    @field:NotBlank val description: String,
+    val description: String = "",
     val starterCode: String = "",
 )
 
 data class UpdateRoomParticipantRoleRequest(
     @field:NotBlank val role: String,
 )
-
