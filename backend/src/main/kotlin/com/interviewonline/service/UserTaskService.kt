@@ -36,8 +36,9 @@ class UserTaskService(
         val language = normalizeLanguage(request.language)
         val title = request.title.trim()
         val description = request.description.trim()
-        if (title.isEmpty() || description.isEmpty()) {
-            throw ApiException(HttpStatus.BAD_REQUEST, "Название и описание задачи обязательны")
+        val starterCode = request.starterCode.trim()
+        if (title.isEmpty()) {
+            throw ApiException(HttpStatus.BAD_REQUEST, "Название задачи обязательно")
         }
         val category = ensureLanguageCategory(user, language)
         val template = taskRepository.save(
@@ -46,7 +47,7 @@ class UserTaskService(
                 category = category,
                 title = title,
                 description = description,
-                starterCode = request.starterCode,
+                starterCode = starterCode,
                 language = language,
             ),
         )
@@ -60,12 +61,13 @@ class UserTaskService(
         val language = normalizeLanguage(request.language)
         val title = request.title.trim()
         val description = request.description.trim()
-        if (title.isEmpty() || description.isEmpty()) {
-            throw ApiException(HttpStatus.BAD_REQUEST, "Название и описание задачи обязательны")
+        val starterCode = request.starterCode.trim()
+        if (title.isEmpty()) {
+            throw ApiException(HttpStatus.BAD_REQUEST, "Название задачи обязательно")
         }
         task.title = title
         task.description = description
-        task.starterCode = request.starterCode
+        task.starterCode = starterCode
         task.language = language
         task.category = ensureLanguageCategory(user, language)
         return taskRepository.save(task).toDto()

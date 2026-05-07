@@ -53,6 +53,7 @@ import {
   defaultKeymap,
   indentWithTab,
 } from "@codemirror/commands";
+import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import {
   indentOnInput,
   bracketMatching,
@@ -870,7 +871,8 @@ export function RoomPage() {
 
   useEffect(() => {
     const nextSequence =
-      typeof merged?.lastYjsSequence === "number" && Number.isFinite(merged.lastYjsSequence)
+      typeof merged?.lastYjsSequence === "number" &&
+      Number.isFinite(merged.lastYjsSequence)
         ? Math.max(0, Math.floor(merged.lastYjsSequence))
         : 0;
     lastKnownServerYjsSequenceRef.current = nextSequence;
@@ -930,7 +932,8 @@ export function RoomPage() {
       );
       const cursorsFromSync = (incoming.cursors ?? []).map((cursor) => {
         const participantMeta = participantBySessionId.get(cursor.sessionId);
-        const normalizedRole = cursor.role ?? participantMeta?.role ?? "candidate";
+        const normalizedRole =
+          cursor.role ?? participantMeta?.role ?? "candidate";
         const nextCursorSequence =
           typeof cursor.cursorSequence === "number"
             ? cursor.cursorSequence
@@ -938,7 +941,9 @@ export function RoomPage() {
         const normalizedCursor: CursorInfo = {
           ...cursor,
           role: normalizedRole,
-          userId: normalizeIdentityValue(cursor.userId ?? participantMeta?.userId),
+          userId: normalizeIdentityValue(
+            cursor.userId ?? participantMeta?.userId,
+          ),
           participantId: normalizeIdentityValue(
             cursor.participantId ?? participantMeta?.participantId,
           ),
@@ -988,7 +993,9 @@ export function RoomPage() {
         };
       });
       const mergedCursorIds = new Set(
-        cursorsFromSync.map((c) => participantIdentityKey(c) ?? `session:${c.sessionId}`),
+        cursorsFromSync.map(
+          (c) => participantIdentityKey(c) ?? `session:${c.sessionId}`,
+        ),
       );
       const cursorsMissingFromSync = (previousState?.cursors ?? []).filter(
         (c) =>
@@ -1045,7 +1052,8 @@ export function RoomPage() {
             : [],
       };
       lastKnownServerYjsSequenceRef.current =
-        typeof nextState.lastYjsSequence === "number" && Number.isFinite(nextState.lastYjsSequence)
+        typeof nextState.lastYjsSequence === "number" &&
+        Number.isFinite(nextState.lastYjsSequence)
           ? Math.max(0, Math.floor(nextState.lastYjsSequence))
           : 0;
       const previousSyncKey = previousState
@@ -1200,7 +1208,10 @@ export function RoomPage() {
       }
 
       const nextCursors = [...currentCursors];
-      nextCursors[existingIndex] = pickPreferredCursor(existing, normalizedCursor);
+      nextCursors[existingIndex] = pickPreferredCursor(
+        existing,
+        normalizedCursor,
+      );
       return { ...previous, cursors: mergeCursorsByIdentity(nextCursors) };
     });
   }, []);
@@ -1626,7 +1637,7 @@ export function RoomPage() {
       if (!merged) return;
       const title = task.title.trim();
       const description = task.description.trim();
-      if (!title || !description) {
+      if (!title) {
         trackEvent("prod_room_custom_task_add_failed", {
           reason: "validation_failed",
         });
@@ -2237,7 +2248,7 @@ function OwnerLayout({
   const submitAddCustomTaskToRoom = useCallback(async () => {
     const title = customTaskTitle.trim();
     const description = customTaskDescription.trim();
-    if (!title || !description) return;
+    if (!title) return;
     try {
       await onAddCustomTask({
         title,
@@ -2441,9 +2452,7 @@ function OwnerLayout({
   if (recentCandidateKeyHistory.length === 0 && lastCandidateKey) {
     recentCandidateKeyHistory.push(lastCandidateKey);
   }
-  const canSubmitCustomTask =
-    customTaskTitle.trim().length > 0 &&
-    customTaskDescription.trim().length > 0;
+  const canSubmitCustomTask = customTaskTitle.trim().length > 0;
 
   const handleTaskStepSelect = useCallback(
     (stepIndex: number) => {
@@ -2535,7 +2544,7 @@ function OwnerLayout({
                 required
               />
               <Textarea
-                label="Описание (Markdown)"
+                label="Описание (Markdown, необязательно)"
                 value={customTaskDescription}
                 onChange={(event) =>
                   setCustomTaskDescription(event.currentTarget.value)
@@ -2543,10 +2552,9 @@ function OwnerLayout({
                 minRows={5}
                 autosize
                 disabled={isAddingTasksFromCatalog}
-                required
               />
               <Textarea
-                label="Стартовый код"
+                label="Стартовый код (необязательно)"
                 value={customTaskStarterCode}
                 onChange={(event) =>
                   setCustomTaskStarterCode(event.currentTarget.value)
@@ -3155,11 +3163,14 @@ function SharedRoomEditorPanel({
             height="100%"
             language={toEditorLanguage(merged.language)}
             value={
-              merged.code || (merged.lastCodeUpdatedBySessionId ? "" : stepStarterCode)
+              merged.code ||
+              (merged.lastCodeUpdatedBySessionId ? "" : stepStarterCode)
             }
             serverYjsBase64={merged.yjsDocumentBase64 ?? null}
             serverYjsSequence={merged.lastYjsSequence ?? 0}
-            lastCodeUpdatedBySessionId={merged.lastCodeUpdatedBySessionId ?? null}
+            lastCodeUpdatedBySessionId={
+              merged.lastCodeUpdatedBySessionId ?? null
+            }
             resyncSignal={resyncSignal}
             syncKey={syncKey}
             readOnly={!editorReady}
@@ -3483,11 +3494,18 @@ function participantIdentityKey(input: {
   return null;
 }
 
-function pickPreferredCursor(existing: CursorInfo, candidate: CursorInfo): CursorInfo {
+function pickPreferredCursor(
+  existing: CursorInfo,
+  candidate: CursorInfo,
+): CursorInfo {
   const existingSequence =
-    typeof existing.cursorSequence === "number" ? existing.cursorSequence : null;
+    typeof existing.cursorSequence === "number"
+      ? existing.cursorSequence
+      : null;
   const candidateSequence =
-    typeof candidate.cursorSequence === "number" ? candidate.cursorSequence : null;
+    typeof candidate.cursorSequence === "number"
+      ? candidate.cursorSequence
+      : null;
   if (existingSequence != null && candidateSequence != null) {
     if (candidateSequence > existingSequence) return candidate;
     if (candidateSequence < existingSequence) return existing;
@@ -3498,9 +3516,13 @@ function pickPreferredCursor(existing: CursorInfo, candidate: CursorInfo): Curso
   }
 
   const existingSeenAt =
-    typeof existing.lastSeenAtEpochMs === "number" ? existing.lastSeenAtEpochMs : 0;
+    typeof existing.lastSeenAtEpochMs === "number"
+      ? existing.lastSeenAtEpochMs
+      : 0;
   const candidateSeenAt =
-    typeof candidate.lastSeenAtEpochMs === "number" ? candidate.lastSeenAtEpochMs : 0;
+    typeof candidate.lastSeenAtEpochMs === "number"
+      ? candidate.lastSeenAtEpochMs
+      : 0;
   if (candidateSeenAt !== existingSeenAt) {
     return candidateSeenAt > existingSeenAt ? candidate : existing;
   }
@@ -3511,7 +3533,8 @@ function pickPreferredCursor(existing: CursorInfo, candidate: CursorInfo): Curso
 function mergeCursorsByIdentity(cursors: CursorInfo[]): CursorInfo[] {
   const byIdentity = new Map<string, CursorInfo>();
   cursors.forEach((cursor) => {
-    const identityKey = participantIdentityKey(cursor) ?? `session:${cursor.sessionId}`;
+    const identityKey =
+      participantIdentityKey(cursor) ?? `session:${cursor.sessionId}`;
     const existing = byIdentity.get(identityKey);
     if (!existing) {
       byIdentity.set(identityKey, cursor);
@@ -3793,7 +3816,8 @@ function RoomCodeEditor({
 
   useEffect(() => {
     latestServerYjsSequenceRef.current =
-      typeof serverYjsSequence === "number" && Number.isFinite(serverYjsSequence)
+      typeof serverYjsSequence === "number" &&
+      Number.isFinite(serverYjsSequence)
         ? Math.max(0, Math.floor(serverYjsSequence))
         : 0;
   }, [serverYjsSequence]);
@@ -3849,7 +3873,8 @@ function RoomCodeEditor({
     const targetCode = value ?? "";
     const snap = serverYjsBase64?.trim();
     const normalizedServerYjsSequence =
-      typeof serverYjsSequence === "number" && Number.isFinite(serverYjsSequence)
+      typeof serverYjsSequence === "number" &&
+      Number.isFinite(serverYjsSequence)
         ? Math.max(0, Math.floor(serverYjsSequence))
         : 0;
     const hasExistingServerYjsState = normalizedServerYjsSequence > 0;
@@ -3969,9 +3994,15 @@ function RoomCodeEditor({
           history(),
           foldGutter(),
           indentOnInput(),
+          closeBrackets(),
           bracketMatching(),
           syntaxHighlighting(defaultHighlightStyle),
-          keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap]),
+          keymap.of([
+            indentWithTab,
+            ...closeBracketsKeymap,
+            ...defaultKeymap,
+            ...historyKeymap,
+          ]),
           readOnlyCompartment.of(EditorState.readOnly.of(readOnly)),
           languageCompartment.of(languageExtension),
           yCollab(yText, awareness, { undoManager: false }),
@@ -4134,12 +4165,12 @@ function RoomCodeEditor({
     const next = value ?? "";
     const snap = serverYjsBase64?.trim() ?? "";
     const normalizedServerYjsSequence =
-      typeof serverYjsSequence === "number" && Number.isFinite(serverYjsSequence)
+      typeof serverYjsSequence === "number" &&
+      Number.isFinite(serverYjsSequence)
         ? Math.max(0, Math.floor(serverYjsSequence))
         : 0;
     const hasRemoteHistoryWithoutSnapshot =
-      !snap &&
-      normalizedServerYjsSequence > 0;
+      !snap && normalizedServerYjsSequence > 0;
 
     roomSyncLog("hydrate_from_server", {
       syncKeyChanged,
