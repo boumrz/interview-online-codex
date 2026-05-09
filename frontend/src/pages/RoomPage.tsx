@@ -83,6 +83,33 @@ import {
 } from "../services/api";
 import { setVisitParams, trackEvent } from "../services/analytics";
 import { useRoomSocket } from "../features/room/useRoomSocket";
+import {
+  buildModifierPrefix,
+  formatCandidateKey,
+  formatCandidateKeyHistoryTimestamp,
+  normalizeKeyCodeLabel,
+  normalizeKeyLabel,
+  type CandidateKeyInfo,
+  type KeyPressPayload,
+} from "../features/room/candidateKeys";
+import { useCandidateKeyTracker } from "../features/room/useCandidateKeyTracker";
+import { useOwnerPanelResize } from "../features/room/useOwnerPanelResize";
+import {
+  buildPersonalNotesMarkdownDocument,
+  formatStepBlockLabel,
+  formatStepRatingSuffix,
+  type PersonalNotesExportOptions,
+} from "../features/room/personalNotesExport";
+import {
+  parsePersonalNotesCommand,
+  parseStepBlockName,
+  type PersonalNotesCommand,
+} from "../features/room/privateNotesCommands";
+import {
+  buildRoomExportFileName,
+  renderPersonalNotesPdf,
+  triggerBrowserDownload,
+} from "../features/room/personalNotesPdfExport";
 import type { RoomTask, TaskTemplate } from "../types";
 
 import styles from "./RoomPage.module.css";
@@ -123,48 +150,9 @@ type CursorInfo = {
 };
 
 /**
- * Возможные категории событий лога активности кандидата:
- * - `keydown` — обычное нажатие клавиши.
- * - `window_blur` — окно браузера потеряло фокус (Alt+Tab/Cmd+Tab,
- *   переключение на другое приложение).
- * - `window_focus` — окно браузера снова получило фокус.
- * - `tab_hidden` — вкладка стала скрытой (переключение на другую вкладку
- *   внутри браузера, сворачивание окна).
- * - `tab_visible` — вкладка снова видна.
+ * Логирование клавиш кандидата вынесено в `frontend/src/features/room/candidateKeys.ts`.
+ * Здесь только реэкспорт публичного API для существующих ссылок внутри файла.
  */
-type CandidateKeyEventKind =
-  | "keydown"
-  | "window_blur"
-  | "window_focus"
-  | "tab_hidden"
-  | "tab_visible";
-
-type CandidateKeyInfo = {
-  sessionId: string;
-  displayName: string;
-  key: string;
-  keyCode: string;
-  ctrlKey: boolean;
-  altKey: boolean;
-  shiftKey: boolean;
-  metaKey: boolean;
-  timestampEpochMs: number;
-  /**
-   * Опциональное поле — старые сообщения с бэкенда могут не содержать его,
-   * тогда трактуем как обычный `keydown`.
-   */
-  eventKind?: CandidateKeyEventKind | string;
-};
-
-type KeyPressPayload = {
-  key: string;
-  keyCode: string;
-  ctrlKey: boolean;
-  altKey: boolean;
-  shiftKey: boolean;
-  metaKey: boolean;
-  eventKind?: CandidateKeyEventKind;
-};
 
 type YjsUpdateHandler = (
   yjsUpdate: string,
@@ -272,20 +260,10 @@ type MarkdownToolId =
   | "table";
 type MobileRoomTab = "editor" | "collaboration" | "tasks";
 
-const MIN_OWNER_PANEL_WIDTH = 330;
 /**
- * Жёсткий потолок для левой панели — половина рабочей области (ширина окна).
- * Реальный максимум вычисляется в рантайме через {@link computeMaxOwnerPanelWidth},
- * эта константа просто страхует от деградации на серверном рендере и при
- * очень узких окнах (никогда не уходим ниже MIN_OWNER_PANEL_WIDTH).
+ * Поведение ресайза левой панели интервьюера живёт в `useOwnerPanelResize` —
+ * там же лежат `MIN_OWNER_PANEL_WIDTH` и расчёт динамического потолка.
  */
-const MAX_OWNER_PANEL_WIDTH_FALLBACK = 1200;
-
-function computeMaxOwnerPanelWidth(viewportWidth: number): number {
-  const half = Math.floor(viewportWidth / 2);
-  // Половина окна, но не меньше минимума, иначе clamp ломается на узких экранах.
-  return Math.max(MIN_OWNER_PANEL_WIDTH, half);
-}
 const MIN_BRIEFING_HEIGHT = 120;
 const MAX_BRIEFING_HEIGHT = 420;
 const LOG_HISTORY_LIMIT = 50;
@@ -435,77 +413,6 @@ function useIsCompactRoomLayout(maxWidth: number): boolean {
   }, [query]);
 
   return isCompact;
-}
-
-function normalizeKeyCodeLabel(code: string): string {
-  const normalizedCode = code.trim();
-  if (!normalizedCode) return "";
-  if (normalizedCode === "Unidentified") return "";
-  if (normalizedCode.startsWith("Key")) {
-    return normalizedCode.slice(3);
-  }
-  if (normalizedCode.startsWith("Digit")) {
-    return normalizedCode.slice(5);
-  }
-  if (normalizedCode === "Space" || normalizedCode === "Spacebar") {
-    return "Space";
-  }
-  if (
-    normalizedCode === "Tab" ||
-    normalizedCode === "Enter" ||
-    normalizedCode === "Escape" ||
-    normalizedCode === "Backspace" ||
-    normalizedCode === "Delete"
-  ) {
-    return normalizedCode;
-  }
-  if (normalizedCode.startsWith("Numpad")) {
-    return normalizedCode.replace("Numpad", "Num");
-  }
-  return normalizedCode.replace(/(Left|Right)$/g, "");
-}
-
-function normalizeKeyLabel(key: string, keyCode: string): string {
-  if (key === " " || key === "\u00A0") {
-    return "Space";
-  }
-  if (key === "\t") {
-    return "Tab";
-  }
-  if (key === "\n" || key === "\r" || key === "\r\n") {
-    return "Enter";
-  }
-  const normalized = key.trim();
-  if (!normalized) {
-    return normalizeKeyCodeLabel(keyCode) || "Unknown";
-  }
-  if (normalized === "Unidentified") {
-    return normalizeKeyCodeLabel(keyCode) || "Unknown";
-  }
-  if (
-    normalized === "Tab" ||
-    normalized === "Enter" ||
-    normalized === "Backspace" ||
-    normalized === "Delete"
-  ) {
-    return normalized;
-  }
-
-  const aliases: Record<string, string> = {
-    Control: "Ctrl",
-    Meta: "Cmd",
-    Command: "Cmd",
-    OS: "Cmd",
-    Escape: "Esc",
-    Spacebar: "Space",
-  };
-  if (aliases[normalized]) {
-    return aliases[normalized];
-  }
-  if (normalized.startsWith("Arrow")) {
-    return normalized.slice(5);
-  }
-  return normalized;
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -741,33 +648,6 @@ function getPrivateNoteBlockColor(blockName: string): (typeof PRIVATE_NOTE_BLOCK
   return PRIVATE_NOTE_BLOCK_COLORS[idx] ?? "blue";
 }
 
-/** UI label for a step block: `Шаг 1`, `Шаг 2`, etc. */
-function formatStepBlockLabel(stepIndex: number): string {
-  return `Шаг ${stepIndex + 1}`;
-}
-
-/**
- * Recognises step block names: `Шаг 1`, `step 2`, `шаг 03` etc. Returns the
- * 0-based step index or `null` if the input is a regular custom name.
- */
-function parseStepBlockName(rawName: string): number | null {
-  const normalized = rawName.trim().toLocaleLowerCase("ru-RU");
-  if (!normalized) return null;
-  const match = normalized.match(/^(?:шаг|step)\s+0*(\d{1,3})$/);
-  if (!match) return null;
-  const oneBased = Number.parseInt(match[1], 10);
-  if (!Number.isFinite(oneBased) || oneBased < 1) return null;
-  return oneBased - 1;
-}
-
-/** Find the task that backs a given step block (used for export labels). */
-function findStepBlockTask<T extends { stepIndex: number; title: string }>(
-  tasks: T[],
-  stepIndex: number,
-): T | null {
-  return tasks.find((task) => task.stepIndex === stepIndex) ?? null;
-}
-
 function formatNoteTimestamp(timestampEpochMs: number): string {
   if (!timestampEpochMs) return "—";
   return new Date(timestampEpochMs).toLocaleTimeString("ru-RU", {
@@ -776,279 +656,11 @@ function formatNoteTimestamp(timestampEpochMs: number): string {
   });
 }
 
-function formatExportTimestamp(timestampEpochMs: number): string {
-  if (!timestampEpochMs) return "—";
-  return new Date(timestampEpochMs).toLocaleString("ru-RU", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-type PersonalNotesCommand =
-  | { kind: "none" }
-  | { kind: "menu" }
-  | { kind: "block_prompt" }
-  | { kind: "block_apply"; blockName: string }
-  | { kind: "unknown"; raw: string };
-
 /**
- * Парсер слэш-команд в поле личных заметок.
- * Поддерживается только `/block <имя>` — закрытие блока теперь делается
- * крестиком на бейдже активного блока, отдельной команды нет.
+ * Билдер markdown-выгрузки приватных заметок и связанные хелперы живут в
+ * `frontend/src/features/room/personalNotesExport.ts`. RoomPage импортирует
+ * их под уже существующими именами.
  */
-function parsePersonalNotesCommand(value: string): PersonalNotesCommand {
-  const normalized = value.replaceAll("\r\n", "\n").trim();
-  if (!normalized.startsWith("/")) return { kind: "none" };
-  if (normalized.includes("\n")) return { kind: "none" };
-  const normalizedLower = normalized.toLowerCase();
-  if (normalizedLower === "/") return { kind: "menu" };
-  if ("/block".startsWith(normalizedLower)) {
-    return { kind: "block_prompt" };
-  }
-  if (normalizedLower.startsWith("/block ")) {
-    const blockName = normalized.slice("/block ".length).trim().slice(0, 80);
-    if (!blockName) {
-      return { kind: "block_prompt" };
-    }
-    return { kind: "block_apply", blockName };
-  }
-  return { kind: "unknown", raw: normalized };
-}
-
-type PersonalNotesExportOptions = {
-  includeTimestamps: boolean;
-  includeFreeNotes: boolean;
-};
-
-/**
- * Форматирует оценку шага из 5-балльной шкалы в кусочек текста для заголовка
- * блока (например, " — Оценка 4/5"). Если оценка не выставлена — возвращает
- * пустую строку, чтобы заголовок не разрастался.
- */
-function formatStepRatingSuffix(rating: number | null | undefined): string {
-  if (typeof rating !== "number" || rating < 1 || rating > 5) return "";
-  return ` — Оценка ${rating}/5`;
-}
-
-/** Один текстовый ряд под `# ...` в выгрузке заметок: без переводов строк. */
-function normalizeExportRoomHeadingLine(
-  roomTitle: string | null | undefined,
-): string {
-  const normalized = (roomTitle ?? "")
-    .replace(/\r?\n+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 200);
-  return normalized || "Комната";
-}
-
-/**
- * Markdown выгрузки личных заметок: первая строка — `# название комнаты`.
- * Заметки — один поток по комнате, группы по блокам; шаг — «Шаг N - задача»
- * (+ оценка при наличии).
- */
-function buildPersonalNotesMarkdownDocument(
-  tasks: Array<{
-    stepIndex: number;
-    title: string;
-  }>,
-  entries: PersonalNoteEntry[],
-  options: PersonalNotesExportOptions,
-  /**
-   * Карта оценок шагов вида `{ "0": 4, "1": null, ... }`. Ключ — индекс шага
-   * как строка, значение — балл 1..5 либо null/отсутствует, если оценки нет.
-   */
-  taskScores: Record<string, number | null> = {},
-  roomTitle?: string | null,
-): string {
-  const lines: string[] = [];
-  lines.push(`# ${normalizeExportRoomHeadingLine(roomTitle)}`);
-  lines.push("");
-  lines.push(`_Сформировано: ${formatExportTimestamp(Date.now())}_`);
-  lines.push("");
-
-  const sorted = entries
-    .slice()
-    .sort(
-      (left, right) =>
-        left.timestampEpochMs - right.timestampEpochMs ||
-        left.id.localeCompare(right.id),
-    );
-
-  type ExportBlock = {
-    key: string;
-    displayName: string;
-    entries: PersonalNoteEntry[];
-    /**
-     * Индекс шага для блока, привязанного к шагу. У кастомных блоков — `null`,
-     * чтобы при сортировке экспорта сначала шли шаги по возрастанию `stepIndex`,
-     * а уже после них — кастомные блоки в порядке появления.
-     */
-    stepIndex: number | null;
-    /**
-     * Порядковый номер вставки. Используется как стабильный вторичный ключ
-     * сортировки для кастомных блоков (сохраняем порядок появления).
-     */
-    insertionOrder: number;
-  };
-  const freeEntries: PersonalNoteEntry[] = [];
-  const blocks = new Map<string, ExportBlock>();
-  let nextInsertionOrder = 0;
-
-  sorted.forEach((entry) => {
-    const stepIndex = entry.blockStepIndex;
-    if (typeof stepIndex === "number") {
-      const stepKey = `step:${stepIndex}`;
-      const taskTitle =
-        findStepBlockTask(tasks, stepIndex)?.title.trim() ?? "";
-      const baseLabel = taskTitle
-        ? `${formatStepBlockLabel(stepIndex)} - ${taskTitle}`
-        : formatStepBlockLabel(stepIndex);
-      const ratingSuffix = formatStepRatingSuffix(
-        taskScores[String(stepIndex)],
-      );
-      const displayName = `${baseLabel}${ratingSuffix}`;
-      const existing = blocks.get(stepKey);
-      if (existing) {
-        existing.entries.push(entry);
-        existing.displayName = displayName;
-      } else {
-        blocks.set(stepKey, {
-          key: stepKey,
-          displayName,
-          entries: [entry],
-          stepIndex,
-          insertionOrder: nextInsertionOrder++,
-        });
-      }
-      return;
-    }
-    const customName = entry.blockName?.trim() ?? "";
-    if (!customName) {
-      freeEntries.push(entry);
-      return;
-    }
-    const customKey = `custom:${customName.toLocaleLowerCase("ru-RU")}`;
-    const existing = blocks.get(customKey);
-    if (existing) {
-      existing.entries.push(entry);
-    } else {
-      blocks.set(customKey, {
-        key: customKey,
-        displayName: customName,
-        entries: [entry],
-        stepIndex: null,
-        insertionOrder: nextInsertionOrder++,
-      });
-    }
-  });
-
-  const formatEntry = (entry: PersonalNoteEntry) => {
-    const prefix = options.includeTimestamps
-      ? `[${formatExportTimestamp(entry.timestampEpochMs)}] `
-      : "";
-    return `- ${prefix}${entry.text}`;
-  };
-
-  /**
-   * Если у шага есть оценка, но нет ни одной заметки — всё равно выводим
-   * блок (без записей), чтобы экспорт показывал оценку каждого шага.
-   * Шаги без заметок и без оценки опускаем.
-   */
-  tasks
-    .slice()
-    .sort((left, right) => left.stepIndex - right.stepIndex)
-    .forEach((task) => {
-      const stepKey = `step:${task.stepIndex}`;
-      if (blocks.has(stepKey)) return;
-      const rating = taskScores[String(task.stepIndex)];
-      if (typeof rating !== "number" || rating < 1 || rating > 5) return;
-      const baseLabel = task.title.trim()
-        ? `${formatStepBlockLabel(task.stepIndex)} - ${task.title.trim()}`
-        : formatStepBlockLabel(task.stepIndex);
-      blocks.set(stepKey, {
-        key: stepKey,
-        displayName: `${baseLabel}${formatStepRatingSuffix(rating)}`,
-        entries: [],
-        stepIndex: task.stepIndex,
-        insertionOrder: nextInsertionOrder++,
-      });
-    });
-
-  /**
-   * Шаговые блоки выводим строго по `stepIndex` (Шаг 1, 2, 3...), кастомные —
-   * в порядке появления. Записи внутри блоков уже отсортированы по времени
-   * выше через `sorted`. «В свободной форме» уезжает в самый конец, чтобы
-   * шаги шли первыми, как и просит пользователь.
-   */
-  const orderedBlocks = Array.from(blocks.values()).sort((left, right) => {
-    if (left.stepIndex !== null && right.stepIndex !== null) {
-      return left.stepIndex - right.stepIndex;
-    }
-    if (left.stepIndex !== null) return -1;
-    if (right.stepIndex !== null) return 1;
-    return left.insertionOrder - right.insertionOrder;
-  });
-
-  orderedBlocks.forEach((block) => {
-    lines.push(`## ${block.displayName}`);
-    if (block.entries.length === 0) {
-      lines.push("- _Заметок нет_");
-    } else {
-      block.entries.forEach((entry) => lines.push(formatEntry(entry)));
-    }
-    lines.push("");
-  });
-
-  if (options.includeFreeNotes && freeEntries.length > 0) {
-    lines.push("## В свободной форме");
-    freeEntries.forEach((entry) => lines.push(formatEntry(entry)));
-    lines.push("");
-  }
-
-  if (lines.length <= 4) {
-    lines.push("Заметок пока нет.");
-    lines.push("");
-  }
-
-  return lines.join("\n");
-}
-
-function buildRoomExportFileName(
-  roomTitle: string | null | undefined,
-  extension: "md" | "pdf",
-): string {
-  const normalizedTitle = (roomTitle ?? "")
-    .replace(/[\\/:*?"<>|]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 96);
-  const baseName = normalizedTitle || "room-notes";
-  return `${baseName}.${extension}`;
-}
-
-function triggerBrowserDownload(blob: Blob, fileName: string) {
-  const href = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = href;
-  anchor.download = fileName;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  const debugWindow = window as Window & {
-    __roomLastDownload?: { fileName: string; mime: string; timestamp: number };
-  };
-  debugWindow.__roomLastDownload = {
-    fileName,
-    mime: blob.type,
-    timestamp: Date.now(),
-  };
-  URL.revokeObjectURL(href);
-}
-
 function getParticipantPresenceLabel(status: Participant["presenceStatus"]) {
   return status === "active" ? "В фокусе" : "Вне фокуса";
 }
@@ -2325,7 +1937,6 @@ export function RoomPage() {
   const exportPersonalNotesPdf = useCallback(async () => {
     if (!merged) return;
     try {
-      const pdfFileName = buildRoomExportFileName(room?.title, "pdf");
       const markdown = buildPersonalNotesMarkdownDocument(
         mergedTasks.map((task) => ({
           stepIndex: task.stepIndex,
@@ -2339,133 +1950,10 @@ export function RoomPage() {
         merged.taskScores,
         room?.title,
       );
-      const { jsPDF } = await import("jspdf");
-      const pageWidthMm = 210;
-      const pageHeightMm = 297;
-      const marginMm = 12;
-      const printableWidthMm = pageWidthMm - marginMm * 2;
-      const printableHeightMm = pageHeightMm - marginMm * 2;
-      const canvasWidthPx = 1200;
-      const pxPerMm = canvasWidthPx / printableWidthMm;
-      const pageHeightPx = Math.max(1, Math.floor(printableHeightMm * pxPerMm));
-      const pageWidthPx = canvasWidthPx;
-
-      const measureCanvas = document.createElement("canvas");
-      const measureCtx = measureCanvas.getContext("2d");
-      if (!measureCtx) {
-        throw new Error("Unable to create 2D context for PDF export");
-      }
-
-      const styledRows = markdown.split("\n").map((line) => {
-        if (!line.trim()) {
-          return { text: "", fontSize: 18, bold: false, marginTop: 4, marginBottom: 8 };
-        }
-        if (line.startsWith("# ")) {
-          return { text: line.slice(2), fontSize: 40, bold: true, marginTop: 8, marginBottom: 14 };
-        }
-        if (line.startsWith("## ")) {
-          return { text: line.slice(3), fontSize: 32, bold: true, marginTop: 8, marginBottom: 10 };
-        }
-        if (line.startsWith("### ")) {
-          return { text: line.slice(4), fontSize: 27, bold: true, marginTop: 6, marginBottom: 8 };
-        }
-        if (line.startsWith("- ")) {
-          return { text: `• ${line.slice(2)}`, fontSize: 20, bold: false, marginTop: 2, marginBottom: 4 };
-        }
-        const trimmed = line.trim();
-        if (trimmed.startsWith("_") && trimmed.endsWith("_") && trimmed.length > 1) {
-          return {
-            text: trimmed.slice(1, -1),
-            fontSize: 19,
-            bold: false,
-            marginTop: 2,
-            marginBottom: 6,
-          };
-        }
-        return { text: line, fontSize: 20, bold: false, marginTop: 2, marginBottom: 5 };
+      await renderPersonalNotesPdf({
+        markdown,
+        fileName: buildRoomExportFileName(room?.title, "pdf"),
       });
-
-      const wrapLine = (text: string, maxWidth: number, fontSize: number, bold: boolean) => {
-        const normalized = text.replace(/\s+/g, " ").trim();
-        if (!normalized) return [""];
-        measureCtx.font = `${bold ? 700 : 400} ${fontSize}px "IBM Plex Sans", "Segoe UI", Arial, sans-serif`;
-        const words = normalized.split(" ");
-        const wrapped: string[] = [];
-        let current = "";
-        words.forEach((word) => {
-          const candidate = current ? `${current} ${word}` : word;
-          if (measureCtx.measureText(candidate).width <= maxWidth || !current) {
-            current = candidate;
-          } else {
-            wrapped.push(current);
-            current = word;
-          }
-        });
-        if (current) wrapped.push(current);
-        return wrapped.length > 0 ? wrapped : [normalized];
-      };
-
-      const pages: Array<
-        Array<{ text: string; y: number; fontSize: number; bold: boolean }>
-      > = [[]];
-      let pageIndex = 0;
-      let cursorY = 0;
-      const ensurePage = () => {
-        if (!pages[pageIndex]) {
-          pages[pageIndex] = [];
-        }
-      };
-      ensurePage();
-
-      styledRows.forEach((row) => {
-        const wrapped = wrapLine(row.text, pageWidthPx - 16, row.fontSize, row.bold);
-        cursorY += row.marginTop;
-        const lineHeight = Math.ceil(row.fontSize * 1.45);
-        wrapped.forEach((line) => {
-          if (cursorY + lineHeight > pageHeightPx && pages[pageIndex].length > 0) {
-            pageIndex += 1;
-            cursorY = 0;
-            ensurePage();
-          }
-          pages[pageIndex].push({
-            text: line,
-            y: cursorY,
-            fontSize: row.fontSize,
-            bold: row.bold,
-          });
-          cursorY += lineHeight;
-        });
-        cursorY += row.marginBottom;
-      });
-
-      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-      pages.forEach((pageLines, index) => {
-        if (index > 0) {
-          pdf.addPage("a4", "portrait");
-        }
-        const pageCanvas = document.createElement("canvas");
-        pageCanvas.width = pageWidthPx;
-        pageCanvas.height = pageHeightPx;
-        const pageCtx = pageCanvas.getContext("2d");
-        if (!pageCtx) return;
-        pageCtx.fillStyle = "#ffffff";
-        pageCtx.fillRect(0, 0, pageWidthPx, pageHeightPx);
-        pageCtx.fillStyle = "#10151c";
-        pageLines.forEach((line) => {
-          pageCtx.font = `${line.bold ? 700 : 400} ${line.fontSize}px "IBM Plex Sans", "Segoe UI", Arial, sans-serif`;
-          pageCtx.fillText(line.text, 8, line.y + line.fontSize);
-        });
-        pdf.addImage(
-          pageCanvas.toDataURL("image/png"),
-          "PNG",
-          marginMm,
-          marginMm,
-          printableWidthMm,
-          printableHeightMm,
-        );
-      });
-      const pdfBlob = pdf.output("blob");
-      triggerBrowserDownload(pdfBlob, pdfFileName);
     } catch (error) {
       console.error("PRIVATE_NOTES_PDF_EXPORT_FAIL", error);
     }
@@ -2688,110 +2176,10 @@ export function RoomPage() {
     [merged?.role, sendKeyPress],
   );
 
-  /**
-   * Глобальные слушатели клавиатуры и фокуса на стороне кандидата. Они
-   * закрывают пробелы, которые не покрывает `keydown`-хэндлер CodeMirror:
-   *   1. Клавиши, нажатые когда фокус не в редакторе (модалки, заметки,
-   *      адресная строка браузера и т.п.) — глобальный `keydown` в фазе
-   *      capture.
-   *   2. `Alt+Tab`/`Cmd+Tab`/смена приложения — ОС перехватывает Tab до
-   *      браузера, но окно теряет фокус: ловим `window.blur` и пишем в лог
-   *      синтетическое событие с накопленным состоянием модификаторов
-   *      (например «Alt+Tab — переключение окна»).
-   *   3. Смена вкладки внутри браузера — `document.visibilitychange`.
-   */
-  useEffect(() => {
-    if (typeof window === "undefined") return undefined;
-    if (merged?.role !== "candidate") return undefined;
-
-    /** Запоминаем последнее состояние модификаторов, чтобы при blur'е
-     *  понимать, нажат ли был Alt/Cmd, и формировать осмысленный лейбл. */
-    const modifierState = {
-      ctrl: false,
-      alt: false,
-      shift: false,
-      meta: false,
-    };
-
-    const updateModifiers = (event: KeyboardEvent) => {
-      modifierState.ctrl = event.ctrlKey;
-      modifierState.alt = event.altKey;
-      modifierState.shift = event.shiftKey;
-      modifierState.meta = event.metaKey;
-    };
-
-    const onWindowKeyDown = (event: KeyboardEvent) => {
-      updateModifiers(event);
-      // Если фокус в CodeMirror — у редактора есть свой keydown-хэндлер,
-      // который уже отправит событие. Дублировать не нужно.
-      const target = event.target;
-      if (target instanceof Element && target.closest(".cm-content")) {
-        return;
-      }
-      handleCandidateKeyPress({
-        key: event.key,
-        keyCode: event.code,
-        ctrlKey: event.ctrlKey,
-        altKey: event.altKey,
-        shiftKey: event.shiftKey,
-        metaKey: event.metaKey,
-      });
-    };
-
-    const onWindowKeyUp = (event: KeyboardEvent) => {
-      updateModifiers(event);
-    };
-
-    /** Эмитим синтетическое «Tab» с реальным состоянием модификаторов: на
-     *  бэкенде/UI получится «Alt+Tab — переключение окна», даже если ОС
-     *  забрала сам Tab себе. */
-    const emitFocusEvent = (eventKind: CandidateKeyEventKind) => {
-      handleCandidateKeyPress({
-        key: "Tab",
-        keyCode: "Tab",
-        ctrlKey: modifierState.ctrl,
-        altKey: modifierState.alt,
-        shiftKey: modifierState.shift,
-        metaKey: modifierState.meta,
-        eventKind,
-      });
-    };
-
-    const onWindowBlur = () => {
-      emitFocusEvent("window_blur");
-    };
-
-    const onWindowFocus = () => {
-      // После возврата фокуса состояние модификаторов гарантированно
-      // сброшено (ОС забрала keyup), поэтому обнуляем сами.
-      modifierState.ctrl = false;
-      modifierState.alt = false;
-      modifierState.shift = false;
-      modifierState.meta = false;
-    };
-
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        emitFocusEvent("tab_hidden");
-      } else if (document.visibilityState === "visible") {
-        emitFocusEvent("tab_visible");
-      }
-    };
-
-    window.addEventListener("keydown", onWindowKeyDown, true);
-    window.addEventListener("keyup", onWindowKeyUp, true);
-    window.addEventListener("blur", onWindowBlur);
-    window.addEventListener("focus", onWindowFocus);
-    document.addEventListener("visibilitychange", onVisibilityChange);
-
-    return () => {
-      window.removeEventListener("keydown", onWindowKeyDown, true);
-      window.removeEventListener("keyup", onWindowKeyUp, true);
-      window.removeEventListener("blur", onWindowBlur);
-      window.removeEventListener("focus", onWindowFocus);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-    };
-  }, [merged?.role, handleCandidateKeyPress]);
+  useCandidateKeyTracker({
+    active: merged?.role === "candidate",
+    onKeyEvent: handleCandidateKeyPress,
+  });
 
   if (isLoading || !merged) {
     return (
@@ -3299,25 +2687,14 @@ function OwnerLayout({
    * вместе с ней одним нажатием Esc.
    */
   useEscapeLayer(addTaskModalOpened, closeAddTaskModal);
-  const [leftPanelWidth, setLeftPanelWidth] = useState(288);
-  /**
-   * Динамический потолок ширины левой панели — половина окна. Минимум остаётся
-   * жёстким (`MIN_OWNER_PANEL_WIDTH`), чтобы при сжатии окна панель не уходила
-   * в зеро. На SSR/первом рендере отдаём fallback, на mount подменяем реальным
-   * значением из `window.innerWidth`.
-   */
-  const [maxOwnerPanelWidth, setMaxOwnerPanelWidth] = useState<number>(() => {
-    if (typeof window === "undefined") return MAX_OWNER_PANEL_WIDTH_FALLBACK;
-    return computeMaxOwnerPanelWidth(window.innerWidth);
-  });
-  useEffect(() => {
-    if (typeof window === "undefined") return undefined;
-    const recompute = () =>
-      setMaxOwnerPanelWidth(computeMaxOwnerPanelWidth(window.innerWidth));
-    recompute();
-    window.addEventListener("resize", recompute);
-    return () => window.removeEventListener("resize", recompute);
-  }, []);
+  const ownerPanelResize = useOwnerPanelResize();
+  const {
+    width: leftPanelWidth,
+    maxWidth: maxOwnerPanelWidth,
+    minWidth: ownerPanelMinWidth,
+    onMouseDown: onOwnerPanelResizeMouseDown,
+    onKeyDown: onOwnerPanelResizeKeyDown,
+  } = ownerPanelResize;
   const roomToolsTabsId = useId();
   const mobileTabsId = useId();
   const notesTabId = `${roomToolsTabsId}-notes-tab`;
@@ -3392,11 +2769,6 @@ function OwnerLayout({
     return availableCatalogTasks.filter((task) => selected.has(task.id));
   }, [availableCatalogTasks, selectedCatalogTaskIds]);
 
-  const dragStateRef = useRef<{ startX: number; startWidth: number } | null>(
-    null,
-  );
-  const [isDragging, setIsDragging] = useState(false);
-
   const submitAddTasksToRoom = useCallback(async () => {
     if (selectedCatalogTaskIds.length === 0) return;
     try {
@@ -3438,18 +2810,6 @@ function OwnerLayout({
     roomLanguage,
   ]);
 
-  const startDrag = useCallback(
-    (event: React.MouseEvent<HTMLDivElement>) => {
-      event.preventDefault();
-      dragStateRef.current = {
-        startX: event.clientX,
-        startWidth: leftPanelWidth,
-      };
-      setIsDragging(true);
-    },
-    [leftPanelWidth],
-  );
-
   const toggleRailPanel = useCallback((panel: "tasks" | "roomTools") => {
     setActiveRailPanel((current) => (current === panel ? null : panel));
   }, []);
@@ -3481,78 +2841,6 @@ function OwnerLayout({
     },
     [],
   );
-
-  const handleResizeHandleKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (event.key === "ArrowLeft") {
-        event.preventDefault();
-        setLeftPanelWidth((current) =>
-          clamp(current - 16, MIN_OWNER_PANEL_WIDTH, maxOwnerPanelWidth),
-        );
-        return;
-      }
-      if (event.key === "ArrowRight") {
-        event.preventDefault();
-        setLeftPanelWidth((current) =>
-          clamp(current + 16, MIN_OWNER_PANEL_WIDTH, maxOwnerPanelWidth),
-        );
-        return;
-      }
-      if (event.key === "Home") {
-        event.preventDefault();
-        setLeftPanelWidth(MIN_OWNER_PANEL_WIDTH);
-        return;
-      }
-      if (event.key === "End") {
-        event.preventDefault();
-        setLeftPanelWidth(maxOwnerPanelWidth);
-      }
-    },
-    [maxOwnerPanelWidth],
-  );
-
-  useEffect(() => {
-    if (!isDragging) return;
-
-    const handleMouseMove = (event: MouseEvent) => {
-      const dragState = dragStateRef.current;
-      if (!dragState) return;
-      const delta = event.clientX - dragState.startX;
-      // Берём актуальный потолок прямо из window — на случай если окно
-      // ресайзнули в момент перетаскивания.
-      const dynamicMax = computeMaxOwnerPanelWidth(
-        typeof window === "undefined"
-          ? MAX_OWNER_PANEL_WIDTH_FALLBACK
-          : window.innerWidth,
-      );
-      setLeftPanelWidth(
-        clamp(
-          dragState.startWidth + delta,
-          MIN_OWNER_PANEL_WIDTH,
-          dynamicMax,
-        ),
-      );
-    };
-
-    const handleMouseUp = () => {
-      setIsDragging(false);
-      dragStateRef.current = null;
-      document.body.style.userSelect = "";
-      document.body.style.cursor = "";
-    };
-
-    document.body.style.userSelect = "none";
-    document.body.style.cursor = "col-resize";
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
-
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
-      document.body.style.userSelect = "";
-      document.body.style.cursor = "";
-    };
-  }, [isDragging]);
 
   useEffect(() => {
     const canScrollNotes = isCompactLayout
@@ -3611,11 +2899,6 @@ function OwnerLayout({
   const showLeftPanel = isCompactLayout
     ? activeMobileTab !== "editor"
     : currentSidePanel !== null;
-  const clampedLeftPanelWidth = clamp(
-    leftPanelWidth,
-    MIN_OWNER_PANEL_WIDTH,
-    maxOwnerPanelWidth,
-  );
   const candidateParticipants = merged.participants.filter(
     (participant) => participant.role === "candidate",
   );
@@ -3864,7 +3147,7 @@ function OwnerLayout({
             }
             className={`${styles.ownerSidePanel} ${isCompactLayout ? styles.mobileRoomPanel : ""}`}
             style={
-              isCompactLayout ? undefined : { width: clampedLeftPanelWidth }
+              isCompactLayout ? undefined : { width: leftPanelWidth }
             }
             aria-label={
               currentSidePanel === "tasks"
@@ -4511,12 +3794,12 @@ function OwnerLayout({
               role="separator"
               tabIndex={0}
               aria-orientation="vertical"
-              aria-valuemin={MIN_OWNER_PANEL_WIDTH}
+              aria-valuemin={ownerPanelMinWidth}
               aria-valuemax={maxOwnerPanelWidth}
-              aria-valuenow={Math.round(clampedLeftPanelWidth)}
+              aria-valuenow={Math.round(leftPanelWidth)}
               aria-label="Изменить ширину левой панели"
-              onMouseDown={startDrag}
-              onKeyDown={handleResizeHandleKeyDown}
+              onMouseDown={onOwnerPanelResizeMouseDown}
+              onKeyDown={onOwnerPanelResizeKeyDown}
             >
               <IconGripVertical size={14} />
             </div>
@@ -4979,80 +4262,6 @@ function BriefingBoard({
       )}
     </Box>
   );
-}
-
-/**
- * Собирает префикс из активных модификаторов («Cmd+», «Alt+Shift+» и т.п.)
- * для строки лога. Используется и обычными `keydown`, и синтетическими
- * событиями (blur/visibility), чтобы лейбл «Alt+Tab — переключение окна»
- * корректно отражал, какие клавиши держал кандидат.
- */
-function buildModifierPrefix(
-  event: Pick<
-    CandidateKeyInfo,
-    "ctrlKey" | "altKey" | "shiftKey" | "metaKey"
-  >,
-  exclude: { ctrl?: boolean; alt?: boolean; shift?: boolean; meta?: boolean } = {},
-): string {
-  const modifiers: string[] = [];
-  if (event.ctrlKey && !exclude.ctrl) modifiers.push("Ctrl");
-  if (event.altKey && !exclude.alt) modifiers.push("Alt");
-  if (event.shiftKey && !exclude.shift) modifiers.push("Shift");
-  if (event.metaKey && !exclude.meta) modifiers.push("Cmd");
-  return modifiers.length > 0 ? `${modifiers.join("+")}+` : "";
-}
-
-function formatCandidateKey(event: CandidateKeyInfo): string {
-  /**
-   * Синтетические события focus/visibility: ОС забирает себе сам Tab при
-   * Alt+Tab/Cmd+Tab, и `keydown` для него до браузера не доходит. Мы знаем
-   * только то, что окно/вкладка потеряли фокус и какие модификаторы при
-   * этом были нажаты — формируем понятный составной лейбл.
-   */
-  const eventKind = event.eventKind ?? "keydown";
-  if (eventKind !== "keydown") {
-    const prefix = buildModifierPrefix(event);
-    switch (eventKind) {
-      case "window_blur":
-        return prefix
-          ? `${prefix}Tab — переключение окна`
-          : "Переключение окна";
-      case "window_focus":
-        return "Возврат в окно";
-      case "tab_hidden":
-        return prefix
-          ? `${prefix}Tab — смена вкладки`
-          : "Смена вкладки";
-      case "tab_visible":
-        return "Возврат на вкладку";
-      default:
-        return prefix ? `${prefix}${eventKind}` : eventKind;
-    }
-  }
-
-  const keyLabel = normalizeKeyLabel(event.key || "", event.keyCode || "");
-  const isCtrlKey = keyLabel === "Ctrl";
-  const isAltKey = keyLabel === "Alt";
-  const isShiftKey = keyLabel === "Shift";
-  const isMetaKey = keyLabel === "Cmd" || keyLabel === "Meta";
-  const prefix = buildModifierPrefix(event, {
-    ctrl: isCtrlKey,
-    alt: isAltKey,
-    shift: isShiftKey,
-    meta: isMetaKey,
-  });
-
-  const key =
-    keyLabel || normalizeKeyCodeLabel(event.keyCode || "") || "Unknown";
-  return `${prefix}${key}`;
-}
-
-function formatCandidateKeyHistoryTimestamp(event: CandidateKeyInfo): string {
-  return new Date(event.timestampEpochMs).toLocaleTimeString("ru-RU", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
 }
 
 function normalizeIdentityValue(value?: string | null): string | null {

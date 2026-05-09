@@ -131,19 +131,11 @@ class CollaborationService(
         var selectionEndColumn: Int? = null,
     )
 
-    private data class NotesThreadPayload(
-        val version: Int = 1,
-        val messages: List<NoteMessagePayload> = emptyList(),
-    )
-
-    private data class RoomPrivateNotesPayload(
-        val version: Int = 1,
-        val authors: Map<String, RoomPrivateNotesAuthorPayload> = emptyMap(),
-    )
-
-    private data class RoomPrivateNotesAuthorPayload(
-        val entries: List<PersonalNoteEntryPayload> = emptyList(),
-    )
+    /**
+     * Payload-структуры (`NotesThreadPayload`, `RoomPrivateNotesPayload`,
+     * `RoomPrivateNotesAuthorPayload`) живут в файле `PrivateNotesPayloads.kt`
+     * того же пакета — используются и сервисом, и [PrivateNotesSerialization].
+     */
 
     private val roomSseConnections = ConcurrentHashMap<String, MutableSet<String>>()
     private val sseConnections = ConcurrentHashMap<String, SseEmitter>()
@@ -1362,49 +1354,14 @@ class CollaborationService(
         return "s:${participant.sessionId.trim()}"
     }
 
-    private fun parseNotesMessages(rawChatJson: String?, legacyNotes: String?): MutableList<NoteMessagePayload> {
-        val chat = rawChatJson.orEmpty().trim()
-        if (chat.isNotBlank()) {
-            val parsed = runCatching {
-                val root = objectMapper.readTree(chat)
-                val messagesNode = when {
-                    root.isArray -> root
-                    root.isObject && root.has("messages") -> root["messages"]
-                    else -> null
-                }
-                if (messagesNode == null || !messagesNode.isArray) {
-                    emptyList()
-                } else {
-                    messagesNode.mapNotNull { node ->
-                        runCatching { objectMapper.treeToValue(node, NoteMessagePayload::class.java) }.getOrNull()
-                    }
-                }
-            }.getOrElse { emptyList() }
-            if (parsed.isNotEmpty()) {
-                return parsed.toMutableList()
-            }
-        }
+    private fun parseNotesMessages(
+        rawChatJson: String?,
+        legacyNotes: String?,
+    ): MutableList<NoteMessagePayload> =
+        PrivateNotesSerialization.parseChatMessages(rawChatJson, legacyNotes, objectMapper)
 
-        val legacy = legacyNotes.orEmpty().trim()
-        if (legacy.isBlank()) {
-            return mutableListOf()
-        }
-
-        return mutableListOf(
-            NoteMessagePayload(
-                id = "legacy-${legacy.hashCode()}",
-                sessionId = "legacy-notes",
-                displayName = "Старые заметки",
-                role = RoomAccessService.RoomRole.INTERVIEWER.wireValue,
-                text = legacy,
-                timestampEpochMs = 0L,
-            ),
-        )
-    }
-
-    private fun serializeNotesMessages(messages: List<NoteMessagePayload>): String {
-        return objectMapper.writeValueAsString(NotesThreadPayload(messages = messages))
-    }
+    private fun serializeNotesMessages(messages: List<NoteMessagePayload>): String =
+        PrivateNotesSerialization.serializeChatMessages(messages, objectMapper)
 
     /**
      * Loads private notes for the room. New room-level storage in
@@ -1413,6 +1370,10 @@ class CollaborationService(
      * once: flatten all entries into a single per-author stream, tagging each
      * entry with `blockStepIndex` of the source task, and persist the result on
      * the room. This keeps existing interviewer notes after the upgrade.
+     *
+     * Pure-сериализация и one-shot миграция вынесены в [PrivateNotesSerialization].
+     * Здесь остаётся ровно тот побочный эффект, который и должен жить в
+     * сервисе: запись результата миграции в БД через [roomRepository].
      */
     private fun parseRoomPrivateNotes(room: Room): MutableMap<String, MutableList<PersonalNoteEntryPayload>> {
         val rawRoom = room.privateNotesJson.orEmpty().trim()
@@ -1421,11 +1382,22 @@ class CollaborationService(
                 objectMapper.readValue(rawRoom, RoomPrivateNotesPayload::class.java)
             }.getOrNull()
             if (parsed != null) {
-                return readAuthorsPayload(parsed.authors)
+                return PrivateNotesSerialization.readAuthorsPayload(
+                    parsed.authors,
+                    historyLimit = privateNotesHistoryLimit,
+                    blockNameMaxChars = privateNotesBlockNameMaxChars,
+                    textMaxChars = privateNotesTextMaxChars,
+                )
             }
         }
 
-        val migrated = migrateLegacyTaskPrivateNotes(room)
+        val migrated = PrivateNotesSerialization.migrateLegacyTaskPrivateNotes(
+            room,
+            objectMapper,
+            historyLimit = privateNotesHistoryLimit,
+            blockNameMaxChars = privateNotesBlockNameMaxChars,
+            textMaxChars = privateNotesTextMaxChars,
+        )
         if (migrated.isNotEmpty()) {
             room.privateNotesJson = serializeRoomPrivateNotes(migrated)
             // Wipe legacy per-task storage so it does not migrate again on next read.
@@ -1435,92 +1407,22 @@ class CollaborationService(
         return migrated
     }
 
-    private fun readAuthorsPayload(
-        authors: Map<String, RoomPrivateNotesAuthorPayload>,
-    ): MutableMap<String, MutableList<PersonalNoteEntryPayload>> {
-        val byAuthor = ConcurrentHashMap<String, MutableList<PersonalNoteEntryPayload>>()
-        authors.forEach { (authorKeyRaw, authorPayload) ->
-            val authorKey = authorKeyRaw.trim()
-            if (authorKey.isBlank()) return@forEach
-            val entries = authorPayload.entries
-                .mapNotNull(::normalizeStoredEntry)
-                .sortedWith(compareBy<PersonalNoteEntryPayload> { it.timestampEpochMs }.thenBy { it.id })
-                .takeLast(privateNotesHistoryLimit)
-                .toMutableList()
-            if (entries.isNotEmpty()) {
-                byAuthor[authorKey] = entries
-            }
-        }
-        return byAuthor
-    }
-
-    /**
-     * One-shot migration helper. Reads the legacy per-task `privateNotesJson`
-     * blobs and folds them into the room-level shape, tagging every entry with
-     * its original `stepIndex` as `blockStepIndex` so the new UI/export can still
-     * label them as `Шаг N - <task title>`.
-     */
-    private fun migrateLegacyTaskPrivateNotes(room: Room): MutableMap<String, MutableList<PersonalNoteEntryPayload>> {
-        val byAuthor = ConcurrentHashMap<String, MutableList<PersonalNoteEntryPayload>>()
-        room.tasks.forEach { task ->
-            val rawTask = task.privateNotesJson.orEmpty().trim()
-            if (rawTask.isBlank()) return@forEach
-            val parsed = runCatching {
-                objectMapper.readValue(rawTask, RoomPrivateNotesPayload::class.java)
-            }.getOrNull() ?: return@forEach
-            parsed.authors.forEach { (authorKeyRaw, authorPayload) ->
-                val authorKey = authorKeyRaw.trim()
-                if (authorKey.isBlank()) return@forEach
-                val sink = byAuthor.getOrPut(authorKey) { mutableListOf() }
-                authorPayload.entries.forEach { entry ->
-                    val normalized = normalizeStoredEntry(entry) ?: return@forEach
-                    sink.add(
-                        normalized.copy(
-                            blockStepIndex = normalized.blockStepIndex ?: task.stepIndex,
-                        ),
-                    )
-                }
-            }
-        }
-        byAuthor.forEach { (authorKey, entries) ->
-            byAuthor[authorKey] = entries
-                .sortedWith(compareBy<PersonalNoteEntryPayload> { it.timestampEpochMs }.thenBy { it.id })
-                .takeLast(privateNotesHistoryLimit)
-                .toMutableList()
-        }
-        return byAuthor
-    }
-
-    private fun normalizeStoredEntry(entry: PersonalNoteEntryPayload): PersonalNoteEntryPayload? {
-        val text = entry.text.replace("\u0000", "").trim()
-        if (text.isBlank()) return null
-        return PersonalNoteEntryPayload(
-            id = entry.id.trim().ifBlank { UUID.randomUUID().toString() },
-            text = text.take(privateNotesTextMaxChars),
-            blockName = entry.blockName
-                ?.replace("\u0000", "")
-                ?.trim()
-                ?.take(privateNotesBlockNameMaxChars)
-                ?.ifBlank { null },
-            blockStepIndex = entry.blockStepIndex?.takeIf { it >= 0 },
-            timestampEpochMs = entry.timestampEpochMs.coerceAtLeast(0L),
+    private fun normalizeStoredEntry(entry: PersonalNoteEntryPayload): PersonalNoteEntryPayload? =
+        PrivateNotesSerialization.normalizeStoredEntry(
+            entry,
+            blockNameMaxChars = privateNotesBlockNameMaxChars,
+            textMaxChars = privateNotesTextMaxChars,
         )
-    }
 
-    private fun serializeRoomPrivateNotes(authors: Map<String, List<PersonalNoteEntryPayload>>): String {
-        val normalizedAuthors = linkedMapOf<String, RoomPrivateNotesAuthorPayload>()
-        authors.forEach { (authorKeyRaw, entriesRaw) ->
-            val authorKey = authorKeyRaw.trim()
-            if (authorKey.isBlank()) return@forEach
-            val entries = entriesRaw
-                .mapNotNull(::normalizeStoredEntry)
-                .sortedWith(compareBy<PersonalNoteEntryPayload> { it.timestampEpochMs }.thenBy { it.id })
-                .takeLast(privateNotesHistoryLimit)
-            if (entries.isEmpty()) return@forEach
-            normalizedAuthors[authorKey] = RoomPrivateNotesAuthorPayload(entries = entries)
-        }
-        return objectMapper.writeValueAsString(RoomPrivateNotesPayload(authors = normalizedAuthors))
-    }
+    private fun serializeRoomPrivateNotes(
+        authors: Map<String, List<PersonalNoteEntryPayload>>,
+    ): String = PrivateNotesSerialization.serializeRoomPrivateNotes(
+        authors,
+        objectMapper,
+        historyLimit = privateNotesHistoryLimit,
+        blockNameMaxChars = privateNotesBlockNameMaxChars,
+        textMaxChars = privateNotesTextMaxChars,
+    )
 
     private fun setStepInternal(inviteCode: String, room: Room, stepIndex: Int) {
         val currentState = roomState[inviteCode]
@@ -1729,35 +1631,25 @@ class CollaborationService(
         }
     }
 
-    private fun normalizeParticipantId(participantId: String?): String? {
-        val normalized = participantId?.trim().orEmpty()
-        if (normalized.isBlank()) return null
-        return normalized.take(128)
-    }
+    /**
+     * Identity-helpers (нормализация participantId, identityKey, rolePriority)
+     * вынесены в [ParticipantIdentity] — здесь только тонкие обёртки и
+     * перегрузка под [ParticipantMeta] (private nested class сервиса).
+     */
+    private fun normalizeParticipantId(participantId: String?): String? =
+        ParticipantIdentity.normalizeParticipantId(participantId)
 
-    private fun participantIdentityKey(userId: String?, participantId: String?, sessionId: String): String {
-        val normalizedUserId = userId?.trim().orEmpty()
-        if (normalizedUserId.isNotBlank()) {
-            return "user:$normalizedUserId"
-        }
-        val normalizedParticipantId = normalizeParticipantId(participantId)
-        if (normalizedParticipantId != null) {
-            return "guest:$normalizedParticipantId"
-        }
-        return "session:$sessionId"
-    }
+    private fun participantIdentityKey(
+        userId: String?,
+        participantId: String?,
+        sessionId: String,
+    ): String = ParticipantIdentity.participantIdentityKey(userId, participantId, sessionId)
 
-    private fun participantIdentityKey(meta: ParticipantMeta): String {
-        return participantIdentityKey(meta.userId, meta.participantId, meta.sessionId)
-    }
+    private fun participantIdentityKey(meta: ParticipantMeta): String =
+        ParticipantIdentity.participantIdentityKey(meta.userId, meta.participantId, meta.sessionId)
 
-    private fun rolePriority(role: RoomAccessService.RoomRole): Int {
-        return when (role) {
-            RoomAccessService.RoomRole.OWNER -> 3
-            RoomAccessService.RoomRole.INTERVIEWER -> 2
-            RoomAccessService.RoomRole.CANDIDATE -> 1
-        }
-    }
+    private fun rolePriority(role: RoomAccessService.RoomRole): Int =
+        ParticipantIdentity.rolePriority(role)
 
     private fun aggregateParticipantGroup(group: List<ParticipantMeta>): ParticipantMeta {
         val representative = group
@@ -1897,109 +1789,31 @@ class CollaborationService(
             .toMutableList()
     }
 
-    private fun parseCandidateKeyHistory(raw: String?): List<CandidateKeyPayload> {
-        val normalized = raw.orEmpty().trim()
-        if (normalized.isBlank()) return emptyList()
-        val parsed = runCatching {
-            val root = objectMapper.readTree(normalized)
-            val eventsNode = when {
-                root.isArray -> root
-                root.isObject && root.has("events") -> root["events"]
-                else -> null
-            }
-            if (eventsNode == null || !eventsNode.isArray) {
-                emptyList()
-            } else {
-                eventsNode.mapNotNull { node ->
-                    runCatching { objectMapper.treeToValue(node, CandidateKeyPayload::class.java) }.getOrNull()
-                }
-            }
-        }.getOrElse { emptyList() }
-        return parsed
-            .sortedBy { it.timestampEpochMs }
-            .takeLast(candidateKeyHistoryMaxSize)
-    }
+    /**
+     * Все pure-хелперы (parse/serialize/merge/normalize) для истории клавиш
+     * живут в [CandidateKeyHistoryHelpers]. Здесь только тонкие методы-обёртки,
+     * чтобы не править все вызовы в сервисе разом — постепенно их можно будет
+     * заменить прямыми обращениями к хелперу.
+     */
+    private fun parseCandidateKeyHistory(raw: String?): List<CandidateKeyPayload> =
+        CandidateKeyHistoryHelpers.parse(raw, objectMapper)
 
-    private fun serializeCandidateKeyHistory(history: List<CandidateKeyPayload>): String {
-        val normalized = history
-            .sortedBy { it.timestampEpochMs }
-            .takeLast(candidateKeyHistoryMaxSize)
-        return objectMapper.writeValueAsString(mapOf("version" to 1, "events" to normalized))
-    }
+    private fun serializeCandidateKeyHistory(history: List<CandidateKeyPayload>): String =
+        CandidateKeyHistoryHelpers.serialize(history, objectMapper)
 
     private fun mergeCandidateKeyHistory(
         inMemory: List<CandidateKeyPayload>,
         persisted: List<CandidateKeyPayload>,
-    ): List<CandidateKeyPayload> {
-        if (inMemory.isEmpty()) return persisted.sortedBy { it.timestampEpochMs }.takeLast(candidateKeyHistoryMaxSize)
-        if (persisted.isEmpty()) return inMemory.sortedBy { it.timestampEpochMs }.takeLast(candidateKeyHistoryMaxSize)
-        val merged = linkedMapOf<String, CandidateKeyPayload>()
-        (persisted + inMemory)
-            .sortedBy { it.timestampEpochMs }
-            .forEach { event ->
-                val dedupeKey = listOf(
-                    event.sessionId,
-                    event.timestampEpochMs.toString(),
-                    event.key,
-                    event.keyCode,
-                    if (event.ctrlKey) "1" else "0",
-                    if (event.altKey) "1" else "0",
-                    if (event.shiftKey) "1" else "0",
-                    if (event.metaKey) "1" else "0",
-                    event.eventKind,
-                ).joinToString(":")
-                merged[dedupeKey] = event
-            }
-        return merged.values
-            .sortedBy { it.timestampEpochMs }
-            .takeLast(candidateKeyHistoryMaxSize)
-    }
+    ): List<CandidateKeyPayload> = CandidateKeyHistoryHelpers.merge(inMemory, persisted)
 
-    /**
-     * Приводит входящий `eventKind` к одному из поддерживаемых значений.
-     * Неизвестные/пустые значения трактуем как обычное `keydown`, чтобы
-     * ничего не падало при появлении старых клиентов или новых, ещё не
-     * добавленных категорий событий.
-     */
-    private fun normalizeKeyEventKind(rawKind: String?): String {
-        val normalized = rawKind?.trim()?.lowercase().orEmpty()
-        return when (normalized) {
-            "window_blur",
-            "window_focus",
-            "tab_hidden",
-            "tab_visible" -> normalized
-            else -> "keydown"
-        }
-    }
+    private fun normalizeKeyEventKind(rawKind: String?): String =
+        CandidateKeyHistoryHelpers.normalizeEventKind(rawKind)
 
-    private fun normalizeIncomingKey(rawKey: String?): String {
-        val raw = rawKey?.take(64) ?: return ""
-        if (raw == " " || raw == "\u00A0") return "Space"
-        if (raw == "\t") return "Tab"
-        if (raw == "\n" || raw == "\r" || raw == "\r\n") return "Enter"
-        val trimmed = raw.trim()
-        if (trimmed.isBlank()) return ""
-        val normalized = when (trimmed) {
-            "Spacebar" -> "Space"
-            "Esc" -> "Escape"
-            "OS" -> "Meta"
-            else -> trimmed
-        }
-        return normalized.take(32)
-    }
+    private fun normalizeIncomingKey(rawKey: String?): String =
+        CandidateKeyHistoryHelpers.normalizeIncomingKey(rawKey)
 
-    private fun normalizeIncomingKeyCode(rawCode: String?): String {
-        val trimmed = rawCode?.trim().orEmpty()
-        if (trimmed.isBlank()) return ""
-        val normalized = when (trimmed) {
-            "Spacebar" -> "Space"
-            "Esc" -> "Escape"
-            "OSLeft", "OSRight", "OS" -> "Meta"
-            "Tab", "Enter", "Backspace", "Delete", "Space" -> trimmed
-            else -> trimmed
-        }
-        return normalized.take(32)
-    }
+    private fun normalizeIncomingKeyCode(rawCode: String?): String =
+        CandidateKeyHistoryHelpers.normalizeIncomingKeyCode(rawCode)
 
     private fun toRealtimeState(room: Room): RealtimeState {
         val currentTask = room.tasks.getOrNull(room.currentStep)
