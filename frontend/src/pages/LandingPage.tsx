@@ -225,7 +225,7 @@ function solve(nums) {
             >
               <form onSubmit={onCreate}>
                 <Stack>
-                  <Title order={3} c="#f3f5f7">
+                  <Title order={2} c="#f3f5f7" size="h3">
                     Создать комнату
                   </Title>
                   <Text size="sm" c="#8b919b">
@@ -268,7 +268,7 @@ function solve(nums) {
             <Card withBorder radius="lg" p="xl" style={{ background: "#11151c", borderColor: "#272b34" }}>
               <form onSubmit={onJoin}>
                 <Stack>
-                  <Title order={3} c="#f3f5f7">
+                  <Title order={2} c="#f3f5f7" size="h3">
                     Войти по коду
                   </Title>
                   <TextInput

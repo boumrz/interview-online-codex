@@ -38,41 +38,6 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import * as Y from "yjs";
-import {
-  Awareness,
-  applyAwarenessUpdate,
-  encodeAwarenessUpdate,
-  removeAwarenessStates,
-} from "y-protocols/awareness";
-import { yCollab } from "y-codemirror.next";
-import { EditorSelection, EditorState, Compartment } from "@codemirror/state";
-import {
-  EditorView,
-  keymap,
-  drawSelection,
-  highlightActiveLine,
-  lineNumbers,
-} from "@codemirror/view";
-import {
-  history,
-  historyKeymap,
-  defaultKeymap,
-  indentWithTab,
-} from "@codemirror/commands";
-import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
-import {
-  indentOnInput,
-  bracketMatching,
-  foldGutter,
-  syntaxHighlighting,
-  defaultHighlightStyle,
-} from "@codemirror/language";
-import { oneDark } from "@codemirror/theme-one-dark";
-import { javascript } from "@codemirror/lang-javascript";
-import { python } from "@codemirror/lang-python";
-import { java } from "@codemirror/lang-java";
-import { sql } from "@codemirror/lang-sql";
 import { useAppSelector } from "../app/hooks";
 import { markdownToHtml } from "../components/markdown";
 import { useEscapeLayer } from "../components/useEscapeLayer";
@@ -110,28 +75,29 @@ import {
   renderPersonalNotesPdf,
   triggerBrowserDownload,
 } from "../features/room/personalNotesPdfExport";
+import { roomSyncLog } from "../features/room/roomSyncLog";
+import {
+  normalizeRoomLanguage,
+  toEditorLanguage,
+} from "../features/room/roomLanguage";
+import {
+  awarenessUserColors,
+  normalizeIdentityValue,
+  participantIdentityKey,
+} from "../features/room/awarenessIdentity";
+import {
+  RoomCodeEditor,
+  type YjsUpdateHandler,
+} from "../features/room/RoomCodeEditor";
+import { BriefingBoard } from "../features/room/BriefingBoard";
+import {
+  TopBar,
+  LANGUAGES,
+  type Participant,
+} from "../features/room/TopBar";
 import type { RoomTask, TaskTemplate } from "../types";
 
 import styles from "./RoomPage.module.css";
-
-const LANGUAGES = [
-  { value: "nodejs", label: "Node JS" },
-  { value: "python", label: "Python" },
-  { value: "kotlin", label: "Kotlin" },
-  { value: "java", label: "Java" },
-  { value: "sql", label: "SQL" },
-];
-
-type Participant = {
-  sessionId: string;
-  displayName: string;
-  userId?: string | null;
-  participantId?: string | null;
-  role: "owner" | "interviewer" | "candidate";
-  presenceStatus: "active" | "away";
-  isAuthenticated?: boolean;
-  canBeGrantedInterviewerAccess?: boolean;
-};
 
 type CursorInfo = {
   sessionId: string;
@@ -153,22 +119,6 @@ type CursorInfo = {
  * Логирование клавиш кандидата вынесено в `frontend/src/features/room/candidateKeys.ts`.
  * Здесь только реэкспорт публичного API для существующих ссылок внутри файла.
  */
-
-type YjsUpdateHandler = (
-  yjsUpdate: string,
-  syncKey: string,
-  codeSnapshot?: string | null,
-  yjsDocumentBase64?: string | null,
-  baseServerYjsSequence?: number | null,
-) => void;
-
-type AwarenessUser = {
-  sessionId?: string;
-  participantId?: string;
-  userId?: string;
-  name?: string;
-  color?: string;
-};
 
 type RealtimeState = {
   inviteCode: string;
@@ -247,17 +197,6 @@ type RoomCustomTaskDraft = {
   language: string;
 };
 
-type MarkdownToolId =
-  | "bold"
-  | "italic"
-  | "code"
-  | "link"
-  | "h1"
-  | "h2"
-  | "ul"
-  | "ol"
-  | "quote"
-  | "table";
 type MobileRoomTab = "editor" | "collaboration" | "tasks";
 
 /**
@@ -267,7 +206,6 @@ type MobileRoomTab = "editor" | "collaboration" | "tasks";
 const MIN_BRIEFING_HEIGHT = 120;
 const MAX_BRIEFING_HEIGHT = 420;
 const LOG_HISTORY_LIMIT = 50;
-const NODEJS_LANGUAGE_ALIASES = new Set(["javascript", "typescript", "nodejs"]);
 const REMOTE_SELECTION_HIGHLIGHT_ENABLED = true;
 const REMOTE_CARET_HIGHLIGHT_ENABLED = true;
 const REMOTE_CURSOR_RENDER_DEBOUNCE_MS = 80;
@@ -280,8 +218,6 @@ const REMOTE_CARET_IDLE_SHOW_DELAY_MS = 500;
 const REMOTE_CURSOR_RENDER_TICK_MS = 120;
 const CURSOR_DEBUG_QUERY_PARAM = "cursorDebug";
 const CURSOR_DEBUG_STORAGE_KEY = "room_cursor_debug";
-const ROOM_SYNC_LOG_QUERY_PARAM = "syncLog";
-const ROOM_SYNC_LOG_STORAGE_KEY = "room_sync_log";
 const PRIVATE_NOTE_BLOCK_COLORS = [
   "teal",
   "cyan",
@@ -295,29 +231,6 @@ const PRIVATE_NOTE_BLOCK_COLORS = [
   "lime",
   "green",
 ] as const;
-
-/** Off: ?syncLog=0 or localStorage room_sync_log = "0" */
-function isRoomSyncLogEnabled(): boolean {
-  try {
-    if (typeof window === "undefined") return true;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get(ROOM_SYNC_LOG_QUERY_PARAM) === "0") return false;
-    if (params.get(ROOM_SYNC_LOG_QUERY_PARAM) === "1") return true;
-    return window.localStorage.getItem(ROOM_SYNC_LOG_STORAGE_KEY) !== "0";
-  } catch {
-    return true;
-  }
-}
-
-function roomSyncLog(event: string, payload?: Record<string, unknown>) {
-  if (!isRoomSyncLogEnabled()) return;
-  const ts = new Date().toISOString();
-  if (payload && Object.keys(payload).length > 0) {
-    console.info(`[room-sync][${ts}] ${event}`, payload);
-  } else {
-    console.info(`[room-sync][${ts}] ${event}`);
-  }
-}
 
 /** Off: ?cursorDebug=0 or localStorage room_cursor_debug = "0" */
 function isCursorDebugEnabled(): boolean {
@@ -337,23 +250,6 @@ function debugCursorLog(event: string, payload: Record<string, unknown>) {
   const ts = new Date().toISOString();
   // Keep logs structured so we can diff event flow between typing tab and observer tab.
   console.debug(`[cursor-debug][${ts}] ${event}`, payload);
-}
-
-function normalizeRoomLanguage(language: string | null | undefined): string {
-  const normalized = (language ?? "").trim().toLowerCase();
-  if (!normalized) return "nodejs";
-  if (NODEJS_LANGUAGE_ALIASES.has(normalized)) {
-    return "nodejs";
-  }
-  return normalized;
-}
-
-function toEditorLanguage(language: string | null | undefined): string {
-  const normalized = (language ?? "").trim().toLowerCase();
-  if (!normalized || NODEJS_LANGUAGE_ALIASES.has(normalized)) {
-    return "javascript";
-  }
-  return normalizeRoomLanguage(normalized);
 }
 
 function normalizeTaskText(value: string | null | undefined): string {
@@ -417,25 +313,6 @@ function useIsCompactRoomLayout(maxWidth: number): boolean {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
-}
-
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = "";
-  for (let i = 0; i < bytes.length; i += 1) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
-}
-
-function base64ToBytes(base64: string): Uint8Array {
-  const normalized = base64.trim();
-  if (!normalized) return new Uint8Array(0);
-  const binary = atob(normalized);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
 }
 
 function normalizeTaskScores(value: unknown): Record<string, number | null> {
@@ -661,21 +538,6 @@ function formatNoteTimestamp(timestampEpochMs: number): string {
  * `frontend/src/features/room/personalNotesExport.ts`. RoomPage импортирует
  * их под уже существующими именами.
  */
-function getParticipantPresenceLabel(status: Participant["presenceStatus"]) {
-  return status === "active" ? "В фокусе" : "Вне фокуса";
-}
-
-function createDeterministicBootstrapUpdate(code: string): Uint8Array {
-  const bootstrapDoc = new Y.Doc();
-  // Use a fixed bootstrap client id so every participant starts from the same CRDT history.
-  (bootstrapDoc as { clientID: number }).clientID = 1;
-  const bootstrapText = bootstrapDoc.getText("room-code");
-  if (code) {
-    bootstrapText.insert(0, code);
-  }
-  return Y.encodeStateAsUpdate(bootstrapDoc);
-}
-
 function guestNameKey(inviteCode: string) {
   return `guest_display_name_${inviteCode}`;
 }
@@ -2212,7 +2074,7 @@ export function RoomPage() {
         centered
       >
         <Stack>
-          <Text size="sm" c="dimmed">
+          <Text size="sm" c="#cbd5e1">
             Это имя увидит собеседующий в списке участников.
           </Text>
           <TextInput
@@ -2250,6 +2112,7 @@ export function RoomPage() {
             : `${styles.shell} ${styles.shellCandidate}`
         }
       >
+        <h1 className="visually-hidden">{`Комната «${room?.title ?? "Live-coding"}»`}</h1>
         <TopBar
           roomTitle={room?.title ?? "Комната"}
           authToken={authToken}
@@ -2346,185 +2209,6 @@ export function RoomPage() {
   );
 }
 
-function TopBar({
-  roomTitle,
-  authToken,
-  connected,
-  participants,
-  showParticipants,
-  showLanguageControl,
-  currentLanguage,
-  onLanguageChange,
-  canGrantAccess,
-  onToggleInterviewerRole,
-}: {
-  roomTitle: string;
-  authToken: string | null;
-  connected: boolean;
-  participants: Participant[];
-  showParticipants: boolean;
-  showLanguageControl: boolean;
-  currentLanguage: string;
-  onLanguageChange: (value: string | null) => void;
-  canGrantAccess: boolean;
-  onToggleInterviewerRole: (participant: Participant) => void;
-}) {
-  return (
-    <Box className={styles.topBar}>
-      <Box className={styles.topInner}>
-        <Box className={styles.brand}>
-          <ThemeIcon size={26} variant="light" color="gray">
-            <IconCode size={14} />
-          </ThemeIcon>
-          <div className={styles.brandTitle}>{roomTitle}</div>
-        </Box>
-
-        {showParticipants ? (
-          <Box className={styles.participantsHost}>
-            <div
-              className={styles.participantsInline}
-              aria-label="Участники комнаты"
-            >
-              {participants.map((participant) => {
-                const presenceLabel = getParticipantPresenceLabel(
-                  participant.presenceStatus,
-                );
-                const canOpenMenu =
-                  canGrantAccess &&
-                  participant.role !== "owner" &&
-                  (participant.canBeGrantedInterviewerAccess ?? true);
-                const isInterviewer = participant.role === "interviewer";
-                const menuActionLabel = isInterviewer
-                  ? "Снять роль интервьюера"
-                  : "Назначить интервьюером";
-                const { color: cursorColor, colorLight: cursorColorLight } =
-                  awarenessUserColors(participant.sessionId);
-                const participantCard = (
-                  <span className={styles.participantNameRow}>
-                    <span className={styles.participantName}>
-                      {participant.displayName}
-                    </span>
-                    {isInterviewer ? (
-                      <span
-                        className={styles.participantInterviewerStar}
-                        aria-label="Интервьюер"
-                        title="Интервьюер"
-                      >
-                        *
-                      </span>
-                    ) : null}
-                  </span>
-                );
-                const participantStyle = {
-                  "--participant-role-color": cursorColor,
-                  "--participant-cursor-color": cursorColor,
-                  "--participant-cursor-color-light": cursorColorLight,
-                } as React.CSSProperties;
-
-                if (!canOpenMenu) {
-                  return (
-                    <div
-                      key={participant.sessionId}
-                      className={styles.participantCard}
-                      data-presence={participant.presenceStatus}
-                      data-testid={`participant-badge-${participant.presenceStatus}`}
-                      style={participantStyle}
-                      title={presenceLabel}
-                    >
-                      {participantCard}
-                    </div>
-                  );
-                }
-
-                return (
-                  <Menu
-                    key={participant.sessionId}
-                    withinPortal
-                    position="bottom"
-                    shadow="md"
-                    offset={8}
-                  >
-                    <Menu.Target>
-                      <button
-                        type="button"
-                        className={`${styles.participantCard} ${styles.participantCardButton}`}
-                        data-presence={participant.presenceStatus}
-                        data-testid={`participant-badge-${participant.presenceStatus}`}
-                        style={participantStyle}
-                        aria-label={`${participant.displayName}, ${presenceLabel}`}
-                      >
-                        {participantCard}
-                      </button>
-                    </Menu.Target>
-                    <Menu.Dropdown>
-                      <Menu.Item
-                        onClick={() => onToggleInterviewerRole(participant)}
-                      >
-                        {menuActionLabel}
-                      </Menu.Item>
-                    </Menu.Dropdown>
-                  </Menu>
-                );
-              })}
-            </div>
-          </Box>
-        ) : (
-          <Box className={styles.participantsHost} />
-        )}
-
-        <div className={styles.topActions}>
-          {showLanguageControl ? (
-            <div className={styles.topLanguageControl}>
-              <Select
-                id="room-language-select"
-                size="xs"
-                data={LANGUAGES}
-                value={normalizeRoomLanguage(currentLanguage)}
-                onChange={(value) =>
-                  onLanguageChange(value ? normalizeRoomLanguage(value) : null)
-                }
-                className={styles.topLanguageSelect}
-                classNames={{
-                  input: styles.topLanguageInput,
-                  dropdown: styles.topLanguageDropdown,
-                  option: styles.topLanguageOption,
-                }}
-                aria-label="Язык комнаты"
-                allowDeselect={false}
-                comboboxProps={{ withinPortal: false }}
-              />
-            </div>
-          ) : null}
-          <div className={styles.topActionButtons}>
-            <Badge color={connected ? "teal" : "gray"} variant="light">
-              {connected ? "Подключено" : "Подключение"}
-            </Badge>
-            <Button
-              component={Link}
-              to={authToken ? "/dashboard/rooms" : "/login"}
-              size="xs"
-              variant="light"
-              color="gray"
-              leftSection={<IconLayoutDashboard size={14} />}
-            >
-              Кабинет
-            </Button>
-            <Button
-              component={Link}
-              to="/"
-              size="xs"
-              variant="outline"
-              color="gray"
-              leftSection={<IconHome2 size={14} />}
-            >
-              Главная
-            </Button>
-          </div>
-        </div>
-      </Box>
-    </Box>
-  );
-}
 
 function OwnerLayout({
   merged,
@@ -3199,6 +2883,7 @@ function OwnerLayout({
                         className={styles.stepRow}
                         data-active={isActiveStep ? "true" : undefined}
                         aria-current={isActiveStep ? "step" : undefined}
+                        aria-label={fullLabel}
                         onClick={() => handleTaskStepSelect(task.stepIndex)}
                         title={fullLabel}
                       >
@@ -3323,6 +3008,7 @@ function OwnerLayout({
                               aria-label="Закрыть блок и писать в свободной форме"
                               data-testid="room-private-notes-active-block-close"
                               onClick={onCloseActivePrivateBlock}
+                              className={styles.privateNotesActiveBlockClose}
                             >
                               <IconX size={12} stroke={2.4} />
                             </ActionIcon>
@@ -3416,6 +3102,7 @@ function OwnerLayout({
                       maxRows={10}
                       data-testid="room-private-notes-input"
                       placeholder={privateNotesInputPlaceholder}
+                      aria-label="Заметка интервьюера"
                       classNames={{ input: styles.privateNotesComposerInput }}
                     />
                     {showPrivateNotesCommandMenu ? (
@@ -3710,6 +3397,7 @@ function OwnerLayout({
                           maxRows={14}
                           data-testid="room-notes-input"
                           placeholder="Напишите сообщение для интервьюеров"
+                          aria-label="Сообщение в чат интервьюеров"
                           classNames={{ input: styles.notesComposerInput }}
                         />
                         <Group
@@ -4015,273 +3703,6 @@ function SharedRoomEditorPanel({
   );
 }
 
-function BriefingBoard({
-  mode,
-  value,
-  onChange,
-}: {
-  mode: "interviewer" | "candidate";
-  value: string;
-  onChange?: (value: string) => void;
-}) {
-  const editorRef = useRef<HTMLTextAreaElement | null>(null);
-  const html = useMemo(() => markdownToHtml(value), [value]);
-  const emptyText =
-    mode === "interviewer"
-      ? "Напишите объяснение или подсказки для кандидата."
-      : "Интервьюер еще не добавил пояснение.";
-
-  const applyWrap = useCallback(
-    (prefix: string, suffix: string, placeholder: string) => {
-      if (!onChange) return;
-      const textarea = editorRef.current;
-      const selectionStart = textarea?.selectionStart ?? 0;
-      const selectionEnd = textarea?.selectionEnd ?? 0;
-      const selected = value.slice(selectionStart, selectionEnd);
-      const content = selected || placeholder;
-      const next = `${value.slice(0, selectionStart)}${prefix}${content}${suffix}${value.slice(selectionEnd)}`;
-      onChange(next);
-      const rangeStart = selectionStart + prefix.length;
-      const rangeEnd = rangeStart + content.length;
-      requestAnimationFrame(() => {
-        textarea?.focus();
-        textarea?.setSelectionRange(rangeStart, rangeEnd);
-      });
-    },
-    [onChange, value],
-  );
-
-  const applyLinePrefix = useCallback(
-    (prefix: string) => {
-      if (!onChange) return;
-      const textarea = editorRef.current;
-      const selectionStart = textarea?.selectionStart ?? 0;
-      const selectionEnd = textarea?.selectionEnd ?? 0;
-      const blockStart =
-        value.lastIndexOf("\n", Math.max(0, selectionStart - 1)) + 1;
-      const blockEndCandidate = value.indexOf("\n", selectionEnd);
-      const blockEnd = blockEndCandidate < 0 ? value.length : blockEndCandidate;
-      const original = value.slice(blockStart, blockEnd);
-      const updated = original
-        .split("\n")
-        .map((line) => (line.startsWith(prefix) ? line : `${prefix}${line}`))
-        .join("\n");
-      const next = `${value.slice(0, blockStart)}${updated}${value.slice(blockEnd)}`;
-      onChange(next);
-      requestAnimationFrame(() => {
-        textarea?.focus();
-        textarea?.setSelectionRange(blockStart, blockStart + updated.length);
-      });
-    },
-    [onChange, value],
-  );
-
-  const insertSnippet = useCallback(
-    (snippet: string) => {
-      if (!onChange) return;
-      const textarea = editorRef.current;
-      const selectionStart = textarea?.selectionStart ?? value.length;
-      const selectionEnd = textarea?.selectionEnd ?? selectionStart;
-      const needsLeadingLineBreak =
-        selectionStart > 0 && value[selectionStart - 1] !== "\n";
-      const needsTrailingLineBreak =
-        selectionEnd < value.length && value[selectionEnd] !== "\n";
-      const prefix = needsLeadingLineBreak ? "\n" : "";
-      const suffix = needsTrailingLineBreak ? "\n" : "";
-      const next = `${value.slice(0, selectionStart)}${prefix}${snippet}${suffix}${value.slice(selectionEnd)}`;
-      onChange(next);
-      const nextSelectionStart = selectionStart + prefix.length;
-      const nextSelectionEnd = nextSelectionStart + snippet.length;
-      requestAnimationFrame(() => {
-        textarea?.focus();
-        textarea?.setSelectionRange(nextSelectionStart, nextSelectionEnd);
-      });
-    },
-    [onChange, value],
-  );
-
-  const applyMarkdownTool = useCallback(
-    (tool: MarkdownToolId) => {
-      if (tool === "bold") return applyWrap("**", "**", "текст");
-      if (tool === "italic") return applyWrap("*", "*", "текст");
-      if (tool === "code") return applyWrap("`", "`", "code");
-      if (tool === "link") return applyWrap("[", "](https://)", "ссылка");
-      if (tool === "h1") return applyLinePrefix("# ");
-      if (tool === "h2") return applyLinePrefix("## ");
-      if (tool === "ul") return applyLinePrefix("- ");
-      if (tool === "ol") return applyLinePrefix("1. ");
-      if (tool === "quote") return applyLinePrefix("> ");
-      if (tool === "table") {
-        return insertSnippet(
-          "| Left columns  | Right columns |\n| ------------- |:-------------:|\n| left foo      | right foo     |\n| left bar      | right bar     |\n| left baz      | right baz     |",
-        );
-      }
-    },
-    [applyLinePrefix, applyWrap, insertSnippet],
-  );
-
-  return (
-    <Box className={styles.briefingPanel} data-mode={mode}>
-      {mode === "interviewer" ? (
-        <>
-          <div className={styles.briefingToolbar}>
-            <button
-              type="button"
-              className={styles.briefingToolButton}
-              aria-label="Жирный текст"
-              title="Жирный текст"
-              onClick={() => applyMarkdownTool("bold")}
-            >
-              B
-            </button>
-            <button
-              type="button"
-              className={styles.briefingToolButton}
-              aria-label="Курсив"
-              title="Курсив"
-              onClick={() => applyMarkdownTool("italic")}
-            >
-              I
-            </button>
-            <button
-              type="button"
-              className={styles.briefingToolButton}
-              aria-label="Вставить код"
-              title="Вставить код"
-              onClick={() => applyMarkdownTool("code")}
-            >
-              {"</>"}
-            </button>
-            <button
-              type="button"
-              className={styles.briefingToolButton}
-              aria-label="Вставить ссылку"
-              title="Вставить ссылку"
-              onClick={() => applyMarkdownTool("link")}
-            >
-              Link
-            </button>
-            <button
-              type="button"
-              className={styles.briefingToolButton}
-              aria-label="Заголовок H1"
-              title="Заголовок H1"
-              onClick={() => applyMarkdownTool("h1")}
-            >
-              H1
-            </button>
-            <button
-              type="button"
-              className={styles.briefingToolButton}
-              aria-label="Заголовок H2"
-              title="Заголовок H2"
-              onClick={() => applyMarkdownTool("h2")}
-            >
-              H2
-            </button>
-            <button
-              type="button"
-              className={styles.briefingToolButton}
-              aria-label="Маркированный список"
-              title="Маркированный список"
-              onClick={() => applyMarkdownTool("ul")}
-            >
-              • List
-            </button>
-            <button
-              type="button"
-              className={styles.briefingToolButton}
-              aria-label="Нумерованный список"
-              title="Нумерованный список"
-              onClick={() => applyMarkdownTool("ol")}
-            >
-              1. List
-            </button>
-            <button
-              type="button"
-              className={styles.briefingToolButton}
-              aria-label="Цитата"
-              title="Цитата"
-              onClick={() => applyMarkdownTool("quote")}
-            >
-              Quote
-            </button>
-            <button
-              type="button"
-              className={styles.briefingToolButton}
-              aria-label="Table"
-              title="Table"
-              onClick={() => applyMarkdownTool("table")}
-            >
-              Table
-            </button>
-          </div>
-          <div className={styles.briefingSplit}>
-            <Textarea
-              value={value}
-              onChange={(event) => onChange?.(event.currentTarget.value)}
-              minRows={6}
-              placeholder="Например: # План\n- Что делаем\n- На что смотреть"
-              data-testid="room-markdown-editor"
-              classNames={{
-                root: styles.briefingEditorRoot,
-                wrapper: styles.briefingEditorWrapper,
-                input: styles.briefingEditorInput,
-              }}
-              ref={editorRef}
-            />
-            <div
-              className={styles.briefingPreviewPane}
-              data-testid="room-markdown-preview"
-            >
-              {html ? (
-                <div
-                  className={styles.briefingMarkdown}
-                  dangerouslySetInnerHTML={{ __html: html }}
-                />
-              ) : (
-                <Text className={styles.briefingEmpty}>{emptyText}</Text>
-              )}
-            </div>
-          </div>
-        </>
-      ) : (
-        <div
-          className={styles.briefingPreviewPane}
-          data-testid="room-markdown-preview"
-        >
-          {html ? (
-            <div
-              className={styles.briefingMarkdown}
-              dangerouslySetInnerHTML={{ __html: html }}
-            />
-          ) : (
-            <Text className={styles.briefingEmpty}>{emptyText}</Text>
-          )}
-        </div>
-      )}
-    </Box>
-  );
-}
-
-function normalizeIdentityValue(value?: string | null): string | null {
-  const normalized = value?.trim() ?? "";
-  return normalized || null;
-}
-
-function participantIdentityKey(input: {
-  sessionId?: string | null;
-  participantId?: string | null;
-  userId?: string | null;
-}): string | null {
-  const userId = normalizeIdentityValue(input.userId);
-  if (userId) return `user:${userId}`;
-  const participantId = normalizeIdentityValue(input.participantId);
-  if (participantId) return `guest:${participantId}`;
-  const sessionId = normalizeIdentityValue(input.sessionId);
-  if (sessionId) return `session:${sessionId}`;
-  return null;
-}
 
 function pickPreferredCursor(
   existing: CursorInfo,
@@ -4334,696 +3755,3 @@ function mergeCursorsByIdentity(cursors: CursorInfo[]): CursorInfo[] {
   return Array.from(byIdentity.values());
 }
 
-function hashSessionId(sessionId: string): number {
-  let hash = 0;
-  for (let i = 0; i < sessionId.length; i += 1) {
-    hash = (hash * 31 + sessionId.charCodeAt(i)) >>> 0;
-  }
-  return hash;
-}
-
-function awarenessUserColors(sessionId: string): {
-  color: string;
-  colorLight: string;
-} {
-  const hue = hashSessionId(sessionId) % 360;
-  return {
-    color: `hsl(${hue} 68% 58%)`,
-    colorLight: `hsla(${hue} 68% 58% / 0.24)`,
-  };
-}
-
-/**
- * After a tab refresh, Yjs assigns a new clientID while the realtime sessionId stays the same.
- * Peers briefly keep both awareness entries → duplicate remote carets.
- *
- * Do not pick the winner by `clock` alone: the old tab's client keeps a large frozen clock while the new tab's
- * clock resets — we would keep the dead entry and drop live updates. Prefer `meta.lastUpdated` (refreshed on each
- * inbound awareness message for that clientId); the disconnected client stops receiving bumps.
- */
-function dedupeRemoteAwarenessEntries(awareness: Awareness) {
-  const localId = awareness.clientID;
-  const localUser = (awareness.states.get(localId)?.user ?? undefined) as
-    | {
-        sessionId?: string;
-        participantId?: string;
-        userId?: string;
-        name?: string;
-        color?: string;
-      }
-    | undefined;
-
-  const clockOf = (clientId: number) =>
-    awareness.meta.get(clientId)?.clock ?? 0;
-  const lastUpdatedOf = (clientId: number) =>
-    awareness.meta.get(clientId)?.lastUpdated ?? 0;
-
-  const hasSessionIdInUser = (st: { user?: unknown } | undefined) => {
-    const sid = (st?.user as { sessionId?: string } | undefined)?.sessionId;
-    return typeof sid === "string" && sid.trim().length > 0;
-  };
-
-  const remoteWinsOver = (newId: number, oldId: number) => {
-    const luN = lastUpdatedOf(newId);
-    const luO = lastUpdatedOf(oldId);
-    if (luN !== luO) {
-      return luN > luO;
-    }
-    const stN = awareness.states.get(newId);
-    const stO = awareness.states.get(oldId);
-    const sidN = hasSessionIdInUser(stN);
-    const sidO = hasSessionIdInUser(stO);
-    if (sidN !== sidO) {
-      return sidN;
-    }
-    const cN = clockOf(newId);
-    const cO = clockOf(oldId);
-    if (cN !== cO) {
-      return cN > cO;
-    }
-    return newId > oldId;
-  };
-
-  const awarenessIdentityKey = (
-    user: AwarenessUser | undefined,
-  ): string | null => {
-    if (!user) return null;
-    return (
-      participantIdentityKey({
-        userId: user.userId,
-        participantId: user.participantId,
-        sessionId: user.sessionId,
-      }) ?? `legacy:${String(user.name ?? "")}|${String(user.color ?? "")}`
-    );
-  };
-  const localIdentityKey = awarenessIdentityKey(localUser);
-  const forEachRemoteAwarenessUser = (
-    visitor: (clientId: number, key: string) => void,
-  ) => {
-    awareness.states.forEach((_state, clientId) => {
-      if (clientId === localId) return;
-      const st = awareness.states.get(clientId);
-      const user = st?.user as AwarenessUser | undefined;
-      if (!user) return;
-      const key = awarenessIdentityKey(user);
-      if (!key) return;
-      visitor(clientId, key);
-    });
-  };
-
-  const winnerByKey = new Map<string, number>();
-  forEachRemoteAwarenessUser((clientId, key) => {
-    if (localIdentityKey && key === localIdentityKey) return;
-    const prev = winnerByKey.get(key);
-    if (prev === undefined || remoteWinsOver(clientId, prev)) {
-      winnerByKey.set(key, clientId);
-    }
-  });
-
-  const toRemove = new Set<number>();
-  forEachRemoteAwarenessUser((clientId, key) => {
-    if (localIdentityKey && key === localIdentityKey) {
-      toRemove.add(clientId);
-      return;
-    }
-    if (winnerByKey.get(key) !== clientId) {
-      toRemove.add(clientId);
-    }
-  });
-
-  // Drop pre-sessionId ghosts when the same participant already has sessionId in awareness.
-  const hasSessionId = new Set<string>();
-  awareness.states.forEach((st, id) => {
-    if (id === localId) return;
-    const sid = (st?.user as { sessionId?: string } | undefined)?.sessionId;
-    if (typeof sid === "string" && sid.trim()) {
-      hasSessionId.add(
-        `${String((st?.user as { name?: string }).name ?? "")}|${String((st?.user as { color?: string }).color ?? "")}`,
-      );
-    }
-  });
-  awareness.states.forEach((_state, clientId) => {
-    if (clientId === localId) return;
-    const st = awareness.states.get(clientId);
-    const u = st?.user as
-      | { sessionId?: string; name?: string; color?: string }
-      | undefined;
-    if (!u || (typeof u.sessionId === "string" && u.sessionId.trim())) return;
-    const legacyKey = `${String(u.name ?? "")}|${String(u.color ?? "")}`;
-    if (hasSessionId.has(legacyKey) && !toRemove.has(clientId)) {
-      toRemove.add(clientId);
-    }
-  });
-
-  if (toRemove.size > 0) {
-    removeAwarenessStates(awareness, Array.from(toRemove), "local");
-  }
-}
-
-/** Remote carets on one-dark background (y-codemirror defaults assume light theme). */
-const remoteCursorDarkTheme = EditorView.baseTheme({
-  ".cm-ySelectionCaret": {
-    borderLeft: "2px solid rgba(255,255,255,0.88)",
-    borderRight: "none",
-  },
-  ".cm-ySelectionCaret::after": {
-    display: "none !important",
-    content: "none",
-  },
-  ".cm-ySelectionCaret::before": {
-    display: "none !important",
-    content: "none",
-  },
-  ".cm-ySelectionInfo": {
-    display: "none !important",
-  },
-  ".cm-ySelectionInfo::before": {
-    display: "none !important",
-  },
-  ".cm-ySelectionCaretDot": {
-    display: "none !important",
-  },
-});
-
-function RoomCodeEditor({
-  height,
-  language,
-  value,
-  serverYjsBase64 = null,
-  serverYjsSequence = 0,
-  lastCodeUpdatedBySessionId = null,
-  syncKey,
-  resyncSignal,
-  readOnly,
-  sessionId,
-  participantId,
-  participantLabel,
-  sendAwarenessUpdate,
-  onAwarenessBridgeReady,
-  onYjsUpdate,
-  onYjsBridgeReady,
-  onEditorValueChange,
-  onKeyPress,
-}: {
-  height: string;
-  language: string;
-  value: string;
-  serverYjsBase64?: string | null;
-  serverYjsSequence?: number;
-  lastCodeUpdatedBySessionId?: string | null;
-  syncKey: string;
-  resyncSignal: number;
-  readOnly: boolean;
-  sessionId: string;
-  participantId: string;
-  participantLabel: string;
-  sendAwarenessUpdate: (awarenessUpdate: string) => void;
-  onAwarenessBridgeReady: (applyFn: ((b64: string) => void) | null) => void;
-  onYjsUpdate: YjsUpdateHandler;
-  onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
-  onEditorValueChange: (value: string) => void;
-  onKeyPress: (payload: KeyPressPayload) => void;
-}) {
-  type CmHostElement = HTMLDivElement & {
-    __roomEditorView?: EditorView | null;
-  };
-  const hostRef = useRef<HTMLDivElement | null>(null);
-  const viewRef = useRef<EditorView | null>(null);
-  const yDocRef = useRef<Y.Doc | null>(null);
-  const yTextRef = useRef<Y.Text | null>(null);
-  const lastHandledResyncSignalRef = useRef(0);
-  const syncKeyRef = useRef<string>(syncKey);
-  const onYjsUpdateRef = useRef(onYjsUpdate);
-  const onEditorValueChangeRef = useRef(onEditorValueChange);
-  const onKeyPressRef = useRef(onKeyPress);
-  const readOnlyCompartmentRef = useRef(new Compartment());
-  const languageCompartmentRef = useRef(new Compartment());
-  const lastAppliedServerYjsSeqRef = useRef(-1);
-  const lastAppliedServerYjsSnapRef = useRef<string | null>(null);
-  const lastSyncKeyForServerSeqRef = useRef(syncKey);
-  const latestServerYjsSequenceRef = useRef(0);
-  const sendAwarenessUpdateRef = useRef(sendAwarenessUpdate);
-  const awarenessRef = useRef<Awareness | null>(null);
-
-  /** After remote Yjs merges (reload / resync), re-anchor local cursor in Awareness and refresh remote carets. */
-  const bumpLocalAwarenessAfterRemoteDocChange = useCallback(() => {
-    requestAnimationFrame(() => {
-      const v = viewRef.current;
-      const awareness = awarenessRef.current;
-      const yText = yTextRef.current;
-      if (!v || !awareness || !yText) return;
-      try {
-        const docLen = yText.length;
-        const sel = v.state.selection.main;
-        const anchor = Math.min(Math.max(sel.anchor, 0), docLen);
-        const head = Math.min(Math.max(sel.head, 0), docLen);
-        if (anchor !== sel.anchor || head !== sel.head) {
-          v.dispatch({ selection: EditorSelection.single(anchor, head) });
-        }
-        const next = v.state.selection.main;
-        awareness.setLocalStateField("cursor", {
-          anchor: Y.createRelativePositionFromTypeIndex(yText, next.anchor),
-          head: Y.createRelativePositionFromTypeIndex(yText, next.head),
-        });
-      } catch {
-        /* selection can be adjusting after applyUpdate */
-      }
-      dedupeRemoteAwarenessEntries(awareness);
-      v.dispatch({});
-    });
-  }, []);
-
-  useEffect(() => {
-    sendAwarenessUpdateRef.current = sendAwarenessUpdate;
-  }, [sendAwarenessUpdate]);
-
-  useEffect(() => {
-    onYjsUpdateRef.current = onYjsUpdate;
-    onEditorValueChangeRef.current = onEditorValueChange;
-    onKeyPressRef.current = onKeyPress;
-  }, [onEditorValueChange, onKeyPress, onYjsUpdate]);
-
-  useEffect(() => {
-    latestServerYjsSequenceRef.current =
-      typeof serverYjsSequence === "number" &&
-      Number.isFinite(serverYjsSequence)
-        ? Math.max(0, Math.floor(serverYjsSequence))
-        : 0;
-  }, [serverYjsSequence]);
-
-  useEffect(() => {
-    const awareness = awarenessRef.current;
-    if (!awareness) return;
-    const st = awareness.getLocalState();
-    if (!st?.user) return;
-    const name = participantLabel.trim() || "Участник";
-    if (
-      st.user.name === name &&
-      (st.user as { sessionId?: string }).sessionId === sessionId &&
-      (st.user as { participantId?: string }).participantId === participantId
-    )
-      return;
-    awareness.setLocalState({
-      ...st,
-      user: { ...st.user, name, sessionId, participantId },
-    });
-  }, [participantId, participantLabel, sessionId]);
-
-  const languageExtension = useMemo(() => {
-    const normalized = normalizeRoomLanguage(language);
-    if (normalized === "python") return python();
-    if (normalized === "java" || normalized === "kotlin") return java();
-    if (normalized === "sql") return sql();
-    return javascript();
-  }, [language]);
-
-  useEffect(() => {
-    return () => {
-      onYjsBridgeReady(null);
-      onAwarenessBridgeReady(null);
-      viewRef.current?.destroy();
-      viewRef.current = null;
-      const hostElement = hostRef.current as CmHostElement | null;
-      if (hostElement) {
-        hostElement.__roomEditorView = null;
-      }
-      yDocRef.current?.destroy();
-      yDocRef.current = null;
-      yTextRef.current = null;
-      awarenessRef.current = null;
-    };
-  }, [onAwarenessBridgeReady, onYjsBridgeReady]);
-
-  useEffect(() => {
-    if (!hostRef.current || viewRef.current) return;
-
-    const readOnlyCompartment = readOnlyCompartmentRef.current;
-    const languageCompartment = languageCompartmentRef.current;
-    const targetCode = value ?? "";
-    const snap = serverYjsBase64?.trim();
-    const normalizedServerYjsSequence =
-      typeof serverYjsSequence === "number" &&
-      Number.isFinite(serverYjsSequence)
-        ? Math.max(0, Math.floor(serverYjsSequence))
-        : 0;
-    const hasExistingServerYjsState = normalizedServerYjsSequence > 0;
-    let yDoc = new Y.Doc();
-    let bootstrappedFromSnapshot = false;
-    if (snap) {
-      try {
-        const raw = base64ToBytes(snap);
-        if (raw.length > 0) {
-          Y.applyUpdate(yDoc, raw, "bootstrap");
-          bootstrappedFromSnapshot = true;
-          trackEvent("prod_editor_bootstrap_server_snapshot", {
-            yjs_sequence: normalizedServerYjsSequence,
-          });
-        }
-      } catch {
-        /* invalid snapshot */
-      }
-    }
-    if (!bootstrappedFromSnapshot && !hasExistingServerYjsState) {
-      trackEvent("prod_editor_bootstrap_code_fallback", {
-        reason: "empty_server_state",
-        yjs_sequence: normalizedServerYjsSequence,
-      });
-      Y.applyUpdate(
-        yDoc,
-        createDeterministicBootstrapUpdate(targetCode),
-        "bootstrap",
-      );
-    }
-    let yText = yDoc.getText("room-code");
-    // Server CRDT snapshot can disagree with `merged.code` (last writer / ordering); never replace a merged doc with the plain string.
-    if (
-      yText.toString() !== targetCode &&
-      !snap &&
-      !hasExistingServerYjsState
-    ) {
-      trackEvent("prod_editor_bootstrap_code_rebuild", {
-        reason: "code_mismatch_after_bootstrap",
-        yjs_sequence: normalizedServerYjsSequence,
-      });
-      yDoc.destroy();
-      yDoc = new Y.Doc();
-      Y.applyUpdate(
-        yDoc,
-        createDeterministicBootstrapUpdate(targetCode),
-        "bootstrap",
-      );
-      yText = yDoc.getText("room-code");
-    }
-    if (!bootstrappedFromSnapshot && hasExistingServerYjsState) {
-      trackEvent("prod_editor_bootstrap_missing_snapshot", {
-        yjs_sequence: normalizedServerYjsSequence,
-      });
-    }
-    yDocRef.current = yDoc;
-    yTextRef.current = yText;
-
-    const awareness = new Awareness(yDoc);
-    awarenessRef.current = awareness;
-    const colorSeed = participantId.trim() || sessionId;
-    const { color, colorLight } = awarenessUserColors(colorSeed);
-    awareness.setLocalState({
-      user: {
-        name: participantLabel.trim() || "Участник",
-        color,
-        colorLight,
-        sessionId,
-        participantId,
-      },
-    });
-
-    let awarenessFlushTimer: number | null = null;
-    const flushAwareness = () => {
-      awarenessFlushTimer = null;
-      try {
-        const u = encodeAwarenessUpdate(awareness, [awareness.clientID]);
-        sendAwarenessUpdateRef.current(bytesToBase64(u));
-      } catch {
-        /* ignore */
-      }
-    };
-    const onAwarenessChanged = (
-      {
-        added,
-        updated,
-        removed,
-      }: { added: number[]; updated: number[]; removed: number[] },
-      origin: unknown,
-    ) => {
-      if (origin === "remote") return;
-      const touched = new Set([...added, ...updated, ...removed]);
-      if (!touched.has(awareness.clientID)) return;
-      if (awarenessFlushTimer != null) window.clearTimeout(awarenessFlushTimer);
-      awarenessFlushTimer = window.setTimeout(flushAwareness, 48);
-    };
-    awareness.on("update", onAwarenessChanged);
-
-    onAwarenessBridgeReady((b64) => {
-      try {
-        if (!b64) return;
-        applyAwarenessUpdate(awareness, base64ToBytes(b64), "remote");
-        dedupeRemoteAwarenessEntries(awareness);
-      } catch {
-        /* ignore malformed */
-      }
-    });
-
-    const view = new EditorView({
-      state: EditorState.create({
-        doc: yText.toString(),
-        extensions: [
-          oneDark,
-          lineNumbers(),
-          highlightActiveLine(),
-          drawSelection(),
-          history(),
-          foldGutter(),
-          indentOnInput(),
-          closeBrackets(),
-          bracketMatching(),
-          syntaxHighlighting(defaultHighlightStyle),
-          keymap.of([
-            indentWithTab,
-            ...closeBracketsKeymap,
-            ...defaultKeymap,
-            ...historyKeymap,
-          ]),
-          readOnlyCompartment.of(EditorState.readOnly.of(readOnly)),
-          languageCompartment.of(languageExtension),
-          yCollab(yText, awareness, { undoManager: false }),
-          remoteCursorDarkTheme,
-          EditorView.updateListener.of((update) => {
-            if (!update.docChanged) return;
-            onEditorValueChangeRef.current(update.state.doc.toString());
-          }),
-          EditorView.domEventHandlers({
-            keydown: (_event, viewInstance) => {
-              const event = _event as KeyboardEvent;
-              onKeyPressRef.current({
-                key: event.key,
-                keyCode: event.code,
-                ctrlKey: event.ctrlKey,
-                altKey: event.altKey,
-                shiftKey: event.shiftKey,
-                metaKey: event.metaKey,
-              });
-              if (viewInstance.state.readOnly) {
-                event.preventDefault();
-                return true;
-              }
-              return false;
-            },
-          }),
-        ],
-      }),
-      parent: hostRef.current,
-    });
-    viewRef.current = view;
-    const hostElement = hostRef.current as CmHostElement | null;
-    if (hostElement) {
-      hostElement.__roomEditorView = view;
-    }
-    onEditorValueChangeRef.current(view.state.doc.toString());
-
-    syncKeyRef.current = syncKey;
-
-    const handleDocUpdate = (updateBytes: Uint8Array, origin: unknown) => {
-      if (origin === "remote" || origin === "bootstrap") return;
-      const encodedUpdate = bytesToBase64(updateBytes);
-      // Always send full Yjs state with each local edit so the server snapshot stays current.
-      // After a tab refresh, missed SSE increments cannot be replayed; reconnecting clients rely on state_sync yjsDocumentBase64.
-      const fullDoc = bytesToBase64(Y.encodeStateAsUpdate(yDoc));
-      onYjsUpdateRef.current(
-        encodedUpdate,
-        syncKeyRef.current,
-        yText.toString(),
-        fullDoc,
-        latestServerYjsSequenceRef.current,
-      );
-    };
-    yDoc.on("update", handleDocUpdate);
-
-    const emitFullSnapshot = () => {
-      const d = yDocRef.current;
-      const t = yTextRef.current;
-      if (!d || !t) return;
-      const full = bytesToBase64(Y.encodeStateAsUpdate(d));
-      onYjsUpdateRef.current(
-        "",
-        syncKeyRef.current,
-        t.toString(),
-        full,
-        latestServerYjsSequenceRef.current,
-      );
-    };
-
-    // Idle tabs still refresh the server snapshot so a reloaded peer does not bootstrap from stale CRDT state.
-    const heartbeatId = window.setInterval(() => {
-      emitFullSnapshot();
-    }, 2500);
-
-    onYjsBridgeReady((encodedYjsUpdate: string) => {
-      const activeDoc = yDocRef.current;
-      if (!activeDoc) return;
-      const updateBytes = base64ToBytes(encodedYjsUpdate);
-      if (updateBytes.length === 0) return;
-      Y.applyUpdate(activeDoc, updateBytes, "remote");
-    });
-
-    const snapshotTimerId = window.setTimeout(() => {
-      emitFullSnapshot();
-    }, 400);
-
-    return () => {
-      window.clearTimeout(snapshotTimerId);
-      window.clearInterval(heartbeatId);
-      yDoc.off("update", handleDocUpdate);
-      awareness.off("update", onAwarenessChanged);
-      if (awarenessFlushTimer != null) window.clearTimeout(awarenessFlushTimer);
-      onAwarenessBridgeReady(null);
-      awareness.destroy();
-      awarenessRef.current = null;
-      const nextHost = hostRef.current as CmHostElement | null;
-      if (nextHost) {
-        nextHost.__roomEditorView = null;
-      }
-    };
-    // IMPORTANT: do not depend on `value` or `serverYjsBase64` here. When those change every state_sync,
-    // this effect's cleanup ran yDoc.off("update") while viewRef stayed set → early return on next run
-    // never re-attached the listener, so outbound Yjs updates stopped after the first remote sync.
-  }, [onYjsBridgeReady, syncKey]);
-
-  /** Merge server CRDT when `lastYjsSequence` advances (same step); passive tabs and late snapshots. */
-  useEffect(() => {
-    const activeDoc = yDocRef.current;
-    if (!activeDoc) return;
-    if (lastSyncKeyForServerSeqRef.current !== syncKey) {
-      lastSyncKeyForServerSeqRef.current = syncKey;
-      lastAppliedServerYjsSeqRef.current = -1;
-      lastAppliedServerYjsSnapRef.current = null;
-    }
-    const seq =
-      typeof serverYjsSequence === "number" && !Number.isNaN(serverYjsSequence)
-        ? serverYjsSequence
-        : 0;
-    const snap = serverYjsBase64?.trim() ?? "";
-    const seqAdvanced = seq > lastAppliedServerYjsSeqRef.current;
-    const snapChangedAtSameSeq =
-      seq === lastAppliedServerYjsSeqRef.current &&
-      snap !== lastAppliedServerYjsSnapRef.current;
-    if (!seqAdvanced && !snapChangedAtSameSeq) return;
-    try {
-      if (snap) {
-        const raw = base64ToBytes(snap);
-        if (raw.length > 0) {
-          Y.applyUpdate(activeDoc, raw, "remote");
-        }
-      }
-    } catch (e) {
-      roomSyncLog("merge_server_yjs_seq_failed", { error: String(e) });
-    }
-    lastAppliedServerYjsSeqRef.current = seq;
-    lastAppliedServerYjsSnapRef.current = snap || null;
-    onEditorValueChangeRef.current(activeDoc.getText("room-code").toString());
-    bumpLocalAwarenessAfterRemoteDocChange();
-  }, [
-    bumpLocalAwarenessAfterRemoteDocChange,
-    serverYjsBase64,
-    serverYjsSequence,
-    syncKey,
-  ]);
-
-  /** Step change or explicit resync (focus/reconnect): merge server Y snapshot or plain code fallback. */
-  useEffect(() => {
-    const activeDoc = yDocRef.current;
-    if (!activeDoc) return;
-    const syncKeyChanged = syncKeyRef.current !== syncKey;
-    syncKeyRef.current = syncKey;
-    const forceHydrateFromState =
-      resyncSignal > lastHandledResyncSignalRef.current;
-    if (forceHydrateFromState) {
-      lastHandledResyncSignalRef.current = resyncSignal;
-    }
-    if (!syncKeyChanged && !forceHydrateFromState) return;
-
-    const t = activeDoc.getText("room-code");
-    const next = value ?? "";
-    const snap = serverYjsBase64?.trim() ?? "";
-    const normalizedServerYjsSequence =
-      typeof serverYjsSequence === "number" &&
-      Number.isFinite(serverYjsSequence)
-        ? Math.max(0, Math.floor(serverYjsSequence))
-        : 0;
-    const hasRemoteHistoryWithoutSnapshot =
-      !snap && normalizedServerYjsSequence > 0;
-
-    roomSyncLog("hydrate_from_server", {
-      syncKeyChanged,
-      resync: forceHydrateFromState,
-      hasYjsSnap: Boolean(snap),
-      codeLen: next.length,
-    });
-    try {
-      if (snap) {
-        const raw = base64ToBytes(snap);
-        if (raw.length > 0) {
-          Y.applyUpdate(activeDoc, raw, "remote");
-        }
-      }
-      if (!snap && t.toString() !== next && !hasRemoteHistoryWithoutSnapshot) {
-        activeDoc.transact(() => {
-          t.delete(0, t.length);
-          if (next) t.insert(0, next);
-        }, "remote");
-      }
-      if (!snap && hasRemoteHistoryWithoutSnapshot) {
-        roomSyncLog("skip_plain_hydrate_waiting_for_yjs_snapshot", {
-          syncKey,
-          codeLen: next.length,
-        });
-      }
-    } catch (e) {
-      roomSyncLog("hydrate_from_server_failed", { error: String(e) });
-    }
-    onEditorValueChangeRef.current(activeDoc.getText("room-code").toString());
-    bumpLocalAwarenessAfterRemoteDocChange();
-  }, [
-    bumpLocalAwarenessAfterRemoteDocChange,
-    resyncSignal,
-    serverYjsBase64,
-    serverYjsSequence,
-    syncKey,
-    value,
-  ]);
-
-  useEffect(() => {
-    const activeView = viewRef.current;
-    if (!activeView) return;
-    activeView.dispatch({
-      effects: readOnlyCompartmentRef.current.reconfigure(
-        EditorState.readOnly.of(readOnly),
-      ),
-    });
-  }, [readOnly]);
-
-  useEffect(() => {
-    const activeView = viewRef.current;
-    if (!activeView) return;
-    activeView.dispatch({
-      effects: languageCompartmentRef.current.reconfigure(languageExtension),
-    });
-  }, [languageExtension]);
-
-  return (
-    <div
-      className={styles.codeEditorHost}
-      data-testid="room-code-editor-host"
-      style={{ height }}
-      ref={hostRef}
-    />
-  );
-}

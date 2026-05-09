@@ -1,6 +1,5 @@
 import React, { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActionIcon,
   AppShell,
   Badge,
   Box,
@@ -10,13 +9,11 @@ import {
   Divider,
   Group,
   Modal,
-  MultiSelect,
   Notification,
   Portal,
   Select,
   SimpleGrid,
   Stack,
-  Switch,
   Text,
   TextInput,
   Textarea,
@@ -25,18 +22,13 @@ import {
 } from "@mantine/core";
 import {
   IconBook2,
-  IconBolt,
-  IconChevronRight,
   IconCode,
   IconEdit,
   IconLayoutDashboard,
   IconLogout2,
   IconPlus,
-  IconRobot,
   IconRocket,
-  IconShieldCheck,
   IconTrash,
-  IconUsers,
 } from "@tabler/icons-react";
 import {
   Navigate,
@@ -76,90 +68,30 @@ import {
 import { setVisitParams, trackEvent } from "../services/analytics";
 import type { AdminUser, RoomSummary, TaskTemplate } from "../types";
 import styles from "./DashboardPage.module.css";
+import {
+  ADMIN_DASHBOARD_SECTION,
+  BASE_DASHBOARD_SECTIONS,
+  type DashboardSection,
+  LANGUAGE_OPTIONS,
+} from "./dashboard/dashboardConstants";
+import {
+  codeInputStyles,
+  darkFieldStyles,
+  darkSelectStyles,
+  markdownInputStyles,
+} from "./dashboard/dashboardFieldStyles";
+import {
+  isDashboardSection,
+  labelForLanguage,
+  normalizeLanguageKey,
+  type RoomSaveStatus,
+} from "./dashboard/dashboardHelpers";
+import { AdminUsersSection } from "./dashboard/AdminUsersSection";
+import { AgentOpsSection } from "./dashboard/AgentOpsSection";
+import { CreateRoomSection } from "./dashboard/CreateRoomSection";
+import { ManageRoomsSection } from "./dashboard/ManageRoomsSection";
 
-type DashboardSection = "rooms" | "tasks" | "manage" | "agents" | "admin";
-type RoomSaveStatus = "idle" | "saving" | "saved" | "error";
 declare const __FEATURE_AGENT_OPS__: string | undefined;
-
-const BASE_DASHBOARD_SECTIONS: Array<{
-  value: DashboardSection;
-  label: string;
-}> = [
-  { value: "rooms", label: "Комнаты" },
-  { value: "tasks", label: "Задачи" },
-  { value: "manage", label: "Управление комнатами" },
-  { value: "agents", label: "Агент-операции" },
-];
-
-const ADMIN_DASHBOARD_SECTION: { value: DashboardSection; label: string } = {
-  value: "admin",
-  label: "Админка",
-};
-
-const LANGUAGE_OPTIONS = [
-  { value: "nodejs", label: "Node JS" },
-  { value: "python", label: "Python" },
-  { value: "kotlin", label: "Kotlin" },
-  { value: "java", label: "Java" },
-  { value: "sql", label: "SQL" },
-];
-
-const darkFieldStyles = {
-  label: { color: "#cbd5e1" },
-  input: {
-    backgroundColor: "#0b1529",
-    borderColor: "#27456f",
-    color: "#e2e8f0",
-  },
-};
-
-const markdownInputStyles = {
-  ...darkFieldStyles,
-  input: {
-    ...darkFieldStyles.input,
-    fontFamily:
-      '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
-    fontSize: "12px",
-    lineHeight: 1.45,
-    resize: "vertical" as const,
-  },
-};
-
-const codeInputStyles = {
-  ...darkFieldStyles,
-  input: {
-    ...darkFieldStyles.input,
-    fontFamily:
-      '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
-    fontSize: "12px",
-    lineHeight: 1.45,
-    resize: "vertical" as const,
-  },
-};
-
-const darkSelectStyles = {
-  ...darkFieldStyles,
-  dropdown: { backgroundColor: "#0f1c34", borderColor: "#27456f" },
-  option: { color: "#e2e8f0" },
-};
-
-const NODEJS_LANGUAGE_ALIASES = new Set(["nodejs", "javascript", "typescript"]);
-
-function normalizeLanguageKey(language: string | null | undefined): string {
-  const normalized = (language ?? "").trim().toLowerCase();
-  if (!normalized || NODEJS_LANGUAGE_ALIASES.has(normalized)) return "nodejs";
-  return normalized;
-}
-
-function isDashboardSection(
-  value: string | undefined,
-  agentOpsEnabled: boolean,
-  isAdmin: boolean,
-): value is DashboardSection {
-  if (value === "rooms" || value === "tasks" || value === "manage") return true;
-  if (isAdmin && value === "admin") return true;
-  return agentOpsEnabled && value === "agents";
-}
 
 export function DashboardPage() {
   const dispatch = useAppDispatch();
@@ -967,6 +899,7 @@ export function DashboardPage() {
         </Portal>
       ) : null}
 
+      <h1 className="visually-hidden">Личный кабинет — управление комнатами и задачами</h1>
       <AppShell padding={0} header={{ height: 72 }}>
         <AppShell.Header
           bg="#101318"
@@ -1149,178 +1082,20 @@ export function DashboardPage() {
               </Card>
 
               {activeSection === "rooms" && (
-                <SimpleGrid cols={{ base: 1, lg: 1 }} spacing="md">
-                  <Card
-                    withBorder
-                    radius="lg"
-                    padding="lg"
-                    bg="#11151c"
-                    c="gray.1"
-                    style={{ borderColor: "#272b34" }}
-                    data-testid="create-room-card"
-                  >
-                    <form onSubmit={onCreateRoom}>
-                      <Stack>
-                        <Group>
-                          <ThemeIcon color="gray" variant="light">
-                            <IconPlus size={15} />
-                          </ThemeIcon>
-                          <Title order={4}>Создать комнату</Title>
-                        </Group>
-                        <Text size="sm" c="gray.4">
-                          Выберите нужные шаги. Язык комнаты будет автоматически
-                          определяться по активной задаче. Если шаги не выбраны,
-                          комната создастся пустой — задачи можно добавить уже
-                          внутри.
-                        </Text>
-                        <TextInput
-                          label="Название комнаты"
-                          value={roomTitle}
-                          onChange={(e) => setRoomTitle(e.currentTarget.value)}
-                          styles={darkFieldStyles}
-                          required
-                        />
-                        <MultiSelect
-                          data-testid="room-task-select"
-                          label="Задачи для комнаты"
-                          description="Можно выбрать задачи на любых языках"
-                          data={taskSelectData}
-                          value={roomTaskIds}
-                          onChange={setRoomTaskIds}
-                          searchable
-                          styles={darkSelectStyles}
-                        />
-                        <Stack gap="xs" data-testid="selected-task-preview">
-                          <Text fw={600}>Выбранные задачи</Text>
-                          {selectedRoomTasks.length === 0 ? (
-                            <Text size="sm" c="gray.4">
-                              Пока ничего не выбрано. Комната будет создана без
-                              задач.
-                            </Text>
-                          ) : (
-                            selectedRoomTasks.map((task) => (
-                              <Card
-                                key={task.id}
-                                withBorder
-                                radius="md"
-                                padding="sm"
-                                bg="#121720"
-                                style={{ borderColor: "#2a3039" }}
-                              >
-                                <Stack gap={4}>
-                                  <Text fw={700}>{task.title}</Text>
-                                  <div
-                                    className={styles.markdownPreviewContent}
-                                    dangerouslySetInnerHTML={{
-                                      __html: markdownToHtml(task.description),
-                                    }}
-                                  />
-                                </Stack>
-                              </Card>
-                            ))
-                          )}
-                        </Stack>
-                        <Button
-                          type="submit"
-                          loading={createRoomState.isLoading}
-                        >
-                          Создать и открыть
-                        </Button>
-                      </Stack>
-                    </form>
-                  </Card>
-
-                  {false && (
-                    <Card
-                      withBorder
-                      radius="lg"
-                      padding="lg"
-                      bg="#11151c"
-                      c="gray.1"
-                      style={{ borderColor: "#272b34" }}
-                    >
-                      <Stack>
-                        <Title order={4}>Текущие параметры</Title>
-                        <Divider color="#272b34" />
-                        <Text size="sm">
-                          Выбрано задач: {roomTaskIds.length}
-                        </Text>
-                        <Text size="sm">
-                          Всего задач в банке: {allSelectableRoomTasks.length}
-                        </Text>
-                        <Text size="sm" c="gray.4">
-                          После создания откроется live-coding сессия. Ссылка и
-                          код комнаты передаются кандидату.
-                        </Text>
-                      </Stack>
-                    </Card>
-                  )}
-                </SimpleGrid>
+                <CreateRoomSection
+                  title={roomTitle}
+                  onTitleChange={setRoomTitle}
+                  taskOptions={taskSelectData}
+                  selectedTaskIds={roomTaskIds}
+                  onSelectedTaskIdsChange={setRoomTaskIds}
+                  selectedTasks={selectedRoomTasks}
+                  isSubmitting={createRoomState.isLoading}
+                  onSubmit={onCreateRoom}
+                />
               )}
 
               {activeSection === "tasks" && (
                 <SimpleGrid cols={{ base: 1, lg: 1 }} spacing="md">
-                  {false && (
-                    <Card
-                      withBorder
-                      radius="lg"
-                      padding="lg"
-                      bg="#11151c"
-                      c="gray.1"
-                      style={{ borderColor: "#272b34" }}
-                    >
-                      <form onSubmit={onCreateTask}>
-                        <Stack>
-                          <Title order={4}>Создать задачу</Title>
-                          <TextInput
-                            label="Название"
-                            value={taskTitle}
-                            onChange={(e) =>
-                              setTaskTitle(e.currentTarget.value)
-                            }
-                            styles={darkFieldStyles}
-                            required
-                          />
-                          <Textarea
-                            label="Описание"
-                            value={taskDescription}
-                            onChange={(e) =>
-                              setTaskDescription(e.currentTarget.value)
-                            }
-                            minRows={3}
-                            styles={darkFieldStyles}
-                            required
-                          />
-                          <Textarea
-                            label="Стартовый код"
-                            value={taskStarterCode}
-                            onChange={(e) =>
-                              setTaskStarterCode(e.currentTarget.value)
-                            }
-                            minRows={8}
-                            styles={darkFieldStyles}
-                            required
-                          />
-                          <Select
-                            label="Язык"
-                            value={taskLanguage}
-                            onChange={(value) =>
-                              setTaskLanguage(value ?? "nodejs")
-                            }
-                            data={LANGUAGE_OPTIONS}
-                            styles={darkSelectStyles}
-                          />
-                          <Button
-                            type="submit"
-                            loading={createTaskState.isLoading}
-                          >
-                            Сохранить задачу
-                          </Button>
-                        </Stack>
-                      </form>
-                    </Card>
-                  )}
-
                   <Card
                     withBorder
                     radius="lg"
@@ -1425,629 +1200,84 @@ export function DashboardPage() {
               )}
 
               {activeSection === "manage" && (
-                <Card
-                  withBorder
-                  radius="lg"
-                  padding="lg"
-                  bg="#11151c"
-                  c="gray.1"
-                  style={{ borderColor: "#272b34" }}
-                >
-                  <Stack>
-                    <Title order={4}>Управление комнатами</Title>
-                    {rooms.map((room) => (
-                      <Card
-                        key={room.id}
-                        withBorder
-                        radius="md"
-                        padding="sm"
-                        bg="#121720"
-                        style={{ borderColor: "#2a3039", cursor: "pointer" }}
-                        role="button"
-                        tabIndex={0}
-                        aria-label={`Открыть комнату ${room.title}`}
-                        className={styles.manageRoomCardInteractive}
-                        onClick={() => openRoomFromDashboard(room)}
-                        onKeyDown={(event) => {
-                          if (event.target !== event.currentTarget) return;
-                          if (event.key !== "Enter" && event.key !== " ")
-                            return;
-                          event.preventDefault();
-                          openRoomFromDashboard(room);
-                        }}
-                      >
-                        <Stack gap="sm">
-                          <Group justify="space-between">
-                            <Group gap="xs">
-                              <Badge color="gray" variant="light">
-                                {labelForLanguage(room.language)}
-                              </Badge>
-                              <Badge
-                                color={
-                                  room.accessRole === "owner" ? "teal" : "blue"
-                                }
-                                variant="light"
-                              >
-                                {room.accessRole === "owner"
-                                  ? "Владелец"
-                                  : "Участник"}
-                              </Badge>
-                              <Badge
-                                variant="outline"
-                                color={statusColor(roomSaveStatus[room.id])}
-                              >
-                                {statusLabel(roomSaveStatus[room.id])}
-                              </Badge>
-                            </Group>
-                            <Group gap={6}>
-                              <Text size="xs" c="gray.4">
-                                Код: {room.inviteCode}
-                              </Text>
-                              <ActionIcon
-                                variant="light"
-                                color="red"
-                                disabled={room.accessRole !== "owner"}
-                                aria-label={`Удалить комнату ${room.title}`}
-                                title="Удалить комнату"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  if (room.accessRole !== "owner") return;
-                                  void removeRoom(room.id);
-                                }}
-                              >
-                                <IconTrash size={14} />
-                              </ActionIcon>
-                            </Group>
-                          </Group>
-
-                          <TextInput
-                            label="Название комнаты"
-                            value={roomTitleDrafts[room.id] ?? room.title}
-                            disabled={room.accessRole !== "owner"}
-                            onClick={(event) => event.stopPropagation()}
-                            onMouseDown={(event) => event.stopPropagation()}
-                            onKeyDown={(event) => event.stopPropagation()}
-                            onChange={(event) => {
-                              if (room.accessRole !== "owner") return;
-                              scheduleRoomAutoSave(
-                                room.id,
-                                room.title,
-                                event.currentTarget.value,
-                              );
-                            }}
-                            onBlur={() => {
-                              if (room.accessRole !== "owner") return;
-                              flushRoomAutoSave(room.id, room.title);
-                            }}
-                            styles={darkFieldStyles}
-                          />
-
-                          <Group justify="space-between">
-                            <Text size="xs" c="gray.4">
-                              Клик по карточке открывает комнату
-                            </Text>
-                            <Group gap={4} c="gray.4">
-                              <Text size="xs">Открыть</Text>
-                              <IconChevronRight size={14} />
-                            </Group>
-                          </Group>
-                        </Stack>
-                      </Card>
-                    ))}
-                    {rooms.length === 0 && (
-                      <Text c="gray.4">Комнат пока нет</Text>
-                    )}
-                  </Stack>
-                </Card>
+                <ManageRoomsSection
+                  rooms={rooms}
+                  roomTitleDrafts={roomTitleDrafts}
+                  roomSaveStatus={roomSaveStatus}
+                  onOpenRoom={openRoomFromDashboard}
+                  onDeleteRoom={(roomId) => {
+                    void removeRoom(roomId);
+                  }}
+                  onScheduleTitleChange={scheduleRoomAutoSave}
+                  onFlushTitleChange={flushRoomAutoSave}
+                />
               )}
 
               {activeSection === "admin" && isAdmin && (
-                <Card
-                  withBorder
-                  radius="lg"
-                  padding="lg"
-                  bg="#11151c"
-                  c="gray.1"
-                  style={{ borderColor: "#272b34" }}
-                >
-                  <Stack>
-                    <Group justify="space-between" align="center">
-                      <Group>
-                        <ThemeIcon color="gray" variant="light">
-                          <IconUsers size={15} />
-                        </ThemeIcon>
-                        <Title order={4}>Админка пользователей</Title>
-                      </Group>
-                      <Button
-                        variant="light"
-                        size="xs"
-                        onClick={() => refetchAdminUsers()}
-                      >
-                        Обновить
-                      </Button>
-                    </Group>
-
-                    <Text size="sm" c="gray.4">
-                      Управляйте ролями и удаляйте пользователей. Системный
-                      администратор `boumrz` защищен от удаления.
-                    </Text>
-
-                    <Stack gap="sm">
-                      {adminUsers.map((user) => {
-                        const draftRole = adminRoleDrafts[user.id] ?? user.role;
-                        const isCurrentUser = user.id === auth.user?.id;
-                        return (
-                          <Card
-                            key={user.id}
-                            withBorder
-                            radius="md"
-                            padding="sm"
-                            bg="#121720"
-                            style={{ borderColor: "#2a3039" }}
-                          >
-                            <Stack gap="sm">
-                              <Group justify="space-between" align="center">
-                                <Group gap="xs">
-                                  <Text fw={700}>@{user.nickname}</Text>
-                                  <Badge
-                                    color={
-                                      user.role === "admin" ? "orange" : "gray"
-                                    }
-                                    variant="light"
-                                  >
-                                    {user.role === "admin"
-                                      ? "Администратор"
-                                      : "Пользователь"}
-                                  </Badge>
-                                  {isCurrentUser && (
-                                    <Badge color="teal" variant="outline">
-                                      Это вы
-                                    </Badge>
-                                  )}
-                                </Group>
-                                <Text size="xs" c="gray.4">
-                                  Создан: {formatCreatedAt(user.createdAt)}
-                                </Text>
-                              </Group>
-
-                              <Group align="end" wrap="wrap">
-                                <Select
-                                  label="Роль"
-                                  value={draftRole}
-                                  onChange={(value) => {
-                                    if (!value) return;
-                                    setAdminRoleDrafts((prev) => ({
-                                      ...prev,
-                                      [user.id]: value,
-                                    }));
-                                  }}
-                                  data={[
-                                    { value: "user", label: "Пользователь" },
-                                    { value: "admin", label: "Администратор" },
-                                  ]}
-                                  styles={darkSelectStyles}
-                                  w={220}
-                                  disabled={
-                                    user.nickname.trim().toLowerCase() ===
-                                    "boumrz"
-                                  }
-                                />
-                                <Button
-                                  variant="light"
-                                  loading={updateAdminUserRoleState.isLoading}
-                                  disabled={draftRole === user.role}
-                                  onClick={() => saveAdminRole(user)}
-                                >
-                                  Сохранить роль
-                                </Button>
-                                <Button
-                                  color="red"
-                                  variant="outline"
-                                  loading={deleteAdminUserState.isLoading}
-                                  disabled={
-                                    isCurrentUser ||
-                                    user.nickname.trim().toLowerCase() ===
-                                      "boumrz"
-                                  }
-                                  onClick={() => removeUserByAdmin(user)}
-                                >
-                                  Удалить пользователя
-                                </Button>
-                              </Group>
-                            </Stack>
-                          </Card>
-                        );
-                      })}
-                      {adminUsers.length === 0 && (
-                        <Text size="sm" c="gray.4">
-                          Пользователи пока не найдены
-                        </Text>
-                      )}
-                    </Stack>
-                  </Stack>
-                </Card>
+                <AdminUsersSection
+                  users={adminUsers}
+                  currentUserId={auth.user?.id}
+                  roleDrafts={adminRoleDrafts}
+                  onRoleDraftChange={(userId, role) =>
+                    setAdminRoleDrafts((prev) => ({ ...prev, [userId]: role }))
+                  }
+                  onSaveRole={saveAdminRole}
+                  onDeleteUser={removeUserByAdmin}
+                  onRefresh={() => refetchAdminUsers()}
+                  isUpdatingRole={updateAdminUserRoleState.isLoading}
+                  isDeleting={deleteAdminUserState.isLoading}
+                />
               )}
 
               {activeSection === "agents" && (
-                <Stack>
-                  <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="md">
-                    <Card
-                      withBorder
-                      radius="lg"
-                      padding="lg"
-                      bg="#11151c"
-                      c="gray.1"
-                      style={{ borderColor: "#272b34" }}
-                    >
-                      <form onSubmit={onStartAgentRun}>
-                        <Stack>
-                          <Group>
-                            <ThemeIcon color="gray" variant="light">
-                              <IconRobot size={15} />
-                            </ThemeIcon>
-                            <Title order={4}>Запуск агентного процесса</Title>
-                          </Group>
-                          <Text size="sm" c="gray.4">
-                            Запуск процесса оркестрации доступен только внутри
-                            задачи Linear.
-                          </Text>
-                          <TextInput
-                            label="Задача Linear"
-                            placeholder="LDT-76"
-                            value={agentIssueId}
-                            onChange={(event) =>
-                              setAgentIssueId(event.currentTarget.value)
-                            }
-                            styles={darkFieldStyles}
-                            required
-                          />
-                          <Select
-                            label="Провайдер процесса"
-                            value={agentProvider}
-                            onChange={(value) =>
-                              setAgentProvider(
-                                (value as "temporal" | "langgraph") ??
-                                  "temporal",
-                              )
-                            }
-                            data={[
-                              {
-                                value: "temporal",
-                                label: "Temporal (основной)",
-                              },
-                              {
-                                value: "langgraph",
-                                label: "LangGraph (прототип)",
-                              },
-                            ]}
-                            styles={darkSelectStyles}
-                          />
-                          <TextInput
-                            label="Текущая роль"
-                            value={agentRole}
-                            onChange={(event) =>
-                              setAgentRole(event.currentTarget.value)
-                            }
-                            styles={darkFieldStyles}
-                          />
-                          <Switch
-                            label="Ручное подтверждение обязательно для финальных этапов"
-                            checked={agentRequiresApproval}
-                            onChange={(event) =>
-                              setAgentRequiresApproval(
-                                event.currentTarget.checked,
-                              )
-                            }
-                          />
-                          <Textarea
-                            label="Критерии приемки (по строкам)"
-                            minRows={5}
-                            value={agentCriteria}
-                            onChange={(event) =>
-                              setAgentCriteria(event.currentTarget.value)
-                            }
-                            styles={darkFieldStyles}
-                          />
-                          <Button
-                            type="submit"
-                            loading={startAgentRunState.isLoading}
-                          >
-                            Запустить процесс
-                          </Button>
-                        </Stack>
-                      </form>
-                    </Card>
-
-                    <Card
-                      withBorder
-                      radius="lg"
-                      padding="lg"
-                      bg="#11151c"
-                      c="gray.1"
-                      style={{ borderColor: "#272b34" }}
-                    >
-                      <Stack>
-                        <Group justify="space-between">
-                          <Group>
-                            <ThemeIcon color="gray" variant="light">
-                              <IconShieldCheck size={15} />
-                            </ThemeIcon>
-                            <Title order={4}>Проверка окружения</Title>
-                          </Group>
-                          <Button
-                            variant="light"
-                            size="xs"
-                            onClick={() => refetchEnvironmentDoctor()}
-                          >
-                            Обновить
-                          </Button>
-                        </Group>
-                        <Badge
-                          variant="light"
-                          color={
-                            environmentDoctor?.status === "PASS"
-                              ? "teal"
-                              : environmentDoctor?.status === "WARN"
-                                ? "yellow"
-                                : "red"
-                          }
-                        >
-                          Статус: {environmentDoctor?.status ?? "НЕИЗВЕСТНО"}
-                        </Badge>
-                        <Stack gap="xs">
-                          {(environmentDoctor?.checks ?? []).map((check) => (
-                            <Card
-                              key={check.key}
-                              withBorder
-                              radius="md"
-                              padding="xs"
-                              bg="#121720"
-                              style={{ borderColor: "#2a3039" }}
-                            >
-                              <Group justify="space-between" align="flex-start">
-                                <Stack gap={2}>
-                                  <Text size="sm" fw={700}>
-                                    {check.key}
-                                  </Text>
-                                  <Text size="xs" c="gray.4">
-                                    {check.message}
-                                  </Text>
-                                </Stack>
-                                <Badge
-                                  size="xs"
-                                  color={
-                                    check.status === "PASS"
-                                      ? "teal"
-                                      : check.status === "WARN"
-                                        ? "yellow"
-                                        : "red"
-                                  }
-                                  variant="light"
-                                >
-                                  {check.status}
-                                </Badge>
-                              </Group>
-                            </Card>
-                          ))}
-                        </Stack>
-                      </Stack>
-                    </Card>
-                  </SimpleGrid>
-
-                  <Card
-                    withBorder
-                    radius="lg"
-                    padding="lg"
-                    bg="#11151c"
-                    c="gray.1"
-                    style={{ borderColor: "#272b34" }}
-                  >
-                    <form onSubmit={onConfigureFaults}>
-                      <Stack>
-                        <Group>
-                          <ThemeIcon color="gray" variant="light">
-                            <IconBolt size={15} />
-                          </ThemeIcon>
-                          <Title order={4}>Инъекции сбоев realtime</Title>
-                        </Group>
-                        <Text size="sm" c="gray.4">
-                          Для тестов хаоса: искусственная задержка и
-                          периодический пропуск broadcast по комнате.
-                        </Text>
-                        <Group grow>
-                          <TextInput
-                            label="Код приглашения"
-                            placeholder="r-xxxxxxxx"
-                            value={faultInviteCode}
-                            onChange={(event) =>
-                              setFaultInviteCode(event.currentTarget.value)
-                            }
-                            styles={darkFieldStyles}
-                            required
-                          />
-                          <TextInput
-                            label="Задержка (мс)"
-                            value={faultLatencyMs}
-                            onChange={(event) =>
-                              setFaultLatencyMs(event.currentTarget.value)
-                            }
-                            styles={darkFieldStyles}
-                          />
-                          <TextInput
-                            label="Пропускать каждый N-й"
-                            value={faultDropEvery}
-                            onChange={(event) =>
-                              setFaultDropEvery(event.currentTarget.value)
-                            }
-                            styles={darkFieldStyles}
-                          />
-                        </Group>
-                        <Group>
-                          <Button
-                            type="submit"
-                            variant="light"
-                            loading={configureRealtimeFaultsState.isLoading}
-                          >
-                            Применить профиль
-                          </Button>
-                          <Button
-                            type="button"
-                            color="red"
-                            variant="outline"
-                            loading={clearRealtimeFaultsState.isLoading}
-                            onClick={onClearFaults}
-                          >
-                            Очистить профиль
-                          </Button>
-                        </Group>
-                      </Stack>
-                    </form>
-                  </Card>
-
-                  <Card
-                    withBorder
-                    radius="lg"
-                    padding="lg"
-                    bg="#11151c"
-                    c="gray.1"
-                    style={{ borderColor: "#272b34" }}
-                  >
-                    <Stack>
-                      <Group justify="space-between">
-                        <Title order={4}>
-                          Запуски по задаче{" "}
-                          {issueIdLooksValid ? normalizedIssueId : "—"}
-                        </Title>
-                        <Button
-                          variant="light"
-                          size="xs"
-                          disabled={!issueIdLooksValid}
-                          onClick={() => refetchAgentRuns()}
-                        >
-                          Обновить список
-                        </Button>
-                      </Group>
-                      <TextInput
-                        label="Комментарий для передачи"
-                        value={transitionComment}
-                        onChange={(event) =>
-                          setTransitionComment(event.currentTarget.value)
-                        }
-                        styles={darkFieldStyles}
-                      />
-                      <Stack gap="sm">
-                        {agentRuns.map((run) => (
-                          <Card
-                            key={run.id}
-                            withBorder
-                            radius="md"
-                            padding="sm"
-                            bg="#121720"
-                            style={{ borderColor: "#2a3039" }}
-                          >
-                            <Stack gap="xs">
-                              <Group justify="space-between">
-                                <Group gap="xs">
-                                  <Badge color="gray" variant="light">
-                                    {run.workflowProvider}
-                                  </Badge>
-                                  <Badge variant="outline" color="gray">
-                                    {run.currentState}
-                                  </Badge>
-                                  <Badge variant="outline" color="gray">
-                                    повтор {run.retryCount}/{run.maxRetries}
-                                  </Badge>
-                                </Group>
-                                <Text size="xs" c="gray.4">
-                                  трасса: {run.traceId}
-                                </Text>
-                              </Group>
-                              <Text size="sm">
-                                Роль: {run.assignedRole || "—"}
-                              </Text>
-                              <Group gap="xs" wrap="wrap">
-                                {run.allowedTransitions.map((targetState) => (
-                                  <Button
-                                    key={targetState}
-                                    size="xs"
-                                    variant="light"
-                                    onClick={() =>
-                                      onTransitionRun(run.id, targetState)
-                                    }
-                                    loading={transitionAgentRunState.isLoading}
-                                  >
-                                    {targetState}
-                                  </Button>
-                                ))}
-                                <Button
-                                  size="xs"
-                                  color="gray"
-                                  variant="outline"
-                                  onClick={() => setSelectedPolicyRunId(run.id)}
-                                >
-                                  Проверить гейты
-                                </Button>
-                                <Button
-                                  size="xs"
-                                  color="gray"
-                                  variant="outline"
-                                  onClick={() => onExecuteReviewers(run.id)}
-                                  loading={
-                                    executeAllRunReviewersState.isLoading
-                                  }
-                                >
-                                  Запустить ревьюеров
-                                </Button>
-                              </Group>
-                            </Stack>
-                          </Card>
-                        ))}
-                        {issueIdLooksValid && agentRuns.length === 0 && (
-                          <Text size="sm" c="gray.4">
-                            Для задачи пока нет запущенных процессов.
-                          </Text>
-                        )}
-                      </Stack>
-
-                      {selectedPolicyRunId && selectedPolicyResult && (
-                        <Card
-                          withBorder
-                          radius="md"
-                          padding="sm"
-                          bg="#121720"
-                          style={{ borderColor: "#2a3039" }}
-                        >
-                          <Stack gap="xs">
-                            <Group justify="space-between">
-                              <Text fw={700}>
-                                Результат гейтов для {selectedPolicyRunId}
-                              </Text>
-                              <Badge
-                                color={
-                                  selectedPolicyResult.passed ? "teal" : "red"
-                                }
-                                variant="light"
-                              >
-                                {selectedPolicyResult.passed
-                                  ? "ПРОЙДЕНО"
-                                  : "НЕ ПРОЙДЕНО"}
-                              </Badge>
-                            </Group>
-                            {selectedPolicyResult.checks.map((check) => (
-                              <Text
-                                key={check.id}
-                                size="sm"
-                                c={check.passed ? "teal.2" : "red.4"}
-                              >
-                                {check.id}: {check.message}
-                              </Text>
-                            ))}
-                          </Stack>
-                        </Card>
-                      )}
-                    </Stack>
-                  </Card>
-                </Stack>
+                <AgentOpsSection
+                  runForm={{
+                    issueId: agentIssueId,
+                    provider: agentProvider,
+                    role: agentRole,
+                    requiresApproval: agentRequiresApproval,
+                    criteria: agentCriteria,
+                    onIssueIdChange: setAgentIssueId,
+                    onProviderChange: setAgentProvider,
+                    onRoleChange: setAgentRole,
+                    onRequiresApprovalChange: setAgentRequiresApproval,
+                    onCriteriaChange: setAgentCriteria,
+                    onSubmit: onStartAgentRun,
+                    isSubmitting: startAgentRunState.isLoading,
+                  }}
+                  environment={{
+                    report: environmentDoctor,
+                    onRefresh: () => refetchEnvironmentDoctor(),
+                  }}
+                  faults={{
+                    inviteCode: faultInviteCode,
+                    latencyMs: faultLatencyMs,
+                    dropEvery: faultDropEvery,
+                    onInviteCodeChange: setFaultInviteCode,
+                    onLatencyMsChange: setFaultLatencyMs,
+                    onDropEveryChange: setFaultDropEvery,
+                    onConfigure: onConfigureFaults,
+                    onClear: onClearFaults,
+                    isConfiguring: configureRealtimeFaultsState.isLoading,
+                    isClearing: clearRealtimeFaultsState.isLoading,
+                  }}
+                  agentRuns={{
+                    runs: agentRuns,
+                    issueLabel: normalizedIssueId,
+                    isIssueValid: issueIdLooksValid,
+                    transitionComment,
+                    selectedPolicyRunId,
+                    selectedPolicyResult,
+                    isTransitioning: transitionAgentRunState.isLoading,
+                    isExecutingReviewers:
+                      executeAllRunReviewersState.isLoading,
+                    onRefresh: () => refetchAgentRuns(),
+                    onTransitionCommentChange: setTransitionComment,
+                    onTransitionRun,
+                    onExecuteReviewers,
+                    onSelectPolicyRun: setSelectedPolicyRunId,
+                  }}
+                />
               )}
 
               {(error || loadingMutation) && (
@@ -2061,47 +1291,4 @@ export function DashboardPage() {
       </AppShell>
     </>
   );
-}
-
-function statusColor(status: RoomSaveStatus | undefined) {
-  if (status === "saving") return "yellow";
-  if (status === "saved") return "teal";
-  if (status === "error") return "red";
-  return "gray";
-}
-
-function statusLabel(status: RoomSaveStatus | undefined) {
-  if (status === "saving") return "Сохранение...";
-  if (status === "saved") return "Сохранено";
-  if (status === "error") return "Ошибка";
-  return "Без изменений";
-}
-
-function labelForLanguage(language: string) {
-  switch (normalizeLanguageKey(language)) {
-    case "nodejs":
-      return "Node JS";
-    case "python":
-      return "Python";
-    case "kotlin":
-      return "Kotlin";
-    case "java":
-      return "Java";
-    case "sql":
-      return "SQL";
-    default:
-      return "Node JS";
-  }
-}
-
-function formatCreatedAt(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("ru-RU", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }

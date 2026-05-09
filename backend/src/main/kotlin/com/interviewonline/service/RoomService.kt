@@ -18,6 +18,7 @@ import com.interviewonline.model.User
 import com.interviewonline.repository.RoomParticipantRepository
 import com.interviewonline.repository.RoomRepository
 import com.interviewonline.repository.UserRepository
+import com.interviewonline.service.LanguageNormalizer.normalize as normalizeLanguage
 import com.interviewonline.ws.NoteMessagePayload
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
@@ -484,16 +485,6 @@ class RoomService(
         room.briefingMarkdown = currentTask.briefingMarkdown.orEmpty()
     }
 
-    private fun normalizeLanguage(language: String): String {
-        return when (language.trim().lowercase()) {
-            "javascript", "typescript", "nodejs" -> "nodejs"
-            "python" -> "python"
-            "kotlin" -> "kotlin"
-            "java" -> "java"
-            "sql" -> "sql"
-            else -> "nodejs"
-        }
-    }
 
     private fun normalizeTaskSignature(title: String, description: String, starterCode: String, language: String): String {
         val normalizedLanguage = normalizeLanguage(language)

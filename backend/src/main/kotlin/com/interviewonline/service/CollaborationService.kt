@@ -7,6 +7,7 @@ import com.interviewonline.model.User
 import com.interviewonline.repository.RoomParticipantRepository
 import com.interviewonline.repository.RoomRepository
 import com.interviewonline.repository.UserRepository
+import com.interviewonline.service.LanguageNormalizer.normalize as normalizeLanguage
 import com.interviewonline.ws.CandidateKeyPayload
 import com.interviewonline.ws.CursorPayload
 import com.interviewonline.ws.NoteMessagePayload
@@ -168,7 +169,7 @@ class CollaborationService(
     fun syncFromRoom(room: Room) {
         val currentState = roomState[room.inviteCode]
         val nextState = toRealtimeState(room)
-        val mergedCandidateKeyHistory = mergeCandidateKeyHistory(
+        val mergedCandidateKeyHistory = CandidateKeyHistoryHelpers.merge(
             inMemory = currentState?.candidateKeyHistory.orEmpty(),
             persisted = nextState.candidateKeyHistory,
         )
@@ -214,7 +215,7 @@ class CollaborationService(
         val connectionId = sseConnectionId(sessionId)
         val emitter = SseEmitter(0L)
         val resolvedRole = resolveRole(room, ownerToken, user)
-        val normalizedParticipantId = normalizeParticipantId(participantId)
+        val normalizedParticipantId = ParticipantIdentity.normalizeParticipantId(participantId)
         val identityRoleOverride = resolveIdentityRoleOverride(
             inviteCode = inviteCode,
             userId = user?.id,
@@ -636,7 +637,7 @@ class CollaborationService(
     }
 
     private fun scheduleCandidateKeyHistorySave(inviteCode: String, history: List<CandidateKeyPayload>) {
-        val serializedHistory = serializeCandidateKeyHistory(history)
+        val serializedHistory = CandidateKeyHistoryHelpers.serialize(history, objectMapper)
         latestCandidateKeyHistoryJsonByRoom[inviteCode] = serializedHistory
         pendingCandidateKeyHistorySaveByRoom.remove(inviteCode)?.cancel(false)
         val next = roomCandidateKeyHistorySaveScheduler.schedule({
@@ -741,7 +742,7 @@ class CollaborationService(
         }
 
         roomRepository.findByInviteCode(inviteCode)?.let {
-            it.interviewerChat = serializeNotesMessages(state.notesMessages)
+            it.interviewerChat = PrivateNotesSerialization.serializeChatMessages(state.notesMessages, objectMapper)
             roomRepository.save(it)
         }
         broadcastState(inviteCode)
@@ -1068,10 +1069,10 @@ class CollaborationService(
         val participant = participants[connectionId] ?: return
         if (participant.role != RoomAccessService.RoomRole.CANDIDATE) return
 
-        val normalizedEventKind = normalizeKeyEventKind(eventKind)
+        val normalizedEventKind = CandidateKeyHistoryHelpers.normalizeEventKind(eventKind)
         val isSyntheticEvent = normalizedEventKind != "keydown"
-        val normalizedKey = normalizeIncomingKey(key)
-        val normalizedCode = normalizeIncomingKeyCode(keyCode)
+        val normalizedKey = CandidateKeyHistoryHelpers.normalizeIncomingKey(key)
+        val normalizedCode = CandidateKeyHistoryHelpers.normalizeIncomingKeyCode(keyCode)
         // Синтетические события (blur/visibility) могут не нести key/keyCode,
         // но всё равно важны для лога — пропускаем фильтр пустоты.
         if (!isSyntheticEvent && normalizedKey.isBlank() && normalizedCode.isBlank()) return
@@ -1354,15 +1355,6 @@ class CollaborationService(
         return "s:${participant.sessionId.trim()}"
     }
 
-    private fun parseNotesMessages(
-        rawChatJson: String?,
-        legacyNotes: String?,
-    ): MutableList<NoteMessagePayload> =
-        PrivateNotesSerialization.parseChatMessages(rawChatJson, legacyNotes, objectMapper)
-
-    private fun serializeNotesMessages(messages: List<NoteMessagePayload>): String =
-        PrivateNotesSerialization.serializeChatMessages(messages, objectMapper)
-
     /**
      * Loads private notes for the room. New room-level storage in
      * `Room.privateNotesJson` is the source of truth. If the room still carries
@@ -1407,13 +1399,6 @@ class CollaborationService(
         return migrated
     }
 
-    private fun normalizeStoredEntry(entry: PersonalNoteEntryPayload): PersonalNoteEntryPayload? =
-        PrivateNotesSerialization.normalizeStoredEntry(
-            entry,
-            blockNameMaxChars = privateNotesBlockNameMaxChars,
-            textMaxChars = privateNotesTextMaxChars,
-        )
-
     private fun serializeRoomPrivateNotes(
         authors: Map<String, List<PersonalNoteEntryPayload>>,
     ): String = PrivateNotesSerialization.serializeRoomPrivateNotes(
@@ -1444,9 +1429,9 @@ class CollaborationService(
         room.code = nextTask.solutionCode ?: nextTask.starterCode
         room.briefingMarkdown = nextTask.briefingMarkdown.orEmpty()
         roomRepository.save(room)
-        val mergedCandidateKeyHistory = mergeCandidateKeyHistory(
+        val mergedCandidateKeyHistory = CandidateKeyHistoryHelpers.merge(
             inMemory = currentState?.candidateKeyHistory.orEmpty(),
-            persisted = parseCandidateKeyHistory(room.candidateKeyHistory),
+            persisted = CandidateKeyHistoryHelpers.parse(room.candidateKeyHistory, objectMapper),
         )
         val mergedLastCandidateKey = mergedCandidateKeyHistory.lastOrNull()
         val taskPayloads = buildTaskPayloads(room)
@@ -1461,7 +1446,7 @@ class CollaborationService(
             currentStep = room.currentStep,
             notes = room.notes.orEmpty(),
             notesMessages = currentState?.notesMessages?.toMutableList()
-                ?: parseNotesMessages(room.interviewerChat, room.notes),
+                ?: PrivateNotesSerialization.parseChatMessages(room.interviewerChat, room.notes, objectMapper),
             privateNotesByAuthor = currentState?.privateNotesByAuthor ?: parseRoomPrivateNotes(room),
             briefingMarkdown = nextTask.briefingMarkdown?.takeIf { it.isNotBlank() } ?: nextTask.description,
             tasks = taskPayloads,
@@ -1632,35 +1617,24 @@ class CollaborationService(
     }
 
     /**
-     * Identity-helpers (нормализация participantId, identityKey, rolePriority)
-     * вынесены в [ParticipantIdentity] — здесь только тонкие обёртки и
-     * перегрузка под [ParticipantMeta] (private nested class сервиса).
+     * Domain-shortcut для [ParticipantIdentity.participantIdentityKey] под
+     * приватный nested-тип [ParticipantMeta]. Все остальные хелперы
+     * (`normalizeParticipantId`, `rolePriority`, перегрузка по userId/participantId/sessionId)
+     * вызываются напрямую из [ParticipantIdentity] без обёрток.
      */
-    private fun normalizeParticipantId(participantId: String?): String? =
-        ParticipantIdentity.normalizeParticipantId(participantId)
-
-    private fun participantIdentityKey(
-        userId: String?,
-        participantId: String?,
-        sessionId: String,
-    ): String = ParticipantIdentity.participantIdentityKey(userId, participantId, sessionId)
-
     private fun participantIdentityKey(meta: ParticipantMeta): String =
         ParticipantIdentity.participantIdentityKey(meta.userId, meta.participantId, meta.sessionId)
-
-    private fun rolePriority(role: RoomAccessService.RoomRole): Int =
-        ParticipantIdentity.rolePriority(role)
 
     private fun aggregateParticipantGroup(group: List<ParticipantMeta>): ParticipantMeta {
         val representative = group
             .sortedWith(
-                compareByDescending<ParticipantMeta> { rolePriority(it.role) }
+                compareByDescending<ParticipantMeta> { ParticipantIdentity.rolePriority(it.role) }
                     .thenByDescending { if (it.presenceStatus == PresenceStatus.ACTIVE) 1 else 0 }
                     .thenBy { it.displayName.lowercase() }
                     .thenBy { it.sessionId },
             )
             .first()
-        val mergedRole = group.maxByOrNull { rolePriority(it.role) }?.role ?: representative.role
+        val mergedRole = group.maxByOrNull { ParticipantIdentity.rolePriority(it.role) }?.role ?: representative.role
         val mergedPresence =
             if (group.any { it.presenceStatus == PresenceStatus.ACTIVE }) PresenceStatus.ACTIVE else PresenceStatus.AWAY
         return representative.copy(
@@ -1715,22 +1689,23 @@ class CollaborationService(
         participantId: String?,
         sessionId: String,
     ): RoomAccessService.RoomRole? {
-        val identityKey = participantIdentityKey(userId, participantId, sessionId)
+        val identityKey = ParticipantIdentity.participantIdentityKey(userId, participantId, sessionId)
         return participants.values
             .asSequence()
             .filter { it.inviteCode == inviteCode }
             .filter { participantIdentityKey(it) == identityKey }
             .map { it.role }
-            .maxByOrNull { rolePriority(it) }
+            .maxByOrNull { ParticipantIdentity.rolePriority(it) }
     }
 
     private fun resolveGuestRoleTargets(inviteCode: String, target: ParticipantMeta): List<ParticipantMeta> {
-        val normalizedTargetParticipantId = normalizeParticipantId(target.participantId) ?: return listOf(target)
+        val normalizedTargetParticipantId =
+            ParticipantIdentity.normalizeParticipantId(target.participantId) ?: return listOf(target)
         val sameGuestTargets = participants.values
             .asSequence()
             .filter { it.inviteCode == inviteCode }
             .filter { it.userId.isNullOrBlank() }
-            .filter { normalizeParticipantId(it.participantId) == normalizedTargetParticipantId }
+            .filter { ParticipantIdentity.normalizeParticipantId(it.participantId) == normalizedTargetParticipantId }
             .toList()
         if (sameGuestTargets.isEmpty()) return listOf(target)
         return sameGuestTargets
@@ -1789,38 +1764,12 @@ class CollaborationService(
             .toMutableList()
     }
 
-    /**
-     * Все pure-хелперы (parse/serialize/merge/normalize) для истории клавиш
-     * живут в [CandidateKeyHistoryHelpers]. Здесь только тонкие методы-обёртки,
-     * чтобы не править все вызовы в сервисе разом — постепенно их можно будет
-     * заменить прямыми обращениями к хелперу.
-     */
-    private fun parseCandidateKeyHistory(raw: String?): List<CandidateKeyPayload> =
-        CandidateKeyHistoryHelpers.parse(raw, objectMapper)
-
-    private fun serializeCandidateKeyHistory(history: List<CandidateKeyPayload>): String =
-        CandidateKeyHistoryHelpers.serialize(history, objectMapper)
-
-    private fun mergeCandidateKeyHistory(
-        inMemory: List<CandidateKeyPayload>,
-        persisted: List<CandidateKeyPayload>,
-    ): List<CandidateKeyPayload> = CandidateKeyHistoryHelpers.merge(inMemory, persisted)
-
-    private fun normalizeKeyEventKind(rawKind: String?): String =
-        CandidateKeyHistoryHelpers.normalizeEventKind(rawKind)
-
-    private fun normalizeIncomingKey(rawKey: String?): String =
-        CandidateKeyHistoryHelpers.normalizeIncomingKey(rawKey)
-
-    private fun normalizeIncomingKeyCode(rawCode: String?): String =
-        CandidateKeyHistoryHelpers.normalizeIncomingKeyCode(rawCode)
-
     private fun toRealtimeState(room: Room): RealtimeState {
         val currentTask = room.tasks.getOrNull(room.currentStep)
         val language = normalizeLanguage(currentTask?.solutionLanguage?.ifBlank { null } ?: room.language)
         val code = currentTask?.solutionCode ?: room.code.ifBlank { currentTask?.starterCode.orEmpty() }
         val notes = room.notes.orEmpty().ifBlank { currentTask?.interviewerNotes.orEmpty() }
-        val candidateKeyHistory = parseCandidateKeyHistory(room.candidateKeyHistory)
+        val candidateKeyHistory = CandidateKeyHistoryHelpers.parse(room.candidateKeyHistory, objectMapper)
         val lastCandidateKey = candidateKeyHistory.lastOrNull()
         val taskPayloads = buildTaskPayloads(room)
         return RealtimeState(
@@ -1832,7 +1781,7 @@ class CollaborationService(
             lastIncrementalYjsSessionId = null,
             currentStep = room.currentStep,
             notes = notes,
-            notesMessages = parseNotesMessages(room.interviewerChat, notes),
+            notesMessages = PrivateNotesSerialization.parseChatMessages(room.interviewerChat, notes, objectMapper),
             privateNotesByAuthor = parseRoomPrivateNotes(room),
             briefingMarkdown = currentTask?.briefingMarkdown?.takeIf { it.isNotBlank() } ?: currentTask?.description.orEmpty(),
             tasks = taskPayloads,
@@ -1850,14 +1799,4 @@ class CollaborationService(
         )
     }
 
-    private fun normalizeLanguage(language: String): String {
-        return when (language.trim().lowercase()) {
-            "javascript", "typescript", "nodejs" -> "nodejs"
-            "python" -> "python"
-            "kotlin" -> "kotlin"
-            "java" -> "java"
-            "sql" -> "sql"
-            else -> "nodejs"
-        }
-    }
 }

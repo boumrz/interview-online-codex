@@ -147,6 +147,7 @@ export function LoginPage() {
   return (
     <Box style={{ minHeight: "100vh", background: "#0f1115", display: "flex", alignItems: "center" }}>
       <Container size="xs" py={40}>
+        <h1 className="visually-hidden">Личный кабинет — вход и регистрация</h1>
         <Card
           withBorder
           radius="lg"
@@ -161,7 +162,7 @@ export function LoginPage() {
                 <ThemeIcon color="gray" variant="light">
                   <IconUser size={16} />
                 </ThemeIcon>
-                <Title order={3} c="#f3f5f7">
+                <Title order={2} c="#f3f5f7" size="h3">
                   Личный кабинет
                 </Title>
               </Group>
@@ -235,6 +236,9 @@ export function LoginPage() {
                   error={passwordError || undefined}
                   styles={fieldStyles}
                   required
+                  visibilityToggleButtonProps={{
+                    "aria-label": "Показать символы",
+                  }}
                 />
                 <Button
                   type="submit"
