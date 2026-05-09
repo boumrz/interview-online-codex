@@ -6,8 +6,15 @@ import {
   Menu,
   Select,
   ThemeIcon,
+  Tooltip,
 } from "@mantine/core";
-import { IconCode, IconHome2, IconLayoutDashboard } from "@tabler/icons-react";
+import {
+  IconChevronDown,
+  IconCode,
+  IconHelpCircle,
+  IconHome2,
+  IconLayoutDashboard,
+} from "@tabler/icons-react";
 import { Link } from "react-router-dom";
 
 import roomPageStyles from "../../pages/RoomPage.module.css";
@@ -122,6 +129,14 @@ export function TopBar({
                         *
                       </span>
                     ) : null}
+                    {canOpenMenu ? (
+                      <IconChevronDown
+                        size={11}
+                        stroke={2.4}
+                        className={roomPageStyles.participantMenuCaret}
+                        aria-hidden="true"
+                      />
+                    ) : null}
                   </span>
                 );
                 const participantStyle = {
@@ -154,16 +169,25 @@ export function TopBar({
                     offset={8}
                   >
                     <Menu.Target>
-                      <button
-                        type="button"
-                        className={`${roomPageStyles.participantCard} ${roomPageStyles.participantCardButton}`}
-                        data-presence={participant.presenceStatus}
-                        data-testid={`participant-badge-${participant.presenceStatus}`}
-                        style={participantStyle}
-                        aria-label={`${participant.displayName}, ${presenceLabel}`}
+                      <Tooltip
+                        label={menuActionLabel}
+                        withArrow
+                        position="bottom"
+                        openDelay={250}
+                        closeDelay={50}
                       >
-                        {participantCard}
-                      </button>
+                        <button
+                          type="button"
+                          className={`${roomPageStyles.participantCard} ${roomPageStyles.participantCardButton}`}
+                          data-presence={participant.presenceStatus}
+                          data-testid={`participant-badge-${participant.presenceStatus}`}
+                          style={participantStyle}
+                          aria-label={`${participant.displayName}, ${presenceLabel}. ${menuActionLabel}`}
+                          aria-haspopup="menu"
+                        >
+                          {participantCard}
+                        </button>
+                      </Tooltip>
                     </Menu.Target>
                     <Menu.Dropdown>
                       <Menu.Item
@@ -175,6 +199,39 @@ export function TopBar({
                   </Menu>
                 );
               })}
+
+              {/*
+               * Compact discoverability helper: shown only when the owner can
+               * actually promote someone (canGrantAccess + ≥1 promotable
+               * participant). Lives in the same row as the chips, opacity 0.6,
+               * tooltip carries the full instruction. This avoids a permanent
+               * banner while still teaching the click-to-promote affordance.
+               */}
+              {canGrantAccess &&
+              participants.some(
+                (p) =>
+                  p.role !== "owner" &&
+                  (p.canBeGrantedInterviewerAccess ?? true),
+              ) ? (
+                <Tooltip
+                  label="Кликните по нику участника, чтобы назначить или снять роль интервьюера"
+                  withArrow
+                  multiline
+                  w={260}
+                  position="bottom"
+                  openDelay={150}
+                >
+                  <span
+                    className={roomPageStyles.participantsHelpHint}
+                    role="note"
+                    aria-label="Подсказка: кликните по участнику, чтобы назначить или снять роль интервьюера"
+                    tabIndex={0}
+                    data-testid="participants-help-hint"
+                  >
+                    <IconHelpCircle size={14} stroke={1.8} aria-hidden="true" />
+                  </span>
+                </Tooltip>
+              ) : null}
             </div>
           </Box>
         ) : (
