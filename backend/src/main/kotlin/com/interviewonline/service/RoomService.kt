@@ -163,6 +163,7 @@ class RoomService(
                 title = title,
                 description = description,
                 starterCode = raw.starterCode.replace("\r\n", "\n"),
+                language = raw.language?.trim()?.takeIf { it.isNotBlank() },
             )
         }
 
@@ -215,7 +216,11 @@ class RoomService(
         }
 
         customTasks.forEach { task ->
-            val signature = normalizeTaskSignature(task.title, task.description, task.starterCode, roomLanguage)
+            // Allow per-task language override; fall back to the room language
+            // when the client didn't pick one. Always normalize to one of the
+            // supported languages so storage stays consistent.
+            val taskLanguage = normalizeLanguage(task.language ?: roomLanguage)
+            val signature = normalizeTaskSignature(task.title, task.description, task.starterCode, taskLanguage)
             if (existingSignatures.contains(signature)) return@forEach
             existingSignatures.add(signature)
             tasksToAppend += RoomTask(
@@ -224,8 +229,8 @@ class RoomService(
                 description = task.description,
                 starterCode = task.starterCode,
                 briefingMarkdown = null,
-                language = roomLanguage,
-                categoryName = roomLanguage,
+                language = taskLanguage,
+                categoryName = taskLanguage,
                 sourceTaskTemplateId = null,
             )
         }
@@ -257,6 +262,8 @@ class RoomService(
         val title: String,
         val description: String,
         val starterCode: String,
+        /** Null means "fall back to the current room language". */
+        val language: String?,
     )
 
     @Transactional(readOnly = true)

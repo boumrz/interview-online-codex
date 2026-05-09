@@ -16,6 +16,11 @@ data class RoomRealtimePayload(
     val currentStep: Int,
     val notes: String,
     val notesMessages: List<NoteMessagePayload> = emptyList(),
+    /**
+     * Room-wide private notes for the requesting interviewer/owner.
+     * Replaces the legacy per-step `personalNotesByStep` payload.
+     */
+    val personalNotes: List<PersonalNoteEntryPayload> = emptyList(),
     val briefingMarkdown: String = "",
     val participants: List<ParticipantPayload>,
     val isOwner: Boolean = false,
@@ -50,6 +55,20 @@ data class NoteMessagePayload(
     val displayName: String,
     val role: String,
     val text: String,
+    val timestampEpochMs: Long,
+)
+
+data class PersonalNoteEntryPayload(
+    val id: String,
+    val text: String,
+    val blockName: String? = null,
+    /**
+     * Optional pointer back to the interview step this entry "belongs to".
+     * Set when the entry was authored under a step block (auto-set on step switch
+     * or via `/block Шаг N`). Used by the client/export to render `Шаг N` in UI
+     * and `Шаг N - <task title>` in exported markdown.
+     */
+    val blockStepIndex: Int? = null,
     val timestampEpochMs: Long,
 )
 
@@ -89,4 +108,12 @@ data class CandidateKeyPayload(
     val shiftKey: Boolean,
     val metaKey: Boolean,
     val timestampEpochMs: Long,
+    /**
+     * Категория события: `keydown` (значение по умолчанию для обратной
+     * совместимости), `window_blur`, `tab_hidden`, `tab_visible`, `window_focus`.
+     * Используется UI, чтобы рендерить переключение окон/вкладок отдельной
+     * строкой вида «Alt+Tab — переключение окна», даже если ОС перехватила
+     * сам Tab и `keydown` для него не приходит.
+     */
+    val eventKind: String = "keydown",
 )

@@ -85,6 +85,12 @@ data class AddRoomCustomTaskRequest(
     @field:NotBlank val title: String,
     val description: String = "",
     val starterCode: String = "",
+    /**
+     * Optional override for the task language. When blank/null we fall back to
+     * the language currently set on the room (legacy behavior). Allows
+     * interviewers to mix tasks of different languages within the same room.
+     */
+    val language: String? = null,
 )
 
 data class UpdateRoomParticipantRoleRequest(

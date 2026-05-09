@@ -11,6 +11,7 @@ import com.interviewonline.ws.CandidateKeyPayload
 import com.interviewonline.ws.CursorPayload
 import com.interviewonline.ws.NoteMessagePayload
 import com.interviewonline.ws.ParticipantPayload
+import com.interviewonline.ws.PersonalNoteEntryPayload
 import com.interviewonline.ws.RealtimeEventRequest
 import com.interviewonline.ws.RoomRealtimePayload
 import com.interviewonline.ws.RoomTaskPayload
@@ -46,6 +47,9 @@ class CollaborationService(
     private val keyEventBroadcastThrottleMs = 20L
     private val candidateKeyHistoryMaxSize = 50
     private val notesHistoryLimit = 500
+    private val privateNotesHistoryLimit = 2_000
+    private val privateNotesBlockNameMaxChars = 80
+    private val privateNotesTextMaxChars = 8_000
     private val maxYjsDocumentBase64Chars = 400_000
     private val maxAwarenessUpdateBase64Chars = 24_000
     private val appliedOperationIdTtlMillis = 15 * 60_000L
@@ -94,6 +98,11 @@ class CollaborationService(
         var currentStep: Int,
         var notes: String,
         val notesMessages: MutableList<NoteMessagePayload> = mutableListOf(),
+        /**
+         * Room-wide private notes per author (each interviewer/owner has their own
+         * stream). Replaces the legacy per-step segregation.
+         */
+        val privateNotesByAuthor: MutableMap<String, MutableList<PersonalNoteEntryPayload>> = ConcurrentHashMap(),
         var briefingMarkdown: String = "",
         val tasks: MutableList<RoomTaskPayload> = mutableListOf(),
         var notesLockedBySessionId: String? = null,
@@ -125,6 +134,15 @@ class CollaborationService(
     private data class NotesThreadPayload(
         val version: Int = 1,
         val messages: List<NoteMessagePayload> = emptyList(),
+    )
+
+    private data class RoomPrivateNotesPayload(
+        val version: Int = 1,
+        val authors: Map<String, RoomPrivateNotesAuthorPayload> = emptyMap(),
+    )
+
+    private data class RoomPrivateNotesAuthorPayload(
+        val entries: List<PersonalNoteEntryPayload> = emptyList(),
     )
 
     private val roomSseConnections = ConcurrentHashMap<String, MutableSet<String>>()
@@ -307,6 +325,14 @@ class CollaborationService(
                 noteText = request.noteText,
                 noteTimestampEpochMs = request.noteTimestampEpochMs,
             )
+            "private_note_entry" -> appendPrivateNoteEntry(
+                connectionId = connectionId,
+                noteId = request.privateNoteId,
+                noteText = request.privateNoteText,
+                blockName = request.privateNoteBlockName,
+                blockStepIndex = request.privateNoteBlockStepIndex,
+                noteTimestampEpochMs = request.privateNoteTimestampEpochMs,
+            )
             "presentation_markdown_update", "briefing_markdown_update" ->
                 updateBriefingMarkdown(connectionId, request.briefingMarkdown ?: request.presentationMarkdown.orEmpty())
             "presence_update" -> updatePresence(connectionId, request.presenceStatus)
@@ -357,6 +383,7 @@ class CollaborationService(
                 altKey = request.altKey ?: false,
                 shiftKey = request.shiftKey ?: false,
                 metaKey = request.metaKey ?: false,
+                eventKind = request.eventKind,
             )
             else -> throw ApiException(HttpStatus.BAD_REQUEST, "Неизвестный тип сообщения: ${request.type}")
         }
@@ -728,6 +755,66 @@ class CollaborationService(
         broadcastState(inviteCode)
     }
 
+    private fun appendPrivateNoteEntry(
+        connectionId: String,
+        noteId: String?,
+        noteText: String?,
+        blockName: String?,
+        blockStepIndex: Int?,
+        noteTimestampEpochMs: Long?,
+    ) {
+        val participant = participants[connectionId] ?: return
+        if (!participant.canManageRoom) {
+            throw ApiException(HttpStatus.FORBIDDEN, "Только интервьюер может вести личные заметки")
+        }
+
+        val normalizedText = noteText.orEmpty().replace("\u0000", "").trim().take(privateNotesTextMaxChars)
+        if (normalizedText.isBlank()) return
+
+        val inviteCode = participant.inviteCode
+        val room = roomRepository.findWithTasksByInviteCode(inviteCode)
+            ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+        val authorKey = resolvePrivateNotesAuthorKey(participant)
+        val normalizedBlockName = blockName
+            ?.replace("\u0000", "")
+            ?.trim()
+            ?.take(privateNotesBlockNameMaxChars)
+            ?.ifBlank { null }
+        val normalizedBlockStepIndex = blockStepIndex
+            ?.takeIf { it >= 0 && it < room.tasks.size.coerceAtLeast(1) }
+        val normalizedTimestamp = noteTimestampEpochMs
+            ?.takeIf { it >= 0 }
+            ?: Instant.now().toEpochMilli()
+
+        val notesByAuthor = parseRoomPrivateNotes(room)
+        val authorNotes = (notesByAuthor[authorKey] ?: mutableListOf()).toMutableList()
+        val nextEntry = PersonalNoteEntryPayload(
+            id = noteId?.trim()?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString(),
+            text = normalizedText,
+            blockName = normalizedBlockName,
+            blockStepIndex = normalizedBlockStepIndex,
+            timestampEpochMs = normalizedTimestamp,
+        )
+        authorNotes.add(nextEntry)
+        if (authorNotes.size > privateNotesHistoryLimit) {
+            val overflow = authorNotes.size - privateNotesHistoryLimit
+            repeat(overflow) {
+                authorNotes.removeAt(0)
+            }
+        }
+        notesByAuthor[authorKey] = authorNotes
+
+        room.privateNotesJson = serializeRoomPrivateNotes(notesByAuthor)
+        roomRepository.save(room)
+
+        roomState[inviteCode]?.let { state ->
+            synchronized(state) {
+                state.privateNotesByAuthor[authorKey] = authorNotes.toMutableList()
+            }
+        }
+        broadcastState(inviteCode)
+    }
+
     private fun updateBriefingMarkdown(connectionId: String, markdown: String) {
         val participant = participants[connectionId] ?: return
         if (!participant.canManageRoom) {
@@ -984,33 +1071,52 @@ class CollaborationService(
         altKey: Boolean,
         shiftKey: Boolean,
         metaKey: Boolean,
+        eventKind: String? = null,
     ) {
         val participant = participants[connectionId] ?: return
         if (participant.role != RoomAccessService.RoomRole.CANDIDATE) return
 
+        val normalizedEventKind = normalizeKeyEventKind(eventKind)
+        val isSyntheticEvent = normalizedEventKind != "keydown"
         val normalizedKey = normalizeIncomingKey(key)
         val normalizedCode = normalizeIncomingKeyCode(keyCode)
-        if (normalizedKey.isBlank() && normalizedCode.isBlank()) return
+        // Синтетические события (blur/visibility) могут не нести key/keyCode,
+        // но всё равно важны для лога — пропускаем фильтр пустоты.
+        if (!isSyntheticEvent && normalizedKey.isBlank() && normalizedCode.isBlank()) return
 
         val state = roomState[participant.inviteCode] ?: return
         val keyEvent: CandidateKeyPayload
         val historySnapshot: List<CandidateKeyPayload>
         synchronized(state) {
             val now = Instant.now().toEpochMilli()
-            if (now - state.lastCandidateKeyAtEpochMs < keyEventBroadcastThrottleMs) {
+            // Троттлим только обычные keydown — синтетические события (смена
+            // окна/вкладки) пропускаем всегда, иначе можно потерять Alt+Tab,
+            // который приходит сразу за keydown модификатора.
+            if (!isSyntheticEvent && now - state.lastCandidateKeyAtEpochMs < keyEventBroadcastThrottleMs) {
                 return
             }
 
             keyEvent = CandidateKeyPayload(
                 sessionId = participant.sessionId,
                 displayName = participant.displayName,
-                key = normalizedKey.ifBlank { normalizedCode.ifBlank { "Unknown" } },
-                keyCode = normalizedCode.ifBlank { normalizedKey.ifBlank { "Unknown" } },
+                key = when {
+                    normalizedKey.isNotBlank() -> normalizedKey
+                    normalizedCode.isNotBlank() -> normalizedCode
+                    isSyntheticEvent -> ""
+                    else -> "Unknown"
+                },
+                keyCode = when {
+                    normalizedCode.isNotBlank() -> normalizedCode
+                    normalizedKey.isNotBlank() -> normalizedKey
+                    isSyntheticEvent -> ""
+                    else -> "Unknown"
+                },
                 ctrlKey = ctrlKey,
                 altKey = altKey,
                 shiftKey = shiftKey,
                 metaKey = metaKey,
                 timestampEpochMs = now,
+                eventKind = normalizedEventKind,
             )
             state.lastCandidateKey = keyEvent
             state.candidateKeyHistory.add(keyEvent)
@@ -1020,7 +1126,11 @@ class CollaborationService(
                     state.candidateKeyHistory.removeAt(0)
                 }
             }
-            state.lastCandidateKeyAtEpochMs = now
+            // Троттл-таймер двигаем только для обычных нажатий — синтетические
+            // события (blur/visibility) не должны вытеснять последующие keydown.
+            if (!isSyntheticEvent) {
+                state.lastCandidateKeyAtEpochMs = now
+            }
             historySnapshot = state.candidateKeyHistory.toList()
         }
 
@@ -1200,6 +1310,7 @@ class CollaborationService(
         cursorsPayload: List<CursorPayload>,
         participant: ParticipantMeta,
     ): RoomRealtimePayload {
+        val personalNotes = buildParticipantPersonalNotes(state, participant)
         return RoomRealtimePayload(
             inviteCode = inviteCode,
             language = state.language,
@@ -1210,6 +1321,7 @@ class CollaborationService(
             currentStep = state.currentStep,
             notes = state.notes,
             notesMessages = state.notesMessages.toList(),
+            personalNotes = personalNotes,
             briefingMarkdown = state.briefingMarkdown,
             participants = participantsPayload,
             isOwner = participant.isOwner,
@@ -1226,6 +1338,28 @@ class CollaborationService(
             lastCandidateKey = state.lastCandidateKey,
             candidateKeyHistory = state.candidateKeyHistory.toList(),
         )
+    }
+
+    private fun buildParticipantPersonalNotes(
+        state: RealtimeState,
+        participant: ParticipantMeta,
+    ): List<PersonalNoteEntryPayload> {
+        if (!participant.canManageRoom) return emptyList()
+        val authorKey = resolvePrivateNotesAuthorKey(participant)
+        if (authorKey.isBlank()) return emptyList()
+        return state.privateNotesByAuthor[authorKey].orEmpty()
+            .asSequence()
+            .filter { it.text.trim().isNotEmpty() }
+            .sortedWith(compareBy<PersonalNoteEntryPayload> { it.timestampEpochMs }.thenBy { it.id })
+            .toList()
+    }
+
+    private fun resolvePrivateNotesAuthorKey(participant: ParticipantMeta): String {
+        val normalizedUserId = participant.userId?.trim().orEmpty()
+        if (normalizedUserId.isNotBlank()) return "u:$normalizedUserId"
+        val normalizedParticipantId = participant.participantId?.trim().orEmpty()
+        if (normalizedParticipantId.isNotBlank()) return "p:$normalizedParticipantId"
+        return "s:${participant.sessionId.trim()}"
     }
 
     private fun parseNotesMessages(rawChatJson: String?, legacyNotes: String?): MutableList<NoteMessagePayload> {
@@ -1272,6 +1406,122 @@ class CollaborationService(
         return objectMapper.writeValueAsString(NotesThreadPayload(messages = messages))
     }
 
+    /**
+     * Loads private notes for the room. New room-level storage in
+     * `Room.privateNotesJson` is the source of truth. If the room still carries
+     * the legacy per-task storage (each task's `privateNotesJson`), we migrate it
+     * once: flatten all entries into a single per-author stream, tagging each
+     * entry with `blockStepIndex` of the source task, and persist the result on
+     * the room. This keeps existing interviewer notes after the upgrade.
+     */
+    private fun parseRoomPrivateNotes(room: Room): MutableMap<String, MutableList<PersonalNoteEntryPayload>> {
+        val rawRoom = room.privateNotesJson.orEmpty().trim()
+        if (rawRoom.isNotBlank()) {
+            val parsed = runCatching {
+                objectMapper.readValue(rawRoom, RoomPrivateNotesPayload::class.java)
+            }.getOrNull()
+            if (parsed != null) {
+                return readAuthorsPayload(parsed.authors)
+            }
+        }
+
+        val migrated = migrateLegacyTaskPrivateNotes(room)
+        if (migrated.isNotEmpty()) {
+            room.privateNotesJson = serializeRoomPrivateNotes(migrated)
+            // Wipe legacy per-task storage so it does not migrate again on next read.
+            room.tasks.forEach { it.privateNotesJson = null }
+            roomRepository.save(room)
+        }
+        return migrated
+    }
+
+    private fun readAuthorsPayload(
+        authors: Map<String, RoomPrivateNotesAuthorPayload>,
+    ): MutableMap<String, MutableList<PersonalNoteEntryPayload>> {
+        val byAuthor = ConcurrentHashMap<String, MutableList<PersonalNoteEntryPayload>>()
+        authors.forEach { (authorKeyRaw, authorPayload) ->
+            val authorKey = authorKeyRaw.trim()
+            if (authorKey.isBlank()) return@forEach
+            val entries = authorPayload.entries
+                .mapNotNull(::normalizeStoredEntry)
+                .sortedWith(compareBy<PersonalNoteEntryPayload> { it.timestampEpochMs }.thenBy { it.id })
+                .takeLast(privateNotesHistoryLimit)
+                .toMutableList()
+            if (entries.isNotEmpty()) {
+                byAuthor[authorKey] = entries
+            }
+        }
+        return byAuthor
+    }
+
+    /**
+     * One-shot migration helper. Reads the legacy per-task `privateNotesJson`
+     * blobs and folds them into the room-level shape, tagging every entry with
+     * its original `stepIndex` as `blockStepIndex` so the new UI/export can still
+     * label them as `Шаг N - <task title>`.
+     */
+    private fun migrateLegacyTaskPrivateNotes(room: Room): MutableMap<String, MutableList<PersonalNoteEntryPayload>> {
+        val byAuthor = ConcurrentHashMap<String, MutableList<PersonalNoteEntryPayload>>()
+        room.tasks.forEach { task ->
+            val rawTask = task.privateNotesJson.orEmpty().trim()
+            if (rawTask.isBlank()) return@forEach
+            val parsed = runCatching {
+                objectMapper.readValue(rawTask, RoomPrivateNotesPayload::class.java)
+            }.getOrNull() ?: return@forEach
+            parsed.authors.forEach { (authorKeyRaw, authorPayload) ->
+                val authorKey = authorKeyRaw.trim()
+                if (authorKey.isBlank()) return@forEach
+                val sink = byAuthor.getOrPut(authorKey) { mutableListOf() }
+                authorPayload.entries.forEach { entry ->
+                    val normalized = normalizeStoredEntry(entry) ?: return@forEach
+                    sink.add(
+                        normalized.copy(
+                            blockStepIndex = normalized.blockStepIndex ?: task.stepIndex,
+                        ),
+                    )
+                }
+            }
+        }
+        byAuthor.forEach { (authorKey, entries) ->
+            byAuthor[authorKey] = entries
+                .sortedWith(compareBy<PersonalNoteEntryPayload> { it.timestampEpochMs }.thenBy { it.id })
+                .takeLast(privateNotesHistoryLimit)
+                .toMutableList()
+        }
+        return byAuthor
+    }
+
+    private fun normalizeStoredEntry(entry: PersonalNoteEntryPayload): PersonalNoteEntryPayload? {
+        val text = entry.text.replace("\u0000", "").trim()
+        if (text.isBlank()) return null
+        return PersonalNoteEntryPayload(
+            id = entry.id.trim().ifBlank { UUID.randomUUID().toString() },
+            text = text.take(privateNotesTextMaxChars),
+            blockName = entry.blockName
+                ?.replace("\u0000", "")
+                ?.trim()
+                ?.take(privateNotesBlockNameMaxChars)
+                ?.ifBlank { null },
+            blockStepIndex = entry.blockStepIndex?.takeIf { it >= 0 },
+            timestampEpochMs = entry.timestampEpochMs.coerceAtLeast(0L),
+        )
+    }
+
+    private fun serializeRoomPrivateNotes(authors: Map<String, List<PersonalNoteEntryPayload>>): String {
+        val normalizedAuthors = linkedMapOf<String, RoomPrivateNotesAuthorPayload>()
+        authors.forEach { (authorKeyRaw, entriesRaw) ->
+            val authorKey = authorKeyRaw.trim()
+            if (authorKey.isBlank()) return@forEach
+            val entries = entriesRaw
+                .mapNotNull(::normalizeStoredEntry)
+                .sortedWith(compareBy<PersonalNoteEntryPayload> { it.timestampEpochMs }.thenBy { it.id })
+                .takeLast(privateNotesHistoryLimit)
+            if (entries.isEmpty()) return@forEach
+            normalizedAuthors[authorKey] = RoomPrivateNotesAuthorPayload(entries = entries)
+        }
+        return objectMapper.writeValueAsString(RoomPrivateNotesPayload(authors = normalizedAuthors))
+    }
+
     private fun setStepInternal(inviteCode: String, room: Room, stepIndex: Int) {
         val currentState = roomState[inviteCode]
         val currentTask = room.tasks.getOrNull(room.currentStep)
@@ -1297,6 +1547,7 @@ class CollaborationService(
             persisted = parseCandidateKeyHistory(room.candidateKeyHistory),
         )
         val mergedLastCandidateKey = mergedCandidateKeyHistory.lastOrNull()
+        val taskPayloads = buildTaskPayloads(room)
 
         roomState[inviteCode] = RealtimeState(
             language = normalizeLanguage(room.language),
@@ -1309,8 +1560,9 @@ class CollaborationService(
             notes = room.notes.orEmpty(),
             notesMessages = currentState?.notesMessages?.toMutableList()
                 ?: parseNotesMessages(room.interviewerChat, room.notes),
+            privateNotesByAuthor = currentState?.privateNotesByAuthor ?: parseRoomPrivateNotes(room),
             briefingMarkdown = nextTask.briefingMarkdown?.takeIf { it.isNotBlank() } ?: nextTask.description,
-            tasks = buildTaskPayloads(room),
+            tasks = taskPayloads,
             notesLockedBySessionId = currentState?.notesLockedBySessionId,
             notesLockedByDisplayName = currentState?.notesLockedByDisplayName,
             notesLockedUntilEpochMs = currentState?.notesLockedUntilEpochMs,
@@ -1694,12 +1946,30 @@ class CollaborationService(
                     if (event.altKey) "1" else "0",
                     if (event.shiftKey) "1" else "0",
                     if (event.metaKey) "1" else "0",
+                    event.eventKind,
                 ).joinToString(":")
                 merged[dedupeKey] = event
             }
         return merged.values
             .sortedBy { it.timestampEpochMs }
             .takeLast(candidateKeyHistoryMaxSize)
+    }
+
+    /**
+     * Приводит входящий `eventKind` к одному из поддерживаемых значений.
+     * Неизвестные/пустые значения трактуем как обычное `keydown`, чтобы
+     * ничего не падало при появлении старых клиентов или новых, ещё не
+     * добавленных категорий событий.
+     */
+    private fun normalizeKeyEventKind(rawKind: String?): String {
+        val normalized = rawKind?.trim()?.lowercase().orEmpty()
+        return when (normalized) {
+            "window_blur",
+            "window_focus",
+            "tab_hidden",
+            "tab_visible" -> normalized
+            else -> "keydown"
+        }
     }
 
     private fun normalizeIncomingKey(rawKey: String?): String {
@@ -1738,6 +2008,7 @@ class CollaborationService(
         val notes = room.notes.orEmpty().ifBlank { currentTask?.interviewerNotes.orEmpty() }
         val candidateKeyHistory = parseCandidateKeyHistory(room.candidateKeyHistory)
         val lastCandidateKey = candidateKeyHistory.lastOrNull()
+        val taskPayloads = buildTaskPayloads(room)
         return RealtimeState(
             language = language,
             code = code,
@@ -1748,8 +2019,9 @@ class CollaborationService(
             currentStep = room.currentStep,
             notes = notes,
             notesMessages = parseNotesMessages(room.interviewerChat, notes),
+            privateNotesByAuthor = parseRoomPrivateNotes(room),
             briefingMarkdown = currentTask?.briefingMarkdown?.takeIf { it.isNotBlank() } ?: currentTask?.description.orEmpty(),
-            tasks = buildTaskPayloads(room),
+            tasks = taskPayloads,
             notesLockedBySessionId = null,
             notesLockedByDisplayName = null,
             notesLockedUntilEpochMs = null,

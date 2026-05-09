@@ -7,9 +7,11 @@
   useState,
 } from "react";
 import {
+  ActionIcon,
   Badge,
   Box,
   Button,
+  Checkbox,
   Group,
   Menu,
   Modal,
@@ -21,14 +23,19 @@ import {
   TextInput,
   Textarea,
   ThemeIcon,
+  Tooltip,
 } from "@mantine/core";
 import {
   IconCode,
+  IconDownload,
+  IconFileDescription,
   IconGripVertical,
   IconHome2,
   IconLayoutDashboard,
+  IconNote,
   IconPlus,
   IconUsers,
+  IconX,
 } from "@tabler/icons-react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import * as Y from "yjs";
@@ -68,6 +75,7 @@ import { java } from "@codemirror/lang-java";
 import { sql } from "@codemirror/lang-sql";
 import { useAppSelector } from "../app/hooks";
 import { markdownToHtml } from "../components/markdown";
+import { useEscapeLayer } from "../components/useEscapeLayer";
 import {
   useAddRoomTasksMutation,
   useGetRoomQuery,
@@ -114,6 +122,23 @@ type CursorInfo = {
   selectionEndColumn?: number | null;
 };
 
+/**
+ * Возможные категории событий лога активности кандидата:
+ * - `keydown` — обычное нажатие клавиши.
+ * - `window_blur` — окно браузера потеряло фокус (Alt+Tab/Cmd+Tab,
+ *   переключение на другое приложение).
+ * - `window_focus` — окно браузера снова получило фокус.
+ * - `tab_hidden` — вкладка стала скрытой (переключение на другую вкладку
+ *   внутри браузера, сворачивание окна).
+ * - `tab_visible` — вкладка снова видна.
+ */
+type CandidateKeyEventKind =
+  | "keydown"
+  | "window_blur"
+  | "window_focus"
+  | "tab_hidden"
+  | "tab_visible";
+
 type CandidateKeyInfo = {
   sessionId: string;
   displayName: string;
@@ -124,6 +149,11 @@ type CandidateKeyInfo = {
   shiftKey: boolean;
   metaKey: boolean;
   timestampEpochMs: number;
+  /**
+   * Опциональное поле — старые сообщения с бэкенда могут не содержать его,
+   * тогда трактуем как обычный `keydown`.
+   */
+  eventKind?: CandidateKeyEventKind | string;
 };
 
 type KeyPressPayload = {
@@ -133,6 +163,7 @@ type KeyPressPayload = {
   altKey: boolean;
   shiftKey: boolean;
   metaKey: boolean;
+  eventKind?: CandidateKeyEventKind;
 };
 
 type YjsUpdateHandler = (
@@ -161,6 +192,11 @@ type RealtimeState = {
   currentStep: number;
   notes: string;
   notesMessages?: NoteMessage[];
+  /**
+   * Room-wide private notes stream for the current viewer (interviewer/owner).
+   * Replaces the legacy per-step grouping.
+   */
+  personalNotes?: PersonalNoteEntry[];
   briefingMarkdown?: string;
   tasks?: RoomTask[];
   taskScores: Record<string, number | null>;
@@ -190,10 +226,37 @@ type PendingNoteMessage = NoteMessage & {
   pending: true;
 };
 
+type PersonalNoteEntry = {
+  id: string;
+  text: string;
+  blockName?: string | null;
+  /**
+   * Step index this entry belongs to when authored under a step block. UI
+   * renders such entries as `Шаг N`; export expands to `Шаг N - <task title>`.
+   */
+  blockStepIndex?: number | null;
+  timestampEpochMs: number;
+};
+
+type PendingPersonalNoteEntry = PersonalNoteEntry & {
+  pending: true;
+};
+
+/**
+ * Active private notes block. A step block is auto-set on step switch and
+ * keeps a stable pointer (`stepIndex`) even if the task title changes; a
+ * custom block is whatever the interviewer typed via `/block <name>`.
+ */
+type ActivePrivateBlock =
+  | { kind: "step"; stepIndex: number }
+  | { kind: "custom"; name: string };
+
 type RoomCustomTaskDraft = {
   title: string;
   description: string;
   starterCode: string;
+  /** Язык новой задачи (по умолчанию совпадает с языком комнаты). */
+  language: string;
 };
 
 type MarkdownToolId =
@@ -209,8 +272,20 @@ type MarkdownToolId =
   | "table";
 type MobileRoomTab = "editor" | "collaboration" | "tasks";
 
-const MIN_OWNER_PANEL_WIDTH = 220;
-const MAX_OWNER_PANEL_WIDTH = 420;
+const MIN_OWNER_PANEL_WIDTH = 330;
+/**
+ * Жёсткий потолок для левой панели — половина рабочей области (ширина окна).
+ * Реальный максимум вычисляется в рантайме через {@link computeMaxOwnerPanelWidth},
+ * эта константа просто страхует от деградации на серверном рендере и при
+ * очень узких окнах (никогда не уходим ниже MIN_OWNER_PANEL_WIDTH).
+ */
+const MAX_OWNER_PANEL_WIDTH_FALLBACK = 1200;
+
+function computeMaxOwnerPanelWidth(viewportWidth: number): number {
+  const half = Math.floor(viewportWidth / 2);
+  // Половина окна, но не меньше минимума, иначе clamp ломается на узких экранах.
+  return Math.max(MIN_OWNER_PANEL_WIDTH, half);
+}
 const MIN_BRIEFING_HEIGHT = 120;
 const MAX_BRIEFING_HEIGHT = 420;
 const LOG_HISTORY_LIMIT = 50;
@@ -229,6 +304,19 @@ const CURSOR_DEBUG_QUERY_PARAM = "cursorDebug";
 const CURSOR_DEBUG_STORAGE_KEY = "room_cursor_debug";
 const ROOM_SYNC_LOG_QUERY_PARAM = "syncLog";
 const ROOM_SYNC_LOG_STORAGE_KEY = "room_sync_log";
+const PRIVATE_NOTE_BLOCK_COLORS = [
+  "teal",
+  "cyan",
+  "blue",
+  "indigo",
+  "violet",
+  "grape",
+  "pink",
+  "red",
+  "orange",
+  "lime",
+  "green",
+] as const;
 
 /** Off: ?syncLog=0 or localStorage room_sync_log = "0" */
 function isRoomSyncLogEnabled(): boolean {
@@ -565,6 +653,44 @@ function normalizeNoteMessage(value: unknown): NoteMessage | null {
   };
 }
 
+function normalizePersonalNoteEntry(value: unknown): PersonalNoteEntry | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<PersonalNoteEntry> & {
+    blockName?: unknown;
+    blockStepIndex?: unknown;
+    timestampEpochMs?: unknown;
+  };
+  const id =
+    typeof candidate.id === "string" && candidate.id.trim()
+      ? candidate.id.trim()
+      : "";
+  const text = typeof candidate.text === "string" ? candidate.text.trim() : "";
+  const timestampEpochMs =
+    typeof candidate.timestampEpochMs === "number" &&
+    Number.isFinite(candidate.timestampEpochMs)
+      ? Math.max(0, Math.floor(candidate.timestampEpochMs))
+      : null;
+  const rawBlockName =
+    typeof candidate.blockName === "string" ? candidate.blockName : "";
+  const blockName = rawBlockName.trim()
+    ? rawBlockName.trim().slice(0, 80)
+    : null;
+  const blockStepIndex =
+    typeof candidate.blockStepIndex === "number" &&
+    Number.isInteger(candidate.blockStepIndex) &&
+    candidate.blockStepIndex >= 0
+      ? candidate.blockStepIndex
+      : null;
+  if (!id || !text || timestampEpochMs == null) return null;
+  return {
+    id,
+    text,
+    blockName,
+    blockStepIndex,
+    timestampEpochMs,
+  };
+}
+
 function parseNotesThread(rawNotes: string | null | undefined): NoteMessage[] {
   const raw = rawNotes?.trim() ?? "";
   if (!raw) return [];
@@ -608,12 +734,319 @@ function hashString(value: string): number {
   return hash;
 }
 
+function getPrivateNoteBlockColor(blockName: string): (typeof PRIVATE_NOTE_BLOCK_COLORS)[number] {
+  const normalized = blockName.trim().toLocaleLowerCase("ru-RU");
+  if (!normalized) return "blue";
+  const idx = hashString(normalized) % PRIVATE_NOTE_BLOCK_COLORS.length;
+  return PRIVATE_NOTE_BLOCK_COLORS[idx] ?? "blue";
+}
+
+/** UI label for a step block: `Шаг 1`, `Шаг 2`, etc. */
+function formatStepBlockLabel(stepIndex: number): string {
+  return `Шаг ${stepIndex + 1}`;
+}
+
+/**
+ * Recognises step block names: `Шаг 1`, `step 2`, `шаг 03` etc. Returns the
+ * 0-based step index or `null` if the input is a regular custom name.
+ */
+function parseStepBlockName(rawName: string): number | null {
+  const normalized = rawName.trim().toLocaleLowerCase("ru-RU");
+  if (!normalized) return null;
+  const match = normalized.match(/^(?:шаг|step)\s+0*(\d{1,3})$/);
+  if (!match) return null;
+  const oneBased = Number.parseInt(match[1], 10);
+  if (!Number.isFinite(oneBased) || oneBased < 1) return null;
+  return oneBased - 1;
+}
+
+/** Find the task that backs a given step block (used for export labels). */
+function findStepBlockTask<T extends { stepIndex: number; title: string }>(
+  tasks: T[],
+  stepIndex: number,
+): T | null {
+  return tasks.find((task) => task.stepIndex === stepIndex) ?? null;
+}
+
 function formatNoteTimestamp(timestampEpochMs: number): string {
   if (!timestampEpochMs) return "—";
   return new Date(timestampEpochMs).toLocaleTimeString("ru-RU", {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatExportTimestamp(timestampEpochMs: number): string {
+  if (!timestampEpochMs) return "—";
+  return new Date(timestampEpochMs).toLocaleString("ru-RU", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+type PersonalNotesCommand =
+  | { kind: "none" }
+  | { kind: "menu" }
+  | { kind: "block_prompt" }
+  | { kind: "block_apply"; blockName: string }
+  | { kind: "unknown"; raw: string };
+
+/**
+ * Парсер слэш-команд в поле личных заметок.
+ * Поддерживается только `/block <имя>` — закрытие блока теперь делается
+ * крестиком на бейдже активного блока, отдельной команды нет.
+ */
+function parsePersonalNotesCommand(value: string): PersonalNotesCommand {
+  const normalized = value.replaceAll("\r\n", "\n").trim();
+  if (!normalized.startsWith("/")) return { kind: "none" };
+  if (normalized.includes("\n")) return { kind: "none" };
+  const normalizedLower = normalized.toLowerCase();
+  if (normalizedLower === "/") return { kind: "menu" };
+  if ("/block".startsWith(normalizedLower)) {
+    return { kind: "block_prompt" };
+  }
+  if (normalizedLower.startsWith("/block ")) {
+    const blockName = normalized.slice("/block ".length).trim().slice(0, 80);
+    if (!blockName) {
+      return { kind: "block_prompt" };
+    }
+    return { kind: "block_apply", blockName };
+  }
+  return { kind: "unknown", raw: normalized };
+}
+
+type PersonalNotesExportOptions = {
+  includeTimestamps: boolean;
+  includeFreeNotes: boolean;
+};
+
+/**
+ * Форматирует оценку шага из 5-балльной шкалы в кусочек текста для заголовка
+ * блока (например, " — Оценка 4/5"). Если оценка не выставлена — возвращает
+ * пустую строку, чтобы заголовок не разрастался.
+ */
+function formatStepRatingSuffix(rating: number | null | undefined): string {
+  if (typeof rating !== "number" || rating < 1 || rating > 5) return "";
+  return ` — Оценка ${rating}/5`;
+}
+
+/** Один текстовый ряд под `# ...` в выгрузке заметок: без переводов строк. */
+function normalizeExportRoomHeadingLine(
+  roomTitle: string | null | undefined,
+): string {
+  const normalized = (roomTitle ?? "")
+    .replace(/\r?\n+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 200);
+  return normalized || "Комната";
+}
+
+/**
+ * Markdown выгрузки личных заметок: первая строка — `# название комнаты`.
+ * Заметки — один поток по комнате, группы по блокам; шаг — «Шаг N - задача»
+ * (+ оценка при наличии).
+ */
+function buildPersonalNotesMarkdownDocument(
+  tasks: Array<{
+    stepIndex: number;
+    title: string;
+  }>,
+  entries: PersonalNoteEntry[],
+  options: PersonalNotesExportOptions,
+  /**
+   * Карта оценок шагов вида `{ "0": 4, "1": null, ... }`. Ключ — индекс шага
+   * как строка, значение — балл 1..5 либо null/отсутствует, если оценки нет.
+   */
+  taskScores: Record<string, number | null> = {},
+  roomTitle?: string | null,
+): string {
+  const lines: string[] = [];
+  lines.push(`# ${normalizeExportRoomHeadingLine(roomTitle)}`);
+  lines.push("");
+  lines.push(`_Сформировано: ${formatExportTimestamp(Date.now())}_`);
+  lines.push("");
+
+  const sorted = entries
+    .slice()
+    .sort(
+      (left, right) =>
+        left.timestampEpochMs - right.timestampEpochMs ||
+        left.id.localeCompare(right.id),
+    );
+
+  type ExportBlock = {
+    key: string;
+    displayName: string;
+    entries: PersonalNoteEntry[];
+    /**
+     * Индекс шага для блока, привязанного к шагу. У кастомных блоков — `null`,
+     * чтобы при сортировке экспорта сначала шли шаги по возрастанию `stepIndex`,
+     * а уже после них — кастомные блоки в порядке появления.
+     */
+    stepIndex: number | null;
+    /**
+     * Порядковый номер вставки. Используется как стабильный вторичный ключ
+     * сортировки для кастомных блоков (сохраняем порядок появления).
+     */
+    insertionOrder: number;
+  };
+  const freeEntries: PersonalNoteEntry[] = [];
+  const blocks = new Map<string, ExportBlock>();
+  let nextInsertionOrder = 0;
+
+  sorted.forEach((entry) => {
+    const stepIndex = entry.blockStepIndex;
+    if (typeof stepIndex === "number") {
+      const stepKey = `step:${stepIndex}`;
+      const taskTitle =
+        findStepBlockTask(tasks, stepIndex)?.title.trim() ?? "";
+      const baseLabel = taskTitle
+        ? `${formatStepBlockLabel(stepIndex)} - ${taskTitle}`
+        : formatStepBlockLabel(stepIndex);
+      const ratingSuffix = formatStepRatingSuffix(
+        taskScores[String(stepIndex)],
+      );
+      const displayName = `${baseLabel}${ratingSuffix}`;
+      const existing = blocks.get(stepKey);
+      if (existing) {
+        existing.entries.push(entry);
+        existing.displayName = displayName;
+      } else {
+        blocks.set(stepKey, {
+          key: stepKey,
+          displayName,
+          entries: [entry],
+          stepIndex,
+          insertionOrder: nextInsertionOrder++,
+        });
+      }
+      return;
+    }
+    const customName = entry.blockName?.trim() ?? "";
+    if (!customName) {
+      freeEntries.push(entry);
+      return;
+    }
+    const customKey = `custom:${customName.toLocaleLowerCase("ru-RU")}`;
+    const existing = blocks.get(customKey);
+    if (existing) {
+      existing.entries.push(entry);
+    } else {
+      blocks.set(customKey, {
+        key: customKey,
+        displayName: customName,
+        entries: [entry],
+        stepIndex: null,
+        insertionOrder: nextInsertionOrder++,
+      });
+    }
+  });
+
+  const formatEntry = (entry: PersonalNoteEntry) => {
+    const prefix = options.includeTimestamps
+      ? `[${formatExportTimestamp(entry.timestampEpochMs)}] `
+      : "";
+    return `- ${prefix}${entry.text}`;
+  };
+
+  /**
+   * Если у шага есть оценка, но нет ни одной заметки — всё равно выводим
+   * блок (без записей), чтобы экспорт показывал оценку каждого шага.
+   * Шаги без заметок и без оценки опускаем.
+   */
+  tasks
+    .slice()
+    .sort((left, right) => left.stepIndex - right.stepIndex)
+    .forEach((task) => {
+      const stepKey = `step:${task.stepIndex}`;
+      if (blocks.has(stepKey)) return;
+      const rating = taskScores[String(task.stepIndex)];
+      if (typeof rating !== "number" || rating < 1 || rating > 5) return;
+      const baseLabel = task.title.trim()
+        ? `${formatStepBlockLabel(task.stepIndex)} - ${task.title.trim()}`
+        : formatStepBlockLabel(task.stepIndex);
+      blocks.set(stepKey, {
+        key: stepKey,
+        displayName: `${baseLabel}${formatStepRatingSuffix(rating)}`,
+        entries: [],
+        stepIndex: task.stepIndex,
+        insertionOrder: nextInsertionOrder++,
+      });
+    });
+
+  /**
+   * Шаговые блоки выводим строго по `stepIndex` (Шаг 1, 2, 3...), кастомные —
+   * в порядке появления. Записи внутри блоков уже отсортированы по времени
+   * выше через `sorted`. «В свободной форме» уезжает в самый конец, чтобы
+   * шаги шли первыми, как и просит пользователь.
+   */
+  const orderedBlocks = Array.from(blocks.values()).sort((left, right) => {
+    if (left.stepIndex !== null && right.stepIndex !== null) {
+      return left.stepIndex - right.stepIndex;
+    }
+    if (left.stepIndex !== null) return -1;
+    if (right.stepIndex !== null) return 1;
+    return left.insertionOrder - right.insertionOrder;
+  });
+
+  orderedBlocks.forEach((block) => {
+    lines.push(`## ${block.displayName}`);
+    if (block.entries.length === 0) {
+      lines.push("- _Заметок нет_");
+    } else {
+      block.entries.forEach((entry) => lines.push(formatEntry(entry)));
+    }
+    lines.push("");
+  });
+
+  if (options.includeFreeNotes && freeEntries.length > 0) {
+    lines.push("## В свободной форме");
+    freeEntries.forEach((entry) => lines.push(formatEntry(entry)));
+    lines.push("");
+  }
+
+  if (lines.length <= 4) {
+    lines.push("Заметок пока нет.");
+    lines.push("");
+  }
+
+  return lines.join("\n");
+}
+
+function buildRoomExportFileName(
+  roomTitle: string | null | undefined,
+  extension: "md" | "pdf",
+): string {
+  const normalizedTitle = (roomTitle ?? "")
+    .replace(/[\\/:*?"<>|]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 96);
+  const baseName = normalizedTitle || "room-notes";
+  return `${baseName}.${extension}`;
+}
+
+function triggerBrowserDownload(blob: Blob, fileName: string) {
+  const href = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = href;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  const debugWindow = window as Window & {
+    __roomLastDownload?: { fileName: string; mime: string; timestamp: number };
+  };
+  debugWindow.__roomLastDownload = {
+    fileName,
+    mime: blob.type,
+    timestamp: Date.now(),
+  };
+  URL.revokeObjectURL(href);
 }
 
 function getParticipantPresenceLabel(status: Participant["presenceStatus"]) {
@@ -673,6 +1106,45 @@ export function RoomPage() {
   );
   const [noteComposer, setNoteComposer] = useState("");
   const [pendingNotes, setPendingNotes] = useState<PendingNoteMessage[]>([]);
+  const [privateNoteComposer, setPrivateNoteComposer] = useState("");
+  const [pendingPrivateNotes, setPendingPrivateNotes] = useState<
+    PendingPersonalNoteEntry[]
+  >([]);
+  const [activePrivateBlock, setActivePrivateBlock] =
+    useState<ActivePrivateBlock | null>(null);
+  /**
+   * Tracks which step we last auto-applied as the active block. We use this to
+   * detect step changes coming from the local viewer's navigation and replace
+   * the active block accordingly, even if the user previously closed it.
+   *
+   * Remote step changes (other interviewers in the same room) are deliberately
+   * ignored here — see `localStepIntent` below.
+   */
+  const lastAutoStepBlockRef = useRef<number | null>(null);
+  /**
+   * Step that *this* viewer explicitly navigated to (or the step they joined
+   * the room at). The personal-notes auto-block follows this, NOT the room's
+   * `merged.currentStep`, so that one interviewer's navigation never steals
+   * the active block from another interviewer mid-typing.
+   *
+   * `null` until the first room sync — then seeded once with the current
+   * room step so a fresh viewer starts on the relevant block.
+   */
+  const [localStepIntent, setLocalStepIntent] = useState<number | null>(null);
+  const [privateNotesExportModalOpened, setPrivateNotesExportModalOpened] =
+    useState(false);
+  const closePrivateNotesExportModal = useCallback(
+    () => setPrivateNotesExportModalOpened(false),
+    [],
+  );
+  /**
+   * Регистрируем модалку экспорта в стеке Escape-слоёв: пока она открыта,
+   * Esc сначала закрывает её, не задевая нижележащих слоёв (например,
+   * выпадающее Mantine Menu участников).
+   */
+  useEscapeLayer(privateNotesExportModalOpened, closePrivateNotesExportModal);
+  const [exportIncludeTimestamps, setExportIncludeTimestamps] = useState(false);
+  const [exportIncludeFreeNotes, setExportIncludeFreeNotes] = useState(true);
   const [briefingDraft, setBriefingDraft] = useState("");
   const [briefingDirty, setBriefingDirty] = useState(false);
   const [resyncSignal, setResyncSignal] = useState(0);
@@ -732,6 +1204,11 @@ export function RoomPage() {
     setNameModalOpened(shouldAskName);
     setNoteComposer("");
     setPendingNotes([]);
+    setPrivateNoteComposer("");
+    setPendingPrivateNotes([]);
+    setActivePrivateBlock(null);
+    lastAutoStepBlockRef.current = null;
+    setLocalStepIntent(null);
   }, [authToken, authUser?.displayName, authUser?.nickname, inviteCode]);
 
   const merged = useMemo<RealtimeState | null>(() => {
@@ -749,6 +1226,7 @@ export function RoomPage() {
       notesMessages: (room.notesMessages ?? [])
         .map(normalizeNoteMessage)
         .filter((item): item is NoteMessage => Boolean(item)),
+      personalNotes: [],
       briefingMarkdown: room.briefingMarkdown ?? "",
       tasks: [...(room.tasks ?? [])].sort(
         (left, right) => left.stepIndex - right.stepIndex,
@@ -799,10 +1277,11 @@ export function RoomPage() {
     const existingSignatures = new Set(
       roomTasks.map((task) => roomTaskSignature(task)),
     );
-    const activeLanguage = normalizeRoomLanguage(merged.language);
+    // По требованию: показываем все задачи пользователя независимо от языка
+    // комнаты. Дедуп — только по уже добавленным в комнату задачам (по
+    // template id и сигнатуре содержимого).
     return taskCatalogGroups
       .flatMap((group) => group.tasks)
-      .filter((task) => normalizeRoomLanguage(task.language) === activeLanguage)
       .filter((task) => !existingTemplateIds.has(task.id))
       .filter((task) => !existingSignatures.has(taskSignature(task)));
   }, [merged, mergedTasks, taskCatalogGroups]);
@@ -845,6 +1324,113 @@ export function RoomPage() {
         a.timestampEpochMs - b.timestampEpochMs || a.id.localeCompare(b.id),
     );
   }, [notesMessages, pendingNotes]);
+  const personalNotes = useMemo(() => {
+    return (merged?.personalNotes ?? [])
+      .map(normalizePersonalNoteEntry)
+      .filter((item): item is PersonalNoteEntry => Boolean(item))
+      .sort(
+        (left, right) =>
+          left.timestampEpochMs - right.timestampEpochMs ||
+          left.id.localeCompare(right.id),
+      );
+  }, [merged?.personalNotes]);
+  /** Server entries plus optimistic pending ones, deduped by id. */
+  const visiblePersonalNotes = useMemo(() => {
+    const serverIds = new Set(personalNotes.map((entry) => entry.id));
+    const merged = [
+      ...personalNotes,
+      ...pendingPrivateNotes.filter((entry) => !serverIds.has(entry.id)),
+    ];
+    return merged.sort(
+      (left, right) =>
+        left.timestampEpochMs - right.timestampEpochMs ||
+        left.id.localeCompare(right.id),
+    );
+  }, [personalNotes, pendingPrivateNotes]);
+  /** Per-task counters used by the step list ("заметки N"). */
+  const privateNotesCountByStep = useMemo(() => {
+    const counts = new Map<number, number>();
+    visiblePersonalNotes.forEach((entry) => {
+      const stepIndex = entry.blockStepIndex;
+      if (typeof stepIndex !== "number") return;
+      counts.set(stepIndex, (counts.get(stepIndex) ?? 0) + 1);
+    });
+    return counts;
+  }, [visiblePersonalNotes]);
+  /**
+   * UI label and step pointer for the active private block. For step blocks
+   * the label is `Шаг N` (export augments it with the task title).
+   */
+  const activePrivateBlockInfo = useMemo(() => {
+    if (!activePrivateBlock) return null;
+    if (activePrivateBlock.kind === "step") {
+      return {
+        kind: "step" as const,
+        stepIndex: activePrivateBlock.stepIndex,
+        label: formatStepBlockLabel(activePrivateBlock.stepIndex),
+      };
+    }
+    return {
+      kind: "custom" as const,
+      stepIndex: null as number | null,
+      label: activePrivateBlock.name,
+    };
+  }, [activePrivateBlock]);
+  const activePrivateBlockName = activePrivateBlockInfo?.label ?? null;
+
+  /**
+   * Seed `localStepIntent` once per room from the current room step.
+   * Subsequent step changes by *other* interviewers must not move this
+   * viewer's intent — only their own navigation does (see
+   * `selectStepLocally`). Without this, a remote step switch would move
+   * everyone's notes block at the same time, kicking other interviewers
+   * out of whatever they were typing.
+   */
+  useEffect(() => {
+    if (!merged) return;
+    if (localStepIntent !== null) return;
+    setLocalStepIntent(merged.currentStep);
+  }, [merged, localStepIntent]);
+
+  /**
+   * Keep the active private block in lock-step with the *local* viewer's
+   * step intent:
+   * - On local step navigation, replace the active block with
+   *   `{kind: "step"}` for the new step (overrides any custom or closed
+   *   state, per product spec).
+   * - Remote step changes from other interviewers do NOT trigger this —
+   *   `localStepIntent` is the only step source we react to here.
+   * - If the room has no tasks, fall back to no active block.
+   * The user can still close the block via the cross icon on the badge or
+   * switch to a custom block; the next *local* step change re-arms the
+   * step block.
+   */
+  useEffect(() => {
+    if (!merged || !canManageRoom) {
+      lastAutoStepBlockRef.current = null;
+      return;
+    }
+    if (mergedTasks.length === 0) {
+      if (activePrivateBlock != null) setActivePrivateBlock(null);
+      lastAutoStepBlockRef.current = null;
+      return;
+    }
+    if (localStepIntent === null) return;
+    const stepHasTask = mergedTasks.some(
+      (task) => task.stepIndex === localStepIntent,
+    );
+    if (!stepHasTask) return;
+    if (lastAutoStepBlockRef.current === localStepIntent) return;
+    lastAutoStepBlockRef.current = localStepIntent;
+    setActivePrivateBlock({ kind: "step", stepIndex: localStepIntent });
+  }, [
+    activePrivateBlock,
+    canManageRoom,
+    localStepIntent,
+    merged,
+    mergedTasks,
+  ]);
+
   const currentSyncKey = useMemo(() => {
     if (!merged) return `${inviteCode}:0:nodejs`;
     return `${merged.inviteCode}:${merged.currentStep}:${merged.language}`;
@@ -1038,6 +1624,16 @@ export function RoomPage() {
           ? incoming.notesMessages
               .map(normalizeNoteMessage)
               .filter((item): item is NoteMessage => Boolean(item))
+          : [],
+        personalNotes: Array.isArray(incoming.personalNotes)
+          ? incoming.personalNotes
+              .map(normalizePersonalNoteEntry)
+              .filter((item): item is PersonalNoteEntry => Boolean(item))
+              .sort(
+                (left, right) =>
+                  left.timestampEpochMs - right.timestampEpochMs ||
+                  left.id.localeCompare(right.id),
+              )
           : [],
         briefingMarkdown:
           typeof incoming.briefingMarkdown === "string"
@@ -1242,6 +1838,7 @@ export function RoomPage() {
         normalizedKey.altKey ? "1" : "0",
         normalizedKey.shiftKey ? "1" : "0",
         normalizedKey.metaKey ? "1" : "0",
+        normalizedKey.eventKind ?? "keydown",
       ].join(":");
 
       const hasDuplicate = (previous.candidateKeyHistory ?? []).some(
@@ -1255,6 +1852,7 @@ export function RoomPage() {
             entry.altKey ? "1" : "0",
             entry.shiftKey ? "1" : "0",
             entry.metaKey ? "1" : "0",
+            entry.eventKind ?? "keydown",
           ].join(":");
           return entryToken === dedupeToken;
         },
@@ -1404,6 +2002,7 @@ export function RoomPage() {
     sendSetStep,
     sendTaskRatingUpdate,
     sendNoteMessage,
+    sendPrivateNoteEntry,
     sendBriefingUpdate,
     sendGrantInterviewerAccess,
     sendRevokeInterviewerAccess,
@@ -1434,6 +2033,21 @@ export function RoomPage() {
     });
   }, [authUser?.id, participantId, sessionId]);
 
+  /**
+   * Локальная навигация по шагам интервью. Кроме отправки `set_step` на
+   * сервер, обновляет `localStepIntent` — это единственный триггер для
+   * автосмены активного блока в личных заметках. Чужая навигация (другой
+   * интервьюер кликнул шаг) сюда не доходит, поэтому их клик не сбивает
+   * нам активный блок и текущую запись.
+   */
+  const selectStepLocally = useCallback(
+    (stepIndex: number) => {
+      setLocalStepIntent(stepIndex);
+      sendSetStep(stepIndex);
+    },
+    [sendSetStep],
+  );
+
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
@@ -1447,6 +2061,16 @@ export function RoomPage() {
       return next.length === current.length ? current : next;
     });
   }, [notesMessages, pendingNotes.length]);
+
+  useEffect(() => {
+    if (pendingPrivateNotes.length === 0) return;
+    const serverIds = new Set(personalNotes.map((entry) => entry.id));
+    if (serverIds.size === 0) return;
+    setPendingPrivateNotes((current) => {
+      const next = current.filter((entry) => !serverIds.has(entry.id));
+      return next.length === current.length ? current : next;
+    });
+  }, [pendingPrivateNotes.length, personalNotes]);
 
   useEffect(() => {
     if (briefingDirty && briefingDraft === mergedBriefingMarkdown) {
@@ -1580,6 +2204,280 @@ export function RoomPage() {
     sessionId,
   ]);
 
+  /**
+   * Maps a raw block name (typed by the user or chosen from suggestions) to
+   * either a step block (when the name matches `Шаг N` and N is a real step)
+   * or a custom block.
+   */
+  const resolveBlockFromName = useCallback(
+    (rawName: string): ActivePrivateBlock | null => {
+      const trimmed = rawName.trim().slice(0, 80);
+      if (!trimmed) return null;
+      const stepIndex = parseStepBlockName(trimmed);
+      if (stepIndex != null && stepIndex < mergedTasks.length) {
+        return { kind: "step", stepIndex };
+      }
+      return { kind: "custom", name: trimmed };
+    },
+    [mergedTasks.length],
+  );
+
+  const submitPrivateNoteEntry = useCallback(() => {
+    if (!merged || !canManageRoom) return;
+    const parsedCommand = parsePersonalNotesCommand(privateNoteComposer);
+    if (parsedCommand.kind === "block_apply") {
+      const next = resolveBlockFromName(parsedCommand.blockName);
+      if (next) setActivePrivateBlock(next);
+      setPrivateNoteComposer("");
+      return;
+    }
+    if (
+      parsedCommand.kind === "menu" ||
+      parsedCommand.kind === "block_prompt" ||
+      parsedCommand.kind === "unknown"
+    ) {
+      return;
+    }
+    const text = privateNoteComposer.trim();
+    if (!text) return;
+    const timestampEpochMs = Date.now();
+    const noteId = crypto.randomUUID();
+    const blockName = activePrivateBlockInfo?.label ?? null;
+    const blockStepIndex = activePrivateBlockInfo?.stepIndex ?? null;
+    const optimisticEntry: PendingPersonalNoteEntry = {
+      id: noteId,
+      text,
+      blockName,
+      blockStepIndex,
+      timestampEpochMs,
+      pending: true,
+    };
+    setPendingPrivateNotes((current) => [...current, optimisticEntry]);
+    setPrivateNoteComposer("");
+    sendPrivateNoteEntry(
+      noteId,
+      text,
+      timestampEpochMs,
+      blockName,
+      blockStepIndex,
+    );
+  }, [
+    activePrivateBlock,
+    activePrivateBlockInfo,
+    canManageRoom,
+    merged,
+    privateNoteComposer,
+    resolveBlockFromName,
+    sendPrivateNoteEntry,
+  ]);
+
+  const applyPrivateNotesCommandShortcut = useCallback(
+    (command: string) => {
+      if (!merged) return;
+      const normalized = command.trim();
+      if (normalized === "/block") {
+        setPrivateNoteComposer("/block ");
+        return;
+      }
+      if (normalized.toLowerCase().startsWith("/block ")) {
+        const blockName = normalized.slice("/block ".length).trim();
+        if (!blockName) return;
+        const next = resolveBlockFromName(blockName);
+        if (next) setActivePrivateBlock(next);
+        setPrivateNoteComposer("");
+      }
+    },
+    [merged, resolveBlockFromName],
+  );
+
+  /** Закрытие активного блока теперь делается крестиком на бейдже. */
+  const closeActivePrivateBlock = useCallback(() => {
+    setActivePrivateBlock(null);
+  }, []);
+
+  const exportPersonalNotesMarkdown = useCallback(() => {
+    if (!merged) return;
+    const markdownFileName = buildRoomExportFileName(room?.title, "md");
+    const markdown = buildPersonalNotesMarkdownDocument(
+      mergedTasks.map((task) => ({
+        stepIndex: task.stepIndex,
+        title: task.title,
+      })),
+      visiblePersonalNotes,
+      {
+        includeTimestamps: exportIncludeTimestamps,
+        includeFreeNotes: exportIncludeFreeNotes,
+      },
+      merged.taskScores,
+      room?.title,
+    );
+    const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+    triggerBrowserDownload(blob, markdownFileName);
+  }, [
+    exportIncludeFreeNotes,
+    exportIncludeTimestamps,
+    merged,
+    room?.title,
+    mergedTasks,
+    visiblePersonalNotes,
+  ]);
+
+  const exportPersonalNotesPdf = useCallback(async () => {
+    if (!merged) return;
+    try {
+      const pdfFileName = buildRoomExportFileName(room?.title, "pdf");
+      const markdown = buildPersonalNotesMarkdownDocument(
+        mergedTasks.map((task) => ({
+          stepIndex: task.stepIndex,
+          title: task.title,
+        })),
+        visiblePersonalNotes,
+        {
+          includeTimestamps: exportIncludeTimestamps,
+          includeFreeNotes: exportIncludeFreeNotes,
+        },
+        merged.taskScores,
+        room?.title,
+      );
+      const { jsPDF } = await import("jspdf");
+      const pageWidthMm = 210;
+      const pageHeightMm = 297;
+      const marginMm = 12;
+      const printableWidthMm = pageWidthMm - marginMm * 2;
+      const printableHeightMm = pageHeightMm - marginMm * 2;
+      const canvasWidthPx = 1200;
+      const pxPerMm = canvasWidthPx / printableWidthMm;
+      const pageHeightPx = Math.max(1, Math.floor(printableHeightMm * pxPerMm));
+      const pageWidthPx = canvasWidthPx;
+
+      const measureCanvas = document.createElement("canvas");
+      const measureCtx = measureCanvas.getContext("2d");
+      if (!measureCtx) {
+        throw new Error("Unable to create 2D context for PDF export");
+      }
+
+      const styledRows = markdown.split("\n").map((line) => {
+        if (!line.trim()) {
+          return { text: "", fontSize: 18, bold: false, marginTop: 4, marginBottom: 8 };
+        }
+        if (line.startsWith("# ")) {
+          return { text: line.slice(2), fontSize: 40, bold: true, marginTop: 8, marginBottom: 14 };
+        }
+        if (line.startsWith("## ")) {
+          return { text: line.slice(3), fontSize: 32, bold: true, marginTop: 8, marginBottom: 10 };
+        }
+        if (line.startsWith("### ")) {
+          return { text: line.slice(4), fontSize: 27, bold: true, marginTop: 6, marginBottom: 8 };
+        }
+        if (line.startsWith("- ")) {
+          return { text: `• ${line.slice(2)}`, fontSize: 20, bold: false, marginTop: 2, marginBottom: 4 };
+        }
+        const trimmed = line.trim();
+        if (trimmed.startsWith("_") && trimmed.endsWith("_") && trimmed.length > 1) {
+          return {
+            text: trimmed.slice(1, -1),
+            fontSize: 19,
+            bold: false,
+            marginTop: 2,
+            marginBottom: 6,
+          };
+        }
+        return { text: line, fontSize: 20, bold: false, marginTop: 2, marginBottom: 5 };
+      });
+
+      const wrapLine = (text: string, maxWidth: number, fontSize: number, bold: boolean) => {
+        const normalized = text.replace(/\s+/g, " ").trim();
+        if (!normalized) return [""];
+        measureCtx.font = `${bold ? 700 : 400} ${fontSize}px "IBM Plex Sans", "Segoe UI", Arial, sans-serif`;
+        const words = normalized.split(" ");
+        const wrapped: string[] = [];
+        let current = "";
+        words.forEach((word) => {
+          const candidate = current ? `${current} ${word}` : word;
+          if (measureCtx.measureText(candidate).width <= maxWidth || !current) {
+            current = candidate;
+          } else {
+            wrapped.push(current);
+            current = word;
+          }
+        });
+        if (current) wrapped.push(current);
+        return wrapped.length > 0 ? wrapped : [normalized];
+      };
+
+      const pages: Array<
+        Array<{ text: string; y: number; fontSize: number; bold: boolean }>
+      > = [[]];
+      let pageIndex = 0;
+      let cursorY = 0;
+      const ensurePage = () => {
+        if (!pages[pageIndex]) {
+          pages[pageIndex] = [];
+        }
+      };
+      ensurePage();
+
+      styledRows.forEach((row) => {
+        const wrapped = wrapLine(row.text, pageWidthPx - 16, row.fontSize, row.bold);
+        cursorY += row.marginTop;
+        const lineHeight = Math.ceil(row.fontSize * 1.45);
+        wrapped.forEach((line) => {
+          if (cursorY + lineHeight > pageHeightPx && pages[pageIndex].length > 0) {
+            pageIndex += 1;
+            cursorY = 0;
+            ensurePage();
+          }
+          pages[pageIndex].push({
+            text: line,
+            y: cursorY,
+            fontSize: row.fontSize,
+            bold: row.bold,
+          });
+          cursorY += lineHeight;
+        });
+        cursorY += row.marginBottom;
+      });
+
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      pages.forEach((pageLines, index) => {
+        if (index > 0) {
+          pdf.addPage("a4", "portrait");
+        }
+        const pageCanvas = document.createElement("canvas");
+        pageCanvas.width = pageWidthPx;
+        pageCanvas.height = pageHeightPx;
+        const pageCtx = pageCanvas.getContext("2d");
+        if (!pageCtx) return;
+        pageCtx.fillStyle = "#ffffff";
+        pageCtx.fillRect(0, 0, pageWidthPx, pageHeightPx);
+        pageCtx.fillStyle = "#10151c";
+        pageLines.forEach((line) => {
+          pageCtx.font = `${line.bold ? 700 : 400} ${line.fontSize}px "IBM Plex Sans", "Segoe UI", Arial, sans-serif`;
+          pageCtx.fillText(line.text, 8, line.y + line.fontSize);
+        });
+        pdf.addImage(
+          pageCanvas.toDataURL("image/png"),
+          "PNG",
+          marginMm,
+          marginMm,
+          printableWidthMm,
+          printableHeightMm,
+        );
+      });
+      const pdfBlob = pdf.output("blob");
+      triggerBrowserDownload(pdfBlob, pdfFileName);
+    } catch (error) {
+      console.error("PRIVATE_NOTES_PDF_EXPORT_FAIL", error);
+    }
+  }, [
+    exportIncludeFreeNotes,
+    exportIncludeTimestamps,
+    merged,
+    room?.title,
+    mergedTasks,
+    visiblePersonalNotes,
+  ]);
+
   const changeBriefingMarkdown = useCallback(
     (value: string) => {
       setBriefingDraft(value);
@@ -1637,6 +2535,7 @@ export function RoomPage() {
       if (!merged) return;
       const title = task.title.trim();
       const description = task.description.trim();
+      const language = normalizeRoomLanguage(task.language);
       if (!title) {
         trackEvent("prod_room_custom_task_add_failed", {
           reason: "validation_failed",
@@ -1646,6 +2545,7 @@ export function RoomPage() {
       trackEvent("prod_room_custom_task_add_submit", {
         title_len: title.length,
         description_len: description.length,
+        language,
       });
       try {
         setError("");
@@ -1657,12 +2557,14 @@ export function RoomPage() {
               title,
               description,
               starterCode: task.starterCode,
+              language,
             },
           ],
           ownerToken: ownerToken ?? undefined,
         }).unwrap();
         trackEvent("prod_room_custom_task_add_success", {
           title_len: title.length,
+          language,
         });
       } catch {
         setError("Не удалось добавить задачу в комнату");
@@ -1786,6 +2688,111 @@ export function RoomPage() {
     [merged?.role, sendKeyPress],
   );
 
+  /**
+   * Глобальные слушатели клавиатуры и фокуса на стороне кандидата. Они
+   * закрывают пробелы, которые не покрывает `keydown`-хэндлер CodeMirror:
+   *   1. Клавиши, нажатые когда фокус не в редакторе (модалки, заметки,
+   *      адресная строка браузера и т.п.) — глобальный `keydown` в фазе
+   *      capture.
+   *   2. `Alt+Tab`/`Cmd+Tab`/смена приложения — ОС перехватывает Tab до
+   *      браузера, но окно теряет фокус: ловим `window.blur` и пишем в лог
+   *      синтетическое событие с накопленным состоянием модификаторов
+   *      (например «Alt+Tab — переключение окна»).
+   *   3. Смена вкладки внутри браузера — `document.visibilitychange`.
+   */
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    if (merged?.role !== "candidate") return undefined;
+
+    /** Запоминаем последнее состояние модификаторов, чтобы при blur'е
+     *  понимать, нажат ли был Alt/Cmd, и формировать осмысленный лейбл. */
+    const modifierState = {
+      ctrl: false,
+      alt: false,
+      shift: false,
+      meta: false,
+    };
+
+    const updateModifiers = (event: KeyboardEvent) => {
+      modifierState.ctrl = event.ctrlKey;
+      modifierState.alt = event.altKey;
+      modifierState.shift = event.shiftKey;
+      modifierState.meta = event.metaKey;
+    };
+
+    const onWindowKeyDown = (event: KeyboardEvent) => {
+      updateModifiers(event);
+      // Если фокус в CodeMirror — у редактора есть свой keydown-хэндлер,
+      // который уже отправит событие. Дублировать не нужно.
+      const target = event.target;
+      if (target instanceof Element && target.closest(".cm-content")) {
+        return;
+      }
+      handleCandidateKeyPress({
+        key: event.key,
+        keyCode: event.code,
+        ctrlKey: event.ctrlKey,
+        altKey: event.altKey,
+        shiftKey: event.shiftKey,
+        metaKey: event.metaKey,
+      });
+    };
+
+    const onWindowKeyUp = (event: KeyboardEvent) => {
+      updateModifiers(event);
+    };
+
+    /** Эмитим синтетическое «Tab» с реальным состоянием модификаторов: на
+     *  бэкенде/UI получится «Alt+Tab — переключение окна», даже если ОС
+     *  забрала сам Tab себе. */
+    const emitFocusEvent = (eventKind: CandidateKeyEventKind) => {
+      handleCandidateKeyPress({
+        key: "Tab",
+        keyCode: "Tab",
+        ctrlKey: modifierState.ctrl,
+        altKey: modifierState.alt,
+        shiftKey: modifierState.shift,
+        metaKey: modifierState.meta,
+        eventKind,
+      });
+    };
+
+    const onWindowBlur = () => {
+      emitFocusEvent("window_blur");
+    };
+
+    const onWindowFocus = () => {
+      // После возврата фокуса состояние модификаторов гарантированно
+      // сброшено (ОС забрала keyup), поэтому обнуляем сами.
+      modifierState.ctrl = false;
+      modifierState.alt = false;
+      modifierState.shift = false;
+      modifierState.meta = false;
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        emitFocusEvent("tab_hidden");
+      } else if (document.visibilityState === "visible") {
+        emitFocusEvent("tab_visible");
+      }
+    };
+
+    window.addEventListener("keydown", onWindowKeyDown, true);
+    window.addEventListener("keyup", onWindowKeyUp, true);
+    window.addEventListener("blur", onWindowBlur);
+    window.addEventListener("focus", onWindowFocus);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      window.removeEventListener("keydown", onWindowKeyDown, true);
+      window.removeEventListener("keyup", onWindowKeyUp, true);
+      window.removeEventListener("blur", onWindowBlur);
+      window.removeEventListener("focus", onWindowFocus);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [merged?.role, handleCandidateKeyPress]);
+
   if (isLoading || !merged) {
     return (
       <Box className={styles.shell} p="xl">
@@ -1882,6 +2889,25 @@ export function RoomPage() {
             noteComposer={noteComposer}
             onNoteComposerChange={setNoteComposer}
             onSendNote={submitNoteMessage}
+            privateNoteComposer={privateNoteComposer}
+            onPrivateNoteComposerChange={setPrivateNoteComposer}
+            privateNotes={visiblePersonalNotes}
+            privateNotesCountByStep={privateNotesCountByStep}
+            activePrivateBlockName={activePrivateBlockName}
+            onPrivateNoteSubmit={submitPrivateNoteEntry}
+            onPrivateNotesCommandShortcut={applyPrivateNotesCommandShortcut}
+            onCloseActivePrivateBlock={closeActivePrivateBlock}
+            privateNotesExportModalOpened={privateNotesExportModalOpened}
+            onOpenPrivateNotesExportModal={() =>
+              setPrivateNotesExportModalOpened(true)
+            }
+            onClosePrivateNotesExportModal={closePrivateNotesExportModal}
+            exportIncludeTimestamps={exportIncludeTimestamps}
+            onExportIncludeTimestampsChange={setExportIncludeTimestamps}
+            exportIncludeFreeNotes={exportIncludeFreeNotes}
+            onExportIncludeFreeNotesChange={setExportIncludeFreeNotes}
+            onExportPrivateNotesMarkdown={exportPersonalNotesMarkdown}
+            onExportPrivateNotesPdf={exportPersonalNotesPdf}
             briefingMarkdown={ownerBriefingValue}
             onBriefingChange={changeBriefingMarkdown}
             sessionId={sessionId}
@@ -1894,7 +2920,7 @@ export function RoomPage() {
             syncKey={currentSyncKey}
             resyncSignal={resyncSignal}
             editorReady={editorReady}
-            onSelectStep={(stepIndex) => sendSetStep(stepIndex)}
+            onSelectStep={selectStepLocally}
             onAddTasksFromCatalog={addTasksFromCatalog}
             onAddCustomTask={addCustomTaskToRoom}
             isAddingTasksFromCatalog={addRoomTasksState.isLoading}
@@ -2125,6 +3151,23 @@ function OwnerLayout({
   noteComposer,
   onNoteComposerChange,
   onSendNote,
+  privateNoteComposer,
+  onPrivateNoteComposerChange,
+  privateNotes,
+  privateNotesCountByStep,
+  activePrivateBlockName,
+  onPrivateNoteSubmit,
+  onPrivateNotesCommandShortcut,
+  onCloseActivePrivateBlock,
+  privateNotesExportModalOpened,
+  onOpenPrivateNotesExportModal,
+  onClosePrivateNotesExportModal,
+  exportIncludeTimestamps,
+  onExportIncludeTimestampsChange,
+  exportIncludeFreeNotes,
+  onExportIncludeFreeNotesChange,
+  onExportPrivateNotesMarkdown,
+  onExportPrivateNotesPdf,
   briefingMarkdown,
   onBriefingChange,
   sessionId,
@@ -2164,6 +3207,26 @@ function OwnerLayout({
   noteComposer: string;
   onNoteComposerChange: (value: string) => void;
   onSendNote: () => void;
+  privateNoteComposer: string;
+  onPrivateNoteComposerChange: (value: string) => void;
+  /** Room-wide private notes (single stream) for the current viewer. */
+  privateNotes: PersonalNoteEntry[];
+  /** Counts of step-block notes keyed by stepIndex (used in the step list). */
+  privateNotesCountByStep: Map<number, number>;
+  activePrivateBlockName: string | null;
+  onPrivateNoteSubmit: () => void;
+  onPrivateNotesCommandShortcut: (command: string) => void;
+  /** Закрывает активный блок (крестик на бейдже). */
+  onCloseActivePrivateBlock: () => void;
+  privateNotesExportModalOpened: boolean;
+  onOpenPrivateNotesExportModal: () => void;
+  onClosePrivateNotesExportModal: () => void;
+  exportIncludeTimestamps: boolean;
+  onExportIncludeTimestampsChange: (next: boolean) => void;
+  exportIncludeFreeNotes: boolean;
+  onExportIncludeFreeNotesChange: (next: boolean) => void;
+  onExportPrivateNotesMarkdown: () => void;
+  onExportPrivateNotesPdf: () => void;
   briefingMarkdown: string;
   onBriefingChange: (value: string) => void;
   sessionId: string;
@@ -2203,7 +3266,58 @@ function OwnerLayout({
   const [customTaskTitle, setCustomTaskTitle] = useState("");
   const [customTaskDescription, setCustomTaskDescription] = useState("");
   const [customTaskStarterCode, setCustomTaskStarterCode] = useState("");
+  const roomLanguage = normalizeRoomLanguage(merged.language);
+  /**
+   * Язык новой кастомной задачи. По умолчанию совпадает с языком комнаты,
+   * но интервьюер может переключить на любой поддерживаемый язык — такая
+   * задача попадёт в комнату со своим языком, не меняя язык комнаты.
+   */
+  const [customTaskLanguage, setCustomTaskLanguage] =
+    useState<string>(roomLanguage);
+  const closeAddTaskModal = useCallback(() => {
+    setAddTaskModalOpened(false);
+    setAddTaskMode("catalog");
+    setSelectedCatalogTaskIds([]);
+    setCustomTaskTitle("");
+    setCustomTaskDescription("");
+    setCustomTaskStarterCode("");
+    setCustomTaskLanguage(roomLanguage);
+  }, [roomLanguage]);
+  /**
+   * Каждый раз, когда модалка открывается, выставляем дефолтный язык
+   * на актуальный язык комнаты — он мог поменяться, пока модалка была
+   * закрыта.
+   */
+  useEffect(() => {
+    if (addTaskModalOpened) {
+      setCustomTaskLanguage(roomLanguage);
+    }
+  }, [addTaskModalOpened, roomLanguage]);
+  /**
+   * Регистрируем модалку «Добавить задачу» в стеке Escape-слоёв,
+   * чтобы открытое поверх неё Mantine Menu/SelectDropdown не закрывалось
+   * вместе с ней одним нажатием Esc.
+   */
+  useEscapeLayer(addTaskModalOpened, closeAddTaskModal);
   const [leftPanelWidth, setLeftPanelWidth] = useState(288);
+  /**
+   * Динамический потолок ширины левой панели — половина окна. Минимум остаётся
+   * жёстким (`MIN_OWNER_PANEL_WIDTH`), чтобы при сжатии окна панель не уходила
+   * в зеро. На SSR/первом рендере отдаём fallback, на mount подменяем реальным
+   * значением из `window.innerWidth`.
+   */
+  const [maxOwnerPanelWidth, setMaxOwnerPanelWidth] = useState<number>(() => {
+    if (typeof window === "undefined") return MAX_OWNER_PANEL_WIDTH_FALLBACK;
+    return computeMaxOwnerPanelWidth(window.innerWidth);
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const recompute = () =>
+      setMaxOwnerPanelWidth(computeMaxOwnerPanelWidth(window.innerWidth));
+    recompute();
+    window.addEventListener("resize", recompute);
+    return () => window.removeEventListener("resize", recompute);
+  }, []);
   const roomToolsTabsId = useId();
   const mobileTabsId = useId();
   const notesTabId = `${roomToolsTabsId}-notes-tab`;
@@ -2217,11 +3331,61 @@ function OwnerLayout({
   const mobileCollaborationPanelId = `${mobileTabsId}-collaboration-panel`;
   const mobileTasksPanelId = `${mobileTabsId}-tasks-panel`;
   const notesFeedRef = useRef<HTMLDivElement | null>(null);
+  const privateNotesFeedRef = useRef<HTMLDivElement | null>(null);
+  const parsedPrivateNotesCommand = useMemo(
+    () => parsePersonalNotesCommand(privateNoteComposer),
+    [privateNoteComposer],
+  );
+  const showPrivateNotesCommandMenu =
+    parsedPrivateNotesCommand.kind === "menu" ||
+    parsedPrivateNotesCommand.kind === "block_prompt" ||
+    parsedPrivateNotesCommand.kind === "block_apply";
+  const privateNotesInputPlaceholder = activePrivateBlockName
+    ? "/block <название> — сменить блок"
+    : 'Введите заметку или "/" для команд';
+  /**
+   * Block name suggestions shown after `/block`. Suggestions mirror the room's
+   * interview steps: 3 steps → `/block Шаг 1`, `Шаг 2`, `Шаг 3`. Кастомное имя,
+   * которое сейчас набирает пользователь, обрабатывается отдельной кнопкой
+   * «Создать блок: …» (см. {@link customBlockCandidate}), а не подмешивается
+   * к списку шагов — иначе непонятно, что произвольное имя тоже допустимо.
+   */
+  const privateNotesCommandExamples = useMemo(() => {
+    return tasks
+      .slice()
+      .sort((left, right) => left.stepIndex - right.stepIndex)
+      .map((task) => formatStepBlockLabel(task.stepIndex));
+  }, [tasks]);
+  /**
+   * Произвольное имя блока, которое сейчас набирает пользователь после
+   * `/block ` и которого ещё нет в подсказках шагов. Пустое — если кандидат
+   * совпадает со ступенью или нет ввода.
+   */
+  const customBlockCandidate = useMemo(() => {
+    if (parsedPrivateNotesCommand.kind !== "block_apply") return "";
+    const candidate = parsedPrivateNotesCommand.blockName.trim();
+    if (!candidate) return "";
+    const matchesStep = privateNotesCommandExamples.some(
+      (item) =>
+        item.toLocaleLowerCase("ru-RU") === candidate.toLocaleLowerCase("ru-RU"),
+    );
+    return matchesStep ? "" : candidate;
+  }, [parsedPrivateNotesCommand, privateNotesCommandExamples]);
   const catalogTaskOptions = useMemo(() => {
-    return availableCatalogTasks.map((task) => ({
-      value: task.id,
-      label: task.title,
-    }));
+    // Дописываем язык в скобках, чтобы при перемешанных языках в банке
+    // было понятно, какую задачу добавляешь (язык комнаты теперь не
+    // фильтрует список).
+    const languageLabelByValue = new Map(
+      LANGUAGES.map((item) => [item.value, item.label]),
+    );
+    return availableCatalogTasks.map((task) => {
+      const langValue = normalizeRoomLanguage(task.language);
+      const langLabel = languageLabelByValue.get(langValue) ?? langValue;
+      return {
+        value: task.id,
+        label: `${task.title} · ${langLabel}`,
+      };
+    });
   }, [availableCatalogTasks]);
   const selectedCatalogTasks = useMemo(() => {
     const selected = new Set(selectedCatalogTaskIds);
@@ -2254,20 +3418,24 @@ function OwnerLayout({
         title,
         description,
         starterCode: customTaskStarterCode,
+        language: customTaskLanguage,
       });
       setCustomTaskTitle("");
       setCustomTaskDescription("");
       setCustomTaskStarterCode("");
       setAddTaskMode("catalog");
       setAddTaskModalOpened(false);
+      setCustomTaskLanguage(roomLanguage);
     } catch {
       // Parent sets user-facing error.
     }
   }, [
     customTaskDescription,
+    customTaskLanguage,
     customTaskStarterCode,
     customTaskTitle,
     onAddCustomTask,
+    roomLanguage,
   ]);
 
   const startDrag = useCallback(
@@ -2319,14 +3487,14 @@ function OwnerLayout({
       if (event.key === "ArrowLeft") {
         event.preventDefault();
         setLeftPanelWidth((current) =>
-          clamp(current - 16, MIN_OWNER_PANEL_WIDTH, MAX_OWNER_PANEL_WIDTH),
+          clamp(current - 16, MIN_OWNER_PANEL_WIDTH, maxOwnerPanelWidth),
         );
         return;
       }
       if (event.key === "ArrowRight") {
         event.preventDefault();
         setLeftPanelWidth((current) =>
-          clamp(current + 16, MIN_OWNER_PANEL_WIDTH, MAX_OWNER_PANEL_WIDTH),
+          clamp(current + 16, MIN_OWNER_PANEL_WIDTH, maxOwnerPanelWidth),
         );
         return;
       }
@@ -2337,10 +3505,10 @@ function OwnerLayout({
       }
       if (event.key === "End") {
         event.preventDefault();
-        setLeftPanelWidth(MAX_OWNER_PANEL_WIDTH);
+        setLeftPanelWidth(maxOwnerPanelWidth);
       }
     },
-    [],
+    [maxOwnerPanelWidth],
   );
 
   useEffect(() => {
@@ -2350,11 +3518,18 @@ function OwnerLayout({
       const dragState = dragStateRef.current;
       if (!dragState) return;
       const delta = event.clientX - dragState.startX;
+      // Берём актуальный потолок прямо из window — на случай если окно
+      // ресайзнули в момент перетаскивания.
+      const dynamicMax = computeMaxOwnerPanelWidth(
+        typeof window === "undefined"
+          ? MAX_OWNER_PANEL_WIDTH_FALLBACK
+          : window.innerWidth,
+      );
       setLeftPanelWidth(
         clamp(
           dragState.startWidth + delta,
           MIN_OWNER_PANEL_WIDTH,
-          MAX_OWNER_PANEL_WIDTH,
+          dynamicMax,
         ),
       );
     };
@@ -2396,6 +3571,19 @@ function OwnerLayout({
   ]);
 
   useEffect(() => {
+    const canScrollPrivateNotes = isCompactLayout
+      ? activeMobileTab === "tasks"
+      : activeRailPanel === "tasks";
+    if (!canScrollPrivateNotes) return;
+    const host = privateNotesFeedRef.current;
+    if (!host) return;
+    const rafId = window.requestAnimationFrame(() => {
+      host.scrollTop = host.scrollHeight;
+    });
+    return () => window.cancelAnimationFrame(rafId);
+  }, [activeMobileTab, activeRailPanel, isCompactLayout, privateNotes.length]);
+
+  useEffect(() => {
     const allowedTaskIds = new Set(
       availableCatalogTasks.map((task) => task.id),
     );
@@ -2426,7 +3614,7 @@ function OwnerLayout({
   const clampedLeftPanelWidth = clamp(
     leftPanelWidth,
     MIN_OWNER_PANEL_WIDTH,
-    MAX_OWNER_PANEL_WIDTH,
+    maxOwnerPanelWidth,
   );
   const candidateParticipants = merged.participants.filter(
     (participant) => participant.role === "candidate",
@@ -2468,16 +3656,10 @@ function OwnerLayout({
     <Box className={styles.ownerBody}>
       <Modal
         opened={addTaskModalOpened}
-        onClose={() => {
-          setAddTaskModalOpened(false);
-          setAddTaskMode("catalog");
-          setSelectedCatalogTaskIds([]);
-          setCustomTaskTitle("");
-          setCustomTaskDescription("");
-          setCustomTaskStarterCode("");
-        }}
+        onClose={closeAddTaskModal}
         title="Добавить задачу в комнату"
         centered
+        closeOnEscape={false}
       >
         <Stack>
           <SegmentedControl
@@ -2495,8 +3677,7 @@ function OwnerLayout({
           {addTaskMode === "catalog" ? (
             <>
               <Text size="sm" c="dimmed">
-                Выберите задачи из личного банка, которые ещё не добавлены в
-                комнату.
+                Выберите задачи из списка, которые ещё не добавлены в комнату.
               </Text>
               <MultiSelect
                 value={selectedCatalogTaskIds}
@@ -2542,6 +3723,21 @@ function OwnerLayout({
                 placeholder="Например, Реализовать LRU-кэш"
                 disabled={isAddingTasksFromCatalog}
                 required
+              />
+              <Select
+                label="Язык"
+                description="По умолчанию — язык комнаты. Можно выбрать другой."
+                data={LANGUAGES}
+                value={customTaskLanguage}
+                onChange={(value) =>
+                  setCustomTaskLanguage(
+                    value ? normalizeRoomLanguage(value) : roomLanguage,
+                  )
+                }
+                allowDeselect={false}
+                disabled={isAddingTasksFromCatalog}
+                comboboxProps={{ withinPortal: false }}
+                data-testid="room-add-custom-task-language"
               />
               <Textarea
                 label="Описание (Markdown, необязательно)"
@@ -2682,45 +3878,94 @@ function OwnerLayout({
                   <Text size="xs" c="#8b919b">
                     шаг {merged.currentStep + 1}/{Math.max(tasks.length, 1)}
                   </Text>
-                  <Button
-                    size="xs"
-                    variant="filled"
-                    color="blue"
-                    leftSection={<IconPlus size={12} />}
-                    onClick={() => setAddTaskModalOpened(true)}
-                  >
-                    Задача
-                  </Button>
+                  <Group gap={6}>
+                    <Button
+                      size="xs"
+                      variant="light"
+                      color="gray"
+                      leftSection={<IconFileDescription size={14} />}
+                      onClick={onOpenPrivateNotesExportModal}
+                      data-testid="room-private-notes-export"
+                    >
+                      Экспорт заметок
+                    </Button>
+                    <Button
+                      size="xs"
+                      variant="filled"
+                      color="blue"
+                      leftSection={<IconPlus size={12} />}
+                      onClick={() => setAddTaskModalOpened(true)}
+                    >
+                      Задача
+                    </Button>
+                  </Group>
                 </Group>
 
                 <Box className={styles.stepList}>
                   {tasks.map((task) => {
                     const taskRating =
                       taskScores[String(task.stepIndex)] ?? task.score ?? null;
+                    const notesCount =
+                      privateNotesCountByStep.get(task.stepIndex) ?? 0;
+                    const isActiveStep = task.stepIndex === merged.currentStep;
+                    const fullLabel = `${task.stepIndex + 1}. ${task.title}`;
                     return (
-                      <Button
+                      <button
                         key={task.stepIndex}
-                        size="xs"
-                        variant={
-                          task.stepIndex === merged.currentStep
-                            ? "filled"
-                            : "light"
-                        }
-                        color={
-                          task.stepIndex === merged.currentStep
-                            ? "gray"
-                            : "dark"
-                        }
-                        justify="space-between"
+                        type="button"
+                        className={styles.stepRow}
+                        data-active={isActiveStep ? "true" : undefined}
+                        aria-current={isActiveStep ? "step" : undefined}
                         onClick={() => handleTaskStepSelect(task.stepIndex)}
+                        title={fullLabel}
                       >
-                        {`${task.stepIndex + 1}. ${task.title}${taskRating ? ` · ★${taskRating}` : ""}`}
-                      </Button>
+                        <span className={styles.stepRowIndex} aria-hidden="true">
+                          {task.stepIndex + 1}
+                        </span>
+                        <span className={styles.stepRowTitle}>
+                          {task.title}
+                        </span>
+                        <span className={styles.stepRowMeta}>
+                          {taskRating ? (
+                            <Tooltip
+                              label={`Оценка шага: ${taskRating} из 5`}
+                              position="top"
+                            >
+                              <span
+                                className={styles.stepRowRating}
+                                aria-label={`Оценка шага: ${taskRating} из 5`}
+                              >
+                                {`★${taskRating}`}
+                              </span>
+                            </Tooltip>
+                          ) : null}
+                          {notesCount > 0 ? (
+                            <Tooltip
+                              label={`Заметок по шагу: ${notesCount}`}
+                              position="top"
+                            >
+                              <span
+                                className={styles.stepRowNotes}
+                                aria-label={`Заметок по шагу: ${notesCount}`}
+                              >
+                                <IconNote size={11} stroke={2.2} />
+                                <span>{notesCount}</span>
+                              </span>
+                            </Tooltip>
+                          ) : null}
+                        </span>
+                      </button>
                     );
                   })}
                 </Box>
 
-                <Text size="sm" c="#e1e6ef" fw={600}>
+                <Text
+                  size="sm"
+                  c="#e1e6ef"
+                  fw={600}
+                  truncate="end"
+                  title={stepTitle}
+                >
                   {stepTitle}
                 </Text>
 
@@ -2766,6 +4011,289 @@ function OwnerLayout({
                     }}
                   />
                 </Box>
+
+                <div className={styles.privateNotesSection}>
+                  <header className={styles.privateNotesHeader}>
+                    <div className={styles.privateNotesHeaderCopy}>
+                      <Text className={styles.panelSectionTitle}>
+                        Заметки
+                      </Text>
+                    </div>
+                  </header>
+
+                  {activePrivateBlockName ? (
+                    <div className={styles.privateNotesActiveBlock}>
+                      <Badge
+                        color={getPrivateNoteBlockColor(activePrivateBlockName)}
+                        variant="light"
+                        rightSection={
+                          <Tooltip
+                            label="Закрыть блок и писать в свободной форме"
+                            withArrow
+                            position="top"
+                          >
+                            <ActionIcon
+                              size="xs"
+                              radius="xl"
+                              variant="transparent"
+                              color="gray"
+                              aria-label="Закрыть блок и писать в свободной форме"
+                              data-testid="room-private-notes-active-block-close"
+                              onClick={onCloseActivePrivateBlock}
+                            >
+                              <IconX size={12} stroke={2.4} />
+                            </ActionIcon>
+                          </Tooltip>
+                        }
+                      >
+                        Блок: {activePrivateBlockName}
+                      </Badge>
+                    </div>
+                  ) : (
+                    <div className={styles.privateNotesActiveBlock}>
+                      <Badge color="gray" variant="light">
+                        Без блока
+                      </Badge>
+                      <Text className={styles.privateNotesHint}>
+                        Записи — вне блока. Выберите блок через{" "}
+                        <code>/block</code> или смените шаг.
+                      </Text>
+                    </div>
+                  )}
+
+                  <div className={styles.privateNotesList} ref={privateNotesFeedRef}>
+                    {privateNotes.length > 0 ? (
+                      privateNotes.map((entry) => (
+                        <article
+                          key={entry.id}
+                          className={styles.privateNoteEntry}
+                          data-pending={Boolean(
+                            (entry as PendingPersonalNoteEntry).pending,
+                          )}
+                        >
+                          <header className={styles.privateNoteEntryMeta}>
+                            <time className={styles.privateNoteEntryTime}>
+                              {formatNoteTimestamp(entry.timestampEpochMs)}
+                            </time>
+                            {typeof entry.blockStepIndex === "number" ? (
+                              <Badge
+                                size="xs"
+                                color={getPrivateNoteBlockColor(
+                                  formatStepBlockLabel(entry.blockStepIndex),
+                                )}
+                                variant="light"
+                              >
+                                {formatStepBlockLabel(entry.blockStepIndex)}
+                              </Badge>
+                            ) : entry.blockName ? (
+                              <Badge
+                                size="xs"
+                                color={getPrivateNoteBlockColor(entry.blockName)}
+                                variant="light"
+                              >
+                                {entry.blockName}
+                              </Badge>
+                            ) : (
+                              <Badge size="xs" color="gray" variant="light">
+                                Вне блока
+                              </Badge>
+                            )}
+                          </header>
+                          <Text className={styles.privateNoteEntryText}>
+                            {entry.text}
+                          </Text>
+                        </article>
+                      ))
+                    ) : (
+                      <div className={styles.privateNotesEmpty}>
+                        <Text className={styles.notesEmptyTitle}>
+                          Пока нет записей
+                        </Text>
+                        <Text className={styles.notesEmptyText}>
+                          Добавьте первую заметку — она автоматически попадёт
+                          в блок текущего шага.
+                        </Text>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className={styles.privateNotesComposer}>
+                    <Textarea
+                      value={privateNoteComposer}
+                      onChange={(event) =>
+                        onPrivateNoteComposerChange(event.currentTarget.value)
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter" || event.shiftKey) return;
+                        event.preventDefault();
+                        onPrivateNoteSubmit();
+                      }}
+                      autosize
+                      minRows={2}
+                      maxRows={10}
+                      data-testid="room-private-notes-input"
+                      placeholder={privateNotesInputPlaceholder}
+                      classNames={{ input: styles.privateNotesComposerInput }}
+                    />
+                    {showPrivateNotesCommandMenu ? (
+                      <div
+                        className={styles.privateNotesCommandMenu}
+                        data-testid="room-private-notes-command-menu"
+                      >
+                        <button
+                          type="button"
+                          className={styles.privateNotesCommandItem}
+                          onClick={() => onPrivateNotesCommandShortcut("/block")}
+                        >
+                          <span className={styles.privateNotesCommandLabel}>
+                            /block
+                          </span>
+                          <span className={styles.privateNotesCommandHint}>
+                            Открыть блок заметок
+                          </span>
+                        </button>
+
+                        <Text className={styles.privateNotesCommandHelper}>
+                          Введите своё название после <code>/block</code> —
+                          создастся новый блок. Или выберите ниже один из шагов
+                          интервью.
+                        </Text>
+
+                        {customBlockCandidate ? (
+                          <button
+                            type="button"
+                            className={styles.privateNotesCommandCreate}
+                            data-testid="room-private-notes-command-create-custom"
+                            onClick={() =>
+                              onPrivateNotesCommandShortcut(
+                                `/block ${customBlockCandidate}`,
+                              )
+                            }
+                          >
+                            <span
+                              className={styles.privateNotesCommandCreateLabel}
+                            >
+                              + Создать блок
+                            </span>
+                            <span
+                              className={styles.privateNotesCommandCreateName}
+                            >
+                              {customBlockCandidate}
+                            </span>
+                          </button>
+                        ) : null}
+
+                        {privateNotesCommandExamples.length > 0 ? (
+                          <div
+                            className={styles.privateNotesCommandSection}
+                            role="group"
+                            aria-label="Шаги интервью"
+                          >
+                            <Text
+                              className={styles.privateNotesCommandSectionTitle}
+                            >
+                              Шаги интервью
+                            </Text>
+                            {privateNotesCommandExamples.map((example) => (
+                              <button
+                                key={example}
+                                type="button"
+                                className={styles.privateNotesCommandExample}
+                                onClick={() =>
+                                  onPrivateNotesCommandShortcut(
+                                    `/block ${example}`,
+                                  )
+                                }
+                              >
+                                {`/block ${example}`}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    {parsedPrivateNotesCommand.kind === "unknown" ? (
+                      <Text className={styles.privateNotesCommandUnknown}>
+                        Команда не найдена. Доступно: <code>/block</code>.
+                      </Text>
+                    ) : null}
+
+                    <Group
+                      justify="space-between"
+                      align="center"
+                      className={styles.notesComposerFooter}
+                    >
+                      <Text className={styles.notesComposerHint}>
+                        Enter: добавить запись, Shift+Enter: новая строка
+                      </Text>
+                      <Button
+                        type="button"
+                        size="xs"
+                        onClick={onPrivateNoteSubmit}
+                        disabled={
+                          !privateNoteComposer.trim() ||
+                          parsedPrivateNotesCommand.kind === "menu" ||
+                          parsedPrivateNotesCommand.kind === "block_prompt" ||
+                          parsedPrivateNotesCommand.kind === "unknown"
+                        }
+                        data-testid="room-private-notes-send"
+                      >
+                        {parsedPrivateNotesCommand.kind === "block_apply"
+                          ? "Применить блок"
+                          : "Добавить"}
+                      </Button>
+                    </Group>
+                  </div>
+                </div>
+
+                <Modal
+                  opened={privateNotesExportModalOpened}
+                  onClose={onClosePrivateNotesExportModal}
+                  title="Экспорт личных заметок"
+                  centered
+                  closeOnEscape={false}
+                >
+                  <Stack gap="sm">
+                    <Text size="sm" c="dimmed">
+                      Экспортирует фактуру по всем шагам, объединяя
+                      повторяющиеся блоки в каждом шаге.
+                    </Text>
+                    <Checkbox
+                      checked={exportIncludeTimestamps}
+                      onChange={(event) =>
+                        onExportIncludeTimestampsChange(
+                          event.currentTarget.checked,
+                        )
+                      }
+                      label="Включать время записей"
+                    />
+                    <Checkbox
+                      checked={exportIncludeFreeNotes}
+                      onChange={(event) =>
+                        onExportIncludeFreeNotesChange(
+                          event.currentTarget.checked,
+                        )
+                      }
+                      label="Включать заметки вне блока"
+                    />
+                    <Group justify="flex-end">
+                      <Button
+                        variant="light"
+                        color="gray"
+                        leftSection={<IconDownload size={14} />}
+                        onClick={onExportPrivateNotesMarkdown}
+                      >
+                        Скачать .md
+                      </Button>
+                      <Button
+                        leftSection={<IconDownload size={14} />}
+                        onClick={onExportPrivateNotesPdf}
+                      >
+                        Скачать .pdf
+                      </Button>
+                    </Group>
+                  </Stack>
+                </Modal>
               </Box>
             ) : (
               <Box className={styles.outputPanel}>
@@ -2917,6 +4445,7 @@ function OwnerLayout({
                           </Button>
                         </Group>
                       </div>
+
                     </div>
                   ) : (
                     <div
@@ -2983,7 +4512,7 @@ function OwnerLayout({
               tabIndex={0}
               aria-orientation="vertical"
               aria-valuemin={MIN_OWNER_PANEL_WIDTH}
-              aria-valuemax={MAX_OWNER_PANEL_WIDTH}
+              aria-valuemax={maxOwnerPanelWidth}
               aria-valuenow={Math.round(clampedLeftPanelWidth)}
               aria-label="Изменить ширину левой панели"
               onMouseDown={startDrag}
@@ -3311,126 +4840,128 @@ function BriefingBoard({
   return (
     <Box className={styles.briefingPanel} data-mode={mode}>
       {mode === "interviewer" ? (
-        <div className={styles.briefingSplit}>
-          <div className={styles.briefingEditorPane}>
-            <div className={styles.briefingToolbar}>
-              <button
-                type="button"
-                className={styles.briefingToolButton}
-                aria-label="Жирный текст"
-                title="Жирный текст"
-                onClick={() => applyMarkdownTool("bold")}
-              >
-                B
-              </button>
-              <button
-                type="button"
-                className={styles.briefingToolButton}
-                aria-label="Курсив"
-                title="Курсив"
-                onClick={() => applyMarkdownTool("italic")}
-              >
-                I
-              </button>
-              <button
-                type="button"
-                className={styles.briefingToolButton}
-                aria-label="Вставить код"
-                title="Вставить код"
-                onClick={() => applyMarkdownTool("code")}
-              >
-                {"</>"}
-              </button>
-              <button
-                type="button"
-                className={styles.briefingToolButton}
-                aria-label="Вставить ссылку"
-                title="Вставить ссылку"
-                onClick={() => applyMarkdownTool("link")}
-              >
-                Link
-              </button>
-              <button
-                type="button"
-                className={styles.briefingToolButton}
-                aria-label="Заголовок H1"
-                title="Заголовок H1"
-                onClick={() => applyMarkdownTool("h1")}
-              >
-                H1
-              </button>
-              <button
-                type="button"
-                className={styles.briefingToolButton}
-                aria-label="Заголовок H2"
-                title="Заголовок H2"
-                onClick={() => applyMarkdownTool("h2")}
-              >
-                H2
-              </button>
-              <button
-                type="button"
-                className={styles.briefingToolButton}
-                aria-label="Маркированный список"
-                title="Маркированный список"
-                onClick={() => applyMarkdownTool("ul")}
-              >
-                • List
-              </button>
-              <button
-                type="button"
-                className={styles.briefingToolButton}
-                aria-label="Нумерованный список"
-                title="Нумерованный список"
-                onClick={() => applyMarkdownTool("ol")}
-              >
-                1. List
-              </button>
-              <button
-                type="button"
-                className={styles.briefingToolButton}
-                aria-label="Цитата"
-                title="Цитата"
-                onClick={() => applyMarkdownTool("quote")}
-              >
-                Quote
-              </button>
-              <button
-                type="button"
-                className={styles.briefingToolButton}
-                aria-label="Table"
-                title="Table"
-                onClick={() => applyMarkdownTool("table")}
-              >
-                Table
-              </button>
-            </div>
+        <>
+          <div className={styles.briefingToolbar}>
+            <button
+              type="button"
+              className={styles.briefingToolButton}
+              aria-label="Жирный текст"
+              title="Жирный текст"
+              onClick={() => applyMarkdownTool("bold")}
+            >
+              B
+            </button>
+            <button
+              type="button"
+              className={styles.briefingToolButton}
+              aria-label="Курсив"
+              title="Курсив"
+              onClick={() => applyMarkdownTool("italic")}
+            >
+              I
+            </button>
+            <button
+              type="button"
+              className={styles.briefingToolButton}
+              aria-label="Вставить код"
+              title="Вставить код"
+              onClick={() => applyMarkdownTool("code")}
+            >
+              {"</>"}
+            </button>
+            <button
+              type="button"
+              className={styles.briefingToolButton}
+              aria-label="Вставить ссылку"
+              title="Вставить ссылку"
+              onClick={() => applyMarkdownTool("link")}
+            >
+              Link
+            </button>
+            <button
+              type="button"
+              className={styles.briefingToolButton}
+              aria-label="Заголовок H1"
+              title="Заголовок H1"
+              onClick={() => applyMarkdownTool("h1")}
+            >
+              H1
+            </button>
+            <button
+              type="button"
+              className={styles.briefingToolButton}
+              aria-label="Заголовок H2"
+              title="Заголовок H2"
+              onClick={() => applyMarkdownTool("h2")}
+            >
+              H2
+            </button>
+            <button
+              type="button"
+              className={styles.briefingToolButton}
+              aria-label="Маркированный список"
+              title="Маркированный список"
+              onClick={() => applyMarkdownTool("ul")}
+            >
+              • List
+            </button>
+            <button
+              type="button"
+              className={styles.briefingToolButton}
+              aria-label="Нумерованный список"
+              title="Нумерованный список"
+              onClick={() => applyMarkdownTool("ol")}
+            >
+              1. List
+            </button>
+            <button
+              type="button"
+              className={styles.briefingToolButton}
+              aria-label="Цитата"
+              title="Цитата"
+              onClick={() => applyMarkdownTool("quote")}
+            >
+              Quote
+            </button>
+            <button
+              type="button"
+              className={styles.briefingToolButton}
+              aria-label="Table"
+              title="Table"
+              onClick={() => applyMarkdownTool("table")}
+            >
+              Table
+            </button>
+          </div>
+          <div className={styles.briefingSplit}>
             <Textarea
               value={value}
               onChange={(event) => onChange?.(event.currentTarget.value)}
-              autosize
               minRows={6}
-              maxRows={24}
               placeholder="Например: # План\n- Что делаем\n- На что смотреть"
               data-testid="room-markdown-editor"
-              classNames={{ input: styles.briefingEditorInput }}
+              classNames={{
+                root: styles.briefingEditorRoot,
+                wrapper: styles.briefingEditorWrapper,
+                input: styles.briefingEditorInput,
+              }}
               ref={editorRef}
             />
+            <div
+              className={styles.briefingPreviewPane}
+              data-testid="room-markdown-preview"
+            >
+              {html ? (
+                <div
+                  className={styles.briefingMarkdown}
+                  dangerouslySetInnerHTML={{ __html: html }}
+                />
+              ) : (
+                <Text className={styles.briefingEmpty}>{emptyText}</Text>
+              )}
+            </div>
           </div>
-          <div
-            className={styles.briefingPreviewPane}
-            data-testid="room-markdown-preview"
-          >
-            {html ? (
-              <div
-                className={styles.briefingMarkdown}
-                dangerouslySetInnerHTML={{ __html: html }}
-              />
-            ) : (
-              <Text className={styles.briefingEmpty}>{emptyText}</Text>
-            )}
-          </div>
-        </div>
+        </>
       ) : (
         <div
           className={styles.briefingPreviewPane}
@@ -3450,21 +4981,70 @@ function BriefingBoard({
   );
 }
 
+/**
+ * Собирает префикс из активных модификаторов («Cmd+», «Alt+Shift+» и т.п.)
+ * для строки лога. Используется и обычными `keydown`, и синтетическими
+ * событиями (blur/visibility), чтобы лейбл «Alt+Tab — переключение окна»
+ * корректно отражал, какие клавиши держал кандидат.
+ */
+function buildModifierPrefix(
+  event: Pick<
+    CandidateKeyInfo,
+    "ctrlKey" | "altKey" | "shiftKey" | "metaKey"
+  >,
+  exclude: { ctrl?: boolean; alt?: boolean; shift?: boolean; meta?: boolean } = {},
+): string {
+  const modifiers: string[] = [];
+  if (event.ctrlKey && !exclude.ctrl) modifiers.push("Ctrl");
+  if (event.altKey && !exclude.alt) modifiers.push("Alt");
+  if (event.shiftKey && !exclude.shift) modifiers.push("Shift");
+  if (event.metaKey && !exclude.meta) modifiers.push("Cmd");
+  return modifiers.length > 0 ? `${modifiers.join("+")}+` : "";
+}
+
 function formatCandidateKey(event: CandidateKeyInfo): string {
+  /**
+   * Синтетические события focus/visibility: ОС забирает себе сам Tab при
+   * Alt+Tab/Cmd+Tab, и `keydown` для него до браузера не доходит. Мы знаем
+   * только то, что окно/вкладка потеряли фокус и какие модификаторы при
+   * этом были нажаты — формируем понятный составной лейбл.
+   */
+  const eventKind = event.eventKind ?? "keydown";
+  if (eventKind !== "keydown") {
+    const prefix = buildModifierPrefix(event);
+    switch (eventKind) {
+      case "window_blur":
+        return prefix
+          ? `${prefix}Tab — переключение окна`
+          : "Переключение окна";
+      case "window_focus":
+        return "Возврат в окно";
+      case "tab_hidden":
+        return prefix
+          ? `${prefix}Tab — смена вкладки`
+          : "Смена вкладки";
+      case "tab_visible":
+        return "Возврат на вкладку";
+      default:
+        return prefix ? `${prefix}${eventKind}` : eventKind;
+    }
+  }
+
   const keyLabel = normalizeKeyLabel(event.key || "", event.keyCode || "");
   const isCtrlKey = keyLabel === "Ctrl";
   const isAltKey = keyLabel === "Alt";
   const isShiftKey = keyLabel === "Shift";
   const isMetaKey = keyLabel === "Cmd" || keyLabel === "Meta";
-  const modifiers: string[] = [];
-  if (event.ctrlKey && !isCtrlKey) modifiers.push("Ctrl");
-  if (event.altKey && !isAltKey) modifiers.push("Alt");
-  if (event.shiftKey && !isShiftKey) modifiers.push("Shift");
-  if (event.metaKey && !isMetaKey) modifiers.push("Cmd");
+  const prefix = buildModifierPrefix(event, {
+    ctrl: isCtrlKey,
+    alt: isAltKey,
+    shift: isShiftKey,
+    meta: isMetaKey,
+  });
 
   const key =
     keyLabel || normalizeKeyCodeLabel(event.keyCode || "") || "Unknown";
-  return [...modifiers, key].join("+");
+  return `${prefix}${key}`;
 }
 
 function formatCandidateKeyHistoryTimestamp(event: CandidateKeyInfo): string {
