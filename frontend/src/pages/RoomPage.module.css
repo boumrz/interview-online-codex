@@ -140,6 +140,54 @@
   font-weight: 700;
 }
 
+/*
+ * Caret hint that appears next to participant names whose role can be
+ * toggled by the current viewer. Subtle (opacity 0.45) so it doesn't
+ * compete with the name; brightens on card hover/focus to confirm
+ * the affordance.
+ */
+.participantMenuCaret {
+  flex: 0 0 auto;
+  margin-left: 1px;
+  color: var(--participant-role-color);
+  opacity: 0.45;
+  transition: opacity 140ms ease;
+}
+
+.participantCardButton:hover .participantMenuCaret,
+.participantCardButton:focus-visible .participantMenuCaret {
+  opacity: 0.9;
+}
+
+/*
+ * Inline "what is this?" affordance shown in the participants row when the
+ * current user can promote someone. Behaves like a quiet info badge: muted
+ * by default, picks up colour on hover/focus. Tooltip carries the full
+ * instruction so the row stays compact.
+ */
+.participantsHelpHint {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  color: #b6c0cf;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: help;
+  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+.participantsHelpHint:hover,
+.participantsHelpHint:focus-visible {
+  outline: none;
+  color: #f3f5f7;
+  background: rgba(108, 159, 255, 0.18);
+  border-color: rgba(108, 159, 255, 0.45);
+}
+
 .topActions {
   display: flex;
   align-items: center;
