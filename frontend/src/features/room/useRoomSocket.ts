@@ -73,6 +73,19 @@ type NoteMessagePayload = {
   timestampEpochMs: number;
 };
 
+type PersonalNoteEntryPayload = {
+  id: string;
+  text: string;
+  blockName?: string | null;
+  /**
+   * If the note was authored under a step block, this points back to that
+   * step's index. Used by the UI to render `Шаг N` and by export to expand
+   * to `Шаг N - <task title>`.
+   */
+  blockStepIndex?: number | null;
+  timestampEpochMs: number;
+};
+
 type RealtimeState = {
   inviteCode: string;
   language: string;
@@ -84,6 +97,11 @@ type RealtimeState = {
   currentStep: number;
   notes: string;
   notesMessages?: NoteMessagePayload[];
+  /**
+   * Room-wide private notes for the current viewer (interviewer/owner only).
+   * Replaces the legacy per-step `personalNotesByStep` payload.
+   */
+  personalNotes?: PersonalNoteEntryPayload[];
   briefingMarkdown?: string;
   tasks?: RoomTask[];
   taskScores: Record<string, number | null>;
@@ -129,6 +147,14 @@ type ClientMessage =
   | { type: "task_rating_update"; stepIndex: number; rating: number | null }
   | { type: "notes_update"; notes: string }
   | { type: "note_message"; noteId: string; noteText: string; noteTimestampEpochMs: number }
+  | {
+      type: "private_note_entry";
+      privateNoteId: string;
+      privateNoteText: string;
+      privateNoteBlockName?: string | null;
+      privateNoteBlockStepIndex?: number | null;
+      privateNoteTimestampEpochMs: number;
+    }
   | { type: "briefing_markdown_update"; briefingMarkdown: string }
   | { type: "grant_interviewer_access"; targetSessionId?: string; targetUserId?: string }
   | { type: "revoke_interviewer_access"; targetSessionId?: string; targetUserId?: string }
@@ -162,6 +188,13 @@ type ClientMessage =
       altKey: boolean;
       shiftKey: boolean;
       metaKey: boolean;
+      /**
+       * Категория события: `keydown` (по умолчанию), либо синтетические
+       * `window_blur`/`window_focus`/`tab_hidden`/`tab_visible`. Нужны для
+       * фиксации Alt+Tab/Cmd+Tab и переключения вкладок в логе кандидата —
+       * сам Tab ОС перехватывает раньше браузера.
+       */
+      eventKind?: string;
     }
   | { type: "request_state_sync" };
 
@@ -886,6 +919,23 @@ export function useRoomSocket({
     });
   };
 
+  const sendPrivateNoteEntry = (
+    privateNoteId: string,
+    privateNoteText: string,
+    privateNoteTimestampEpochMs: number,
+    privateNoteBlockName?: string | null,
+    privateNoteBlockStepIndex?: number | null
+  ) => {
+    send({
+      type: "private_note_entry",
+      privateNoteId,
+      privateNoteText,
+      privateNoteTimestampEpochMs,
+      privateNoteBlockName: privateNoteBlockName ?? null,
+      privateNoteBlockStepIndex: privateNoteBlockStepIndex ?? null
+    });
+  };
+
   const sendBriefingUpdate = (briefingMarkdown: string) => {
     send({
       type: "briefing_markdown_update",
@@ -973,12 +1023,28 @@ export function useRoomSocket({
     altKey: boolean;
     shiftKey: boolean;
     metaKey: boolean;
+    /**
+     * Категория события: `keydown` (по умолчанию), либо синтетические
+     * `window_blur`/`window_focus`/`tab_hidden`/`tab_visible`. Они нужны,
+     * чтобы фиксировать в логе переключение окон/вкладок (Alt+Tab, Cmd+Tab),
+     * которые ОС перехватывает до браузера и обычным `keydown` не приходят.
+     */
+    eventKind?: string;
   }) => {
     const now = Date.now();
-    if (now - lastKeyPressSentAtRef.current < KEY_PRESS_CLIENT_THROTTLE_MS) {
+    const eventKind = payload.eventKind ?? "keydown";
+    // Синтетические события (blur/visibility) не должны теряться из-за
+    // троттлинга: они срабатывают редко, а пропустить «переключился на другое
+    // окно» — это потерять самый важный сигнал в логах.
+    if (
+      eventKind === "keydown" &&
+      now - lastKeyPressSentAtRef.current < KEY_PRESS_CLIENT_THROTTLE_MS
+    ) {
       return;
     }
-    lastKeyPressSentAtRef.current = now;
+    if (eventKind === "keydown") {
+      lastKeyPressSentAtRef.current = now;
+    }
     send({
       type: "key_press",
       key: payload.key,
@@ -986,7 +1052,8 @@ export function useRoomSocket({
       ctrlKey: payload.ctrlKey,
       altKey: payload.altKey,
       shiftKey: payload.shiftKey,
-      metaKey: payload.metaKey
+      metaKey: payload.metaKey,
+      eventKind
     });
   };
 
@@ -1000,6 +1067,7 @@ export function useRoomSocket({
     sendTaskRatingUpdate,
     sendNotesUpdate,
     sendNoteMessage,
+    sendPrivateNoteEntry,
     sendBriefingUpdate,
     sendGrantInterviewerAccess,
     sendRevokeInterviewerAccess,
