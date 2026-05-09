@@ -9,6 +9,7 @@ import com.interviewonline.model.UserTaskCategory
 import com.interviewonline.model.UserTaskTemplate
 import com.interviewonline.repository.UserTaskCategoryRepository
 import com.interviewonline.repository.UserTaskTemplateRepository
+import com.interviewonline.service.LanguageNormalizer.normalize as normalizeLanguage
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -144,16 +145,6 @@ class UserTaskService(
         return listOf(normalizedLanguage, normalizedTitle, normalizedDescription, normalizedStarterCode).joinToString("::")
     }
 
-    private fun normalizeLanguage(language: String): String {
-        return when (language.lowercase()) {
-            "javascript", "typescript", "nodejs" -> "nodejs"
-            "python" -> "python"
-            "kotlin" -> "kotlin"
-            "java" -> "java"
-            "sql" -> "sql"
-            else -> "nodejs"
-        }
-    }
 
     private fun UserTaskTemplate.toDto(): TaskTemplateDto {
         return TaskTemplateDto(

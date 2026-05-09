@@ -1104,6 +1104,22 @@
   max-width: 100%;
 }
 
+/*
+ * Иконка-крестик закрытия блока визуально маленькая (помещается в Badge),
+ * но кликабельная зона расширена до 32px через invisible overlay,
+ * чтобы попадание было комфортным (Apple HIG ≥ 28px touch target).
+ */
+.privateNotesActiveBlockClose {
+  position: relative;
+}
+
+.privateNotesActiveBlockClose::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: inherit;
+}
+
 .privateNotesList {
   display: grid;
   gap: 8px;

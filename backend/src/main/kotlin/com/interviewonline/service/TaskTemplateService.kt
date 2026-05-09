@@ -1,6 +1,7 @@
 package com.interviewonline.service
 
 import com.interviewonline.model.RoomTask
+import com.interviewonline.service.LanguageNormalizer.normalize as normalizeLanguage
 import org.springframework.stereotype.Service
 
 @Service
@@ -30,16 +31,6 @@ class TaskTemplateService {
         return supported.associateWith { seedsForLanguage(it) }
     }
 
-    private fun normalizeLanguage(language: String): String {
-        return when (language.lowercase()) {
-            "javascript", "typescript", "nodejs" -> "nodejs"
-            "python" -> "python"
-            "kotlin" -> "kotlin"
-            "java" -> "java"
-            "sql" -> "sql"
-            else -> "nodejs"
-        }
-    }
 
     private fun seedsForLanguage(language: String): List<TemplateSeed> {
         return when (language) {
