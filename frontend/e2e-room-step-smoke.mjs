@@ -21,7 +21,10 @@ try {
   await page.getByRole("button", { name: /1\./ }).first().click();
 
   // Notes are now an interviewer chat: sending should append a bubble with timestamp.
-  const roomToolsButton = page.getByRole("button", { name: "Открыть панель чата и логов" });
+  // The left-rail "Чат" button (was "Открыть панель чата и логов" before
+  // we added a caption + new aria-label). Selected by data-testid for
+  // stability across copy/iconography changes.
+  const roomToolsButton = page.locator('[data-testid="room-rail-tools"]');
   if (await roomToolsButton.isVisible().catch(() => false)) {
     await roomToolsButton.click();
   }

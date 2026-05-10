@@ -1,6 +1,5 @@
 import React from "react";
 import {
-  Badge,
   Box,
   Button,
   Menu,
@@ -13,7 +12,7 @@ import {
   IconCode,
   IconHelpCircle,
   IconHome2,
-  IconLayoutDashboard,
+  IconUserCircle,
 } from "@tabler/icons-react";
 import { Link } from "react-router-dom";
 
@@ -262,16 +261,40 @@ export function TopBar({
             </div>
           ) : null}
           <div className={roomPageStyles.topActionButtons}>
-            <Badge color={connected ? "teal" : "gray"} variant="light">
-              {connected ? "Подключено" : "Подключение"}
-            </Badge>
+            {/*
+             * Connection state used to be a bright "Подключено" badge, which
+             * pulled focus away from the actual navigation buttons even
+             * though it's just a passive status. We now render it as a tiny
+             * LED-style dot with a tooltip — visible enough to debug, quiet
+             * enough to ignore in steady state.
+             */}
+            <Tooltip
+              label={connected ? "Соединение установлено" : "Соединение восстанавливается"}
+              position="bottom"
+              withArrow
+            >
+              <span
+                className={roomPageStyles.connectionDot}
+                data-state={connected ? "online" : "offline"}
+                role="status"
+                aria-live="polite"
+                aria-label={connected ? "Соединение установлено" : "Соединение восстанавливается"}
+                data-testid="room-connection-status"
+              />
+            </Tooltip>
+            {/*
+             * Cabinet is a secondary nav action. Keeps a light filled
+             * surface (variant="light") so it's clearly clickable without
+             * competing with the primary filled "Главная" CTA — `subtle`
+             * was too quiet and read as a passive label per UX feedback.
+             */}
             <Button
               component={Link}
               to={authToken ? "/dashboard/rooms" : "/login"}
               size="xs"
               variant="light"
-              color="gray"
-              leftSection={<IconLayoutDashboard size={14} />}
+              color="blue"
+              leftSection={<IconUserCircle size={14} />}
             >
               Кабинет
             </Button>
@@ -279,8 +302,8 @@ export function TopBar({
               component={Link}
               to="/"
               size="xs"
-              variant="outline"
-              color="gray"
+              variant="filled"
+              color="blue"
               leftSection={<IconHome2 size={14} />}
             >
               Главная

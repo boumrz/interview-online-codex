@@ -11,6 +11,7 @@ import com.interviewonline.dto.RoomSummaryDto
 import com.interviewonline.dto.RoomTaskDto
 import com.interviewonline.dto.UpdateRoomParticipantRoleRequest
 import com.interviewonline.dto.UpdateRoomRequest
+import com.interviewonline.dto.UpdateRoomTaskRequest
 import com.interviewonline.model.Room
 import com.interviewonline.model.RoomParticipant
 import com.interviewonline.model.RoomTask
@@ -37,14 +38,27 @@ class RoomService(
     private val userTaskService: UserTaskService,
     private val objectMapper: ObjectMapper,
 ) {
+    /**
+     * Creates a "quick" room from the landing page.
+     *
+     * - If [user] is null we keep the guest flow: anonymous owner identified
+     *   by a session token (legacy behaviour).
+     * - If [user] is present (the visitor was already signed in when they
+     *   pressed "Создать комнату"), we still seed the room with default
+     *   tasks for the chosen language, but bind it to the user via
+     *   `ownerUser`. This is what makes the room show up in their
+     *   "Мои комнаты" — previously we always created an anonymous room and
+     *   the authenticated user lost it after navigating away.
+     */
     @Transactional
-    fun createGuestRoom(request: CreateGuestRoomRequest): RoomResponse {
+    fun createGuestRoom(request: CreateGuestRoomRequest, user: User? = null): RoomResponse {
         val language = normalizeLanguage(request.language.ifBlank { "nodejs" })
         val room = Room(
             title = request.title.ifBlank { "Комната собеседования" },
             inviteCode = "r-${UUID.randomUUID()}",
             ownerSessionToken = "owner_${UUID.randomUUID()}",
             interviewerSessionToken = "interviewer_${UUID.randomUUID()}",
+            ownerUser = user,
             language = language,
         )
         val tasks = taskTemplateService.defaultRoomTasks(language).toMutableList()
@@ -53,10 +67,18 @@ class RoomService(
         initializeCurrentStepSnapshot(room)
         val saved = roomRepository.save(room)
         collaborationService.bootstrapRoom(saved)
+        // Authenticated owner uses a Bearer token, so we don't have to
+        // expose the session-token fallback to the client.
+        val isLegacyAnonymousOwner = user == null
+        val access = if (isLegacyAnonymousOwner) {
+            roomAccessService.resolveAccess(saved, null, saved.ownerSessionToken, null)
+        } else {
+            roomAccessService.resolveAccess(saved, user)
+        }
         return toRoomResponse(
             room = saved,
-            access = roomAccessService.resolveAccess(saved, null, saved.ownerSessionToken, null),
-            includeOwnerToken = true,
+            access = access,
+            includeOwnerToken = isLegacyAnonymousOwner,
             includeInterviewerToken = false,
         )
     }
@@ -266,6 +288,93 @@ class RoomService(
         /** Null means "fall back to the current room language". */
         val language: String?,
     )
+
+    /**
+     * In-room task title edit (PATCH semantics). Behaviour-preserving:
+     *   - Doesn't touch step ordering, language, briefing, snapshots.
+     *   - Persists rename and rebroadcasts the room snapshot so all clients
+     *     instantly see the new title in their step list/sidebar.
+     */
+    @Transactional
+    fun updateRoomTask(
+        inviteCode: String,
+        stepIndex: Int,
+        request: UpdateRoomTaskRequest,
+        ownerToken: String?,
+        interviewerToken: String?,
+        user: User?,
+    ): RoomResponse {
+        val room = roomRepository.findByInviteCode(inviteCode)
+            ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+        val access = roomAccessService.requireManager(room, user, ownerToken, interviewerToken)
+        val task = room.tasks.firstOrNull { it.stepIndex == stepIndex }
+            ?: throw ApiException(HttpStatus.NOT_FOUND, "Задача не найдена")
+
+        val newTitle = request.title?.trim()
+        if (newTitle != null) {
+            if (newTitle.isEmpty()) {
+                throw ApiException(HttpStatus.BAD_REQUEST, "Название задачи не может быть пустым")
+            }
+            task.title = newTitle
+        }
+
+        val saved = roomRepository.save(room)
+        collaborationService.syncFromRoom(saved)
+        return toRoomResponse(saved, access = access, includeOwnerToken = false, includeInterviewerToken = false)
+    }
+
+    /**
+     * Remove a single task from the room and re-pack `stepIndex` so the
+     * remaining tasks stay 0..N-1 contiguous. If the deleted step was the
+     * current one, we move to the previous step (or step 0) and re-apply
+     * the snapshot so the editor doesn't end up pointing into a stale slot.
+     */
+    @Transactional
+    fun removeRoomTask(
+        inviteCode: String,
+        stepIndex: Int,
+        ownerToken: String?,
+        interviewerToken: String?,
+        user: User?,
+    ): RoomResponse {
+        val room = roomRepository.findByInviteCode(inviteCode)
+            ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+        val access = roomAccessService.requireManager(room, user, ownerToken, interviewerToken)
+        if (room.tasks.size <= 1) {
+            throw ApiException(
+                HttpStatus.BAD_REQUEST,
+                "В комнате должна остаться хотя бы одна задача",
+            )
+        }
+        val target = room.tasks.firstOrNull { it.stepIndex == stepIndex }
+            ?: throw ApiException(HttpStatus.NOT_FOUND, "Задача не найдена")
+
+        val wasCurrent = room.currentStep == stepIndex
+        if (wasCurrent) {
+            // Persist whatever the live editor is showing into the *current*
+            // task before we drop it, so unrelated state (notes/briefing
+            // attached to the room itself) doesn't leak into the next step.
+            saveCurrentStepSnapshot(room)
+        }
+
+        room.tasks.remove(target)
+        // Re-sequence remaining tasks 0..N-1 so the UI keeps numeric order.
+        room.tasks.sortBy { it.stepIndex }
+        room.tasks.forEachIndexed { index, t -> t.stepIndex = index }
+
+        val maxStep = room.tasks.size - 1
+        room.currentStep = when {
+            room.currentStep > maxStep -> maxStep
+            wasCurrent -> (stepIndex - 1).coerceAtLeast(0)
+            room.currentStep > stepIndex -> room.currentStep - 1
+            else -> room.currentStep
+        }
+        applyCurrentStepSnapshot(room)
+
+        val saved = roomRepository.save(room)
+        collaborationService.syncFromRoom(saved)
+        return toRoomResponse(saved, access = access, includeOwnerToken = false, includeInterviewerToken = false)
+    }
 
     @Transactional(readOnly = true)
     fun listRoomsForUser(user: User): List<RoomSummaryDto> {

@@ -91,6 +91,43 @@ export const api = createApi({
       }),
       invalidatesTags: ["Room"],
     }),
+    /**
+     * In-room task editing. PATCH semantics — only the supplied fields are
+     * applied. Currently exposes title editing; designed so we can grow
+     * description/language/starterCode without breaking the call sites.
+     */
+    updateRoomTask: builder.mutation<
+      Room,
+      {
+        inviteCode: string;
+        stepIndex: number;
+        title?: string;
+        ownerToken?: string;
+      }
+    >({
+      query: ({ inviteCode, stepIndex, ownerToken, ...body }) => ({
+        url: `/rooms/${inviteCode}/tasks/${stepIndex}`,
+        method: "PATCH",
+        headers: {
+          ...(ownerToken ? { "X-Room-Owner-Token": ownerToken } : {}),
+        },
+        body,
+      }),
+      invalidatesTags: ["Room"],
+    }),
+    deleteRoomTask: builder.mutation<
+      Room,
+      { inviteCode: string; stepIndex: number; ownerToken?: string }
+    >({
+      query: ({ inviteCode, stepIndex, ownerToken }) => ({
+        url: `/rooms/${inviteCode}/tasks/${stepIndex}`,
+        method: "DELETE",
+        headers: {
+          ...(ownerToken ? { "X-Room-Owner-Token": ownerToken } : {}),
+        },
+      }),
+      invalidatesTags: ["Room"],
+    }),
     myRooms: builder.query<RoomSummary[], void>({
       query: () => "/me/rooms",
       providesTags: ["MyRooms"],
@@ -277,6 +314,8 @@ export const {
   useCreateRoomMutation,
   useGetRoomQuery,
   useAddRoomTasksMutation,
+  useUpdateRoomTaskMutation,
+  useDeleteRoomTaskMutation,
   useMyRoomsQuery,
   useUpdateRoomMutation,
   useDeleteRoomMutation,

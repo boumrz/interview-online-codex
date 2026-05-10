@@ -96,3 +96,12 @@ data class AddRoomCustomTaskRequest(
 data class UpdateRoomParticipantRoleRequest(
     @field:NotBlank val role: String,
 )
+
+/**
+ * In-room task editing payload. All fields optional (PATCH semantics) — at
+ * minimum one must be supplied. Lets interviewers tweak the title (or other
+ * fields later) without leaving the live coding session.
+ */
+data class UpdateRoomTaskRequest(
+    val title: String? = null,
+)

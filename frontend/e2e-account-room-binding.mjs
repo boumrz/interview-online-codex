@@ -113,7 +113,7 @@ function escapeRegExp(value) {
 }
 
 async function openRoomToolsPanelIfAvailable(page) {
-  const roomToolsButton = page.getByRole("button", { name: "Открыть панель чата и логов" });
+  const roomToolsButton = page.locator('[data-testid="room-rail-tools"]');
   const isVisible = await roomToolsButton.isVisible().catch(() => false);
   if (!isVisible) return;
   await roomToolsButton.click();

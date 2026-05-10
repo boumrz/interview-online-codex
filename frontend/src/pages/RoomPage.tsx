@@ -26,14 +26,18 @@ import {
   Tooltip,
 } from "@mantine/core";
 import {
+  IconChecklist,
   IconCode,
+  IconDots,
   IconDownload,
   IconFileDescription,
   IconGripVertical,
   IconHome2,
-  IconLayoutDashboard,
+  IconMessages,
   IconNote,
+  IconPencil,
   IconPlus,
+  IconTrash,
   IconUsers,
   IconX,
 } from "@tabler/icons-react";
@@ -43,6 +47,8 @@ import { markdownToHtml } from "../components/markdown";
 import { useEscapeLayer } from "../components/useEscapeLayer";
 import {
   useAddRoomTasksMutation,
+  useDeleteRoomTaskMutation,
+  useUpdateRoomTaskMutation,
   useGetRoomQuery,
   useTasksGroupedQuery,
 } from "../services/api";
@@ -740,6 +746,8 @@ export function RoomPage() {
     skip: !authToken || !canManageRoom,
   });
   const [addRoomTasks, addRoomTasksState] = useAddRoomTasksMutation();
+  const [updateRoomTask] = useUpdateRoomTaskMutation();
+  const [deleteRoomTask] = useDeleteRoomTaskMutation();
   const availableCatalogTasks = useMemo(() => {
     if (!merged) return [];
     const roomTasks = mergedTasks;
@@ -1927,6 +1935,70 @@ export function RoomPage() {
     [addRoomTasks, merged, ownerToken],
   );
 
+  /**
+   * Edit only the title of an existing in-room task. Validates non-empty,
+   * forwards to the dedicated PATCH endpoint, and surfaces failure via the
+   * shared room error banner — same UX path as `addCustomTaskToRoom`.
+   */
+  const renameRoomTaskTitle = useCallback(
+    async (stepIndex: number, nextTitle: string): Promise<void> => {
+      if (!merged) return;
+      const trimmed = nextTitle.trim();
+      if (!trimmed) {
+        throw new Error("room_task_rename_validation_failed");
+      }
+      trackEvent("prod_room_task_rename_submit", {
+        step_index: stepIndex,
+        title_len: trimmed.length,
+      });
+      try {
+        setError("");
+        await updateRoomTask({
+          inviteCode: merged.inviteCode,
+          stepIndex,
+          title: trimmed,
+          ownerToken: ownerToken ?? undefined,
+        }).unwrap();
+        trackEvent("prod_room_task_rename_success", {
+          step_index: stepIndex,
+        });
+      } catch {
+        setError("Не удалось переименовать задачу");
+        trackEvent("prod_room_task_rename_failed", {
+          step_index: stepIndex,
+        });
+        throw new Error("room_task_rename_failed");
+      }
+    },
+    [merged, ownerToken, updateRoomTask],
+  );
+
+  /**
+   * Delete a single task from the room. Backend re-packs `stepIndex` and
+   * adjusts `currentStep`, so we don't have to maintain client-side
+   * compensations beyond surfacing failures.
+   */
+  const removeRoomTaskFromRoom = useCallback(
+    async (stepIndex: number): Promise<void> => {
+      if (!merged) return;
+      trackEvent("prod_room_task_delete_submit", { step_index: stepIndex });
+      try {
+        setError("");
+        await deleteRoomTask({
+          inviteCode: merged.inviteCode,
+          stepIndex,
+          ownerToken: ownerToken ?? undefined,
+        }).unwrap();
+        trackEvent("prod_room_task_delete_success", { step_index: stepIndex });
+      } catch {
+        setError("Не удалось удалить задачу");
+        trackEvent("prod_room_task_delete_failed", { step_index: stepIndex });
+        throw new Error("room_task_delete_failed");
+      }
+    },
+    [deleteRoomTask, merged, ownerToken],
+  );
+
   const briefingSeededStepRef = useRef<string>("");
 
   useEffect(() => {
@@ -2174,6 +2246,8 @@ export function RoomPage() {
             onSelectStep={selectStepLocally}
             onAddTasksFromCatalog={addTasksFromCatalog}
             onAddCustomTask={addCustomTaskToRoom}
+            onRenameTask={renameRoomTaskTitle}
+            onDeleteTask={removeRoomTaskFromRoom}
             isAddingTasksFromCatalog={addRoomTasksState.isLoading}
             onYjsUpdate={forwardLocalYjsUpdate}
             onYjsBridgeReady={onYjsBridgeReady}
@@ -2255,6 +2329,8 @@ function OwnerLayout({
   onSelectStep,
   onAddTasksFromCatalog,
   onAddCustomTask,
+  onRenameTask,
+  onDeleteTask,
   isAddingTasksFromCatalog,
   onYjsUpdate,
   onYjsBridgeReady,
@@ -2314,6 +2390,10 @@ function OwnerLayout({
   onSelectStep: (stepIndex: number) => void;
   onAddTasksFromCatalog: (taskIds: string[]) => Promise<void>;
   onAddCustomTask: (task: RoomCustomTaskDraft) => Promise<void>;
+  /** Rename an existing in-room task by stepIndex. */
+  onRenameTask: (stepIndex: number, title: string) => Promise<void>;
+  /** Remove an existing in-room task by stepIndex. */
+  onDeleteTask: (stepIndex: number) => Promise<void>;
   isAddingTasksFromCatalog: boolean;
   onYjsUpdate: YjsUpdateHandler;
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
@@ -2338,6 +2418,79 @@ function OwnerLayout({
   const [customTaskTitle, setCustomTaskTitle] = useState("");
   const [customTaskDescription, setCustomTaskDescription] = useState("");
   const [customTaskStarterCode, setCustomTaskStarterCode] = useState("");
+  /**
+   * In-room rename modal state. Only one task can be renamed at a time;
+   * `renameTaskTarget` holds the snapshot we opened the modal with so we
+   * keep showing the right title even if `tasks` reorders/refreshes.
+   */
+  const [renameTaskTarget, setRenameTaskTarget] = useState<
+    | { stepIndex: number; originalTitle: string }
+    | null
+  >(null);
+  const [renameTaskDraft, setRenameTaskDraft] = useState("");
+  const [renameTaskSubmitting, setRenameTaskSubmitting] = useState(false);
+  const [renameTaskError, setRenameTaskError] = useState<string | null>(null);
+  /** Confirmation modal for in-room task deletion. */
+  const [deleteTaskTarget, setDeleteTaskTarget] = useState<
+    | { stepIndex: number; title: string }
+    | null
+  >(null);
+  const [deleteTaskSubmitting, setDeleteTaskSubmitting] = useState(false);
+  const closeRenameTaskModal = useCallback(() => {
+    setRenameTaskTarget(null);
+    setRenameTaskDraft("");
+    setRenameTaskSubmitting(false);
+    setRenameTaskError(null);
+  }, []);
+  const closeDeleteTaskModal = useCallback(() => {
+    setDeleteTaskTarget(null);
+    setDeleteTaskSubmitting(false);
+  }, []);
+  const submitRenameTask = useCallback(async () => {
+    if (!renameTaskTarget) return;
+    const trimmed = renameTaskDraft.trim();
+    if (!trimmed) {
+      setRenameTaskError("Название не может быть пустым");
+      return;
+    }
+    if (trimmed === renameTaskTarget.originalTitle.trim()) {
+      closeRenameTaskModal();
+      return;
+    }
+    setRenameTaskError(null);
+    setRenameTaskSubmitting(true);
+    try {
+      await onRenameTask(renameTaskTarget.stepIndex, trimmed);
+      closeRenameTaskModal();
+    } catch {
+      setRenameTaskError("Не удалось переименовать задачу");
+    } finally {
+      setRenameTaskSubmitting(false);
+    }
+  }, [
+    closeRenameTaskModal,
+    onRenameTask,
+    renameTaskDraft,
+    renameTaskTarget,
+  ]);
+  const submitDeleteTask = useCallback(async () => {
+    if (!deleteTaskTarget) return;
+    setDeleteTaskSubmitting(true);
+    try {
+      await onDeleteTask(deleteTaskTarget.stepIndex);
+      closeDeleteTaskModal();
+    } catch {
+      // Error is surfaced via the room error banner; just leave the modal.
+      closeDeleteTaskModal();
+    }
+  }, [closeDeleteTaskModal, deleteTaskTarget, onDeleteTask]);
+  /**
+   * Register rename/delete modals as Escape layers — `useEscapeLayer` makes
+   * sure Esc closes the topmost modal first instead of collapsing every
+   * overlay at once (matches the room-wide Esc handling contract).
+   */
+  useEscapeLayer(Boolean(renameTaskTarget), closeRenameTaskModal);
+  useEscapeLayer(Boolean(deleteTaskTarget), closeDeleteTaskModal);
   const roomLanguage = normalizeRoomLanguage(merged.language);
   /**
    * Язык новой кастомной задачи. По умолчанию совпадает с языком комнаты,
@@ -2744,29 +2897,146 @@ function OwnerLayout({
           )}
         </Stack>
       </Modal>
+
+      {/*
+       * In-room rename modal. Lives next to the add-task modal so the focus
+       * trap, dark theme, and Esc layering follow the same rules.
+       */}
+      <Modal
+        opened={Boolean(renameTaskTarget)}
+        onClose={closeRenameTaskModal}
+        title="Переименовать задачу"
+        centered
+        closeOnEscape={false}
+      >
+        <Stack>
+          <Text size="sm" c="dimmed">
+            Изменения увидят все участники комнаты — название обновится в
+            списке шагов и в экспорте заметок.
+          </Text>
+          <TextInput
+            label="Название"
+            value={renameTaskDraft}
+            onChange={(event) => setRenameTaskDraft(event.currentTarget.value)}
+            data-testid="room-task-rename-input"
+            disabled={renameTaskSubmitting}
+            error={renameTaskError ?? undefined}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void submitRenameTask();
+              }
+            }}
+            autoFocus
+          />
+          <Group justify="flex-end" gap={8}>
+            <Button
+              variant="subtle"
+              color="gray"
+              onClick={closeRenameTaskModal}
+              disabled={renameTaskSubmitting}
+            >
+              Отмена
+            </Button>
+            <Button
+              onClick={() => void submitRenameTask()}
+              loading={renameTaskSubmitting}
+              disabled={
+                renameTaskSubmitting ||
+                renameTaskDraft.trim().length === 0
+              }
+              data-testid="room-task-rename-submit"
+            >
+              Сохранить
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
+        opened={Boolean(deleteTaskTarget)}
+        onClose={closeDeleteTaskModal}
+        title="Удалить задачу?"
+        centered
+        closeOnEscape={false}
+      >
+        <Stack>
+          <Text size="sm" c="#cbd5e1">
+            {deleteTaskTarget
+              ? `Задача «${deleteTaskTarget.title}» будет удалена из комнаты. Заметки и оценка по этому шагу также пропадут.`
+              : ""}
+          </Text>
+          <Group justify="flex-end" gap={8}>
+            <Button
+              variant="subtle"
+              color="gray"
+              onClick={closeDeleteTaskModal}
+              disabled={deleteTaskSubmitting}
+            >
+              Отмена
+            </Button>
+            <Button
+              color="red"
+              onClick={() => void submitDeleteTask()}
+              loading={deleteTaskSubmitting}
+              disabled={deleteTaskSubmitting}
+              data-testid="room-task-delete-confirm"
+            >
+              Удалить
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
       <nav className={styles.leftRail} aria-label="Панели владельца комнаты">
-        <button
-          type="button"
-          className={`${styles.railButton} ${activeRailPanel === "tasks" ? styles.railButtonActive : ""}`}
-          aria-label="Открыть панель задач"
-          aria-pressed={activeRailPanel === "tasks"}
-          aria-controls="owner-side-panel"
-          onClick={() => toggleRailPanel("tasks")}
-          title="Панель задач"
+        {/*
+         * Rail buttons used to be icon-only (16px), which made the chat/logs
+         * vs. tasks intent unclear. We add a short label under each icon and
+         * a tooltip with the full description — discoverability without
+         * eating horizontal space (rail width unchanged at 56px).
+         *
+         * Note: the tasks icon is `IconChecklist` (a clipboard with a
+         * check mark) — it matches the "Шаги" caption better than a plain
+         * numbered list and reads as "задачи / чек-лист по шагам" at a
+         * glance. It also stays distinct from the "Кабинет" icon up top.
+         */}
+        <Tooltip
+          label="Шаги интервью, оценки и заметки"
+          position="right"
+          openDelay={250}
+          withArrow
         >
-          <IconLayoutDashboard size={16} />
-        </button>
-        <button
-          type="button"
-          className={`${styles.railButton} ${activeRailPanel === "roomTools" ? styles.railButtonActive : ""}`}
-          aria-label="Открыть панель чата и логов"
-          aria-pressed={activeRailPanel === "roomTools"}
-          aria-controls="owner-side-panel"
-          onClick={() => toggleRailPanel("roomTools")}
-          title="Панель чата и статуса"
+          <button
+            type="button"
+            className={`${styles.railButton} ${activeRailPanel === "tasks" ? styles.railButtonActive : ""}`}
+            aria-label="Открыть панель шагов и заметок"
+            aria-pressed={activeRailPanel === "tasks"}
+            aria-controls="owner-side-panel"
+            onClick={() => toggleRailPanel("tasks")}
+            data-testid="room-rail-tasks"
+          >
+            <IconChecklist size={16} stroke={1.8} />
+            <span className={styles.railButtonLabel}>Шаги</span>
+          </button>
+        </Tooltip>
+        <Tooltip
+          label="Чат с напарниками и логи активности кандидата"
+          position="right"
+          openDelay={250}
+          withArrow
         >
-          <IconUsers size={16} />
-        </button>
+          <button
+            type="button"
+            className={`${styles.railButton} ${activeRailPanel === "roomTools" ? styles.railButtonActive : ""}`}
+            aria-label="Открыть чат и логи активности кандидата"
+            aria-pressed={activeRailPanel === "roomTools"}
+            aria-controls="owner-side-panel"
+            onClick={() => toggleRailPanel("roomTools")}
+            data-testid="room-rail-tools"
+          >
+            <IconMessages size={16} stroke={1.8} />
+            <span className={styles.railButtonLabel}>Чат</span>
+          </button>
+        </Tooltip>
       </nav>
 
       {isCompactLayout && (
@@ -2876,53 +3146,127 @@ function OwnerLayout({
                       privateNotesCountByStep.get(task.stepIndex) ?? 0;
                     const isActiveStep = task.stepIndex === merged.currentStep;
                     const fullLabel = `${task.stepIndex + 1}. ${task.title}`;
+                    const canDeleteThis = tasks.length > 1;
                     return (
-                      <button
+                      <div
                         key={task.stepIndex}
-                        type="button"
                         className={styles.stepRow}
                         data-active={isActiveStep ? "true" : undefined}
-                        aria-current={isActiveStep ? "step" : undefined}
-                        aria-label={fullLabel}
-                        onClick={() => handleTaskStepSelect(task.stepIndex)}
-                        title={fullLabel}
                       >
-                        <span className={styles.stepRowIndex} aria-hidden="true">
-                          {task.stepIndex + 1}
-                        </span>
-                        <span className={styles.stepRowTitle}>
-                          {task.title}
-                        </span>
-                        <span className={styles.stepRowMeta}>
-                          {taskRating ? (
-                            <Tooltip
-                              label={`Оценка шага: ${taskRating} из 5`}
-                              position="top"
-                            >
-                              <span
-                                className={styles.stepRowRating}
-                                aria-label={`Оценка шага: ${taskRating} из 5`}
+                        <button
+                          type="button"
+                          className={styles.stepRowMain}
+                          aria-current={isActiveStep ? "step" : undefined}
+                          aria-label={fullLabel}
+                          onClick={() => handleTaskStepSelect(task.stepIndex)}
+                          title={fullLabel}
+                        >
+                          <span
+                            className={styles.stepRowIndex}
+                            aria-hidden="true"
+                          >
+                            {task.stepIndex + 1}
+                          </span>
+                          <span className={styles.stepRowTitle}>
+                            {task.title}
+                          </span>
+                          <span className={styles.stepRowMeta}>
+                            {taskRating ? (
+                              <Tooltip
+                                label={`Оценка шага: ${taskRating} из 5`}
+                                position="top"
                               >
-                                {`★${taskRating}`}
-                              </span>
-                            </Tooltip>
-                          ) : null}
-                          {notesCount > 0 ? (
-                            <Tooltip
-                              label={`Заметок по шагу: ${notesCount}`}
-                              position="top"
-                            >
-                              <span
-                                className={styles.stepRowNotes}
-                                aria-label={`Заметок по шагу: ${notesCount}`}
+                                <span
+                                  className={styles.stepRowRating}
+                                  aria-label={`Оценка шага: ${taskRating} из 5`}
+                                >
+                                  {`★${taskRating}`}
+                                </span>
+                              </Tooltip>
+                            ) : null}
+                            {notesCount > 0 ? (
+                              <Tooltip
+                                label={`Заметок по шагу: ${notesCount}`}
+                                position="top"
                               >
-                                <IconNote size={11} stroke={2.2} />
-                                <span>{notesCount}</span>
-                              </span>
-                            </Tooltip>
-                          ) : null}
-                        </span>
-                      </button>
+                                <span
+                                  className={styles.stepRowNotes}
+                                  aria-label={`Заметок по шагу: ${notesCount}`}
+                                >
+                                  <IconNote size={11} stroke={2.2} />
+                                  <span>{notesCount}</span>
+                                </span>
+                              </Tooltip>
+                            ) : null}
+                          </span>
+                        </button>
+                        {/*
+                         * Per-step actions live in a sibling button so we
+                         * don't nest <button> in <button> (invalid HTML).
+                         * Tooltip explains the menu, and the menu trigger
+                         * itself shows up only on hover/focus to keep the
+                         * row visually quiet (see `.stepRowActions` CSS).
+                         */}
+                        <div className={styles.stepRowActions}>
+                          <Menu
+                            withinPortal
+                            position="bottom-end"
+                            shadow="md"
+                            offset={4}
+                          >
+                            <Menu.Target>
+                              {/*
+                               * Action menu trigger. The previous "Действия
+                               * с задачей" tooltip was redundant — `aria-label`
+                               * already names the control for screen readers,
+                               * and the dropdown items are self-explanatory.
+                               * Removed per UX feedback (felt noisy on hover).
+                               */}
+                              <ActionIcon
+                                size="sm"
+                                variant="subtle"
+                                color="gray"
+                                className={styles.stepRowActionsTrigger}
+                                aria-label={`Действия с задачей: ${task.title}`}
+                                data-testid={`room-task-actions-${task.stepIndex}`}
+                              >
+                                <IconDots size={14} stroke={2} />
+                              </ActionIcon>
+                            </Menu.Target>
+                            <Menu.Dropdown>
+                              <Menu.Item
+                                leftSection={<IconPencil size={14} />}
+                                onClick={() => {
+                                  setRenameTaskTarget({
+                                    stepIndex: task.stepIndex,
+                                    originalTitle: task.title,
+                                  });
+                                  setRenameTaskDraft(task.title);
+                                  setRenameTaskError(null);
+                                }}
+                                data-testid={`room-task-rename-${task.stepIndex}`}
+                              >
+                                Переименовать
+                              </Menu.Item>
+                              <Menu.Item
+                                color="red"
+                                leftSection={<IconTrash size={14} />}
+                                disabled={!canDeleteThis}
+                                onClick={() => {
+                                  if (!canDeleteThis) return;
+                                  setDeleteTaskTarget({
+                                    stepIndex: task.stepIndex,
+                                    title: task.title,
+                                  });
+                                }}
+                                data-testid={`room-task-delete-${task.stepIndex}`}
+                              >
+                                Удалить
+                              </Menu.Item>
+                            </Menu.Dropdown>
+                          </Menu>
+                        </div>
+                      </div>
                     );
                   })}
                 </Box>

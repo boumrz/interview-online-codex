@@ -77,8 +77,19 @@ export function LandingPage() {
         ownerDisplayName: displayName,
         language
       }).unwrap();
-      localStorage.setItem(`owner_token_${room.inviteCode}`, room.ownerToken ?? "");
-      localStorage.setItem(`guest_display_name_${room.inviteCode}`, displayName);
+      // Persist the owner session token only for true anonymous rooms.
+      // When the visitor is already authenticated the backend binds the
+      // room to their account (`ownerUser`) and doesn't return a session
+      // token — it isn't needed because we authorize via Bearer.
+      if (room.ownerToken) {
+        localStorage.setItem(`owner_token_${room.inviteCode}`, room.ownerToken);
+      }
+      // Guest display name is only relevant for anonymous owners. For
+      // authenticated users we read the name from their profile in
+      // `RoomPage`, so storing a fallback here just litters localStorage.
+      if (!authToken) {
+        localStorage.setItem(`guest_display_name_${room.inviteCode}`, displayName);
+      }
       trackEvent("prod_guest_room_create_success", {
         language,
         room_invite_len: room.inviteCode.length
