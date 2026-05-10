@@ -6,10 +6,13 @@ import com.interviewonline.dto.RoomResponse
 import com.interviewonline.dto.RoomAccessMemberDto
 import com.interviewonline.dto.AddRoomTasksRequest
 import com.interviewonline.dto.UpdateRoomParticipantRoleRequest
+import com.interviewonline.dto.UpdateRoomTaskRequest
 import com.interviewonline.service.AuthService
 import com.interviewonline.service.RoomService
 import jakarta.validation.Valid
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
@@ -24,8 +27,17 @@ class RoomController(
     private val authService: AuthService,
 ) {
     @PostMapping("/public/rooms")
-    fun createGuestRoom(@RequestBody request: CreateGuestRoomRequest): RoomResponse {
-        return roomService.createGuestRoom(request)
+    fun createGuestRoom(
+        @RequestHeader("Authorization", required = false) authorization: String?,
+        @RequestBody request: CreateGuestRoomRequest,
+    ): RoomResponse {
+        // Quick room from the landing page. We accept an optional Bearer
+        // token so an authenticated user creating a "quick" room still gets
+        // the room saved into their personal account ("Мои комнаты"),
+        // without having to go through the dashboard creation flow.
+        val authToken = authorization?.removePrefix("Bearer ")?.trim()
+        val user = authService.resolveUserByToken(authToken)
+        return roomService.createGuestRoom(request, user)
     }
 
     @PostMapping("/rooms")
@@ -73,6 +85,33 @@ class RoomController(
         val authToken = authorization?.removePrefix("Bearer ")?.trim()
         val user = authService.resolveUserByToken(authToken)
         return roomService.addTasksToRoom(inviteCode, request, ownerToken, interviewerToken, user)
+    }
+
+    @PatchMapping("/rooms/{inviteCode}/tasks/{stepIndex}")
+    fun updateRoomTask(
+        @PathVariable inviteCode: String,
+        @PathVariable stepIndex: Int,
+        @RequestHeader("X-Room-Owner-Token", required = false) ownerToken: String?,
+        @RequestHeader("X-Room-Interviewer-Token", required = false) interviewerToken: String?,
+        @RequestHeader("Authorization", required = false) authorization: String?,
+        @RequestBody request: UpdateRoomTaskRequest,
+    ): RoomResponse {
+        val authToken = authorization?.removePrefix("Bearer ")?.trim()
+        val user = authService.resolveUserByToken(authToken)
+        return roomService.updateRoomTask(inviteCode, stepIndex, request, ownerToken, interviewerToken, user)
+    }
+
+    @DeleteMapping("/rooms/{inviteCode}/tasks/{stepIndex}")
+    fun deleteRoomTask(
+        @PathVariable inviteCode: String,
+        @PathVariable stepIndex: Int,
+        @RequestHeader("X-Room-Owner-Token", required = false) ownerToken: String?,
+        @RequestHeader("X-Room-Interviewer-Token", required = false) interviewerToken: String?,
+        @RequestHeader("Authorization", required = false) authorization: String?,
+    ): RoomResponse {
+        val authToken = authorization?.removePrefix("Bearer ")?.trim()
+        val user = authService.resolveUserByToken(authToken)
+        return roomService.removeRoomTask(inviteCode, stepIndex, ownerToken, interviewerToken, user)
     }
 
     @GetMapping("/rooms/{inviteCode}/participants")

@@ -234,6 +234,29 @@
   gap: 8px;
 }
 
+/*
+ * Tiny LED-style connection indicator. Replaces the loud "Подключено"
+ * badge in the top bar — a passive status doesn't deserve as much
+ * weight as the navigation buttons next to it. Wrapped in a Tooltip
+ * for the full label, with `aria-label` providing the same affordance
+ * for screen readers.
+ */
+.connectionDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+  background: #3aa776;
+  box-shadow: 0 0 0 2px rgba(58, 167, 118, 0.18);
+  transition: background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.connectionDot[data-state="offline"] {
+  background: #d59a3c;
+  box-shadow: 0 0 0 2px rgba(213, 154, 60, 0.18);
+}
+
 .invitesBar {
   flex-shrink: 0;
   border-bottom: 1px solid #222b36;
@@ -260,16 +283,25 @@
   gap: 6px;
 }
 
+/*
+ * Each rail button is icon + caption, so the user can tell "Задачи" from
+ * "Чат" without hovering the icon. The caption is intentionally tiny
+ * (10px), low-weight, and only shows up below the icon so the rail stays
+ * 56px wide (we don't want to push the editor sideways for a label).
+ */
 .railButton {
   border: 1px solid transparent;
   border-radius: 9px;
   background: #151b25;
   color: #97a3b6;
   width: 100%;
-  min-height: 40px;
+  min-height: 52px;
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 4px;
+  padding: 6px 4px;
   cursor: pointer;
   transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, transform 120ms ease;
 }
@@ -290,6 +322,14 @@
   background: #20304a;
   border-color: #34527b;
   color: #f2f6ff;
+}
+
+.railButtonLabel {
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.2px;
+  color: inherit;
 }
 
 .ownerSidePanel {
@@ -378,22 +418,27 @@
  * `min-width: 0` на корне и колонке заголовка — обязательное условие, чтобы
  * длинный текст не растягивал сайдбар и не создавал горизонтальный скролл.
  */
+/*
+ * Step list row. The row used to be a single `<button>`, but we now need
+ * room for a per-step "⋯" actions menu (rename/delete). Native HTML
+ * forbids nested buttons, so we split the row into:
+ *   - `.stepRow`       — the visual container (background, border, hover/active);
+ *   - `.stepRowMain`   — the main clickable button (selects the step);
+ *   - `.stepRowActions`— a sibling slot hosting the actions menu trigger.
+ * The visual contract (rounded card, hover lighten, active highlight)
+ * stays exactly as it was when the row was one button.
+ */
 .stepRow {
   width: 100%;
   min-width: 0;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px 6px 6px;
+  display: flex;
+  align-items: stretch;
   border: 1px solid transparent;
   border-radius: 8px;
   background: #14202c;
   color: #cdd5df;
-  text-align: left;
   font-size: 12px;
   font-weight: 500;
-  cursor: pointer;
   transition:
     background 120ms ease,
     border-color 120ms ease,
@@ -404,16 +449,55 @@
   background: #1a283a;
 }
 
-.stepRow:focus-visible {
-  outline: none;
-  border-color: #3a4d67;
-  box-shadow: 0 0 0 2px rgba(90, 124, 174, 0.25);
-}
-
 .stepRow[data-active="true"] {
   background: #232f43;
   color: #f3f5f7;
   border-color: #34465f;
+}
+
+.stepRowMain {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px 6px 6px;
+  background: transparent;
+  border: none;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  border-radius: 8px 0 0 8px;
+}
+
+.stepRowMain:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px rgba(90, 124, 174, 0.45);
+}
+
+/*
+ * Per-step actions. The trigger fades in on row hover/focus to keep the
+ * step list visually quiet, but stays at full opacity when the menu is
+ * open or the trigger itself is focused (keyboard navigation).
+ */
+.stepRowActions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  padding: 4px 6px 4px 0;
+}
+
+.stepRowActionsTrigger {
+  opacity: 0.35;
+  transition: opacity 120ms ease, background-color 120ms ease;
+}
+
+.stepRow:hover .stepRowActionsTrigger,
+.stepRowActionsTrigger:focus-visible,
+.stepRowActionsTrigger[aria-expanded="true"] {
+  opacity: 1;
 }
 
 .stepRowIndex {

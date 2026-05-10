@@ -30,9 +30,10 @@ async function openTasksPanelIfNeeded(page) {
     if (await privateInput.isVisible().catch(() => false)) return;
   }
 
-  const tasksRailButton = page.getByRole("button", {
-    name: "Открыть панель задач",
-  });
+  // The left-rail "Задачи" button (was "Открыть панель задач" before we
+  // added a caption + new aria-label). Using data-testid so future copy
+  // tweaks don't break this test.
+  const tasksRailButton = page.locator('[data-testid="room-rail-tasks"]');
   if (await tasksRailButton.isVisible().catch(() => false)) {
     await tasksRailButton.click();
   }
