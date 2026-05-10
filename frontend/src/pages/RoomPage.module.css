@@ -21,9 +21,14 @@
   flex-shrink: 0;
 }
 
+/*
+ * Top bar inner row. We used to cap it at `max-width: 1560px` and centre
+ * it with `margin: 0 auto`, which left two thick empty bands on the sides
+ * of any wider monitor. The room shell already runs edge-to-edge, so the
+ * bar should follow — let it stretch the full viewport and rely on the
+ * grid template + padding for breathing room.
+ */
 .topInner {
-  max-width: 1560px;
-  margin: 0 auto;
   width: 100%;
   padding: 8px 16px;
   min-height: 54px;
