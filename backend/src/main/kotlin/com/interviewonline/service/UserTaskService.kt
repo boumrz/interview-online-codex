@@ -87,7 +87,9 @@ class UserTaskService(
         cleanupLegacySeedTasks(user)
         val tasks = taskRepository.findAllByOwnerUserIdOrderByCreatedAtDesc(user.id!!)
         val tasksByLanguage = tasks.groupBy { normalizeLanguage(it.language) }
-        val languageOrder = listOf("nodejs", "python", "kotlin", "java", "sql")
+        // Keep UI language tabs deterministic and include `plaintext` so
+        // "Plain text" tasks are available in room task selectors.
+        val languageOrder = listOf("nodejs", "python", "kotlin", "java", "sql", "plaintext")
         return languageOrder.map { language ->
             TaskLanguageGroupDto(
                 language = language,

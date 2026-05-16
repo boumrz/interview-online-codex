@@ -24,7 +24,10 @@ const LANGUAGES = [
   { value: "python", label: "Python" },
   { value: "kotlin", label: "Kotlin" },
   { value: "java", label: "Java" },
-  { value: "sql", label: "SQL" }
+  { value: "sql", label: "SQL" },
+  // Plain text — для интервью без привязки к синтаксису (теория,
+  // алгоритмическое обсуждение, перевод задачи и т.д.).
+  { value: "plaintext", label: "Plain text" }
 ];
 
 const darkFieldStyles = {

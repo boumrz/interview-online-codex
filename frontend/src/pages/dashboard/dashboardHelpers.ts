@@ -3,6 +3,19 @@ import type { DashboardSection } from "./dashboardConstants";
 export type RoomSaveStatus = "idle" | "saving" | "saved" | "error";
 
 const NODEJS_LANGUAGE_ALIASES = new Set(["nodejs", "javascript", "typescript"]);
+/**
+ * Алиасы, которые должны сворачиваться в канонический `plaintext`.
+ * Нужно держать список синхронным с `roomLanguage.PLAINTEXT_LANGUAGE_ALIASES`.
+ */
+const PLAINTEXT_LANGUAGE_ALIASES = new Set([
+  "plaintext",
+  "plain-text",
+  "plain_text",
+  "plain",
+  "text",
+  "txt",
+  "none",
+]);
 
 /**
  * Lower-cases the language slug and folds JS/TS variants onto the
@@ -11,6 +24,7 @@ const NODEJS_LANGUAGE_ALIASES = new Set(["nodejs", "javascript", "typescript"]);
 export function normalizeLanguageKey(language: string | null | undefined): string {
   const normalized = (language ?? "").trim().toLowerCase();
   if (!normalized || NODEJS_LANGUAGE_ALIASES.has(normalized)) return "nodejs";
+  if (PLAINTEXT_LANGUAGE_ALIASES.has(normalized)) return "plaintext";
   return normalized;
 }
 
@@ -55,6 +69,8 @@ export function labelForLanguage(language: string) {
       return "Java";
     case "sql":
       return "SQL";
+    case "plaintext":
+      return "Plain text";
     default:
       return "Node JS";
   }

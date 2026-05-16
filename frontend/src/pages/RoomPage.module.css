@@ -671,8 +671,22 @@
   border-radius: 12px;
   background: #11151c;
   padding: 10px;
-  min-height: 156px;
-  max-height: min(42dvh, 360px);
+  min-height: 140px;
+  height: clamp(180px, 30dvh, 360px);
+  /*
+   * Изначально max-height был жёстко ограничен — это запирало
+   * markdown в маленькой полоске и не давало пользователю
+   * расширить его вертикально, даже при `resize: vertical`. Теперь
+   * минимальная высота задана, а вертикальный ресайз действительно
+   * расширяется на всю свободную часть колонки (`flex: 1 1 auto` ниже
+   * в data-focus="on"). Стандартная высота по-прежнему компактная.
+   */
+  /*
+   * Allow users to pull markdown panel much higher in default mode.
+   * The cap is now essentially the viewport minus top/bottom breathing room,
+   * so practical resize can reach ~half screen and above.
+   */
+  max-height: calc(100dvh - 120px);
   resize: vertical;
   overflow: hidden;
   display: flex;
@@ -683,6 +697,79 @@
 .briefingPanel[data-mode="candidate"] {
   display: block;
   overflow: auto;
+}
+
+/*
+ * Synced focus mode: код-редактор скрыт у обоих участников,
+ * markdown растягивается на всю колонку. Снимает ограничение
+ * max-height, чтобы панель заняла весь свободный flex-слот.
+ */
+.briefingPanel[data-focus="on"] {
+  flex: 1 1 auto;
+  max-height: none;
+}
+
+/* On desktop default mode keep enough growth room by default. */
+@media (min-width: 761px) {
+  .briefingPanel:not([data-focus="on"]):not([data-expanded="on"]) {
+    min-height: 140px;
+  }
+}
+
+/*
+ * Локальный fullscreen у пользователя — оверлей поверх всей комнаты.
+ * Не зависит от focus mode и не синхронизируется между участниками.
+ */
+.briefingPanel[data-expanded="on"] {
+  position: fixed;
+  inset: 16px;
+  z-index: 1500;
+  max-height: none !important;
+  width: calc(100vw - 32px) !important;
+  height: calc(100dvh - 32px) !important;
+  min-height: 0 !important;
+  resize: none;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+}
+
+.briefingPanel[data-mode="candidate"][data-expanded="on"] {
+  display: flex;
+  flex-direction: column;
+}
+
+/*
+ * On narrow screens expanded mode must behave like a true fullscreen overlay.
+ * `inset: 16px` left visible gutters and looked "not full screen".
+ */
+@media (max-width: 1200px) {
+  .briefingPanel[data-expanded="on"] {
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    border-radius: 0;
+    padding: 10px;
+  }
+}
+
+/*
+ * Кнопки focus/expand находятся в правой части тулбара. Спейсер
+ * "схлопывается" под flex-grow, оттесняя их вправо.
+ */
+.briefingToolbarSpacer {
+  flex-grow: 1;
+}
+
+.briefingToolbarCandidate {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.briefingToolButtonActive {
+  background: #1d2c45 !important;
+  border-color: #3b6dba !important;
+  color: #cfe0ff !important;
 }
 
 .briefingSplit {
@@ -1152,6 +1239,10 @@
 .notesComposerHint {
   color: #8d97a5;
   font-size: 11px;
+}
+
+.exportStatusSlot {
+  min-height: 34px;
 }
 
 .notesEmpty {
@@ -1784,7 +1875,7 @@
 @media (max-height: 820px) {
   .briefingPanel {
     min-height: 110px;
-    max-height: min(34dvh, 260px);
+    max-height: calc(100dvh - 120px);
   }
 
   .briefingEditorInput {

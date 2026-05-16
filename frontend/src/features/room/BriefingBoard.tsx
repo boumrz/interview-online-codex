@@ -1,5 +1,11 @@
-import React, { useCallback, useMemo, useRef } from "react";
-import { Box, Text, Textarea } from "@mantine/core";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Box, Text, Textarea, Tooltip } from "@mantine/core";
+import {
+  IconArrowsDiagonal,
+  IconArrowsDiagonalMinimize2,
+  IconLayoutColumns,
+  IconLayoutRows,
+} from "@tabler/icons-react";
 
 import { markdownToHtml } from "../../components/markdown";
 import roomPageStyles from "../../pages/RoomPage.module.css";
@@ -20,6 +26,17 @@ export type BriefingBoardProps = {
   mode: "interviewer" | "candidate";
   value: string;
   onChange?: (value: string) => void;
+  /**
+   * Включён ли «focus mode»: код-редактор скрыт, и markdown
+   * занимает всю рабочую область. Синхронизируется через
+   * `briefingMarkdown` (см. `briefingFocusMode.ts`).
+   */
+  focusMode?: boolean;
+  /**
+   * Колбэк для переключения focus mode. Доступен только интервьюеру —
+   * у кандидата кнопка не отображается, состояние приходит «сверху».
+   */
+  onFocusModeChange?: (next: boolean) => void;
 };
 
 /**
@@ -38,13 +55,33 @@ export function BriefingBoard({
   mode,
   value,
   onChange,
+  focusMode = false,
+  onFocusModeChange,
 }: BriefingBoardProps) {
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
+  /**
+   * Локальный «fullscreen»: разворачивает панель брифинга поверх
+   * комнаты на весь viewport. Состояние локальное у каждого участника
+   * (интервьюер может развернуть, кандидат — нет, и наоборот).
+   * Не путать с `focusMode`, который синхронизируется между сторонами.
+   */
+  const [isExpanded, setIsExpanded] = useState(false);
   const html = useMemo(() => markdownToHtml(value), [value]);
   const emptyText =
     mode === "interviewer"
       ? "Напишите объяснение или подсказки для кандидата."
       : "Интервьюер еще не добавил пояснение.";
+
+  // ESC закрывает локальный fullscreen, чтобы поведение совпадало с
+  // другими «модалками» комнаты.
+  useEffect(() => {
+    if (!isExpanded) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsExpanded(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isExpanded]);
 
   const applyWrap = useCallback(
     (prefix: string, suffix: string, placeholder: string) => {
@@ -135,8 +172,18 @@ export function BriefingBoard({
     [applyLinePrefix, applyWrap, insertSnippet],
   );
 
+  // Когда панель раскрывают на весь экран — отключаем максимальную
+  // высоту из RoomPage.module.css через data-атрибут, чтобы CSS мог
+  // переопределить размерности оверлейного режима. Аналогично
+  // `data-focus`, который реагирует на synced focus-mode.
   return (
-    <Box className={roomPageStyles.briefingPanel} data-mode={mode}>
+    <Box
+      className={roomPageStyles.briefingPanel}
+      data-mode={mode}
+      data-focus={focusMode ? "on" : "off"}
+      data-expanded={isExpanded ? "on" : "off"}
+      data-testid={`briefing-board-${mode}`}
+    >
       {mode === "interviewer" ? (
         <>
           <div className={roomPageStyles.briefingToolbar}>
@@ -230,6 +277,70 @@ export function BriefingBoard({
             >
               Table
             </button>
+            {/*
+              Отделитель + утилитарные кнопки. focus-mode синхронизирован
+              (см. RoomPage → onFocusModeChange), expand — локальный.
+            */}
+            <span className={roomPageStyles.briefingToolbarSpacer} aria-hidden />
+            {onFocusModeChange ? (
+              <Tooltip
+                label={
+                  focusMode
+                    ? "Вернуть код-редактор у обоих участников"
+                    : "Заменить блок с кодом на markdown у обоих участников"
+                }
+                position="bottom"
+                withArrow
+              >
+                <button
+                  type="button"
+                  data-testid="briefing-focus-toggle"
+                  data-state={focusMode ? "on" : "off"}
+                  className={`${roomPageStyles.briefingToolButton} ${
+                    focusMode ? roomPageStyles.briefingToolButtonActive : ""
+                  }`.trim()}
+                  aria-pressed={focusMode}
+                  aria-label={
+                    focusMode
+                      ? "Выключить режим только-markdown"
+                      : "Заменить блок кода на markdown"
+                  }
+                  onClick={() => onFocusModeChange(!focusMode)}
+                >
+                  {focusMode ? (
+                    <IconLayoutColumns size={14} aria-hidden />
+                  ) : (
+                    <IconLayoutRows size={14} aria-hidden />
+                  )}
+                </button>
+              </Tooltip>
+            ) : null}
+            <Tooltip
+              label={
+                isExpanded
+                  ? "Свернуть markdown к стандартному размеру"
+                  : "Развернуть markdown на весь экран"
+              }
+              position="bottom"
+              withArrow
+            >
+              <button
+                type="button"
+                data-testid="briefing-expand-toggle"
+                className={roomPageStyles.briefingToolButton}
+                aria-pressed={isExpanded}
+                aria-label={
+                  isExpanded ? "Свернуть markdown" : "Развернуть markdown"
+                }
+                onClick={() => setIsExpanded((prev) => !prev)}
+              >
+                {isExpanded ? (
+                  <IconArrowsDiagonalMinimize2 size={14} aria-hidden />
+                ) : (
+                  <IconArrowsDiagonal size={14} aria-hidden />
+                )}
+              </button>
+            </Tooltip>
           </div>
           <div className={roomPageStyles.briefingSplit}>
             <Textarea
@@ -264,19 +375,55 @@ export function BriefingBoard({
           </div>
         </>
       ) : (
-        <div
-          className={roomPageStyles.briefingPreviewPane}
-          data-testid="room-markdown-preview"
-        >
-          {html ? (
-            <div
-              className={roomPageStyles.briefingMarkdown}
-              dangerouslySetInnerHTML={{ __html: html }}
-            />
-          ) : (
-            <Text className={roomPageStyles.briefingEmpty}>{emptyText}</Text>
-          )}
-        </div>
+        <>
+          {/*
+            У кандидата нет инструментов редактирования, но мы всё равно
+            даём ему локальную кнопку «развернуть» — чтобы он мог
+            прочитать длинное ТЗ на весь экран независимо от того,
+            переключил ли интервьюер focus mode.
+          */}
+          <div className={roomPageStyles.briefingToolbarCandidate}>
+            <Tooltip
+              label={
+                isExpanded
+                  ? "Свернуть markdown к стандартному размеру"
+                  : "Развернуть markdown на весь экран"
+              }
+              position="bottom"
+              withArrow
+            >
+              <button
+                type="button"
+                data-testid="briefing-expand-toggle"
+                className={roomPageStyles.briefingToolButton}
+                aria-pressed={isExpanded}
+                aria-label={
+                  isExpanded ? "Свернуть markdown" : "Развернуть markdown"
+                }
+                onClick={() => setIsExpanded((prev) => !prev)}
+              >
+                {isExpanded ? (
+                  <IconArrowsDiagonalMinimize2 size={14} aria-hidden />
+                ) : (
+                  <IconArrowsDiagonal size={14} aria-hidden />
+                )}
+              </button>
+            </Tooltip>
+          </div>
+          <div
+            className={roomPageStyles.briefingPreviewPane}
+            data-testid="room-markdown-preview"
+          >
+            {html ? (
+              <div
+                className={roomPageStyles.briefingMarkdown}
+                dangerouslySetInnerHTML={{ __html: html }}
+              />
+            ) : (
+              <Text className={roomPageStyles.briefingEmpty}>{emptyText}</Text>
+            )}
+          </div>
+        </>
       )}
     </Box>
   );

@@ -1111,7 +1111,18 @@ export function DashboardPage() {
                         <Button
                           data-testid="open-create-task-modal"
                           leftSection={<IconPlus size={14} />}
-                          onClick={() => setCreateTaskModalOpened(true)}
+                          onClick={() => {
+                            // Прежде окно открывалось со значением `taskLanguage`,
+                            // которое жило в state и сбрасывалось в `nodejs` на
+                            // первой попытке. В результате, если пользователь
+                            // открывал модалку с активным табом `python`/`sql`,
+                            // в селекте всё равно стоял Node JS, и при сабмите
+                            // задача попадала не в свою группу. Теперь явно
+                            // синхронизируем язык с табом, который сейчас
+                            // выбран (`safeTaskLanguage`).
+                            setTaskLanguage(safeTaskLanguage);
+                            setCreateTaskModalOpened(true);
+                          }}
                         >
                           Создать задачу
                         </Button>

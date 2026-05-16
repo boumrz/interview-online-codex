@@ -34,6 +34,12 @@ export const LANGUAGES: ReadonlyArray<{ value: string; label: string }> = [
   { value: "kotlin", label: "Kotlin" },
   { value: "java", label: "Java" },
   { value: "sql", label: "SQL" },
+  /**
+   * `plaintext` доступен в селекте языков комнаты на равных правах с
+   * остальными — это позволяет вести интервью на чистом тексте
+   * (например, вопросы по теории) без подсветки и парсинга синтаксиса.
+   */
+  { value: "plaintext", label: "Plain text" },
 ];
 
 export type Participant = {

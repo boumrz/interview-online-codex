@@ -21,6 +21,10 @@ internal object LanguageNormalizer {
             "kotlin" -> "kotlin"
             "java" -> "java"
             "sql" -> "sql"
+            // `plaintext` — синтетический "не-язык" для задач без
+            // привязки к синтаксису. Бэкенд хранит его как обычную
+            // строку и не пытается выполнять код в раннере.
+            "plaintext", "plain-text", "plain_text", "plain", "text", "txt", "none" -> "plaintext"
             else -> DEFAULT_LANGUAGE
         }
 }

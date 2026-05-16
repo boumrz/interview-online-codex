@@ -15,6 +15,21 @@ const NODEJS_LANGUAGE_ALIASES = new Set([
   "nodejs",
 ]);
 
+/**
+ * Алиасы для "пустого" языка без подсветки. Любое из этих значений
+ * нормализуется в канонический `plaintext`, который понимает
+ * `RoomCodeEditor` (там оно превращается в no-op language extension).
+ */
+const PLAINTEXT_LANGUAGE_ALIASES = new Set([
+  "plaintext",
+  "plain-text",
+  "plain_text",
+  "plain",
+  "text",
+  "txt",
+  "none",
+]);
+
 export function normalizeRoomLanguage(
   language: string | null | undefined,
 ): string {
@@ -22,6 +37,9 @@ export function normalizeRoomLanguage(
   if (!normalized) return "nodejs";
   if (NODEJS_LANGUAGE_ALIASES.has(normalized)) {
     return "nodejs";
+  }
+  if (PLAINTEXT_LANGUAGE_ALIASES.has(normalized)) {
+    return "plaintext";
   }
   return normalized;
 }
@@ -31,5 +49,15 @@ export function toEditorLanguage(language: string | null | undefined): string {
   if (!normalized || NODEJS_LANGUAGE_ALIASES.has(normalized)) {
     return "javascript";
   }
+  if (PLAINTEXT_LANGUAGE_ALIASES.has(normalized)) {
+    return "plaintext";
+  }
   return normalizeRoomLanguage(normalized);
+}
+
+export function isPlaintextLanguage(
+  language: string | null | undefined,
+): boolean {
+  const normalized = (language ?? "").trim().toLowerCase();
+  return PLAINTEXT_LANGUAGE_ALIASES.has(normalized);
 }
