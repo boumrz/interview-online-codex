@@ -28,7 +28,7 @@ let pdfCyrillicFontData:
 
 async function ensurePdfCyrillicFont(pdf: {
   addFileToVFS: (fileName: string, data: string) => void;
-  addFont: (fileName: string, fontName: string, fontStyle: string) => void;
+  addFont: (fileName: string, fontName: string, fontStyle: string, encoding?: string) => void;
 }) {
   const toBase64 = (buffer: ArrayBuffer): string => {
     const bytes = new Uint8Array(buffer);

@@ -48,16 +48,22 @@ runner/load-tests/
 # Local debug tooling output
 .playwright-cli/
 
-# Local AI tooling configs (not for server/repo)
+# Local AI tooling configs (personal, not for repo)
 .mcp.json
 .opencode.json
-.cursor/
-.claude/
 .cursorrules
 .windsurfrules
 CLAUDE.md
 GEMINI.md
-AGENTS.md
+
+# Cursor personal settings — ignore everything except shared agent rules
+.cursor/*.json
+.cursor/mcp*.json
+
+# Claude Code personal settings
+.claude/
+
+# AGENTS.md is the Codex/OpenAI agent contract — committed so the whole team can use it
 
 # Local vendored toolchain and ad-hoc debug files
 .tools/

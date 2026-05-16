@@ -16,7 +16,7 @@ All other agents run on progressively cheaper models matched to the cognitive co
 
 | Tier | Model | When to use |
 |------|-------|-------------|
-| **Opus** | `claude-opus-4-5` | Deep reasoning, ambiguity resolution, full-spec authoring |
+| **Opus** | `claude-opus-4-7` | Deep reasoning, ambiguity resolution, full-spec authoring |
 | **Sonnet** | `claude-sonnet-4-6` | Architecture design, implementation, structured reviews |
 | **Haiku** | `claude-haiku-4-5-20251001` | Checklist verification, formatting, audit tasks |
 
@@ -72,5 +72,22 @@ A Cursor rule in `.cursor/rules/00-multi-agent-system.mdc` surfaces these instru
 
 ### Codex (OpenAI)
 Codex does not support model-per-agent routing.
-The `AGENTS.md` file documents the intended model tier for each agent role.
+The `AGENTS.md` file (project root) documents the intended model tier for each agent role.
 When using the OpenAI API directly, pass the appropriate model string in the `model` field for each agent call.
+
+OpenAI model equivalents:
+- Opus tier → `o3` or `o3-pro` (best reasoning model available)
+- Sonnet tier → `o4-mini` or `gpt-4.1`
+- Haiku tier → `gpt-4.1-mini`
+
+---
+
+## Enforcement Summary
+
+| Environment | Enforcement method |
+|-------------|-------------------|
+| Claude Code | Automatic — `model:` frontmatter in `.claude/agents/*.md` |
+| Cursor | Manual — switch model selector; `.cursor/rules/00-multi-agent-system.mdc` surfaces the table inline |
+| Codex / OpenAI API | Manual — pass correct `model` string per agent call; see `AGENTS.md` |
+
+**The tier assignments (Opus / Sonnet / Haiku) are non-negotiable.** Upgrading a Haiku agent to Sonnet to "get better results" defeats the purpose of the budget policy. If a checklist agent is producing poor output, fix its prompt — not its model tier.

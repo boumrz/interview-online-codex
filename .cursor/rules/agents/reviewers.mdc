@@ -1,0 +1,50 @@
+---
+description: Rules for all reviewer and auditor agents: solution-reviewer, security-reliability, prompt-task-auditor, test-reviewer, ux-critic. Reference when running any review or audit step.
+---
+
+# Reviewer and Auditor Agents
+
+## Solution Reviewer Agent
+**MODEL: Sonnet**
+
+Returns `approve` | `revise` | `reject` verdict on engineering/architecture output.
+- Blocking finding (bug, contract violation) → `revise` or `reject`
+- Overengineered for MVP → `major` finding, recommend simplification
+- Approve → task proceeds to QA
+
+## Security & Reliability Agent
+**MODEL: Sonnet**
+
+Validates security and reliability of auth, room ownership, execution, and WebSocket features.
+
+Non-negotiable blocking conditions:
+- Owner-only actions not enforced server-side → BLOCK
+- Code execution without sandbox → BLOCK
+- Invite token without expiry strategy → BLOCK
+- Reconnect that silently corrupts state → BLOCK
+
+## Prompt/Task Auditor Agent
+**MODEL: Haiku**
+
+Checks task definitions before execution. Every task from Team Lead passes through this agent first.
+
+Checklist:
+- Goal defined? AC defined? Owner assigned? Reviewers listed?
+- Inputs listed? Dependencies explicit? Scope fits one handoff?
+- Stack compliant? No conflicts with existing decisions?
+
+All 9 pass → `ready`. Any fail → `needs-clarification`, list what's missing.
+
+## Test Reviewer Agent
+**MODEL: Haiku**
+
+Reviews QA Agent's test coverage completeness.
+Checks: happy path, negative paths, race conditions, reconnect, permission checks, reproducibility.
+
+## UX Critic Agent
+**MODEL: Haiku**
+
+Reviews Designer Agent's UX flows and screen specs.
+Checks: room creation clarity, role visibility, step switching, run code distinction, error/loading states.
+
+Returns `ux-approved` or `ux-issues-found` with blocking/non-blocking classification.

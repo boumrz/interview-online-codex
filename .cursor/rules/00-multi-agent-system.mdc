@@ -1,0 +1,79 @@
+---
+description: Main orchestration rules for the interview-online multi-agent development system. Apply this when starting any new feature, epic, or significant change. Also apply when routing work between agents or deciding which agent to invoke.
+alwaysApply: true
+---
+
+# Multi-Agent System — interview-online
+
+This project uses a structured multi-agent pipeline.
+All work flows through defined agent roles in a fixed sequence.
+
+## Stack (fixed — do not deviate)
+
+- Frontend: React + TypeScript + RTK + RTK Query + CSS Modules + Rspack + Monaco Editor
+- Backend: Kotlin + Spring Boot + PostgreSQL + Redis
+- Realtime: WebSocket (server-authoritative)
+- Code execution: isolated sandbox service
+
+## Orchestration flow
+
+```
+New feature / request
+  → @specification-agent  [MODEL: Opus]   — creates master spec
+  → @product-owner-agent  [MODEL: Sonnet] — refines stories + AC
+  → @architect-agent      [MODEL: Sonnet] — designs solution
+  → @team-lead-agent      [MODEL: Sonnet] — decomposes into tasks
+  → @prompt-task-auditor  [MODEL: Haiku]  — validates each task
+  → @developer-agent      [MODEL: Sonnet] — builds
+     or @designer-agent   [MODEL: Sonnet] — designs
+  → @solution-reviewer    [MODEL: Sonnet] — reviews
+  → @security-agent       [MODEL: Sonnet] — security gate (if needed)
+  → @qa-agent             [MODEL: Haiku]  — tests
+  → @test-reviewer        [MODEL: Haiku]  — validates test coverage
+  → @ux-critic            [MODEL: Haiku]  — UX review (design work)
+  → @product-owner-agent  [MODEL: Sonnet] — final acceptance
+```
+
+## Model selection guide for Cursor
+
+Cursor does not assign models per-agent automatically.
+Switch the model manually when invoking each agent:
+
+| Agent | Model to select |
+|-------|----------------|
+| `specification-agent` | **Opus** (most capable — required) |
+| `product-owner-agent` | Sonnet |
+| `architect-agent` | Sonnet |
+| `team-lead-agent` | Sonnet |
+| `developer-agent` | Sonnet |
+| `designer-agent` | Sonnet |
+| `solution-reviewer-agent` | Sonnet |
+| `security-reliability-agent` | Sonnet |
+| `qa-agent` | Haiku |
+| `prompt-task-auditor-agent` | Haiku |
+| `test-reviewer-agent` | Haiku |
+| `ux-critic-agent` | Haiku |
+
+## When to invoke Specification Agent (Opus)
+
+Invoke `@specification-agent` when:
+- Starting a new feature or epic from a free-form description
+- Requirements are ambiguous or contain conflicts
+- NFRs for realtime, security, or reliability are undefined
+- Scope is unclear and downstream agents cannot proceed
+
+Do NOT invoke it for small bug fixes, minor UI copy changes, or already-specified tasks.
+
+## Mandatory rules (all agents)
+
+- Work only within your defined responsibility area
+- Use Linear as the single source of task state
+- Return structured YAML output, not free-form reasoning
+- Escalate conflicts — do not silently resolve them
+- Every handoff requires: input summary, output summary, risks, next owner
+- No task enters execution without a Linear issue in `Ready` state
+
+## Agent rules files
+
+Each agent has a detailed `.cursor/rules/agents/*.mdc` file.
+Reference them with `@agents/specification-agent` etc. when invoking a specific role.
