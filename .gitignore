@@ -42,6 +42,7 @@ test-results/
 
 # Load/performance artifacts and ad-hoc load scripts
 artifacts/
+frontend/artifacts/
 runner/load-tests/
 
 # Local debug tooling output

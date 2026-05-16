@@ -38,6 +38,9 @@ class RoomTask(
     @Column(name = "interviewer_notes", columnDefinition = "TEXT")
     var interviewerNotes: String? = null,
 
+    @Column(name = "private_notes_json", columnDefinition = "TEXT")
+    var privateNotesJson: String? = null,
+
     @Column(name = "briefing_markdown", columnDefinition = "TEXT")
     var briefingMarkdown: String? = null,
 

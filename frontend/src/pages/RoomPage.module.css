@@ -21,9 +21,14 @@
   flex-shrink: 0;
 }
 
+/*
+ * Top bar inner row. We used to cap it at `max-width: 1560px` and centre
+ * it with `margin: 0 auto`, which left two thick empty bands on the sides
+ * of any wider monitor. The room shell already runs edge-to-edge, so the
+ * bar should follow — let it stretch the full viewport and rely on the
+ * grid template + padding for breathing room.
+ */
 .topInner {
-  max-width: 1560px;
-  margin: 0 auto;
   width: 100%;
   padding: 8px 16px;
   min-height: 54px;
@@ -140,6 +145,54 @@
   font-weight: 700;
 }
 
+/*
+ * Caret hint that appears next to participant names whose role can be
+ * toggled by the current viewer. Subtle (opacity 0.45) so it doesn't
+ * compete with the name; brightens on card hover/focus to confirm
+ * the affordance.
+ */
+.participantMenuCaret {
+  flex: 0 0 auto;
+  margin-left: 1px;
+  color: var(--participant-role-color);
+  opacity: 0.45;
+  transition: opacity 140ms ease;
+}
+
+.participantCardButton:hover .participantMenuCaret,
+.participantCardButton:focus-visible .participantMenuCaret {
+  opacity: 0.9;
+}
+
+/*
+ * Inline "what is this?" affordance shown in the participants row when the
+ * current user can promote someone. Behaves like a quiet info badge: muted
+ * by default, picks up colour on hover/focus. Tooltip carries the full
+ * instruction so the row stays compact.
+ */
+.participantsHelpHint {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  color: #b6c0cf;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: help;
+  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+.participantsHelpHint:hover,
+.participantsHelpHint:focus-visible {
+  outline: none;
+  color: #f3f5f7;
+  background: rgba(108, 159, 255, 0.18);
+  border-color: rgba(108, 159, 255, 0.45);
+}
+
 .topActions {
   display: flex;
   align-items: center;
@@ -186,6 +239,29 @@
   gap: 8px;
 }
 
+/*
+ * Tiny LED-style connection indicator. Replaces the loud "Подключено"
+ * badge in the top bar — a passive status doesn't deserve as much
+ * weight as the navigation buttons next to it. Wrapped in a Tooltip
+ * for the full label, with `aria-label` providing the same affordance
+ * for screen readers.
+ */
+.connectionDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+  background: #3aa776;
+  box-shadow: 0 0 0 2px rgba(58, 167, 118, 0.18);
+  transition: background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.connectionDot[data-state="offline"] {
+  background: #d59a3c;
+  box-shadow: 0 0 0 2px rgba(213, 154, 60, 0.18);
+}
+
 .invitesBar {
   flex-shrink: 0;
   border-bottom: 1px solid #222b36;
@@ -212,16 +288,25 @@
   gap: 6px;
 }
 
+/*
+ * Each rail button is icon + caption, so the user can tell "Задачи" from
+ * "Чат" without hovering the icon. The caption is intentionally tiny
+ * (10px), low-weight, and only shows up below the icon so the rail stays
+ * 56px wide (we don't want to push the editor sideways for a label).
+ */
 .railButton {
   border: 1px solid transparent;
   border-radius: 9px;
   background: #151b25;
   color: #97a3b6;
   width: 100%;
-  min-height: 40px;
+  min-height: 52px;
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 4px;
+  padding: 6px 4px;
   cursor: pointer;
   transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, transform 120ms ease;
 }
@@ -242,6 +327,14 @@
   background: #20304a;
   border-color: #34527b;
   color: #f2f6ff;
+}
+
+.railButtonLabel {
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.2px;
+  color: inherit;
 }
 
 .ownerSidePanel {
@@ -301,11 +394,18 @@
 .sidebar {
   height: 100%;
   min-width: 0;
+  /*
+   * Скрываем горизонтальный overflow жёстко: длинные названия задач
+   * сами обрабатываются ellipsis, а Mantine-бейджи ниже могут попытаться
+   * растянуть колонку — этого допускать нельзя.
+   */
+  overflow-x: hidden;
   overflow-y: auto;
   border-right: 1px solid #252a32;
   padding: 12px;
   background: #11151c;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   align-content: start;
   gap: 10px;
   flex-shrink: 0;
@@ -314,6 +414,166 @@
 .stepList {
   display: grid;
   gap: 7px;
+}
+
+/*
+ * Шаговый ряд в боковой панели. Одна строка делится на три зоны:
+ *   индекс • название (truncate-ellipsis) • метаданные (оценка + кол-во заметок).
+ *
+ * `min-width: 0` на корне и колонке заголовка — обязательное условие, чтобы
+ * длинный текст не растягивал сайдбар и не создавал горизонтальный скролл.
+ */
+/*
+ * Step list row. The row used to be a single `<button>`, but we now need
+ * room for a per-step "⋯" actions menu (rename/delete). Native HTML
+ * forbids nested buttons, so we split the row into:
+ *   - `.stepRow`       — the visual container (background, border, hover/active);
+ *   - `.stepRowMain`   — the main clickable button (selects the step);
+ *   - `.stepRowActions`— a sibling slot hosting the actions menu trigger.
+ * The visual contract (rounded card, hover lighten, active highlight)
+ * stays exactly as it was when the row was one button.
+ */
+.stepRow {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: #14202c;
+  color: #cdd5df;
+  font-size: 12px;
+  font-weight: 500;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+.stepRow:hover {
+  background: #1a283a;
+}
+
+.stepRow[data-active="true"] {
+  background: #232f43;
+  color: #f3f5f7;
+  border-color: #34465f;
+}
+
+.stepRowMain {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px 6px 6px;
+  background: transparent;
+  border: none;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  border-radius: 8px 0 0 8px;
+}
+
+.stepRowMain:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px rgba(90, 124, 174, 0.45);
+}
+
+/*
+ * Per-step actions. The trigger fades in on row hover/focus to keep the
+ * step list visually quiet, but stays at full opacity when the menu is
+ * open or the trigger itself is focused (keyboard navigation).
+ */
+.stepRowActions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  padding: 4px 6px 4px 0;
+}
+
+.stepRowActionsTrigger {
+  opacity: 0.35;
+  transition: opacity 120ms ease, background-color 120ms ease;
+}
+
+.stepRow:hover .stepRowActionsTrigger,
+.stepRowActionsTrigger:focus-visible,
+.stepRowActionsTrigger[aria-expanded="true"] {
+  opacity: 1;
+}
+
+.stepRowIndex {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  font-weight: 600;
+  font-size: 11px;
+  color: #b8c2cf;
+  flex-shrink: 0;
+}
+
+.stepRow[data-active="true"] .stepRowIndex {
+  background: rgba(255, 255, 255, 0.12);
+  color: #f3f5f7;
+}
+
+.stepRowTitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * Метаданные шага: оценка + количество заметок. Имеют свой собственный участок
+ * справа, поэтому не «съедаются» длинным заголовком и всегда видны.
+ */
+.stepRowMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.stepRowRating,
+.stepRowNotes {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+.stepRowRating {
+  background: #2a3a52;
+  color: #ecd6a4;
+}
+
+/*
+ * Бейдж счётчика заметок на шаге: иконка + число. Иконка нужна, чтобы
+ * пользователь не путал это с оценкой шага (ранее тут был просто
+ * «N в кружочке»).
+ */
+.stepRowNotes {
+  background: #1f2c3f;
+  color: #b3c4dc;
+  border: 1px solid #2a3a52;
+  gap: 4px;
+}
+
+.stepRowNotes svg {
+  display: block;
 }
 
 .taskRatingCard {
@@ -411,30 +671,135 @@
   border-radius: 12px;
   background: #11151c;
   padding: 10px;
-  min-height: 132px;
-  max-height: min(42dvh, 360px);
+  min-height: 140px;
+  height: clamp(180px, 30dvh, 360px);
+  /*
+   * Изначально max-height был жёстко ограничен — это запирало
+   * markdown в маленькой полоске и не давало пользователю
+   * расширить его вертикально, даже при `resize: vertical`. Теперь
+   * минимальная высота задана, а вертикальный ресайз действительно
+   * расширяется на всю свободную часть колонки (`flex: 1 1 auto` ниже
+   * в data-focus="on"). Стандартная высота по-прежнему компактная.
+   */
+  /*
+   * Allow users to pull markdown panel much higher in default mode.
+   * The cap is now essentially the viewport minus top/bottom breathing room,
+   * so practical resize can reach ~half screen and above.
+   */
+  max-height: calc(100dvh - 120px);
   resize: vertical;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.briefingPanel[data-mode="candidate"] {
+  display: block;
   overflow: auto;
+}
+
+/*
+ * Synced focus mode: код-редактор скрыт у обоих участников,
+ * markdown растягивается на всю колонку. Снимает ограничение
+ * max-height, чтобы панель заняла весь свободный flex-слот.
+ */
+.briefingPanel[data-focus="on"] {
+  flex: 1 1 auto;
+  max-height: none;
+}
+
+/* On desktop default mode keep enough growth room by default. */
+@media (min-width: 761px) {
+  .briefingPanel:not([data-focus="on"]):not([data-expanded="on"]) {
+    min-height: 140px;
+  }
+}
+
+/*
+ * Локальный fullscreen у пользователя — оверлей поверх всей комнаты.
+ * Не зависит от focus mode и не синхронизируется между участниками.
+ */
+.briefingPanel[data-expanded="on"] {
+  position: fixed;
+  inset: 16px;
+  z-index: 1500;
+  max-height: none !important;
+  width: calc(100vw - 32px) !important;
+  height: calc(100dvh - 32px) !important;
+  min-height: 0 !important;
+  resize: none;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+}
+
+.briefingPanel[data-mode="candidate"][data-expanded="on"] {
+  display: flex;
+  flex-direction: column;
+}
+
+/*
+ * On narrow screens expanded mode must behave like a true fullscreen overlay.
+ * `inset: 16px` left visible gutters and looked "not full screen".
+ */
+@media (max-width: 1200px) {
+  .briefingPanel[data-expanded="on"] {
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    border-radius: 0;
+    padding: 10px;
+  }
+}
+
+/*
+ * Кнопки focus/expand находятся в правой части тулбара. Спейсер
+ * "схлопывается" под flex-grow, оттесняя их вправо.
+ */
+.briefingToolbarSpacer {
+  flex-grow: 1;
+}
+
+.briefingToolbarCandidate {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.briefingToolButtonActive {
+  background: #1d2c45 !important;
+  border-color: #3b6dba !important;
+  color: #cfe0ff !important;
 }
 
 .briefingSplit {
   display: grid;
   gap: 8px;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  min-height: 132px;
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
-.briefingEditorPane {
+/* Корневой контейнер Mantine Textarea: тянем на 100% колонки. */
+.briefingEditorRoot {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+}
+
+/* Промежуточный wrapper Mantine Textarea — растягиваем в колонке. */
+.briefingEditorWrapper {
+  flex: 1 1 auto;
   min-height: 0;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
 }
 
 .briefingToolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  flex-shrink: 0;
 }
 
 .briefingToolButton {
@@ -465,6 +830,9 @@
 }
 
 .briefingEditorInput {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
   min-height: 132px;
   max-height: none;
   background-color: #11161f;
@@ -473,10 +841,12 @@
   font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   line-height: 1.45;
   font-size: 12px;
-  resize: vertical;
+  resize: none;
 }
 
 .briefingPreviewPane {
+  height: 100%;
+  min-height: 0;
   border: 1px solid #273242;
   border-radius: 10px;
   background: #0f141c;
@@ -871,6 +1241,10 @@
   font-size: 11px;
 }
 
+.exportStatusSlot {
+  min-height: 34px;
+}
+
 .notesEmpty {
   margin: 0;
   min-height: 144px;
@@ -893,6 +1267,326 @@
   margin: 4px 0 0;
   color: #7f8ca1;
   font-size: 12px;
+}
+
+.privateNotesSection {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid #273242;
+  padding-top: 12px;
+}
+
+.privateNotesHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.privateNotesHeaderCopy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.privateNotesHint {
+  margin: 0;
+  color: #8d97a5;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.privateNotesHint code {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: #182131;
+  border: 1px solid #2a3648;
+  border-radius: 5px;
+  padding: 1px 6px;
+  color: #d3e1f7;
+}
+
+.privateNotesActiveBlock {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+/*
+ * Бейдж активного блока: при длинных названиях имени блока обрезаем
+ * текст эллипсисом, чтобы он не растягивал сайдбар по ширине и не
+ * выходил за пределы карточки.
+ */
+.privateNotesActiveBlock :global(.mantine-Badge-root) {
+  max-width: 100%;
+  text-transform: none;
+}
+
+.privateNotesActiveBlock :global(.mantine-Badge-label) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  max-width: 100%;
+}
+
+/*
+ * Иконка-крестик закрытия блока визуально маленькая (помещается в Badge),
+ * но кликабельная зона расширена до 32px через invisible overlay,
+ * чтобы попадание было комфортным (Apple HIG ≥ 28px touch target).
+ */
+.privateNotesActiveBlockClose {
+  position: relative;
+}
+
+.privateNotesActiveBlockClose::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: inherit;
+}
+
+.privateNotesList {
+  display: grid;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: #3a4658 transparent;
+}
+
+.privateNotesList::-webkit-scrollbar {
+  width: 8px;
+}
+
+.privateNotesList::-webkit-scrollbar-thumb {
+  background: #3a4658;
+  border-radius: 8px;
+}
+
+.privateNotesEmpty {
+  margin: 0;
+  border: 1px dashed #303c4d;
+  border-radius: 12px;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  background: #111821;
+  padding: 12px;
+  min-height: 88px;
+}
+
+.privateNoteEntry {
+  display: grid;
+  gap: 6px;
+  border: 1px solid #273242;
+  border-radius: 10px;
+  background: #111821;
+  padding: 9px 10px;
+}
+
+.privateNoteEntry[data-pending="true"] {
+  opacity: 0.72;
+}
+
+.privateNoteEntryMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.privateNoteEntryTime {
+  color: #8c97a8;
+  font-size: 10px;
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.privateNoteEntryText {
+  margin: 0;
+  color: #d5deeb;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.privateNotesComposer {
+  display: grid;
+  gap: 8px;
+}
+
+.privateNotesComposerInput {
+  min-height: 72px;
+  background-color: #101721;
+  border-color: #2a3648;
+  color: #d6dce6;
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  line-height: 1.4;
+  font-size: 12px;
+}
+
+.privateNotesCommandMenu {
+  display: grid;
+  gap: 6px;
+  min-width: min(300px, 100%);
+  width: 100%;
+  border: 1px solid #2d3e56;
+  background: #121a26;
+  border-radius: 10px;
+  padding: 8px;
+}
+
+.privateNotesCommandItem {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid #2a374a;
+  background: #162233;
+  color: #e5ecf7;
+  border-radius: 8px;
+  padding: 8px;
+  cursor: pointer;
+}
+
+.privateNotesCommandItem:hover {
+  border-color: #3a5376;
+}
+
+.privateNotesCommandLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.privateNotesCommandHint {
+  color: #92a0b6;
+  font-size: 11px;
+}
+
+/*
+ * Поясняющий текст между «/block» и подсказками шагов. Нужен, чтобы
+ * пользователи понимали: список ниже — это лишь пресеты шагов, а после
+ * `/block` можно ввести любое название и создать новый блок.
+ */
+.privateNotesCommandHelper {
+  margin: 0;
+  color: #b8c2cf;
+  font-size: 11.5px;
+  line-height: 1.45;
+  padding: 4px 2px 0;
+}
+
+.privateNotesCommandHelper code {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: #1f2a3a;
+  border: 1px solid #2c3b54;
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: #e2eaf5;
+}
+
+/*
+ * Акцентная кнопка «+ Создать блок: «xxx»», которая появляется, как только
+ * пользователь набирает после `/block ` имя, не совпадающее с шагами.
+ * Визуально выделяется среди подсказок — это первичный CTA для нового блока.
+ */
+.privateNotesCommandCreate {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid #4a73b3;
+  background: linear-gradient(180deg, #1d2b46 0%, #182441 100%);
+  color: #eaf1ff;
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.privateNotesCommandCreate:hover {
+  background: linear-gradient(180deg, #243353 0%, #1c2a4f 100%);
+  border-color: #5d8be0;
+}
+
+.privateNotesCommandCreateLabel {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: #93b6f1;
+  white-space: nowrap;
+}
+
+.privateNotesCommandCreateName {
+  font-size: 12px;
+  font-weight: 600;
+  color: #f3f5f7;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/*
+ * Секция «Шаги интервью» — визуально отделяет пресеты от верхней части
+ * (CTA на новый блок и пояснительный текст), чтобы было ясно, что это
+ * лишь подсказки, а не единственный способ задать блок.
+ */
+.privateNotesCommandSection {
+  display: grid;
+  gap: 6px;
+  padding-top: 4px;
+  border-top: 1px dashed #233045;
+}
+
+.privateNotesCommandSectionTitle {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: #7d8a9e;
+  padding: 2px 2px 0;
+}
+
+.privateNotesCommandExample {
+  width: 100%;
+  text-align: left;
+  border: 1px dashed #33465f;
+  background: #121b2a;
+  color: #bed0ea;
+  border-radius: 8px;
+  padding: 7px 8px;
+  font-size: 11px;
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  cursor: pointer;
+}
+
+.privateNotesCommandExample:hover {
+  border-color: #486893;
+}
+
+.privateNotesCommandUnknown {
+  margin: 0;
+  color: #d6b896;
+  font-size: 11px;
+}
+
+.privateNotesCommandUnknown code {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: #1f232b;
+  border-radius: 4px;
+  padding: 1px 5px;
 }
 
 .logsTabPanel {
@@ -1181,7 +1875,7 @@
 @media (max-height: 820px) {
   .briefingPanel {
     min-height: 110px;
-    max-height: min(34dvh, 260px);
+    max-height: calc(100dvh - 120px);
   }
 
   .briefingEditorInput {
@@ -1308,20 +2002,22 @@
 
   .topActions {
     width: 100%;
-    justify-content: flex-start;
+    justify-content: flex-end;
   }
 
   .topLanguageControl,
   .topActionButtons {
-    width: 100%;
+    width: auto;
   }
 
   .topLanguageSelect {
-    width: 100%;
+    width: 132px;
+    max-width: 45vw;
   }
 
   .topActionButtons {
-    justify-content: space-between;
+    justify-content: flex-end;
+    margin-left: auto;
   }
 
   .briefingSplit {

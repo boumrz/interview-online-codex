@@ -1,4 +1,4 @@
-import React, { FormEvent, useState } from "react";
+import React, { FormEvent, useEffect, useState } from "react";
 import {
   Badge,
   Box,
@@ -17,13 +17,17 @@ import { IconArrowRight, IconCode, IconDeviceLaptop, IconUsers } from "@tabler/i
 import { Link, useNavigate } from "react-router-dom";
 import { useAppSelector } from "../app/hooks";
 import { useCreateGuestRoomMutation } from "../services/api";
+import { setVisitParams, trackEvent } from "../services/analytics";
 
 const LANGUAGES = [
   { value: "nodejs", label: "Node JS" },
   { value: "python", label: "Python" },
   { value: "kotlin", label: "Kotlin" },
   { value: "java", label: "Java" },
-  { value: "sql", label: "SQL" }
+  { value: "sql", label: "SQL" },
+  // Plain text — для интервью без привязки к синтаксису (теория,
+  // алгоритмическое обсуждение, перевод задачи и т.д.).
+  { value: "plaintext", label: "Plain text" }
 ];
 
 const darkFieldStyles = {
@@ -52,8 +56,23 @@ export function LandingPage() {
   const [error, setError] = useState("");
   const [createGuestRoom, { isLoading }] = useCreateGuestRoomMutation();
 
+  useEffect(() => {
+    trackEvent("mkt_landing_view", {
+      authenticated: Boolean(authToken)
+    });
+    setVisitParams({
+      entrypoint: "landing",
+      authenticated: Boolean(authToken)
+    });
+  }, [authToken]);
+
   const onCreate = async (e: FormEvent) => {
     e.preventDefault();
+    trackEvent("prod_guest_room_create_submit", {
+      language,
+      has_title: title.trim().length > 0,
+      has_display_name: displayName.trim().length > 0
+    });
     try {
       setError("");
       const room = await createGuestRoom({
@@ -61,11 +80,29 @@ export function LandingPage() {
         ownerDisplayName: displayName,
         language
       }).unwrap();
-      localStorage.setItem(`owner_token_${room.inviteCode}`, room.ownerToken ?? "");
-      localStorage.setItem(`guest_display_name_${room.inviteCode}`, displayName);
+      // Persist the owner session token only for true anonymous rooms.
+      // When the visitor is already authenticated the backend binds the
+      // room to their account (`ownerUser`) and doesn't return a session
+      // token — it isn't needed because we authorize via Bearer.
+      if (room.ownerToken) {
+        localStorage.setItem(`owner_token_${room.inviteCode}`, room.ownerToken);
+      }
+      // Guest display name is only relevant for anonymous owners. For
+      // authenticated users we read the name from their profile in
+      // `RoomPage`, so storing a fallback here just litters localStorage.
+      if (!authToken) {
+        localStorage.setItem(`guest_display_name_${room.inviteCode}`, displayName);
+      }
+      trackEvent("prod_guest_room_create_success", {
+        language,
+        room_invite_len: room.inviteCode.length
+      });
       navigate(`/room/${room.inviteCode}`);
     } catch {
       setError("Не удалось создать комнату. Повторите попытку.");
+      trackEvent("prod_guest_room_create_failed", {
+        language
+      });
     }
   };
 
@@ -74,6 +111,10 @@ export function LandingPage() {
     if (!inviteCode.trim()) return;
     const name = (displayName || "Участник").trim();
     const code = inviteCode.trim();
+    trackEvent("prod_room_join_submit", {
+      invite_code_len: code.length,
+      has_display_name: name.length > 0
+    });
     localStorage.setItem(`guest_display_name_${code}`, name);
     navigate(`/room/${code}`);
   };
@@ -198,7 +239,7 @@ function solve(nums) {
             >
               <form onSubmit={onCreate}>
                 <Stack>
-                  <Title order={3} c="#f3f5f7">
+                  <Title order={2} c="#f3f5f7" size="h3">
                     Создать комнату
                   </Title>
                   <Text size="sm" c="#8b919b">
@@ -241,7 +282,7 @@ function solve(nums) {
             <Card withBorder radius="lg" p="xl" style={{ background: "#11151c", borderColor: "#272b34" }}>
               <form onSubmit={onJoin}>
                 <Stack>
-                  <Title order={3} c="#f3f5f7">
+                  <Title order={2} c="#f3f5f7" size="h3">
                     Войти по коду
                   </Title>
                   <TextInput

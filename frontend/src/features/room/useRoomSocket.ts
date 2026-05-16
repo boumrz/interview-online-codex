@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE_URL } from "../../config/runtime";
 import type { RoomTask } from "../../types";
+import { trackEvent } from "../../services/analytics";
 
 /** Same opt-out as RoomPage: localStorage room_sync_log = "0" or ?syncLog=0 */
 function isRoomSyncTransportLogEnabled(): boolean {
@@ -72,6 +73,19 @@ type NoteMessagePayload = {
   timestampEpochMs: number;
 };
 
+type PersonalNoteEntryPayload = {
+  id: string;
+  text: string;
+  blockName?: string | null;
+  /**
+   * If the note was authored under a step block, this points back to that
+   * step's index. Used by the UI to render `Шаг N` and by export to expand
+   * to `Шаг N - <task title>`.
+   */
+  blockStepIndex?: number | null;
+  timestampEpochMs: number;
+};
+
 type RealtimeState = {
   inviteCode: string;
   language: string;
@@ -83,6 +97,11 @@ type RealtimeState = {
   currentStep: number;
   notes: string;
   notesMessages?: NoteMessagePayload[];
+  /**
+   * Room-wide private notes for the current viewer (interviewer/owner only).
+   * Replaces the legacy per-step `personalNotesByStep` payload.
+   */
+  personalNotes?: PersonalNoteEntryPayload[];
   briefingMarkdown?: string;
   tasks?: RoomTask[];
   taskScores: Record<string, number | null>;
@@ -128,6 +147,14 @@ type ClientMessage =
   | { type: "task_rating_update"; stepIndex: number; rating: number | null }
   | { type: "notes_update"; notes: string }
   | { type: "note_message"; noteId: string; noteText: string; noteTimestampEpochMs: number }
+  | {
+      type: "private_note_entry";
+      privateNoteId: string;
+      privateNoteText: string;
+      privateNoteBlockName?: string | null;
+      privateNoteBlockStepIndex?: number | null;
+      privateNoteTimestampEpochMs: number;
+    }
   | { type: "briefing_markdown_update"; briefingMarkdown: string }
   | { type: "grant_interviewer_access"; targetSessionId?: string; targetUserId?: string }
   | { type: "revoke_interviewer_access"; targetSessionId?: string; targetUserId?: string }
@@ -148,6 +175,8 @@ type ClientMessage =
       syncKey?: string | null;
       code?: string | null;
       yjsClientSequence: number;
+      baseServerYjsSequence?: number | null;
+      operationId: string;
       yjsDocumentBase64?: string | null;
     }
   | { type: "awareness_update"; awarenessUpdate: string }
@@ -159,6 +188,13 @@ type ClientMessage =
       altKey: boolean;
       shiftKey: boolean;
       metaKey: boolean;
+      /**
+       * Категория события: `keydown` (по умолчанию), либо синтетические
+       * `window_blur`/`window_focus`/`tab_hidden`/`tab_visible`. Нужны для
+       * фиксации Alt+Tab/Cmd+Tab и переключения вкладок в логе кандидата —
+       * сам Tab ОС перехватывает раньше браузера.
+       */
+      eventKind?: string;
     }
   | { type: "request_state_sync" };
 
@@ -365,6 +401,23 @@ export function useRoomSocket({
     let reconnectScheduled = false;
     let leaveNotified = false;
     lastPresenceRef.current = null;
+    const metricLastSentAt = new Map<string, number>();
+    const emitMetric = (
+      eventName: string,
+      payload: Record<string, string | number | boolean | null> = {},
+      options: { minIntervalMs?: number; dedupeKey?: string } = {}
+    ) => {
+      const dedupeKey = options.dedupeKey ?? eventName;
+      const now = Date.now();
+      const minIntervalMs = options.minIntervalMs ?? 0;
+      const previous = metricLastSentAt.get(dedupeKey) ?? 0;
+      if (minIntervalMs > 0 && now - previous < minIntervalMs) return;
+      metricLastSentAt.set(dedupeKey, now);
+      trackEvent(eventName, {
+        invite_code_len: inviteCode.length,
+        ...payload
+      });
+    };
 
     const requiresEventToken = (payload: ClientMessage) => {
       return payload.type !== "request_state_sync" && payload.type !== "presence_update";
@@ -393,6 +446,11 @@ export function useRoomSocket({
     const scheduleReconnect = () => {
       if (disposed || reconnectScheduled) return;
       reconnectScheduled = true;
+      emitMetric(
+        "prod_realtime_reconnect_scheduled",
+        { pending_messages: pendingMessagesRef.current.length },
+        { minIntervalMs: 3000 }
+      );
       setConnected(false);
       abortInFlightRequest();
       const activeSource = sseRef.current;
@@ -457,6 +515,11 @@ export function useRoomSocket({
             } catch {
               inFlightControllerRef.current = null;
               if (disposed || controller.signal.aborted) break;
+              emitMetric(
+                "prod_realtime_post_failed",
+                { reason: "network_error" },
+                { minIntervalMs: 2000 }
+              );
               scheduleReconnect();
               onError("Не удалось отправить действие в комнату");
               break;
@@ -475,11 +538,21 @@ export function useRoomSocket({
             const data = (await response.json().catch(() => ({}))) as { error?: string };
             if (response.status === 403) {
               // Stale event token/session after reconnect. Keep head for retry with a fresh token.
+              emitMetric(
+                "prod_realtime_post_rejected",
+                { status_code: 403, payload_type: head.payload.type },
+                { minIntervalMs: 2000, dedupeKey: `post_rejected_403_${head.payload.type}` }
+              );
               scheduleReconnect();
               break;
             }
             if (response.status === 409) {
               // Out-of-order or stale client sequence; safe to drop.
+              emitMetric(
+                "prod_realtime_post_rejected",
+                { status_code: 409, payload_type: head.payload.type },
+                { minIntervalMs: 2000, dedupeKey: `post_rejected_409_${head.payload.type}` }
+              );
               if (nextIndex === 0) {
                 pendingMessagesRef.current.shift();
               } else {
@@ -489,12 +562,22 @@ export function useRoomSocket({
             }
             if (response.status >= 400 && response.status < 500) {
               // Invalid payload should not block the whole queue forever.
+              emitMetric(
+                "prod_realtime_post_rejected",
+                { status_code: response.status, payload_type: head.payload.type },
+                { minIntervalMs: 2000, dedupeKey: `post_rejected_${response.status}_${head.payload.type}` }
+              );
               if (nextIndex === 0) {
                 pendingMessagesRef.current.shift();
               } else {
                 pendingMessagesRef.current.splice(nextIndex, 1);
               }
             } else {
+              emitMetric(
+                "prod_realtime_post_failed",
+                { reason: "server_error", status_code: response.status },
+                { minIntervalMs: 2000 }
+              );
               scheduleReconnect();
             }
             onError(data.error || "Не удалось отправить действие в комнату");
@@ -523,6 +606,14 @@ export function useRoomSocket({
       // until someone else forces a full state broadcast.
       if (!options.expectHydration && now - lastStateSyncRequestAt < 300) return;
       lastStateSyncRequestAt = now;
+      emitMetric(
+        "prod_state_sync_requested",
+        { expect_hydration: Boolean(options.expectHydration) },
+        {
+          minIntervalMs: options.expectHydration ? 1000 : 4000,
+          dedupeKey: options.expectHydration ? "state_sync_hydration" : "state_sync_regular"
+        }
+      );
       queuePayload({ type: "request_state_sync" }, { dedupeSameType: true });
       tryDrainQueueRef.current?.();
     };
@@ -583,6 +674,7 @@ export function useRoomSocket({
         sseErrorNotified = false;
         setConnected(true);
         roomSyncTransportLog("sse_open", { inviteCode });
+        emitMetric("prod_realtime_connected", {}, { minIntervalMs: 1000 });
         onError("");
         publishCurrentPresence({ force: true });
         requestStateSync({ expectHydration: true });
@@ -600,6 +692,11 @@ export function useRoomSocket({
         }
         if (!sseErrorNotified) {
           sseErrorNotified = true;
+          emitMetric(
+            "prod_realtime_connection_lost",
+            { ready_state: source.readyState },
+            { minIntervalMs: 2000 }
+          );
           onError("Соединение с realtime временно потеряно. Пытаемся восстановить связь...");
         }
       };
@@ -613,6 +710,15 @@ export function useRoomSocket({
           eventTokenRef.current = payload.eventToken?.trim() || null;
           const shouldHydrateFromState = expectRecoveryStateSync;
           expectRecoveryStateSync = false;
+          emitMetric(
+            "prod_state_sync_received",
+            {
+              participants: payload.participants?.length ?? 0,
+              has_yjs_snapshot: Boolean(payload.yjsDocumentBase64),
+              yjs_sequence: typeof payload.lastYjsSequence === "number" ? payload.lastYjsSequence : 0
+            },
+            { minIntervalMs: 1000 }
+          );
           onState(payload);
           if (shouldHydrateFromState) {
             // After a recovery sync, discard stale queued code/yjs writes so we do not replay
@@ -623,6 +729,13 @@ export function useRoomSocket({
             tryDrainQueueRef.current?.();
           }
           if (shouldHydrateFromState) {
+            emitMetric(
+              "prod_recovery_state_sync_applied",
+              {
+                yjs_sequence: typeof payload.lastYjsSequence === "number" ? payload.lastYjsSequence : 0
+              },
+              { minIntervalMs: 1000 }
+            );
             onRecoveryStateSync?.(typeof payload.lastYjsSequence === "number" ? payload.lastYjsSequence : 0);
           }
           return;
@@ -671,9 +784,11 @@ export function useRoomSocket({
           return;
         }
         if (message.type === "error") {
+          emitMetric("prod_realtime_server_error_message", {}, { minIntervalMs: 2000 });
           onError((message.payload as { message: string }).message);
         }
       } catch {
+        emitMetric("prod_realtime_message_parse_failed", {}, { minIntervalMs: 2000 });
         onError("Ошибка чтения сообщения комнаты");
       }
     };
@@ -804,6 +919,23 @@ export function useRoomSocket({
     });
   };
 
+  const sendPrivateNoteEntry = (
+    privateNoteId: string,
+    privateNoteText: string,
+    privateNoteTimestampEpochMs: number,
+    privateNoteBlockName?: string | null,
+    privateNoteBlockStepIndex?: number | null
+  ) => {
+    send({
+      type: "private_note_entry",
+      privateNoteId,
+      privateNoteText,
+      privateNoteTimestampEpochMs,
+      privateNoteBlockName: privateNoteBlockName ?? null,
+      privateNoteBlockStepIndex: privateNoteBlockStepIndex ?? null
+    });
+  };
+
   const sendBriefingUpdate = (briefingMarkdown: string) => {
     send({
       type: "briefing_markdown_update",
@@ -860,19 +992,27 @@ export function useRoomSocket({
     yjsUpdate: string,
     syncKey?: string | null,
     codeSnapshot?: string | null,
-    yjsDocumentBase64?: string | null
+    yjsDocumentBase64?: string | null,
+    baseServerYjsSequence?: number | null
   ) => {
+    const normalizedYjsUpdate = yjsUpdate.trim();
     const yjsClientSequence = yjsSequenceRef.current + 1;
     yjsSequenceRef.current = yjsClientSequence;
     persistYjsSequence(inviteCode, yjsClientSequence);
+    const normalizedBaseServerYjsSequence =
+      typeof baseServerYjsSequence === "number" && Number.isFinite(baseServerYjsSequence)
+        ? Math.max(0, Math.floor(baseServerYjsSequence))
+        : null;
     queuePayload({
       type: "yjs_update",
-      yjsUpdate,
+      yjsUpdate: normalizedYjsUpdate,
       syncKey: syncKey ?? null,
       code: codeSnapshot ?? null,
       yjsClientSequence,
+      baseServerYjsSequence: normalizedBaseServerYjsSequence,
+      operationId: `yjs-op-${crypto.randomUUID()}`,
       yjsDocumentBase64: yjsDocumentBase64?.trim() || null
-    }, { dedupeSameType: true });
+    }, { dedupeSameType: normalizedYjsUpdate.length === 0 });
     tryDrainQueueRef.current?.();
   };
 
@@ -883,12 +1023,28 @@ export function useRoomSocket({
     altKey: boolean;
     shiftKey: boolean;
     metaKey: boolean;
+    /**
+     * Категория события: `keydown` (по умолчанию), либо синтетические
+     * `window_blur`/`window_focus`/`tab_hidden`/`tab_visible`. Они нужны,
+     * чтобы фиксировать в логе переключение окон/вкладок (Alt+Tab, Cmd+Tab),
+     * которые ОС перехватывает до браузера и обычным `keydown` не приходят.
+     */
+    eventKind?: string;
   }) => {
     const now = Date.now();
-    if (now - lastKeyPressSentAtRef.current < KEY_PRESS_CLIENT_THROTTLE_MS) {
+    const eventKind = payload.eventKind ?? "keydown";
+    // Синтетические события (blur/visibility) не должны теряться из-за
+    // троттлинга: они срабатывают редко, а пропустить «переключился на другое
+    // окно» — это потерять самый важный сигнал в логах.
+    if (
+      eventKind === "keydown" &&
+      now - lastKeyPressSentAtRef.current < KEY_PRESS_CLIENT_THROTTLE_MS
+    ) {
       return;
     }
-    lastKeyPressSentAtRef.current = now;
+    if (eventKind === "keydown") {
+      lastKeyPressSentAtRef.current = now;
+    }
     send({
       type: "key_press",
       key: payload.key,
@@ -896,7 +1052,8 @@ export function useRoomSocket({
       ctrlKey: payload.ctrlKey,
       altKey: payload.altKey,
       shiftKey: payload.shiftKey,
-      metaKey: payload.metaKey
+      metaKey: payload.metaKey,
+      eventKind
     });
   };
 
@@ -910,6 +1067,7 @@ export function useRoomSocket({
     sendTaskRatingUpdate,
     sendNotesUpdate,
     sendNoteMessage,
+    sendPrivateNoteEntry,
     sendBriefingUpdate,
     sendGrantInterviewerAccess,
     sendRevokeInterviewerAccess,

@@ -23,7 +23,10 @@ async function createGuestRoom() {
 
 async function enterNameIfPrompted(page, name) {
   const title = page.getByText("Представьтесь перед входом в комнату");
-  const visible = await title.isVisible().catch(() => false);
+  const visible = await title
+    .waitFor({ state: "visible", timeout: 2500 })
+    .then(() => true)
+    .catch(() => false);
   if (!visible) return;
   await page.getByLabel("Ваше имя").fill(name);
   await page.getByRole("button", { name: "Войти в комнату", exact: true }).click();
@@ -32,6 +35,10 @@ async function enterNameIfPrompted(page, name) {
 
 async function modelValue(page) {
   return page.evaluate(() => {
+    const host = document.querySelector("[data-testid='room-code-editor-host']");
+    if (host?.__roomEditorView?.state?.doc?.toString) {
+      return host.__roomEditorView.state.doc.toString();
+    }
     const editor = document.querySelector(".cm-editor");
     const anyEditor = editor;
     const view = anyEditor?.cmView?.view ?? anyEditor?.cmView?.rootView?.view ?? null;
@@ -42,9 +49,25 @@ async function modelValue(page) {
   });
 }
 
+function countOccurrences(haystack, needle) {
+  if (!needle) return 0;
+  let count = 0;
+  let from = 0;
+  while (true) {
+    const index = haystack.indexOf(needle, from);
+    if (index < 0) return count;
+    count += 1;
+    from = index + needle.length;
+  }
+}
+
 async function waitModelContains(page, marker) {
   await page.waitForFunction(
     (token) => {
+      const host = document.querySelector("[data-testid='room-code-editor-host']");
+      if (host?.__roomEditorView?.state?.doc?.toString) {
+        return host.__roomEditorView.state.doc.toString().includes(token);
+      }
       const editor = document.querySelector(".cm-editor");
       const anyEditor = editor;
       const view = anyEditor?.cmView?.view ?? anyEditor?.cmView?.rootView?.view ?? null;
@@ -86,9 +109,12 @@ try {
 
   const candidatePages = [];
   const candidateContexts = [];
+  const markers = [];
 
   for (let i = 0; i < 3; i += 1) {
-    await appendText(ownerPage, `\nowner-typing-before-join-${i}`);
+    const marker = `owner-typing-before-join-${i}`;
+    markers.push(marker);
+    await appendText(ownerPage, `\n${marker}`);
 
     const context = await browser.newContext();
     candidateContexts.push(context);
@@ -101,6 +127,7 @@ try {
   }
 
   const finalMarker = `__join_race_done_${Date.now()}__`;
+  markers.push(finalMarker);
   await appendText(ownerPage, `\n${finalMarker}`);
   await waitModelContains(ownerPage, finalMarker);
   await ownerPage.waitForTimeout(1500);
@@ -117,6 +144,26 @@ try {
       finalMarker,
       { timeout: 45000 }
     );
+  }
+
+  const ownerSnapshot = await modelValue(ownerPage);
+  const candidateSnapshots = await Promise.all(candidatePages.map((page) => modelValue(page)));
+  for (const marker of markers) {
+    const ownerCount = countOccurrences(ownerSnapshot, marker);
+    if (ownerCount !== 1) {
+      throw new Error(
+        `JOIN_RACE_OWNER_DUPLICATE marker=${marker} ownerCount=${ownerCount}\nOWNER:\n${ownerSnapshot}`
+      );
+    }
+    for (let i = 0; i < candidateSnapshots.length; i += 1) {
+      const snapshot = candidateSnapshots[i];
+      const count = countOccurrences(snapshot, marker);
+      if (count !== 1) {
+        throw new Error(
+          `JOIN_RACE_CANDIDATE_DUPLICATE marker=${marker} candidateIndex=${i} count=${count}\nCANDIDATE:\n${snapshot}`
+        );
+      }
+    }
   }
 
   console.log("JOIN_RACE_SYNC_OK", room.inviteCode);

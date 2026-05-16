@@ -4,6 +4,7 @@ data class RealtimeEventRequest(
     val sessionId: String,
     val eventToken: String? = null,
     val clientEventSequence: Long? = null,
+    val operationId: String? = null,
     val type: String,
     val code: String? = null,
     val codeSequence: Long? = null,
@@ -14,6 +15,11 @@ data class RealtimeEventRequest(
     val noteId: String? = null,
     val noteText: String? = null,
     val noteTimestampEpochMs: Long? = null,
+    val privateNoteId: String? = null,
+    val privateNoteText: String? = null,
+    val privateNoteBlockName: String? = null,
+    val privateNoteBlockStepIndex: Int? = null,
+    val privateNoteTimestampEpochMs: Long? = null,
     val presentationMarkdown: String? = null,
     val briefingMarkdown: String? = null,
     val presenceStatus: String? = null,
@@ -30,9 +36,19 @@ data class RealtimeEventRequest(
     val altKey: Boolean? = null,
     val shiftKey: Boolean? = null,
     val metaKey: Boolean? = null,
+    /**
+     * Категория события для лога активности кандидата:
+     * `keydown` (по умолчанию, обычное нажатие клавиши),
+     * `window_blur` (окно браузера потеряло фокус — обычно Alt+Tab/Cmd+Tab),
+     * `tab_hidden` / `tab_visible` (смена видимости вкладки),
+     * `window_focus` (возврат фокуса в окно).
+     * Поле опционально для обратной совместимости со старыми клиентами.
+     */
+    val eventKind: String? = null,
     val yjsUpdate: String? = null,
     val syncKey: String? = null,
     val yjsClientSequence: Long? = null,
+    val baseServerYjsSequence: Long? = null,
     val yjsDocumentBase64: String? = null,
     /** Base64-encoded y-protocols awareness update (remote cursors / selections). */
     val awarenessUpdate: String? = null,

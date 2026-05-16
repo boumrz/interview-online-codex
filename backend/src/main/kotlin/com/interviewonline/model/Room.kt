@@ -58,6 +58,9 @@ class Room(
     @Column(name = "candidate_key_history", columnDefinition = "TEXT")
     var candidateKeyHistory: String? = "[]",
 
+    @Column(name = "private_notes_json", columnDefinition = "TEXT")
+    var privateNotesJson: String? = null,
+
     @Column(name = "created_at", nullable = false)
     var createdAt: Instant = Instant.now(),
 

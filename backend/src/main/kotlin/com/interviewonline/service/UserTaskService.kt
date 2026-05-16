@@ -9,6 +9,7 @@ import com.interviewonline.model.UserTaskCategory
 import com.interviewonline.model.UserTaskTemplate
 import com.interviewonline.repository.UserTaskCategoryRepository
 import com.interviewonline.repository.UserTaskTemplateRepository
+import com.interviewonline.service.LanguageNormalizer.normalize as normalizeLanguage
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -36,8 +37,9 @@ class UserTaskService(
         val language = normalizeLanguage(request.language)
         val title = request.title.trim()
         val description = request.description.trim()
-        if (title.isEmpty() || description.isEmpty()) {
-            throw ApiException(HttpStatus.BAD_REQUEST, "Название и описание задачи обязательны")
+        val starterCode = request.starterCode.trim()
+        if (title.isEmpty()) {
+            throw ApiException(HttpStatus.BAD_REQUEST, "Название задачи обязательно")
         }
         val category = ensureLanguageCategory(user, language)
         val template = taskRepository.save(
@@ -46,7 +48,7 @@ class UserTaskService(
                 category = category,
                 title = title,
                 description = description,
-                starterCode = request.starterCode,
+                starterCode = starterCode,
                 language = language,
             ),
         )
@@ -60,12 +62,13 @@ class UserTaskService(
         val language = normalizeLanguage(request.language)
         val title = request.title.trim()
         val description = request.description.trim()
-        if (title.isEmpty() || description.isEmpty()) {
-            throw ApiException(HttpStatus.BAD_REQUEST, "Название и описание задачи обязательны")
+        val starterCode = request.starterCode.trim()
+        if (title.isEmpty()) {
+            throw ApiException(HttpStatus.BAD_REQUEST, "Название задачи обязательно")
         }
         task.title = title
         task.description = description
-        task.starterCode = request.starterCode
+        task.starterCode = starterCode
         task.language = language
         task.category = ensureLanguageCategory(user, language)
         return taskRepository.save(task).toDto()
@@ -84,7 +87,9 @@ class UserTaskService(
         cleanupLegacySeedTasks(user)
         val tasks = taskRepository.findAllByOwnerUserIdOrderByCreatedAtDesc(user.id!!)
         val tasksByLanguage = tasks.groupBy { normalizeLanguage(it.language) }
-        val languageOrder = listOf("nodejs", "python", "kotlin", "java", "sql")
+        // Keep UI language tabs deterministic and include `plaintext` so
+        // "Plain text" tasks are available in room task selectors.
+        val languageOrder = listOf("nodejs", "python", "kotlin", "java", "sql", "plaintext")
         return languageOrder.map { language ->
             TaskLanguageGroupDto(
                 language = language,
@@ -94,9 +99,8 @@ class UserTaskService(
     }
 
     @Transactional
-    fun resolveTasksForRoom(user: User, taskIds: List<String>, language: String): List<UserTaskTemplate> {
+    fun resolveTasksForRoom(user: User, taskIds: List<String>): List<UserTaskTemplate> {
         cleanupLegacySeedTasks(user)
-        val normalizedLanguage = normalizeLanguage(language)
         val normalized = taskIds.map { it.trim() }.filter { it.isNotBlank() }.distinct()
         if (normalized.isEmpty()) {
             return emptyList()
@@ -104,12 +108,6 @@ class UserTaskService(
         val tasks = taskRepository.findAllByIdInAndOwnerUserId(normalized, user.id!!)
         if (tasks.size != normalized.size) {
             throw ApiException(HttpStatus.BAD_REQUEST, "Некоторые задачи не найдены или не принадлежат пользователю")
-        }
-        if (tasks.any { normalizeLanguage(it.language) != normalizedLanguage }) {
-            throw ApiException(
-                HttpStatus.BAD_REQUEST,
-                "Выбранные задачи должны соответствовать языку комнаты: $normalizedLanguage",
-            )
         }
         val tasksById = tasks.associateBy { it.id }
         return normalized.mapNotNull { tasksById[it] }
@@ -149,16 +147,6 @@ class UserTaskService(
         return listOf(normalizedLanguage, normalizedTitle, normalizedDescription, normalizedStarterCode).joinToString("::")
     }
 
-    private fun normalizeLanguage(language: String): String {
-        return when (language.lowercase()) {
-            "javascript", "typescript", "nodejs" -> "nodejs"
-            "python" -> "python"
-            "kotlin" -> "kotlin"
-            "java" -> "java"
-            "sql" -> "sql"
-            else -> "nodejs"
-        }
-    }
 
     private fun UserTaskTemplate.toDto(): TaskTemplateDto {
         return TaskTemplateDto(
