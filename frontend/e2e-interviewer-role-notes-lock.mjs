@@ -43,7 +43,7 @@ async function openRoomToolsPanelIfNeeded(page) {
   const hasChatTab = await chatTab.isVisible().catch(() => false);
   if (hasChatTab) return;
 
-  const roomToolsButton = page.getByRole("button", { name: "Открыть панель чата и логов" });
+  const roomToolsButton = page.locator('[data-testid="room-rail-tools"]');
   const hasRoomToolsButton = await roomToolsButton.isVisible().catch(() => false);
   if (!hasRoomToolsButton) return;
   await roomToolsButton.click();

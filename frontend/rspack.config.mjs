@@ -75,7 +75,10 @@ export default defineConfig({
     new rspack.DefinePlugin({
       __FEATURE_AGENT_OPS__: JSON.stringify(process.env.FEATURE_AGENT_OPS ?? "false"),
       "process.env.FEATURE_AGENT_OPS": JSON.stringify(process.env.FEATURE_AGENT_OPS ?? "false"),
-      "process.env.VITE_API_BASE_URL": JSON.stringify(process.env.VITE_API_BASE_URL ?? "/api")
+      "process.env.VITE_API_BASE_URL": JSON.stringify(process.env.VITE_API_BASE_URL ?? "/api"),
+      "process.env.VITE_METRIKA_ALLOWED_HOSTS": JSON.stringify(
+        process.env.VITE_METRIKA_ALLOWED_HOSTS ?? "interview.domiknote.ru"
+      )
     }),
     new rspack.HtmlRspackPlugin({
       template: "./public/index.html"

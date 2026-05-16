@@ -1,6 +1,5 @@
 import React, { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActionIcon,
   AppShell,
   Badge,
   Box,
@@ -10,37 +9,38 @@ import {
   Divider,
   Group,
   Modal,
-  MultiSelect,
   Notification,
   Portal,
   Select,
   SimpleGrid,
   Stack,
-  Switch,
   Text,
   TextInput,
   Textarea,
   ThemeIcon,
-  Title
+  Title,
 } from "@mantine/core";
 import {
   IconBook2,
-  IconBolt,
-  IconChevronRight,
   IconCode,
   IconEdit,
   IconLayoutDashboard,
   IconLogout2,
   IconPlus,
-  IconRobot,
   IconRocket,
-  IconShieldCheck,
   IconTrash,
-  IconUsers
 } from "@tabler/icons-react";
-import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import {
+  Navigate,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../app/hooks";
-import { clearAuth, updateProfile as updateAuthProfile } from "../features/auth/authSlice";
+import {
+  clearAuth,
+  updateProfile as updateAuthProfile,
+} from "../features/auth/authSlice";
 import { markdownToHtml } from "../components/markdown";
 import {
   api,
@@ -63,78 +63,35 @@ import {
   useUpdateProfileMutation,
   useTasksGroupedQuery,
   useUpdateRoomMutation,
-  useUpdateTaskTemplateMutation
+  useUpdateTaskTemplateMutation,
 } from "../services/api";
+import { setVisitParams, trackEvent } from "../services/analytics";
 import type { AdminUser, RoomSummary, TaskTemplate } from "../types";
 import styles from "./DashboardPage.module.css";
+import {
+  ADMIN_DASHBOARD_SECTION,
+  BASE_DASHBOARD_SECTIONS,
+  type DashboardSection,
+  LANGUAGE_OPTIONS,
+} from "./dashboard/dashboardConstants";
+import {
+  codeInputStyles,
+  darkFieldStyles,
+  darkSelectStyles,
+  markdownInputStyles,
+} from "./dashboard/dashboardFieldStyles";
+import {
+  isDashboardSection,
+  labelForLanguage,
+  normalizeLanguageKey,
+  type RoomSaveStatus,
+} from "./dashboard/dashboardHelpers";
+import { AdminUsersSection } from "./dashboard/AdminUsersSection";
+import { AgentOpsSection } from "./dashboard/AgentOpsSection";
+import { CreateRoomSection } from "./dashboard/CreateRoomSection";
+import { ManageRoomsSection } from "./dashboard/ManageRoomsSection";
 
-type DashboardSection = "rooms" | "tasks" | "manage" | "agents" | "admin";
-type RoomSaveStatus = "idle" | "saving" | "saved" | "error";
 declare const __FEATURE_AGENT_OPS__: string | undefined;
-
-const BASE_DASHBOARD_SECTIONS: Array<{ value: DashboardSection; label: string }> = [
-  { value: "rooms", label: "Комнаты" },
-  { value: "tasks", label: "Задачи" },
-  { value: "manage", label: "Управление комнатами" },
-  { value: "agents", label: "Агент-операции" }
-];
-
-const ADMIN_DASHBOARD_SECTION: { value: DashboardSection; label: string } = { value: "admin", label: "Админка" };
-
-const LANGUAGE_OPTIONS = [
-  { value: "nodejs", label: "Node JS" },
-  { value: "python", label: "Python" },
-  { value: "kotlin", label: "Kotlin" },
-  { value: "java", label: "Java" },
-  { value: "sql", label: "SQL" }
-];
-
-const darkFieldStyles = {
-  label: { color: "#cbd5e1" },
-  input: { backgroundColor: "#0b1529", borderColor: "#27456f", color: "#e2e8f0" }
-};
-
-const markdownInputStyles = {
-  ...darkFieldStyles,
-  input: {
-    ...darkFieldStyles.input,
-    fontFamily: "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Menlo, monospace",
-    fontSize: "12px",
-    lineHeight: 1.45,
-    resize: "vertical" as const
-  }
-};
-
-const codeInputStyles = {
-  ...darkFieldStyles,
-  input: {
-    ...darkFieldStyles.input,
-    fontFamily: "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Menlo, monospace",
-    fontSize: "12px",
-    lineHeight: 1.45,
-    resize: "vertical" as const
-  }
-};
-
-const darkSelectStyles = {
-  ...darkFieldStyles,
-  dropdown: { backgroundColor: "#0f1c34", borderColor: "#27456f" },
-  option: { color: "#e2e8f0" }
-};
-
-const NODEJS_LANGUAGE_ALIASES = new Set(["nodejs", "javascript", "typescript"]);
-
-function normalizeLanguageKey(language: string | null | undefined): string {
-  const normalized = (language ?? "").trim().toLowerCase();
-  if (!normalized || NODEJS_LANGUAGE_ALIASES.has(normalized)) return "nodejs";
-  return normalized;
-}
-
-function isDashboardSection(value: string | undefined, agentOpsEnabled: boolean, isAdmin: boolean): value is DashboardSection {
-  if (value === "rooms" || value === "tasks" || value === "manage") return true;
-  if (isAdmin && value === "admin") return true;
-  return agentOpsEnabled && value === "agents";
-}
 
 export function DashboardPage() {
   const dispatch = useAppDispatch();
@@ -144,7 +101,9 @@ export function DashboardPage() {
   const auth = useAppSelector((s) => s.auth);
   const [error, setError] = useState("");
   const agentOpsEnabled =
-    (typeof __FEATURE_AGENT_OPS__ !== "undefined" ? __FEATURE_AGENT_OPS__ : "false") === "true";
+    (typeof __FEATURE_AGENT_OPS__ !== "undefined"
+      ? __FEATURE_AGENT_OPS__
+      : "false") === "true";
   const isAdmin = auth.user?.role === "admin";
 
   const [taskTitle, setTaskTitle] = useState("");
@@ -154,14 +113,22 @@ export function DashboardPage() {
   const [createTaskModalOpened, setCreateTaskModalOpened] = useState(false);
 
   const [roomTitle, setRoomTitle] = useState("Техническое интервью");
-  const [roomLanguage, setRoomLanguage] = useState("nodejs");
   const [roomTaskIds, setRoomTaskIds] = useState<string[]>([]);
-  const [profileDisplayName, setProfileDisplayName] = useState(auth.user?.displayName ?? "");
-  const [profileSaveToast, setProfileSaveToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [profileDisplayName, setProfileDisplayName] = useState(
+    auth.user?.displayName ?? "",
+  );
+  const [profileSaveToast, setProfileSaveToast] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
   const profileSaveToastTimerRef = useRef<number | null>(null);
 
-  const [roomTitleDrafts, setRoomTitleDrafts] = useState<Record<string, string>>({});
-  const [roomSaveStatus, setRoomSaveStatus] = useState<Record<string, RoomSaveStatus>>({});
+  const [roomTitleDrafts, setRoomTitleDrafts] = useState<
+    Record<string, string>
+  >({});
+  const [roomSaveStatus, setRoomSaveStatus] = useState<
+    Record<string, RoomSaveStatus>
+  >({});
   const roomSaveTimersRef = useRef<Record<string, number>>({});
   const roomStatusTimersRef = useRef<Record<string, number>>({});
 
@@ -171,68 +138,95 @@ export function DashboardPage() {
   const [editTaskStarterCode, setEditTaskStarterCode] = useState("");
   const [editTaskLanguage, setEditTaskLanguage] = useState("nodejs");
   const [agentIssueId, setAgentIssueId] = useState("");
-  const [agentProvider, setAgentProvider] = useState<"temporal" | "langgraph">("temporal");
+  const [agentProvider, setAgentProvider] = useState<"temporal" | "langgraph">(
+    "temporal",
+  );
   const [agentRole, setAgentRole] = useState("Тимлид");
   const [agentRequiresApproval, setAgentRequiresApproval] = useState(true);
   const [agentCriteria, setAgentCriteria] = useState(
-    "Сформулированы критерии приемки\nЕсть итог ревью решения\nЕсть итог ревью безопасности\nЕсть итог ревью тестов\nЕсть связанные артефакты"
+    "Сформулированы критерии приемки\nЕсть итог ревью решения\nЕсть итог ревью безопасности\nЕсть итог ревью тестов\nЕсть связанные артефакты",
   );
   const [transitionComment, setTransitionComment] = useState("");
-  const [selectedPolicyRunId, setSelectedPolicyRunId] = useState<string | null>(null);
+  const [selectedPolicyRunId, setSelectedPolicyRunId] = useState<string | null>(
+    null,
+  );
   const [faultInviteCode, setFaultInviteCode] = useState("");
   const [faultLatencyMs, setFaultLatencyMs] = useState("250");
   const [faultDropEvery, setFaultDropEvery] = useState("0");
-  const [adminRoleDrafts, setAdminRoleDrafts] = useState<Record<string, string>>({});
+  const [adminRoleDrafts, setAdminRoleDrafts] = useState<
+    Record<string, string>
+  >({});
   const dashboardSections = BASE_DASHBOARD_SECTIONS.filter(
-    (dashboardSection) => agentOpsEnabled || dashboardSection.value !== "agents"
+    (dashboardSection) =>
+      agentOpsEnabled || dashboardSection.value !== "agents",
   ).concat(isAdmin ? [ADMIN_DASHBOARD_SECTION] : []);
 
-  const editTaskDescriptionHtml = useMemo(() => markdownToHtml(editTaskDescription), [editTaskDescription]);
+  const editTaskDescriptionHtml = useMemo(
+    () => markdownToHtml(editTaskDescription),
+    [editTaskDescription],
+  );
 
   useEffect(() => {
     setProfileDisplayName(auth.user?.displayName ?? "");
   }, [auth.user?.displayName]);
 
-  const { data: rooms = [] } = useMyRoomsQuery(undefined, { skip: !auth.token, refetchOnMountOrArgChange: true });
-  const { data: groupedTasks = [] } = useTasksGroupedQuery(undefined, { skip: !auth.token });
-  const { data: adminUsers = [], refetch: refetchAdminUsers } = useAdminUsersQuery(undefined, {
-    skip: !auth.token || !isAdmin
+  const { data: rooms = [] } = useMyRoomsQuery(undefined, {
+    skip: !auth.token,
+    refetchOnMountOrArgChange: true,
   });
+  const { data: groupedTasks = [] } = useTasksGroupedQuery(undefined, {
+    skip: !auth.token,
+  });
+  const { data: adminUsers = [], refetch: refetchAdminUsers } =
+    useAdminUsersQuery(undefined, {
+      skip: !auth.token || !isAdmin,
+    });
 
   const [createTask, createTaskState] = useCreateTaskTemplateMutation();
   const [updateTask, updateTaskState] = useUpdateTaskTemplateMutation();
   const [deleteTask, deleteTaskState] = useDeleteTaskTemplateMutation();
-  const [updateAdminUserRole, updateAdminUserRoleState] = useAdminUpdateUserRoleMutation();
+  const [updateAdminUserRole, updateAdminUserRoleState] =
+    useAdminUpdateUserRoleMutation();
   const [deleteAdminUser, deleteAdminUserState] = useAdminDeleteUserMutation();
   const [createRoom, createRoomState] = useCreateRoomMutation();
   const [updateRoom, updateRoomState] = useUpdateRoomMutation();
   const [deleteRoom, deleteRoomState] = useDeleteRoomMutation();
   const [startAgentRun, startAgentRunState] = useStartAgentRunMutation();
-  const [transitionAgentRun, transitionAgentRunState] = useTransitionAgentRunMutation();
-  const [executeAllRunReviewers, executeAllRunReviewersState] = useExecuteAllRunReviewersMutation();
-  const [configureRealtimeFaults, configureRealtimeFaultsState] = useConfigureRealtimeFaultsMutation();
-  const [clearRealtimeFaults, clearRealtimeFaultsState] = useClearRealtimeFaultsMutation();
+  const [transitionAgentRun, transitionAgentRunState] =
+    useTransitionAgentRunMutation();
+  const [executeAllRunReviewers, executeAllRunReviewersState] =
+    useExecuteAllRunReviewersMutation();
+  const [configureRealtimeFaults, configureRealtimeFaultsState] =
+    useConfigureRealtimeFaultsMutation();
+  const [clearRealtimeFaults, clearRealtimeFaultsState] =
+    useClearRealtimeFaultsMutation();
   const [updateProfile, updateProfileState] = useUpdateProfileMutation();
 
   const normalizedIssueId = agentIssueId.trim().toUpperCase();
   const issueIdLooksValid = /^[A-Z]+-\d+$/.test(normalizedIssueId);
 
-  const { data: environmentDoctor, refetch: refetchEnvironmentDoctor } = useGetEnvironmentDoctorReportQuery(undefined, {
-    skip: !auth.token || !agentOpsEnabled
-  });
-  const { data: agentRuns = [], refetch: refetchAgentRuns } = useListAgentRunsByIssueQuery(
-    { linearIssueId: normalizedIssueId },
-    { skip: !auth.token || !agentOpsEnabled || !issueIdLooksValid }
-  );
+  const { data: environmentDoctor, refetch: refetchEnvironmentDoctor } =
+    useGetEnvironmentDoctorReportQuery(undefined, {
+      skip: !auth.token || !agentOpsEnabled,
+    });
+  const { data: agentRuns = [], refetch: refetchAgentRuns } =
+    useListAgentRunsByIssueQuery(
+      { linearIssueId: normalizedIssueId },
+      { skip: !auth.token || !agentOpsEnabled || !issueIdLooksValid },
+    );
   const { data: selectedPolicyResult } = useEvaluateAgentPolicyQuery(
     { runId: selectedPolicyRunId ?? "" },
-    { skip: !auth.token || !agentOpsEnabled || !selectedPolicyRunId }
+    { skip: !auth.token || !agentOpsEnabled || !selectedPolicyRunId },
   );
 
   useEffect(() => {
     return () => {
-      Object.values(roomSaveTimersRef.current).forEach((timerId) => window.clearTimeout(timerId));
-      Object.values(roomStatusTimersRef.current).forEach((timerId) => window.clearTimeout(timerId));
+      Object.values(roomSaveTimersRef.current).forEach((timerId) =>
+        window.clearTimeout(timerId),
+      );
+      Object.values(roomStatusTimersRef.current).forEach((timerId) =>
+        window.clearTimeout(timerId),
+      );
     };
   }, []);
 
@@ -259,15 +253,29 @@ export function DashboardPage() {
   const activeSection: DashboardSection = hasValidSection ? section : "rooms";
   const activeTaskLanguage = normalizeLanguageKey(searchParams.get("lang"));
 
+  useEffect(() => {
+    trackEvent("prod_dashboard_view", {
+      section: activeSection,
+      is_admin: isAdmin,
+      agent_ops_enabled: agentOpsEnabled,
+    });
+    setVisitParams({
+      dashboard_section: activeSection,
+    });
+  }, [activeSection, agentOpsEnabled, isAdmin]);
+
   const normalizedTaskGroups = useMemo(() => {
     const tasksByLanguage = new Map<string, TaskTemplate[]>();
     groupedTasks.forEach((group) => {
       const language = normalizeLanguageKey(group.language);
       const current = tasksByLanguage.get(language) ?? [];
-      tasksByLanguage.set(
-        language,
-        [...current, ...group.tasks.map((task) => ({ ...task, language: normalizeLanguageKey(task.language) }))]
-      );
+      tasksByLanguage.set(language, [
+        ...current,
+        ...group.tasks.map((task) => ({
+          ...task,
+          language: normalizeLanguageKey(task.language),
+        })),
+      ]);
     });
     LANGUAGE_OPTIONS.forEach((languageOption) => {
       if (!tasksByLanguage.has(languageOption.value)) {
@@ -276,65 +284,76 @@ export function DashboardPage() {
     });
     return Array.from(tasksByLanguage.entries()).map(([language, tasks]) => ({
       language,
-      tasks
+      tasks,
     }));
   }, [groupedTasks]);
 
-  const safeTaskLanguage = normalizedTaskGroups.some((group) => group.language === activeTaskLanguage)
+  const safeTaskLanguage = normalizedTaskGroups.some(
+    (group) => group.language === activeTaskLanguage,
+  )
     ? activeTaskLanguage
     : "nodejs";
 
-  const currentTaskGroup = normalizedTaskGroups.find((group) => group.language === safeTaskLanguage) ?? {
+  const currentTaskGroup = normalizedTaskGroups.find(
+    (group) => group.language === safeTaskLanguage,
+  ) ?? {
     language: "nodejs",
-    tasks: []
+    tasks: [],
   };
 
-  const currentLanguageTasks = useMemo(
-    () => normalizedTaskGroups.find((group) => group.language === roomLanguage)?.tasks ?? [],
-    [normalizedTaskGroups, roomLanguage]
+  const allSelectableRoomTasks = useMemo(
+    () => normalizedTaskGroups.flatMap((group) => group.tasks),
+    [normalizedTaskGroups],
   );
 
   const taskSelectData = useMemo(() => {
-    return currentLanguageTasks.map((task) => ({
+    return allSelectableRoomTasks.map((task) => ({
       value: task.id,
-      label: task.title
+      label: `${task.title} (${labelForLanguage(task.language)})`,
     }));
-  }, [currentLanguageTasks]);
+  }, [allSelectableRoomTasks]);
 
   const selectedRoomTasks = useMemo(() => {
     const selected = new Set(roomTaskIds);
-    return currentLanguageTasks.filter((task) => selected.has(task.id));
-  }, [currentLanguageTasks, roomTaskIds]);
+    return allSelectableRoomTasks.filter((task) => selected.has(task.id));
+  }, [allSelectableRoomTasks, roomTaskIds]);
 
   const allowedRoomTaskIds = useMemo(() => {
-    return new Set(currentLanguageTasks.map((task) => task.id));
-  }, [currentLanguageTasks]);
+    return new Set(allSelectableRoomTasks.map((task) => task.id));
+  }, [allSelectableRoomTasks]);
 
   const hasUnavailableSelectedRoomTasks = useMemo(() => {
     return roomTaskIds.some((taskId) => !allowedRoomTaskIds.has(taskId));
   }, [allowedRoomTaskIds, roomTaskIds]);
 
   const totalTasksCount = useMemo(() => {
-    return normalizedTaskGroups.reduce((acc, group) => acc + group.tasks.length, 0);
+    return normalizedTaskGroups.reduce(
+      (acc, group) => acc + group.tasks.length,
+      0,
+    );
   }, [normalizedTaskGroups]);
 
   const activeLanguagesCount = useMemo(() => {
-    return normalizedTaskGroups.filter((group) => group.tasks.length > 0).length;
+    return normalizedTaskGroups.filter((group) => group.tasks.length > 0)
+      .length;
   }, [normalizedTaskGroups]);
 
   useEffect(() => {
-    const allowed = new Set(currentLanguageTasks.map((task) => task.id));
+    const allowed = new Set(allSelectableRoomTasks.map((task) => task.id));
     setRoomTaskIds((prev) => {
       const next = prev.filter((id) => allowed.has(id));
-      return next.length === prev.length && next.every((id, index) => id === prev[index]) ? prev : next;
+      return next.length === prev.length &&
+        next.every((id, index) => id === prev[index])
+        ? prev
+        : next;
     });
-  }, [currentLanguageTasks]);
+  }, [allSelectableRoomTasks]);
 
   useEffect(() => {
     setRoomTitleDrafts((prev) => {
       const allowedRoomIds = new Set(rooms.map((room) => room.id));
       const next = Object.fromEntries(
-        Object.entries(prev).filter(([roomId]) => allowedRoomIds.has(roomId))
+        Object.entries(prev).filter(([roomId]) => allowedRoomIds.has(roomId)),
       ) as Record<string, string>;
       rooms.forEach((room) => {
         if (!next[room.id]) {
@@ -347,8 +366,11 @@ export function DashboardPage() {
 
   useEffect(() => {
     const allowedRoomIds = new Set(rooms.map((room) => room.id));
-    setRoomSaveStatus((prev) =>
-      Object.fromEntries(Object.entries(prev).filter(([roomId]) => allowedRoomIds.has(roomId))) as Record<string, RoomSaveStatus>
+    setRoomSaveStatus(
+      (prev) =>
+        Object.fromEntries(
+          Object.entries(prev).filter(([roomId]) => allowedRoomIds.has(roomId)),
+        ) as Record<string, RoomSaveStatus>,
     );
   }, [rooms]);
 
@@ -357,7 +379,7 @@ export function DashboardPage() {
     setAdminRoleDrafts((prev) => {
       const allowedUserIds = new Set(adminUsers.map((user) => user.id));
       const next = Object.fromEntries(
-        Object.entries(prev).filter(([userId]) => allowedUserIds.has(userId))
+        Object.entries(prev).filter(([userId]) => allowedUserIds.has(userId)),
       ) as Record<string, string>;
       adminUsers.forEach((user) => {
         if (!next[user.id]) {
@@ -370,13 +392,17 @@ export function DashboardPage() {
 
   const onCreateTask = async (e: FormEvent) => {
     e.preventDefault();
+    trackEvent("prod_task_create_submit", {
+      language: taskLanguage,
+      has_title: taskTitle.trim().length > 0,
+    });
     try {
       setError("");
       await createTask({
         title: taskTitle,
         description: taskDescription,
         starterCode: taskStarterCode,
-        language: taskLanguage
+        language: taskLanguage,
       }).unwrap();
       setTaskTitle("");
       setTaskDescription("");
@@ -385,31 +411,54 @@ export function DashboardPage() {
       const params = new URLSearchParams(searchParams);
       params.set("lang", taskLanguage);
       setSearchParams(params, { replace: true });
+      trackEvent("prod_task_create_success", {
+        language: taskLanguage,
+      });
     } catch {
       setError("Не удалось создать задачу");
+      trackEvent("prod_task_create_failed", {
+        language: taskLanguage,
+      });
     }
   };
 
   const onCreateRoom = async (e: FormEvent) => {
     e.preventDefault();
+    const firstSelectedTaskLanguage = selectedRoomTasks[0]?.language ?? null;
+    trackEvent("prod_room_create_submit", {
+      selected_tasks: roomTaskIds.length,
+      first_task_language: firstSelectedTaskLanguage,
+    });
     try {
       setError("");
-      const normalizedTaskIds = Array.from(new Set(roomTaskIds.filter((taskId) => allowedRoomTaskIds.has(taskId))));
+      const normalizedTaskIds = Array.from(
+        new Set(roomTaskIds.filter((taskId) => allowedRoomTaskIds.has(taskId))),
+      );
       if (normalizedTaskIds.length !== roomTaskIds.length) {
         setRoomTaskIds(normalizedTaskIds);
       }
       const room = await createRoom({
         title: roomTitle,
-        language: roomLanguage,
-        taskIds: normalizedTaskIds
+        taskIds: normalizedTaskIds,
       }).unwrap();
       const ownerName = auth.user?.displayName?.trim() || "Интервьюер";
-      localStorage.setItem(`owner_token_${room.inviteCode}`, room.ownerToken ?? "");
+      localStorage.setItem(
+        `owner_token_${room.inviteCode}`,
+        room.ownerToken ?? "",
+      );
       localStorage.setItem("display_name", ownerName);
       localStorage.setItem(`guest_display_name_${room.inviteCode}`, ownerName);
+      trackEvent("prod_room_create_success", {
+        selected_tasks: normalizedTaskIds.length,
+        first_task_language: firstSelectedTaskLanguage,
+        room_invite_len: room.inviteCode.length,
+      });
       navigate(`/room/${room.inviteCode}`);
     } catch {
       setError("Не удалось создать комнату");
+      trackEvent("prod_room_create_failed", {
+        first_task_language: firstSelectedTaskLanguage,
+      });
     }
   };
 
@@ -430,7 +479,7 @@ export function DashboardPage() {
         title: editTaskTitle,
         description: editTaskDescription,
         starterCode: editTaskStarterCode,
-        language: editTaskLanguage
+        language: editTaskLanguage,
       }).unwrap();
       setEditingTask(null);
     } catch {
@@ -449,7 +498,9 @@ export function DashboardPage() {
   };
 
   const saveAdminRole = async (user: AdminUser) => {
-    const nextRole = (adminRoleDrafts[user.id] ?? user.role).trim().toLowerCase();
+    const nextRole = (adminRoleDrafts[user.id] ?? user.role)
+      .trim()
+      .toLowerCase();
     if (!nextRole || nextRole === user.role) return;
     try {
       setError("");
@@ -470,7 +521,11 @@ export function DashboardPage() {
     }
   };
 
-  const persistRoomTitle = async (roomId: string, originalTitle: string, titleDraft: string) => {
+  const persistRoomTitle = async (
+    roomId: string,
+    originalTitle: string,
+    titleDraft: string,
+  ) => {
     const normalized = titleDraft.trim();
     if (!normalized) {
       setRoomSaveStatus((prev) => ({ ...prev, [roomId]: "error" }));
@@ -503,10 +558,14 @@ export function DashboardPage() {
     }
   };
 
-  const scheduleRoomAutoSave = (roomId: string, originalTitle: string, nextTitle: string) => {
+  const scheduleRoomAutoSave = (
+    roomId: string,
+    originalTitle: string,
+    nextTitle: string,
+  ) => {
     setRoomTitleDrafts((prev) => ({
       ...prev,
-      [roomId]: nextTitle
+      [roomId]: nextTitle,
     }));
 
     if (roomSaveTimersRef.current[roomId]) {
@@ -515,7 +574,8 @@ export function DashboardPage() {
 
     roomSaveTimersRef.current[roomId] = window.setTimeout(() => {
       delete roomSaveTimersRef.current[roomId];
-      const latestOriginal = rooms.find((room) => room.id === roomId)?.title ?? originalTitle;
+      const latestOriginal =
+        rooms.find((room) => room.id === roomId)?.title ?? originalTitle;
       void persistRoomTitle(roomId, latestOriginal, nextTitle);
     }, 600);
   };
@@ -526,7 +586,8 @@ export function DashboardPage() {
       delete roomSaveTimersRef.current[roomId];
     }
     const draft = roomTitleDrafts[roomId] ?? originalTitle;
-    const latestOriginal = rooms.find((room) => room.id === roomId)?.title ?? originalTitle;
+    const latestOriginal =
+      rooms.find((room) => room.id === roomId)?.title ?? originalTitle;
     void persistRoomTitle(roomId, latestOriginal, draft);
   };
 
@@ -589,7 +650,7 @@ export function DashboardPage() {
         acceptanceCriteria: agentCriteria
           .split("\n")
           .map((line) => line.trim())
-          .filter(Boolean)
+          .filter(Boolean),
       }).unwrap();
       await refetchAgentRuns();
     } catch {
@@ -605,7 +666,7 @@ export function DashboardPage() {
         targetState,
         handoffReason: transitionComment || `Transition to ${targetState}`,
         actorRole: agentRole,
-        humanApproved: agentRequiresApproval
+        humanApproved: agentRequiresApproval,
       }).unwrap();
       await refetchAgentRuns();
       setSelectedPolicyRunId(runId);
@@ -632,7 +693,7 @@ export function DashboardPage() {
       await configureRealtimeFaults({
         inviteCode: faultInviteCode.trim(),
         latencyMs: Number(faultLatencyMs) || 0,
-        dropEveryNthMessage: Number(faultDropEvery) || 0
+        dropEveryNthMessage: Number(faultDropEvery) || 0,
       }).unwrap();
     } catch {
       setError("Не удалось применить профиль сбоев realtime");
@@ -643,7 +704,9 @@ export function DashboardPage() {
     try {
       setError("");
       if (!faultInviteCode.trim()) return;
-      await clearRealtimeFaults({ inviteCode: faultInviteCode.trim() }).unwrap();
+      await clearRealtimeFaults({
+        inviteCode: faultInviteCode.trim(),
+      }).unwrap();
     } catch {
       setError("Не удалось очистить профиль сбоев realtime");
     }
@@ -692,7 +755,13 @@ export function DashboardPage() {
 
   return (
     <>
-      <Modal opened={!!editingTask} onClose={() => setEditingTask(null)} title="Редактирование задачи" size="lg" centered>
+      <Modal
+        opened={!!editingTask}
+        onClose={() => setEditingTask(null)}
+        title="Редактирование задачи"
+        size="lg"
+        centered
+      >
         <Stack>
           <TextInput
             label="Название"
@@ -713,7 +782,12 @@ export function DashboardPage() {
               />
               <div className={styles.markdownPreview}>
                 {editTaskDescriptionHtml ? (
-                  <div className={styles.markdownPreviewContent} dangerouslySetInnerHTML={{ __html: editTaskDescriptionHtml }} />
+                  <div
+                    className={styles.markdownPreviewContent}
+                    dangerouslySetInnerHTML={{
+                      __html: editTaskDescriptionHtml,
+                    }}
+                  />
                 ) : (
                   <Text size="sm" c="dimmed">
                     Предпросмотр markdown-описания
@@ -763,22 +837,20 @@ export function DashboardPage() {
             <Textarea
               id="create-task-description"
               data-testid="create-task-description-input"
-              label="Описание (Markdown)"
+              label="Описание (Markdown, необязательно)"
               value={taskDescription}
               onChange={(e) => setTaskDescription(e.currentTarget.value)}
               minRows={8}
               styles={markdownInputStyles}
-              required
             />
             <Textarea
               id="create-task-code"
               data-testid="create-task-code-input"
-              label="Стартовый код"
+              label="Стартовый код (необязательно)"
               value={taskStarterCode}
               onChange={(e) => setTaskStarterCode(e.currentTarget.value)}
               minRows={12}
               styles={codeInputStyles}
-              required
             />
             <Select
               data-testid="create-task-language-select"
@@ -788,7 +860,11 @@ export function DashboardPage() {
               data={LANGUAGE_OPTIONS}
               styles={darkSelectStyles}
             />
-            <Button data-testid="create-task-submit-button" type="submit" loading={createTaskState.isLoading}>
+            <Button
+              data-testid="create-task-submit-button"
+              type="submit"
+              loading={createTaskState.isLoading}
+            >
               Сохранить задачу
             </Button>
           </Stack>
@@ -804,12 +880,16 @@ export function DashboardPage() {
               left: "50%",
               transform: "translateX(-50%)",
               width: "min(480px, calc(100vw - 24px))",
-              zIndex: 5000
+              zIndex: 5000,
             }}
           >
             <Notification
               color={profileSaveToast.type === "success" ? "teal" : "red"}
-              title={profileSaveToast.type === "success" ? "Имя сохранено" : "Ошибка сохранения"}
+              title={
+                profileSaveToast.type === "success"
+                  ? "Имя сохранено"
+                  : "Ошибка сохранения"
+              }
               withCloseButton
               onClose={() => setProfileSaveToast(null)}
             >
@@ -819,8 +899,13 @@ export function DashboardPage() {
         </Portal>
       ) : null}
 
+      <h1 className="visually-hidden">Личный кабинет — управление комнатами и задачами</h1>
       <AppShell padding={0} header={{ height: 72 }}>
-        <AppShell.Header bg="#101318" c="white" style={{ borderBottom: "1px solid #272b34" }}>
+        <AppShell.Header
+          bg="#101318"
+          c="white"
+          style={{ borderBottom: "1px solid #272b34" }}
+        >
           <Container size="xl" h="100%">
             <Group h="100%" justify="space-between" align="center">
               <Group>
@@ -860,12 +945,23 @@ export function DashboardPage() {
             style={{
               minHeight: "calc(100vh - 72px)",
               background:
-                "radial-gradient(1200px 500px at 15% -20%, rgba(255,255,255,0.06), transparent), radial-gradient(900px 420px at 90% -20%, rgba(255,255,255,0.04), transparent), #0f1115"
+                "radial-gradient(1200px 500px at 15% -20%, rgba(255,255,255,0.06), transparent), radial-gradient(900px 420px at 90% -20%, rgba(255,255,255,0.04), transparent), #0f1115",
             }}
           >
             <Container size="xl" py={20}>
-              <Card withBorder bg="#11151c" c="gray.1" style={{ borderColor: "#272b34" }} mb="md">
-                <Group justify="space-between" align="flex-start" gap="xl" wrap="wrap">
+              <Card
+                withBorder
+                bg="#11151c"
+                c="gray.1"
+                style={{ borderColor: "#272b34" }}
+                mb="md"
+              >
+                <Group
+                  justify="space-between"
+                  align="flex-start"
+                  gap="xl"
+                  wrap="wrap"
+                >
                   <Box style={{ flex: "1 1 320px", minWidth: 280 }}>
                     <Text c="gray.4" size="sm">
                       Профиль
@@ -874,14 +970,17 @@ export function DashboardPage() {
                       Имя для комнаты
                     </Title>
                     <Text c="gray.5" size="sm" mt={4}>
-                      Это имя увидят другие участники комнаты. Никнейм остаётся приватным и используется только для входа.
+                      Это имя увидят другие участники комнаты. Никнейм остаётся
+                      приватным и используется только для входа.
                     </Text>
                   </Box>
                   <Box style={{ flex: "1 1 320px", minWidth: 280 }}>
                     <Stack gap="xs">
                       <TextInput
                         value={profileDisplayName}
-                        onChange={(event) => setProfileDisplayName(event.currentTarget.value)}
+                        onChange={(event) =>
+                          setProfileDisplayName(event.currentTarget.value)
+                        }
                         styles={darkFieldStyles}
                         label="Имя для отображения"
                       />
@@ -889,7 +988,10 @@ export function DashboardPage() {
                         <Text size="xs" c="gray.5">
                           Ник для входа: @{auth.user?.nickname}
                         </Text>
-                        <Button loading={updateProfileState.isLoading} onClick={saveProfileDisplayName}>
+                        <Button
+                          loading={updateProfileState.isLoading}
+                          onClick={saveProfileDisplayName}
+                        >
                           Сохранить имя
                         </Button>
                       </Group>
@@ -899,7 +1001,12 @@ export function DashboardPage() {
               </Card>
 
               <SimpleGrid cols={{ base: 1, md: 3 }} spacing="md" mb="md">
-                <Card withBorder bg="#11151c" c="gray.1" style={{ borderColor: "#272b34" }}>
+                <Card
+                  withBorder
+                  bg="#11151c"
+                  c="gray.1"
+                  style={{ borderColor: "#272b34" }}
+                >
                   <Group justify="space-between">
                     <Text c="gray.4">Комнат создано</Text>
                     <ThemeIcon color="gray" variant="light">
@@ -910,7 +1017,12 @@ export function DashboardPage() {
                     {rooms.length}
                   </Title>
                 </Card>
-                <Card withBorder bg="#11151c" c="gray.1" style={{ borderColor: "#272b34" }}>
+                <Card
+                  withBorder
+                  bg="#11151c"
+                  c="gray.1"
+                  style={{ borderColor: "#272b34" }}
+                >
                   <Group justify="space-between">
                     <Text c="gray.4">Задач</Text>
                     <ThemeIcon color="gray" variant="light">
@@ -921,7 +1033,12 @@ export function DashboardPage() {
                     {totalTasksCount}
                   </Title>
                 </Card>
-                <Card withBorder bg="#11151c" c="gray.1" style={{ borderColor: "#272b34" }}>
+                <Card
+                  withBorder
+                  bg="#11151c"
+                  c="gray.1"
+                  style={{ borderColor: "#272b34" }}
+                >
                   <Group justify="space-between">
                     <Text c="gray.4">Языков в банке</Text>
                     <ThemeIcon color="gray" variant="light">
@@ -934,13 +1051,28 @@ export function DashboardPage() {
                 </Card>
               </SimpleGrid>
 
-              <Card withBorder radius="lg" mb="md" bg="#11151c" c="gray.1" style={{ borderColor: "#272b34" }}>
+              <Card
+                withBorder
+                radius="lg"
+                mb="md"
+                bg="#11151c"
+                c="gray.1"
+                style={{ borderColor: "#272b34" }}
+              >
                 <Group wrap="wrap" gap="xs">
                   {dashboardSections.map((dashboardSection) => (
                     <Button
                       key={dashboardSection.value}
-                      variant={activeSection === dashboardSection.value ? "filled" : "subtle"}
-                      color={activeSection === dashboardSection.value ? "gray" : "dark"}
+                      variant={
+                        activeSection === dashboardSection.value
+                          ? "filled"
+                          : "subtle"
+                      }
+                      color={
+                        activeSection === dashboardSection.value
+                          ? "gray"
+                          : "dark"
+                      }
                       onClick={() => switchSection(dashboardSection.value)}
                     >
                       {dashboardSection.label}
@@ -950,146 +1082,47 @@ export function DashboardPage() {
               </Card>
 
               {activeSection === "rooms" && (
-                <SimpleGrid cols={{ base: 1, lg: 1 }} spacing="md">
-                  <Card withBorder radius="lg" padding="lg" bg="#11151c" c="gray.1" style={{ borderColor: "#272b34" }} data-testid="create-room-card">
-                    <form onSubmit={onCreateRoom}>
-                      <Stack>
-                        <Group>
-                          <ThemeIcon color="gray" variant="light">
-                            <IconPlus size={15} />
-                          </ThemeIcon>
-                          <Title order={4}>Создать комнату</Title>
-                        </Group>
-                        <Text size="sm" c="gray.4">
-                          Выбери язык и нужные шаги. Если шаги не выбраны, комната создастся пустой — задачи можно добавить уже внутри.
-                        </Text>
-                        <TextInput
-                          label="Название комнаты"
-                          value={roomTitle}
-                          onChange={(e) => setRoomTitle(e.currentTarget.value)}
-                          styles={darkFieldStyles}
-                          required
-                        />
-                        <Select
-                          label="Язык комнаты"
-                          value={roomLanguage}
-                          onChange={(value) => setRoomLanguage(value ?? "nodejs")}
-                          data={LANGUAGE_OPTIONS}
-                          styles={darkSelectStyles}
-                        />
-                        <MultiSelect
-                          data-testid="room-task-select"
-                          label="Задачи для комнаты"
-                          description="Показываются задачи только выбранного языка"
-                          data={taskSelectData}
-                          value={roomTaskIds}
-                          onChange={setRoomTaskIds}
-                          searchable
-                          styles={darkSelectStyles}
-                        />
-                        {hasUnavailableSelectedRoomTasks && (
-                          <Text size="xs" c="yellow.4">
-                            Часть выбранных задач не соответствует текущему языку и будет удалена перед созданием
-                            комнаты.
-                          </Text>
-                        )}
-                        <Stack gap="xs" data-testid="selected-task-preview">
-                          <Text fw={600}>Выбранные задачи</Text>
-                          {selectedRoomTasks.length === 0 ? (
-                            <Text size="sm" c="gray.4">
-                              Пока ничего не выбрано. Комната будет создана без задач.
-                            </Text>
-                          ) : (
-                            selectedRoomTasks.map((task) => (
-                              <Card key={task.id} withBorder radius="md" padding="sm" bg="#121720" style={{ borderColor: "#2a3039" }}>
-                                <Stack gap={4}>
-                                  <Text fw={700}>{task.title}</Text>
-                                  <div
-                                    className={styles.markdownPreviewContent}
-                                    dangerouslySetInnerHTML={{ __html: markdownToHtml(task.description) }}
-                                  />
-                                </Stack>
-                              </Card>
-                            ))
-                          )}
-                        </Stack>
-                        <Button
-                          type="submit"
-                          loading={createRoomState.isLoading}
-                          disabled={hasUnavailableSelectedRoomTasks}
-                        >
-                          Создать и открыть
-                        </Button>
-                      </Stack>
-                    </form>
-                  </Card>
-
-                  {false && (<Card withBorder radius="lg" padding="lg" bg="#11151c" c="gray.1" style={{ borderColor: "#272b34" }}>
-                    <Stack>
-                      <Title order={4}>Текущие параметры</Title>
-                      <Divider color="#272b34" />
-                      <Text size="sm">Язык комнаты: {labelForLanguage(roomLanguage)}</Text>
-                      <Text size="sm">Выбрано задач: {roomTaskIds.length}</Text>
-                      <Text size="sm">Всего задач языка: {currentLanguageTasks.length}</Text>
-                      <Text size="sm" c="gray.4">
-                        После создания откроется live-coding сессия. Ссылка и код комнаты передаются кандидату.
-                      </Text>
-                    </Stack>
-                  </Card>)}
-                </SimpleGrid>
+                <CreateRoomSection
+                  title={roomTitle}
+                  onTitleChange={setRoomTitle}
+                  taskOptions={taskSelectData}
+                  selectedTaskIds={roomTaskIds}
+                  onSelectedTaskIdsChange={setRoomTaskIds}
+                  selectedTasks={selectedRoomTasks}
+                  isSubmitting={createRoomState.isLoading}
+                  onSubmit={onCreateRoom}
+                />
               )}
 
               {activeSection === "tasks" && (
                 <SimpleGrid cols={{ base: 1, lg: 1 }} spacing="md">
-                  {false && (<Card withBorder radius="lg" padding="lg" bg="#11151c" c="gray.1" style={{ borderColor: "#272b34" }}>
-                    <form onSubmit={onCreateTask}>
-                      <Stack>
-                        <Title order={4}>Создать задачу</Title>
-                        <TextInput
-                          label="Название"
-                          value={taskTitle}
-                          onChange={(e) => setTaskTitle(e.currentTarget.value)}
-                          styles={darkFieldStyles}
-                          required
-                        />
-                        <Textarea
-                          label="Описание"
-                          value={taskDescription}
-                          onChange={(e) => setTaskDescription(e.currentTarget.value)}
-                          minRows={3}
-                          styles={darkFieldStyles}
-                          required
-                        />
-                        <Textarea
-                          label="Стартовый код"
-                          value={taskStarterCode}
-                          onChange={(e) => setTaskStarterCode(e.currentTarget.value)}
-                          minRows={8}
-                          styles={darkFieldStyles}
-                          required
-                        />
-                        <Select
-                          label="Язык"
-                          value={taskLanguage}
-                          onChange={(value) => setTaskLanguage(value ?? "nodejs")}
-                          data={LANGUAGE_OPTIONS}
-                          styles={darkSelectStyles}
-                        />
-                        <Button type="submit" loading={createTaskState.isLoading}>
-                          Сохранить задачу
-                        </Button>
-                      </Stack>
-                    </form>
-                  </Card>)}
-
-                  <Card withBorder radius="lg" padding="lg" bg="#11151c" c="gray.1" style={{ borderColor: "#272b34" }} data-testid="task-bank-panel">
+                  <Card
+                    withBorder
+                    radius="lg"
+                    padding="lg"
+                    bg="#11151c"
+                    c="gray.1"
+                    style={{ borderColor: "#272b34" }}
+                    data-testid="task-bank-panel"
+                  >
                     <Stack>
                       <Title order={4}>Управление задачами</Title>
                       <Group justify="space-between" align="center">
                         <Button
                           data-testid="open-create-task-modal"
                           leftSection={<IconPlus size={14} />}
-                          onClick={() => setCreateTaskModalOpened(true)}
+                          onClick={() => {
+                            // Прежде окно открывалось со значением `taskLanguage`,
+                            // которое жило в state и сбрасывалось в `nodejs` на
+                            // первой попытке. В результате, если пользователь
+                            // открывал модалку с активным табом `python`/`sql`,
+                            // в селекте всё равно стоял Node JS, и при сабмите
+                            // задача попадала не в свою группу. Теперь явно
+                            // синхронизируем язык с табом, который сейчас
+                            // выбран (`safeTaskLanguage`).
+                            setTaskLanguage(safeTaskLanguage);
+                            setCreateTaskModalOpened(true);
+                          }}
                         >
                           Создать задачу
                         </Button>
@@ -1099,8 +1132,16 @@ export function DashboardPage() {
                           <Button
                             key={group.language}
                             size="xs"
-                            variant={group.language === safeTaskLanguage ? "filled" : "subtle"}
-                            color={group.language === safeTaskLanguage ? "blue" : "gray"}
+                            variant={
+                              group.language === safeTaskLanguage
+                                ? "filled"
+                                : "subtle"
+                            }
+                            color={
+                              group.language === safeTaskLanguage
+                                ? "blue"
+                                : "gray"
+                            }
                             onClick={() => {
                               const params = new URLSearchParams(searchParams);
                               params.set("lang", group.language);
@@ -1114,7 +1155,14 @@ export function DashboardPage() {
                       <Divider color="#272b34" />
                       <Stack gap="sm">
                         {currentTaskGroup.tasks.map((task) => (
-                          <Card key={task.id} withBorder radius="md" padding="sm" bg="#121720" style={{ borderColor: "#2a3039" }}>
+                          <Card
+                            key={task.id}
+                            withBorder
+                            radius="md"
+                            padding="sm"
+                            bg="#121720"
+                            style={{ borderColor: "#2a3039" }}
+                          >
                             <Stack gap="xs">
                               <Group justify="space-between">
                                 <Text fw={700}>{task.title}</Text>
@@ -1124,7 +1172,9 @@ export function DashboardPage() {
                               </Group>
                               <div
                                 className={styles.taskDescriptionMarkdown}
-                                dangerouslySetInnerHTML={{ __html: markdownToHtml(task.description) }}
+                                dangerouslySetInnerHTML={{
+                                  __html: markdownToHtml(task.description),
+                                }}
                               />
                               <Group justify="flex-end">
                                 <Button
@@ -1150,7 +1200,8 @@ export function DashboardPage() {
                         ))}
                         {currentTaskGroup.tasks.length === 0 && (
                           <Text size="sm" c="gray.4">
-                            Пока нет задач для {labelForLanguage(currentTaskGroup.language)}
+                            Пока нет задач для{" "}
+                            {labelForLanguage(currentTaskGroup.language)}
                           </Text>
                         )}
                       </Stack>
@@ -1160,453 +1211,84 @@ export function DashboardPage() {
               )}
 
               {activeSection === "manage" && (
-                <Card withBorder radius="lg" padding="lg" bg="#11151c" c="gray.1" style={{ borderColor: "#272b34" }}>
-                  <Stack>
-                    <Title order={4}>Управление комнатами</Title>
-                    {rooms.map((room) => (
-                      <Card
-                        key={room.id}
-                        withBorder
-                        radius="md"
-                        padding="sm"
-                        bg="#121720"
-                        style={{ borderColor: "#2a3039", cursor: "pointer" }}
-                        role="button"
-                        tabIndex={0}
-                        aria-label={`Открыть комнату ${room.title}`}
-                        className={styles.manageRoomCardInteractive}
-                        onClick={() => openRoomFromDashboard(room)}
-                        onKeyDown={(event) => {
-                          if (event.target !== event.currentTarget) return;
-                          if (event.key !== "Enter" && event.key !== " ") return;
-                          event.preventDefault();
-                          openRoomFromDashboard(room);
-                        }}
-                      >
-                        <Stack gap="sm">
-                          <Group justify="space-between">
-                            <Group gap="xs">
-                              <Badge color="gray" variant="light">
-                                {labelForLanguage(room.language)}
-                              </Badge>
-                              <Badge color={room.accessRole === "owner" ? "teal" : "blue"} variant="light">
-                                {room.accessRole === "owner" ? "Владелец" : "Участник"}
-                              </Badge>
-                              <Badge variant="outline" color={statusColor(roomSaveStatus[room.id])}>
-                                {statusLabel(roomSaveStatus[room.id])}
-                              </Badge>
-                            </Group>
-                            <Group gap={6}>
-                              <Text size="xs" c="gray.4">
-                                Код: {room.inviteCode}
-                              </Text>
-                              <ActionIcon
-                                variant="light"
-                                color="red"
-                                disabled={room.accessRole !== "owner"}
-                                aria-label={`Удалить комнату ${room.title}`}
-                                title="Удалить комнату"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  if (room.accessRole !== "owner") return;
-                                  void removeRoom(room.id);
-                                }}
-                              >
-                                <IconTrash size={14} />
-                              </ActionIcon>
-                            </Group>
-                          </Group>
-
-                          <TextInput
-                            label="Название комнаты"
-                            value={roomTitleDrafts[room.id] ?? room.title}
-                            disabled={room.accessRole !== "owner"}
-                            onClick={(event) => event.stopPropagation()}
-                            onMouseDown={(event) => event.stopPropagation()}
-                            onKeyDown={(event) => event.stopPropagation()}
-                            onChange={(event) => {
-                              if (room.accessRole !== "owner") return;
-                              scheduleRoomAutoSave(room.id, room.title, event.currentTarget.value);
-                            }}
-                            onBlur={() => {
-                              if (room.accessRole !== "owner") return;
-                              flushRoomAutoSave(room.id, room.title);
-                            }}
-                            styles={darkFieldStyles}
-                          />
-
-                          <Group justify="space-between">
-                            <Text size="xs" c="gray.4">
-                              Клик по карточке открывает комнату
-                            </Text>
-                            <Group gap={4} c="gray.4">
-                              <Text size="xs">Открыть</Text>
-                              <IconChevronRight size={14} />
-                            </Group>
-                          </Group>
-                        </Stack>
-                      </Card>
-                    ))}
-                    {rooms.length === 0 && <Text c="gray.4">Комнат пока нет</Text>}
-                  </Stack>
-                </Card>
+                <ManageRoomsSection
+                  rooms={rooms}
+                  roomTitleDrafts={roomTitleDrafts}
+                  roomSaveStatus={roomSaveStatus}
+                  onOpenRoom={openRoomFromDashboard}
+                  onDeleteRoom={(roomId) => {
+                    void removeRoom(roomId);
+                  }}
+                  onScheduleTitleChange={scheduleRoomAutoSave}
+                  onFlushTitleChange={flushRoomAutoSave}
+                />
               )}
 
               {activeSection === "admin" && isAdmin && (
-                <Card withBorder radius="lg" padding="lg" bg="#11151c" c="gray.1" style={{ borderColor: "#272b34" }}>
-                  <Stack>
-                    <Group justify="space-between" align="center">
-                      <Group>
-                        <ThemeIcon color="gray" variant="light">
-                          <IconUsers size={15} />
-                        </ThemeIcon>
-                        <Title order={4}>Админка пользователей</Title>
-                      </Group>
-                      <Button variant="light" size="xs" onClick={() => refetchAdminUsers()}>
-                        Обновить
-                      </Button>
-                    </Group>
-
-                    <Text size="sm" c="gray.4">
-                      Управляйте ролями и удаляйте пользователей. Системный администратор `boumrz` защищен от удаления.
-                    </Text>
-
-                    <Stack gap="sm">
-                      {adminUsers.map((user) => {
-                        const draftRole = adminRoleDrafts[user.id] ?? user.role;
-                        const isCurrentUser = user.id === auth.user?.id;
-                        return (
-                          <Card key={user.id} withBorder radius="md" padding="sm" bg="#121720" style={{ borderColor: "#2a3039" }}>
-                            <Stack gap="sm">
-                              <Group justify="space-between" align="center">
-                                <Group gap="xs">
-                                  <Text fw={700}>@{user.nickname}</Text>
-                                  <Badge color={user.role === "admin" ? "orange" : "gray"} variant="light">
-                                    {user.role === "admin" ? "Администратор" : "Пользователь"}
-                                  </Badge>
-                                  {isCurrentUser && (
-                                    <Badge color="teal" variant="outline">
-                                      Это вы
-                                    </Badge>
-                                  )}
-                                </Group>
-                                <Text size="xs" c="gray.4">
-                                  Создан: {formatCreatedAt(user.createdAt)}
-                                </Text>
-                              </Group>
-
-                              <Group align="end" wrap="wrap">
-                                <Select
-                                  label="Роль"
-                                  value={draftRole}
-                                  onChange={(value) => {
-                                    if (!value) return;
-                                    setAdminRoleDrafts((prev) => ({ ...prev, [user.id]: value }));
-                                  }}
-                                  data={[
-                                    { value: "user", label: "Пользователь" },
-                                    { value: "admin", label: "Администратор" }
-                                  ]}
-                                  styles={darkSelectStyles}
-                                  w={220}
-                                  disabled={user.nickname.trim().toLowerCase() === "boumrz"}
-                                />
-                                <Button
-                                  variant="light"
-                                  loading={updateAdminUserRoleState.isLoading}
-                                  disabled={draftRole === user.role}
-                                  onClick={() => saveAdminRole(user)}
-                                >
-                                  Сохранить роль
-                                </Button>
-                                <Button
-                                  color="red"
-                                  variant="outline"
-                                  loading={deleteAdminUserState.isLoading}
-                                  disabled={isCurrentUser || user.nickname.trim().toLowerCase() === "boumrz"}
-                                  onClick={() => removeUserByAdmin(user)}
-                                >
-                                  Удалить пользователя
-                                </Button>
-                              </Group>
-                            </Stack>
-                          </Card>
-                        );
-                      })}
-                      {adminUsers.length === 0 && (
-                        <Text size="sm" c="gray.4">
-                          Пользователи пока не найдены
-                        </Text>
-                      )}
-                    </Stack>
-                  </Stack>
-                </Card>
+                <AdminUsersSection
+                  users={adminUsers}
+                  currentUserId={auth.user?.id}
+                  roleDrafts={adminRoleDrafts}
+                  onRoleDraftChange={(userId, role) =>
+                    setAdminRoleDrafts((prev) => ({ ...prev, [userId]: role }))
+                  }
+                  onSaveRole={saveAdminRole}
+                  onDeleteUser={removeUserByAdmin}
+                  onRefresh={() => refetchAdminUsers()}
+                  isUpdatingRole={updateAdminUserRoleState.isLoading}
+                  isDeleting={deleteAdminUserState.isLoading}
+                />
               )}
 
               {activeSection === "agents" && (
-                <Stack>
-                  <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="md">
-                    <Card withBorder radius="lg" padding="lg" bg="#11151c" c="gray.1" style={{ borderColor: "#272b34" }}>
-                      <form onSubmit={onStartAgentRun}>
-                        <Stack>
-                          <Group>
-                            <ThemeIcon color="gray" variant="light">
-                              <IconRobot size={15} />
-                            </ThemeIcon>
-                            <Title order={4}>Запуск агентного процесса</Title>
-                          </Group>
-                          <Text size="sm" c="gray.4">
-                            Запуск процесса оркестрации доступен только внутри задачи Linear.
-                          </Text>
-                          <TextInput
-                            label="Задача Linear"
-                            placeholder="LDT-76"
-                            value={agentIssueId}
-                            onChange={(event) => setAgentIssueId(event.currentTarget.value)}
-                            styles={darkFieldStyles}
-                            required
-                          />
-                          <Select
-                            label="Провайдер процесса"
-                            value={agentProvider}
-                            onChange={(value) => setAgentProvider((value as "temporal" | "langgraph") ?? "temporal")}
-                            data={[
-                              { value: "temporal", label: "Temporal (основной)" },
-                              { value: "langgraph", label: "LangGraph (прототип)" }
-                            ]}
-                            styles={darkSelectStyles}
-                          />
-                          <TextInput
-                            label="Текущая роль"
-                            value={agentRole}
-                            onChange={(event) => setAgentRole(event.currentTarget.value)}
-                            styles={darkFieldStyles}
-                          />
-                          <Switch
-                            label="Ручное подтверждение обязательно для финальных этапов"
-                            checked={agentRequiresApproval}
-                            onChange={(event) => setAgentRequiresApproval(event.currentTarget.checked)}
-                          />
-                          <Textarea
-                            label="Критерии приемки (по строкам)"
-                            minRows={5}
-                            value={agentCriteria}
-                            onChange={(event) => setAgentCriteria(event.currentTarget.value)}
-                            styles={darkFieldStyles}
-                          />
-                          <Button type="submit" loading={startAgentRunState.isLoading}>
-                            Запустить процесс
-                          </Button>
-                        </Stack>
-                      </form>
-                    </Card>
-
-                    <Card withBorder radius="lg" padding="lg" bg="#11151c" c="gray.1" style={{ borderColor: "#272b34" }}>
-                      <Stack>
-                        <Group justify="space-between">
-                          <Group>
-                            <ThemeIcon color="gray" variant="light">
-                              <IconShieldCheck size={15} />
-                            </ThemeIcon>
-                            <Title order={4}>Проверка окружения</Title>
-                          </Group>
-                          <Button variant="light" size="xs" onClick={() => refetchEnvironmentDoctor()}>
-                            Обновить
-                          </Button>
-                        </Group>
-                        <Badge
-                          variant="light"
-                          color={
-                            environmentDoctor?.status === "PASS"
-                              ? "teal"
-                              : environmentDoctor?.status === "WARN"
-                              ? "yellow"
-                              : "red"
-                          }
-                        >
-                          Статус: {environmentDoctor?.status ?? "НЕИЗВЕСТНО"}
-                        </Badge>
-                        <Stack gap="xs">
-                          {(environmentDoctor?.checks ?? []).map((check) => (
-                            <Card
-                              key={check.key}
-                              withBorder
-                              radius="md"
-                              padding="xs"
-                              bg="#121720"
-                              style={{ borderColor: "#2a3039" }}
-                            >
-                              <Group justify="space-between" align="flex-start">
-                                <Stack gap={2}>
-                                  <Text size="sm" fw={700}>
-                                    {check.key}
-                                  </Text>
-                                  <Text size="xs" c="gray.4">
-                                    {check.message}
-                                  </Text>
-                                </Stack>
-                                <Badge
-                                  size="xs"
-                                  color={check.status === "PASS" ? "teal" : check.status === "WARN" ? "yellow" : "red"}
-                                  variant="light"
-                                >
-                                  {check.status}
-                                </Badge>
-                              </Group>
-                            </Card>
-                          ))}
-                        </Stack>
-                      </Stack>
-                    </Card>
-                  </SimpleGrid>
-
-                  <Card withBorder radius="lg" padding="lg" bg="#11151c" c="gray.1" style={{ borderColor: "#272b34" }}>
-                    <form onSubmit={onConfigureFaults}>
-                      <Stack>
-                        <Group>
-                          <ThemeIcon color="gray" variant="light">
-                            <IconBolt size={15} />
-                          </ThemeIcon>
-                          <Title order={4}>Инъекции сбоев realtime</Title>
-                        </Group>
-                        <Text size="sm" c="gray.4">
-                          Для тестов хаоса: искусственная задержка и периодический пропуск broadcast по комнате.
-                        </Text>
-                        <Group grow>
-                          <TextInput
-                            label="Код приглашения"
-                            placeholder="r-xxxxxxxx"
-                            value={faultInviteCode}
-                            onChange={(event) => setFaultInviteCode(event.currentTarget.value)}
-                            styles={darkFieldStyles}
-                            required
-                          />
-                          <TextInput
-                            label="Задержка (мс)"
-                            value={faultLatencyMs}
-                            onChange={(event) => setFaultLatencyMs(event.currentTarget.value)}
-                            styles={darkFieldStyles}
-                          />
-                          <TextInput
-                            label="Пропускать каждый N-й"
-                            value={faultDropEvery}
-                            onChange={(event) => setFaultDropEvery(event.currentTarget.value)}
-                            styles={darkFieldStyles}
-                          />
-                        </Group>
-                        <Group>
-                          <Button type="submit" variant="light" loading={configureRealtimeFaultsState.isLoading}>
-                            Применить профиль
-                          </Button>
-                          <Button
-                            type="button"
-                            color="red"
-                            variant="outline"
-                            loading={clearRealtimeFaultsState.isLoading}
-                            onClick={onClearFaults}
-                          >
-                            Очистить профиль
-                          </Button>
-                        </Group>
-                      </Stack>
-                    </form>
-                  </Card>
-
-                  <Card withBorder radius="lg" padding="lg" bg="#11151c" c="gray.1" style={{ borderColor: "#272b34" }}>
-                    <Stack>
-                      <Group justify="space-between">
-                        <Title order={4}>Запуски по задаче {issueIdLooksValid ? normalizedIssueId : "—"}</Title>
-                        <Button variant="light" size="xs" disabled={!issueIdLooksValid} onClick={() => refetchAgentRuns()}>
-                          Обновить список
-                        </Button>
-                      </Group>
-                      <TextInput
-                        label="Комментарий для передачи"
-                        value={transitionComment}
-                        onChange={(event) => setTransitionComment(event.currentTarget.value)}
-                        styles={darkFieldStyles}
-                      />
-                      <Stack gap="sm">
-                        {agentRuns.map((run) => (
-                          <Card key={run.id} withBorder radius="md" padding="sm" bg="#121720" style={{ borderColor: "#2a3039" }}>
-                            <Stack gap="xs">
-                              <Group justify="space-between">
-                                <Group gap="xs">
-                                  <Badge color="gray" variant="light">
-                                    {run.workflowProvider}
-                                  </Badge>
-                                  <Badge variant="outline" color="gray">
-                                    {run.currentState}
-                                  </Badge>
-                                  <Badge variant="outline" color="gray">
-                                    повтор {run.retryCount}/{run.maxRetries}
-                                  </Badge>
-                                </Group>
-                                <Text size="xs" c="gray.4">
-                                  трасса: {run.traceId}
-                                </Text>
-                              </Group>
-                              <Text size="sm">Роль: {run.assignedRole || "—"}</Text>
-                              <Group gap="xs" wrap="wrap">
-                                {run.allowedTransitions.map((targetState) => (
-                                  <Button
-                                    key={targetState}
-                                    size="xs"
-                                    variant="light"
-                                    onClick={() => onTransitionRun(run.id, targetState)}
-                                    loading={transitionAgentRunState.isLoading}
-                                  >
-                                    {targetState}
-                                  </Button>
-                                ))}
-                                <Button
-                                  size="xs"
-                                  color="gray"
-                                  variant="outline"
-                                  onClick={() => setSelectedPolicyRunId(run.id)}
-                                >
-                                  Проверить гейты
-                                </Button>
-                                <Button
-                                  size="xs"
-                                  color="gray"
-                                  variant="outline"
-                                  onClick={() => onExecuteReviewers(run.id)}
-                                  loading={executeAllRunReviewersState.isLoading}
-                                >
-                                  Запустить ревьюеров
-                                </Button>
-                              </Group>
-                            </Stack>
-                          </Card>
-                        ))}
-                        {issueIdLooksValid && agentRuns.length === 0 && (
-                          <Text size="sm" c="gray.4">
-                            Для задачи пока нет запущенных процессов.
-                          </Text>
-                        )}
-                      </Stack>
-
-                      {selectedPolicyRunId && selectedPolicyResult && (
-                        <Card withBorder radius="md" padding="sm" bg="#121720" style={{ borderColor: "#2a3039" }}>
-                          <Stack gap="xs">
-                            <Group justify="space-between">
-                              <Text fw={700}>Результат гейтов для {selectedPolicyRunId}</Text>
-                              <Badge color={selectedPolicyResult.passed ? "teal" : "red"} variant="light">
-                                {selectedPolicyResult.passed ? "ПРОЙДЕНО" : "НЕ ПРОЙДЕНО"}
-                              </Badge>
-                            </Group>
-                            {selectedPolicyResult.checks.map((check) => (
-                              <Text key={check.id} size="sm" c={check.passed ? "teal.2" : "red.4"}>
-                                {check.id}: {check.message}
-                              </Text>
-                            ))}
-                          </Stack>
-                        </Card>
-                      )}
-                    </Stack>
-                  </Card>
-                </Stack>
+                <AgentOpsSection
+                  runForm={{
+                    issueId: agentIssueId,
+                    provider: agentProvider,
+                    role: agentRole,
+                    requiresApproval: agentRequiresApproval,
+                    criteria: agentCriteria,
+                    onIssueIdChange: setAgentIssueId,
+                    onProviderChange: setAgentProvider,
+                    onRoleChange: setAgentRole,
+                    onRequiresApprovalChange: setAgentRequiresApproval,
+                    onCriteriaChange: setAgentCriteria,
+                    onSubmit: onStartAgentRun,
+                    isSubmitting: startAgentRunState.isLoading,
+                  }}
+                  environment={{
+                    report: environmentDoctor,
+                    onRefresh: () => refetchEnvironmentDoctor(),
+                  }}
+                  faults={{
+                    inviteCode: faultInviteCode,
+                    latencyMs: faultLatencyMs,
+                    dropEvery: faultDropEvery,
+                    onInviteCodeChange: setFaultInviteCode,
+                    onLatencyMsChange: setFaultLatencyMs,
+                    onDropEveryChange: setFaultDropEvery,
+                    onConfigure: onConfigureFaults,
+                    onClear: onClearFaults,
+                    isConfiguring: configureRealtimeFaultsState.isLoading,
+                    isClearing: clearRealtimeFaultsState.isLoading,
+                  }}
+                  agentRuns={{
+                    runs: agentRuns,
+                    issueLabel: normalizedIssueId,
+                    isIssueValid: issueIdLooksValid,
+                    transitionComment,
+                    selectedPolicyRunId,
+                    selectedPolicyResult,
+                    isTransitioning: transitionAgentRunState.isLoading,
+                    isExecutingReviewers:
+                      executeAllRunReviewersState.isLoading,
+                    onRefresh: () => refetchAgentRuns(),
+                    onTransitionCommentChange: setTransitionComment,
+                    onTransitionRun,
+                    onExecuteReviewers,
+                    onSelectPolicyRun: setSelectedPolicyRunId,
+                  }}
+                />
               )}
 
               {(error || loadingMutation) && (
@@ -1620,47 +1302,4 @@ export function DashboardPage() {
       </AppShell>
     </>
   );
-}
-
-function statusColor(status: RoomSaveStatus | undefined) {
-  if (status === "saving") return "yellow";
-  if (status === "saved") return "teal";
-  if (status === "error") return "red";
-  return "gray";
-}
-
-function statusLabel(status: RoomSaveStatus | undefined) {
-  if (status === "saving") return "Сохранение...";
-  if (status === "saved") return "Сохранено";
-  if (status === "error") return "Ошибка";
-  return "Без изменений";
-}
-
-function labelForLanguage(language: string) {
-  switch (normalizeLanguageKey(language)) {
-    case "nodejs":
-      return "Node JS";
-    case "python":
-      return "Python";
-    case "kotlin":
-      return "Kotlin";
-    case "java":
-      return "Java";
-    case "sql":
-      return "SQL";
-    default:
-      return "Node JS";
-  }
-}
-
-function formatCreatedAt(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("ru-RU", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
 }

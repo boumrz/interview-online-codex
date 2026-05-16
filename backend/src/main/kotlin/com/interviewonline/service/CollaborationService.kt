@@ -7,10 +7,12 @@ import com.interviewonline.model.User
 import com.interviewonline.repository.RoomParticipantRepository
 import com.interviewonline.repository.RoomRepository
 import com.interviewonline.repository.UserRepository
+import com.interviewonline.service.LanguageNormalizer.normalize as normalizeLanguage
 import com.interviewonline.ws.CandidateKeyPayload
 import com.interviewonline.ws.CursorPayload
 import com.interviewonline.ws.NoteMessagePayload
 import com.interviewonline.ws.ParticipantPayload
+import com.interviewonline.ws.PersonalNoteEntryPayload
 import com.interviewonline.ws.RealtimeEventRequest
 import com.interviewonline.ws.RoomRealtimePayload
 import com.interviewonline.ws.RoomTaskPayload
@@ -46,8 +48,14 @@ class CollaborationService(
     private val keyEventBroadcastThrottleMs = 20L
     private val candidateKeyHistoryMaxSize = 50
     private val notesHistoryLimit = 500
+    private val privateNotesHistoryLimit = 2_000
+    private val privateNotesBlockNameMaxChars = 80
+    private val privateNotesTextMaxChars = 8_000
     private val maxYjsDocumentBase64Chars = 400_000
     private val maxAwarenessUpdateBase64Chars = 24_000
+    private val appliedOperationIdTtlMillis = 15 * 60_000L
+    private val appliedOperationIdCacheMaxSize = 20_000
+    private val yjsSequenceAuthorHistoryLimit = 4_096L
 
     private enum class PresenceStatus(val wireValue: String) {
         ACTIVE("active"),
@@ -87,9 +95,15 @@ class CollaborationService(
         var lastCodeUpdatedBySessionId: String? = null,
         var yjsDocumentBase64: String? = null,
         var lastYjsSequence: Long = 0,
+        var lastIncrementalYjsSessionId: String? = null,
         var currentStep: Int,
         var notes: String,
         val notesMessages: MutableList<NoteMessagePayload> = mutableListOf(),
+        /**
+         * Room-wide private notes per author (each interviewer/owner has their own
+         * stream). Replaces the legacy per-step segregation.
+         */
+        val privateNotesByAuthor: MutableMap<String, MutableList<PersonalNoteEntryPayload>> = ConcurrentHashMap(),
         var briefingMarkdown: String = "",
         val tasks: MutableList<RoomTaskPayload> = mutableListOf(),
         var notesLockedBySessionId: String? = null,
@@ -101,6 +115,8 @@ class CollaborationService(
         val lastCodeSequenceBySessionId: MutableMap<String, Long> = ConcurrentHashMap(),
         val lastYjsSnapshotSequenceBySessionId: MutableMap<String, Long> = ConcurrentHashMap(),
         val lastClientEventSequenceBySessionId: MutableMap<String, Long> = ConcurrentHashMap(),
+        val appliedOperationIds: MutableMap<String, Long> = ConcurrentHashMap(),
+        val yjsSequenceAuthorBySequence: MutableMap<Long, String> = ConcurrentHashMap(),
         val grantedRoleBySessionId: MutableMap<String, RoomAccessService.RoomRole> = ConcurrentHashMap(),
         var lastCandidateKey: CandidateKeyPayload? = null,
         val candidateKeyHistory: MutableList<CandidateKeyPayload> = mutableListOf(),
@@ -116,10 +132,11 @@ class CollaborationService(
         var selectionEndColumn: Int? = null,
     )
 
-    private data class NotesThreadPayload(
-        val version: Int = 1,
-        val messages: List<NoteMessagePayload> = emptyList(),
-    )
+    /**
+     * Payload-структуры (`NotesThreadPayload`, `RoomPrivateNotesPayload`,
+     * `RoomPrivateNotesAuthorPayload`) живут в файле `PrivateNotesPayloads.kt`
+     * того же пакета — используются и сервисом, и [PrivateNotesSerialization].
+     */
 
     private val roomSseConnections = ConcurrentHashMap<String, MutableSet<String>>()
     private val sseConnections = ConcurrentHashMap<String, SseEmitter>()
@@ -152,7 +169,7 @@ class CollaborationService(
     fun syncFromRoom(room: Room) {
         val currentState = roomState[room.inviteCode]
         val nextState = toRealtimeState(room)
-        val mergedCandidateKeyHistory = mergeCandidateKeyHistory(
+        val mergedCandidateKeyHistory = CandidateKeyHistoryHelpers.merge(
             inMemory = currentState?.candidateKeyHistory.orEmpty(),
             persisted = nextState.candidateKeyHistory,
         )
@@ -198,7 +215,7 @@ class CollaborationService(
         val connectionId = sseConnectionId(sessionId)
         val emitter = SseEmitter(0L)
         val resolvedRole = resolveRole(room, ownerToken, user)
-        val normalizedParticipantId = normalizeParticipantId(participantId)
+        val normalizedParticipantId = ParticipantIdentity.normalizeParticipantId(participantId)
         val identityRoleOverride = resolveIdentityRoleOverride(
             inviteCode = inviteCode,
             userId = user?.id,
@@ -260,6 +277,15 @@ class CollaborationService(
         }
         val participant = participants[connectionId] ?: return
         val state = roomState[participant.inviteCode] ?: return
+        if (request.type == "yjs_update" && !markOperationApplied(state, request.operationId)) {
+            logger.debug(
+                "Skipping duplicate realtime operation for room {} session {} operationId={}",
+                participant.inviteCode,
+                participant.sessionId,
+                request.operationId,
+            )
+            return
+        }
         if (requiresEventToken) {
             val clientEventSequence = request.clientEventSequence
             if (clientEventSequence != null) {
@@ -292,6 +318,14 @@ class CollaborationService(
                 noteText = request.noteText,
                 noteTimestampEpochMs = request.noteTimestampEpochMs,
             )
+            "private_note_entry" -> appendPrivateNoteEntry(
+                connectionId = connectionId,
+                noteId = request.privateNoteId,
+                noteText = request.privateNoteText,
+                blockName = request.privateNoteBlockName,
+                blockStepIndex = request.privateNoteBlockStepIndex,
+                noteTimestampEpochMs = request.privateNoteTimestampEpochMs,
+            )
             "presentation_markdown_update", "briefing_markdown_update" ->
                 updateBriefingMarkdown(connectionId, request.briefingMarkdown ?: request.presentationMarkdown.orEmpty())
             "presence_update" -> updatePresence(connectionId, request.presenceStatus)
@@ -312,6 +346,7 @@ class CollaborationService(
                 syncKey = request.syncKey,
                 codeSnapshot = request.code,
                 yjsClientSequence = request.yjsClientSequence,
+                baseServerYjsSequence = request.baseServerYjsSequence,
                 yjsDocumentBase64 = request.yjsDocumentBase64,
             )
             "request_state_sync" -> sendStateToConnection(connectionId)
@@ -341,6 +376,7 @@ class CollaborationService(
                 altKey = request.altKey ?: false,
                 shiftKey = request.shiftKey ?: false,
                 metaKey = request.metaKey ?: false,
+                eventKind = request.eventKind,
             )
             else -> throw ApiException(HttpStatus.BAD_REQUEST, "Неизвестный тип сообщения: ${request.type}")
         }
@@ -421,6 +457,7 @@ class CollaborationService(
         syncKey: String?,
         codeSnapshot: String?,
         yjsClientSequence: Long?,
+        baseServerYjsSequence: Long?,
         yjsDocumentBase64: String?,
     ) {
         val participant = participants[connectionId] ?: return
@@ -429,6 +466,7 @@ class CollaborationService(
         val trimmedDocCandidate = yjsDocumentBase64?.trim().orEmpty()
         val safeDocSnap =
             if (trimmedDocCandidate.isNotEmpty() && trimmedDocCandidate.length <= maxYjsDocumentBase64Chars) trimmedDocCandidate else null
+        val normalizedBaseServerYjsSequence = baseServerYjsSequence?.coerceAtLeast(0)
 
         if (isHeartbeatOnlyYjsUpdate(yjsUpdate) && safeDocSnap == null) {
             logger.debug(
@@ -485,6 +523,31 @@ class CollaborationService(
             if (safeDocSnap == null) return
             val acceptedCodeSnapshot = synchronized(state) {
                 if (resolveOutboundSyncKey() == null) return
+                val currentSequence = state.lastYjsSequence
+                val canSessionPublishSnapshotOnly =
+                    currentSequence == 0L || state.lastIncrementalYjsSessionId == participant.sessionId
+                if (!canSessionPublishSnapshotOnly) {
+                    logger.debug(
+                        "Rejecting snapshot-only yjs payload from non-authoritative session for room {} session {}: currentSequence={} lastIncrementalSession={}",
+                        participant.inviteCode,
+                        participant.sessionId,
+                        currentSequence,
+                        state.lastIncrementalYjsSessionId,
+                    )
+                    return
+                }
+                val canApplySnapshot =
+                    normalizedBaseServerYjsSequence != null && normalizedBaseServerYjsSequence >= currentSequence
+                if (!canApplySnapshot) {
+                    logger.debug(
+                        "Rejecting stale Yjs snapshot-only payload for room {} session {}: baseServerYjsSequence={} < current={}",
+                        participant.inviteCode,
+                        participant.sessionId,
+                        normalizedBaseServerYjsSequence,
+                        currentSequence,
+                    )
+                    return
+                }
                 state.yjsDocumentBase64 = safeDocSnap
                 tryApplyCodeSnapshot()
             }
@@ -496,20 +559,49 @@ class CollaborationService(
         }
 
         var acceptedCodeSnapshot: String? = null
+        var shouldBroadcastStateFromYjs = safeDocSnap == null
         synchronized(state) {
             if (resolveOutboundSyncKey() == null) return
             if (safeDocSnap != null) {
-                state.yjsDocumentBase64 = safeDocSnap
-                acceptedCodeSnapshot = tryApplyCodeSnapshot()
+                val currentSequence = state.lastYjsSequence
+                val canApplySnapshot =
+                    normalizedBaseServerYjsSequence != null &&
+                        (
+                            normalizedBaseServerYjsSequence >= currentSequence ||
+                                canAcceptStaleSnapshotForLocalOnlyGap(
+                                    state = state,
+                                    baseServerYjsSequence = normalizedBaseServerYjsSequence,
+                                    currentServerYjsSequence = currentSequence,
+                                    sessionId = participant.sessionId,
+                                )
+                            )
+                if (canApplySnapshot) {
+                    state.yjsDocumentBase64 = safeDocSnap
+                    acceptedCodeSnapshot = tryApplyCodeSnapshot()
+                    shouldBroadcastStateFromYjs = true
+                } else {
+                    logger.debug(
+                        "Rejecting stale Yjs full snapshot for room {} session {}: baseServerYjsSequence={} < current={}",
+                        participant.inviteCode,
+                        participant.sessionId,
+                        normalizedBaseServerYjsSequence,
+                        currentSequence,
+                    )
+                }
             }
             state.lastYjsSequence += 1
+            state.lastIncrementalYjsSessionId = participant.sessionId
+            state.yjsSequenceAuthorBySequence[state.lastYjsSequence] = participant.sessionId
+            pruneYjsSequenceAuthorHistory(state, state.lastYjsSequence)
         }
 
         if (acceptedCodeSnapshot != null) {
             scheduleDebouncedRoomCodeSave(participant.inviteCode, acceptedCodeSnapshot!!)
         }
 
-        scheduleStateBroadcastFromYjs(participant.inviteCode)
+        if (shouldBroadcastStateFromYjs) {
+            scheduleStateBroadcastFromYjs(participant.inviteCode)
+        }
 
         val outboundSyncKey = resolveOutboundSyncKey() ?: return
         broadcastTransportMessage(
@@ -545,7 +637,7 @@ class CollaborationService(
     }
 
     private fun scheduleCandidateKeyHistorySave(inviteCode: String, history: List<CandidateKeyPayload>) {
-        val serializedHistory = serializeCandidateKeyHistory(history)
+        val serializedHistory = CandidateKeyHistoryHelpers.serialize(history, objectMapper)
         latestCandidateKeyHistoryJsonByRoom[inviteCode] = serializedHistory
         pendingCandidateKeyHistorySaveByRoom.remove(inviteCode)?.cancel(false)
         val next = roomCandidateKeyHistorySaveScheduler.schedule({
@@ -579,16 +671,18 @@ class CollaborationService(
         }
         val normalizedLanguage = normalizeLanguage(language)
         roomState[participant.inviteCode]?.let { state ->
-            state.language = normalizedLanguage
-            val currentTaskIndex = state.tasks.indexOfFirst { it.stepIndex == state.currentStep }
-            if (currentTaskIndex >= 0) {
-                state.tasks[currentTaskIndex] = state.tasks[currentTaskIndex].copy(language = normalizedLanguage)
+            synchronized(state) {
+                state.language = normalizedLanguage
+                val currentTaskIndex = state.tasks.indexOfFirst { it.stepIndex == state.currentStep }
+                if (currentTaskIndex >= 0) {
+                    state.tasks[currentTaskIndex] = state.tasks[currentTaskIndex].copy(language = normalizedLanguage)
+                }
             }
         }
-        roomRepository.findByInviteCode(participant.inviteCode)?.let {
-            it.language = normalizedLanguage
-            it.tasks.getOrNull(it.currentStep)?.solutionLanguage = normalizedLanguage
-            roomRepository.save(it)
+        roomRepository.findByInviteCode(participant.inviteCode)?.let { room ->
+            room.language = normalizedLanguage
+            room.tasks.getOrNull(room.currentStep)?.solutionLanguage = normalizedLanguage
+            roomRepository.save(room)
         }
         broadcastState(participant.inviteCode)
     }
@@ -648,8 +742,68 @@ class CollaborationService(
         }
 
         roomRepository.findByInviteCode(inviteCode)?.let {
-            it.interviewerChat = serializeNotesMessages(state.notesMessages)
+            it.interviewerChat = PrivateNotesSerialization.serializeChatMessages(state.notesMessages, objectMapper)
             roomRepository.save(it)
+        }
+        broadcastState(inviteCode)
+    }
+
+    private fun appendPrivateNoteEntry(
+        connectionId: String,
+        noteId: String?,
+        noteText: String?,
+        blockName: String?,
+        blockStepIndex: Int?,
+        noteTimestampEpochMs: Long?,
+    ) {
+        val participant = participants[connectionId] ?: return
+        if (!participant.canManageRoom) {
+            throw ApiException(HttpStatus.FORBIDDEN, "Только интервьюер может вести личные заметки")
+        }
+
+        val normalizedText = noteText.orEmpty().replace("\u0000", "").trim().take(privateNotesTextMaxChars)
+        if (normalizedText.isBlank()) return
+
+        val inviteCode = participant.inviteCode
+        val room = roomRepository.findWithTasksByInviteCode(inviteCode)
+            ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+        val authorKey = resolvePrivateNotesAuthorKey(participant)
+        val normalizedBlockName = blockName
+            ?.replace("\u0000", "")
+            ?.trim()
+            ?.take(privateNotesBlockNameMaxChars)
+            ?.ifBlank { null }
+        val normalizedBlockStepIndex = blockStepIndex
+            ?.takeIf { it >= 0 && it < room.tasks.size.coerceAtLeast(1) }
+        val normalizedTimestamp = noteTimestampEpochMs
+            ?.takeIf { it >= 0 }
+            ?: Instant.now().toEpochMilli()
+
+        val notesByAuthor = parseRoomPrivateNotes(room)
+        val authorNotes = (notesByAuthor[authorKey] ?: mutableListOf()).toMutableList()
+        val nextEntry = PersonalNoteEntryPayload(
+            id = noteId?.trim()?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString(),
+            text = normalizedText,
+            blockName = normalizedBlockName,
+            blockStepIndex = normalizedBlockStepIndex,
+            timestampEpochMs = normalizedTimestamp,
+        )
+        authorNotes.add(nextEntry)
+        if (authorNotes.size > privateNotesHistoryLimit) {
+            val overflow = authorNotes.size - privateNotesHistoryLimit
+            repeat(overflow) {
+                authorNotes.removeAt(0)
+            }
+        }
+        notesByAuthor[authorKey] = authorNotes
+
+        room.privateNotesJson = serializeRoomPrivateNotes(notesByAuthor)
+        roomRepository.save(room)
+
+        roomState[inviteCode]?.let { state ->
+            synchronized(state) {
+                state.privateNotesByAuthor[authorKey] = authorNotes.toMutableList()
+            }
         }
         broadcastState(inviteCode)
     }
@@ -910,33 +1064,52 @@ class CollaborationService(
         altKey: Boolean,
         shiftKey: Boolean,
         metaKey: Boolean,
+        eventKind: String? = null,
     ) {
         val participant = participants[connectionId] ?: return
         if (participant.role != RoomAccessService.RoomRole.CANDIDATE) return
 
-        val normalizedKey = normalizeIncomingKey(key)
-        val normalizedCode = normalizeIncomingKeyCode(keyCode)
-        if (normalizedKey.isBlank() && normalizedCode.isBlank()) return
+        val normalizedEventKind = CandidateKeyHistoryHelpers.normalizeEventKind(eventKind)
+        val isSyntheticEvent = normalizedEventKind != "keydown"
+        val normalizedKey = CandidateKeyHistoryHelpers.normalizeIncomingKey(key)
+        val normalizedCode = CandidateKeyHistoryHelpers.normalizeIncomingKeyCode(keyCode)
+        // Синтетические события (blur/visibility) могут не нести key/keyCode,
+        // но всё равно важны для лога — пропускаем фильтр пустоты.
+        if (!isSyntheticEvent && normalizedKey.isBlank() && normalizedCode.isBlank()) return
 
         val state = roomState[participant.inviteCode] ?: return
         val keyEvent: CandidateKeyPayload
         val historySnapshot: List<CandidateKeyPayload>
         synchronized(state) {
             val now = Instant.now().toEpochMilli()
-            if (now - state.lastCandidateKeyAtEpochMs < keyEventBroadcastThrottleMs) {
+            // Троттлим только обычные keydown — синтетические события (смена
+            // окна/вкладки) пропускаем всегда, иначе можно потерять Alt+Tab,
+            // который приходит сразу за keydown модификатора.
+            if (!isSyntheticEvent && now - state.lastCandidateKeyAtEpochMs < keyEventBroadcastThrottleMs) {
                 return
             }
 
             keyEvent = CandidateKeyPayload(
                 sessionId = participant.sessionId,
                 displayName = participant.displayName,
-                key = normalizedKey.ifBlank { normalizedCode.ifBlank { "Unknown" } },
-                keyCode = normalizedCode.ifBlank { normalizedKey.ifBlank { "Unknown" } },
+                key = when {
+                    normalizedKey.isNotBlank() -> normalizedKey
+                    normalizedCode.isNotBlank() -> normalizedCode
+                    isSyntheticEvent -> ""
+                    else -> "Unknown"
+                },
+                keyCode = when {
+                    normalizedCode.isNotBlank() -> normalizedCode
+                    normalizedKey.isNotBlank() -> normalizedKey
+                    isSyntheticEvent -> ""
+                    else -> "Unknown"
+                },
                 ctrlKey = ctrlKey,
                 altKey = altKey,
                 shiftKey = shiftKey,
                 metaKey = metaKey,
                 timestampEpochMs = now,
+                eventKind = normalizedEventKind,
             )
             state.lastCandidateKey = keyEvent
             state.candidateKeyHistory.add(keyEvent)
@@ -946,7 +1119,11 @@ class CollaborationService(
                     state.candidateKeyHistory.removeAt(0)
                 }
             }
-            state.lastCandidateKeyAtEpochMs = now
+            // Троттл-таймер двигаем только для обычных нажатий — синтетические
+            // события (blur/visibility) не должны вытеснять последующие keydown.
+            if (!isSyntheticEvent) {
+                state.lastCandidateKeyAtEpochMs = now
+            }
             historySnapshot = state.candidateKeyHistory.toList()
         }
 
@@ -1126,6 +1303,7 @@ class CollaborationService(
         cursorsPayload: List<CursorPayload>,
         participant: ParticipantMeta,
     ): RoomRealtimePayload {
+        val personalNotes = buildParticipantPersonalNotes(state, participant)
         return RoomRealtimePayload(
             inviteCode = inviteCode,
             language = state.language,
@@ -1136,6 +1314,7 @@ class CollaborationService(
             currentStep = state.currentStep,
             notes = state.notes,
             notesMessages = state.notesMessages.toList(),
+            personalNotes = personalNotes,
             briefingMarkdown = state.briefingMarkdown,
             participants = participantsPayload,
             isOwner = participant.isOwner,
@@ -1154,49 +1333,81 @@ class CollaborationService(
         )
     }
 
-    private fun parseNotesMessages(rawChatJson: String?, legacyNotes: String?): MutableList<NoteMessagePayload> {
-        val chat = rawChatJson.orEmpty().trim()
-        if (chat.isNotBlank()) {
+    private fun buildParticipantPersonalNotes(
+        state: RealtimeState,
+        participant: ParticipantMeta,
+    ): List<PersonalNoteEntryPayload> {
+        if (!participant.canManageRoom) return emptyList()
+        val authorKey = resolvePrivateNotesAuthorKey(participant)
+        if (authorKey.isBlank()) return emptyList()
+        return state.privateNotesByAuthor[authorKey].orEmpty()
+            .asSequence()
+            .filter { it.text.trim().isNotEmpty() }
+            .sortedWith(compareBy<PersonalNoteEntryPayload> { it.timestampEpochMs }.thenBy { it.id })
+            .toList()
+    }
+
+    private fun resolvePrivateNotesAuthorKey(participant: ParticipantMeta): String {
+        val normalizedUserId = participant.userId?.trim().orEmpty()
+        if (normalizedUserId.isNotBlank()) return "u:$normalizedUserId"
+        val normalizedParticipantId = participant.participantId?.trim().orEmpty()
+        if (normalizedParticipantId.isNotBlank()) return "p:$normalizedParticipantId"
+        return "s:${participant.sessionId.trim()}"
+    }
+
+    /**
+     * Loads private notes for the room. New room-level storage in
+     * `Room.privateNotesJson` is the source of truth. If the room still carries
+     * the legacy per-task storage (each task's `privateNotesJson`), we migrate it
+     * once: flatten all entries into a single per-author stream, tagging each
+     * entry with `blockStepIndex` of the source task, and persist the result on
+     * the room. This keeps existing interviewer notes after the upgrade.
+     *
+     * Pure-сериализация и one-shot миграция вынесены в [PrivateNotesSerialization].
+     * Здесь остаётся ровно тот побочный эффект, который и должен жить в
+     * сервисе: запись результата миграции в БД через [roomRepository].
+     */
+    private fun parseRoomPrivateNotes(room: Room): MutableMap<String, MutableList<PersonalNoteEntryPayload>> {
+        val rawRoom = room.privateNotesJson.orEmpty().trim()
+        if (rawRoom.isNotBlank()) {
             val parsed = runCatching {
-                val root = objectMapper.readTree(chat)
-                val messagesNode = when {
-                    root.isArray -> root
-                    root.isObject && root.has("messages") -> root["messages"]
-                    else -> null
-                }
-                if (messagesNode == null || !messagesNode.isArray) {
-                    emptyList()
-                } else {
-                    messagesNode.mapNotNull { node ->
-                        runCatching { objectMapper.treeToValue(node, NoteMessagePayload::class.java) }.getOrNull()
-                    }
-                }
-            }.getOrElse { emptyList() }
-            if (parsed.isNotEmpty()) {
-                return parsed.toMutableList()
+                objectMapper.readValue(rawRoom, RoomPrivateNotesPayload::class.java)
+            }.getOrNull()
+            if (parsed != null) {
+                return PrivateNotesSerialization.readAuthorsPayload(
+                    parsed.authors,
+                    historyLimit = privateNotesHistoryLimit,
+                    blockNameMaxChars = privateNotesBlockNameMaxChars,
+                    textMaxChars = privateNotesTextMaxChars,
+                )
             }
         }
 
-        val legacy = legacyNotes.orEmpty().trim()
-        if (legacy.isBlank()) {
-            return mutableListOf()
-        }
-
-        return mutableListOf(
-            NoteMessagePayload(
-                id = "legacy-${legacy.hashCode()}",
-                sessionId = "legacy-notes",
-                displayName = "Старые заметки",
-                role = RoomAccessService.RoomRole.INTERVIEWER.wireValue,
-                text = legacy,
-                timestampEpochMs = 0L,
-            ),
+        val migrated = PrivateNotesSerialization.migrateLegacyTaskPrivateNotes(
+            room,
+            objectMapper,
+            historyLimit = privateNotesHistoryLimit,
+            blockNameMaxChars = privateNotesBlockNameMaxChars,
+            textMaxChars = privateNotesTextMaxChars,
         )
+        if (migrated.isNotEmpty()) {
+            room.privateNotesJson = serializeRoomPrivateNotes(migrated)
+            // Wipe legacy per-task storage so it does not migrate again on next read.
+            room.tasks.forEach { it.privateNotesJson = null }
+            roomRepository.save(room)
+        }
+        return migrated
     }
 
-    private fun serializeNotesMessages(messages: List<NoteMessagePayload>): String {
-        return objectMapper.writeValueAsString(NotesThreadPayload(messages = messages))
-    }
+    private fun serializeRoomPrivateNotes(
+        authors: Map<String, List<PersonalNoteEntryPayload>>,
+    ): String = PrivateNotesSerialization.serializeRoomPrivateNotes(
+        authors,
+        objectMapper,
+        historyLimit = privateNotesHistoryLimit,
+        blockNameMaxChars = privateNotesBlockNameMaxChars,
+        textMaxChars = privateNotesTextMaxChars,
+    )
 
     private fun setStepInternal(inviteCode: String, room: Room, stepIndex: Int) {
         val currentState = roomState[inviteCode]
@@ -1218,11 +1429,12 @@ class CollaborationService(
         room.code = nextTask.solutionCode ?: nextTask.starterCode
         room.briefingMarkdown = nextTask.briefingMarkdown.orEmpty()
         roomRepository.save(room)
-        val mergedCandidateKeyHistory = mergeCandidateKeyHistory(
+        val mergedCandidateKeyHistory = CandidateKeyHistoryHelpers.merge(
             inMemory = currentState?.candidateKeyHistory.orEmpty(),
-            persisted = parseCandidateKeyHistory(room.candidateKeyHistory),
+            persisted = CandidateKeyHistoryHelpers.parse(room.candidateKeyHistory, objectMapper),
         )
         val mergedLastCandidateKey = mergedCandidateKeyHistory.lastOrNull()
+        val taskPayloads = buildTaskPayloads(room)
 
         roomState[inviteCode] = RealtimeState(
             language = normalizeLanguage(room.language),
@@ -1230,12 +1442,14 @@ class CollaborationService(
             lastCodeUpdatedBySessionId = null,
             yjsDocumentBase64 = null,
             lastYjsSequence = 0,
+            lastIncrementalYjsSessionId = null,
             currentStep = room.currentStep,
             notes = room.notes.orEmpty(),
             notesMessages = currentState?.notesMessages?.toMutableList()
-                ?: parseNotesMessages(room.interviewerChat, room.notes),
+                ?: PrivateNotesSerialization.parseChatMessages(room.interviewerChat, room.notes, objectMapper),
+            privateNotesByAuthor = currentState?.privateNotesByAuthor ?: parseRoomPrivateNotes(room),
             briefingMarkdown = nextTask.briefingMarkdown?.takeIf { it.isNotBlank() } ?: nextTask.description,
-            tasks = buildTaskPayloads(room),
+            tasks = taskPayloads,
             notesLockedBySessionId = currentState?.notesLockedBySessionId,
             notesLockedByDisplayName = currentState?.notesLockedByDisplayName,
             notesLockedUntilEpochMs = currentState?.notesLockedUntilEpochMs,
@@ -1306,10 +1520,6 @@ class CollaborationService(
             connectionByRoomSession.remove(roomSessionKey(participant.inviteCode, participant.sessionId), connectionId)
             roomState[participant.inviteCode]?.let { state ->
                 state.cursorsBySessionId.remove(participant.sessionId)
-                state.lastCursorSequenceBySessionId.remove(participant.sessionId)
-                state.lastCodeSequenceBySessionId.remove(participant.sessionId)
-                state.lastYjsSnapshotSequenceBySessionId.remove(participant.sessionId)
-                state.lastClientEventSequenceBySessionId.remove(participant.sessionId)
             }
         }
 
@@ -1341,46 +1551,90 @@ class CollaborationService(
         return "sse:$sessionId:${UUID.randomUUID()}"
     }
 
-    private fun normalizeParticipantId(participantId: String?): String? {
-        val normalized = participantId?.trim().orEmpty()
-        if (normalized.isBlank()) return null
-        return normalized.take(128)
+    private fun markOperationApplied(state: RealtimeState, operationIdRaw: String?): Boolean {
+        val operationId = operationIdRaw?.trim().orEmpty()
+        if (operationId.isEmpty()) return true
+
+        val now = Instant.now().toEpochMilli()
+        val staleBefore = now - appliedOperationIdTtlMillis
+        synchronized(state) {
+            if (state.appliedOperationIds.containsKey(operationId)) {
+                return false
+            }
+
+            if (state.appliedOperationIds.isNotEmpty()) {
+                val staleIds = state.appliedOperationIds.entries
+                    .asSequence()
+                    .filter { it.value < staleBefore }
+                    .map { it.key }
+                    .toList()
+                staleIds.forEach { staleId ->
+                    state.appliedOperationIds.remove(staleId)
+                }
+            }
+
+            state.appliedOperationIds[operationId] = now
+            val overflow = state.appliedOperationIds.size - appliedOperationIdCacheMaxSize
+            if (overflow > 0) {
+                val oldestIds = state.appliedOperationIds.entries
+                    .sortedBy { it.value }
+                    .take(overflow)
+                    .map { it.key }
+                oldestIds.forEach { staleId ->
+                    state.appliedOperationIds.remove(staleId)
+                }
+            }
+        }
+        return true
     }
 
-    private fun participantIdentityKey(userId: String?, participantId: String?, sessionId: String): String {
-        val normalizedUserId = userId?.trim().orEmpty()
-        if (normalizedUserId.isNotBlank()) {
-            return "user:$normalizedUserId"
+    private fun canAcceptStaleSnapshotForLocalOnlyGap(
+        state: RealtimeState,
+        baseServerYjsSequence: Long,
+        currentServerYjsSequence: Long,
+        sessionId: String,
+    ): Boolean {
+        if (baseServerYjsSequence >= currentServerYjsSequence) return true
+        if (baseServerYjsSequence < 0) return false
+        var sequence = baseServerYjsSequence + 1
+        while (sequence <= currentServerYjsSequence) {
+            val authorSessionId = state.yjsSequenceAuthorBySequence[sequence] ?: return false
+            if (authorSessionId != sessionId) return false
+            sequence += 1
         }
-        val normalizedParticipantId = normalizeParticipantId(participantId)
-        if (normalizedParticipantId != null) {
-            return "guest:$normalizedParticipantId"
-        }
-        return "session:$sessionId"
+        return true
     }
 
-    private fun participantIdentityKey(meta: ParticipantMeta): String {
-        return participantIdentityKey(meta.userId, meta.participantId, meta.sessionId)
-    }
-
-    private fun rolePriority(role: RoomAccessService.RoomRole): Int {
-        return when (role) {
-            RoomAccessService.RoomRole.OWNER -> 3
-            RoomAccessService.RoomRole.INTERVIEWER -> 2
-            RoomAccessService.RoomRole.CANDIDATE -> 1
+    private fun pruneYjsSequenceAuthorHistory(state: RealtimeState, currentServerYjsSequence: Long) {
+        val minSequenceToKeep = (currentServerYjsSequence - yjsSequenceAuthorHistoryLimit).coerceAtLeast(0)
+        if (state.yjsSequenceAuthorBySequence.isEmpty()) return
+        val staleSequences = state.yjsSequenceAuthorBySequence.keys
+            .filter { it < minSequenceToKeep }
+        if (staleSequences.isEmpty()) return
+        staleSequences.forEach { staleSequence ->
+            state.yjsSequenceAuthorBySequence.remove(staleSequence)
         }
     }
+
+    /**
+     * Domain-shortcut для [ParticipantIdentity.participantIdentityKey] под
+     * приватный nested-тип [ParticipantMeta]. Все остальные хелперы
+     * (`normalizeParticipantId`, `rolePriority`, перегрузка по userId/participantId/sessionId)
+     * вызываются напрямую из [ParticipantIdentity] без обёрток.
+     */
+    private fun participantIdentityKey(meta: ParticipantMeta): String =
+        ParticipantIdentity.participantIdentityKey(meta.userId, meta.participantId, meta.sessionId)
 
     private fun aggregateParticipantGroup(group: List<ParticipantMeta>): ParticipantMeta {
         val representative = group
             .sortedWith(
-                compareByDescending<ParticipantMeta> { rolePriority(it.role) }
+                compareByDescending<ParticipantMeta> { ParticipantIdentity.rolePriority(it.role) }
                     .thenByDescending { if (it.presenceStatus == PresenceStatus.ACTIVE) 1 else 0 }
                     .thenBy { it.displayName.lowercase() }
                     .thenBy { it.sessionId },
             )
             .first()
-        val mergedRole = group.maxByOrNull { rolePriority(it.role) }?.role ?: representative.role
+        val mergedRole = group.maxByOrNull { ParticipantIdentity.rolePriority(it.role) }?.role ?: representative.role
         val mergedPresence =
             if (group.any { it.presenceStatus == PresenceStatus.ACTIVE }) PresenceStatus.ACTIVE else PresenceStatus.AWAY
         return representative.copy(
@@ -1435,22 +1689,23 @@ class CollaborationService(
         participantId: String?,
         sessionId: String,
     ): RoomAccessService.RoomRole? {
-        val identityKey = participantIdentityKey(userId, participantId, sessionId)
+        val identityKey = ParticipantIdentity.participantIdentityKey(userId, participantId, sessionId)
         return participants.values
             .asSequence()
             .filter { it.inviteCode == inviteCode }
             .filter { participantIdentityKey(it) == identityKey }
             .map { it.role }
-            .maxByOrNull { rolePriority(it) }
+            .maxByOrNull { ParticipantIdentity.rolePriority(it) }
     }
 
     private fun resolveGuestRoleTargets(inviteCode: String, target: ParticipantMeta): List<ParticipantMeta> {
-        val normalizedTargetParticipantId = normalizeParticipantId(target.participantId) ?: return listOf(target)
+        val normalizedTargetParticipantId =
+            ParticipantIdentity.normalizeParticipantId(target.participantId) ?: return listOf(target)
         val sameGuestTargets = participants.values
             .asSequence()
             .filter { it.inviteCode == inviteCode }
             .filter { it.userId.isNullOrBlank() }
-            .filter { normalizeParticipantId(it.participantId) == normalizedTargetParticipantId }
+            .filter { ParticipantIdentity.normalizeParticipantId(it.participantId) == normalizedTargetParticipantId }
             .toList()
         if (sameGuestTargets.isEmpty()) return listOf(target)
         return sameGuestTargets
@@ -1509,110 +1764,27 @@ class CollaborationService(
             .toMutableList()
     }
 
-    private fun parseCandidateKeyHistory(raw: String?): List<CandidateKeyPayload> {
-        val normalized = raw.orEmpty().trim()
-        if (normalized.isBlank()) return emptyList()
-        val parsed = runCatching {
-            val root = objectMapper.readTree(normalized)
-            val eventsNode = when {
-                root.isArray -> root
-                root.isObject && root.has("events") -> root["events"]
-                else -> null
-            }
-            if (eventsNode == null || !eventsNode.isArray) {
-                emptyList()
-            } else {
-                eventsNode.mapNotNull { node ->
-                    runCatching { objectMapper.treeToValue(node, CandidateKeyPayload::class.java) }.getOrNull()
-                }
-            }
-        }.getOrElse { emptyList() }
-        return parsed
-            .sortedBy { it.timestampEpochMs }
-            .takeLast(candidateKeyHistoryMaxSize)
-    }
-
-    private fun serializeCandidateKeyHistory(history: List<CandidateKeyPayload>): String {
-        val normalized = history
-            .sortedBy { it.timestampEpochMs }
-            .takeLast(candidateKeyHistoryMaxSize)
-        return objectMapper.writeValueAsString(mapOf("version" to 1, "events" to normalized))
-    }
-
-    private fun mergeCandidateKeyHistory(
-        inMemory: List<CandidateKeyPayload>,
-        persisted: List<CandidateKeyPayload>,
-    ): List<CandidateKeyPayload> {
-        if (inMemory.isEmpty()) return persisted.sortedBy { it.timestampEpochMs }.takeLast(candidateKeyHistoryMaxSize)
-        if (persisted.isEmpty()) return inMemory.sortedBy { it.timestampEpochMs }.takeLast(candidateKeyHistoryMaxSize)
-        val merged = linkedMapOf<String, CandidateKeyPayload>()
-        (persisted + inMemory)
-            .sortedBy { it.timestampEpochMs }
-            .forEach { event ->
-                val dedupeKey = listOf(
-                    event.sessionId,
-                    event.timestampEpochMs.toString(),
-                    event.key,
-                    event.keyCode,
-                    if (event.ctrlKey) "1" else "0",
-                    if (event.altKey) "1" else "0",
-                    if (event.shiftKey) "1" else "0",
-                    if (event.metaKey) "1" else "0",
-                ).joinToString(":")
-                merged[dedupeKey] = event
-            }
-        return merged.values
-            .sortedBy { it.timestampEpochMs }
-            .takeLast(candidateKeyHistoryMaxSize)
-    }
-
-    private fun normalizeIncomingKey(rawKey: String?): String {
-        val raw = rawKey?.take(64) ?: return ""
-        if (raw == " " || raw == "\u00A0") return "Space"
-        if (raw == "\t") return "Tab"
-        if (raw == "\n" || raw == "\r" || raw == "\r\n") return "Enter"
-        val trimmed = raw.trim()
-        if (trimmed.isBlank()) return ""
-        val normalized = when (trimmed) {
-            "Spacebar" -> "Space"
-            "Esc" -> "Escape"
-            "OS" -> "Meta"
-            else -> trimmed
-        }
-        return normalized.take(32)
-    }
-
-    private fun normalizeIncomingKeyCode(rawCode: String?): String {
-        val trimmed = rawCode?.trim().orEmpty()
-        if (trimmed.isBlank()) return ""
-        val normalized = when (trimmed) {
-            "Spacebar" -> "Space"
-            "Esc" -> "Escape"
-            "OSLeft", "OSRight", "OS" -> "Meta"
-            "Tab", "Enter", "Backspace", "Delete", "Space" -> trimmed
-            else -> trimmed
-        }
-        return normalized.take(32)
-    }
-
     private fun toRealtimeState(room: Room): RealtimeState {
         val currentTask = room.tasks.getOrNull(room.currentStep)
         val language = normalizeLanguage(currentTask?.solutionLanguage?.ifBlank { null } ?: room.language)
         val code = currentTask?.solutionCode ?: room.code.ifBlank { currentTask?.starterCode.orEmpty() }
         val notes = room.notes.orEmpty().ifBlank { currentTask?.interviewerNotes.orEmpty() }
-        val candidateKeyHistory = parseCandidateKeyHistory(room.candidateKeyHistory)
+        val candidateKeyHistory = CandidateKeyHistoryHelpers.parse(room.candidateKeyHistory, objectMapper)
         val lastCandidateKey = candidateKeyHistory.lastOrNull()
+        val taskPayloads = buildTaskPayloads(room)
         return RealtimeState(
             language = language,
             code = code,
             lastCodeUpdatedBySessionId = null,
             yjsDocumentBase64 = null,
             lastYjsSequence = 0,
+            lastIncrementalYjsSessionId = null,
             currentStep = room.currentStep,
             notes = notes,
-            notesMessages = parseNotesMessages(room.interviewerChat, notes),
+            notesMessages = PrivateNotesSerialization.parseChatMessages(room.interviewerChat, notes, objectMapper),
+            privateNotesByAuthor = parseRoomPrivateNotes(room),
             briefingMarkdown = currentTask?.briefingMarkdown?.takeIf { it.isNotBlank() } ?: currentTask?.description.orEmpty(),
-            tasks = buildTaskPayloads(room),
+            tasks = taskPayloads,
             notesLockedBySessionId = null,
             notesLockedByDisplayName = null,
             notesLockedUntilEpochMs = null,
@@ -1627,14 +1799,4 @@ class CollaborationService(
         )
     }
 
-    private fun normalizeLanguage(language: String): String {
-        return when (language.trim().lowercase()) {
-            "javascript", "typescript", "nodejs" -> "nodejs"
-            "python" -> "python"
-            "kotlin" -> "kotlin"
-            "java" -> "java"
-            "sql" -> "sql"
-            else -> "nodejs"
-        }
-    }
 }

@@ -83,11 +83,25 @@ data class AddRoomTasksRequest(
 
 data class AddRoomCustomTaskRequest(
     @field:NotBlank val title: String,
-    @field:NotBlank val description: String,
+    val description: String = "",
     val starterCode: String = "",
+    /**
+     * Optional override for the task language. When blank/null we fall back to
+     * the language currently set on the room (legacy behavior). Allows
+     * interviewers to mix tasks of different languages within the same room.
+     */
+    val language: String? = null,
 )
 
 data class UpdateRoomParticipantRoleRequest(
     @field:NotBlank val role: String,
 )
 
+/**
+ * In-room task editing payload. All fields optional (PATCH semantics) — at
+ * minimum one must be supplied. Lets interviewers tweak the title (or other
+ * fields later) without leaving the live coding session.
+ */
+data class UpdateRoomTaskRequest(
+    val title: String? = null,
+)

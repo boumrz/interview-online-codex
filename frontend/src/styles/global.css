@@ -50,3 +50,20 @@ textarea,
 select {
   font: inherit;
 }
+
+/*
+ * Visually hidden helper: keeps content available to screen readers while
+ * removing it from the visual flow. Used to provide page-level <h1>s when
+ * the visual design uses smaller titles.
+ */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}

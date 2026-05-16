@@ -9,7 +9,7 @@ import type {
   RoomSummary,
   TaskLanguageGroup,
   TaskTemplate,
-  User
+  User,
 } from "../types";
 import type { RootState } from "../app/store";
 import { API_BASE_URL } from "../config/runtime";
@@ -24,50 +24,60 @@ export const api = createApi({
       const token = (getState() as RootState).auth.token;
       if (token) headers.set("Authorization", `Bearer ${token}`);
       return headers;
-    }
+    },
   }),
   tagTypes: ["Room", "MyRooms", "Tasks", "AdminUsers"],
   endpoints: (builder) => ({
-    register: builder.mutation<AuthResponse, { nickname: string; displayName: string; password: string }>({
-      query: (body) => ({ url: "/auth/register", method: "POST", body })
+    register: builder.mutation<
+      AuthResponse,
+      { nickname: string; displayName: string; password: string }
+    >({
+      query: (body) => ({ url: "/auth/register", method: "POST", body }),
     }),
-    login: builder.mutation<AuthResponse, { nickname: string; password: string }>({
-      query: (body) => ({ url: "/auth/login", method: "POST", body })
+    login: builder.mutation<
+      AuthResponse,
+      { nickname: string; password: string }
+    >({
+      query: (body) => ({ url: "/auth/login", method: "POST", body }),
     }),
     meProfile: builder.query<User, void>({
-      query: () => "/me/profile"
+      query: () => "/me/profile",
     }),
-    createGuestRoom: builder.mutation<Room, { title?: string; ownerDisplayName?: string; language: string }>({
+    createGuestRoom: builder.mutation<
+      Room,
+      { title?: string; ownerDisplayName?: string; language: string }
+    >({
       query: (body) => ({ url: "/public/rooms", method: "POST", body }),
-      invalidatesTags: ["Room"]
+      invalidatesTags: ["Room"],
     }),
-    createRoom: builder.mutation<Room, { title: string; language: string; taskIds: string[] }>({
+    createRoom: builder.mutation<Room, { title: string; taskIds: string[] }>({
       query: (body) => ({ url: "/rooms", method: "POST", body }),
-      invalidatesTags: ["MyRooms"]
+      invalidatesTags: ["MyRooms"],
     }),
     getRoom: builder.query<Room, { inviteCode: string; ownerToken?: string }>({
       query: ({ inviteCode, ownerToken }) => ({
         url: `/rooms/${inviteCode}`,
         headers: {
-          ...(ownerToken ? { "X-Room-Owner-Token": ownerToken } : {})
-        }
+          ...(ownerToken ? { "X-Room-Owner-Token": ownerToken } : {}),
+        },
       }),
-      providesTags: ["Room"]
-    }),
-    nextStep: builder.mutation<Room, { inviteCode: string; ownerToken: string }>({
-      query: ({ inviteCode, ownerToken }) => ({
-        url: `/rooms/${inviteCode}/next-step`,
-        method: "POST",
-        headers: { "X-Room-Owner-Token": ownerToken }
-      }),
-      invalidatesTags: ["Room"]
+      providesTags: ["Room"],
     }),
     addRoomTasks: builder.mutation<
       Room,
       {
         inviteCode: string;
         taskIds?: string[];
-        customTasks?: Array<{ title: string; description: string; starterCode: string }>;
+        customTasks?: Array<{
+          title: string;
+          description?: string;
+          starterCode?: string;
+          /**
+           * Optional language override for a custom task. Backend falls back
+           * to the current room language when omitted/blank.
+           */
+          language?: string;
+        }>;
         ownerToken?: string;
       }
     >({
@@ -75,82 +85,142 @@ export const api = createApi({
         url: `/rooms/${inviteCode}/tasks`,
         method: "POST",
         headers: {
-          ...(ownerToken ? { "X-Room-Owner-Token": ownerToken } : {})
+          ...(ownerToken ? { "X-Room-Owner-Token": ownerToken } : {}),
         },
-        body: { taskIds, customTasks }
+        body: { taskIds, customTasks },
       }),
-      invalidatesTags: ["Room"]
+      invalidatesTags: ["Room"],
+    }),
+    /**
+     * In-room task editing. PATCH semantics — only the supplied fields are
+     * applied. Currently exposes title editing; designed so we can grow
+     * description/language/starterCode without breaking the call sites.
+     */
+    updateRoomTask: builder.mutation<
+      Room,
+      {
+        inviteCode: string;
+        stepIndex: number;
+        title?: string;
+        ownerToken?: string;
+      }
+    >({
+      query: ({ inviteCode, stepIndex, ownerToken, ...body }) => ({
+        url: `/rooms/${inviteCode}/tasks/${stepIndex}`,
+        method: "PATCH",
+        headers: {
+          ...(ownerToken ? { "X-Room-Owner-Token": ownerToken } : {}),
+        },
+        body,
+      }),
+      invalidatesTags: ["Room"],
+    }),
+    deleteRoomTask: builder.mutation<
+      Room,
+      { inviteCode: string; stepIndex: number; ownerToken?: string }
+    >({
+      query: ({ inviteCode, stepIndex, ownerToken }) => ({
+        url: `/rooms/${inviteCode}/tasks/${stepIndex}`,
+        method: "DELETE",
+        headers: {
+          ...(ownerToken ? { "X-Room-Owner-Token": ownerToken } : {}),
+        },
+      }),
+      invalidatesTags: ["Room"],
     }),
     myRooms: builder.query<RoomSummary[], void>({
       query: () => "/me/rooms",
-      providesTags: ["MyRooms"]
+      providesTags: ["MyRooms"],
     }),
-    updateRoom: builder.mutation<RoomSummary, { roomId: string; title: string }>({
+    updateRoom: builder.mutation<
+      RoomSummary,
+      { roomId: string; title: string }
+    >({
       query: ({ roomId, title }) => ({
         url: `/me/rooms/${roomId}`,
         method: "PATCH",
-        body: { title }
+        body: { title },
       }),
-      invalidatesTags: ["MyRooms"]
+      invalidatesTags: ["MyRooms"],
     }),
     deleteRoom: builder.mutation<{ status: string }, { roomId: string }>({
       query: ({ roomId }) => ({
         url: `/me/rooms/${roomId}`,
-        method: "DELETE"
+        method: "DELETE",
       }),
-      invalidatesTags: ["MyRooms"]
+      invalidatesTags: ["MyRooms"],
     }),
     updateProfile: builder.mutation<User, { displayName: string }>({
       query: (body) => ({
         url: "/me/profile",
         method: "PATCH",
-        body
-      })
+        body,
+      }),
     }),
     tasksGrouped: builder.query<TaskLanguageGroup[], void>({
       query: () => "/me/tasks",
-      providesTags: ["Tasks"]
+      providesTags: ["Tasks"],
     }),
-    createTaskTemplate: builder.mutation<TaskTemplate, { title: string; description: string; starterCode: string; language: string }>({
+    createTaskTemplate: builder.mutation<
+      TaskTemplate,
+      {
+        title: string;
+        description?: string;
+        starterCode?: string;
+        language: string;
+      }
+    >({
       query: (body) => ({ url: "/me/tasks", method: "POST", body }),
-      invalidatesTags: ["Tasks"]
+      invalidatesTags: ["Tasks"],
     }),
     updateTaskTemplate: builder.mutation<
       TaskTemplate,
-      { taskId: string; title: string; description: string; starterCode: string; language: string }
+      {
+        taskId: string;
+        title: string;
+        description?: string;
+        starterCode?: string;
+        language: string;
+      }
     >({
       query: ({ taskId, ...body }) => ({
         url: `/me/tasks/${taskId}`,
         method: "PATCH",
-        body
+        body,
       }),
-      invalidatesTags: ["Tasks"]
+      invalidatesTags: ["Tasks"],
     }),
-    deleteTaskTemplate: builder.mutation<{ status: string }, { taskId: string }>({
+    deleteTaskTemplate: builder.mutation<
+      { status: string },
+      { taskId: string }
+    >({
       query: ({ taskId }) => ({
         url: `/me/tasks/${taskId}`,
-        method: "DELETE"
+        method: "DELETE",
       }),
-      invalidatesTags: ["Tasks"]
+      invalidatesTags: ["Tasks"],
     }),
     adminUsers: builder.query<AdminUser[], void>({
       query: () => "/admin/users",
-      providesTags: ["AdminUsers"]
+      providesTags: ["AdminUsers"],
     }),
-    adminUpdateUserRole: builder.mutation<AdminUser, { userId: string; role: string }>({
+    adminUpdateUserRole: builder.mutation<
+      AdminUser,
+      { userId: string; role: string }
+    >({
       query: ({ userId, role }) => ({
         url: `/admin/users/${userId}/role`,
         method: "PATCH",
-        body: { role }
+        body: { role },
       }),
-      invalidatesTags: ["AdminUsers"]
+      invalidatesTags: ["AdminUsers"],
     }),
     adminDeleteUser: builder.mutation<{ status: string }, { userId: string }>({
       query: ({ userId }) => ({
         url: `/admin/users/${userId}`,
-        method: "DELETE"
+        method: "DELETE",
       }),
-      invalidatesTags: ["AdminUsers"]
+      invalidatesTags: ["AdminUsers"],
     }),
     startAgentRun: builder.mutation<
       AgentRun,
@@ -162,7 +232,7 @@ export const api = createApi({
         assignedRole: string;
       }
     >({
-      query: (body) => ({ url: "/agent/runs", method: "POST", body })
+      query: (body) => ({ url: "/agent/runs", method: "POST", body }),
     }),
     transitionAgentRun: builder.mutation<
       AgentRun,
@@ -178,8 +248,8 @@ export const api = createApi({
       query: ({ runId, ...body }) => ({
         url: `/agent/runs/${runId}/transition`,
         method: "POST",
-        body
-      })
+        body,
+      }),
     }),
     executeAllRunReviewers: builder.mutation<
       Array<{
@@ -193,35 +263,46 @@ export const api = createApi({
     >({
       query: ({ runId }) => ({
         url: `/agent/runs/${runId}/reviewers/execute-all`,
-        method: "POST"
-      })
+        method: "POST",
+      }),
     }),
     configureRealtimeFaults: builder.mutation<
-      { status: string; inviteCode: string; latencyMs: number; dropEveryNthMessage: number },
+      {
+        status: string;
+        inviteCode: string;
+        latencyMs: number;
+        dropEveryNthMessage: number;
+      },
       { inviteCode: string; latencyMs: number; dropEveryNthMessage: number }
     >({
       query: ({ inviteCode, ...body }) => ({
         url: `/agent/realtime/faults/${inviteCode}`,
         method: "POST",
-        body
-      })
+        body,
+      }),
     }),
-    clearRealtimeFaults: builder.mutation<{ status: string; inviteCode: string }, { inviteCode: string }>({
+    clearRealtimeFaults: builder.mutation<
+      { status: string; inviteCode: string },
+      { inviteCode: string }
+    >({
       query: ({ inviteCode }) => ({
         url: `/agent/realtime/faults/${inviteCode}`,
-        method: "DELETE"
-      })
+        method: "DELETE",
+      }),
     }),
     listAgentRunsByIssue: builder.query<AgentRun[], { linearIssueId: string }>({
-      query: ({ linearIssueId }) => `/agent/issues/${linearIssueId}/runs`
+      query: ({ linearIssueId }) => `/agent/issues/${linearIssueId}/runs`,
     }),
-    evaluateAgentPolicy: builder.query<AgentPolicyGateResult, { runId: string }>({
-      query: ({ runId }) => `/agent/runs/${runId}/policy`
+    evaluateAgentPolicy: builder.query<
+      AgentPolicyGateResult,
+      { runId: string }
+    >({
+      query: ({ runId }) => `/agent/runs/${runId}/policy`,
     }),
     getEnvironmentDoctorReport: builder.query<EnvironmentDoctorReport, void>({
-      query: () => "/agent/environment/doctor"
-    })
-  })
+      query: () => "/agent/environment/doctor",
+    }),
+  }),
 });
 
 export const {
@@ -232,8 +313,9 @@ export const {
   useCreateGuestRoomMutation,
   useCreateRoomMutation,
   useGetRoomQuery,
-  useNextStepMutation,
   useAddRoomTasksMutation,
+  useUpdateRoomTaskMutation,
+  useDeleteRoomTaskMutation,
   useMyRoomsQuery,
   useUpdateRoomMutation,
   useDeleteRoomMutation,
@@ -252,5 +334,5 @@ export const {
   useClearRealtimeFaultsMutation,
   useListAgentRunsByIssueQuery,
   useEvaluateAgentPolicyQuery,
-  useGetEnvironmentDoctorReportQuery
+  useGetEnvironmentDoctorReportQuery,
 } = api;
