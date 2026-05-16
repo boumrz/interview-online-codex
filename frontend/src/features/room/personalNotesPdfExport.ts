@@ -19,12 +19,57 @@ type StyledRow = {
   marginBottom: number;
 };
 
-type RenderedLine = {
-  text: string;
-  y: number;
-  fontSize: number;
-  bold: boolean;
-};
+let pdfCyrillicFontData:
+  | null
+  | {
+      regularBase64: string;
+      boldBase64: string;
+    } = null;
+
+async function ensurePdfCyrillicFont(pdf: {
+  addFileToVFS: (fileName: string, data: string) => void;
+  addFont: (fileName: string, fontName: string, fontStyle: string) => void;
+}) {
+  const toBase64 = (buffer: ArrayBuffer): string => {
+    const bytes = new Uint8Array(buffer);
+    const chunkSize = 0x8000;
+    let binary = "";
+    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+      const slice = bytes.subarray(offset, offset + chunkSize);
+      binary += String.fromCharCode(...slice);
+    }
+    return btoa(binary);
+  };
+
+  if (!pdfCyrillicFontData) {
+    const [regularResponse, boldResponse] = await Promise.all([
+      fetch("/fonts/Arial.ttf"),
+      fetch("/fonts/Arial-Bold.ttf"),
+    ]);
+
+    if (!regularResponse.ok || !boldResponse.ok) {
+      throw new Error("PDF_CYRILLIC_FONT_LOAD_FAILED");
+    }
+
+    const [regularBuffer, boldBuffer] = await Promise.all([
+      regularResponse.arrayBuffer(),
+      boldResponse.arrayBuffer(),
+    ]);
+
+    pdfCyrillicFontData = {
+      regularBase64: toBase64(regularBuffer),
+      boldBase64: toBase64(boldBuffer),
+    };
+  }
+
+  // Important: register font files on every jsPDF instance.
+  // Caching only the binary data keeps things fast while avoiding
+  // "sometimes works" behaviour when a fresh instance misses fonts.
+  pdf.addFileToVFS("Arial.ttf", pdfCyrillicFontData.regularBase64);
+  pdf.addFont("Arial.ttf", "Arial", "normal", "Identity-H");
+  pdf.addFileToVFS("Arial-Bold.ttf", pdfCyrillicFontData.boldBase64);
+  pdf.addFont("Arial-Bold.ttf", "Arial", "bold", "Identity-H");
+}
 
 /**
  * Сопоставляет одной строке markdown-документа стили для рендера в PDF
@@ -107,19 +152,47 @@ export type RenderPersonalNotesPdfArgs = {
   markdown: string;
   /** Имя файла, под которым будет скачан PDF. */
   fileName: string;
+  /**
+   * Опциональный progress-репортер. Вызывается с числом от 0 до 1 и
+   * краткой меткой шага. Используется, чтобы UI мог отрисовать
+   * прогресс-бар, пока выгрузка идёт фоном (yields через
+   * `requestAnimationFrame`).
+   */
+  onProgress?: (progress: number, label: string) => void;
 };
 
 /**
+ * Возвращает Promise, который resolved в следующем кадре. Используется
+ * между порциями тяжёлой работы (per-page render), чтобы UI оставался
+ * отзывчивым во время выгрузки PDF при большом числе заметок.
+ */
+function nextFrame(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(() => resolve());
+    } else {
+      setTimeout(resolve, 0);
+    }
+  });
+}
+
+/**
  * Полный pipeline: markdown → стилизация → раскладка по страницам A4 →
- * рендер на canvas → сборка PDF через jspdf → скачивание в браузере.
+ * прямой текстовый рендер через `pdf.text()` → скачивание в браузере.
  *
- * Бросает исключение, если 2D-контекст canvas недоступен (старые браузеры,
- * privacy mode и пр.). Не ловит ошибки jspdf — пусть подскочат наверх,
- * RoomPage логирует их в консоль и (опционально) показывает уведомление.
+ * Раньше использовался canvas + `toDataURL("image/png")` per page —
+ * это блокировало главный поток на сотни миллисекунд (PNG-кодирование)
+ * и зависало при большом числе заметок. Теперь:
+ *   1. Шрифт растеризуется один раз через jsPDF (нативный `text()`).
+ *   2. Между страницами делается `await nextFrame()`, чтобы отдать
+ *      такт event-loop и не фризить UI/анимации.
+ *   3. Опциональный `onProgress` колбэк сообщает фронту, сколько
+ *      работы осталось.
  */
 export async function renderPersonalNotesPdf({
   markdown,
   fileName,
+  onProgress,
 }: RenderPersonalNotesPdfArgs): Promise<void> {
   const { jsPDF } = await import("jspdf");
 
@@ -128,102 +201,78 @@ export async function renderPersonalNotesPdf({
   const marginMm = 12;
   const printableWidthMm = pageWidthMm - marginMm * 2;
   const printableHeightMm = pageHeightMm - marginMm * 2;
-  const canvasWidthPx = 1200;
-  const pxPerMm = canvasWidthPx / printableWidthMm;
-  const pageHeightPx = Math.max(1, Math.floor(printableHeightMm * pxPerMm));
-  const pageWidthPx = canvasWidthPx;
 
-  const measureCanvas = document.createElement("canvas");
-  const measureCtx = measureCanvas.getContext("2d");
-  if (!measureCtx) {
-    throw new Error("Unable to create 2D context for PDF export");
-  }
+  // jsPDF работает в "pt" (point ≈ 1/72 in). Чтобы стили (fontSize в
+  // пикселях, как в старой canvas-версии) сохранили примерно тот же
+  // визуальный размер, переводим в pt с коэф. 0.5 (≈ 1px → 0.5pt при
+  // нашем prev. canvas 1200px шириной, что близко к 186mm = 527pt).
+  const PX_TO_PT = 0.5;
+
+  // Уведомить UI, что работа стартовала.
+  onProgress?.(0, "Готовим документ");
+  // Один отдельный yield перед началом, чтобы успел отрисоваться
+  // прогресс/спиннер до того, как мы начнём тяжелую работу.
+  await nextFrame();
 
   const styledRows = markdown.split("\n").map(classifyMarkdownLine);
 
-  const wrapLine = (
-    text: string,
-    maxWidth: number,
-    fontSize: number,
-    bold: boolean,
-  ): string[] => {
-    const normalized = text.replace(/\s+/g, " ").trim();
-    if (!normalized) return [""];
-    measureCtx.font = `${bold ? 700 : 400} ${fontSize}px "IBM Plex Sans", "Segoe UI", Arial, sans-serif`;
-    const words = normalized.split(" ");
-    const wrapped: string[] = [];
-    let current = "";
-    words.forEach((word) => {
-      const candidate = current ? `${current} ${word}` : word;
-      if (measureCtx.measureText(candidate).width <= maxWidth || !current) {
-        current = candidate;
-      } else {
-        wrapped.push(current);
-        current = word;
-      }
-    });
-    if (current) wrapped.push(current);
-    return wrapped.length > 0 ? wrapped : [normalized];
-  };
-
-  const pages: RenderedLine[][] = [[]];
-  let pageIndex = 0;
-  let cursorY = 0;
-  const ensurePage = () => {
-    if (!pages[pageIndex]) {
-      pages[pageIndex] = [];
-    }
-  };
-  ensurePage();
-
-  styledRows.forEach((row) => {
-    const wrapped = wrapLine(row.text, pageWidthPx - 16, row.fontSize, row.bold);
-    cursorY += row.marginTop;
-    const lineHeight = Math.ceil(row.fontSize * 1.45);
-    wrapped.forEach((line) => {
-      if (cursorY + lineHeight > pageHeightPx && pages[pageIndex].length > 0) {
-        pageIndex += 1;
-        cursorY = 0;
-        ensurePage();
-      }
-      pages[pageIndex].push({
-        text: line,
-        y: cursorY,
-        fontSize: row.fontSize,
-        bold: row.bold,
-      });
-      cursorY += lineHeight;
-    });
-    cursorY += row.marginBottom;
-  });
-
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  pages.forEach((pageLines, index) => {
-    if (index > 0) {
-      pdf.addPage("a4", "portrait");
+  await ensurePdfCyrillicFont(pdf);
+  pdf.setFont("Arial", "normal");
+
+  const usableWidthMm = printableWidthMm;
+  const pageBottomMm = marginMm + printableHeightMm;
+  let cursorY = marginMm;
+  let isFirstPage = true;
+
+  const newPage = () => {
+    if (isFirstPage) {
+      isFirstPage = false;
+      return;
     }
-    const pageCanvas = document.createElement("canvas");
-    pageCanvas.width = pageWidthPx;
-    pageCanvas.height = pageHeightPx;
-    const pageCtx = pageCanvas.getContext("2d");
-    if (!pageCtx) return;
-    pageCtx.fillStyle = "#ffffff";
-    pageCtx.fillRect(0, 0, pageWidthPx, pageHeightPx);
-    pageCtx.fillStyle = "#10151c";
-    pageLines.forEach((line) => {
-      pageCtx.font = `${line.bold ? 700 : 400} ${line.fontSize}px "IBM Plex Sans", "Segoe UI", Arial, sans-serif`;
-      pageCtx.fillText(line.text, 8, line.y + line.fontSize);
-    });
-    pdf.addImage(
-      pageCanvas.toDataURL("image/png"),
-      "PNG",
-      marginMm,
-      marginMm,
-      printableWidthMm,
-      printableHeightMm,
-    );
-  });
+    pdf.addPage("a4", "portrait");
+    cursorY = marginMm;
+  };
+
+  newPage();
+
+  for (let i = 0; i < styledRows.length; i += 1) {
+    const row = styledRows[i];
+    const fontSizePt = Math.max(8, row.fontSize * PX_TO_PT);
+    const lineHeightMm = (fontSizePt * 1.45) / 2.83465; // pt → mm
+    pdf.setFont("Arial", row.bold ? "bold" : "normal");
+    pdf.setFontSize(fontSizePt);
+
+    const normalized = (row.text ?? "").replace(/\s+/g, " ").trim();
+    const wrapped: string[] = normalized
+      ? (pdf.splitTextToSize(normalized, usableWidthMm) as string[])
+      : [""];
+
+    cursorY += row.marginTop / 6; // px → mm "комфортный" сжатый отступ
+
+    for (const line of wrapped) {
+      if (cursorY + lineHeightMm > pageBottomMm) {
+        newPage();
+      }
+      // `text` рисуется по baseline, поэтому смещаем на высоту строки.
+      pdf.text(line, marginMm, cursorY + lineHeightMm * 0.78);
+      cursorY += lineHeightMm;
+    }
+
+    cursorY += row.marginBottom / 6;
+
+    // Каждые 200 строк отдаём кадр event-loop'у. Это держит UI
+    // отзывчивым даже на больших экспортах (сотни заметок).
+    if (i > 0 && i % 200 === 0) {
+      onProgress?.(i / styledRows.length, "Раскладываем страницы");
+      await nextFrame();
+    }
+  }
+
+  onProgress?.(0.95, "Сохраняем файл");
+  await nextFrame();
 
   const pdfBlob = pdf.output("blob");
   triggerBrowserDownload(pdfBlob, fileName);
+  onProgress?.(1, "Готово");
 }

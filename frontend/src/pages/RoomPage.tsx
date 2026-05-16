@@ -97,6 +97,11 @@ import {
 } from "../features/room/RoomCodeEditor";
 import { BriefingBoard } from "../features/room/BriefingBoard";
 import {
+  extractFocusMode,
+  setFocusMode as applyBriefingFocusMode,
+  stripFocusMarker,
+} from "../features/room/briefingFocusMode";
+import {
   TopBar,
   LANGUAGES,
   type Participant,
@@ -625,6 +630,15 @@ export function RoomPage() {
   useEscapeLayer(privateNotesExportModalOpened, closePrivateNotesExportModal);
   const [exportIncludeTimestamps, setExportIncludeTimestamps] = useState(false);
   const [exportIncludeFreeNotes, setExportIncludeFreeNotes] = useState(true);
+  /**
+   * Прогресс выгрузки заметок (`md`/`pdf`). `null` = выгрузки нет.
+   * Нужен для единообразного UX: одна шкала и блокировка повторных
+   * кликов для обоих форматов, без "фейкового" idle-лоадера.
+   */
+  const [exportProgress, setExportProgress] = useState<
+    | null
+    | { progress: number; label: string; format: "md" | "pdf" }
+  >(null);
   const [briefingDraft, setBriefingDraft] = useState("");
   const [briefingDirty, setBriefingDirty] = useState(false);
   const [resyncSignal, setResyncSignal] = useState(0);
@@ -1777,8 +1791,14 @@ export function RoomPage() {
     setActivePrivateBlock(null);
   }, []);
 
-  const exportPersonalNotesMarkdown = useCallback(() => {
+  const exportPersonalNotesMarkdown = useCallback(async () => {
     if (!merged) return;
+    if (exportProgress !== null) return;
+    setExportProgress({
+      progress: 0,
+      label: "Готовим markdown",
+      format: "md",
+    });
     const markdownFileName = buildRoomExportFileName(room?.title, "md");
     const markdown = buildPersonalNotesMarkdownDocument(
       mergedTasks.map((task) => ({
@@ -1795,7 +1815,15 @@ export function RoomPage() {
     );
     const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
     triggerBrowserDownload(blob, markdownFileName);
+    setExportProgress({
+      progress: 1,
+      label: "Файл готов, начинаем скачивание",
+      format: "md",
+    });
+    await new Promise((resolve) => window.setTimeout(resolve, 280));
+    setExportProgress(null);
   }, [
+    exportProgress,
     exportIncludeFreeNotes,
     exportIncludeTimestamps,
     merged,
@@ -1806,6 +1834,12 @@ export function RoomPage() {
 
   const exportPersonalNotesPdf = useCallback(async () => {
     if (!merged) return;
+    if (exportProgress !== null) return; // Защита от повторного клика.
+    setExportProgress({
+      progress: 0,
+      label: "Готовим документ",
+      format: "pdf",
+    });
     try {
       const markdown = buildPersonalNotesMarkdownDocument(
         mergedTasks.map((task) => ({
@@ -1823,11 +1857,24 @@ export function RoomPage() {
       await renderPersonalNotesPdf({
         markdown,
         fileName: buildRoomExportFileName(room?.title, "pdf"),
+        onProgress: (progress, label) => {
+          setExportProgress({ progress, label, format: "pdf" });
+        },
       });
+      setExportProgress({
+        progress: 1,
+        label: "Файл готов, начинаем скачивание",
+        format: "pdf",
+      });
+      // Keep success state briefly so modal UI doesn't "jump" right after completion.
+      await new Promise((resolve) => window.setTimeout(resolve, 380));
     } catch (error) {
       console.error("PRIVATE_NOTES_PDF_EXPORT_FAIL", error);
+    } finally {
+      setExportProgress(null);
     }
   }, [
+    exportProgress,
     exportIncludeFreeNotes,
     exportIncludeTimestamps,
     merged,
@@ -2129,10 +2176,37 @@ export function RoomPage() {
   const currentTaskRating =
     merged.taskScores[String(merged.currentStep)] ?? step?.score ?? null;
   const stepStarterCode = step?.starterCode ?? "";
-  const ownerBriefingValue = briefingDirty
-    ? briefingDraft
-    : mergedBriefingMarkdown;
-  const candidateBriefingValue = mergedBriefingMarkdown;
+  // Состояние «focus mode» (synced) хранится прямо в `briefingMarkdown`
+  // через скрытый sentinel-маркер (см. `briefingFocusMode.ts`). Это
+  // даёт синхронизацию через уже существующий канал без миграции БД.
+  const rawBriefingValue = briefingDirty ? briefingDraft : mergedBriefingMarkdown;
+  const briefingFocusMode = extractFocusMode(rawBriefingValue);
+  const ownerBriefingValue = stripFocusMarker(rawBriefingValue);
+  const candidateBriefingValue = stripFocusMarker(mergedBriefingMarkdown);
+  const candidateBriefingFocusMode = extractFocusMode(mergedBriefingMarkdown);
+
+  /**
+   * Переключение focus mode со стороны интервьюера. Состояние едет
+   * по тому же каналу, что и обычное редактирование (debounced
+   * `sendBriefingUpdate`), поэтому мы просто пересобираем строку
+   * с учётом маркера и переиспользуем `changeBriefingMarkdown`.
+   */
+  const handleBriefingFocusToggle = (next: boolean) => {
+    const baseValue = stripFocusMarker(rawBriefingValue);
+    changeBriefingMarkdown(applyBriefingFocusMode(baseValue, next));
+  };
+
+  /**
+   * Колбэк для изменения markdown из BriefingBoard: получает «чистый»
+   * текст (без маркера), а мы обратно прокидываем его в общий
+   * редактор с учётом текущего focus mode.
+   */
+  const handleBriefingValueChange = (cleanValue: string) => {
+    const withFocus = briefingFocusMode
+      ? applyBriefingFocusMode(cleanValue, true)
+      : cleanValue;
+    changeBriefingMarkdown(withFocus);
+  };
 
   return (
     <>
@@ -2231,8 +2305,11 @@ export function RoomPage() {
             onExportIncludeFreeNotesChange={setExportIncludeFreeNotes}
             onExportPrivateNotesMarkdown={exportPersonalNotesMarkdown}
             onExportPrivateNotesPdf={exportPersonalNotesPdf}
+            pdfExportProgress={exportProgress}
             briefingMarkdown={ownerBriefingValue}
-            onBriefingChange={changeBriefingMarkdown}
+            briefingFocusMode={briefingFocusMode}
+            onBriefingChange={handleBriefingValueChange}
+            onBriefingFocusModeChange={handleBriefingFocusToggle}
             sessionId={sessionId}
             participantId={participantId}
             participantLabel={effectiveDisplayName}
@@ -2263,6 +2340,7 @@ export function RoomPage() {
             stepTitle={step?.title ?? "-"}
             stepStarterCode={stepStarterCode}
             briefingMarkdown={candidateBriefingValue}
+            briefingFocusMode={candidateBriefingFocusMode}
             sessionId={sessionId}
             participantId={participantId}
             participantLabel={effectiveDisplayName}
@@ -2314,8 +2392,11 @@ function OwnerLayout({
   onExportIncludeFreeNotesChange,
   onExportPrivateNotesMarkdown,
   onExportPrivateNotesPdf,
+  pdfExportProgress,
   briefingMarkdown,
+  briefingFocusMode,
   onBriefingChange,
+  onBriefingFocusModeChange,
   sessionId,
   participantId,
   participantLabel,
@@ -2375,8 +2456,26 @@ function OwnerLayout({
   onExportIncludeFreeNotesChange: (next: boolean) => void;
   onExportPrivateNotesMarkdown: () => void;
   onExportPrivateNotesPdf: () => void;
+  /**
+   * Текущий прогресс PDF-экспорта. `null` означает, что выгрузка
+   * сейчас не идёт. Используется, чтобы заблокировать кнопку и
+   * показать индикатор внутри модалки экспорта.
+   */
+  pdfExportProgress:
+    | {
+        progress: number;
+        label: string;
+        format: "md" | "pdf";
+      }
+    | null;
   briefingMarkdown: string;
+  /**
+   * Synced focus mode: когда `true`, у обоих участников вместо
+   * редактора кода показывается markdown-панель на всю колонку.
+   */
+  briefingFocusMode: boolean;
   onBriefingChange: (value: string) => void;
+  onBriefingFocusModeChange: (next: boolean) => void;
   sessionId: string;
   participantId: string;
   participantLabel: string;
@@ -3590,18 +3689,71 @@ function OwnerLayout({
                       }
                       label="Включать заметки вне блока"
                     />
+                    <div
+                      className={styles.exportStatusSlot}
+                      data-testid="private-notes-export-status-slot"
+                    >
+                      {pdfExportProgress ? (
+                        // Keep a stable-height status slot in the modal so
+                        // buttons don't jump when export progress appears.
+                        <Stack
+                          gap={4}
+                          data-testid="private-notes-pdf-progress"
+                        >
+                          <Text size="xs" c="gray.4">
+                            {pdfExportProgress.label}…{" "}
+                            {Math.round(pdfExportProgress.progress * 100)}%
+                          </Text>
+                          <div
+                            style={{
+                              height: 4,
+                              background: "#1c2230",
+                              borderRadius: 2,
+                              overflow: "hidden",
+                            }}
+                          >
+                            <div
+                              style={{
+                                height: "100%",
+                                width: `${Math.max(
+                                  4,
+                                  Math.round(pdfExportProgress.progress * 100),
+                                )}%`,
+                                background: "#3b82f6",
+                                transition: "width 120ms linear",
+                              }}
+                            />
+                          </div>
+                        </Stack>
+                      ) : (
+                        <Text size="xs" c="gray.6">
+                          Выберите формат для экспорта заметок
+                        </Text>
+                      )}
+                    </div>
                     <Group justify="flex-end">
                       <Button
                         variant="light"
                         color="gray"
                         leftSection={<IconDownload size={14} />}
                         onClick={onExportPrivateNotesMarkdown}
+                        disabled={pdfExportProgress !== null}
+                        loading={
+                          pdfExportProgress?.format === "md" &&
+                          pdfExportProgress.progress < 1
+                        }
                       >
                         Скачать .md
                       </Button>
                       <Button
                         leftSection={<IconDownload size={14} />}
                         onClick={onExportPrivateNotesPdf}
+                        loading={
+                          pdfExportProgress?.format === "pdf" &&
+                          pdfExportProgress.progress < 1
+                        }
+                        disabled={pdfExportProgress !== null}
+                        data-testid="private-notes-pdf-export-button"
                       >
                         Скачать .pdf
                       </Button>
@@ -3854,24 +4006,33 @@ function OwnerLayout({
                 mode="interviewer"
                 value={briefingMarkdown}
                 onChange={onBriefingChange}
+                focusMode={briefingFocusMode}
+                onFocusModeChange={onBriefingFocusModeChange}
               />
-              <SharedRoomEditorPanel
-                merged={merged}
-                stepStarterCode={stepStarterCode}
-                editorReady={editorReady}
-                syncKey={syncKey}
-                resyncSignal={resyncSignal}
-                sessionId={sessionId}
-                participantId={participantId}
-                participantLabel={participantLabel}
-                sendAwarenessUpdate={sendAwarenessUpdate}
-                onAwarenessBridgeReady={onAwarenessBridgeReady}
-                onYjsUpdate={onYjsUpdate}
-                onYjsBridgeReady={onYjsBridgeReady}
-                onEditorValueChange={onEditorValueChange}
-                onKeyPress={onKeyPress}
-                panelClassName={styles.editorPanel}
-              />
+              {/*
+                Synced focus mode: интервьюер скрывает блок с кодом для
+                обоих участников. У кандидата выполняется тот же if
+                ниже в `CandidateLayout`.
+              */}
+              {!briefingFocusMode ? (
+                <SharedRoomEditorPanel
+                  merged={merged}
+                  stepStarterCode={stepStarterCode}
+                  editorReady={editorReady}
+                  syncKey={syncKey}
+                  resyncSignal={resyncSignal}
+                  sessionId={sessionId}
+                  participantId={participantId}
+                  participantLabel={participantLabel}
+                  sendAwarenessUpdate={sendAwarenessUpdate}
+                  onAwarenessBridgeReady={onAwarenessBridgeReady}
+                  onYjsUpdate={onYjsUpdate}
+                  onYjsBridgeReady={onYjsBridgeReady}
+                  onEditorValueChange={onEditorValueChange}
+                  onKeyPress={onKeyPress}
+                  panelClassName={styles.editorPanel}
+                />
+              ) : null}
               {error && <Text className={styles.error}>{error}</Text>}
             </Box>
           </Box>
@@ -3899,11 +4060,18 @@ function CandidateLayout({
   onEditorValueChange,
   onKeyPress,
   error,
+  briefingFocusMode,
 }: {
   merged: RealtimeState;
   stepTitle: string;
   stepStarterCode: string;
   briefingMarkdown: string;
+  /**
+   * Synced focus mode (см. `briefingFocusMode.ts`): когда `true`,
+   * у кандидата код-редактор скрыт и markdown показывается на всю
+   * рабочую область.
+   */
+  briefingFocusMode: boolean;
   sessionId: string;
   participantId: string;
   participantLabel: string;
@@ -3940,25 +4108,28 @@ function CandidateLayout({
         key={`briefing-${merged.currentStep}`}
         mode="candidate"
         value={briefingMarkdown}
+        focusMode={briefingFocusMode}
       />
 
-      <SharedRoomEditorPanel
-        merged={merged}
-        stepStarterCode={stepStarterCode}
-        editorReady={editorReady}
-        syncKey={syncKey}
-        resyncSignal={resyncSignal}
-        sessionId={sessionId}
-        participantId={participantId}
-        participantLabel={participantLabel}
-        sendAwarenessUpdate={sendAwarenessUpdate}
-        onAwarenessBridgeReady={onAwarenessBridgeReady}
-        onYjsUpdate={onYjsUpdate}
-        onYjsBridgeReady={onYjsBridgeReady}
-        onEditorValueChange={onEditorValueChange}
-        onKeyPress={onKeyPress}
-        panelClassName={styles.candidatePanel}
-      />
+      {!briefingFocusMode ? (
+        <SharedRoomEditorPanel
+          merged={merged}
+          stepStarterCode={stepStarterCode}
+          editorReady={editorReady}
+          syncKey={syncKey}
+          resyncSignal={resyncSignal}
+          sessionId={sessionId}
+          participantId={participantId}
+          participantLabel={participantLabel}
+          sendAwarenessUpdate={sendAwarenessUpdate}
+          onAwarenessBridgeReady={onAwarenessBridgeReady}
+          onYjsUpdate={onYjsUpdate}
+          onYjsBridgeReady={onYjsBridgeReady}
+          onEditorValueChange={onEditorValueChange}
+          onKeyPress={onKeyPress}
+          panelClassName={styles.candidatePanel}
+        />
+      ) : null}
 
       {error && <Text className={styles.error}>{error}</Text>}
     </Box>

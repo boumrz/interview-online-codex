@@ -29,4 +29,12 @@ export const LANGUAGE_OPTIONS = [
   { value: "kotlin", label: "Kotlin" },
   { value: "java", label: "Java" },
   { value: "sql", label: "SQL" },
+  /**
+   * `plaintext` — синтетический "язык" для задач, где подсветка кода
+   * не нужна (тексты, ТЗ, заметки). В CodeMirror интерпретируется как
+   * `null`-extension (без grammar), в API/БД хранится как обычная
+   * строка. Совместим с любым backend `LanguageNormalizer`,
+   * который пропускает неизвестные значения без изменений.
+   */
+  { value: "plaintext", label: "Plain text" },
 ];

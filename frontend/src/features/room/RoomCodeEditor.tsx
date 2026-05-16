@@ -45,7 +45,7 @@ import {
   bytesToBase64,
   createDeterministicBootstrapUpdate,
 } from "./yjsCodec";
-import { normalizeRoomLanguage } from "./roomLanguage";
+import { isPlaintextLanguage, normalizeRoomLanguage } from "./roomLanguage";
 import { roomSyncLog } from "./roomSyncLog";
 import type { KeyPressPayload } from "./candidateKeys";
 import roomPageStyles from "../../pages/RoomPage.module.css";
@@ -208,6 +208,11 @@ export function RoomCodeEditor({
 
   const languageExtension = useMemo(() => {
     const normalized = normalizeRoomLanguage(language);
+    // Для plain text возвращаем пустой массив расширений: CodeMirror
+    // продолжит работать как обычный многострочный редактор, но без
+    // grammar-парсера и подсветки — то, что нужно для текстовых
+    // задач/ТЗ без привязки к синтаксису.
+    if (isPlaintextLanguage(normalized)) return [];
     if (normalized === "python") return python();
     if (normalized === "java" || normalized === "kotlin") return java();
     if (normalized === "sql") return sql();
