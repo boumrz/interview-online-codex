@@ -1,0 +1,71 @@
+---
+description: Multi-agent system rules for interview-online. Always-on for all Cursor sessions.
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# Multi-Agent System — interview-online
+
+This project uses a structured 12-agent hierarchy. Each agent has a specific role, model tier, and handoff contract. Read `agents/common/model-policy.md` for the full tier table.
+
+## Agent Roles and Model Tiers
+
+| Agent | Tier | Cursor Model to Use |
+|-------|------|---------------------|
+| Specification (TZ) Agent | **Opus** | `claude-opus-4-7` |
+| Product Owner Agent | Sonnet | `claude-sonnet-4-6` |
+| Architect Agent | Sonnet | `claude-sonnet-4-6` |
+| Team Lead Agent | Sonnet | `claude-sonnet-4-6` |
+| Developer Agent | Sonnet | `claude-sonnet-4-6` |
+| Designer Agent | Sonnet | `claude-sonnet-4-6` |
+| Solution Reviewer Agent | Sonnet | `claude-sonnet-4-6` |
+| Security & Reliability Agent | Sonnet | `claude-sonnet-4-6` |
+| QA Agent | **Haiku** | `claude-haiku-4-5-20251001` |
+| Prompt/Task Auditor Agent | **Haiku** | `claude-haiku-4-5-20251001` |
+| Test Reviewer Agent | **Haiku** | `claude-haiku-4-5-20251001` |
+| UX Critic Agent | **Haiku** | `claude-haiku-4-5-20251001` |
+
+## How to Invoke Agents in Cursor
+
+Cursor does not support automatic per-agent model routing. Follow these steps:
+
+1. **Before calling `@specification-agent`** — switch model to Opus (`claude-opus-4-7`) in Cursor model selector.
+2. **Before calling any Sonnet-tier agent** — use `claude-sonnet-4-6`.
+3. **Before calling any Haiku-tier agent** — use `claude-haiku-4-5-20251001` or the cheapest available model.
+
+You can reference agents by their role names defined in `agents/roles/`:
+- `@specification-agent` — requirements → specification
+- `@product-owner-agent` — scope, user stories, AC
+- `@architect-agent` — architecture, API contracts, ADRs
+- `@team-lead-agent` — task decomposition, sprint planning
+- `@developer-agent` — code implementation
+- `@designer-agent` — UX flows, screen specs
+- `@solution-reviewer-agent` — code/architecture review
+- `@security-reliability-agent` — security, auth, execution safety
+- `@qa-agent` — test cases, release readiness
+- `@prompt-task-auditor-agent` — task definition quality gate
+- `@test-reviewer-agent` — test coverage review
+- `@ux-critic-agent` — UX spec review
+
+## Workflow Order
+
+```
+Input → specification-agent (Opus)
+  → product-owner-agent (Sonnet)
+  → architect-agent (Sonnet)
+  → team-lead-agent (Sonnet)
+  → prompt-task-auditor-agent (Haiku) [quality gate]
+  → developer-agent / designer-agent (Sonnet) [parallel]
+  → solution-reviewer-agent / security-reliability-agent (Sonnet) [parallel review]
+  → qa-agent (Haiku)
+  → test-reviewer-agent / ux-critic-agent (Haiku) [parallel review]
+  → Done
+```
+
+## Key Rules
+
+- Every task must correspond to a Linear issue. No work outside Linear.
+- No state transition (In Review → Done) without the required reviewer verdicts.
+- Reviewer verdicts: `approve`, `revise`, or `reject`. Only `approve` unblocks the next state.
+- Full contracts in `agents/common/shared-contract.md`.
+- Handoff scenarios in `agents/common/handoff-scenarios.md`.
