@@ -45,6 +45,10 @@ artifacts/
 frontend/artifacts/
 runner/load-tests/
 
+# Internal analytics artifacts (Excel, gap-analysis, RICE)
+# Не для коммита — личный аналитический контекст основателя
+analytics/
+
 # Local debug tooling output
 .playwright-cli/
 
