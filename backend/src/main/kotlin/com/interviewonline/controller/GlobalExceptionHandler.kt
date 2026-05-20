@@ -2,6 +2,7 @@ package com.interviewonline.controller
 
 import com.interviewonline.service.ApiException
 import org.springframework.dao.DataAccessException
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.MethodArgumentNotValidException
@@ -13,6 +14,12 @@ class GlobalExceptionHandler {
     @ExceptionHandler(ApiException::class)
     fun handleApiException(ex: ApiException): ResponseEntity<Map<String, String>> {
         return ResponseEntity.status(ex.status).body(mapOf("error" to ex.message))
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException::class)
+    fun handleIntegrityViolation(ex: DataIntegrityViolationException): ResponseEntity<Map<String, String>> {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+            .body(mapOf("error" to "Конфликт данных: запись с такими параметрами уже существует"))
     }
 
     @ExceptionHandler(DataAccessException::class)

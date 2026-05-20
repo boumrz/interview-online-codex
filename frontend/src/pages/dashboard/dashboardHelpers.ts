@@ -37,7 +37,7 @@ export function isDashboardSection(
   agentOpsEnabled: boolean,
   isAdmin: boolean,
 ): value is DashboardSection {
-  if (value === "rooms" || value === "tasks" || value === "manage") return true;
+  if (value === "rooms" || value === "tasks" || value === "presets" || value === "manage") return true;
   if (isAdmin && value === "admin") return true;
   return agentOpsEnabled && value === "agents";
 }

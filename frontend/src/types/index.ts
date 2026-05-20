@@ -153,3 +153,22 @@ export type EnvironmentDoctorReport = {
     details: Record<string, string>;
   }>;
 };
+
+export type PresetItem = {
+  taskTemplateId: string;
+  title: string;
+  language: string;
+  position: number;
+};
+
+export type PresetSummary = {
+  id: string;
+  name: string;
+  itemCount: number;
+};
+
+export type PresetDetail = {
+  id: string;
+  name: string;
+  items: PresetItem[];
+};

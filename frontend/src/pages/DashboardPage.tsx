@@ -90,6 +90,7 @@ import { AdminUsersSection } from "./dashboard/AdminUsersSection";
 import { AgentOpsSection } from "./dashboard/AgentOpsSection";
 import { CreateRoomSection } from "./dashboard/CreateRoomSection";
 import { ManageRoomsSection } from "./dashboard/ManageRoomsSection";
+import { PresetsSection } from "./dashboard/PresetsSection";
 
 declare const __FEATURE_AGENT_OPS__: string | undefined;
 
@@ -1208,6 +1209,10 @@ export function DashboardPage() {
                     </Stack>
                   </Card>
                 </SimpleGrid>
+              )}
+
+              {activeSection === "presets" && (
+                <PresetsSection taskOptions={taskSelectData} />
               )}
 
               {activeSection === "manage" && (

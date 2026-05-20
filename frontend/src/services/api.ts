@@ -5,6 +5,8 @@ import type {
   AgentRun,
   AuthResponse,
   EnvironmentDoctorReport,
+  PresetDetail,
+  PresetSummary,
   Room,
   RoomSummary,
   TaskLanguageGroup,
@@ -26,7 +28,7 @@ export const api = createApi({
       return headers;
     },
   }),
-  tagTypes: ["Room", "MyRooms", "Tasks", "AdminUsers"],
+  tagTypes: ["Room", "MyRooms", "Tasks", "AdminUsers", "Presets"],
   endpoints: (builder) => ({
     register: builder.mutation<
       AuthResponse,
@@ -302,6 +304,26 @@ export const api = createApi({
     getEnvironmentDoctorReport: builder.query<EnvironmentDoctorReport, void>({
       query: () => "/agent/environment/doctor",
     }),
+    listPresets: builder.query<PresetSummary[], void>({
+      query: () => "/me/presets",
+      providesTags: ["Presets"],
+    }),
+    getPreset: builder.query<PresetDetail, { presetId: string }>({
+      query: ({ presetId }) => `/me/presets/${presetId}`,
+      providesTags: (_result, _error, { presetId }) => [{ type: "Presets" as const, id: presetId }],
+    }),
+    createPreset: builder.mutation<PresetDetail, { name: string; taskTemplateIds: string[] }>({
+      query: (body) => ({ url: "/me/presets", method: "POST", body }),
+      invalidatesTags: ["Presets"],
+    }),
+    updatePreset: builder.mutation<PresetDetail, { presetId: string; name: string; taskTemplateIds: string[] }>({
+      query: ({ presetId, ...body }) => ({ url: `/me/presets/${presetId}`, method: "PUT", body }),
+      invalidatesTags: ["Presets"],
+    }),
+    deletePreset: builder.mutation<{ status: string }, { presetId: string }>({
+      query: ({ presetId }) => ({ url: `/me/presets/${presetId}`, method: "DELETE" }),
+      invalidatesTags: ["Presets"],
+    }),
   }),
 });
 
@@ -335,4 +357,10 @@ export const {
   useListAgentRunsByIssueQuery,
   useEvaluateAgentPolicyQuery,
   useGetEnvironmentDoctorReportQuery,
+  useListPresetsQuery,
+  useGetPresetQuery,
+  useLazyGetPresetQuery,
+  useCreatePresetMutation,
+  useUpdatePresetMutation,
+  useDeletePresetMutation,
 } = api;

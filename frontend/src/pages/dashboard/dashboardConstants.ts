@@ -4,7 +4,7 @@
  * so we expose them as separate constants and let the page compose the
  * final list.
  */
-export type DashboardSection = "rooms" | "tasks" | "manage" | "agents" | "admin";
+export type DashboardSection = "rooms" | "tasks" | "presets" | "manage" | "agents" | "admin";
 
 export interface DashboardSectionDescriptor {
   value: DashboardSection;
@@ -14,6 +14,7 @@ export interface DashboardSectionDescriptor {
 export const BASE_DASHBOARD_SECTIONS: DashboardSectionDescriptor[] = [
   { value: "rooms", label: "Комнаты" },
   { value: "tasks", label: "Задачи" },
+  { value: "presets", label: "Пресеты" },
   { value: "manage", label: "Управление комнатами" },
   { value: "agents", label: "Агент-операции" },
 ];
