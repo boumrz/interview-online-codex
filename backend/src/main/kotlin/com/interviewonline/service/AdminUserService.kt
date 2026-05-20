@@ -101,6 +101,7 @@ class AdminUserService(
             nickname = nickname,
             role = role,
             createdAt = DateTimeFormatter.ISO_INSTANT.format(createdAt),
+            isSystemAdmin = nickname.equals(PRIMARY_ADMIN_NICKNAME, ignoreCase = true),
         )
     }
 }

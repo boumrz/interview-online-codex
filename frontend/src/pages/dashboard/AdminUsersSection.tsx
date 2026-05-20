@@ -15,8 +15,6 @@ import type { AdminUser } from "../../types";
 import { darkSelectStyles } from "./dashboardFieldStyles";
 import { formatCreatedAt } from "./dashboardHelpers";
 
-const PROTECTED_ADMIN_NICKNAME = "boumrz";
-
 interface AdminUsersSectionProps {
   users: AdminUser[];
   currentUserId: string | undefined;
@@ -70,15 +68,14 @@ export function AdminUsersSection({
 
         <Text size="sm" c="gray.4">
           Управляйте ролями и удаляйте пользователей. Системный администратор
-          `boumrz` защищен от удаления.
+          защищен от изменения роли и удаления.
         </Text>
 
         <Stack gap="sm">
           {users.map((user) => {
             const draftRole = roleDrafts[user.id] ?? user.role;
             const isCurrentUser = user.id === currentUserId;
-            const isProtected =
-              user.nickname.trim().toLowerCase() === PROTECTED_ADMIN_NICKNAME;
+            const isProtected = user.isSystemAdmin;
             return (
               <Card
                 key={user.id}

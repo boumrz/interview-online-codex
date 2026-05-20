@@ -7,6 +7,7 @@ data class AdminUserDto(
     val nickname: String,
     val role: String,
     val createdAt: String,
+    val isSystemAdmin: Boolean,
 )
 
 data class UpdateUserRoleRequest(

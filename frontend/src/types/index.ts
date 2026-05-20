@@ -86,6 +86,7 @@ export type AdminUser = {
   nickname: string;
   role: "user" | "admin" | string;
   createdAt: string;
+  isSystemAdmin: boolean;
 };
 
 export type AgentArtifact = {

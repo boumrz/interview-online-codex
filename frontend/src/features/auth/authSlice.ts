@@ -9,13 +9,10 @@ type AuthState = {
 const storedToken = localStorage.getItem("auth_token");
 
 function normalizeUser(raw: User): User {
-  const nickname = raw.nickname ?? "";
   const displayName = raw.displayName ?? "";
   const normalizedRole =
     typeof raw.role === "string" && raw.role.trim().length > 0
       ? raw.role
-      : nickname.trim().toLowerCase() === "boumrz"
-      ? "admin"
       : "user";
   return {
     ...raw,

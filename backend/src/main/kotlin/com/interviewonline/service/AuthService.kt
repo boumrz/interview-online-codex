@@ -23,6 +23,7 @@ class AuthService(
     companion object {
         const val ROLE_USER = "user"
         const val ROLE_ADMIN = "admin"
+        private const val PRIMARY_ADMIN_NICKNAME = "boumrz"
     }
 
     private val passwordEncoder = BCryptPasswordEncoder()
@@ -42,12 +43,13 @@ class AuthService(
         if (userRepository.findByNickname(nickname) != null) {
             throw ApiException(HttpStatus.CONFLICT, "Ник уже занят")
         }
+        val role = if (nickname.equals(PRIMARY_ADMIN_NICKNAME, ignoreCase = true)) ROLE_ADMIN else ROLE_USER
         val user = userRepository.save(
             User(
                 nickname = nickname,
                 displayName = displayName,
                 passwordHash = passwordEncoder.encode(request.password),
-                role = ROLE_USER,
+                role = role,
             ),
         )
         userTaskService.initializeTaskBank(user)
