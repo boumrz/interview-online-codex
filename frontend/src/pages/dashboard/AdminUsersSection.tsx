@@ -123,6 +123,7 @@ export function AdminUsersSection({
                       styles={darkSelectStyles}
                       w={220}
                       disabled={isProtected}
+                      labelProps={{ onClick: (e: React.MouseEvent) => e.preventDefault() }}
                     />
                     <Button
                       variant="light"

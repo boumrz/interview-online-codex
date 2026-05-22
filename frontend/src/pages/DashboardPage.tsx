@@ -1,5 +1,6 @@
 import React, { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActionIcon,
   AppShell,
   Badge,
   Box,
@@ -9,8 +10,6 @@ import {
   Divider,
   Group,
   Modal,
-  Notification,
-  Portal,
   Select,
   SimpleGrid,
   Stack,
@@ -20,9 +19,13 @@ import {
   ThemeIcon,
   Title,
 } from "@mantine/core";
+import { DashboardToast } from "../components/DashboardToast";
+import type { ToastEntry } from "../components/DashboardToast";
 import {
   IconBook2,
+  IconCheck,
   IconCode,
+  IconCopy,
   IconEdit,
   IconLayoutDashboard,
   IconLogout2,
@@ -86,10 +89,12 @@ import {
   normalizeLanguageKey,
   type RoomSaveStatus,
 } from "./dashboard/dashboardHelpers";
+import { encodeTaskShareCode } from "../features/tasks/taskShareCode";
 import { AdminUsersSection } from "./dashboard/AdminUsersSection";
 import { AgentOpsSection } from "./dashboard/AgentOpsSection";
 import { CreateRoomSection } from "./dashboard/CreateRoomSection";
 import { ManageRoomsSection } from "./dashboard/ManageRoomsSection";
+import { PasteTaskCodeField } from "./dashboard/PasteTaskCodeField";
 import { PresetsSection } from "./dashboard/PresetsSection";
 
 declare const __FEATURE_AGENT_OPS__: string | undefined;
@@ -100,7 +105,6 @@ export function DashboardPage() {
   const { section } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const auth = useAppSelector((s) => s.auth);
-  const [error, setError] = useState("");
   const agentOpsEnabled =
     (typeof __FEATURE_AGENT_OPS__ !== "undefined"
       ? __FEATURE_AGENT_OPS__
@@ -118,11 +122,9 @@ export function DashboardPage() {
   const [profileDisplayName, setProfileDisplayName] = useState(
     auth.user?.displayName ?? "",
   );
-  const [profileSaveToast, setProfileSaveToast] = useState<{
-    type: "success" | "error";
-    message: string;
-  } | null>(null);
-  const profileSaveToastTimerRef = useRef<number | null>(null);
+  // ── Notification stack ─────────────────────────────────────────────────
+  const [notifications, setNotifications] = useState<ToastEntry[]>([]);
+  const notifTimerRefs = useRef<Record<string, number>>({});
 
   const [roomTitleDrafts, setRoomTitleDrafts] = useState<
     Record<string, string>
@@ -157,6 +159,9 @@ export function DashboardPage() {
   const [adminRoleDrafts, setAdminRoleDrafts] = useState<
     Record<string, string>
   >({});
+
+  const [copiedTaskId, setCopiedTaskId] = useState<string | null>(null);
+  const copiedTaskTimerRef = useRef<Record<string, number>>({});
   const dashboardSections = BASE_DASHBOARD_SECTIONS.filter(
     (dashboardSection) =>
       agentOpsEnabled || dashboardSection.value !== "agents",
@@ -232,23 +237,37 @@ export function DashboardPage() {
   }, []);
 
   useEffect(() => {
+    const timers = notifTimerRefs.current;
     return () => {
-      if (profileSaveToastTimerRef.current != null) {
-        window.clearTimeout(profileSaveToastTimerRef.current);
-      }
+      Object.values(timers).forEach((id) => window.clearTimeout(id));
     };
   }, []);
 
-  const showProfileSaveToast = (type: "success" | "error", message: string) => {
-    setProfileSaveToast({ type, message });
-    if (profileSaveToastTimerRef.current != null) {
-      window.clearTimeout(profileSaveToastTimerRef.current);
+  useEffect(() => {
+    return () => {
+      Object.values(copiedTaskTimerRef.current).forEach((id) => window.clearTimeout(id));
+    };
+  }, []);
+
+  const dismissNotif = (id: string) => {
+    if (notifTimerRefs.current[id]) {
+      window.clearTimeout(notifTimerRefs.current[id]);
+      delete notifTimerRefs.current[id];
     }
-    profileSaveToastTimerRef.current = window.setTimeout(() => {
-      setProfileSaveToast(null);
-      profileSaveToastTimerRef.current = null;
-    }, 3200);
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
   };
+
+  const pushNotif = (type: "success" | "error", title: string, message: string) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setNotifications((prev) => [...prev, { id, type, title, message }]);
+    notifTimerRefs.current[id] = window.setTimeout(() => {
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+      delete notifTimerRefs.current[id];
+    }, 5000);
+  };
+
+  const showError = (message: string) => pushNotif("error", message, "");
+  const showSuccess = (title: string, message: string) => pushNotif("success", title, message);
 
   const hasValidSection = isDashboardSection(section, agentOpsEnabled, isAdmin);
   const activeSection: DashboardSection = hasValidSection ? section : "rooms";
@@ -398,7 +417,6 @@ export function DashboardPage() {
       has_title: taskTitle.trim().length > 0,
     });
     try {
-      setError("");
       await createTask({
         title: taskTitle,
         description: taskDescription,
@@ -416,7 +434,7 @@ export function DashboardPage() {
         language: taskLanguage,
       });
     } catch {
-      setError("Не удалось создать задачу");
+      showError("Не удалось создать задачу");
       trackEvent("prod_task_create_failed", {
         language: taskLanguage,
       });
@@ -431,7 +449,6 @@ export function DashboardPage() {
       first_task_language: firstSelectedTaskLanguage,
     });
     try {
-      setError("");
       const normalizedTaskIds = Array.from(
         new Set(roomTaskIds.filter((taskId) => allowedRoomTaskIds.has(taskId))),
       );
@@ -456,7 +473,7 @@ export function DashboardPage() {
       });
       navigate(`/room/${room.inviteCode}`);
     } catch {
-      setError("Не удалось создать комнату");
+      showError("Не удалось создать комнату");
       trackEvent("prod_room_create_failed", {
         first_task_language: firstSelectedTaskLanguage,
       });
@@ -474,7 +491,6 @@ export function DashboardPage() {
   const submitTaskEdit = async () => {
     if (!editingTask) return;
     try {
-      setError("");
       await updateTask({
         taskId: editingTask.id,
         title: editTaskTitle,
@@ -484,17 +500,37 @@ export function DashboardPage() {
       }).unwrap();
       setEditingTask(null);
     } catch {
-      setError("Не удалось обновить задачу");
+      showError("Не удалось обновить задачу");
     }
   };
 
   const removeTask = async (taskId: string) => {
     if (!window.confirm("Удалить задачу из банка?")) return;
     try {
-      setError("");
       await deleteTask({ taskId }).unwrap();
+    } catch (err) {
+      const serverMessage = (err as { data?: { error?: string } })?.data?.error;
+      showError(serverMessage ?? "Не удалось удалить задачу");
+    }
+  };
+
+  const handleCopyTaskCode = async (task: TaskTemplate) => {
+    try {
+      const code = encodeTaskShareCode({
+        title: task.title,
+        description: task.description,
+        starterCode: task.starterCode,
+        language: task.language,
+      });
+      await navigator.clipboard.writeText(code);
+      setCopiedTaskId(task.id);
+      if (copiedTaskTimerRef.current[task.id]) window.clearTimeout(copiedTaskTimerRef.current[task.id]);
+      copiedTaskTimerRef.current[task.id] = window.setTimeout(() => {
+        setCopiedTaskId((prev) => (prev === task.id ? null : prev));
+        delete copiedTaskTimerRef.current[task.id];
+      }, 2000);
     } catch {
-      setError("Не удалось удалить задачу");
+      showError("Не удалось скопировать код задачи");
     }
   };
 
@@ -504,21 +540,19 @@ export function DashboardPage() {
       .toLowerCase();
     if (!nextRole || nextRole === user.role) return;
     try {
-      setError("");
       await updateAdminUserRole({ userId: user.id, role: nextRole }).unwrap();
       setAdminRoleDrafts((prev) => ({ ...prev, [user.id]: nextRole }));
     } catch {
-      setError("Не удалось обновить роль пользователя");
+      showError("Не удалось обновить роль пользователя");
     }
   };
 
   const removeUserByAdmin = async (user: AdminUser) => {
     if (!window.confirm(`Удалить пользователя @${user.nickname}?`)) return;
     try {
-      setError("");
       await deleteAdminUser({ userId: user.id }).unwrap();
     } catch {
-      setError("Не удалось удалить пользователя");
+      showError("Не удалось удалить пользователя");
     }
   };
 
@@ -539,7 +573,6 @@ export function DashboardPage() {
 
     try {
       setRoomSaveStatus((prev) => ({ ...prev, [roomId]: "saving" }));
-      setError("");
       await updateRoom({ roomId, title: normalized }).unwrap();
       setRoomTitleDrafts((prev) => ({ ...prev, [roomId]: normalized }));
       setRoomSaveStatus((prev) => ({ ...prev, [roomId]: "saved" }));
@@ -555,7 +588,7 @@ export function DashboardPage() {
       }, 1200);
     } catch {
       setRoomSaveStatus((prev) => ({ ...prev, [roomId]: "error" }));
-      setError("Не удалось автоматически сохранить комнату");
+      showError("Не удалось автоматически сохранить комнату");
     }
   };
 
@@ -595,30 +628,26 @@ export function DashboardPage() {
   const removeRoom = async (roomId: string) => {
     if (!window.confirm("Удалить комнату?")) return;
     try {
-      setError("");
       await deleteRoom({ roomId }).unwrap();
     } catch {
-      setError("Не удалось удалить комнату");
+      showError("Не удалось удалить комнату");
     }
   };
 
   const saveProfileDisplayName = async () => {
     const normalized = profileDisplayName.trim();
     if (!normalized) {
-      setError("Имя для комнаты обязательно");
-      showProfileSaveToast("error", "Введите имя для отображения");
+      showError("Введите имя для отображения");
       return;
     }
     try {
-      setError("");
       const updated = await updateProfile({ displayName: normalized }).unwrap();
       dispatch(updateAuthProfile({ displayName: updated.displayName }));
       localStorage.setItem("display_name", updated.displayName);
       setProfileDisplayName(updated.displayName);
-      showProfileSaveToast("success", "Имя для комнаты успешно сохранено");
+      showSuccess("Имя сохранено", "Имя для комнаты успешно сохранено");
     } catch {
-      setError("Не удалось обновить имя профиля");
-      showProfileSaveToast("error", "Не удалось сохранить имя для комнаты");
+      showError("Не удалось сохранить имя для комнаты");
     }
   };
 
@@ -638,9 +667,8 @@ export function DashboardPage() {
   const onStartAgentRun = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      setError("");
       if (!issueIdLooksValid) {
-        setError("Укажите задачу Linear в формате KEY-123");
+        showError("Укажите задачу Linear в формате KEY-123");
         return;
       }
       await startAgentRun({
@@ -655,13 +683,12 @@ export function DashboardPage() {
       }).unwrap();
       await refetchAgentRuns();
     } catch {
-      setError("Не удалось запустить агентный процесс");
+      showError("Не удалось запустить агентный процесс");
     }
   };
 
   const onTransitionRun = async (runId: string, targetState: string) => {
     try {
-      setError("");
       await transitionAgentRun({
         runId,
         targetState,
@@ -672,62 +699,43 @@ export function DashboardPage() {
       await refetchAgentRuns();
       setSelectedPolicyRunId(runId);
     } catch {
-      setError("Не удалось выполнить переход процесса");
+      showError("Не удалось выполнить переход процесса");
     }
   };
 
   const onExecuteReviewers = async (runId: string) => {
     try {
-      setError("");
       await executeAllRunReviewers({ runId }).unwrap();
       await refetchAgentRuns();
       setSelectedPolicyRunId(runId);
     } catch {
-      setError("Не удалось запустить независимые ревью");
+      showError("Не удалось запустить независимые ревью");
     }
   };
 
   const onConfigureFaults = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      setError("");
       await configureRealtimeFaults({
         inviteCode: faultInviteCode.trim(),
         latencyMs: Number(faultLatencyMs) || 0,
         dropEveryNthMessage: Number(faultDropEvery) || 0,
       }).unwrap();
     } catch {
-      setError("Не удалось применить профиль сбоев realtime");
+      showError("Не удалось применить профиль сбоев realtime");
     }
   };
 
   const onClearFaults = async () => {
     try {
-      setError("");
       if (!faultInviteCode.trim()) return;
       await clearRealtimeFaults({
         inviteCode: faultInviteCode.trim(),
       }).unwrap();
     } catch {
-      setError("Не удалось очистить профиль сбоев realtime");
+      showError("Не удалось очистить профиль сбоев realtime");
     }
   };
-
-  const loadingMutation =
-    createTaskState.isLoading ||
-    updateTaskState.isLoading ||
-    deleteTaskState.isLoading ||
-    updateAdminUserRoleState.isLoading ||
-    deleteAdminUserState.isLoading ||
-    createRoomState.isLoading ||
-    updateRoomState.isLoading ||
-    deleteRoomState.isLoading ||
-    startAgentRunState.isLoading ||
-    transitionAgentRunState.isLoading ||
-    executeAllRunReviewersState.isLoading ||
-    configureRealtimeFaultsState.isLoading ||
-    clearRealtimeFaultsState.isLoading ||
-    updateProfileState.isLoading;
 
   const switchSection = (nextSection: DashboardSection) => {
     if (nextSection === "agents" && !agentOpsEnabled) {
@@ -810,6 +818,7 @@ export function DashboardPage() {
             onChange={(value) => setEditTaskLanguage(value ?? "nodejs")}
             data={LANGUAGE_OPTIONS}
             styles={darkSelectStyles}
+            labelProps={{ onClick: (e: React.MouseEvent) => e.preventDefault() }}
           />
           <Button loading={updateTaskState.isLoading} onClick={submitTaskEdit}>
             Сохранить изменения
@@ -860,6 +869,7 @@ export function DashboardPage() {
               onChange={(value) => setTaskLanguage(value ?? "nodejs")}
               data={LANGUAGE_OPTIONS}
               styles={darkSelectStyles}
+              labelProps={{ onClick: (e: React.MouseEvent) => e.preventDefault() }}
             />
             <Button
               data-testid="create-task-submit-button"
@@ -872,33 +882,7 @@ export function DashboardPage() {
         </form>
       </Modal>
 
-      {profileSaveToast ? (
-        <Portal>
-          <Box
-            style={{
-              position: "fixed",
-              top: 16,
-              left: "50%",
-              transform: "translateX(-50%)",
-              width: "min(480px, calc(100vw - 24px))",
-              zIndex: 5000,
-            }}
-          >
-            <Notification
-              color={profileSaveToast.type === "success" ? "teal" : "red"}
-              title={
-                profileSaveToast.type === "success"
-                  ? "Имя сохранено"
-                  : "Ошибка сохранения"
-              }
-              withCloseButton
-              onClose={() => setProfileSaveToast(null)}
-            >
-              {profileSaveToast.message}
-            </Notification>
-          </Box>
-        </Portal>
-      ) : null}
+      <DashboardToast notifications={notifications} onDismiss={dismissNotif} />
 
       <h1 className="visually-hidden">Личный кабинет — управление комнатами и задачами</h1>
       <AppShell padding={0} header={{ height: 72 }}>
@@ -1069,11 +1053,7 @@ export function DashboardPage() {
                           ? "filled"
                           : "subtle"
                       }
-                      color={
-                        activeSection === dashboardSection.value
-                          ? "gray"
-                          : "dark"
-                      }
+                      color="gray"
                       onClick={() => switchSection(dashboardSection.value)}
                     >
                       {dashboardSection.label}
@@ -1089,9 +1069,9 @@ export function DashboardPage() {
                   taskOptions={taskSelectData}
                   selectedTaskIds={roomTaskIds}
                   onSelectedTaskIdsChange={setRoomTaskIds}
-                  selectedTasks={selectedRoomTasks}
                   isSubmitting={createRoomState.isLoading}
                   onSubmit={onCreateRoom}
+                  onError={showError}
                 />
               )}
 
@@ -1154,6 +1134,14 @@ export function DashboardPage() {
                         ))}
                       </Group>
                       <Divider color="#272b34" />
+                      <PasteTaskCodeField
+                        existingTasks={allSelectableRoomTasks}
+                        onImportSuccess={(language) => {
+                          const params = new URLSearchParams(searchParams);
+                          params.set("lang", language);
+                          setSearchParams(params, { replace: true });
+                        }}
+                      />
                       <Stack gap="sm">
                         {currentTaskGroup.tasks.map((task) => (
                           <Card
@@ -1178,6 +1166,16 @@ export function DashboardPage() {
                                 }}
                               />
                               <Group justify="flex-end">
+                                <ActionIcon
+                                  size="sm"
+                                  variant="light"
+                                  color={copiedTaskId === task.id ? "teal" : "gray"}
+                                  onClick={() => void handleCopyTaskCode(task)}
+                                  title="Скопировать код задачи"
+                                  aria-label="Скопировать код задачи"
+                                >
+                                  {copiedTaskId === task.id ? <IconCheck size={14} /> : <IconCopy size={14} />}
+                                </ActionIcon>
                                 <Button
                                   size="xs"
                                   leftSection={<IconEdit size={14} />}
@@ -1212,7 +1210,7 @@ export function DashboardPage() {
               )}
 
               {activeSection === "presets" && (
-                <PresetsSection taskOptions={taskSelectData} />
+                <PresetsSection taskOptions={taskSelectData} onError={showError} />
               )}
 
               {activeSection === "manage" && (
@@ -1296,11 +1294,6 @@ export function DashboardPage() {
                 />
               )}
 
-              {(error || loadingMutation) && (
-                <Text c={error ? "red.4" : "gray.4"} mt="md">
-                  {error || "Выполняется операция..."}
-                </Text>
-              )}
             </Container>
           </Box>
         </AppShell.Main>

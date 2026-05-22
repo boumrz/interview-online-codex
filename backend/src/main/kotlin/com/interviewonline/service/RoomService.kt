@@ -164,10 +164,12 @@ class RoomService(
         ownerToken: String?,
         interviewerToken: String?,
         user: User?,
+        eventToken: String? = null,
     ): RoomResponse {
         val room = roomRepository.findByInviteCode(inviteCode)
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
-        val access = roomAccessService.requireManager(room, user, ownerToken, interviewerToken)
+        val realtimeRole = collaborationService.resolveRoleByEventToken(inviteCode, eventToken)
+        val access = roomAccessService.requireManager(room, user, ownerToken, interviewerToken, realtimeRole)
 
         val requestedTaskIds = request.taskIds
             .map { it.trim() }
@@ -303,10 +305,12 @@ class RoomService(
         ownerToken: String?,
         interviewerToken: String?,
         user: User?,
+        eventToken: String? = null,
     ): RoomResponse {
         val room = roomRepository.findByInviteCode(inviteCode)
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
-        val access = roomAccessService.requireManager(room, user, ownerToken, interviewerToken)
+        val realtimeRole = collaborationService.resolveRoleByEventToken(inviteCode, eventToken)
+        val access = roomAccessService.requireManager(room, user, ownerToken, interviewerToken, realtimeRole)
         val task = room.tasks.firstOrNull { it.stepIndex == stepIndex }
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Задача не найдена")
 
@@ -336,10 +340,12 @@ class RoomService(
         ownerToken: String?,
         interviewerToken: String?,
         user: User?,
+        eventToken: String? = null,
     ): RoomResponse {
         val room = roomRepository.findByInviteCode(inviteCode)
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
-        val access = roomAccessService.requireManager(room, user, ownerToken, interviewerToken)
+        val realtimeRole = collaborationService.resolveRoleByEventToken(inviteCode, eventToken)
+        val access = roomAccessService.requireManager(room, user, ownerToken, interviewerToken, realtimeRole)
         if (room.tasks.size <= 1) {
             throw ApiException(
                 HttpStatus.BAD_REQUEST,

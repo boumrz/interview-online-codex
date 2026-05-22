@@ -7,6 +7,7 @@ import com.interviewonline.dto.UpdateTaskTemplateRequest
 import com.interviewonline.model.User
 import com.interviewonline.model.UserTaskCategory
 import com.interviewonline.model.UserTaskTemplate
+import com.interviewonline.repository.PresetItemRepository
 import com.interviewonline.repository.UserTaskCategoryRepository
 import com.interviewonline.repository.UserTaskTemplateRepository
 import com.interviewonline.service.LanguageNormalizer.normalize as normalizeLanguage
@@ -19,6 +20,7 @@ class UserTaskService(
     private val categoryRepository: UserTaskCategoryRepository,
     private val taskRepository: UserTaskTemplateRepository,
     private val taskTemplateService: TaskTemplateService,
+    private val presetItemRepository: PresetItemRepository,
 ) {
     @Transactional
     fun initializeTaskBank(user: User) {
@@ -76,10 +78,26 @@ class UserTaskService(
 
     @Transactional
     fun deleteTask(user: User, taskId: String) {
-        val deleted = taskRepository.deleteByIdAndOwnerUserId(taskId, user.id!!)
-        if (deleted == 0L) {
+        // Verify ownership before any further checks.
+        if (taskRepository.findByIdAndOwnerUserId(taskId, user.id!!) == null) {
             throw ApiException(HttpStatus.NOT_FOUND, "Задача не найдена")
         }
+
+        // Block deletion when the task is referenced by one or more presets.
+        val usedInItems = presetItemRepository.findByTaskTemplateIdWithPreset(taskId)
+        if (usedInItems.isNotEmpty()) {
+            val presetWord = if (usedInItems.size == 1) "пресете" else "пресетах"
+            val presetNames = usedInItems
+                .mapNotNull { it.preset?.name }
+                .distinct()
+                .joinToString(", ") { "«$it»" }
+            throw ApiException(
+                HttpStatus.CONFLICT,
+                "Нельзя удалить задачу: она используется в $presetWord $presetNames. Сначала удалите её из пресета.",
+            )
+        }
+
+        taskRepository.deleteByIdAndOwnerUserId(taskId, user.id!!)
     }
 
     @Transactional

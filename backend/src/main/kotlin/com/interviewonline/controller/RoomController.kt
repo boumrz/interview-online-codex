@@ -79,12 +79,13 @@ class RoomController(
         @PathVariable inviteCode: String,
         @RequestHeader("X-Room-Owner-Token", required = false) ownerToken: String?,
         @RequestHeader("X-Room-Interviewer-Token", required = false) interviewerToken: String?,
+        @RequestHeader("X-Room-Event-Token", required = false) eventToken: String?,
         @RequestHeader("Authorization", required = false) authorization: String?,
         @RequestBody request: AddRoomTasksRequest,
     ): RoomResponse {
         val authToken = authorization?.removePrefix("Bearer ")?.trim()
         val user = authService.resolveUserByToken(authToken)
-        return roomService.addTasksToRoom(inviteCode, request, ownerToken, interviewerToken, user)
+        return roomService.addTasksToRoom(inviteCode, request, ownerToken, interviewerToken, user, eventToken)
     }
 
     @PatchMapping("/rooms/{inviteCode}/tasks/{stepIndex}")
@@ -93,12 +94,13 @@ class RoomController(
         @PathVariable stepIndex: Int,
         @RequestHeader("X-Room-Owner-Token", required = false) ownerToken: String?,
         @RequestHeader("X-Room-Interviewer-Token", required = false) interviewerToken: String?,
+        @RequestHeader("X-Room-Event-Token", required = false) eventToken: String?,
         @RequestHeader("Authorization", required = false) authorization: String?,
         @RequestBody request: UpdateRoomTaskRequest,
     ): RoomResponse {
         val authToken = authorization?.removePrefix("Bearer ")?.trim()
         val user = authService.resolveUserByToken(authToken)
-        return roomService.updateRoomTask(inviteCode, stepIndex, request, ownerToken, interviewerToken, user)
+        return roomService.updateRoomTask(inviteCode, stepIndex, request, ownerToken, interviewerToken, user, eventToken)
     }
 
     @DeleteMapping("/rooms/{inviteCode}/tasks/{stepIndex}")
@@ -107,11 +109,12 @@ class RoomController(
         @PathVariable stepIndex: Int,
         @RequestHeader("X-Room-Owner-Token", required = false) ownerToken: String?,
         @RequestHeader("X-Room-Interviewer-Token", required = false) interviewerToken: String?,
+        @RequestHeader("X-Room-Event-Token", required = false) eventToken: String?,
         @RequestHeader("Authorization", required = false) authorization: String?,
     ): RoomResponse {
         val authToken = authorization?.removePrefix("Bearer ")?.trim()
         val user = authService.resolveUserByToken(authToken)
-        return roomService.removeRoomTask(inviteCode, stepIndex, ownerToken, interviewerToken, user)
+        return roomService.removeRoomTask(inviteCode, stepIndex, ownerToken, interviewerToken, user, eventToken)
     }
 
     @GetMapping("/rooms/{inviteCode}/participants")

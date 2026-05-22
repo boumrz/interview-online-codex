@@ -1,7 +1,6 @@
 import React, { useState, type FormEvent } from "react";
 import {
   Button,
-  Card,
   Group,
   MultiSelect,
   Select,
@@ -11,15 +10,13 @@ import {
   TextInput,
   ThemeIcon,
   Title,
+  Card,
 } from "@mantine/core";
 import { IconPlus } from "@tabler/icons-react";
-import { markdownToHtml } from "../../components/markdown";
 import {
   useListPresetsQuery,
   useLazyGetPresetQuery,
 } from "../../services/api";
-import type { TaskTemplate } from "../../types";
-import styles from "../DashboardPage.module.css";
 import {
   darkFieldStyles,
   darkSelectStyles,
@@ -36,9 +33,9 @@ interface CreateRoomSectionProps {
   taskOptions: RoomTaskOption[];
   selectedTaskIds: string[];
   onSelectedTaskIdsChange: (ids: string[]) => void;
-  selectedTasks: Pick<TaskTemplate, "id" | "title" | "description">[];
   isSubmitting: boolean;
   onSubmit: (event: FormEvent) => void;
+  onError?: (message: string) => void;
 }
 
 /**
@@ -56,12 +53,11 @@ export function CreateRoomSection({
   taskOptions,
   selectedTaskIds,
   onSelectedTaskIdsChange,
-  selectedTasks,
   isSubmitting,
   onSubmit,
+  onError,
 }: CreateRoomSectionProps) {
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
-  const [presetLoadError, setPresetLoadError] = useState<string | null>(null);
 
   // RTK Query deduplicates this subscription against PresetsSection when both
   // are mounted — only one /me/presets request is issued.
@@ -73,7 +69,6 @@ export function CreateRoomSection({
 
   const handlePresetChange = async (value: string | null) => {
     setSelectedPresetId(value);
-    setPresetLoadError(null);
 
     if (!value) {
       // Preset cleared — reset the task selection so the form state is consistent
@@ -86,7 +81,7 @@ export function CreateRoomSection({
       const detail = await triggerGetPreset({ presetId: value }).unwrap();
       onSelectedTaskIdsChange(detail.items.map((item) => item.taskTemplateId));
     } catch {
-      setPresetLoadError("Не удалось загрузить пресет. Попробуйте ещё раз.");
+      onError?.("Не удалось загрузить пресет. Попробуйте ещё раз.");
     }
   };
 
@@ -132,12 +127,8 @@ export function CreateRoomSection({
                   disabled={isLoadingPreset}
                   onChange={(value) => void handlePresetChange(value)}
                   styles={darkSelectStyles}
+                  labelProps={{ onClick: (e: React.MouseEvent) => e.preventDefault() }}
                 />
-                {presetLoadError && (
-                  <Text size="xs" c="red.4">
-                    {presetLoadError}
-                  </Text>
-                )}
               </Stack>
             )}
             <MultiSelect
@@ -149,36 +140,8 @@ export function CreateRoomSection({
               onChange={onSelectedTaskIdsChange}
               searchable
               styles={darkSelectStyles}
+              labelProps={{ onClick: (e: React.MouseEvent) => e.preventDefault() }}
             />
-            <Stack gap="xs" data-testid="selected-task-preview">
-              <Text fw={600}>Выбранные задачи</Text>
-              {selectedTasks.length === 0 ? (
-                <Text size="sm" c="gray.4">
-                  Пока ничего не выбрано. Комната будет создана без задач.
-                </Text>
-              ) : (
-                selectedTasks.map((task) => (
-                  <Card
-                    key={task.id}
-                    withBorder
-                    radius="md"
-                    padding="sm"
-                    bg="#121720"
-                    style={{ borderColor: "#2a3039" }}
-                  >
-                    <Stack gap={4}>
-                      <Text fw={700}>{task.title}</Text>
-                      <div
-                        className={styles.markdownPreviewContent}
-                        dangerouslySetInnerHTML={{
-                          __html: markdownToHtml(task.description),
-                        }}
-                      />
-                    </Stack>
-                  </Card>
-                ))
-              )}
-            </Stack>
             <Button type="submit" loading={isSubmitting}>
               Создать и открыть
             </Button>

@@ -154,6 +154,8 @@ type RealtimeState = {
   role: "owner" | "interviewer" | "candidate";
   canManageRoom: boolean;
   canGrantAccess?: boolean;
+  /** Server-assigned per-connection token. Used to authenticate REST calls for guest interviewers. */
+  eventToken?: string | null;
   notesLockedBySessionId: string | null;
   notesLockedByDisplayName: string | null;
   notesLockedUntilEpochMs: number | null;
@@ -1920,6 +1922,7 @@ export function RoomPage() {
           taskIds: normalizedTaskIds,
           customTasks: [],
           ownerToken: ownerToken ?? undefined,
+          eventToken: merged.eventToken ?? undefined,
         }).unwrap();
         trackEvent("prod_room_tasks_add_success", {
           tasks_count: normalizedTaskIds.length,
@@ -1966,6 +1969,7 @@ export function RoomPage() {
             },
           ],
           ownerToken: ownerToken ?? undefined,
+          eventToken: merged.eventToken ?? undefined,
         }).unwrap();
         trackEvent("prod_room_custom_task_add_success", {
           title_len: title.length,
@@ -2005,6 +2009,7 @@ export function RoomPage() {
           stepIndex,
           title: trimmed,
           ownerToken: ownerToken ?? undefined,
+          eventToken: merged.eventToken ?? undefined,
         }).unwrap();
         trackEvent("prod_room_task_rename_success", {
           step_index: stepIndex,
@@ -2035,6 +2040,7 @@ export function RoomPage() {
           inviteCode: merged.inviteCode,
           stepIndex,
           ownerToken: ownerToken ?? undefined,
+          eventToken: merged.eventToken ?? undefined,
         }).unwrap();
         trackEvent("prod_room_task_delete_success", { step_index: stepIndex });
       } catch {

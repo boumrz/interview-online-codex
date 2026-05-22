@@ -40,6 +40,7 @@ class RoomAccessService(
         user: User?,
         ownerToken: String? = null,
         interviewerToken: String? = null,
+        realtimeRoleOverride: RoomRole? = null,
     ): RoomAccess {
         val ownerId = room.ownerUser?.id
         val userId = user?.id
@@ -61,6 +62,11 @@ class RoomAccessService(
                 !interviewerToken.isNullOrBlank() &&
                 room.interviewerSessionToken == interviewerToken ->
                 RoomAccess(RoomRole.INTERVIEWER)
+            // Fallback for guest participants whose role was granted via the
+            // realtime channel. The in-memory role is trusted only after all
+            // credential-based checks have failed (owner token, DB record, etc.).
+            realtimeRoleOverride != null ->
+                RoomAccess(realtimeRoleOverride)
             else -> RoomAccess(RoomRole.CANDIDATE)
         }
     }
@@ -70,8 +76,9 @@ class RoomAccessService(
         user: User?,
         ownerToken: String? = null,
         interviewerToken: String? = null,
+        realtimeRoleOverride: RoomRole? = null,
     ): RoomAccess {
-        val access = resolveAccess(room, user, ownerToken, interviewerToken)
+        val access = resolveAccess(room, user, ownerToken, interviewerToken, realtimeRoleOverride)
         if (!access.canManageRoom) {
             throw ApiException(HttpStatus.FORBIDDEN, "Только интервьюер может выполнить это действие")
         }

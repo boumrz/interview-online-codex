@@ -174,6 +174,7 @@ function AgentRunFormCard({
               { value: "langgraph", label: "LangGraph (прототип)" },
             ]}
             styles={darkSelectStyles}
+            labelProps={{ onClick: (e: React.MouseEvent) => e.preventDefault() }}
           />
           <TextInput
             label="Текущая роль"

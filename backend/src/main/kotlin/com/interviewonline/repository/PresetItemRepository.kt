@@ -9,4 +9,8 @@ interface PresetItemRepository : JpaRepository<PresetItem, String> {
     @Modifying
     @Query("DELETE FROM PresetItem pi WHERE pi.preset.id = :presetId")
     fun deleteAllByPresetIdJpql(presetId: String): Int
+
+    /** Returns all preset items referencing the given task template, with the preset eagerly loaded. */
+    @Query("SELECT pi FROM PresetItem pi JOIN FETCH pi.preset WHERE pi.taskTemplate.id = :taskTemplateId")
+    fun findByTaskTemplateIdWithPreset(taskTemplateId: String): List<PresetItem>
 }

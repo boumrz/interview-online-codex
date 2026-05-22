@@ -28,13 +28,16 @@ import { darkFieldStyles, darkSelectStyles } from "./dashboardFieldStyles";
 
 interface PresetsSectionProps {
   taskOptions: Array<{ value: string; label: string }>;
+  onError?: (message: string) => void;
 }
 
 /**
  * Self-contained CRUD component for task presets.
  * Allows creating, editing, and deleting presets of task templates.
+ * All error reporting is delegated to the `onError` callback so the
+ * parent controls the notification presentation.
  */
-export function PresetsSection({ taskOptions }: PresetsSectionProps) {
+export function PresetsSection({ taskOptions, onError }: PresetsSectionProps) {
   const { token } = useAppSelector((state) => state.auth);
 
   const { data: presets = [], isLoading, isError } = useListPresetsQuery(undefined, {
@@ -50,45 +53,40 @@ export function PresetsSection({ taskOptions }: PresetsSectionProps) {
   const [createOpened, { open: openCreate, close: closeCreate }] = useDisclosure(false);
   const [createName, setCreateName] = useState("");
   const [createTaskIds, setCreateTaskIds] = useState<string[]>([]);
-  const [createError, setCreateError] = useState("");
 
   // Edit modal state
   const [editOpened, { open: openEdit, close: closeEdit }] = useDisclosure(false);
   const [editPresetId, setEditPresetId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editTaskIds, setEditTaskIds] = useState<string[]>([]);
-  const [editError, setEditError] = useState("");
   const [editLoading, setEditLoading] = useState(false);
 
   const handleOpenCreate = () => {
     setCreateName("");
     setCreateTaskIds([]);
-    setCreateError("");
     openCreate();
   };
 
   const handleCloseCreate = () => {
     setCreateName("");
     setCreateTaskIds([]);
-    setCreateError("");
     closeCreate();
   };
 
   const handleCreate = async () => {
     if (!createName.trim()) {
-      setCreateError("Введите название пресета");
+      onError?.("Введите название пресета");
       return;
     }
     if (createTaskIds.length === 0) {
-      setCreateError("Выберите хотя бы одну задачу");
+      onError?.("Выберите хотя бы одну задачу");
       return;
     }
     try {
-      setCreateError("");
       await createPreset({ name: createName.trim(), taskTemplateIds: createTaskIds }).unwrap();
       handleCloseCreate();
     } catch {
-      setCreateError("Не удалось создать пресет");
+      onError?.("Не удалось создать пресет");
     }
   };
 
@@ -96,7 +94,6 @@ export function PresetsSection({ taskOptions }: PresetsSectionProps) {
     setEditPresetId(presetId);
     setEditName("");
     setEditTaskIds([]);
-    setEditError("");
     setEditLoading(true);
     openEdit();
     try {
@@ -104,7 +101,7 @@ export function PresetsSection({ taskOptions }: PresetsSectionProps) {
       setEditName(detail.name);
       setEditTaskIds(detail.items.map((item) => item.taskTemplateId));
     } catch {
-      setEditError("Не удалось загрузить данные пресета");
+      onError?.("Не удалось загрузить данные пресета");
     } finally {
       setEditLoading(false);
     }
@@ -114,7 +111,6 @@ export function PresetsSection({ taskOptions }: PresetsSectionProps) {
     setEditPresetId(null);
     setEditName("");
     setEditTaskIds([]);
-    setEditError("");
     setEditLoading(false);
     closeEdit();
   };
@@ -122,19 +118,18 @@ export function PresetsSection({ taskOptions }: PresetsSectionProps) {
   const handleEdit = async () => {
     if (!editPresetId) return;
     if (!editName.trim()) {
-      setEditError("Введите название пресета");
+      onError?.("Введите название пресета");
       return;
     }
     if (editTaskIds.length === 0) {
-      setEditError("Выберите хотя бы одну задачу");
+      onError?.("Выберите хотя бы одну задачу");
       return;
     }
     try {
-      setEditError("");
       await updatePreset({ presetId: editPresetId, name: editName.trim(), taskTemplateIds: editTaskIds }).unwrap();
       handleCloseEdit();
     } catch {
-      setEditError("Не удалось сохранить пресет");
+      onError?.("Не удалось сохранить пресет");
     }
   };
 
@@ -143,8 +138,7 @@ export function PresetsSection({ taskOptions }: PresetsSectionProps) {
     try {
       await deletePreset({ presetId }).unwrap();
     } catch {
-      // show inline error via alert since no toast system is available here
-      window.alert("Не удалось удалить пресет");
+      onError?.("Не удалось удалить пресет. Попробуйте ещё раз.");
     }
   };
 
@@ -173,12 +167,8 @@ export function PresetsSection({ taskOptions }: PresetsSectionProps) {
             placeholder="Выберите задачи"
             styles={darkSelectStyles}
             required
+            labelProps={{ onClick: (e: React.MouseEvent) => e.preventDefault() }}
           />
-          {createError && (
-            <Text c="red.4" size="sm">
-              {createError}
-            </Text>
-          )}
           <Button
             onClick={handleCreate}
             loading={createPresetState.isLoading}
@@ -218,13 +208,9 @@ export function PresetsSection({ taskOptions }: PresetsSectionProps) {
                 placeholder="Выберите задачи"
                 styles={darkSelectStyles}
                 required
+                labelProps={{ onClick: (e: React.MouseEvent) => e.preventDefault() }}
               />
             </>
-          )}
-          {editError && (
-            <Text c="red.4" size="sm">
-              {editError}
-            </Text>
           )}
           <Button
             onClick={handleEdit}

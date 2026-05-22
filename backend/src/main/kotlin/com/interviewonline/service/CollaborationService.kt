@@ -867,6 +867,21 @@ class CollaborationService(
     }
 
     @Transactional
+    /**
+     * Resolves the in-memory realtime role for a connection identified by its
+     * server-assigned event token. Used by REST endpoints that need to honour
+     * roles granted to guest (unauthenticated) participants via the realtime
+     * channel — those participants have no JWT and no DB participant record.
+     *
+     * Returns null when the token is blank or no matching connection is found.
+     */
+    fun resolveRoleByEventToken(inviteCode: String, eventToken: String?): RoomAccessService.RoomRole? {
+        if (eventToken.isNullOrBlank()) return null
+        return participants.values
+            .firstOrNull { it.inviteCode == inviteCode && it.eventToken == eventToken }
+            ?.role
+    }
+
     fun syncParticipantPermissions(inviteCode: String, targetUserId: String) {
         val room = roomRepository.findByInviteCode(inviteCode) ?: return
         val nextRole = resolveStoredRole(room, targetUserId)

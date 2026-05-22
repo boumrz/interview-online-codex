@@ -81,13 +81,16 @@ export const api = createApi({
           language?: string;
         }>;
         ownerToken?: string;
+        /** Realtime event token — lets guest interviewers authenticate REST calls. */
+        eventToken?: string;
       }
     >({
-      query: ({ inviteCode, taskIds = [], customTasks = [], ownerToken }) => ({
+      query: ({ inviteCode, taskIds = [], customTasks = [], ownerToken, eventToken }) => ({
         url: `/rooms/${inviteCode}/tasks`,
         method: "POST",
         headers: {
           ...(ownerToken ? { "X-Room-Owner-Token": ownerToken } : {}),
+          ...(eventToken ? { "X-Room-Event-Token": eventToken } : {}),
         },
         body: { taskIds, customTasks },
       }),
@@ -105,13 +108,16 @@ export const api = createApi({
         stepIndex: number;
         title?: string;
         ownerToken?: string;
+        /** Realtime event token — lets guest interviewers authenticate REST calls. */
+        eventToken?: string;
       }
     >({
-      query: ({ inviteCode, stepIndex, ownerToken, ...body }) => ({
+      query: ({ inviteCode, stepIndex, ownerToken, eventToken, ...body }) => ({
         url: `/rooms/${inviteCode}/tasks/${stepIndex}`,
         method: "PATCH",
         headers: {
           ...(ownerToken ? { "X-Room-Owner-Token": ownerToken } : {}),
+          ...(eventToken ? { "X-Room-Event-Token": eventToken } : {}),
         },
         body,
       }),
@@ -119,13 +125,14 @@ export const api = createApi({
     }),
     deleteRoomTask: builder.mutation<
       Room,
-      { inviteCode: string; stepIndex: number; ownerToken?: string }
+      { inviteCode: string; stepIndex: number; ownerToken?: string; eventToken?: string }
     >({
-      query: ({ inviteCode, stepIndex, ownerToken }) => ({
+      query: ({ inviteCode, stepIndex, ownerToken, eventToken }) => ({
         url: `/rooms/${inviteCode}/tasks/${stepIndex}`,
         method: "DELETE",
         headers: {
           ...(ownerToken ? { "X-Room-Owner-Token": ownerToken } : {}),
+          ...(eventToken ? { "X-Room-Event-Token": eventToken } : {}),
         },
       }),
       invalidatesTags: ["Room"],
