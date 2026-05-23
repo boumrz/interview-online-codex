@@ -155,11 +155,15 @@ cd "${release_dir}/frontend"
 npm ci
 npm run typecheck
 npm run build
+echo "==> Pruning frontend node_modules after build"
+rm -rf node_modules
 
 echo "==> Building backend"
 cd "${release_dir}/backend"
 mvn -B -DskipTests package
 cp target/interview-online-backend-0.0.1-SNAPSHOT.jar interview-online-backend.jar
+echo "==> Pruning backend build artifacts after packaging"
+rm -rf target
 
 echo "==> Updating current symlink"
 ln -sfn "${release_dir}" "${CURRENT_LINK}"
@@ -173,5 +177,8 @@ echo "==> Running smoke checks"
 wait_for_url "Backend health" "http://127.0.0.1:${BACKEND_HEALTH_PORT}/api/public/health" 45 2
 wait_for_url "Public backend health" "https://${DOMAIN}/api/public/health" 30 2
 wait_for_url "Public index" "https://${DOMAIN}/" 15 2
+
+echo "==> Cleaning old releases (keeping last 3)"
+ls -1dt "${RELEASES_DIR}"/[0-9]* 2>/dev/null | tail -n +4 | xargs -r rm -rf
 
 echo "Deployment completed: ${release_dir}"

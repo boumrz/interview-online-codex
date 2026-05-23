@@ -62,10 +62,6 @@ Optional env vars:
 ```bash
 AGENT_LINEAR_SYNC_ENABLED=true
 LINEAR_API_KEY=lin_api_xxx
-EXECUTION_MODE=isolated
-EXECUTION_ISOLATED_URL=http://localhost:7070/api/execute
-EXECUTION_FALLBACK_TO_LOCAL=false
-EXECUTION_KILL_SWITCH=false
 ```
 
 ### 3. Frontend
@@ -119,14 +115,12 @@ curl -I -H "Accept-Encoding: gzip" https://<your-domain>/
 - вход в комнату по invite-коду
 - совместное редактирование кода в реальном времени через SSE stream + POST `/events`
 - управление шагами и языком редактора владельцем комнаты
-- запуск кода только владельцем комнаты
 - Agent orchestration API с обязательной привязкой к Linear issue
 - Shared artifact registry (Postgres JSONB) для envelopes, verdicts и trace events
 - Policy gates перед переходами в `QA`/`DONE`
 - Environment Doctor endpoint: `GET /api/agent/environment/doctor`
 - Independent reviewers: solution / security-reliability / test / ux
 - Realtime fault injection API для chaos/regression прогонов
-- Isolated runner mode через отдельный Docker worker
 
 ## Agent API (MVP)
 
@@ -142,20 +136,6 @@ curl -I -H "Accept-Encoding: gzip" https://<your-domain>/
 - `GET /api/agent/runs/{runId}/trace` - trace-события handoff/decision
 - `POST /api/agent/realtime/faults/{inviteCode}` - fault profile (latency/drop)
 - `DELETE /api/agent/realtime/faults/{inviteCode}` - очистка fault profile
-
-## Isolated Runner
-
-Запуск отдельного execution worker:
-
-```bash
-docker compose -f docker-compose.runner.yml up -d --build
-```
-
-Backend в isolated mode:
-
-```bash
-EXECUTION_MODE=isolated EXECUTION_ISOLATED_URL=http://localhost:7070/api/execute mvn spring-boot:run
-```
 
 ## Chaos QA Harness
 

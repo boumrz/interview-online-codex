@@ -1,11 +1,8 @@
 package com.interviewonline.service
 
-import com.interviewonline.config.ExecutionProperties
 import com.interviewonline.dto.EnvironmentDoctorCheckDto
 import com.interviewonline.dto.EnvironmentDoctorReportDto
-import org.springframework.http.MediaType
 import org.springframework.stereotype.Service
-import org.springframework.web.client.RestClient
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -14,10 +11,7 @@ import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
 
 @Service
-class EnvironmentDoctorService(
-    private val executionProperties: ExecutionProperties,
-    private val restClientBuilder: RestClient.Builder,
-) {
+class EnvironmentDoctorService {
     fun run(): EnvironmentDoctorReportDto {
         val checks = mutableListOf<EnvironmentDoctorCheckDto>()
 
@@ -36,8 +30,6 @@ class EnvironmentDoctorService(
         } else {
             playwrightResult.check
         }
-
-        checks += checkExecutionRunner()
 
         val projectLayout = resolveProjectLayout()
         val readme = readFile(projectLayout.rootDir.resolve("README.md"))
@@ -149,51 +141,6 @@ class EnvironmentDoctorService(
                     status = "FAIL",
                     message = "Не удалось выполнить ${command.joinToString(" ")}: ${ex.message}",
                 ),
-            )
-        }
-    }
-
-    private fun checkExecutionRunner(): EnvironmentDoctorCheckDto {
-        if (executionProperties.killSwitch) {
-            return EnvironmentDoctorCheckDto(
-                key = "execution_runner_mode",
-                status = "WARN",
-                message = "Execution kill-switch включен, запуск кода заблокирован",
-            )
-        }
-
-        val mode = executionProperties.mode.lowercase()
-        if (mode != "isolated") {
-            return EnvironmentDoctorCheckDto(
-                key = "execution_runner_mode",
-                status = "WARN",
-                message = "Используется mode='$mode'. Для production рекомендуется isolated runner",
-                details = mapOf(
-                    "fallbackToLocal" to executionProperties.fallbackToLocal.toString(),
-                ),
-            )
-        }
-
-        val healthUrl = executionProperties.isolatedUrl.removeSuffix("/api/execute") + "/health"
-        return runCatching {
-            val body = restClientBuilder.build()
-                .get()
-                .uri(healthUrl)
-                .accept(MediaType.APPLICATION_JSON)
-                .retrieve()
-                .body(String::class.java)
-                .orEmpty()
-            EnvironmentDoctorCheckDto(
-                key = "execution_runner_mode",
-                status = "PASS",
-                message = "Isolated runner доступен ($healthUrl) ${body.take(120)}",
-            )
-        }.getOrElse { ex ->
-            EnvironmentDoctorCheckDto(
-                key = "execution_runner_mode",
-                status = "FAIL",
-                message = "Execution mode=isolated, но runner недоступен: ${ex.message}",
-                details = mapOf("url" to healthUrl),
             )
         }
     }

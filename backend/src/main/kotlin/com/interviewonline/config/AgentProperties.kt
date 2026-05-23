@@ -35,13 +35,3 @@ class LinearSyncProperties {
         "BLOCKED" to "Backlog",
     )
 }
-
-@Component
-@ConfigurationProperties(prefix = "app.execution")
-class ExecutionProperties {
-    var mode: String = "local"
-    var localEnabled: Boolean = true
-    var isolatedUrl: String = "http://localhost:7070/api/execute"
-    var fallbackToLocal: Boolean = false
-    var killSwitch: Boolean = false
-}

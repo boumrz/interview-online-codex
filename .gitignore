@@ -11,6 +11,9 @@ backend/build
 backend/target/
 frontend/dist/
 
+# Runner (code execution service — removed from roadmap)
+runner/node_modules/
+
 # Runtime logs and local run metadata
 .run/
 backend/.run/
@@ -43,7 +46,6 @@ test-results/
 # Load/performance artifacts and ad-hoc load scripts
 artifacts/
 frontend/artifacts/
-runner/load-tests/
 
 # Internal analytics artifacts (Excel, gap-analysis, RICE)
 # Не для коммита — личный аналитический контекст основателя
@@ -51,6 +53,8 @@ analytics/
 
 # Local debug tooling output
 .playwright-cli/
+.playwright-mcp/
+.ux-audit/
 
 # Local AI tooling configs (personal, not for repo)
 .mcp.json

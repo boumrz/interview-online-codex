@@ -50,9 +50,3 @@ app:
         QA: Передано на Front
         DONE: Выполнено
         BLOCKED: Backlog
-  execution:
-    mode: ${EXECUTION_MODE:local}
-    local-enabled: ${EXECUTION_LOCAL_ENABLED:true}
-    isolated-url: ${EXECUTION_ISOLATED_URL:http://localhost:7070/api/execute}
-    fallback-to-local: ${EXECUTION_FALLBACK_TO_LOCAL:false}
-    kill-switch: ${EXECUTION_KILL_SWITCH:false}

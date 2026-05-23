@@ -139,13 +139,7 @@ systemd unit на порту 18080; nginx subdomain `interview.domiknote.ru`.
 > ⚠️ Здесь зафиксирован реальный gap. Многие из этих пунктов попадают в Excel
 > анализа (`analytics/`) как кандидаты на бэклог.
 
-**Запуск кода (runner)**: исторический артефакт. В `runner/server.mjs` лежит
-Express-сервис под Node 20, поддерживающий JS/TS/Python через `node` и `python3`.
-Backend его не вызывает, кнопки «Run» в UI нет. **Не приоритизируется к
-интеграции** — фича явно исключена из roadmap решением владельца (см.
-`analytics/feature-roadmap.md`). При финальной уборке репозитория директорию
-`runner/` и упоминания EXECUTION_MODE/EXECUTION_ISOLATED_URL/`docker-compose.runner.yml`
-можно безопасно удалить.
+**Запуск кода в комнате**: не реализован и исключён из roadmap. Редактор — только совместное редактирование (Yjs CRDT), без выполнения кода.
 
 **Полноценный anti-cheat**: нет детекции paste из буфера; нет AI-детекции /
 стилометрии / сравнения с ChatGPT-паттернами; нет полноэкранного фокус-режима;
@@ -298,12 +292,6 @@ Prod: PostgreSQL 16; local: H2 in-memory в PostgreSQL-mode; pgvector — опц
 ### Realtime transport
 **SSE** на `text/event-stream`; POST events для исходящих от клиента;
 **WebSocket НЕ используется** (location `/ws/` в nginx ведёт в никуда).
-
-### Runner (deprecated, не в roadmap)
-В `runner/server.mjs` лежит Express-сервис под Node 20 (`POST /api/execute`,
-4 c timeout, 8 KB output limit, JS/TS/Python). К backend не подключён.
-**Решение владельца:** не интегрировать. Возможный кандидат на удаление при
-финальной чистке репозитория.
 
 ### Deploy
 Systemd unit `interview-online-backend.service`; nginx subdomain
