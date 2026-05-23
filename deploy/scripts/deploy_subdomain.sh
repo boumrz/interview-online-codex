@@ -179,6 +179,9 @@ wait_for_url "Public backend health" "https://${DOMAIN}/api/public/health" 30 2
 wait_for_url "Public index" "https://${DOMAIN}/" 15 2
 
 echo "==> Cleaning old releases (keeping last 3)"
-ls -1dt "${RELEASES_DIR}"/[0-9]* 2>/dev/null | tail -n +4 | xargs -r rm -rf
+ls -1dt "${RELEASES_DIR}"/[0-9]* 2>/dev/null | tail -n +4 | while IFS= read -r old_release; do
+  run_privileged chown -R "$(id -u):$(id -g)" "${old_release}" 2>/dev/null || true
+  rm -rf "${old_release}"
+done
 
 echo "Deployment completed: ${release_dir}"
