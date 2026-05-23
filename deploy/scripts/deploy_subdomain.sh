@@ -137,9 +137,9 @@ ensure_git_safe_directory
 
 echo "==> Fetching source (${BRANCH})"
 cd "${REPO_DIR}"
-git fetch --all --tags --no-write-fetch-head
+git fetch --all --tags
 git checkout "${BRANCH}"
-git pull --ff-only origin "${BRANCH}"
+git reset --hard "origin/${BRANCH}"
 
 echo "==> Creating release directory ${release_dir}"
 mkdir -p "${release_dir}"
