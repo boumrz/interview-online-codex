@@ -36,6 +36,10 @@ data class RoomRealtimePayload(
     val cursors: List<CursorPayload> = emptyList(),
     val lastCandidateKey: CandidateKeyPayload? = null,
     val candidateKeyHistory: List<CandidateKeyPayload> = emptyList(),
+    val verdict: String? = null,
+    val verdictComment: String? = null,
+    val status: String = "active",
+    val finishedAt: Long? = null,
 )
 
 data class RoomTaskPayload(
@@ -83,6 +87,12 @@ data class ParticipantPayload(
     val canBeGrantedInterviewerAccess: Boolean = false,
 )
 
+data class VerdictSetPayload(
+    val verdict: String,
+    val verdictComment: String? = null,
+    val finishedAt: Long,
+)
+
 data class CursorPayload(
     val sessionId: String,
     val displayName: String,
@@ -116,4 +126,6 @@ data class CandidateKeyPayload(
      * сам Tab и `keydown` для него не приходит.
      */
     val eventKind: String = "keydown",
+    val pasteLength: Int? = null,
+    val pastePreview: String? = null,
 )

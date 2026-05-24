@@ -113,7 +113,8 @@ internal object CandidateKeyHistoryHelpers {
             "window_blur",
             "window_focus",
             "tab_hidden",
-            "tab_visible" -> normalized
+            "tab_visible",
+            "paste" -> normalized
             else -> "keydown"
         }
     }
@@ -138,6 +139,16 @@ internal object CandidateKeyHistoryHelpers {
             else -> trimmed
         }
         return normalized.take(32)
+    }
+
+    fun sanitizePastePreview(raw: String?): String? {
+        if (raw == null) return null
+        return raw.take(50)
+    }
+
+    fun sanitizePasteLength(raw: Int?): Int? {
+        if (raw == null) return null
+        return raw.coerceIn(0, 1_000_000)
     }
 
     /**

@@ -67,4 +67,16 @@ class Room(
     @OneToMany(mappedBy = "room", cascade = [CascadeType.ALL], orphanRemoval = true)
     @OrderBy("stepIndex ASC")
     var tasks: MutableList<RoomTask> = mutableListOf(),
+
+    @Column(nullable = true, length = 32)
+    var verdict: String? = null,
+
+    @Column(name = "verdict_comment", columnDefinition = "TEXT", nullable = true)
+    var verdictComment: String? = null,
+
+    @Column(nullable = true, length = 32)
+    var status: String? = null,
+
+    @Column(name = "finished_at", nullable = true)
+    var finishedAt: java.time.Instant? = null,
 )

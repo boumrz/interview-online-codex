@@ -66,6 +66,8 @@ export type RoomSummary = {
   createdAt: string;
   ownerToken: string | null;
   interviewerToken: string | null;
+  verdict?: string | null;
+  status?: string;
 };
 
 export type TaskTemplate = {

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.interviewonline.dto.AddRoomTasksRequest
 import com.interviewonline.dto.CreateGuestRoomRequest
 import com.interviewonline.dto.CreateRoomRequest
+import com.interviewonline.dto.KeystrokeEventDto
 import com.interviewonline.dto.RoomAccessMemberDto
 import com.interviewonline.dto.RoomNoteMessageDto
 import com.interviewonline.dto.RoomResponse
@@ -11,11 +12,14 @@ import com.interviewonline.dto.RoomSummaryDto
 import com.interviewonline.dto.RoomTaskDto
 import com.interviewonline.dto.UpdateRoomParticipantRoleRequest
 import com.interviewonline.dto.UpdateRoomRequest
+import com.interviewonline.dto.SetVerdictRequest
 import com.interviewonline.dto.UpdateRoomTaskRequest
 import com.interviewonline.model.Room
+import com.interviewonline.model.VerdictValue
 import com.interviewonline.model.RoomParticipant
 import com.interviewonline.model.RoomTask
 import com.interviewonline.model.User
+import com.interviewonline.repository.RoomKeystrokeEventRepository
 import com.interviewonline.repository.RoomParticipantRepository
 import com.interviewonline.repository.RoomRepository
 import com.interviewonline.repository.UserRepository
@@ -24,6 +28,9 @@ import com.interviewonline.ws.NoteMessagePayload
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
+import java.time.Instant
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 
@@ -31,6 +38,7 @@ import java.util.UUID
 class RoomService(
     private val roomRepository: RoomRepository,
     private val roomParticipantRepository: RoomParticipantRepository,
+    private val roomKeystrokeEventRepository: RoomKeystrokeEventRepository,
     private val userRepository: UserRepository,
     private val roomAccessService: RoomAccessService,
     private val taskTemplateService: TaskTemplateService,
@@ -415,6 +423,8 @@ class RoomService(
                     createdAt = DateTimeFormatter.ISO_INSTANT.format(room.createdAt),
                     ownerToken = if (accessRole == "owner" && room.ownerUser == null) room.ownerSessionToken else null,
                     interviewerToken = null,
+                    verdict = room.verdict,
+                    status = room.status ?: "active",
                 )
             }
     }
@@ -438,6 +448,8 @@ class RoomService(
             createdAt = DateTimeFormatter.ISO_INSTANT.format(saved.createdAt),
             ownerToken = null,
             interviewerToken = null,
+            verdict = saved.verdict,
+            status = saved.status ?: "active",
         )
     }
 
@@ -447,11 +459,117 @@ class RoomService(
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
         val inviteCode = room.inviteCode
         room.id?.let {
+            // Delete related rows that have no JPA cascade configured.
+            // The V5 migration adds a DB-level FK ON DELETE CASCADE for PG;
+            // this explicit delete also covers H2 (Flyway-disabled local profile).
+            roomKeystrokeEventRepository.deleteByRoomId(it)
             roomParticipantRepository.deleteAllByRoomId(it)
             roomParticipantRepository.flush()
         }
         roomRepository.delete(room)
         collaborationService.closeRoom(inviteCode)
+    }
+
+    @Transactional
+    fun setVerdict(
+        inviteCode: String,
+        request: SetVerdictRequest,
+        ownerToken: String?,
+        interviewerToken: String?,
+        user: User?,
+        eventToken: String? = null,
+    ): RoomResponse {
+        val room = roomRepository.findByInviteCode(inviteCode)
+            ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+
+        // eventToken lets a guest interviewer (promoted via realtime channel, no DB record)
+        // submit the verdict using the role that was granted in-session.
+        val realtimeRole = collaborationService.resolveRoleByEventToken(inviteCode, eventToken)
+        val access = roomAccessService.resolveAccess(room, user, ownerToken, interviewerToken, realtimeRole)
+        if (!access.canManageRoom) {
+            throw ApiException(HttpStatus.FORBIDDEN, "Недостаточно прав для выставления вердикта")
+        }
+
+        // Allow updating the verdict even on a finished room (interviewer can correct mistakes).
+
+        val verdictValue = VerdictValue.fromWire(request.verdict)
+            ?: throw ApiException(HttpStatus.BAD_REQUEST, "Неизвестное значение вердикта: ${request.verdict}")
+
+        room.verdict = verdictValue.wireValue
+        room.verdictComment = request.verdictComment?.take(2000)
+        room.status = "finished"
+        room.finishedAt = Instant.now()
+
+        roomRepository.save(room)
+
+        // Capture values for use in the after-commit callback (room fields may change).
+        val broadcastVerdict = verdictValue.wireValue
+        val broadcastComment = room.verdictComment
+        val broadcastFinishedAt = room.finishedAt!!.toEpochMilli()
+        val broadcastInviteCode = inviteCode
+
+        // Broadcast AFTER the transaction commits so clients never see
+        // verdict_set before the DB row is durable.
+        TransactionSynchronizationManager.registerSynchronization(
+            object : TransactionSynchronization {
+                override fun afterCommit() {
+                    collaborationService.broadcastVerdictSet(
+                        inviteCode = broadcastInviteCode,
+                        verdict = broadcastVerdict,
+                        verdictComment = broadcastComment,
+                        finishedAt = broadcastFinishedAt,
+                    )
+                }
+            }
+        )
+
+        return toRoomResponse(
+            room = room,
+            access = access,
+            includeOwnerToken = false,
+            includeInterviewerToken = false,
+        )
+    }
+
+    /**
+     * Returns all keystroke events for the room, ordered by timestamp.
+     * Requires canManageRoom (owner / interviewer). Supports eventToken so that
+     * guest interviewers promoted via the realtime channel can also export logs.
+     */
+    @Transactional(readOnly = true)
+    fun getKeystrokeEvents(
+        inviteCode: String,
+        ownerToken: String?,
+        interviewerToken: String?,
+        user: User?,
+        eventToken: String? = null,
+    ): List<KeystrokeEventDto> {
+        val room = roomRepository.findByInviteCode(inviteCode)
+            ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+        val realtimeRole = collaborationService.resolveRoleByEventToken(inviteCode, eventToken)
+        val access = roomAccessService.resolveAccess(room, user, ownerToken, interviewerToken, realtimeRole)
+        if (!access.canManageRoom) {
+            throw ApiException(HttpStatus.FORBIDDEN, "Недостаточно прав")
+        }
+        return roomKeystrokeEventRepository
+            .findByRoomIdOrderByTimestampEpochMsAsc(room.id!!)
+            .map { e ->
+                KeystrokeEventDto(
+                    id = e.id!!,
+                    sessionId = e.sessionId,
+                    displayName = e.displayName,
+                    keyValue = e.keyValue,
+                    keyCode = e.keyCode,
+                    ctrlKey = e.ctrlKey,
+                    altKey = e.altKey,
+                    shiftKey = e.shiftKey,
+                    metaKey = e.metaKey,
+                    eventKind = e.eventKind,
+                    pasteLength = e.pasteLength,
+                    pastePreview = e.pastePreview,
+                    timestampEpochMs = e.timestampEpochMs,
+                )
+            }
     }
 
     fun verifyManager(room: Room, user: User?, ownerToken: String?, interviewerToken: String?): RoomAccessService.RoomAccess {
@@ -563,6 +681,10 @@ class RoomService(
                     sourceTaskTemplateId = it.sourceTaskTemplateId,
                 )
             },
+            verdict = room.verdict,
+            verdictComment = room.verdictComment,
+            status = room.status ?: "active",
+            finishedAt = room.finishedAt?.toString(),
         )
     }
 

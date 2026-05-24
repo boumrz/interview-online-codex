@@ -331,6 +331,29 @@ export const api = createApi({
       query: ({ presetId }) => ({ url: `/me/presets/${presetId}`, method: "DELETE" }),
       invalidatesTags: ["Presets"],
     }),
+    setVerdict: builder.mutation<
+      Room,
+      {
+        inviteCode: string;
+        verdict: string;
+        verdictComment?: string;
+        ownerToken?: string;
+        interviewerToken?: string;
+        eventToken?: string;
+      }
+    >({
+      query: ({ inviteCode, verdict, verdictComment, ownerToken, interviewerToken, eventToken }) => ({
+        url: `/rooms/${inviteCode}/verdict`,
+        method: "POST",
+        headers: {
+          ...(ownerToken ? { "X-Room-Owner-Token": ownerToken } : {}),
+          ...(interviewerToken ? { "X-Room-Interviewer-Token": interviewerToken } : {}),
+          ...(eventToken ? { "X-Room-Event-Token": eventToken } : {}),
+        },
+        body: { verdict, verdictComment },
+      }),
+      invalidatesTags: ["Room"],
+    }),
   }),
 });
 
@@ -370,4 +393,5 @@ export const {
   useCreatePresetMutation,
   useUpdatePresetMutation,
   useDeletePresetMutation,
+  useSetVerdictMutation,
 } = api;

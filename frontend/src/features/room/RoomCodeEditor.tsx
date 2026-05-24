@@ -48,6 +48,8 @@ import {
 import { isPlaintextLanguage, normalizeRoomLanguage } from "./roomLanguage";
 import { roomSyncLog } from "./roomSyncLog";
 import type { KeyPressPayload } from "./candidateKeys";
+import { pasteDetectionExtension } from "./pasteDetection";
+import type { PastePayload } from "./pasteDetection";
 import roomPageStyles from "../../pages/RoomPage.module.css";
 
 /**
@@ -84,6 +86,7 @@ export type RoomCodeEditorProps = {
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
   onEditorValueChange: (value: string) => void;
   onKeyPress: (payload: KeyPressPayload) => void;
+  onPaste?: (payload: PastePayload) => void;
 };
 
 /**
@@ -120,6 +123,7 @@ export function RoomCodeEditor({
   onYjsBridgeReady,
   onEditorValueChange,
   onKeyPress,
+  onPaste,
 }: RoomCodeEditorProps) {
   type CmHostElement = HTMLDivElement & {
     __roomEditorView?: EditorView | null;
@@ -400,6 +404,7 @@ export function RoomCodeEditor({
               return false;
             },
           }),
+          ...(onPaste && !readOnly ? [pasteDetectionExtension(onPaste)] : []),
         ],
       }),
       parent: hostRef.current,

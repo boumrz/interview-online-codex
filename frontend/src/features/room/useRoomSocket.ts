@@ -62,6 +62,10 @@ type CandidateKeyPayload = {
   shiftKey: boolean;
   metaKey: boolean;
   timestampEpochMs: number;
+  /** Must match CandidateKeyEventKind in candidateKeys.ts. Present for all events from the server. */
+  eventKind?: string;
+  pasteLength?: number;
+  pastePreview?: string;
 };
 
 type NoteMessagePayload = {
@@ -117,6 +121,10 @@ type RealtimeState = {
   cursors: CursorPayload[];
   lastCandidateKey: CandidateKeyPayload | null;
   candidateKeyHistory: CandidateKeyPayload[];
+  verdict?: string | null;
+  verdictComment?: string | null;
+  status?: string;
+  finishedAt?: number | null;
 };
 
 type WsMessage = {
@@ -195,6 +203,8 @@ type ClientMessage =
        * сам Tab ОС перехватывает раньше браузера.
        */
       eventKind?: string;
+      pasteLength?: number;
+      pastePreview?: string;
     }
   | { type: "request_state_sync" };
 
@@ -783,6 +793,13 @@ export function useRoomSocket({
           }
           return;
         }
+        if (message.type === "verdict_set") {
+          // Fetch the updated room state immediately so the verdict/status UI
+          // reflects the committed DB row before the user sees the screen.
+          // expectHydration:true forces a full re-hydration of the room state.
+          requestStateSync({ expectHydration: true });
+          return;
+        }
         if (message.type === "error") {
           emitMetric("prod_realtime_server_error_message", {}, { minIntervalMs: 2000 });
           onError((message.payload as { message: string }).message);
@@ -1030,6 +1047,8 @@ export function useRoomSocket({
      * которые ОС перехватывает до браузера и обычным `keydown` не приходят.
      */
     eventKind?: string;
+    pasteLength?: number;
+    pastePreview?: string;
   }) => {
     const now = Date.now();
     const eventKind = payload.eventKind ?? "keydown";
@@ -1053,7 +1072,9 @@ export function useRoomSocket({
       altKey: payload.altKey,
       shiftKey: payload.shiftKey,
       metaKey: payload.metaKey,
-      eventKind
+      eventKind,
+      ...(payload.pasteLength != null ? { pasteLength: payload.pasteLength } : {}),
+      ...(payload.pastePreview != null ? { pastePreview: payload.pastePreview } : {}),
     });
   };
 

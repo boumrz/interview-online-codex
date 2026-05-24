@@ -16,6 +16,7 @@ import com.interviewonline.ws.PersonalNoteEntryPayload
 import com.interviewonline.ws.RealtimeEventRequest
 import com.interviewonline.ws.RoomRealtimePayload
 import com.interviewonline.ws.RoomTaskPayload
+import com.interviewonline.ws.VerdictSetPayload
 import com.interviewonline.ws.WsOutgoingMessage
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
@@ -42,6 +43,7 @@ class CollaborationService(
     private val roomAccessService: RoomAccessService,
     private val realtimeFaultInjectionService: RealtimeFaultInjectionService,
     private val objectMapper: ObjectMapper,
+    private val keystrokePersistenceService: KeystrokePersistenceService,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val notesLockMillis = 3_000L
@@ -121,6 +123,12 @@ class CollaborationService(
         var lastCandidateKey: CandidateKeyPayload? = null,
         val candidateKeyHistory: MutableList<CandidateKeyPayload> = mutableListOf(),
         var lastCandidateKeyAtEpochMs: Long = 0L,
+        var verdict: String? = null,
+        var verdictComment: String? = null,
+        var status: String = "active",
+        var finishedAt: Long? = null,
+        /** Cached Room.id (UUID) to avoid DB lookup on every keystroke event. */
+        var roomId: String = "",
     )
 
     private data class CursorState(
@@ -189,6 +197,10 @@ class CollaborationService(
             lastCandidateKey = mergedLastCandidateKey,
             candidateKeyHistory = mergedCandidateKeyHistory.toMutableList(),
             lastCandidateKeyAtEpochMs = mergedLastCandidateKey?.timestampEpochMs ?: 0L,
+            verdict = nextState.verdict,
+            verdictComment = nextState.verdictComment,
+            status = nextState.status,
+            finishedAt = nextState.finishedAt,
         )
         if (mergedCandidateKeyHistory.isNotEmpty()) {
             scheduleCandidateKeyHistorySave(room.inviteCode, mergedCandidateKeyHistory)
@@ -377,6 +389,8 @@ class CollaborationService(
                 shiftKey = request.shiftKey ?: false,
                 metaKey = request.metaKey ?: false,
                 eventKind = request.eventKind,
+                pasteLength = request.pasteLength,
+                pastePreview = request.pastePreview,
             )
             else -> throw ApiException(HttpStatus.BAD_REQUEST, "Неизвестный тип сообщения: ${request.type}")
         }
@@ -1080,6 +1094,8 @@ class CollaborationService(
         shiftKey: Boolean,
         metaKey: Boolean,
         eventKind: String? = null,
+        pasteLength: Int? = null,
+        pastePreview: String? = null,
     ) {
         val participant = participants[connectionId] ?: return
         if (participant.role != RoomAccessService.RoomRole.CANDIDATE) return
@@ -1125,6 +1141,8 @@ class CollaborationService(
                 metaKey = metaKey,
                 timestampEpochMs = now,
                 eventKind = normalizedEventKind,
+                pasteLength = CandidateKeyHistoryHelpers.sanitizePasteLength(pasteLength),
+                pastePreview = CandidateKeyHistoryHelpers.sanitizePastePreview(pastePreview),
             )
             state.lastCandidateKey = keyEvent
             state.candidateKeyHistory.add(keyEvent)
@@ -1158,6 +1176,20 @@ class CollaborationService(
             payload = keyEvent,
             includeConnectionIds = managerConnectionIds,
         )
+
+        // Persist keystroke to DB for timeline export.
+        // Use cached roomId from RealtimeState to avoid a DB round-trip on every key event.
+        val cachedRoomId = roomState[participant.inviteCode]?.roomId
+        if (!cachedRoomId.isNullOrBlank()) {
+            keystrokePersistenceService.enqueue(roomId = cachedRoomId, payload = keyEvent)
+        } else {
+            logger.warn(
+                "Keystroke dropped: cachedRoomId is blank for room {} session {} — " +
+                    "RealtimeState may not have been bootstrapped with a persisted Room entity",
+                participant.inviteCode,
+                participant.sessionId,
+            )
+        }
     }
 
     private fun nextStep(connectionId: String) {
@@ -1188,6 +1220,32 @@ class CollaborationService(
             throw ApiException(HttpStatus.BAD_REQUEST, "Номер шага вне диапазона")
         }
         setStepInternal(participant.inviteCode, room, stepIndex)
+    }
+
+    fun broadcastVerdictSet(
+        inviteCode: String,
+        verdict: String,
+        verdictComment: String?,
+        finishedAt: Long,
+    ) {
+        // Update in-memory state so that any state_sync requested by clients
+        // AFTER receiving this event reflects the committed verdict immediately.
+        roomState[inviteCode]?.let { state ->
+            state.verdict = verdict
+            state.verdictComment = verdictComment
+            state.status = "finished"
+            state.finishedAt = finishedAt
+        }
+        val payload = VerdictSetPayload(
+            verdict = verdict,
+            verdictComment = verdictComment,
+            finishedAt = finishedAt,
+        )
+        broadcastTransportMessage(
+            inviteCode = inviteCode,
+            type = "verdict_set",
+            payload = payload,
+        )
     }
 
     fun closeRoom(inviteCode: String) {
@@ -1345,6 +1403,10 @@ class CollaborationService(
             cursors = cursorsPayload,
             lastCandidateKey = state.lastCandidateKey,
             candidateKeyHistory = state.candidateKeyHistory.toList(),
+            verdict = state.verdict,
+            verdictComment = state.verdictComment,
+            status = state.status,
+            finishedAt = state.finishedAt,
         )
     }
 
@@ -1478,6 +1540,10 @@ class CollaborationService(
             lastCandidateKey = mergedLastCandidateKey,
             candidateKeyHistory = mergedCandidateKeyHistory.toMutableList(),
             lastCandidateKeyAtEpochMs = mergedLastCandidateKey?.timestampEpochMs ?: 0L,
+            verdict = room.verdict,
+            verdictComment = room.verdictComment,
+            status = room.status ?: "active",
+            finishedAt = room.finishedAt?.toEpochMilli(),
         )
         broadcastState(inviteCode)
     }
@@ -1811,6 +1877,11 @@ class CollaborationService(
             lastCandidateKey = lastCandidateKey,
             candidateKeyHistory = candidateKeyHistory.toMutableList(),
             lastCandidateKeyAtEpochMs = lastCandidateKey?.timestampEpochMs ?: 0L,
+            verdict = room.verdict,
+            verdictComment = room.verdictComment,
+            status = room.status ?: "active",
+            finishedAt = room.finishedAt?.toEpochMilli(),
+            roomId = room.id ?: "",
         )
     }
 

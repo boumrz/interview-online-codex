@@ -55,4 +55,6 @@ data class RealtimeEventRequest(
     val targetSessionId: String? = null,
     val targetUserId: String? = null,
     val role: String? = null,
+    val pasteLength: Int? = null,
+    val pastePreview: String? = null,
 )

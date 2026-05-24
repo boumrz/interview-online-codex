@@ -11,6 +11,7 @@ import {
 } from "@mantine/core";
 import { IconChevronRight, IconTrash } from "@tabler/icons-react";
 import type { RoomSummary } from "../../types";
+import { VerdictBadge } from "../../features/room/VerdictBadge";
 import styles from "../DashboardPage.module.css";
 import { darkFieldStyles } from "./dashboardFieldStyles";
 import {
@@ -19,6 +20,8 @@ import {
   statusColor,
   statusLabel,
 } from "./dashboardHelpers";
+
+const KNOWN_VERDICTS = new Set(["STRONG_HIRE", "HIRE", "NO_HIRE", "STRONG_NO_HIRE"]);
 
 interface ManageRoomsSectionProps {
   rooms: RoomSummary[];
@@ -91,12 +94,18 @@ export function ManageRoomsSection({
                     <Badge color={isOwner ? "teal" : "blue"} variant="light">
                       {isOwner ? "Владелец" : "Участник"}
                     </Badge>
-                    <Badge
-                      variant="outline"
-                      color={statusColor(roomSaveStatus[room.id])}
-                    >
-                      {statusLabel(roomSaveStatus[room.id])}
-                    </Badge>
+                    {room.status === "finished" ? (
+                      <>
+                        <Badge color="gray" variant="outline">Завершено</Badge>
+                        {room.verdict && KNOWN_VERDICTS.has(room.verdict) && (
+                          <VerdictBadge verdict={room.verdict} size="xs" />
+                        )}
+                      </>
+                    ) : (
+                      <Badge variant="outline" color={statusColor(roomSaveStatus[room.id])}>
+                        {statusLabel(roomSaveStatus[room.id])}
+                      </Badge>
+                    )}
                   </Group>
                   <Group gap={6}>
                     <Text size="xs" c="gray.4">

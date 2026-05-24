@@ -1,6 +1,8 @@
 # Technical Specification: interview-online
 
-> **Версия документа:** 2.0 (актуализировано после аудита кода 2026-05-17).
+> **Версия документа:** 2.1 (актуализировано 2026-05-23 — добавлены фичи
+> финального verdict, paste detection и полного keystroke timeline + экспорт).
+> Версия 2.0 (2026-05-17) актуализирована после аудита кода.
 > Предыдущая версия (v1.0) описывала ~30% реальной функциональности и не учитывала
 > Agent platform, anti-cheat, Yjs CRDT и личный кабинет.
 
@@ -141,21 +143,23 @@ systemd unit на порту 18080; nginx subdomain `interview.domiknote.ru`.
 
 **Запуск кода в комнате**: не реализован и исключён из roadmap. Редактор — только совместное редактирование (Yjs CRDT), без выполнения кода.
 
-**Полноценный anti-cheat**: нет детекции paste из буфера; нет AI-детекции /
-стилометрии / сравнения с ChatGPT-паттернами; нет полноэкранного фокус-режима;
-нет watermark / face-tracking / webcam.
+**Полноценный anti-cheat**: paste detection из буфера — **в разработке**
+(см. FR-11); нет AI-детекции / стилометрии / сравнения с ChatGPT-паттернами;
+нет полноэкранного фокус-режима; нет watermark / face-tracking / webcam.
 
 **Запись и реплей**: нет видеозаписи / аудиозаписи; нет покадрового replay
-coding (Yjs-апдейты применяются и теряются); нет полного keystroke timeline
-(только 50 последних); нет calibration между интервьюерами.
+coding (Yjs-апдейты применяются и теряются); полный keystroke timeline +
+экспорт — **в разработке** (см. FR-12; in-memory буфер 50 событий остаётся для
+real-time UI); нет calibration между интервьюерами.
 
 **Идентичность кандидата**: кандидат — анонимный участник с произвольным
 `displayName`; нет таблицы `candidate_profile`; нет связки email→интервью;
 нельзя отследить «один и тот же кандидат был полгода назад»; нет связи с CV.
 
 **Оценка интервью**: скоринг только per-task (`RoomTask.score`); нет
-полноценного scorecard / rubric; нет финального verdict-а
-(`hire/no-hire/strong-hire`); personal notes — свободный markdown.
+полноценного scorecard / rubric; финальный verdict
+(`strong-hire/hire/no-hire/strong-no-hire`) — **в разработке** (см. FR-10);
+personal notes — свободный markdown.
 
 **ATS / HR-интеграции**: нет webhooks / events bus / outbox для Greenhouse /
 HireFlow / Huntflow / E-Staff; нет экспорта в HR-стандарты; Linear sync —
@@ -238,6 +242,98 @@ CodeMirror 6 с подсветкой для JS/TS, Python, Java, SQL; Kotlin —
 BACKLOG→…→DONE с policy gates; artifact registry, verdicts, trace events;
 Environment Doctor для проверки локальной среды.
 
+### FR-10 Финальный verdict (#7, F-021)
+
+**Продуктовый контекст**: на сегодня итог интервью существует только в виде
+free-form personal notes. Нет структурированного решения «брать / не брать»,
+поэтому данные нельзя агрегировать для аналитики воронки найма и calibration.
+
+**Требования**:
+
+- Вводится ENUM `InterviewVerdict`: `STRONG_HIRE` / `HIRE` / `NO_HIRE` /
+  `STRONG_NO_HIRE`.
+- Новые поля в `Room`: `verdict: String? = null`, `verdictComment: TEXT? = null`,
+  `status: String = "active"` (значения `active` | `finished`).
+- Новый REST endpoint `POST /api/rooms/{inviteCode}/verdict`, тело
+  `{ verdict: String, comment: String }`. Доступен **только** для роли
+  `OWNER` / `INTERVIEWER` (`canManageRoom = true`); комментарий обязателен,
+  длина ≥ 10 символов; `verdict` должен входить в `InterviewVerdict`. После
+  успешного сохранения комната переходит в `status = "finished"`.
+- `GET /api/rooms/{inviteCode}` и `RoomResponse` дополняются полями `verdict`,
+  `verdictComment`, `status`.
+- `RoomSummaryDto` дополняется полями `verdict`, `status`.
+- Realtime broadcast при сохранении verdict: новое событие `verdict_set` с
+  payload `{ verdict, verdictComment, status: "finished" }` всем участникам
+  комнаты (через тот же SSE-канал).
+- Frontend: кнопка «Завершить интервью» (рендерится только при
+  `canManageRoom = true`) открывает Mantine Modal — `Radio` с 4 опциями +
+  `TextArea` для обязательного комментария (≥ 10 символов) + кнопка
+  «Сохранить». После сохранения в заголовке комнаты показывается badge со
+  статусом verdict.
+- **Зависимости**: нет.
+
+### FR-11 Paste detection (#19, F-013)
+
+**Продуктовый контекст**: вставка из буфера в CodeMirror 6 сейчас не отличается
+от ручного ввода. Это самая массовая форма списывания и она детектируется
+надёжно без ML.
+
+**Требования**:
+
+- Frontend: обработчик `paste` вешается на `EditorView` через
+  `EditorView.domEventHandlers({ paste: ... })` в `RoomCodeEditor.tsx`.
+- При вставке отправляется realtime-событие type `candidate_key`,
+  `eventKind = "paste"` + новые поля `pasteLength: number` (длина вставленного
+  текста) и `pastePreview: string` (первые 50 символов).
+- Backend:
+  - В `RealtimeEventRequest` добавляются `pasteLength: Int? = null`,
+    `pastePreview: String? = null`.
+  - В `CandidateKeyPayload` (`WsMessages.kt`) добавляются `pasteLength: Int? = null`,
+    `pastePreview: String? = null`.
+  - `normalizeEventKind()` (`CandidateKeyHistoryHelpers.kt`) принимает `paste`
+    как валидный `eventKind`.
+  - Paste-события хранятся в `Room.candidateKeyHistory` наравне с `keydown`
+    (общий лимит 50 событий).
+- Realtime broadcast: paste-события идут тем же путём, что и прочие
+  `candidate_key`, и доставляются интервьюерам.
+- UI интервьюера: в таймлайне истории клавиш для `eventKind = paste`
+  показывается специальная иконка и `pastePreview`.
+- Захват только у роли `CANDIDATE` (как у остальных key-events).
+- **Зависимости**: нет.
+
+### FR-12 Полный keystroke timeline + экспорт (#5, F-026)
+
+**Продуктовый контекст**: текущий буфер в 50 событий — это ≈ 10 секунд
+активного кодирования. Этого недостаточно для доказательной базы, аналитики
+паттернов поведения и формирования блэклиста списывающих.
+
+**Требования**:
+
+- Новая JPA entity `RoomKeystrokeEvent` + таблица `room_keystroke_events`
+  (схема — см. раздел 6 «Persistence»). Индексы:
+  `(room_id, timestamp_epoch_ms)` и `(room_id, session_id)`. FK на `rooms.id`
+  без cascade delete (чтобы очистка событий не роняла комнаты).
+- BatchPersistence в `CollaborationService`: события накапливаются в
+  `ConcurrentLinkedQueue`, flush — каждые 100 событий или каждые 5 секунд через
+  существующий `ScheduledExecutorService`. Flush выполняется в отдельной
+  транзакции, чтобы не блокировать realtime-flow.
+- В новую таблицу сохраняются **все** candidate key-events (`keydown`,
+  `window_blur`, `tab_hidden`, `tab_visible`, `window_focus`, `paste`)
+  параллельно с in-memory буфером 50 событий (буфер остаётся для real-time
+  отображения в UI).
+- Новые REST endpoints (авторизация: только `OWNER` / `INTERVIEWER`):
+  - `GET /api/rooms/{inviteCode}/keystroke-events` → JSON-массив всех событий,
+    сортировка по `timestamp_epoch_ms` ASC.
+  - `GET /api/rooms/{inviteCode}/keystroke-events?format=csv` → CSV с
+    заголовком.
+- Frontend: новая панель/вкладка «Activity Timeline» в `RoomPage`, видна только
+  при `canManageRoom = true`: список событий с иконками по `eventKind`,
+  `timestamp`, `displayName`; кнопки «Экспорт JSON» / «Экспорт CSV».
+- Retention policy: данные хранятся 12 месяцев (cleanup — scheduled job или
+  ручная задача).
+- **Зависимости**: FR-11 (paste detection — чтобы paste-события также попадали
+  в timeline).
+
 ---
 
 ## 5. Нефункциональные требования
@@ -288,6 +384,33 @@ crypto-модуль для BCrypt); Spring RestClient для Linear API; OpenTel
 ### Persistence
 Prod: PostgreSQL 16; local: H2 in-memory в PostgreSQL-mode; pgvector — опц.,
 для `agent_artifacts.embedding`; **Redis НЕ используется** (вопреки CLAUDE.md).
+
+Новая таблица для полного keystroke timeline (FR-12), создаётся через
+`ddl-auto: update`:
+
+```
+room_keystroke_events(
+  id                 UUID PK,
+  room_id            TEXT NOT NULL,        -- FK rooms.id, без cascade delete
+  session_id         TEXT NOT NULL,
+  display_name       TEXT NOT NULL,
+  event_kind         TEXT NOT NULL,        -- keydown|window_blur|tab_hidden|tab_visible|window_focus|paste
+  key                TEXT,
+  key_code           TEXT,
+  ctrl_key           BOOLEAN DEFAULT FALSE,
+  alt_key            BOOLEAN DEFAULT FALSE,
+  shift_key          BOOLEAN DEFAULT FALSE,
+  meta_key           BOOLEAN DEFAULT FALSE,
+  paste_length       INT,
+  paste_preview      TEXT,
+  timestamp_epoch_ms BIGINT NOT NULL,
+  created_at         TIMESTAMP DEFAULT NOW()
+)
+-- индексы: (room_id, timestamp_epoch_ms), (room_id, session_id)
+```
+
+Поля `rooms`, добавляемые для FR-10: `verdict TEXT NULL`,
+`verdict_comment TEXT NULL`, `status TEXT NOT NULL DEFAULT 'active'`.
 
 ### Realtime transport
 **SSE** на `text/event-stream`; POST events для исходящих от клиента;

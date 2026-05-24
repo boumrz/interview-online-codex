@@ -394,21 +394,25 @@
 .sidebar {
   height: 100%;
   min-width: 0;
-  /*
-   * Скрываем горизонтальный overflow жёстко: длинные названия задач
-   * сами обрабатываются ellipsis, а Mantine-бейджи ниже могут попытаться
-   * растянуть колонку — этого допускать нельзя.
-   */
+  overflow: hidden; /* clip children; inner div handles scroll */
+  border-right: 1px solid #252a32;
+  background: #11151c;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+/* Scrollable inner area — holds all step/notes content */
+.sidebarScrollContent {
+  flex: 1;
+  min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  border-right: 1px solid #252a32;
   padding: 12px;
-  background: #11151c;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-content: start;
   gap: 10px;
-  flex-shrink: 0;
 }
 
 .stepList {
@@ -1039,6 +1043,40 @@
   color: #8fd6a8;
 }
 
+/* Verdict / action strip — true flex footer of the Шаги sidebar.
+   Lives OUTSIDE the scrollable content area so it is always visible. */
+.verdictStrip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid rgba(37, 44, 55, 0.92);
+  background: rgba(11, 16, 23, 0.8);
+  flex-shrink: 0;
+}
+
+.verdictStrip[data-verdict="STRONG_HIRE"],
+.verdictStrip[data-verdict="HIRE"] {
+  background: rgba(22, 58, 44, 0.55);
+  border-top-color: rgba(46, 120, 92, 0.4);
+}
+
+.verdictStrip[data-verdict="NO_HIRE"],
+.verdictStrip[data-verdict="STRONG_NO_HIRE"] {
+  background: rgba(58, 22, 22, 0.55);
+  border-top-color: rgba(120, 46, 46, 0.4);
+}
+
+/* Remove Mantine's built-in transition animation on radio button indicators */
+.verdictRadioGroup :global(.mantine-Radio-icon) {
+  animation: none;
+  transition: none;
+}
+.verdictRadioGroup :global(.mantine-Radio-radio) {
+  transition: none;
+}
+
 .panelTabsList {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1420,7 +1458,11 @@
 }
 
 .privateNotesComposerInput {
-  min-height: 72px;
+  /* Fixed height — no autosize jumping. Clamp keeps it proportional on small screens. */
+  height: clamp(80px, 18dvh, 110px);
+  min-height: unset;
+  overflow-y: auto;
+  resize: none;
   background-color: #101721;
   border-color: #2a3648;
   color: #d6dce6;
@@ -1600,129 +1642,6 @@
   background: linear-gradient(180deg, #11161d 0%, #0e1319 100%);
 }
 
-.logsHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border-bottom: 1px solid #252c37;
-  background: rgba(14, 19, 25, 0.9);
-}
-
-.logsTitleWrap {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.logsTitle {
-  margin: 0;
-  color: #e5ebf5;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.2px;
-}
-
-.logsCount {
-  height: 18px;
-  min-width: 18px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: #1d2633;
-  color: #9fb0c9;
-  font-size: 11px;
-  line-height: 18px;
-  text-align: center;
-  flex-shrink: 0;
-}
-
-.logsCounter {
-  color: #8b96a8;
-  font-size: 11px;
-  white-space: nowrap;
-}
-
-.logsList {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  margin: 0;
-  padding: 8px 10px 10px;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  scrollbar-width: thin;
-  scrollbar-color: #3a4658 transparent;
-}
-
-.logsList::-webkit-scrollbar {
-  width: 8px;
-}
-
-.logsList::-webkit-scrollbar-thumb {
-  background: #3a4658;
-  border-radius: 8px;
-}
-
-.logItem {
-  display: grid;
-  grid-template-columns: 76px minmax(0, 1fr);
-  gap: 10px;
-  align-items: start;
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid #273242;
-  background: #141b24;
-}
-
-.logItem:hover {
-  background: #18212c;
-  border-color: #33435a;
-}
-
-.logTime {
-  color: #8f9fb5;
-  font-size: 11px;
-  line-height: 1.4;
-  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-
-.logMessage {
-  margin: 0;
-  color: #d5deeb;
-  font-size: 12px;
-  line-height: 1.4;
-  word-break: break-word;
-  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-
-.logsEmpty {
-  margin: 10px;
-  min-height: 120px;
-  border: 1px dashed #303c4d;
-  border-radius: 10px;
-  display: grid;
-  place-content: center;
-  text-align: center;
-  background: #111821;
-  padding: 12px;
-}
-
-.logsEmptyTitle {
-  margin: 0;
-  color: #c2cddd;
-  font-size: 13px;
-}
-
-.logsEmptyText {
-  margin: 4px 0 0;
-  color: #7f8ca1;
-  font-size: 12px;
-}
 
 .candidateBody {
   flex: 1;
@@ -1863,7 +1782,7 @@
     gap: 8px;
   }
 
-  .sidebar {
+  .sidebarScrollContent {
     padding: 10px;
   }
 
@@ -1971,6 +1890,10 @@
     border-radius: 12px;
     max-height: none;
     min-height: 0;
+  }
+
+  .sidebarScrollContent {
+    padding: 10px;
   }
 
   .workspace {

@@ -26,7 +26,8 @@ export type CandidateKeyEventKind =
   | "window_blur"
   | "window_focus"
   | "tab_hidden"
-  | "tab_visible";
+  | "tab_visible"
+  | "paste";
 
 export type CandidateKeyInfo = {
   sessionId: string;
@@ -43,6 +44,8 @@ export type CandidateKeyInfo = {
    * тогда трактуем как обычный `keydown`.
    */
   eventKind?: CandidateKeyEventKind | string;
+  pasteLength?: number;
+  pastePreview?: string;
 };
 
 export type KeyPressPayload = {
@@ -53,6 +56,8 @@ export type KeyPressPayload = {
   shiftKey: boolean;
   metaKey: boolean;
   eventKind?: CandidateKeyEventKind;
+  pasteLength?: number;
+  pastePreview?: string;
 };
 
 /**
@@ -190,6 +195,8 @@ export function formatCandidateKey(event: CandidateKeyInfo): string {
           : "Смена вкладки";
       case "tab_visible":
         return "Возврат на вкладку";
+      case "paste":
+        return `Вставка: ${(event as CandidateKeyInfo & { pasteLength?: number }).pasteLength ?? 0} симв.`;
       default:
         return prefix ? `${prefix}${eventKind}` : eventKind;
     }

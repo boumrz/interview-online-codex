@@ -59,6 +59,10 @@ data class RoomResponse(
     val canGrantAccess: Boolean = false,
     val accessMembers: List<RoomAccessMemberDto> = emptyList(),
     val tasks: List<RoomTaskDto>,
+    val verdict: String? = null,
+    val verdictComment: String? = null,
+    val status: String = "active",
+    val finishedAt: String? = null,
 )
 
 data class RoomSummaryDto(
@@ -70,6 +74,13 @@ data class RoomSummaryDto(
     val createdAt: String,
     val ownerToken: String?,
     val interviewerToken: String?,
+    val verdict: String? = null,
+    val status: String = "active",
+)
+
+data class SetVerdictRequest(
+    val verdict: String,
+    val verdictComment: String? = null,
 )
 
 data class UpdateRoomRequest(

@@ -16,6 +16,7 @@ import {
   Menu,
   Modal,
   MultiSelect,
+  Radio,
   SegmentedControl,
   Select,
   Stack,
@@ -51,7 +52,10 @@ import {
   useUpdateRoomTaskMutation,
   useGetRoomQuery,
   useTasksGroupedQuery,
+  useSetVerdictMutation,
 } from "../services/api";
+import { VerdictBadge } from "../features/room/VerdictBadge";
+import { ActivityTimeline } from "../features/room/ActivityTimeline";
 import { setVisitParams, trackEvent } from "../services/analytics";
 import { useRoomSocket } from "../features/room/useRoomSocket";
 import {
@@ -162,6 +166,10 @@ type RealtimeState = {
   cursors: CursorInfo[];
   lastCandidateKey: CandidateKeyInfo | null;
   candidateKeyHistory: CandidateKeyInfo[];
+  verdict?: string | null;
+  verdictComment?: string | null;
+  status?: string;
+  finishedAt?: number | null;
 };
 
 type NoteMessage = {
@@ -641,6 +649,10 @@ export function RoomPage() {
     | null
     | { progress: number; label: string; format: "md" | "pdf" }
   >(null);
+  const [verdictModalOpen, setVerdictModalOpen] = useState(false);
+  const [selectedVerdict, setSelectedVerdict] = useState<string>("HIRE");
+  const [verdictComment, setVerdictComment] = useState("");
+  const [setVerdict, { isLoading: isSettingVerdict }] = useSetVerdictMutation();
   const [briefingDraft, setBriefingDraft] = useState("");
   const [briefingDirty, setBriefingDirty] = useState(false);
   const [resyncSignal, setResyncSignal] = useState(0);
@@ -2127,6 +2139,22 @@ export function RoomPage() {
     });
   };
 
+  const handleSubmitVerdict = async () => {
+    if (!selectedVerdict) return;
+    try {
+      await setVerdict({
+        inviteCode: merged?.inviteCode ?? inviteCode,
+        verdict: selectedVerdict,
+        verdictComment: verdictComment.trim() || undefined,
+        ownerToken: ownerToken ?? undefined,
+        eventToken: merged?.eventToken ?? undefined,
+      }).unwrap();
+      setVerdictModalOpen(false);
+    } catch {
+      // ошибка отображается через toast или игнорируется в MVP
+    }
+  };
+
   const goToLoginAndReturn = () => {
     const next = `${location.pathname}${location.search}`;
     trackEvent("prod_room_go_to_login", {
@@ -2339,6 +2367,18 @@ export function RoomPage() {
             onTaskRatingChange={(rating) =>
               sendTaskRatingUpdate(merged.currentStep, rating)
             }
+            inviteCode={inviteCode}
+            ownerToken={ownerToken}
+            authToken={authToken}
+            verdictModalOpen={verdictModalOpen}
+            onOpenVerdictModal={() => setVerdictModalOpen(true)}
+            onCloseVerdictModal={() => setVerdictModalOpen(false)}
+            selectedVerdict={selectedVerdict}
+            onSelectedVerdictChange={setSelectedVerdict}
+            verdictComment={verdictComment}
+            onVerdictCommentChange={setVerdictComment}
+            onSubmitVerdict={() => void handleSubmitVerdict()}
+            isSettingVerdict={isSettingVerdict}
           />
         ) : (
           <CandidateLayout
@@ -2359,6 +2399,19 @@ export function RoomPage() {
             onYjsBridgeReady={onYjsBridgeReady}
             onEditorValueChange={onEditorValueChange}
             onKeyPress={handleCandidateKeyPress}
+            onPaste={(payload) => {
+              sendKeyPress({
+                key: "",
+                keyCode: "",
+                ctrlKey: false,
+                altKey: false,
+                shiftKey: false,
+                metaKey: false,
+                eventKind: "paste",
+                pasteLength: payload.pasteLength,
+                pastePreview: payload.pastePreview,
+              });
+            }}
             error={error}
           />
         )}
@@ -2424,6 +2477,18 @@ function OwnerLayout({
   onEditorValueChange,
   onKeyPress,
   onTaskRatingChange,
+  inviteCode,
+  ownerToken,
+  authToken,
+  verdictModalOpen,
+  onOpenVerdictModal,
+  onCloseVerdictModal,
+  selectedVerdict,
+  onSelectedVerdictChange,
+  verdictComment,
+  onVerdictCommentChange,
+  onSubmitVerdict,
+  isSettingVerdict,
 }: {
   merged: RealtimeState;
   tasks: Array<{
@@ -2505,6 +2570,18 @@ function OwnerLayout({
   onEditorValueChange: (value: string) => void;
   onKeyPress: (payload: KeyPressPayload) => void;
   onTaskRatingChange: (rating: number | null) => void;
+  inviteCode: string;
+  ownerToken: string | null;
+  authToken: string | null;
+  verdictModalOpen: boolean;
+  onOpenVerdictModal: () => void;
+  onCloseVerdictModal: () => void;
+  selectedVerdict: string;
+  onSelectedVerdictChange: (value: string) => void;
+  verdictComment: string;
+  onVerdictCommentChange: (value: string) => void;
+  onSubmitVerdict: () => void;
+  isSettingVerdict: boolean;
 }) {
   const isCompactLayout = useIsCompactRoomLayout(760);
   const [activeRailPanel, setActiveRailPanel] = useState<
@@ -3216,6 +3293,7 @@ function OwnerLayout({
           >
             {currentSidePanel === "tasks" ? (
               <Box className={styles.sidebar}>
+                <div className={styles.sidebarScrollContent}>
                 <Group justify="space-between" align="center" gap={8}>
                   <Text size="xs" c="#8b919b">
                     шаг {merged.currentStep + 1}/{Math.max(tasks.length, 1)}
@@ -3546,9 +3624,6 @@ function OwnerLayout({
                         event.preventDefault();
                         onPrivateNoteSubmit();
                       }}
-                      autosize
-                      minRows={2}
-                      maxRows={10}
                       data-testid="room-private-notes-input"
                       placeholder={privateNotesInputPlaceholder}
                       aria-label="Заметка интервьюера"
@@ -3664,6 +3739,46 @@ function OwnerLayout({
                     </Group>
                   </div>
                 </div>
+                </div>{/* end sidebarScrollContent */}
+
+                {/* ── Verdict strip — true flex footer, always visible at bottom of Шаги panel ── */}
+                {merged.canManageRoom && (
+                  merged.status === "finished" ? (
+                    <div
+                      className={styles.verdictStrip}
+                      {...(merged.verdict ? { "data-verdict": merged.verdict } : {})}
+                    >
+                      <Text size="xs" fw={600} c="#a8b5c4" style={{ flex: 1 }}>
+                        Интервью завершено
+                      </Text>
+                      {merged.verdict && (
+                        <VerdictBadge verdict={merged.verdict} size="xs" />
+                      )}
+                      <Button
+                        size="xs"
+                        variant="subtle"
+                        color="gray"
+                        onClick={onOpenVerdictModal}
+                      >
+                        Изменить
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className={styles.verdictStrip}>
+                      <Text size="xs" c="#6b7280" style={{ flex: 1 }}>
+                        Активная сессия
+                      </Text>
+                      <Button
+                        size="xs"
+                        variant="subtle"
+                        color="red"
+                        onClick={onOpenVerdictModal}
+                      >
+                        Завершить интервью
+                      </Button>
+                    </div>
+                  )
+                )}
 
                 <Modal
                   opened={privateNotesExportModalOpened}
@@ -3927,50 +4042,15 @@ function OwnerLayout({
                       role="tabpanel"
                       aria-labelledby={logsTabId}
                     >
-                      <header className={styles.logsHeader}>
-                        <div className={styles.logsTitleWrap}>
-                          <Text component="h3" className={styles.logsTitle}>
-                            Логи кандидата
-                          </Text>
-                          <span className={styles.logsCount}>
-                            {recentCandidateKeyHistory.length}
-                          </span>
-                        </div>
-                        <Text className={styles.logsCounter}>
-                          Лимит {LOG_HISTORY_LIMIT}
-                        </Text>
-                      </header>
+                      <ActivityTimeline
+                        inviteCode={inviteCode}
+                        ownerToken={ownerToken}
+                        authToken={authToken}
+                        eventToken={merged.eventToken}
+                        keyHistory={recentCandidateKeyHistory}
+                        canManageRoom={merged.canManageRoom}
+                      />
 
-                      <div
-                        className={styles.logsList}
-                        role="log"
-                        aria-label="Логи кандидата"
-                      >
-                        {recentCandidateKeyHistory.length > 0 ? (
-                          recentCandidateKeyHistory.map((event, index) => (
-                            <div
-                              key={`${event.sessionId}-${event.timestampEpochMs}-${index}`}
-                              className={styles.logItem}
-                            >
-                              <time className={styles.logTime}>
-                                {formatCandidateKeyHistoryTimestamp(event)}
-                              </time>
-                              <p className={styles.logMessage}>
-                                {event.displayName}: {formatCandidateKey(event)}
-                              </p>
-                            </div>
-                          ))
-                        ) : (
-                          <div className={styles.logsEmpty}>
-                            <Text className={styles.logsEmptyTitle}>
-                              Пока пусто
-                            </Text>
-                            <Text className={styles.logsEmptyText}>
-                              События клавиатуры появятся здесь.
-                            </Text>
-                          </div>
-                        )}
-                      </div>
                     </div>
                   )}
                 </div>
@@ -4044,6 +4124,52 @@ function OwnerLayout({
           </Box>
         </Box>
       )}
+
+      <Modal
+        opened={verdictModalOpen}
+        onClose={onCloseVerdictModal}
+        title="Завершить интервью"
+        centered
+        styles={{
+          content: { background: "#14171d", color: "#f3f5f7" },
+          header: { background: "#14171d", color: "#f3f5f7" },
+        }}
+      >
+        <Stack gap="md">
+          <Radio.Group
+            value={selectedVerdict}
+            onChange={onSelectedVerdictChange}
+            label="Решение"
+            className={styles.verdictRadioGroup}
+          >
+            <Stack gap="xs" mt="xs">
+              <Radio value="STRONG_HIRE" label="Strong Hire — однозначно нанять" color="green" />
+              <Radio value="HIRE" label="Hire — нанять" color="teal" />
+              <Radio value="NO_HIRE" label="No Hire — отказать" color="orange" />
+              <Radio value="STRONG_NO_HIRE" label="Strong No Hire — однозначно отказать" color="red" />
+            </Stack>
+          </Radio.Group>
+          <Textarea
+            label="Обоснование"
+            placeholder="Опишите ключевые наблюдения..."
+            value={verdictComment}
+            onChange={(e) => onVerdictCommentChange(e.currentTarget.value)}
+            minRows={3}
+            styles={{
+              label: { color: "#9ba0a8" },
+              input: { background: "#0f1218", borderColor: "#272b34", color: "#f3f5f7" },
+            }}
+          />
+          <Button
+            fullWidth
+            loading={isSettingVerdict}
+            onClick={onSubmitVerdict}
+            style={{ background: "#f3f5f7", color: "#0f1115" }}
+          >
+            Сохранить вердикт
+          </Button>
+        </Stack>
+      </Modal>
     </Box>
   );
 }
@@ -4065,6 +4191,7 @@ function CandidateLayout({
   onYjsBridgeReady,
   onEditorValueChange,
   onKeyPress,
+  onPaste,
   error,
   briefingFocusMode,
 }: {
@@ -4090,6 +4217,7 @@ function CandidateLayout({
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
   onEditorValueChange: (value: string) => void;
   onKeyPress: (payload: KeyPressPayload) => void;
+  onPaste?: (payload: import("../features/room/pasteDetection").PastePayload) => void;
   error: string;
 }) {
   return (
@@ -4133,6 +4261,7 @@ function CandidateLayout({
           onYjsBridgeReady={onYjsBridgeReady}
           onEditorValueChange={onEditorValueChange}
           onKeyPress={onKeyPress}
+          onPaste={onPaste}
           panelClassName={styles.candidatePanel}
         />
       ) : null}
@@ -4157,6 +4286,7 @@ function SharedRoomEditorPanel({
   onYjsBridgeReady,
   onEditorValueChange,
   onKeyPress,
+  onPaste,
   panelClassName,
 }: {
   merged: RealtimeState;
@@ -4173,6 +4303,7 @@ function SharedRoomEditorPanel({
   onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
   onEditorValueChange: (value: string) => void;
   onKeyPress: (payload: KeyPressPayload) => void;
+  onPaste?: (payload: import("../features/room/pasteDetection").PastePayload) => void;
   panelClassName: string;
 }) {
   return (
@@ -4204,6 +4335,7 @@ function SharedRoomEditorPanel({
             onYjsBridgeReady={onYjsBridgeReady}
             onEditorValueChange={onEditorValueChange}
             onKeyPress={onKeyPress}
+            onPaste={onPaste}
           />
         ) : (
           <Box

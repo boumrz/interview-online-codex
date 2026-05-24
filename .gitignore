@@ -77,3 +77,10 @@ GEMINI.md
 .tools/
 frontend/tmp-notes-chat-smoke.mjs
 frontend/smoke-debug.png
+
+# Debug/AI-session artifacts — screenshots, diffs, patches created during
+# browser-testing or code-review sessions. Never belong in the repo.
+/*.png
+/*.patch
+/*full-diff.txt
+/*-diff.txt
