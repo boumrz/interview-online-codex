@@ -273,6 +273,7 @@ class CollaborationService(
 
     @Transactional
     fun handleRealtimeEvent(inviteCode: String, request: RealtimeEventRequest) {
+        val eventReceivedAt = System.currentTimeMillis()
         val requiresEventToken =
             request.type != "request_state_sync" &&
                 request.type != "presence_update" &&
@@ -360,6 +361,7 @@ class CollaborationService(
                 yjsClientSequence = request.yjsClientSequence,
                 baseServerYjsSequence = request.baseServerYjsSequence,
                 yjsDocumentBase64 = request.yjsDocumentBase64,
+                eventReceivedAt = eventReceivedAt,
             )
             "request_state_sync" -> sendStateToConnection(connectionId)
             "grant_interviewer_access" -> updateParticipantRoomRole(
@@ -473,6 +475,7 @@ class CollaborationService(
         yjsClientSequence: Long?,
         baseServerYjsSequence: Long?,
         yjsDocumentBase64: String?,
+        eventReceivedAt: Long = System.currentTimeMillis(),
     ) {
         val participant = participants[connectionId] ?: return
         val state = roomState[participant.inviteCode] ?: return
@@ -628,6 +631,12 @@ class CollaborationService(
                 "yjsSequence" to state.lastYjsSequence,
             ),
             excludeConnectionId = connectionId,
+        )
+        logger.info(
+            "yjs_relay_latency room={} seq={} relay_ms={}",
+            participant.inviteCode,
+            state.lastYjsSequence,
+            System.currentTimeMillis() - eventReceivedAt,
         )
     }
 

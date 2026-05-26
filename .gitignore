@@ -84,3 +84,11 @@ frontend/smoke-debug.png
 /*.patch
 /*full-diff.txt
 /*-diff.txt
+
+# Screenshots saved by ad-hoc test/debug scripts in any subdirectory
+frontend/ss-*.png
+frontend/screenshot-*.png
+
+# Ad-hoc two-window debug scripts (not part of the official e2e suite)
+/test-two-windows.mjs
+frontend/test-two-windows.mjs

@@ -351,10 +351,21 @@ export function useRoomSocket({
     if (options.dedupeSameType) {
       const currentHead = pendingMessagesRef.current[0];
       const hasInFlight = inFlightControllerRef.current != null;
+      // A "heartbeat" is a yjs_update with an empty delta (full snapshot only).
+      // Never abort an in-flight heartbeat with another heartbeat: if the server
+      // is slow (response time > 2500 ms), mutual cancellation would starve the
+      // server indefinitely and watchers would see no updates at all.
+      const isIncomingHeartbeat =
+        payload.type === "yjs_update" &&
+        (payload as Extract<ClientMessage, { type: "yjs_update" }>).yjsUpdate === "";
+      const isInFlightHeartbeat =
+        currentHead?.payload.type === "yjs_update" &&
+        (currentHead?.payload as Extract<ClientMessage, { type: "yjs_update" }>).yjsUpdate === "";
       const canReplaceInFlight =
         (payload.type === "code_update" || payload.type === "yjs_update") &&
         hasInFlight &&
-        currentHead?.payload.type === payload.type;
+        currentHead?.payload.type === payload.type &&
+        !(isIncomingHeartbeat && isInFlightHeartbeat);
       abortAndReplaceInFlight = canReplaceInFlight;
       const preserveHead = (queueDrainInProgressRef.current || hasInFlight) && !abortAndReplaceInFlight;
       const head = preserveHead ? pendingMessagesRef.current.slice(0, 1) : [];
@@ -987,22 +998,47 @@ export function useRoomSocket({
     const cursorSequence = cursorSequenceRef.current + 1;
     cursorSequenceRef.current = cursorSequence;
     persistCursorSequence(inviteCode, cursorSequence);
-    send({
-      type: "cursor_update",
-      lineNumber: payload.lineNumber,
-      column: payload.column,
-      cursorSequence,
-      selectionStartLineNumber: payload.selectionStartLineNumber,
-      selectionStartColumn: payload.selectionStartColumn,
-      selectionEndLineNumber: payload.selectionEndLineNumber,
-      selectionEndColumn: payload.selectionEndColumn
-    });
+    // Cursor position is presence data, not code-sync critical.
+    // Fire-and-forget so cursor events never block Yjs updates in the main queue.
+    const token = eventTokenRef.current;
+    if (!token) return;
+    void fetch(`${API_BASE_URL}/realtime/rooms/${inviteCode}/events`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId,
+        eventToken: token,
+        clientEventSequence: null,
+        type: "cursor_update",
+        lineNumber: payload.lineNumber,
+        column: payload.column,
+        cursorSequence,
+        selectionStartLineNumber: payload.selectionStartLineNumber,
+        selectionStartColumn: payload.selectionStartColumn,
+        selectionEndLineNumber: payload.selectionEndLineNumber,
+        selectionEndColumn: payload.selectionEndColumn,
+      }),
+    }).catch(() => {});
   };
 
   const sendAwarenessUpdate = (awarenessUpdate: string) => {
     const trimmed = awarenessUpdate.trim();
     if (!trimmed) return;
-    send({ type: "awareness_update", awarenessUpdate: trimmed });
+    // Yjs awareness (presence/selection) is not code-sync critical.
+    // Fire-and-forget so awareness floods never block Yjs updates in the main queue.
+    const token = eventTokenRef.current;
+    if (!token) return;
+    void fetch(`${API_BASE_URL}/realtime/rooms/${inviteCode}/events`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId,
+        eventToken: token,
+        clientEventSequence: null,
+        type: "awareness_update",
+        awarenessUpdate: trimmed,
+      }),
+    }).catch(() => {});
   };
 
   const sendYjsUpdate = (
@@ -1064,18 +1100,31 @@ export function useRoomSocket({
     if (eventKind === "keydown") {
       lastKeyPressSentAtRef.current = now;
     }
-    send({
-      type: "key_press",
-      key: payload.key,
-      keyCode: payload.keyCode,
-      ctrlKey: payload.ctrlKey,
-      altKey: payload.altKey,
-      shiftKey: payload.shiftKey,
-      metaKey: payload.metaKey,
-      eventKind,
-      ...(payload.pasteLength != null ? { pasteLength: payload.pasteLength } : {}),
-      ...(payload.pastePreview != null ? { pastePreview: payload.pastePreview } : {}),
-    });
+    // key_press is telemetry (keystroke log), not code-sync critical.
+    // Fire-and-forget so it never blocks Yjs updates in the main queue.
+    // On slow networks, queued key_presses would otherwise delay the watcher
+    // from seeing code for tens of seconds.
+    const token = eventTokenRef.current;
+    if (!token) return;
+    void fetch(`${API_BASE_URL}/realtime/rooms/${inviteCode}/events`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId,
+        eventToken: token,
+        clientEventSequence: null,
+        type: "key_press",
+        key: payload.key,
+        keyCode: payload.keyCode,
+        ctrlKey: payload.ctrlKey,
+        altKey: payload.altKey,
+        shiftKey: payload.shiftKey,
+        metaKey: payload.metaKey,
+        eventKind,
+        ...(payload.pasteLength != null ? { pasteLength: payload.pasteLength } : {}),
+        ...(payload.pastePreview != null ? { pastePreview: payload.pastePreview } : {}),
+      }),
+    }).catch(() => {});
   };
 
   return {

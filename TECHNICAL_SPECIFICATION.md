@@ -1,6 +1,9 @@
 # Technical Specification: interview-online
 
-> **Версия документа:** 2.1 (актуализировано 2026-05-23 — добавлены фичи
+> **Версия документа:** 2.2 (актуализировано 2026-05-26 — зафиксированы фиксы
+> надёжности realtime-синхронизации при медленной сети: heartbeat-взаимная-отмена
+> и вытеснение Yjs-очереди телеметрией; расширены NFR и transport-раздел).
+> Версия 2.1 (актуализировано 2026-05-23 — добавлены фичи
 > финального verdict, paste detection и полного keystroke timeline + экспорт).
 > Версия 2.0 (2026-05-17) актуализирована после аудита кода.
 > Предыдущая версия (v1.0) описывала ~30% реальной функциональности и не учитывала
@@ -91,6 +94,17 @@ base64). Параллельно поддерживается server-authoritativ
 `codeSequence` (LWW) как fallback. Presence (`active` / `away`), курсоры,
 awareness. Dedupe `operationId` (15 мин TTL, 20k events). Reconnect через
 `request_state_sync` (полный snapshot комнаты).
+
+**Очередь клиентских сообщений** (`useRoomSocket` / `queuePayload`): serial FIFO
+очередь для критичных событий (`yjs_update`, `code_update` и пр.) с логикой
+abort-and-replace — новый payload вытесняет in-flight только если оба не
+являются heartbeat-only Yjs-апдейтами (пустой `yjsUpdate`). Это предотвращает
+mutual-starvation при backend latency > heartbeat-интервала. Телеметрические
+события (`key_press`, `cursor_update`, `awareness_update`) вынесены из главной
+очереди в **fire-and-forget** параллельные fetch-запросы, чтобы медленная сеть
+не задерживала доставку Yjs-дельт (SPEC-001). Backend эмитирует structured-лог
+`yjs_relay_latency room={} seq={} relay_ms={}` для каждого обработанного
+`yjs_update`.
 
 **Code editor**: **CodeMirror 6** (НЕ Monaco, как ошибочно писалось в CLAUDE.md);
 языки: `nodejs` (alias `javascript`/`typescript`), `python`, `kotlin` (без
@@ -208,6 +222,17 @@ chain не сконфигурирован; авторизация — вручн
 Редактирование кода синхронизируется через Yjs CRDT + SSE; presence
 (active/away), курсоры, awareness; reconnect восстанавливает полный snapshot
 через `request_state_sync`; dedupe по `operationId`.
+
+**FR-2.1 Slow-network resilience (SPEC-001, выполнено 2026-05-26)**
+
+- `key_press`, `cursor_update`, `awareness_update` отправляются **fire-and-forget**
+  (параллельный fetch, не попадают в основную очередь). При медленной сети
+  (~40 нажатий × 800 мс RTT ≈ 32 с) они больше не блокируют Yjs-апдейты.
+- `queuePayload` запрещает abort-and-replace когда и in-flight, и входящий
+  payload — heartbeat Yjs (`yjsUpdate === ""`): это предотвращает бесконечную
+  взаимную отмену при backend latency > 2500 мс.
+- Backend: `relayYjsUpdate` принимает `eventReceivedAt: Long` и после SSE-броадкаста
+  пишет `yjs_relay_latency` structured-лог.
 
 ### FR-3 Interview steps
 Комната содержит упорядоченный список `RoomTask`; `OWNER` / `INTERVIEWER`
@@ -340,6 +365,11 @@ free-form personal notes. Нет структурированного решен
 
 ### NFR-1 Latency
 Editor update propagation: <300 мс в одном регионе при обычной нагрузке.
+При медленной сети (симуляция 3G: 800 мс RTT, 250 кбит/с upload) watcher
+получает изменения кандидата в течение **≤ 15 с** (проверено E2E Playwright
+`e2e-slow-network-sync.mjs`, Scenario 2: ~1.6 с).
+При инжектированной задержке сервера 3000 мс (> heartbeat-интервала) watcher
+получает изменения в течение **≤ 10 с** (Scenario 1: ~1 с).
 
 ### NFR-2 Consistency
 Основной режим: Yjs CRDT (eventual consistency, automatic conflict resolution);
@@ -415,6 +445,18 @@ room_keystroke_events(
 ### Realtime transport
 **SSE** на `text/event-stream`; POST events для исходящих от клиента;
 **WebSocket НЕ используется** (location `/ws/` в nginx ведёт в никуда).
+
+**Клиентская очередь**: FIFO serial очередь в `useRoomSocket` для кода и Yjs;
+телеметрия (cursor, awareness, key_press) — **fire-and-forget** (отдельные
+fetch без AbortController). Abort-and-replace допустим только при замене
+инкрементального Yjs-апдейта другим инкрементальным; heartbeat (пустой дельта)
+никогда не отменяет другой heartbeat. Дедупликация in-queue по `dedupeSameType`
+для `yjs_update` и `code_update`.
+
+**Backend relay**: `relayYjsUpdate` в `CollaborationService` пишет structured-лог
+`yjs_relay_latency room=… seq=… relay_ms=…` после каждой SSE-рассылки;
+дебаунсированный `scheduleStateBroadcastFromYjs` (110 мс) — для снижения
+частоты `broadcastState` при лавине Yjs-апдейтов.
 
 ### Deploy
 Systemd unit `interview-online-backend.service`; nginx subdomain
