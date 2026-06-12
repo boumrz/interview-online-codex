@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.run/
+*.log
+artifacts/
+coverage/
+playwright-report/
+test-results/
+ss-*.png
+screenshot-*.png
+smoke-debug.png

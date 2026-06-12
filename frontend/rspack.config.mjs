@@ -77,7 +77,7 @@ export default defineConfig({
       "process.env.FEATURE_AGENT_OPS": JSON.stringify(process.env.FEATURE_AGENT_OPS ?? "false"),
       "process.env.VITE_API_BASE_URL": JSON.stringify(process.env.VITE_API_BASE_URL ?? "/api"),
       "process.env.VITE_METRIKA_ALLOWED_HOSTS": JSON.stringify(
-        process.env.VITE_METRIKA_ALLOWED_HOSTS ?? "interview.domiknote.ru"
+        process.env.VITE_METRIKA_ALLOWED_HOSTS ?? "interview.vtools.tech"
       )
     }),
     new rspack.HtmlRspackPlugin({

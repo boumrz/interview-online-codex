@@ -1,8 +1,0 @@
-# Install as:
-#   sudo cp /opt/interview-online/repo/deploy/env/sudoers-deploy-interview-online.example /etc/sudoers.d/deploy-interview-online
-#   sudo chmod 440 /etc/sudoers.d/deploy-interview-online
-#   sudo visudo -cf /etc/sudoers.d/deploy-interview-online
-
-# systemctl + nginx reload for deploy; chown is required when the repo was touched as root
-# and ensure_repo_writable() in deploy/scripts/deploy_subdomain.sh must fix ownership.
-deploy ALL=(root) NOPASSWD: /usr/bin/systemctl daemon-reload, /usr/bin/systemctl restart interview-online-backend, /usr/bin/systemctl reload nginx, /bin/chown -R * /opt/interview-online/repo, /usr/bin/chown -R * /opt/interview-online/repo, /bin/chown -R * /opt/interview-online/releases, /usr/bin/chown -R * /opt/interview-online/releases

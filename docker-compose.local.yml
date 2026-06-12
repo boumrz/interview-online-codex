@@ -1,0 +1,6 @@
+# Local override for Apple Silicon and other arm64 hosts.
+# eclipse-temurin:17-jre-alpine is published for linux/amd64 only.
+# On the production server (amd64) use docker-compose.prod.yml without this file.
+services:
+  backend:
+    platform: linux/amd64

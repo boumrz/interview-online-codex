@@ -615,7 +615,7 @@ frontend assets; SSE-friendly nginx-конфиг (no buffering, 1h timeout).
 | Realtime hook | `frontend/src/features/room/useRoomSocket.ts` |
 | Editor | `frontend/src/features/room/RoomCodeEditor.tsx` |
 | Anti-cheat tracker | `frontend/src/features/room/useCandidateKeyTracker.ts`, `candidateKeys.ts` |
-| Deploy | `deploy/nginx/interview-online-subdomain.conf`, `deploy/systemd/interview-online-backend.service` |
+| Deploy | `docker-compose.prod.yml`, `backend/Dockerfile`, `frontend/Dockerfile`, `deploy/scripts/deploy_docker.sh` |
 | Agent роли | `.claude/agents/*.md`, `agents/roles/*.md`, `agents/common/*.md` |
 
 ---
