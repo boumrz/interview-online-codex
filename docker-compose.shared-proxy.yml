@@ -1,0 +1,16 @@
+services:
+  web:
+    environment:
+      INTERVIEW_SERVER_NAMES: ${INTERVIEW_SERVER_NAMES:-interview.vtools.tech,interview.domiknote.ru}
+      FINANCE_PROXY_ENABLED: ${FINANCE_PROXY_ENABLED:-true}
+      FINANCE_DOMAIN: ${FINANCE_DOMAIN:-domiknote.ru}
+      FINANCE_CERT_DOMAIN: ${FINANCE_CERT_DOMAIN:-domiknote.ru}
+      FINANCE_WEB_UPSTREAM: ${FINANCE_WEB_UPSTREAM:-finance-assistant-web-1:80}
+    networks:
+      - interview_net
+      - shared_proxy
+
+networks:
+  shared_proxy:
+    external: true
+    name: ${SHARED_PROXY_NETWORK:-domiknote_proxy}

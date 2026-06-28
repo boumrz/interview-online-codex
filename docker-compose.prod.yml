@@ -52,7 +52,12 @@ services:
       - "${HTTPS_PORT:-443}:443"
     environment:
       DOMAIN: ${DOMAIN:-interview.vtools.tech}
+      INTERVIEW_SERVER_NAMES: ${INTERVIEW_SERVER_NAMES:-interview.vtools.tech}
       NGINX_SSL: ${NGINX_SSL:-false}
+      FINANCE_PROXY_ENABLED: ${FINANCE_PROXY_ENABLED:-false}
+      FINANCE_DOMAIN: ${FINANCE_DOMAIN:-domiknote.ru}
+      FINANCE_CERT_DOMAIN: ${FINANCE_CERT_DOMAIN:-domiknote.ru}
+      FINANCE_WEB_UPSTREAM: ${FINANCE_WEB_UPSTREAM:-finance-assistant-web-1:80}
     volumes:
       - certbot_www:/var/www/certbot:ro
       - certbot_certs:/etc/letsencrypt:ro
