@@ -11,7 +11,7 @@ try {
   await page.waitForSelector("text=Создать комнату", { timeout: 15000 });
   await page.click("button:has-text('Создать комнату')");
   await page.waitForURL(/\/room\//, { timeout: 15000 });
-  await page.waitForSelector(".cm-editor", { timeout: 15000 });
+  await page.waitForSelector('[data-testid="room-code-editor-host"] .cm-editor', { timeout: 15000 });
   // The connection state used to be a "Подключено" badge in the top bar;
   // it's now a quieter LED indicator with `data-state="online"` once the
   // socket is up. We assert on the data attribute so the smoke test stays

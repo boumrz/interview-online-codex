@@ -64,7 +64,7 @@ try {
   await ownerPage1.goto(`${webBaseUrl}/room/${room.inviteCode}`, {
     waitUntil: "domcontentloaded",
   });
-  await ownerPage1.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await ownerPage1.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
   await openTasksPanelIfNeeded(ownerPage1);
 
   const privateInput = ownerPage1.locator(
@@ -163,7 +163,7 @@ try {
   await ownerPage2.goto(`${webBaseUrl}/room/${room.inviteCode}`, {
     waitUntil: "domcontentloaded",
   });
-  await ownerPage2.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await ownerPage2.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
   await openTasksPanelIfNeeded(ownerPage2);
   await ownerPage2
     .locator('[data-testid="room-private-notes-input"]')

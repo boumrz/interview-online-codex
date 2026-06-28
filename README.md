@@ -13,7 +13,18 @@
 - `frontend` - web client
 - `backend` - API + realtime SSE server
 - `agents` - split English multi-agent prompt contracts (roles + shared rules)
-- `TECHNICAL_SPECIFICATION.md` - detailed technical specification
+- `openspec` - OpenSpec SDD source of truth (`specs/` for accepted requirements, `changes/` for active work)
+
+## SDD Workflow
+
+All feature and bug work starts with OpenSpec:
+
+```bash
+npx --yes @fission-ai/openspec@latest new change <change-id>
+npx --yes @fission-ai/openspec@latest validate <change-id> --strict
+```
+
+Do not recreate `TECHNICAL_SPECIFICATION.md`, `docs/specs/`, or `docs/adr/` for new work. Use `openspec/project.md`, `openspec/specs/`, and `openspec/changes/`.
 
 ## Quick Start
 

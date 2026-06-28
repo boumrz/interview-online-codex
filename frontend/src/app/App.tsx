@@ -4,6 +4,7 @@ import { useAppDispatch, useAppSelector } from "./hooks";
 import { clearAuth, setCurrentUser } from "../features/auth/authSlice";
 import { api, useMeProfileQuery } from "../services/api";
 import { setUserParams, trackPageView } from "../services/analytics";
+import { LegacyDomainNotice } from "../components/LegacyDomainNotice";
 
 const LandingPage = lazy(() => import("../pages/LandingPage").then((module) => ({ default: module.LandingPage })));
 const LoginPage = lazy(() => import("../pages/LoginPage").then((module) => ({ default: module.LoginPage })));
@@ -59,6 +60,7 @@ function RoutePageTracker() {
 export function App() {
   return (
     <>
+      <LegacyDomainNotice />
       <AuthSessionSync />
       <RoutePageTracker />
       <Suspense fallback={<div style={{ padding: "24px" }}>Loading...</div>}>

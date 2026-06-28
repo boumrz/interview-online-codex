@@ -68,7 +68,7 @@ try {
     .getByRole("button", { name: "Создать комнату" })
     .click();
   await interviewerPage.waitForURL(/\/room\//, { timeout: 15000 });
-  await interviewerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await interviewerPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
   const inviteCode = parseInviteCode(interviewerPage.url());
   if (!inviteCode)
     throw new Error(`INVITE_CODE_PARSE_FAILED url=${interviewerPage.url()}`);
@@ -78,13 +78,13 @@ try {
   const candidatePage = await candidateContext.newPage();
   await gotoWithRetry(candidatePage, `${webBaseUrl}/room/${inviteCode}`);
   await enterNameIfPrompted(candidatePage, "Candidate Focus");
-  await candidatePage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await candidatePage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
 
   // Sanity: у обоих сейчас видим code-editor.
-  if (!(await interviewerPage.locator(".cm-editor").isVisible())) {
+  if (!(await interviewerPage.locator('[data-testid="room-code-editor-host"] .cm-editor').isVisible())) {
     throw new Error("FOCUS_MODE_PRECOND_INTERVIEWER_EDITOR_HIDDEN");
   }
-  if (!(await candidatePage.locator(".cm-editor").isVisible())) {
+  if (!(await candidatePage.locator('[data-testid="room-code-editor-host"] .cm-editor').isVisible())) {
     throw new Error("FOCUS_MODE_PRECOND_CANDIDATE_EDITOR_HIDDEN");
   }
 
@@ -97,12 +97,12 @@ try {
 
   // У интервьюера блок с кодом должен скрыться.
   await interviewerPage
-    .locator(".cm-editor")
+    .locator('[data-testid="room-code-editor-host"] .cm-editor')
     .waitFor({ state: "detached", timeout: 8000 });
 
   // (2) У кандидата блок с кодом тоже должен скрыться (synced).
   await candidatePage
-    .locator(".cm-editor")
+    .locator('[data-testid="room-code-editor-host"] .cm-editor')
     .waitFor({ state: "detached", timeout: 8000 });
 
   // briefing-board должен быть в focus state у кандидата.
@@ -120,10 +120,10 @@ try {
   // (3) Выключаем focus mode и убеждаемся, что код вернулся обоим.
   await focusToggle.click();
   await interviewerPage
-    .locator(".cm-editor")
+    .locator('[data-testid="room-code-editor-host"] .cm-editor')
     .waitFor({ state: "visible", timeout: 8000 });
   await candidatePage
-    .locator(".cm-editor")
+    .locator('[data-testid="room-code-editor-host"] .cm-editor')
     .waitFor({ state: "visible", timeout: 8000 });
 
   // (4) Локальный fullscreen у интервьюера.

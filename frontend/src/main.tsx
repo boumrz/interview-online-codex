@@ -7,6 +7,7 @@ import { store } from "./app/store";
 import { App } from "./app/App";
 import { initAnalytics } from "./services/analytics";
 import "@mantine/core/styles.css";
+import "highlight.js/styles/github-dark.css";
 import "./styles/global.css";
 
 initAnalytics();

@@ -76,7 +76,7 @@ async function clearFaults(token, inviteCode) {
 }
 
 async function appendCode(page, snippet) {
-  await page.locator(".cm-content").click({ force: true });
+  await page.locator('[data-testid="room-code-editor-host"] .cm-content').click({ force: true });
   await page.keyboard.press("End");
   await page.keyboard.type(snippet, { delay: 6 });
 }
@@ -99,7 +99,7 @@ async function enterNameIfPrompted(page, name) {
 }
 
 async function waitForEditor(page, timeoutMs = 15000) {
-  const editor = page.locator(".cm-editor");
+  const editor = page.locator('[data-testid="room-code-editor-host"] .cm-editor');
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const visible = await editor.isVisible().catch(() => false);
@@ -127,11 +127,11 @@ async function waitForMarker(page, marker, timeoutMs = 30000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const text = await page.evaluate(() => {
-      const editor = document.querySelector(".cm-editor");
+      const editor = document.querySelector("[data-testid='room-code-editor-host'] .cm-editor");
       const anyEditor = editor;
       const view = anyEditor?.cmView?.view ?? anyEditor?.cmView?.rootView?.view ?? null;
       if (view?.state?.doc?.toString) return view.state.doc.toString();
-      return document.querySelector(".cm-content")?.textContent ?? "";
+      return document.querySelector("[data-testid='room-code-editor-host'] .cm-content")?.textContent ?? "";
     });
     if (text.includes(marker)) return;
     await page.waitForTimeout(120);
@@ -160,7 +160,7 @@ try {
   );
   const ownerPage = await ownerContext.newPage();
   await ownerPage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
-  await ownerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await ownerPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
 
   const candidateContext = await browser.newContext();
   const candidatePage = await candidateContext.newPage();

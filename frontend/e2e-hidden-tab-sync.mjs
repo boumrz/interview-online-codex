@@ -21,13 +21,13 @@ function parseInviteCode(url) {
 
 async function modelValue(page) {
   return page.evaluate(() => {
-    const editor = document.querySelector(".cm-editor");
+    const editor = document.querySelector("[data-testid='room-code-editor-host'] .cm-editor");
     const anyEditor = editor;
     const view = anyEditor?.cmView?.view ?? anyEditor?.cmView?.rootView?.view ?? null;
     if (view?.state?.doc?.toString) {
       return view.state.doc.toString();
     }
-    return document.querySelector(".cm-content")?.textContent ?? "";
+    return document.querySelector("[data-testid='room-code-editor-host'] .cm-content")?.textContent ?? "";
   });
 }
 
@@ -39,7 +39,7 @@ try {
   await ownerPage.goto(webBaseUrl, { waitUntil: "domcontentloaded" });
   await ownerPage.getByRole("button", { name: "Создать комнату" }).click();
   await ownerPage.waitForURL(/\/room\//, { timeout: 15000 });
-  await ownerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await ownerPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
 
   const inviteCode = parseInviteCode(ownerPage.url());
   if (!inviteCode) throw new Error(`INVITE_CODE_PARSE_FAILED url=${ownerPage.url()}`);
@@ -49,7 +49,7 @@ try {
   const roomUrl = `${webBaseUrl}/room/${inviteCode}`;
   await candidatePage.goto(roomUrl, { waitUntil: "domcontentloaded" });
   await enterNameIfPrompted(candidatePage, "Candidate Hidden");
-  await candidatePage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await candidatePage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
 
   // Make candidate tab hidden by opening another tab in the same context and bringing it to front.
   const dummyPage = await candidateContext.newPage();
@@ -68,7 +68,7 @@ try {
 
   const marker = `hidden-sync-${Date.now()}`;
   await ownerPage.bringToFront();
-  await ownerPage.locator(".cm-content").click({ force: true });
+  await ownerPage.locator('[data-testid="room-code-editor-host"] .cm-content').click({ force: true });
   await ownerPage.keyboard.press("End");
   await ownerPage.keyboard.type(`\n${marker}\n`, { delay: 8 });
 

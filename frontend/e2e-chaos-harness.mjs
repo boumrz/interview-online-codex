@@ -17,18 +17,18 @@ function now() {
 
 async function roomCodeValue(page) {
   return page.evaluate(() => {
-    const editor = document.querySelector(".cm-editor");
+    const editor = document.querySelector("[data-testid='room-code-editor-host'] .cm-editor");
     const anyEditor = editor;
     const view = anyEditor?.cmView?.view ?? anyEditor?.cmView?.rootView?.view ?? null;
     if (view?.state?.doc?.toString) {
       return view.state.doc.toString();
     }
-    return document.querySelector(".cm-content")?.textContent ?? "";
+    return document.querySelector("[data-testid='room-code-editor-host'] .cm-content")?.textContent ?? "";
   });
 }
 
 async function appendCode(page, snippet) {
-  await page.locator(".cm-content").click({ force: true });
+  await page.locator('[data-testid="room-code-editor-host"] .cm-content').click({ force: true });
   await page.keyboard.press("End");
   await page.keyboard.type(snippet, { delay: 6 });
 }
@@ -52,7 +52,7 @@ try {
   await owner.goto(BASE_URL, { waitUntil: "domcontentloaded" });
   await owner.getByRole("button", { name: "Создать комнату" }).click();
   await owner.waitForURL(/\/room\//, { timeout: 15000 });
-  await owner.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await owner.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
   const roomUrl = owner.url();
 
   const candidateAContext = await browser.newContext();
@@ -61,7 +61,7 @@ try {
   await candidateA.getByText("Представьтесь перед входом в комнату", { exact: true }).waitFor({ timeout: 15000 });
   await candidateA.getByLabel("Ваше имя").fill("Candidate A");
   await candidateA.getByRole("button", { name: "Войти в комнату" }).click();
-  await candidateA.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await candidateA.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
 
   const candidateBContext = await browser.newContext();
   const candidateB = await candidateBContext.newPage();
@@ -69,7 +69,7 @@ try {
   await candidateB.getByText("Представьтесь перед входом в комнату", { exact: true }).waitFor({ timeout: 15000 });
   await candidateB.getByLabel("Ваше имя").fill("Candidate B");
   await candidateB.getByRole("button", { name: "Войти в комнату" }).click();
-  await candidateB.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await candidateB.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
 
   const marker = `chaos-${Date.now()}`;
   const t0 = now();
@@ -94,7 +94,7 @@ try {
   const reconnectStart = now();
   await candidateBContext.setOffline(false);
   await candidateB.reload({ waitUntil: "domcontentloaded" });
-  await candidateB.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await candidateB.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
   await waitForEditorContains(candidateB, reconnectMarker, 20000);
   metrics.reconnectMs = now() - reconnectStart;
 

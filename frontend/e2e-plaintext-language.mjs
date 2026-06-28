@@ -70,13 +70,13 @@ try {
     .getByRole("button", { name: "Создать комнату" })
     .click();
   await interviewerPage.waitForURL(/\/room\//, { timeout: 15000 });
-  await interviewerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await interviewerPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
   const inviteCode = parseInviteCode(interviewerPage.url());
   if (!inviteCode) throw new Error(`INVITE_PARSE_FAILED url=${interviewerPage.url()}`);
 
   // (2) В редакторе пишем «обычный» текст и убеждаемся, что
   //     CodeMirror принимает ввод без падения по синтаксису.
-  const cm = interviewerPage.locator(".cm-content");
+  const cm = interviewerPage.locator('[data-testid="room-code-editor-host"] .cm-content');
   await cm.click();
   await interviewerPage.keyboard.type(
     "Hello, plain text! Не язык — просто заметки.",
@@ -97,7 +97,7 @@ try {
   const candidatePage = await candidateContext.newPage();
   await gotoWithRetry(candidatePage, `${webBaseUrl}/room/${inviteCode}`);
   await enterNameIfPrompted(candidatePage, "Candidate Plain");
-  await candidatePage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await candidatePage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
   await candidatePage.getByText("plain text", { exact: false }).waitFor({
     timeout: 12000,
   });

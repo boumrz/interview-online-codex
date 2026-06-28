@@ -39,13 +39,13 @@ async function modelValue(page) {
     if (host?.__roomEditorView?.state?.doc?.toString) {
       return host.__roomEditorView.state.doc.toString();
     }
-    const editor = document.querySelector(".cm-editor");
+    const editor = document.querySelector("[data-testid='room-code-editor-host'] .cm-editor");
     const anyEditor = editor;
     const view = anyEditor?.cmView?.view ?? anyEditor?.cmView?.rootView?.view ?? null;
     if (view?.state?.doc?.toString) {
       return view.state.doc.toString();
     }
-    return document.querySelector(".cm-content")?.textContent ?? "";
+    return document.querySelector("[data-testid='room-code-editor-host'] .cm-content")?.textContent ?? "";
   });
 }
 
@@ -68,10 +68,10 @@ async function waitModelContains(page, marker) {
       if (host?.__roomEditorView?.state?.doc?.toString) {
         return host.__roomEditorView.state.doc.toString().includes(token);
       }
-      const editor = document.querySelector(".cm-editor");
+      const editor = document.querySelector("[data-testid='room-code-editor-host'] .cm-editor");
       const anyEditor = editor;
       const view = anyEditor?.cmView?.view ?? anyEditor?.cmView?.rootView?.view ?? null;
-      const value = view?.state?.doc?.toString ? view.state.doc.toString() : (document.querySelector(".cm-content")?.textContent ?? "");
+      const value = view?.state?.doc?.toString ? view.state.doc.toString() : (document.querySelector("[data-testid='room-code-editor-host'] .cm-content")?.textContent ?? "");
       return typeof value === "string" && value.includes(token);
     },
     marker,
@@ -80,7 +80,7 @@ async function waitModelContains(page, marker) {
 }
 
 async function appendText(page, text) {
-  await page.locator(".cm-content").click({ force: true });
+  await page.locator('[data-testid="room-code-editor-host"] .cm-content').click({ force: true });
   await page.keyboard.press("End");
   await page.keyboard.type(text, { delay: 8 });
 }
@@ -105,7 +105,7 @@ try {
 
   const ownerPage = await ownerContext.newPage();
   await ownerPage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
-  await ownerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await ownerPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
 
   const candidatePages = [];
   const candidateContexts = [];
@@ -122,7 +122,7 @@ try {
     candidatePages.push(page);
     await page.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
     await enterNameIfPrompted(page, `Candidate ${i + 1}`);
-    await page.locator(".cm-editor").waitFor({ timeout: 15000 });
+    await page.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
     await page.waitForTimeout(220);
   }
 
@@ -135,10 +135,10 @@ try {
   for (const page of candidatePages) {
     await page.waitForFunction(
       (marker) => {
-        const editor = document.querySelector(".cm-editor");
+        const editor = document.querySelector("[data-testid='room-code-editor-host'] .cm-editor");
         const anyEditor = editor;
         const view = anyEditor?.cmView?.view ?? anyEditor?.cmView?.rootView?.view ?? null;
-        const value = view?.state?.doc?.toString ? view.state.doc.toString() : (document.querySelector(".cm-content")?.textContent ?? "");
+        const value = view?.state?.doc?.toString ? view.state.doc.toString() : (document.querySelector("[data-testid='room-code-editor-host'] .cm-content")?.textContent ?? "");
         return typeof value === "string" && value.includes(marker);
       },
       finalMarker,

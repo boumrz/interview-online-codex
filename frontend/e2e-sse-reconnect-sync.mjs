@@ -52,13 +52,13 @@ async function registerAndCreateRoom() {
 
 async function modelValue(page) {
   return page.evaluate(() => {
-    const editor = document.querySelector(".cm-editor");
+    const editor = document.querySelector("[data-testid='room-code-editor-host'] .cm-editor");
     const anyEditor = editor;
     const view = anyEditor?.cmView?.view ?? anyEditor?.cmView?.rootView?.view ?? null;
     if (view?.state?.doc?.toString) {
       return view.state.doc.toString();
     }
-    return document.querySelector(".cm-content")?.textContent ?? "";
+    return document.querySelector("[data-testid='room-code-editor-host'] .cm-content")?.textContent ?? "";
   });
 }
 
@@ -80,7 +80,7 @@ try {
   );
   const ownerPage = await ownerContext.newPage();
   await ownerPage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
-  await ownerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await ownerPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
 
   const candidateContext = await browser.newContext();
   const candidatePage = await candidateContext.newPage();
@@ -88,7 +88,7 @@ try {
   await candidatePage.getByText("Представьтесь перед входом в комнату", { exact: true }).waitFor({ timeout: 15000 });
   await candidatePage.getByLabel("Ваше имя").fill("Candidate SSE");
   await candidatePage.getByRole("button", { name: "Войти в комнату" }).click();
-  await candidatePage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await candidatePage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
 
   const markers = ["focus-reconnect-alpha", "focus-reconnect-beta", "focus-reconnect-gamma"];
 
@@ -96,7 +96,7 @@ try {
   await candidateContext.setOffline(true);
 
   await ownerPage.bringToFront();
-  await ownerPage.locator(".cm-content").click({ force: true });
+  await ownerPage.locator('[data-testid="room-code-editor-host"] .cm-content').click({ force: true });
   await ownerPage.keyboard.press("End");
   await ownerPage.keyboard.type(appendedText, { delay: 8 });
   await ownerPage.waitForTimeout(1200);

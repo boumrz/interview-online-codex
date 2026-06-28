@@ -75,7 +75,7 @@ try {
     ownerToken: room.ownerToken
   });
   await ownerPage1.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
-  await ownerPage1.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await ownerPage1.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
   await openRoomToolsPanelIfNeeded(ownerPage1);
   await ownerPage1.getByRole("tab", { name: /^(Заметки|Чат)$/ }).waitFor({ timeout: 10000 });
 
@@ -89,13 +89,13 @@ try {
     ownerToken: room.ownerToken
   });
   await ownerPage2.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
-  await ownerPage2.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await ownerPage2.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
   await openRoomToolsPanelIfNeeded(ownerPage2);
   await ownerPage2.getByRole("tab", { name: /^(Заметки|Чат)$/ }).waitFor({ timeout: 10000 });
 
   await candidatePage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
   await enterNameIfPrompted(candidatePage, "Candidate QA");
-  await candidatePage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await candidatePage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
   const candidateHasChatComposer = await candidatePage.locator('[data-testid="room-notes-input"]').isVisible().catch(() => false);
   if (candidateHasChatComposer) {
     throw new Error("CANDIDATE_SHOULD_NOT_HAVE_INTERVIEWER_CHAT");

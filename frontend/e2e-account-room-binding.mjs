@@ -137,7 +137,7 @@ try {
   const ownerPage = await ownerContext.newPage();
   await bootstrapAuthStorage(ownerPage, ownerAuth.token, ownerAuth.user, room.inviteCode);
   await ownerPage.goto(roomUrl, { waitUntil: "domcontentloaded" });
-  await ownerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await ownerPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
 
   const legacyInvitesVisible = await ownerPage
     .getByRole("button", { name: "Приглашения", exact: true })
@@ -151,7 +151,7 @@ try {
   const interviewerPage = await interviewerContext.newPage();
   await bootstrapAuthStorage(interviewerPage, interviewerAuth.token, interviewerAuth.user, room.inviteCode);
   await interviewerPage.goto(roomUrl, { waitUntil: "domcontentloaded" });
-  await interviewerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await interviewerPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
   await openRoomToolsPanelIfAvailable(interviewerPage);
 
   const interviewerCanManageBeforeGrant = await interviewerPage
@@ -173,14 +173,14 @@ try {
 
   // Requirement: a refresh should be enough to see newly granted room rights.
   await interviewerPage.reload({ waitUntil: "domcontentloaded" });
-  await interviewerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await interviewerPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
   await openRoomToolsPanelIfAvailable(interviewerPage);
   await interviewerPage.locator('[data-testid="room-notes-input"]').waitFor({ timeout: 15000 });
 
   // Интервьюер меняет шаг и после refresh должен остаться интервьюером.
   await switchToNextStepAsUser(room.inviteCode, interviewerAuth.token);
   await interviewerPage.reload({ waitUntil: "domcontentloaded" });
-  await interviewerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await interviewerPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
   await openRoomToolsPanelIfAvailable(interviewerPage);
   await interviewerPage.locator('[data-testid="room-notes-input"]').waitFor({ timeout: 15000 });
 
@@ -189,7 +189,7 @@ try {
   const guestPage = await guestContext.newPage();
   await guestPage.goto(roomUrl, { waitUntil: "domcontentloaded" });
   await enterGuestNameIfPrompted(guestPage, "Guest Candidate");
-  await guestPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await guestPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
   await openRoomToolsPanelIfAvailable(guestPage);
   const guestCanManage = await guestPage
     .locator('[data-testid="room-notes-input"]')
@@ -202,7 +202,7 @@ try {
   // Owner grants interviewer access to an unauthenticated guest.
   await ownerPage.bringToFront();
   await ownerPage.reload({ waitUntil: "domcontentloaded" });
-  await ownerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await ownerPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
   const participantsHost = ownerPage.locator('[aria-label="Участники комнаты"]').first();
   await participantsHost.waitFor({ timeout: 15000 });
   const participantButtons = participantsHost.getByRole("button");
@@ -228,7 +228,7 @@ try {
   // Guest should receive rights after refresh.
   await guestPage.reload({ waitUntil: "domcontentloaded" });
   await enterGuestNameIfPrompted(guestPage, "Guest Candidate");
-  await guestPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await guestPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
   await openRoomToolsPanelIfAvailable(guestPage);
   await guestPage.locator('[data-testid="room-notes-input"]').waitFor({ timeout: 15000 });
 
@@ -238,7 +238,7 @@ try {
   await ownerPage.waitForTimeout(250);
   await guestPage.reload({ waitUntil: "domcontentloaded" });
   await enterGuestNameIfPrompted(guestPage, "Guest Candidate");
-  await guestPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await guestPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
   await openRoomToolsPanelIfAvailable(guestPage);
   await guestPage.locator('[data-testid="room-notes-input"]').waitFor({ timeout: 15000 });
 

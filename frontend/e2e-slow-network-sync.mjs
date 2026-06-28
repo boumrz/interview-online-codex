@@ -111,7 +111,7 @@ async function enterNameIfPrompted(page, name) {
 }
 
 async function waitForEditor(page, timeoutMs = 15000) {
-  const editor = page.locator(".cm-editor");
+  const editor = page.locator('[data-testid="room-code-editor-host"] .cm-editor');
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const visible = await editor.isVisible().catch(() => false);
@@ -137,16 +137,16 @@ async function ensureJoinedAndEditorReady(page, candidateName) {
 
 async function modelValue(page) {
   return page.evaluate(() => {
-    const editor = document.querySelector(".cm-editor");
+    const editor = document.querySelector("[data-testid='room-code-editor-host'] .cm-editor");
     const anyEditor = editor;
     const view = anyEditor?.cmView?.view ?? anyEditor?.cmView?.rootView?.view ?? null;
     if (view?.state?.doc?.toString) return view.state.doc.toString();
-    return document.querySelector(".cm-content")?.textContent ?? "";
+    return document.querySelector("[data-testid='room-code-editor-host'] .cm-content")?.textContent ?? "";
   });
 }
 
 async function appendCode(page, snippet) {
-  await page.locator(".cm-content").click({ force: true });
+  await page.locator('[data-testid="room-code-editor-host"] .cm-content').click({ force: true });
   await page.keyboard.press("End");
   await page.keyboard.type(snippet, { delay: 8 });
 }
@@ -190,7 +190,7 @@ try {
   );
   const ownerPage = await ownerContext.newPage();
   await ownerPage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
-  await ownerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await ownerPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
 
   const candidateContext = await browser.newContext();
   const candidatePage = await candidateContext.newPage();
@@ -308,9 +308,9 @@ try {
   // pressSequentially generates real keydown/keyup events → key_press + cursor_update
   // messages. With delay:80 and ~35 chars, typing takes ~2800ms.
   const kpMarker = `KEYPRESS_CANARY_${Date.now()}`;
-  await candidatePage.locator(".cm-content").click({ force: true });
+  await candidatePage.locator('[data-testid="room-code-editor-host"] .cm-content').click({ force: true });
   const tType = Date.now();
-  await candidatePage.locator(".cm-content").pressSequentially(` ${kpMarker}`, { delay: 80 });
+  await candidatePage.locator('[data-testid="room-code-editor-host"] .cm-content').pressSequentially(` ${kpMarker}`, { delay: 80 });
   console.log(`[candidate] Typed ${kpMarker.length + 1} chars in ${Date.now() - tType}ms`);
 
   const KP_TIMEOUT = 15_000;

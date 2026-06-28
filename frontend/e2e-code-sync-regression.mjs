@@ -52,12 +52,12 @@ async function registerAndCreateRoom() {
 
 async function modelValue(page) {
   return page.evaluate(() => {
-    const host = document.querySelector(".cm-host");
+    const host = document.querySelector("[data-testid='room-code-editor-host']");
     const view = host?.__roomEditorView ?? null;
     if (view?.state?.doc?.toString) {
       return view.state.doc.toString();
     }
-    const content = document.querySelector(".cm-content");
+    const content = document.querySelector("[data-testid='room-code-editor-host'] .cm-content");
     if (!content) return null;
     const raw = content.innerText ?? "";
     return raw
@@ -80,11 +80,11 @@ function normalizeSnapshot(value) {
 async function waitForFragments(page, fragments, timeout = 12000) {
   await page.waitForFunction(
     ({ fragments }) => {
-      const host = document.querySelector(".cm-host");
+      const host = document.querySelector("[data-testid='room-code-editor-host']");
       const view = host?.__roomEditorView ?? null;
       const raw =
         (view?.state?.doc?.toString ? view.state.doc.toString() : null) ??
-        (document.querySelector(".cm-content")?.innerText ?? "");
+        (document.querySelector("[data-testid='room-code-editor-host'] .cm-content")?.innerText ?? "");
       const normalized = raw
         .replace(/[\u200b\u200c\u200d\u200e\u200f\u2060-\u206f\ufeff]/g, "")
         .replaceAll("Owner QA", "")
@@ -120,7 +120,7 @@ try {
   );
   const ownerPage = await ownerContext.newPage();
   await ownerPage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
-  await ownerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await ownerPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
 
   const candidateContext = await browser.newContext();
   const candidatePage = await candidateContext.newPage();
@@ -128,7 +128,7 @@ try {
   await candidatePage.getByText("Представьтесь перед входом в комнату", { exact: true }).waitFor({ timeout: 15000 });
   await candidatePage.getByLabel("Ваше имя").fill("Candidate QA");
   await candidatePage.getByRole("button", { name: "Войти в комнату" }).click();
-  await candidatePage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await candidatePage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
 
   const initialValue = await modelValue(ownerPage);
   if (initialValue == null) {
@@ -139,7 +139,7 @@ try {
   const secondHalf = appendedText.slice(splitAt);
 
   await ownerPage.bringToFront();
-  await ownerPage.locator(".cm-content").click({ force: true });
+  await ownerPage.locator('[data-testid="room-code-editor-host"] .cm-content').click({ force: true });
   await ownerPage.keyboard.press("End");
   await ownerPage.keyboard.type(firstHalf, { delay: 8 });
   await ownerPage.waitForTimeout(300);

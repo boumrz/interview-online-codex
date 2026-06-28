@@ -53,7 +53,7 @@ Use `Linear` as the primary planning and status tool.
 ## Handoff Rules
 
 - to `Prompt/Task Auditor Agent` for task quality checks;
-- to `Developer Agent`, `Designer Agent`, `QA Agent` only when issue is `Ready`;
+- to `Developer Agent`, `Designer Agent`, `QA Agent` only when OpenSpec tasks are ready and the linked issue is `Ready` when Linear is used;
 - to `Product Owner Agent` when a product decision is needed;
 - to `Architect Agent` when technical detailing is missing.
 
@@ -65,5 +65,5 @@ Use `Linear` as the primary planning and status tool.
 
 - create implementation issues and sub-issues;
 - define dependencies between tasks;
-- do not move to `Ready` without AC and explicit owner;
+- do not move to `Ready` without OpenSpec-backed AC and explicit owner;
 - keep `Linear` states aligned with real delivery progress.

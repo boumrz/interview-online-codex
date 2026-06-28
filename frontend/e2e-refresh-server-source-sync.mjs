@@ -31,14 +31,14 @@ async function editorValue(page) {
     if (host?.__roomEditorView?.state?.doc?.toString) {
       return host.__roomEditorView.state.doc.toString();
     }
-    const editor = document.querySelector(".cm-editor");
+    const editor = document.querySelector("[data-testid='room-code-editor-host'] .cm-editor");
     const anyEditor = editor;
     const view =
       anyEditor?.cmView?.view ?? anyEditor?.cmView?.rootView?.view ?? null;
     if (view?.state?.doc?.toString) {
       return view.state.doc.toString();
     }
-    const content = document.querySelector(".cm-content");
+    const content = document.querySelector("[data-testid='room-code-editor-host'] .cm-content");
     return content?.textContent ?? "";
   });
 }
@@ -51,14 +51,14 @@ async function waitForMarkers(page, markers) {
       if (host?.__roomEditorView?.state?.doc?.toString) {
         rawText = host.__roomEditorView.state.doc.toString();
       } else {
-        const editor = document.querySelector(".cm-editor");
+        const editor = document.querySelector("[data-testid='room-code-editor-host'] .cm-editor");
         const anyEditor = editor;
         const view =
           anyEditor?.cmView?.view ?? anyEditor?.cmView?.rootView?.view ?? null;
         if (view?.state?.doc?.toString) {
           rawText = view.state.doc.toString();
         } else {
-          rawText = document.querySelector(".cm-content")?.textContent ?? "";
+          rawText = document.querySelector("[data-testid='room-code-editor-host'] .cm-content")?.textContent ?? "";
         }
       }
       const normalized = rawText
@@ -179,21 +179,21 @@ try {
   );
   const ownerPage = await ownerContext.newPage();
   await ownerPage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
-  await ownerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await ownerPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
   await waitForEditableCodeEditor(ownerPage);
 
   const candidateContext = await browser.newContext();
   const candidatePage = await candidateContext.newPage();
   await candidatePage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
   await joinAsCandidate(candidatePage);
-  await candidatePage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await candidatePage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
 
   await appendToCodeEditorModel(ownerPage, `\n${markerA}\n${markerB}`);
 
   // Refresh quickly, before delayed DB save, to assert server realtime state remains the source of truth.
   await ownerPage.waitForTimeout(160);
   await ownerPage.reload({ waitUntil: "domcontentloaded" });
-  await ownerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await ownerPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
   await waitForEditableCodeEditor(ownerPage);
 
   await waitForMarkers(ownerPage, [markerA, markerB]);

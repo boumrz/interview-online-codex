@@ -1067,6 +1067,7 @@ export function DashboardPage() {
                   title={roomTitle}
                   onTitleChange={setRoomTitle}
                   taskOptions={taskSelectData}
+                  selectedTasks={selectedRoomTasks}
                   selectedTaskIds={roomTaskIds}
                   onSelectedTaskIdsChange={setRoomTaskIds}
                   isSubmitting={createRoomState.isLoading}

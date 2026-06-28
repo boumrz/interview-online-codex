@@ -59,6 +59,22 @@
   background: rgba(18, 23, 32, 0.9);
 }
 
+.selectedTaskPreviewList {
+  border: 1px solid #273242;
+  border-radius: 8px;
+  background: #0e1520;
+  padding: 10px;
+}
+
+.selectedTaskPreviewItem {
+  display: grid;
+  gap: 6px;
+  border: 1px solid #263448;
+  border-radius: 8px;
+  background: #111a27;
+  padding: 9px 10px;
+}
+
 .markdownEditorGrid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -83,9 +99,30 @@
 
 .markdownPreviewContent h1,
 .markdownPreviewContent h2,
-.markdownPreviewContent h3 {
+.markdownPreviewContent h3,
+.markdownPreviewContent h4,
+.markdownPreviewContent h5,
+.markdownPreviewContent h6 {
   margin: 0 0 8px;
   color: #f8fafc;
+  line-height: 1.22;
+}
+
+.markdownPreviewContent h1 {
+  font-size: 20px;
+  border-bottom: 1px solid #243b5f;
+  padding-bottom: 7px;
+}
+
+.markdownPreviewContent h2 {
+  font-size: 17px;
+}
+
+.markdownPreviewContent h3,
+.markdownPreviewContent h4,
+.markdownPreviewContent h5,
+.markdownPreviewContent h6 {
+  font-size: 14px;
 }
 
 .markdownPreviewContent p {
@@ -94,15 +131,82 @@
 
 .markdownPreviewContent ul,
 .markdownPreviewContent ol {
-  margin: 0 0 8px 16px;
-  padding: 0;
+  margin: 0 0 8px;
+  padding-left: 22px;
 }
 
-.markdownPreviewContent code {
+.markdownPreviewContent li,
+.taskDescriptionMarkdown li {
+  margin: 3px 0;
+}
+
+.markdownPreviewContent li > p,
+.taskDescriptionMarkdown li > p {
+  margin: 0;
+}
+
+.markdownPreviewContent input[type="checkbox"],
+.taskDescriptionMarkdown input[type="checkbox"] {
+  margin: 0 6px 0 -18px;
+  vertical-align: middle;
+}
+
+.markdownPreviewContent a,
+.taskDescriptionMarkdown a {
+  color: #8ab4ff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.markdownPreviewContent blockquote,
+.taskDescriptionMarkdown blockquote {
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  border-left: 3px solid #4f6f9e;
+  background: rgba(45, 67, 99, 0.22);
+  color: #bec9d8;
+  border-radius: 0 8px 8px 0;
+}
+
+.markdownPreviewContent blockquote > :last-child,
+.taskDescriptionMarkdown blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.markdownPreviewContent hr,
+.taskDescriptionMarkdown hr {
+  border: 0;
+  border-top: 1px solid #2d3b4f;
+  margin: 14px 0;
+}
+
+.markdownPreviewContent code,
+.taskDescriptionMarkdown code {
   font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   background: rgba(38, 68, 108, 0.45);
   border-radius: 6px;
   padding: 1px 4px;
+}
+
+.markdownPreviewContent pre,
+.taskDescriptionMarkdown pre {
+  margin: 0 0 10px;
+  border: 1px solid #2d3b4f;
+  border-radius: 8px;
+  overflow: auto;
+  background: #0b1017;
+}
+
+.markdownPreviewContent pre code,
+.taskDescriptionMarkdown pre code {
+  display: block;
+  min-width: 100%;
+  padding: 11px 12px;
+  background: transparent;
+  border-radius: 0;
+  color: #d6deeb;
+  line-height: 1.5;
+  white-space: pre;
 }
 
 .markdownPreviewContent table,
@@ -142,7 +246,7 @@
 .taskDescriptionMarkdown p,
 .taskDescriptionMarkdown ul,
 .taskDescriptionMarkdown ol {
-  margin: 0;
+  margin: 0 0 8px;
 }
 
 @media (max-width: 900px) {

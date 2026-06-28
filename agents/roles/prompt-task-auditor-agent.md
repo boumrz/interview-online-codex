@@ -39,7 +39,7 @@ Your goal is to prevent poorly specified tasks from entering delivery flow.
 
 ## Decision Rules
 
-- no AC means not ready;
+- no OpenSpec-backed AC means not ready;
 - no owner/reviewers means not ready;
 - hidden dependency means not ready;
 - oversized task requires decomposition.

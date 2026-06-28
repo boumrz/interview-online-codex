@@ -66,13 +66,13 @@ async function modelValue(page) {
     if (host?.__roomEditorView?.state?.doc?.toString) {
       return host.__roomEditorView.state.doc.toString();
     }
-    const editor = document.querySelector(".cm-editor");
+    const editor = document.querySelector("[data-testid='room-code-editor-host'] .cm-editor");
     const anyEditor = editor;
     const view = anyEditor?.cmView?.view ?? anyEditor?.cmView?.rootView?.view ?? null;
     if (view?.state?.doc?.toString) {
       return view.state.doc.toString();
     }
-    return document.querySelector(".cm-content")?.textContent ?? "";
+    return document.querySelector("[data-testid='room-code-editor-host'] .cm-content")?.textContent ?? "";
   });
 }
 
@@ -133,20 +133,20 @@ try {
   const candidateCPage = await candidateCContext.newPage();
 
   await ownerPage.goto(roomUrl, { waitUntil: "domcontentloaded" });
-  await ownerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await ownerPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
   await waitForEditableCodeEditor(ownerPage);
 
   await candidateAPage.goto(roomUrl, { waitUntil: "domcontentloaded" });
   await enterNameIfPrompted(candidateAPage, "Candidate A");
-  await candidateAPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await candidateAPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
 
   await candidateBPage.goto(roomUrl, { waitUntil: "domcontentloaded" });
   await enterNameIfPrompted(candidateBPage, "Candidate B");
-  await candidateBPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await candidateBPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
 
   await candidateCPage.goto(roomUrl, { waitUntil: "domcontentloaded" });
   await enterNameIfPrompted(candidateCPage, "Candidate C");
-  await candidateCPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await candidateCPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
 
   await appendToCodeEditorModel(ownerPage, " alpha_yjs_A  beta_yjs_B  gamma_yjs_C ");
 
@@ -172,7 +172,7 @@ try {
   // Hard reload one participant: must converge again from server snapshot + SSE (regression: stale yjs on server).
   await candidateBPage.reload({ waitUntil: "domcontentloaded" });
   await enterNameIfPrompted(candidateBPage, "Candidate B");
-  await candidateBPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await candidateBPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
   await candidateBPage.waitForTimeout(14000);
 
   const afterReload = await Promise.all([

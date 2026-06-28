@@ -1,11 +1,43 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Box, Text, Textarea, Tooltip } from "@mantine/core";
+import React, {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { Box, Text, Tooltip } from "@mantine/core";
 import {
   IconArrowsDiagonal,
   IconArrowsDiagonalMinimize2,
   IconLayoutColumns,
   IconLayoutRows,
 } from "@tabler/icons-react";
+import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
+import {
+  defaultKeymap,
+  history,
+  historyKeymap,
+  indentWithTab,
+} from "@codemirror/commands";
+import {
+  bracketMatching,
+  defaultHighlightStyle,
+  indentOnInput,
+  syntaxHighlighting,
+} from "@codemirror/language";
+import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
+import { languages } from "@codemirror/language-data";
+import { EditorSelection, EditorState } from "@codemirror/state";
+import { oneDark } from "@codemirror/theme-one-dark";
+import {
+  drawSelection,
+  EditorView,
+  highlightActiveLine,
+  keymap,
+  lineNumbers,
+} from "@codemirror/view";
 
 import { markdownToHtml } from "../../components/markdown";
 import roomPageStyles from "../../pages/RoomPage.module.css";
@@ -14,6 +46,7 @@ type MarkdownToolId =
   | "bold"
   | "italic"
   | "code"
+  | "codeblock"
   | "link"
   | "h1"
   | "h2"
@@ -39,6 +72,17 @@ export type BriefingBoardProps = {
   onFocusModeChange?: (next: boolean) => void;
 };
 
+type MarkdownEditorHandle = {
+  focus: () => void;
+  getSelectionRange: () => { selectionStart: number; selectionEnd: number };
+  setSelectionRange: (selectionStart: number, selectionEnd: number) => void;
+};
+
+type MarkdownCodeMirrorEditorProps = {
+  value: string;
+  onChange?: (value: string) => void;
+};
+
 /**
  * Markdown-брифинг задачи.
  *
@@ -58,7 +102,7 @@ export function BriefingBoard({
   focusMode = false,
   onFocusModeChange,
 }: BriefingBoardProps) {
-  const editorRef = useRef<HTMLTextAreaElement | null>(null);
+  const editorRef = useRef<MarkdownEditorHandle | null>(null);
   /**
    * Локальный «fullscreen»: разворачивает панель брифинга поверх
    * комнаты на весь viewport. Состояние локальное у каждого участника
@@ -86,9 +130,10 @@ export function BriefingBoard({
   const applyWrap = useCallback(
     (prefix: string, suffix: string, placeholder: string) => {
       if (!onChange) return;
-      const textarea = editorRef.current;
-      const selectionStart = textarea?.selectionStart ?? 0;
-      const selectionEnd = textarea?.selectionEnd ?? 0;
+      const editor = editorRef.current;
+      const selection = editor?.getSelectionRange();
+      const selectionStart = selection?.selectionStart ?? 0;
+      const selectionEnd = selection?.selectionEnd ?? 0;
       const selected = value.slice(selectionStart, selectionEnd);
       const content = selected || placeholder;
       const next = `${value.slice(0, selectionStart)}${prefix}${content}${suffix}${value.slice(selectionEnd)}`;
@@ -96,8 +141,8 @@ export function BriefingBoard({
       const rangeStart = selectionStart + prefix.length;
       const rangeEnd = rangeStart + content.length;
       requestAnimationFrame(() => {
-        textarea?.focus();
-        textarea?.setSelectionRange(rangeStart, rangeEnd);
+        editor?.focus();
+        editor?.setSelectionRange(rangeStart, rangeEnd);
       });
     },
     [onChange, value],
@@ -106,9 +151,10 @@ export function BriefingBoard({
   const applyLinePrefix = useCallback(
     (prefix: string) => {
       if (!onChange) return;
-      const textarea = editorRef.current;
-      const selectionStart = textarea?.selectionStart ?? 0;
-      const selectionEnd = textarea?.selectionEnd ?? 0;
+      const editor = editorRef.current;
+      const selection = editor?.getSelectionRange();
+      const selectionStart = selection?.selectionStart ?? 0;
+      const selectionEnd = selection?.selectionEnd ?? 0;
       const blockStart =
         value.lastIndexOf("\n", Math.max(0, selectionStart - 1)) + 1;
       const blockEndCandidate = value.indexOf("\n", selectionEnd);
@@ -121,8 +167,8 @@ export function BriefingBoard({
       const next = `${value.slice(0, blockStart)}${updated}${value.slice(blockEnd)}`;
       onChange(next);
       requestAnimationFrame(() => {
-        textarea?.focus();
-        textarea?.setSelectionRange(blockStart, blockStart + updated.length);
+        editor?.focus();
+        editor?.setSelectionRange(blockStart, blockStart + updated.length);
       });
     },
     [onChange, value],
@@ -131,9 +177,10 @@ export function BriefingBoard({
   const insertSnippet = useCallback(
     (snippet: string) => {
       if (!onChange) return;
-      const textarea = editorRef.current;
-      const selectionStart = textarea?.selectionStart ?? value.length;
-      const selectionEnd = textarea?.selectionEnd ?? selectionStart;
+      const editor = editorRef.current;
+      const selection = editor?.getSelectionRange();
+      const selectionStart = selection?.selectionStart ?? value.length;
+      const selectionEnd = selection?.selectionEnd ?? selectionStart;
       const needsLeadingLineBreak =
         selectionStart > 0 && value[selectionStart - 1] !== "\n";
       const needsTrailingLineBreak =
@@ -145,8 +192,8 @@ export function BriefingBoard({
       const nextSelectionStart = selectionStart + prefix.length;
       const nextSelectionEnd = nextSelectionStart + snippet.length;
       requestAnimationFrame(() => {
-        textarea?.focus();
-        textarea?.setSelectionRange(nextSelectionStart, nextSelectionEnd);
+        editor?.focus();
+        editor?.setSelectionRange(nextSelectionStart, nextSelectionEnd);
       });
     },
     [onChange, value],
@@ -157,6 +204,7 @@ export function BriefingBoard({
       if (tool === "bold") return applyWrap("**", "**", "текст");
       if (tool === "italic") return applyWrap("*", "*", "текст");
       if (tool === "code") return applyWrap("`", "`", "code");
+      if (tool === "codeblock") return insertSnippet("```ts\n// code\n```");
       if (tool === "link") return applyWrap("[", "](https://)", "ссылка");
       if (tool === "h1") return applyLinePrefix("# ");
       if (tool === "h2") return applyLinePrefix("## ");
@@ -213,6 +261,15 @@ export function BriefingBoard({
               onClick={() => applyMarkdownTool("code")}
             >
               {"</>"}
+            </button>
+            <button
+              type="button"
+              className={roomPageStyles.briefingToolButton}
+              aria-label="Code block"
+              title="Code block"
+              onClick={() => applyMarkdownTool("codeblock")}
+            >
+              Code
             </button>
             <button
               type="button"
@@ -343,19 +400,10 @@ export function BriefingBoard({
             </Tooltip>
           </div>
           <div className={roomPageStyles.briefingSplit}>
-            <Textarea
-              value={value}
-              onChange={(event) => onChange?.(event.currentTarget.value)}
-              minRows={6}
-              placeholder="Например: # План\n- Что делаем\n- На что смотреть"
-              data-testid="room-markdown-editor"
-              aria-label="Markdown-описание задачи"
-              classNames={{
-                root: roomPageStyles.briefingEditorRoot,
-                wrapper: roomPageStyles.briefingEditorWrapper,
-                input: roomPageStyles.briefingEditorInput,
-              }}
+            <MarkdownCodeMirrorEditor
               ref={editorRef}
+              value={value}
+              onChange={onChange}
             />
             <div
               className={roomPageStyles.briefingPreviewPane}
@@ -428,3 +476,140 @@ export function BriefingBoard({
     </Box>
   );
 }
+
+const MarkdownCodeMirrorEditor = forwardRef<
+  MarkdownEditorHandle,
+  MarkdownCodeMirrorEditorProps
+>(function MarkdownCodeMirrorEditor(
+  { value, onChange },
+  ref,
+) {
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const viewRef = useRef<EditorView | null>(null);
+  const onChangeRef = useRef(onChange);
+  const valueRef = useRef(value);
+  const applyingExternalValueRef = useRef(false);
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
+
+  const extensions = useMemo(
+    () => [
+      oneDark,
+      lineNumbers(),
+      highlightActiveLine(),
+      drawSelection(),
+      history(),
+      indentOnInput(),
+      closeBrackets(),
+      bracketMatching(),
+      syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+      keymap.of([
+        indentWithTab,
+        ...closeBracketsKeymap,
+        ...defaultKeymap,
+        ...historyKeymap,
+      ]),
+      markdown({
+        base: markdownLanguage,
+        codeLanguages: languages,
+      }),
+      EditorView.lineWrapping,
+      EditorView.theme(
+        {
+          "&": {
+            height: "100%",
+          },
+          ".cm-scroller": {
+            overflow: "auto",
+          },
+        },
+        { dark: true },
+      ),
+      EditorView.updateListener.of((update) => {
+        if (!update.docChanged || applyingExternalValueRef.current) return;
+        const next = update.state.doc.toString();
+        valueRef.current = next;
+        onChangeRef.current?.(next);
+      }),
+    ],
+    [],
+  );
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host || viewRef.current) return;
+    const view = new EditorView({
+      state: EditorState.create({
+        doc: valueRef.current,
+        extensions,
+      }),
+      parent: host,
+    });
+    viewRef.current = view;
+    return () => {
+      view.destroy();
+      viewRef.current = null;
+    };
+  }, [extensions]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    const current = view.state.doc.toString();
+    if (value === current) return;
+    const selection = view.state.selection.main;
+    const nextLength = value.length;
+    applyingExternalValueRef.current = true;
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: value },
+      selection: EditorSelection.range(
+        Math.min(selection.anchor, nextLength),
+        Math.min(selection.head, nextLength),
+      ),
+    });
+    applyingExternalValueRef.current = false;
+  }, [value]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      focus: () => {
+        viewRef.current?.focus();
+      },
+      getSelectionRange: () => {
+        const selection = viewRef.current?.state.selection.main;
+        return {
+          selectionStart: selection?.from ?? 0,
+          selectionEnd: selection?.to ?? 0,
+        };
+      },
+      setSelectionRange: (selectionStart, selectionEnd) => {
+        const view = viewRef.current;
+        if (!view) return;
+        const docLength = view.state.doc.length;
+        const start = Math.min(Math.max(selectionStart, 0), docLength);
+        const end = Math.min(Math.max(selectionEnd, 0), docLength);
+        view.dispatch({
+          selection: EditorSelection.range(start, end),
+          scrollIntoView: true,
+        });
+      },
+    }),
+    [],
+  );
+
+  return (
+    <div
+      ref={hostRef}
+      className={roomPageStyles.briefingEditorRoot}
+      data-testid="room-markdown-editor"
+      aria-label="Markdown task description"
+    />
+  );
+});

@@ -6,6 +6,7 @@ Each agent must:
 
 - work only inside its own responsibility area;
 - avoid changing product, architecture, or priority decisions outside its role;
+- use `OpenSpec` as the source of requirement truth;
 - use `Linear` as the single source of task state;
 - return structured outputs instead of free-form reasoning dumps;
 - escalate conflicts instead of silently making disputed decisions;
@@ -30,6 +31,7 @@ context:
   dependencies: []
   constraints: []
 artifacts:
+  openspec_change: []
   prd: []
   architecture: []
   design: []

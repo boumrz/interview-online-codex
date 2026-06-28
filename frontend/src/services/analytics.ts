@@ -1,6 +1,6 @@
 const METRIKA_COUNTER_ID = 109032539;
 const METRIKA_SCRIPT_URL = `https://mc.yandex.ru/metrika/tag.js?id=${METRIKA_COUNTER_ID}`;
-const DEFAULT_ALLOWED_HOSTS = ["interview.vtools.tech"];
+const DEFAULT_ALLOWED_HOSTS = ["interview.vtools.tech", "interview.domiknote.ru"];
 const LOCAL_DEV_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
 type PrimitiveMetricValue = string | number | boolean | null;

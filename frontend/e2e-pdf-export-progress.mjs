@@ -61,7 +61,7 @@ try {
   });
 
   // Дожидаемся, пока редактор готов.
-  await page.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await page.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
 
   // Открыть таб заметок (мобильный layout) — для CI достаточно.
   const tasksRailButton = page.locator('[data-testid="room-rail-tasks"]');

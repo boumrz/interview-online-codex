@@ -21,16 +21,26 @@ import {
   darkFieldStyles,
   darkSelectStyles,
 } from "./dashboardFieldStyles";
+import { markdownToHtml } from "../../components/markdown";
+import styles from "../DashboardPage.module.css";
 
 export interface RoomTaskOption {
   value: string;
   label: string;
 }
 
+export interface RoomTaskPreview {
+  id: string;
+  title: string;
+  description: string;
+  language: string;
+}
+
 interface CreateRoomSectionProps {
   title: string;
   onTitleChange: (value: string) => void;
   taskOptions: RoomTaskOption[];
+  selectedTasks: RoomTaskPreview[];
   selectedTaskIds: string[];
   onSelectedTaskIdsChange: (ids: string[]) => void;
   isSubmitting: boolean;
@@ -51,6 +61,7 @@ export function CreateRoomSection({
   title,
   onTitleChange,
   taskOptions,
+  selectedTasks,
   selectedTaskIds,
   onSelectedTaskIdsChange,
   isSubmitting,
@@ -142,6 +153,39 @@ export function CreateRoomSection({
               styles={darkSelectStyles}
               labelProps={{ onClick: (e: React.MouseEvent) => e.preventDefault() }}
             />
+            {selectedTasks.length > 0 && (
+              <Stack
+                gap={8}
+                className={styles.selectedTaskPreviewList}
+                data-testid="selected-task-preview"
+              >
+                {selectedTasks.map((task) => {
+                  const descriptionHtml = markdownToHtml(task.description);
+                  return (
+                    <div className={styles.selectedTaskPreviewItem} key={task.id}>
+                      <Group justify="space-between" gap="xs" wrap="nowrap">
+                        <Text fw={700} size="sm" c="gray.1">
+                          {task.title}
+                        </Text>
+                        <Text size="xs" c="gray.5">
+                          {task.language}
+                        </Text>
+                      </Group>
+                      {descriptionHtml ? (
+                        <div
+                          className={styles.taskDescriptionMarkdown}
+                          dangerouslySetInnerHTML={{ __html: descriptionHtml }}
+                        />
+                      ) : (
+                        <Text size="xs" c="gray.5">
+                          No description
+                        </Text>
+                      )}
+                    </div>
+                  );
+                })}
+              </Stack>
+            )}
             <Button type="submit" loading={isSubmitting}>
               Создать и открыть
             </Button>

@@ -787,18 +787,76 @@
 
 /* Корневой контейнер Mantine Textarea: тянем на 100% колонки. */
 .briefingEditorRoot {
-  display: flex;
+  min-width: 0;
   height: 100%;
   min-height: 0;
+  overflow: hidden;
+  border: 1px solid #273242;
+  border-radius: 10px;
+  background: #11161f;
+}
+
+.briefingEditorRoot:focus-within {
+  border-color: #4f70a6;
+  box-shadow: 0 0 0 2px rgba(79, 112, 166, 0.18);
+}
+
+.briefingEditorRoot :global(.cm-editor) {
+  height: 100%;
+  background: #11161f;
+  color: #d6dce6;
+}
+
+.briefingEditorRoot :global(.cm-focused) {
+  outline: none;
+}
+
+.briefingEditorRoot :global(.cm-scroller) {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.briefingEditorRoot :global(.cm-content) {
+  min-height: 100%;
+  padding: 10px 0;
+  caret-color: #f3f5f7;
+}
+
+.briefingEditorRoot :global(.cm-line) {
+  padding: 0 12px;
+}
+
+.briefingEditorRoot :global(.cm-gutters) {
+  background: #0d131c;
+  border-right: 1px solid #273242;
+  color: #67758a;
+}
+
+.briefingEditorRoot :global(.cm-lineNumbers .cm-gutterElement) {
+  min-width: 32px;
+  padding: 0 8px 0 10px;
+}
+
+.briefingEditorRoot :global(.cm-activeLine) {
+  background: rgba(83, 124, 190, 0.1);
+}
+
+.briefingEditorRoot :global(.cm-activeLineGutter) {
+  background: rgba(83, 124, 190, 0.16);
+  color: #dbe8ff;
+}
+
+.briefingEditorRoot :global(.cm-selectionBackground),
+.briefingEditorRoot :global(.cm-content ::selection) {
+  background: rgba(83, 124, 190, 0.35) !important;
+}
+
+.briefingEditorRoot :global(.cm-placeholder) {
+  color: #6f7b8f;
 }
 
 /* Промежуточный wrapper Mantine Textarea — растягиваем в колонке. */
-.briefingEditorWrapper {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-}
-
 .briefingToolbar {
   display: flex;
   flex-wrap: wrap;
@@ -833,21 +891,6 @@
   box-shadow: 0 0 0 2px rgba(90, 124, 174, 0.25);
 }
 
-.briefingEditorInput {
-  flex: 1 1 auto;
-  width: 100%;
-  height: 100%;
-  min-height: 132px;
-  max-height: none;
-  background-color: #11161f;
-  border-color: #273242;
-  color: #d6dce6;
-  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  line-height: 1.45;
-  font-size: 12px;
-  resize: none;
-}
-
 .briefingPreviewPane {
   height: 100%;
   min-height: 0;
@@ -873,9 +916,30 @@
 
 .briefingMarkdown h1,
 .briefingMarkdown h2,
-.briefingMarkdown h3 {
-  margin: 0 0 8px;
+.briefingMarkdown h3,
+.briefingMarkdown h4,
+.briefingMarkdown h5,
+.briefingMarkdown h6 {
+  margin: 0 0 9px;
   color: #f3f5f7;
+  line-height: 1.22;
+}
+
+.briefingMarkdown h1 {
+  font-size: 20px;
+  border-bottom: 1px solid #283445;
+  padding-bottom: 7px;
+}
+
+.briefingMarkdown h2 {
+  font-size: 17px;
+}
+
+.briefingMarkdown h3,
+.briefingMarkdown h4,
+.briefingMarkdown h5,
+.briefingMarkdown h6 {
+  font-size: 14px;
 }
 
 .briefingMarkdown p {
@@ -884,8 +948,46 @@
 
 .briefingMarkdown ul,
 .briefingMarkdown ol {
-  margin: 0 0 10px 18px;
-  padding: 0;
+  margin: 0 0 10px;
+  padding-left: 22px;
+}
+
+.briefingMarkdown li {
+  margin: 3px 0;
+}
+
+.briefingMarkdown li > p {
+  margin: 0;
+}
+
+.briefingMarkdown input[type="checkbox"] {
+  margin: 0 6px 0 -18px;
+  vertical-align: middle;
+}
+
+.briefingMarkdown a {
+  color: #8ab4ff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.briefingMarkdown blockquote {
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  border-left: 3px solid #4f6f9e;
+  background: rgba(45, 67, 99, 0.22);
+  color: #bec9d8;
+  border-radius: 0 8px 8px 0;
+}
+
+.briefingMarkdown blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.briefingMarkdown hr {
+  border: 0;
+  border-top: 1px solid #2d3b4f;
+  margin: 14px 0;
 }
 
 .briefingMarkdown code {
@@ -897,11 +999,22 @@
 
 .briefingMarkdown pre {
   margin: 0 0 10px;
-  padding: 10px;
+  padding: 0;
   border-radius: 8px;
   overflow: auto;
   background: #0b1017;
   border: 1px solid #273242;
+}
+
+.briefingMarkdown pre code {
+  display: block;
+  min-width: 100%;
+  padding: 11px 12px;
+  background: transparent;
+  border-radius: 0;
+  color: #d6deeb;
+  line-height: 1.5;
+  white-space: pre;
 }
 
 .briefingMarkdown table {
@@ -1797,7 +1910,7 @@
     max-height: calc(100dvh - 120px);
   }
 
-  .briefingEditorInput {
+  .briefingEditorRoot {
     min-height: 104px;
   }
 }

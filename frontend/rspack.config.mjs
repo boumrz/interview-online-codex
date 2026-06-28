@@ -76,8 +76,20 @@ export default defineConfig({
       __FEATURE_AGENT_OPS__: JSON.stringify(process.env.FEATURE_AGENT_OPS ?? "false"),
       "process.env.FEATURE_AGENT_OPS": JSON.stringify(process.env.FEATURE_AGENT_OPS ?? "false"),
       "process.env.VITE_API_BASE_URL": JSON.stringify(process.env.VITE_API_BASE_URL ?? "/api"),
+      "process.env.VITE_LEGACY_PUBLIC_DOMAIN": JSON.stringify(
+        process.env.VITE_LEGACY_PUBLIC_DOMAIN ?? "interview.domiknote.ru"
+      ),
+      "process.env.VITE_NEW_PUBLIC_DOMAIN": JSON.stringify(
+        process.env.VITE_NEW_PUBLIC_DOMAIN ?? "interview.vtools.tech"
+      ),
+      "process.env.VITE_LEGACY_DOMAIN_SHUTDOWN_DATE": JSON.stringify(
+        process.env.VITE_LEGACY_DOMAIN_SHUTDOWN_DATE ?? "2026-07-26"
+      ),
+      "process.env.VITE_SHOW_LEGACY_DOMAIN_NOTICE": JSON.stringify(
+        process.env.VITE_SHOW_LEGACY_DOMAIN_NOTICE ?? "false"
+      ),
       "process.env.VITE_METRIKA_ALLOWED_HOSTS": JSON.stringify(
-        process.env.VITE_METRIKA_ALLOWED_HOSTS ?? "interview.vtools.tech"
+        process.env.VITE_METRIKA_ALLOWED_HOSTS ?? "interview.vtools.tech,interview.domiknote.ru"
       )
     }),
     new rspack.HtmlRspackPlugin({

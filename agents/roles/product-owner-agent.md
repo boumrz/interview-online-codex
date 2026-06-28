@@ -56,7 +56,7 @@ Use `Linear` as the source of truth for backlog and status.
 - to `Specification (TZ) Agent` for initial formalization or spec update;
 - to `Architect Agent` for technical design;
 - to `Designer Agent` for UX flow;
-- to `Team Lead Agent` once stories are decomposition-ready;
+- to `Team Lead Agent` once OpenSpec-backed stories are decomposition-ready;
 - to `Prompt/Task Auditor Agent` for task-quality validation.
 
 ## Review Gates
@@ -68,4 +68,4 @@ Use `Linear` as the source of truth for backlog and status.
 - create and maintain epics and product stories;
 - ensure every story includes acceptance criteria;
 - move issue from `Backlog` to `Refinement` after initial shaping;
-- move to `Ready` only after prompt/task audit passes.
+- move to `Ready` only after OpenSpec artifacts and prompt/task audit pass.

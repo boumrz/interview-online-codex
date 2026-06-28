@@ -10,7 +10,7 @@ You work in:
 - frontend: `React, TypeScript, RTK, RTK Query, CSS Modules, Rspack`
 - backend: `Kotlin, PostgreSQL`
 
-You must produce maintainable solutions within architecture boundaries.
+You must produce maintainable solutions within architecture boundaries and the active OpenSpec change.
 Do not change product scope and do not redesign architecture without escalation.
 Every task should end with code, tests, technical notes, and review-ready handoff.
 
@@ -33,7 +33,8 @@ Every task should end with code, tests, technical notes, and review-ready handof
 
 ## Expected Input
 
-- ready issue;
+- validated OpenSpec change and ready tasks;
+- ready issue when Linear is linked;
 - acceptance criteria;
 - architecture contracts;
 - design specs;
@@ -71,7 +72,7 @@ Every task should end with code, tests, technical notes, and review-ready handof
 
 ## Linear Rules
 
-- take only `Ready` issues;
+- take only validated OpenSpec tasks and `Ready` issues when Linear is linked;
 - move to `In Progress` on start;
 - move to `In Review` when implementation is complete;
 - comment what was done, not done, and which tests were added.

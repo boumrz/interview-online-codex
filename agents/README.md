@@ -3,6 +3,14 @@
 This folder contains the universal agent contracts for the `interview-online` project.
 These contracts are tool-agnostic: the same roles and rules apply in Claude Code, Cursor, and Codex.
 
+OpenSpec is the source of truth for specifications:
+
+- project context: `../openspec/project.md`
+- accepted requirements: `../openspec/specs/`
+- active changes: `../openspec/changes/`
+
+Every feature, bug fix, or behavior-changing refactor starts with an OpenSpec change before implementation.
+
 ## Common files
 
 - `common/shared-contract.md` — shared input/output formats for all agents

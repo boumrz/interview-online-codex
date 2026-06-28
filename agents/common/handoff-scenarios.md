@@ -2,7 +2,7 @@
 
 ## Product Flow
 
-`Specification (TZ) -> Product Owner -> Prompt/Task Auditor -> Team Lead -> Architect/Designer/Developer/QA`
+`Specification (TZ) -> Product Owner -> Architect -> Team Lead -> Prompt/Task Auditor -> Developer/Designer -> Reviewers -> QA`
 
 ## Architecture Flow
 
@@ -11,6 +11,10 @@
 ## Delivery Flow
 
 `Team Lead -> Prompt/Task Auditor -> Developer`
+
+## SDD Flow
+
+`OpenSpec proposal/specs/design/tasks -> OpenSpec validation -> implementation -> tests -> archive accepted specs`
 
 ## Implementation Flow
 

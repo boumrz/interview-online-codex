@@ -189,7 +189,7 @@ async function typeSharedCode(interviewerPage, candidatePage) {
     "}",
   ].join("\n");
 
-  const editor = interviewerPage.locator(".cm-editor");
+  const editor = interviewerPage.locator('[data-testid="room-code-editor-host"] .cm-editor');
   await editor.waitFor({ timeout: 15000 });
   await editor.click();
 
@@ -197,7 +197,7 @@ async function typeSharedCode(interviewerPage, candidatePage) {
   // the final snippet strictly deterministic for demo recording.
   const ready = await interviewerPage.evaluate(() => {
     const host =
-      document.querySelector(".cm-host") ??
+      document.querySelector("[data-testid='room-code-editor-host']") ??
       Array.from(document.querySelectorAll("div")).find(
         (node) => Boolean(node?.__roomEditorView),
       );
@@ -210,7 +210,7 @@ async function typeSharedCode(interviewerPage, candidatePage) {
 
   await interviewerPage.evaluate(() => {
     const host =
-      document.querySelector(".cm-host") ??
+      document.querySelector("[data-testid='room-code-editor-host']") ??
       Array.from(document.querySelectorAll("div")).find(
         (node) => Boolean(node?.__roomEditorView),
       );
@@ -226,7 +226,7 @@ async function typeSharedCode(interviewerPage, candidatePage) {
     const nextText = codeSnippet.slice(0, i);
     await interviewerPage.evaluate((text) => {
       const host =
-        document.querySelector(".cm-host") ??
+        document.querySelector("[data-testid='room-code-editor-host']") ??
         Array.from(document.querySelectorAll("div")).find(
           (node) => Boolean(node?.__roomEditorView),
         );
@@ -241,7 +241,7 @@ async function typeSharedCode(interviewerPage, candidatePage) {
 
   await interviewerPage.evaluate((expected) => {
     const host =
-      document.querySelector(".cm-host") ??
+      document.querySelector("[data-testid='room-code-editor-host']") ??
       Array.from(document.querySelectorAll("div")).find(
         (node) => Boolean(node?.__roomEditorView),
       );
@@ -255,7 +255,7 @@ async function typeSharedCode(interviewerPage, candidatePage) {
   await interviewerPage.waitForFunction(
     (expected) => {
       const host =
-        document.querySelector(".cm-host") ??
+        document.querySelector("[data-testid='room-code-editor-host']") ??
         Array.from(document.querySelectorAll("div")).find(
           (node) => Boolean(node?.__roomEditorView),
         );
@@ -267,13 +267,13 @@ async function typeSharedCode(interviewerPage, candidatePage) {
   );
 
   await candidatePage
-    .locator(".cm-content")
+    .locator('[data-testid="room-code-editor-host"] .cm-content')
     .getByText("function twoSum(nums, target)", { exact: false })
     .waitFor({ timeout: 10000 });
   await candidatePage.waitForFunction(
     (expected) => {
       const host =
-        document.querySelector(".cm-host") ??
+        document.querySelector("[data-testid='room-code-editor-host']") ??
         Array.from(document.querySelectorAll("div")).find(
           (node) => Boolean(node?.__roomEditorView),
         );
@@ -338,14 +338,14 @@ try {
   await interviewerPage.goto(`${webBaseUrl}/room/${room.inviteCode}`, {
     waitUntil: "domcontentloaded",
   });
-  await interviewerPage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await interviewerPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
   await interviewerPage.waitForTimeout(900);
 
   await candidatePage.goto(`${webBaseUrl}/room/${room.inviteCode}`, {
     waitUntil: "domcontentloaded",
   });
   await enterNameIfPrompted(candidatePage, "Candidate Demo");
-  await candidatePage.locator(".cm-editor").waitFor({ timeout: 15000 });
+  await candidatePage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
   await candidatePage.waitForTimeout(900);
 
   await typeSharedCode(interviewerPage, candidatePage);
