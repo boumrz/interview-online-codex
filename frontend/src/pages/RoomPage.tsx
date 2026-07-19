@@ -44,20 +44,23 @@ import {
 } from "@tabler/icons-react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAppSelector } from "../app/hooks";
-import { markdownToHtml } from "../components/markdown";
 import { useEscapeLayer } from "../components/useEscapeLayer";
 import {
   useAddRoomTasksMutation,
   useDeleteRoomTaskMutation,
   useUpdateRoomTaskMutation,
   useGetRoomQuery,
+  useGetRoomTaskWorkspaceQuery,
   useTasksGroupedQuery,
   useSetVerdictMutation,
 } from "../services/api";
 import { VerdictBadge } from "../features/room/VerdictBadge";
 import { ActivityTimeline } from "../features/room/ActivityTimeline";
-import { setVisitParams, trackEvent } from "../services/analytics";
-import { useRoomSocket } from "../features/room/useRoomSocket";
+import { PRODUCT_METRIKA_EVENT, setVisitParams, trackEvent } from "../services/analytics";
+import {
+  useRoomSocket,
+  type ManagerWorkspaceRealtimeState,
+} from "../features/room/useRoomSocket";
 import {
   buildModifierPrefix,
   formatCandidateKey,
@@ -98,6 +101,8 @@ import {
 import {
   RoomCodeEditor,
   type YjsUpdateHandler,
+  type YjsRemoteUpdateApplier,
+  type YjsSnapshotEmitter,
 } from "../features/room/RoomCodeEditor";
 import { BriefingBoard } from "../features/room/BriefingBoard";
 import {
@@ -110,7 +115,7 @@ import {
   LANGUAGES,
   type Participant,
 } from "../features/room/TopBar";
-import type { RoomTask, TaskTemplate } from "../types";
+import type { RoomTask, RoomTaskWorkspace, TaskTemplate } from "../types";
 
 import styles from "./RoomPage.module.css";
 
@@ -563,6 +568,35 @@ function guestNameKey(inviteCode: string) {
   return `guest_display_name_${inviteCode}`;
 }
 
+/**
+ * The selected task is private to one manager and deliberately never becomes
+ * part of room state. Session storage keeps that private preview available on
+ * a refresh without leaking it to another browser or participant.
+ */
+function managerSelectedStepKey(inviteCode: string) {
+  return `room_manager_selected_step_${inviteCode}`;
+}
+
+function readManagerSelectedStep(inviteCode: string): number | null {
+  try {
+    const value = Number.parseInt(
+      sessionStorage.getItem(managerSelectedStepKey(inviteCode)) ?? "",
+      10,
+    );
+    return Number.isInteger(value) && value >= 0 ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistManagerSelectedStep(inviteCode: string, stepIndex: number) {
+  try {
+    sessionStorage.setItem(managerSelectedStepKey(inviteCode), String(stepIndex));
+  } catch {
+    // A blocked browser storage must not prevent local step navigation.
+  }
+}
+
 function readStoredDisplayName(inviteCode: string) {
   const roomScoped = (
     localStorage.getItem(guestNameKey(inviteCode)) ?? ""
@@ -655,12 +689,32 @@ export function RoomPage() {
   const [setVerdict, { isLoading: isSettingVerdict }] = useSetVerdictMutation();
   const [briefingDraft, setBriefingDraft] = useState("");
   const [briefingDirty, setBriefingDirty] = useState(false);
+  const [stepChangeNotification, setStepChangeNotification] = useState<{
+    stepIndex: number;
+    title: string;
+  } | null>(null);
+  const previousPublishedStepRef = useRef<number | null>(null);
+  /** Server-authoritative manager-only state for the selected inactive task. */
+  const [managerWorkspace, setManagerWorkspace] =
+    useState<RoomTaskWorkspace | null>(null);
+  const managerWorkspaceRef = useRef<RoomTaskWorkspace | null>(null);
+  const managerYjsApplyRef = useRef<YjsRemoteUpdateApplier | null>(null);
+  const managerYjsSnapshotRef = useRef<YjsSnapshotEmitter | null>(null);
+  const lastManagerYjsRecoveryKeyRef = useRef<string | null>(null);
+  const managerAwarenessApplyRef = useRef<((update: string) => void) | null>(null);
+  const managerYjsPendingUpdatesRef = useRef<Array<{
+    stepIndex: number;
+    update: string;
+    yjsSequence?: number | null;
+  }>>([]);
+  const managerAwarenessPendingUpdatesRef = useRef<Array<{ stepIndex: number; update: string }>>([]);
   const [resyncSignal, setResyncSignal] = useState(0);
   const [awaitingRecoverySync, setAwaitingRecoverySync] = useState(false);
   const awaitingRecoverySyncRef = useRef(false);
   const roomOpenedTrackedInviteRef = useRef("");
   const previousParticipantsCountRef = useRef<number | null>(null);
   const firstCodeEditTrackedRef = useRef(false);
+  const candidateJoinedTrackedRef = useRef(false);
   const lastErrorMetricRef = useRef<{ message: string; at: number }>({
     message: "",
     at: 0,
@@ -682,6 +736,7 @@ export function RoomPage() {
 
   useEffect(() => {
     firstCodeEditTrackedRef.current = false;
+    candidateJoinedTrackedRef.current = false;
     roomOpenedTrackedInviteRef.current = "";
     previousParticipantsCountRef.current = null;
   }, [inviteCode]);
@@ -770,6 +825,37 @@ export function RoomPage() {
   const mergedNotes = merged?.notes ?? "";
   const mergedBriefingMarkdown = merged?.briefingMarkdown ?? "";
   const canManageRoom = merged?.canManageRoom ?? false;
+  const selectedManagerStep =
+    localStepIntent !== null &&
+    mergedTasks.some((task) => task.stepIndex === localStepIntent)
+      ? localStepIntent
+      : (merged?.currentStep ?? 0);
+  const isLocalWorkspacePreview =
+    canManageRoom &&
+    merged !== null &&
+    selectedManagerStep !== merged.currentStep;
+  const localPreviewTask = mergedTasks.find(
+    (task) => task.stepIndex === selectedManagerStep,
+  );
+  const {
+    data: localWorkspaceSnapshot,
+    isFetching: isLocalWorkspaceSnapshotFetching,
+    refetch: refetchLocalWorkspaceSnapshot,
+  } = useGetRoomTaskWorkspaceQuery(
+    {
+      inviteCode,
+      stepIndex: selectedManagerStep,
+      ownerToken: ownerToken ?? undefined,
+      eventToken: merged?.eventToken ?? undefined,
+    },
+    {
+      skip: !isLocalWorkspacePreview,
+      // A task may have been globally active and edited since this manager
+      // last previewed it. Re-entering the static preview must therefore not
+      // reuse a stale saved workspace from RTK Query's cache.
+      refetchOnMountOrArgChange: true,
+    },
+  );
   const { data: taskCatalogGroups = [] } = useTasksGroupedQuery(undefined, {
     skip: !authToken || !canManageRoom,
   });
@@ -889,18 +975,63 @@ export function RoomPage() {
   const activePrivateBlockName = activePrivateBlockInfo?.label ?? null;
 
   /**
-   * Seed `localStepIntent` once per room from the current room step.
-   * Subsequent step changes by *other* interviewers must not move this
-   * viewer's intent — only their own navigation does (see
-   * `selectStepLocally`). Without this, a remote step switch would move
-   * everyone's notes block at the same time, kicking other interviewers
-   * out of whatever they were typing.
+   * Restore a manager's private task choice for this browser session. The
+   * published room step is used only for a new/invalid selection; later room
+   * updates must move the shared workspace and its marker, not this choice.
    */
   useEffect(() => {
-    if (!merged) return;
-    if (localStepIntent !== null) return;
-    setLocalStepIntent(merged.currentStep);
-  }, [merged, localStepIntent]);
+    if (!merged || !canManageRoom || mergedTasks.length === 0) return;
+
+    const isValidStep = (stepIndex: number | null): stepIndex is number =>
+      stepIndex !== null &&
+      mergedTasks.some((task) => task.stepIndex === stepIndex);
+
+    if (isValidStep(localStepIntent)) {
+      persistManagerSelectedStep(inviteCode, localStepIntent);
+      return;
+    }
+
+    const storedStep = readManagerSelectedStep(inviteCode);
+    const nextStep = isValidStep(storedStep)
+      ? storedStep
+      : merged.currentStep;
+
+    if (localStepIntent !== nextStep) {
+      setLocalStepIntent(nextStep);
+    }
+    persistManagerSelectedStep(inviteCode, nextStep);
+  }, [canManageRoom, inviteCode, localStepIntent, merged, mergedTasks]);
+
+  useEffect(() => {
+    if (!canManageRoom || !merged) {
+      previousPublishedStepRef.current = null;
+      return;
+    }
+    const nextPublishedStep = merged.currentStep;
+    const previousPublishedStep = previousPublishedStepRef.current;
+    previousPublishedStepRef.current = nextPublishedStep;
+    if (
+      previousPublishedStep == null ||
+      previousPublishedStep === nextPublishedStep ||
+      localStepIntent === nextPublishedStep
+    ) {
+      return;
+    }
+    const title =
+      mergedTasks.find((task) => task.stepIndex === nextPublishedStep)?.title ??
+      `Шаг ${nextPublishedStep + 1}`;
+    setStepChangeNotification({ stepIndex: nextPublishedStep, title });
+  }, [canManageRoom, localStepIntent, merged, mergedTasks]);
+
+  useEffect(() => {
+    if (
+      stepChangeNotification &&
+      (stepChangeNotification.stepIndex === localStepIntent ||
+        localStepIntent === merged?.currentStep)
+    ) {
+      setStepChangeNotification(null);
+    }
+  }, [localStepIntent, merged?.currentStep, stepChangeNotification]);
 
   /**
    * Keep the active private block in lock-step with the *local* viewer's
@@ -949,9 +1080,9 @@ export function RoomPage() {
   const sessionIdRef = useRef<string>("");
   const localParticipantIdentityKeyRef = useRef<string | null>(null);
   const yjsPendingUpdatesRef = useRef<
-    Array<{ syncKey: string; update: string }>
+    Array<{ syncKey: string; update: string; yjsSequence?: number | null }>
   >([]);
-  const yjsApplyUpdateRef = useRef<((yjsUpdate: string) => void) | null>(null);
+  const yjsApplyUpdateRef = useRef<YjsRemoteUpdateApplier | null>(null);
   const lastKnownServerYjsSequenceRef = useRef(0);
   const awarenessApplyRef = useRef<((b64: string) => void) | null>(null);
   /** Awareness may arrive over SSE before RoomCodeEditor registers the applier (same race as yjs). */
@@ -1213,7 +1344,7 @@ export function RoomPage() {
     if (previous.message === normalized && now - previous.at < 3000) return;
     lastErrorMetricRef.current = { message: normalized, at: now };
     trackEvent("prod_room_error", {
-      message: normalized.slice(0, 120),
+      error_code: "room_state_error",
     });
   }, []);
 
@@ -1421,10 +1552,14 @@ export function RoomPage() {
         yjsSequence: payload.yjsSequence ?? null,
       });
       if (yjsApplyUpdateRef.current) {
-        yjsApplyUpdateRef.current(update);
+        yjsApplyUpdateRef.current(update, payload.yjsSequence);
         return;
       }
-      yjsPendingUpdatesRef.current.push({ syncKey: incomingSyncKey, update });
+      yjsPendingUpdatesRef.current.push({
+        syncKey: incomingSyncKey,
+        update,
+        yjsSequence: payload.yjsSequence,
+      });
       if (yjsPendingUpdatesRef.current.length > 200) {
         yjsPendingUpdatesRef.current.splice(
           0,
@@ -1436,7 +1571,7 @@ export function RoomPage() {
   );
 
   const onYjsBridgeReady = useCallback(
-    (applyUpdate: ((yjsUpdate: string) => void) | null) => {
+    (applyUpdate: YjsRemoteUpdateApplier | null) => {
       yjsApplyUpdateRef.current = applyUpdate;
       if (!applyUpdate) return;
       const targetSyncKey = syncKeyRef.current;
@@ -1446,7 +1581,7 @@ export function RoomPage() {
       );
       pending
         .filter((item) => item.syncKey === targetSyncKey)
-        .forEach((item) => applyUpdate(item.update));
+        .forEach((item) => applyUpdate(item.update, item.yjsSequence));
     },
     [],
   );
@@ -1500,12 +1635,118 @@ export function RoomPage() {
     [],
   );
 
+  const onManagerWorkspaceSync = useCallback(
+    (payload: ManagerWorkspaceRealtimeState) => {
+      const current = managerWorkspaceRef.current;
+      if (
+        !payload.recovery &&
+        current?.stepIndex === payload.stepIndex &&
+        ((payload.revision ?? 0) < (current.revision ?? 0) ||
+          ((payload.revision ?? 0) === (current.revision ?? 0) &&
+            (payload.yjsSequence ?? 0) < (current.yjsSequence ?? 0)))
+      ) {
+        return;
+      }
+      const next: RoomTaskWorkspace = {
+        stepIndex: payload.stepIndex,
+        title: payload.title,
+        language: normalizeRoomLanguage(payload.language),
+        code: payload.code,
+        briefingMarkdown: payload.briefingMarkdown,
+        revision: payload.revision,
+        yjsDocumentBase64: payload.yjsDocumentBase64 ?? null,
+        yjsSequence: payload.yjsSequence ?? 0,
+        focusMode: payload.focusMode === true,
+      };
+      managerWorkspaceRef.current = next;
+      setManagerWorkspace(next);
+      const recoverySnapshot = payload.recovery
+        ? payload.yjsDocumentBase64?.trim()
+        : "";
+      if (!recoverySnapshot || !managerYjsApplyRef.current) return;
+      const recoveryKey = `${payload.stepIndex}:${payload.yjsSequence ?? 0}:${recoverySnapshot}`;
+      if (lastManagerYjsRecoveryKeyRef.current === recoveryKey) return;
+      lastManagerYjsRecoveryKeyRef.current = recoveryKey;
+      // Applying the canonical snapshot with the `remote` origin merges it
+      // into the local Y.Doc without re-emitting an intermediate update. The
+      // queued full snapshot below then rebases any local concurrent edit.
+      managerYjsApplyRef.current(recoverySnapshot, payload.yjsSequence);
+      window.setTimeout(() => {
+        if (managerWorkspaceRef.current?.stepIndex === payload.stepIndex) {
+          managerYjsSnapshotRef.current?.();
+        }
+      }, 0);
+    },
+    [],
+  );
+
+  const onManagerWorkspaceYjsUpdate = useCallback(
+    (payload: {
+      stepIndex: number;
+      sessionId: string;
+      yjsUpdate: string;
+      yjsSequence?: number | null;
+    }) => {
+      if (payload.sessionId === sessionIdRef.current) return;
+      const update = payload.yjsUpdate.trim();
+      if (!update) return;
+      const current = managerWorkspaceRef.current;
+      if (current?.stepIndex !== payload.stepIndex) return;
+      const incomingSequence =
+        typeof payload.yjsSequence === "number" && Number.isFinite(payload.yjsSequence)
+          ? Math.max(0, Math.floor(payload.yjsSequence))
+          : current.yjsSequence ?? 0;
+      if (incomingSequence > (current.yjsSequence ?? 0)) {
+        const next = { ...current, yjsSequence: incomingSequence };
+        managerWorkspaceRef.current = next;
+        setManagerWorkspace(next);
+      }
+      if (managerYjsApplyRef.current) {
+        managerYjsApplyRef.current(update, incomingSequence);
+        return;
+      }
+      managerYjsPendingUpdatesRef.current.push({
+        stepIndex: payload.stepIndex,
+        update,
+        yjsSequence: incomingSequence,
+      });
+      if (managerYjsPendingUpdatesRef.current.length > 200) {
+        managerYjsPendingUpdatesRef.current.splice(
+          0,
+          managerYjsPendingUpdatesRef.current.length - 200,
+        );
+      }
+    },
+    [],
+  );
+
+  const onManagerWorkspaceAwarenessUpdate = useCallback(
+    (payload: { stepIndex: number; sessionId: string; awarenessUpdate: string }) => {
+      if (payload.sessionId === sessionIdRef.current) return;
+      const update = payload.awarenessUpdate.trim();
+      if (!update || managerWorkspaceRef.current?.stepIndex !== payload.stepIndex) return;
+      if (managerAwarenessApplyRef.current) {
+        managerAwarenessApplyRef.current(update);
+        return;
+      }
+      managerAwarenessPendingUpdatesRef.current.push({ stepIndex: payload.stepIndex, update });
+      if (managerAwarenessPendingUpdatesRef.current.length > 200) {
+        managerAwarenessPendingUpdatesRef.current.splice(
+          0,
+          managerAwarenessPendingUpdatesRef.current.length - 200,
+        );
+      }
+    },
+    [],
+  );
+
   const fallbackDisplayName = authUser?.displayName?.trim() || "Участник";
   const effectiveDisplayName = displayName.trim() || fallbackDisplayName;
   const canConnect =
     Boolean(inviteCode) && (Boolean(authToken) || Boolean(displayName.trim()));
   const {
     connected,
+    accessDenied: realtimeAccessDenied,
     participantId,
     sessionId,
     sendLanguageUpdate,
@@ -1518,6 +1759,13 @@ export function RoomPage() {
     sendRevokeInterviewerAccess,
     sendAwarenessUpdate,
     sendYjsUpdate,
+    openManagerWorkspace,
+    closeManagerWorkspace,
+    sendManagerWorkspaceYjsUpdate,
+    sendManagerWorkspaceBriefingUpdate,
+    sendManagerWorkspaceLanguageUpdate,
+    sendManagerWorkspaceFocusModeUpdate,
+    sendManagerWorkspaceAwarenessUpdate,
     sendKeyPress,
   } = useRoomSocket({
     enabled: canConnect,
@@ -1531,6 +1779,9 @@ export function RoomPage() {
     onCandidateKey,
     onYjsUpdate,
     onAwarenessUpdate: onAwarenessUpdateSocket,
+    onManagerWorkspaceSync,
+    onManagerWorkspaceYjsUpdate,
+    onManagerWorkspaceAwarenessUpdate,
     onRecoveryStateSync,
     onRequireRecoverySync: markRecoverySyncPending,
   });
@@ -1543,16 +1794,76 @@ export function RoomPage() {
     });
   }, [authUser?.id, participantId, sessionId]);
 
+  useEffect(() => {
+    if (!isLocalWorkspacePreview || !connected) {
+      const previousStep = managerWorkspaceRef.current?.stepIndex;
+      if (previousStep != null) closeManagerWorkspace(previousStep);
+      managerWorkspaceRef.current = null;
+      setManagerWorkspace(null);
+      managerYjsApplyRef.current = null;
+      managerYjsSnapshotRef.current = null;
+      managerAwarenessApplyRef.current = null;
+      return;
+    }
+    openManagerWorkspace(selectedManagerStep);
+    void refetchLocalWorkspaceSnapshot();
+    return () => closeManagerWorkspace(selectedManagerStep);
+    // Transport callbacks intentionally use stable refs inside useRoomSocket.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    connected,
+    isLocalWorkspacePreview,
+    selectedManagerStep,
+    localPreviewTask?.title,
+    refetchLocalWorkspaceSnapshot,
+  ]);
+
+  useEffect(() => {
+    if (!isLocalWorkspacePreview || !localWorkspaceSnapshot) return;
+    const current = managerWorkspaceRef.current;
+    if (
+      current?.stepIndex === localWorkspaceSnapshot.stepIndex &&
+      (localWorkspaceSnapshot.revision ?? 0) <= (current.revision ?? 0) &&
+      (localWorkspaceSnapshot.yjsSequence ?? 0) <= (current.yjsSequence ?? 0)
+    ) {
+      return;
+    }
+    onManagerWorkspaceSync({
+      stepIndex: localWorkspaceSnapshot.stepIndex,
+      title: localWorkspaceSnapshot.title,
+      language: localWorkspaceSnapshot.language,
+      code: localWorkspaceSnapshot.code,
+      briefingMarkdown: localWorkspaceSnapshot.briefingMarkdown,
+      revision: localWorkspaceSnapshot.revision ?? 0,
+      yjsDocumentBase64: localWorkspaceSnapshot.yjsDocumentBase64 ?? null,
+      yjsSequence: localWorkspaceSnapshot.yjsSequence ?? 0,
+      focusMode: localWorkspaceSnapshot.focusMode === true,
+    });
+  }, [isLocalWorkspacePreview, localWorkspaceSnapshot, onManagerWorkspaceSync]);
+
   /**
-   * Локальная навигация по шагам интервью. Кроме отправки `set_step` на
-   * сервер, обновляет `localStepIntent` — это единственный триггер для
-   * автосмены активного блока в личных заметках. Чужая навигация (другой
-   * интервьюер кликнул шаг) сюда не доходит, поэтому их клик не сбивает
-   * нам активный блок и текущую запись.
+   * Choosing a task is a manager-private preview. Only the explicit publish
+   * action below is allowed to emit the room-wide `set_step` event.
    */
   const selectStepLocally = useCallback(
     (stepIndex: number) => {
       setLocalStepIntent(stepIndex);
+      persistManagerSelectedStep(inviteCode, stepIndex);
+    },
+    [inviteCode],
+  );
+
+  const publishSelectedStep = useCallback(
+    (stepIndex: number) => {
+      // Publishing is this manager's explicit acknowledgement of the room-wide
+      // transition, so a notice about an earlier publication is no longer relevant.
+      setStepChangeNotification(null);
+      if (managerWorkspaceRef.current?.stepIndex === stepIndex) {
+        // Queue the currently merged manager document before `set_step`.
+        // useRoomSocket serialises both events, so publication cannot read a
+        // previously persisted Yjs snapshot from another manager session.
+        managerYjsSnapshotRef.current?.();
+      }
       sendSetStep(stepIndex);
     },
     [sendSetStep],
@@ -1635,15 +1946,33 @@ export function RoomPage() {
           trackEvent("prod_first_code_edit", {
             invite_code_len: inviteCode.length,
           });
+          if (merged?.role === "candidate") {
+            trackEvent(PRODUCT_METRIKA_EVENT.meaningfulCandidateActivity, {
+              actor_role: "candidate",
+              schema_version: "v1",
+            });
+          }
         }
         lastKnownServerYjsSequenceRef.current = baseServerYjsSequence + 1;
       }
     },
-    [inviteCode, sendYjsUpdate],
+    [inviteCode, merged?.role, sendYjsUpdate],
   );
 
   const hasRealtimeState = Boolean(state);
   const participantsCount = state?.participants.length ?? 0;
+
+  useEffect(() => {
+    if (!merged || merged.role !== "candidate" || !connected || !hasRealtimeState) return;
+    if (candidateJoinedTrackedRef.current) return;
+    candidateJoinedTrackedRef.current = true;
+    trackEvent(PRODUCT_METRIKA_EVENT.candidateJoined, {
+      actor_role: "candidate",
+      auth_status: authToken ? "authenticated" : "anonymous",
+      entry_point: "direct_invite",
+      schema_version: "v1",
+    });
+  }, [authToken, connected, hasRealtimeState, merged]);
 
   useEffect(() => {
     if (!merged) return;
@@ -2149,6 +2478,12 @@ export function RoomPage() {
         ownerToken: ownerToken ?? undefined,
         eventToken: merged?.eventToken ?? undefined,
       }).unwrap();
+      trackEvent(PRODUCT_METRIKA_EVENT.verdictSaved, {
+        actor_role: merged?.role === "interviewer" ? "interviewer" : "owner",
+        verdict_code: selectedVerdict,
+        has_comment: Boolean(verdictComment.trim()),
+        schema_version: "v1",
+      });
       setVerdictModalOpen(false);
     } catch {
       // ошибка отображается через toast или игнорируется в MVP
@@ -2158,7 +2493,7 @@ export function RoomPage() {
   const goToLoginAndReturn = () => {
     const next = `${location.pathname}${location.search}`;
     trackEvent("prod_room_go_to_login", {
-      next_path: next,
+      entry_point: "room",
     });
     navigate(`/login?next=${encodeURIComponent(next)}`);
   };
@@ -2207,6 +2542,15 @@ export function RoomPage() {
   const step = mergedTasks.find(
     (task) => task.stepIndex === merged.currentStep,
   );
+  const localSelectedStep =
+    selectedManagerStep;
+  const localWorkspacePreview: RoomTaskWorkspace | null =
+    isLocalWorkspacePreview && localPreviewTask
+      ? (managerWorkspace?.stepIndex === selectedManagerStep &&
+          managerWorkspace.title === localPreviewTask.title
+          ? managerWorkspace
+          : null)
+      : null;
   const currentTaskRating =
     merged.taskScores[String(merged.currentStep)] ?? step?.score ?? null;
   const stepStarterCode = step?.starterCode ?? "";
@@ -2240,6 +2584,132 @@ export function RoomPage() {
       ? applyBriefingFocusMode(cleanValue, true)
       : cleanValue;
     changeBriefingMarkdown(withFocus);
+  };
+
+  const applyManagerWorkspacePatch = (patch: Partial<RoomTaskWorkspace>) => {
+    const current = managerWorkspaceRef.current;
+    if (!current) return;
+    const next = { ...current, ...patch };
+    managerWorkspaceRef.current = next;
+    setManagerWorkspace(next);
+  };
+
+  const selectedManagerWorkspace = (): RoomTaskWorkspace | null => {
+    const current = managerWorkspaceRef.current ?? localWorkspacePreview;
+    if (!current) return null;
+    if (managerWorkspaceRef.current == null) {
+      managerWorkspaceRef.current = current;
+      setManagerWorkspace(current);
+    }
+    return current;
+  };
+
+  const managerWorkspaceBriefing = localWorkspacePreview?.briefingMarkdown ?? "";
+  const managerWorkspaceFocusMode =
+    localWorkspacePreview?.focusMode ?? extractFocusMode(managerWorkspaceBriefing);
+
+  const handleManagerWorkspaceBriefingChange = (cleanValue: string) => {
+    const workspace = selectedManagerWorkspace();
+    if (!workspace) return;
+    const briefingMarkdown = cleanValue;
+    applyManagerWorkspacePatch({
+      briefingMarkdown,
+      revision: (workspace.revision ?? 0) + 1,
+    });
+    sendManagerWorkspaceBriefingUpdate(
+      workspace.stepIndex,
+      briefingMarkdown,
+      workspace.revision ?? 0,
+    );
+  };
+
+  const handleManagerWorkspaceFocusModeChange = (nextFocusMode: boolean) => {
+    const workspace = selectedManagerWorkspace();
+    if (!workspace) return;
+    applyManagerWorkspacePatch({
+      focusMode: nextFocusMode,
+      revision: (workspace.revision ?? 0) + 1,
+    });
+    sendManagerWorkspaceFocusModeUpdate(
+      workspace.stepIndex,
+      nextFocusMode,
+      workspace.revision ?? 0,
+    );
+  };
+
+  const handleManagerWorkspaceLanguageChange = (nextLanguage: string) => {
+    // Changing the language remounts the task-scoped editor. Capture the
+    // currently merged document first, otherwise a positive Yjs sequence with
+    // no local snapshot can boot the new editor as an empty document.
+    managerYjsSnapshotRef.current?.();
+    const workspace = selectedManagerWorkspace();
+    if (!workspace) return;
+    const language = normalizeRoomLanguage(nextLanguage);
+    applyManagerWorkspacePatch({
+      language,
+      revision: (workspace.revision ?? 0) + 1,
+    });
+    sendManagerWorkspaceLanguageUpdate(
+      workspace.stepIndex,
+      language,
+      workspace.revision ?? 0,
+    );
+  };
+
+  const handleManagerWorkspaceYjsUpdate = (
+    yjsUpdate: string,
+    _syncKey?: string | null,
+    codeSnapshot?: string | null,
+    yjsDocumentBase64?: string | null,
+    baseServerYjsSequence?: number | null,
+  ) => {
+    const workspace = selectedManagerWorkspace();
+    if (!workspace) return;
+    const documentSnapshot = yjsDocumentBase64?.trim() || null;
+    if (codeSnapshot != null || documentSnapshot != null) {
+      applyManagerWorkspacePatch({
+        ...(codeSnapshot != null ? { code: codeSnapshot } : {}),
+        ...(documentSnapshot != null ? { yjsDocumentBase64: documentSnapshot } : {}),
+      });
+    }
+    sendManagerWorkspaceYjsUpdate(
+      workspace.stepIndex,
+      yjsUpdate,
+      codeSnapshot,
+      yjsDocumentBase64,
+      baseServerYjsSequence,
+    );
+  };
+
+  const onManagerYjsBridgeReady = (applyUpdate: YjsRemoteUpdateApplier | null) => {
+    managerYjsApplyRef.current = applyUpdate;
+    if (!applyUpdate) return;
+    const stepIndex = managerWorkspaceRef.current?.stepIndex;
+    if (stepIndex == null) return;
+    const pending = managerYjsPendingUpdatesRef.current.splice(0);
+    pending
+      .filter((item) => item.stepIndex === stepIndex)
+      .forEach((item) => applyUpdate(item.update, item.yjsSequence));
+  };
+
+  const onManagerYjsSnapshotBridgeReady = (emitSnapshot: YjsSnapshotEmitter | null) => {
+    managerYjsSnapshotRef.current = emitSnapshot;
+  };
+
+  const onManagerAwarenessBridgeReady = (applyUpdate: ((awarenessUpdate: string) => void) | null) => {
+    managerAwarenessApplyRef.current = applyUpdate;
+    if (!applyUpdate) return;
+    const stepIndex = managerWorkspaceRef.current?.stepIndex;
+    if (stepIndex == null) return;
+    const pending = managerAwarenessPendingUpdatesRef.current.splice(0);
+    pending
+      .filter((item) => item.stepIndex === stepIndex)
+      .forEach((item) => applyUpdate(item.update));
+  };
+
+  const sendManagerWorkspaceAwareness = (awarenessUpdate: string) => {
+    const stepIndex = managerWorkspaceRef.current?.stepIndex;
+    if (stepIndex != null) sendManagerWorkspaceAwarenessUpdate(stepIndex, awarenessUpdate);
   };
 
   return (
@@ -2300,18 +2770,85 @@ export function RoomPage() {
           participants={merged.participants}
           showParticipants={canManageRoom}
           showLanguageControl={canManageRoom}
-          currentLanguage={normalizeRoomLanguage(merged.language)}
-          onLanguageChange={(value) => value && sendLanguageUpdate(value)}
+          currentLanguage={normalizeRoomLanguage(localWorkspacePreview?.language ?? merged.language)}
+          onLanguageChange={(value) => {
+            if (!value) return;
+            if (localWorkspacePreview) {
+              handleManagerWorkspaceLanguageChange(value);
+              return;
+            }
+            sendLanguageUpdate(value);
+          }}
           canGrantAccess={Boolean(merged.canGrantAccess)}
           onToggleInterviewerRole={toggleParticipantInterviewerRole}
         />
 
-        {canManageRoom ? (
+        {canManageRoom && stepChangeNotification ? (
+          <section
+            className={styles.stepChangeNotification}
+            role="status"
+            aria-live="polite"
+            data-testid="room-step-change-notification"
+          >
+            <div className={styles.stepChangeNotificationCopy}>
+              <Text size="sm" fw={700} c="#e8eef8">
+                Активный шаг изменён
+              </Text>
+              <Text size="xs" c="#b7c5d8">
+                {`В комнате активна задача «${stepChangeNotification.title}». Переключитесь на неё, чтобы продолжить вместе с кандидатом.`}
+              </Text>
+            </div>
+            <Button
+              size="compact-xs"
+              variant="light"
+              color="blue"
+              onClick={() => {
+                selectStepLocally(stepChangeNotification.stepIndex);
+                setStepChangeNotification(null);
+              }}
+            >
+              Перейти к шагу
+            </Button>
+            <ActionIcon
+              variant="subtle"
+              color="gray"
+              size="sm"
+              aria-label="Закрыть уведомление об изменении шага"
+              onClick={() => setStepChangeNotification(null)}
+            >
+              <IconX size={15} />
+            </ActionIcon>
+          </section>
+        ) : null}
+
+        {realtimeAccessDenied ? (
+          <section className={styles.realtimeAccessError} data-testid="room-realtime-access-error" role="alert">
+            <Text fw={700} size="lg">Доступ к комнате не подтверждён</Text>
+            <Text c="#b7c5d8" size="sm">
+              Проверьте ссылку-приглашение или войдите в аккаунт и откройте комнату снова.
+            </Text>
+            <Button component={Link} to="/login" variant="light" color="blue">
+              Войти в аккаунт
+            </Button>
+          </section>
+        ) : !hasRealtimeState ? (
+          <section className={styles.realtimeAccessPending} data-testid="room-realtime-access-pending" role="status">
+            <Text fw={700} size="lg">Подтверждаем доступ к комнате…</Text>
+            <Text c="#b7c5d8" size="sm">
+              Рабочая область станет доступна после подключения к комнате.
+            </Text>
+          </section>
+        ) : canManageRoom ? (
           <OwnerLayout
             merged={merged}
             tasks={mergedTasks}
             availableCatalogTasks={availableCatalogTasks}
-            stepTitle={step?.title ?? "-"}
+            localSelectedStep={localSelectedStep}
+            localWorkspacePreview={localWorkspacePreview}
+            isLocalWorkspacePreview={isLocalWorkspacePreview}
+            isLocalWorkspaceSnapshotFetching={
+              isLocalWorkspaceSnapshotFetching
+            }
             stepStarterCode={stepStarterCode}
             error={error}
             taskScores={merged.taskScores}
@@ -2344,6 +2881,14 @@ export function RoomPage() {
             briefingFocusMode={briefingFocusMode}
             onBriefingChange={handleBriefingValueChange}
             onBriefingFocusModeChange={handleBriefingFocusToggle}
+            managerWorkspaceFocusMode={managerWorkspaceFocusMode}
+            onManagerWorkspaceBriefingChange={handleManagerWorkspaceBriefingChange}
+            onManagerWorkspaceFocusModeChange={handleManagerWorkspaceFocusModeChange}
+            onManagerWorkspaceYjsUpdate={handleManagerWorkspaceYjsUpdate}
+            onManagerWorkspaceYjsBridgeReady={onManagerYjsBridgeReady}
+            onManagerWorkspaceYjsSnapshotBridgeReady={onManagerYjsSnapshotBridgeReady}
+            onManagerWorkspaceAwarenessBridgeReady={onManagerAwarenessBridgeReady}
+            sendManagerWorkspaceAwarenessUpdate={sendManagerWorkspaceAwareness}
             sessionId={sessionId}
             participantId={participantId}
             participantLabel={effectiveDisplayName}
@@ -2355,6 +2900,7 @@ export function RoomPage() {
             resyncSignal={resyncSignal}
             editorReady={editorReady}
             onSelectStep={selectStepLocally}
+            onPublishSelectedStep={publishSelectedStep}
             onAddTasksFromCatalog={addTasksFromCatalog}
             onAddCustomTask={addCustomTaskToRoom}
             onRenameTask={renameRoomTaskTitle}
@@ -2425,7 +2971,10 @@ function OwnerLayout({
   merged,
   tasks,
   availableCatalogTasks,
-  stepTitle,
+  localSelectedStep,
+  localWorkspacePreview,
+  isLocalWorkspacePreview,
+  isLocalWorkspaceSnapshotFetching,
   stepStarterCode,
   error,
   taskScores,
@@ -2456,6 +3005,14 @@ function OwnerLayout({
   briefingFocusMode,
   onBriefingChange,
   onBriefingFocusModeChange,
+  managerWorkspaceFocusMode,
+  onManagerWorkspaceBriefingChange,
+  onManagerWorkspaceFocusModeChange,
+  onManagerWorkspaceYjsUpdate,
+  onManagerWorkspaceYjsBridgeReady,
+  onManagerWorkspaceYjsSnapshotBridgeReady,
+  onManagerWorkspaceAwarenessBridgeReady,
+  sendManagerWorkspaceAwarenessUpdate,
   sessionId,
   participantId,
   participantLabel,
@@ -2467,6 +3024,7 @@ function OwnerLayout({
   resyncSignal,
   editorReady,
   onSelectStep,
+  onPublishSelectedStep,
   onAddTasksFromCatalog,
   onAddCustomTask,
   onRenameTask,
@@ -2498,7 +3056,11 @@ function OwnerLayout({
     score: number | null;
   }>;
   availableCatalogTasks: TaskTemplate[];
-  stepTitle: string;
+  localSelectedStep: number;
+  /** A manager-shared editable workspace while the selected task is not published. */
+  localWorkspacePreview: RoomTaskWorkspace | null;
+  isLocalWorkspacePreview: boolean;
+  isLocalWorkspaceSnapshotFetching: boolean;
   stepStarterCode: string;
   error: string;
   taskScores: Record<string, number | null>;
@@ -2547,6 +3109,14 @@ function OwnerLayout({
   briefingFocusMode: boolean;
   onBriefingChange: (value: string) => void;
   onBriefingFocusModeChange: (next: boolean) => void;
+  managerWorkspaceFocusMode: boolean;
+  onManagerWorkspaceBriefingChange: (value: string) => void;
+  onManagerWorkspaceFocusModeChange: (next: boolean) => void;
+  onManagerWorkspaceYjsUpdate: YjsUpdateHandler;
+  onManagerWorkspaceYjsBridgeReady: (applyUpdate: YjsRemoteUpdateApplier | null) => void;
+  onManagerWorkspaceYjsSnapshotBridgeReady: (emitSnapshot: YjsSnapshotEmitter | null) => void;
+  onManagerWorkspaceAwarenessBridgeReady: (applyFn: ((b64: string) => void) | null) => void;
+  sendManagerWorkspaceAwarenessUpdate: (awarenessUpdate: string) => void;
   sessionId: string;
   participantId: string;
   participantLabel: string;
@@ -2558,6 +3128,7 @@ function OwnerLayout({
   resyncSignal: number;
   editorReady: boolean;
   onSelectStep: (stepIndex: number) => void;
+  onPublishSelectedStep: (stepIndex: number) => void;
   onAddTasksFromCatalog: (taskIds: string[]) => Promise<void>;
   onAddCustomTask: (task: RoomCustomTaskDraft) => Promise<void>;
   /** Rename an existing in-room task by stepIndex. */
@@ -2566,7 +3137,7 @@ function OwnerLayout({
   onDeleteTask: (stepIndex: number) => Promise<void>;
   isAddingTasksFromCatalog: boolean;
   onYjsUpdate: YjsUpdateHandler;
-  onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
+  onYjsBridgeReady: (applyUpdate: YjsRemoteUpdateApplier | null) => void;
   onEditorValueChange: (value: string) => void;
   onKeyPress: (payload: KeyPressPayload) => void;
   onTaskRatingChange: (rating: number | null) => void;
@@ -3296,7 +3867,7 @@ function OwnerLayout({
                 <div className={styles.sidebarScrollContent}>
                 <Group justify="space-between" align="center" gap={8}>
                   <Text size="xs" c="#8b919b">
-                    шаг {merged.currentStep + 1}/{Math.max(tasks.length, 1)}
+                    Шаг {localSelectedStep + 1} из {Math.max(tasks.length, 1)}
                   </Text>
                   <Group gap={6}>
                     <Button
@@ -3327,19 +3898,31 @@ function OwnerLayout({
                       taskScores[String(task.stepIndex)] ?? task.score ?? null;
                     const notesCount =
                       privateNotesCountByStep.get(task.stepIndex) ?? 0;
-                    const isActiveStep = task.stepIndex === merged.currentStep;
-                    const fullLabel = `${task.stepIndex + 1}. ${task.title}`;
+                    const isGlobalActive =
+                      task.stepIndex === merged.currentStep;
+                    const isLocalSelected =
+                      task.stepIndex === localSelectedStep;
+                    const fullLabel = `${task.stepIndex + 1}. ${task.title}${isLocalSelected ? ", выбран" : ""}${isGlobalActive ? ", активен для всех" : ""}`;
                     const canDeleteThis = tasks.length > 1;
                     return (
                       <div
                         key={task.stepIndex}
                         className={styles.stepRow}
-                        data-active={isActiveStep ? "true" : undefined}
+                        data-local-selected={
+                          isLocalSelected ? "true" : undefined
+                        }
+                        data-global-active={
+                          isGlobalActive ? "true" : undefined
+                        }
                       >
                         <button
                           type="button"
                           className={styles.stepRowMain}
-                          aria-current={isActiveStep ? "step" : undefined}
+                          data-testid={`room-step-row-${task.stepIndex}`}
+                          data-local-selected={
+                            isLocalSelected ? "true" : undefined
+                          }
+                          aria-current={isLocalSelected ? "step" : undefined}
                           aria-label={fullLabel}
                           onClick={() => handleTaskStepSelect(task.stepIndex)}
                           title={fullLabel}
@@ -3381,8 +3964,28 @@ function OwnerLayout({
                                 </span>
                               </Tooltip>
                             ) : null}
+                            {isGlobalActive ? (
+                              <span
+                                className={styles.globalActiveStepMarker}
+                                data-testid={`room-global-active-step-${task.stepIndex}`}
+                                aria-label={`Активная для всех задача «${task.title}»`}
+                              >
+                                Активен
+                              </span>
+                            ) : null}
                           </span>
                         </button>
+                        {isLocalSelected && !isGlobalActive ? (
+                          <button
+                            type="button"
+                            className={styles.stepRowPublishAction}
+                            data-testid="room-publish-step"
+                            aria-label={`Переключить всех участников комнаты на задачу «${task.title}»`}
+                            onClick={() => onPublishSelectedStep(task.stepIndex)}
+                          >
+                            Переключить
+                          </button>
+                        ) : null}
                         {/*
                          * Per-step actions live in a sibling button so we
                          * don't nest <button> in <button> (invalid HTML).
@@ -3454,21 +4057,12 @@ function OwnerLayout({
                   })}
                 </Box>
 
-                <Text
-                  size="sm"
-                  c="#e1e6ef"
-                  fw={600}
-                  truncate="end"
-                  title={stepTitle}
-                >
-                  {stepTitle}
-                </Text>
-
+                {localWorkspacePreview === null ? (
                 <Box className={styles.taskRatingCard}>
                   <Select
                     className={styles.taskRating}
                     classNames={{ option: styles.taskRatingOption }}
-                    label="Оценка шага"
+                    label="Оценка активного для всех шага"
                     placeholder="Нет оценки"
                     value={currentTaskRating ? String(currentTaskRating) : null}
                     onChange={(value) =>
@@ -3506,6 +4100,7 @@ function OwnerLayout({
                     }}
                   />
                 </Box>
+                ) : null}
 
                 <div className={styles.privateNotesSection}>
                   <header className={styles.privateNotesHeader}>
@@ -4085,42 +4680,74 @@ function OwnerLayout({
           hidden={isCompactLayout && activeMobileTab !== "editor"}
           className={`${styles.editorViewport} ${isCompactLayout ? styles.mobileRoomPanel : ""}`.trim()}
         >
-          <Box className={styles.workspace}>
-            <Box className={styles.editorColumn}>
-              <BriefingBoard
-                key={`briefing-${merged.currentStep}`}
-                mode="interviewer"
-                value={briefingMarkdown}
-                onChange={onBriefingChange}
-                focusMode={briefingFocusMode}
-                onFocusModeChange={onBriefingFocusModeChange}
+          <Box
+            className={styles.workspace}
+            data-testid="room-current-local-step-context"
+            data-step-index={
+              localWorkspacePreview?.stepIndex ?? merged.currentStep
+            }
+          >
+            {localWorkspacePreview ? (
+              <ManagerWorkspaceEditor
+                workspace={localWorkspacePreview}
+                isRefreshing={isLocalWorkspaceSnapshotFetching}
+                focusMode={managerWorkspaceFocusMode}
+                onBriefingChange={onManagerWorkspaceBriefingChange}
+                onFocusModeChange={onManagerWorkspaceFocusModeChange}
+                sessionId={sessionId}
+                participantId={participantId}
+                participantLabel={participantLabel}
+                sendAwarenessUpdate={sendManagerWorkspaceAwarenessUpdate}
+                onAwarenessBridgeReady={onManagerWorkspaceAwarenessBridgeReady}
+                onYjsUpdate={onManagerWorkspaceYjsUpdate}
+                onYjsBridgeReady={onManagerWorkspaceYjsBridgeReady}
+                onYjsSnapshotBridgeReady={onManagerWorkspaceYjsSnapshotBridgeReady}
               />
-              {/*
-                Synced focus mode: интервьюер скрывает блок с кодом для
-                обоих участников. У кандидата выполняется тот же if
-                ниже в `CandidateLayout`.
-              */}
-              {!briefingFocusMode ? (
-                <SharedRoomEditorPanel
-                  merged={merged}
-                  stepStarterCode={stepStarterCode}
-                  editorReady={editorReady}
-                  syncKey={syncKey}
-                  resyncSignal={resyncSignal}
-                  sessionId={sessionId}
-                  participantId={participantId}
-                  participantLabel={participantLabel}
-                  sendAwarenessUpdate={sendAwarenessUpdate}
-                  onAwarenessBridgeReady={onAwarenessBridgeReady}
-                  onYjsUpdate={onYjsUpdate}
-                  onYjsBridgeReady={onYjsBridgeReady}
-                  onEditorValueChange={onEditorValueChange}
-                  onKeyPress={onKeyPress}
-                  panelClassName={styles.editorPanel}
+            ) : isLocalWorkspacePreview ? (
+              <Box
+                className={styles.editorColumn}
+                data-testid="manager-workspace-loading"
+                aria-busy="true"
+              >
+                <Text size="sm" c="dimmed">Загружаем рабочее пространство задачи…</Text>
+              </Box>
+            ) : (
+              <Box className={styles.editorColumn}>
+                <BriefingBoard
+                  key={`briefing-${merged.currentStep}`}
+                  mode="interviewer"
+                  value={briefingMarkdown}
+                  onChange={onBriefingChange}
+                  focusMode={briefingFocusMode}
+                  onFocusModeChange={onBriefingFocusModeChange}
                 />
-              ) : null}
-              {error && <Text className={styles.error}>{error}</Text>}
-            </Box>
+                {/*
+                  Synced focus mode: интервьюер скрывает блок с кодом для
+                  обоих участников. У кандидата выполняется тот же if
+                  ниже в `CandidateLayout`.
+                */}
+                {!briefingFocusMode ? (
+                  <SharedRoomEditorPanel
+                    merged={merged}
+                    stepStarterCode={stepStarterCode}
+                    editorReady={editorReady}
+                    syncKey={syncKey}
+                    resyncSignal={resyncSignal}
+                    sessionId={sessionId}
+                    participantId={participantId}
+                    participantLabel={participantLabel}
+                    sendAwarenessUpdate={sendAwarenessUpdate}
+                    onAwarenessBridgeReady={onAwarenessBridgeReady}
+                    onYjsUpdate={onYjsUpdate}
+                    onYjsBridgeReady={onYjsBridgeReady}
+                    onEditorValueChange={onEditorValueChange}
+                    onKeyPress={onKeyPress}
+                    panelClassName={styles.editorPanel}
+                  />
+                ) : null}
+                {error && <Text className={styles.error}>{error}</Text>}
+              </Box>
+            )}
           </Box>
         </Box>
       )}
@@ -4174,6 +4801,116 @@ function OwnerLayout({
   );
 }
 
+/**
+ * A task-scoped manager workspace. Its editor has a distinct Yjs lifecycle and
+ * transport callbacks, so inactive-task preparation never writes to the
+ * candidate-visible room document.
+ */
+function ManagerWorkspaceEditor({
+  workspace,
+  isRefreshing,
+  focusMode,
+  onBriefingChange,
+  onFocusModeChange,
+  sessionId,
+  participantId,
+  participantLabel,
+  sendAwarenessUpdate,
+  onAwarenessBridgeReady,
+  onYjsUpdate,
+  onYjsBridgeReady,
+  onYjsSnapshotBridgeReady,
+}: {
+  workspace: RoomTaskWorkspace;
+  isRefreshing: boolean;
+  focusMode: boolean;
+  onBriefingChange: (value: string) => void;
+  onFocusModeChange: (next: boolean) => void;
+  sessionId: string;
+  participantId: string;
+  participantLabel: string;
+  sendAwarenessUpdate: (awarenessUpdate: string) => void;
+  onAwarenessBridgeReady: (applyFn: ((b64: string) => void) | null) => void;
+  onYjsUpdate: YjsUpdateHandler;
+  onYjsBridgeReady: (applyUpdate: YjsRemoteUpdateApplier | null) => void;
+  onYjsSnapshotBridgeReady: (emitSnapshot: YjsSnapshotEmitter | null) => void;
+}) {
+  const syncKey = `manager:${workspace.stepIndex}:${normalizeRoomLanguage(workspace.language)}`;
+  // RoomCodeEditor owns a Y.Doc. Keep its bridge callbacks stable across
+  // parent workspace updates; otherwise its cleanup destroys the document
+  // after every manager sync and can drop an in-flight edit.
+  const onYjsBridgeReadyRef = useRef(onYjsBridgeReady);
+  const onYjsSnapshotBridgeReadyRef = useRef(onYjsSnapshotBridgeReady);
+  const onAwarenessBridgeReadyRef = useRef(onAwarenessBridgeReady);
+  useEffect(() => {
+    onYjsBridgeReadyRef.current = onYjsBridgeReady;
+    onYjsSnapshotBridgeReadyRef.current = onYjsSnapshotBridgeReady;
+    onAwarenessBridgeReadyRef.current = onAwarenessBridgeReady;
+  }, [onAwarenessBridgeReady, onYjsBridgeReady, onYjsSnapshotBridgeReady]);
+  const forwardYjsBridgeReady = useCallback(
+    (applyUpdate: YjsRemoteUpdateApplier | null) => {
+      onYjsBridgeReadyRef.current(applyUpdate);
+    },
+    [],
+  );
+  const forwardAwarenessBridgeReady = useCallback(
+    (applyUpdate: ((b64: string) => void) | null) => {
+      onAwarenessBridgeReadyRef.current(applyUpdate);
+    },
+    [],
+  );
+  const forwardYjsSnapshotBridgeReady = useCallback(
+    (emitSnapshot: YjsSnapshotEmitter | null) => {
+      onYjsSnapshotBridgeReadyRef.current(emitSnapshot);
+    },
+    [],
+  );
+
+  return (
+    <Box
+      className={styles.editorColumn}
+      aria-busy={isRefreshing || undefined}
+    >
+      <BriefingBoard
+        key={`manager-briefing-${workspace.stepIndex}`}
+        mode="interviewer"
+        value={stripFocusMarker(workspace.briefingMarkdown)}
+        onChange={onBriefingChange}
+        focusMode={focusMode}
+        onFocusModeChange={onFocusModeChange}
+      />
+      {!focusMode ? (
+        <Box className={styles.editorPanel}>
+          <div className={styles.editorWrap}>
+            <RoomCodeEditor
+              key={syncKey}
+              height="100%"
+              language={toEditorLanguage(workspace.language)}
+              value={workspace.code}
+              serverYjsBase64={workspace.yjsDocumentBase64 ?? null}
+              serverYjsSequence={workspace.yjsSequence ?? 0}
+              lastCodeUpdatedBySessionId={null}
+              resyncSignal={workspace.revision ?? 0}
+              syncKey={syncKey}
+              readOnly={isRefreshing}
+              sessionId={sessionId}
+              participantId={participantId}
+              participantLabel={participantLabel}
+              sendAwarenessUpdate={sendAwarenessUpdate}
+              onAwarenessBridgeReady={forwardAwarenessBridgeReady}
+              onYjsUpdate={onYjsUpdate}
+              onYjsBridgeReady={forwardYjsBridgeReady}
+              onYjsSnapshotBridgeReady={forwardYjsSnapshotBridgeReady}
+              onEditorValueChange={() => {}}
+              onKeyPress={() => {}}
+            />
+          </div>
+        </Box>
+      ) : null}
+    </Box>
+  );
+}
+
 function CandidateLayout({
   merged,
   stepTitle,
@@ -4214,7 +4951,7 @@ function CandidateLayout({
   resyncSignal: number;
   editorReady: boolean;
   onYjsUpdate: YjsUpdateHandler;
-  onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
+  onYjsBridgeReady: (applyUpdate: YjsRemoteUpdateApplier | null) => void;
   onEditorValueChange: (value: string) => void;
   onKeyPress: (payload: KeyPressPayload) => void;
   onPaste?: (payload: import("../features/room/pasteDetection").PastePayload) => void;
@@ -4228,7 +4965,11 @@ function CandidateLayout({
             <ThemeIcon size={24} variant="light" color="gray">
               <IconUsers size={14} />
             </ThemeIcon>
-            <Text size="sm" c="#d2d8e1">
+            <Text
+              size="sm"
+              c="#d2d8e1"
+              data-testid="room-current-published-step-title"
+            >
               Текущий шаг: {stepTitle}
             </Text>
           </Group>
@@ -4300,7 +5041,7 @@ function SharedRoomEditorPanel({
   sendAwarenessUpdate: (awarenessUpdate: string) => void;
   onAwarenessBridgeReady: (applyFn: ((b64: string) => void) | null) => void;
   onYjsUpdate: YjsUpdateHandler;
-  onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
+  onYjsBridgeReady: (applyUpdate: YjsRemoteUpdateApplier | null) => void;
   onEditorValueChange: (value: string) => void;
   onKeyPress: (payload: KeyPressPayload) => void;
   onPaste?: (payload: import("../features/room/pasteDetection").PastePayload) => void;

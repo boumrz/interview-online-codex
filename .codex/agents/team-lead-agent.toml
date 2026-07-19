@@ -40,6 +40,8 @@ Decompose work into these streams where applicable:
 
 ## Decision rules
 
+- For every behavioural change, plan test authoring and a red execution before the linked production implementation task; E2E is the default for user-observable flows, otherwise record the test-level exception.
+
 - If a task cannot fit in one autonomous handoff → split it
 - If a task lacks clear inputs and outputs → return it for clarification
 - MVP blockers and critical-path dependencies take highest priority

@@ -5,7 +5,7 @@ const devServerPort = new URL(devServerBaseUrl).port || "5173";
 const counterId = 109032539;
 const productionHosts = ["interview.vtools.tech", "interview.domiknote.ru"];
 
-async function openWithHost(browser, host) {
+async function openWithHost(browser, host, pathname = "/") {
   const context = await browser.newContext();
   await context.route("https://mc.yandex.ru/**", async (route) => {
     await route.fulfill({
@@ -23,7 +23,7 @@ async function openWithHost(browser, host) {
     });
   }
   const page = await context.newPage();
-  await page.goto(`http://${host}:${devServerPort}/`, {
+  await page.goto(`http://${host}:${devServerPort}${pathname}`, {
     waitUntil: "domcontentloaded",
     timeout: 30000,
   });
@@ -37,16 +37,40 @@ async function assertMetrikaEnabled(browser, host) {
     const result = await page.evaluate((expectedCounterId) => {
       const ym = window.ym;
       const calls = Array.isArray(ym?.a) ? ym.a : [];
+      const init = calls.find((call) => call[0] === expectedCounterId && call[1] === "init");
       return {
         hasYm: typeof ym === "function",
         calls,
+        initOptions: init?.[2] ?? null,
         initCalls: calls.filter((call) => call[0] === expectedCounterId && call[1] === "init").length,
         hitCalls: calls.filter((call) => call[0] === expectedCounterId && call[1] === "hit").length,
       };
     }, counterId);
 
-    if (!result.hasYm || result.initCalls < 1 || result.hitCalls < 1) {
+    if (
+      !result.hasYm || result.initCalls < 1 || result.hitCalls < 1
+      || result.initOptions?.webvisor !== false
+      || result.initOptions?.clickmap !== false
+      || result.initOptions?.trackLinks !== false
+      || result.initOptions?.referrer !== ""
+    ) {
       throw new Error(`METRIKA_NOT_ENABLED host=${host} result=${JSON.stringify(result)}`);
+    }
+  } finally {
+    await context.close();
+  }
+}
+
+async function assertInviteRouteIsRedacted(browser) {
+  const invite = "sensitive-invite-value";
+  const query = "?next=%2Froom%2Fsensitive-invite-value";
+  const { context, page } = await openWithHost(browser, productionHosts[0], `/room/${invite}${query}`);
+  try {
+    const calls = await page.evaluate(() => Array.isArray(window.ym?.a) ? window.ym.a : []);
+    const serialised = JSON.stringify(calls);
+    const roomHit = calls.find((call) => call[1] === "hit");
+    if (serialised.includes(invite) || serialised.includes("next=") || roomHit?.[2] !== "/room/:invite") {
+      throw new Error(`METRIKA_ROUTE_LEAK result=${serialised}`);
     }
   } finally {
     await context.close();
@@ -75,6 +99,7 @@ try {
   for (const host of productionHosts) {
     await assertMetrikaEnabled(browser, host);
   }
+  await assertInviteRouteIsRedacted(browser);
   await assertMetrikaBlocked(browser, "localhost");
   console.log("METRIKA_HOSTS_OK");
 } catch (error) {

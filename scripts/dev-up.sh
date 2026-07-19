@@ -11,13 +11,10 @@
 #   7. По Ctrl+C аккуратно гасит оба процесса.
 #
 # Логи:
-#   .run/backend.log
-#   .run/frontend.log
 #
 # Использование:
 #   ./scripts/dev-up.sh                 # запустить
 #   ./scripts/dev-up.sh --stop          # погасить уже запущенные процессы
-#   tail -f .run/backend.log            # смотреть логи
 
 set -euo pipefail
 
@@ -28,8 +25,6 @@ RUN_DIR="$ROOT_DIR/.run"
 mkdir -p "$RUN_DIR"
 BACKEND_PID_FILE="$RUN_DIR/backend.pid"
 FRONTEND_PID_FILE="$RUN_DIR/frontend.pid"
-BACKEND_LOG="$RUN_DIR/backend.log"
-FRONTEND_LOG="$RUN_DIR/frontend.log"
 
 cleanup() {
   echo
@@ -50,7 +45,8 @@ cleanup() {
     fi
     rm -f "$FRONTEND_PID_FILE"
   fi
-  echo "Готово. Логи сохранены в $RUN_DIR/"
+  echo "Готово."
+  rmdir "$RUN_DIR" 2>/dev/null || true
 }
 
 if [[ "${1:-}" == "--stop" ]]; then
@@ -142,12 +138,10 @@ export DB_PASSWORD="${DB_PASSWORD:-interview}"
 
 (
   cd "$ROOT_DIR/backend"
-  : > "$BACKEND_LOG"
-  "$MVN" -q spring-boot:run \
-    >> "$BACKEND_LOG" 2>&1 &
+  "$MVN" -q spring-boot:run &
   echo $! > "$BACKEND_PID_FILE"
 )
-echo "    pid=$(cat "$BACKEND_PID_FILE")  log=$BACKEND_LOG"
+echo "    pid=$(cat "$BACKEND_PID_FILE")  output=terminal"
 
 echo ">>> Жду /actuator/health (может занять до 90 сек на первом запуске)..."
 HEALTH=0
@@ -159,7 +153,7 @@ for _ in $(seq 1 90); do
   sleep 1
 done
 if [[ "$HEALTH" -ne 1 ]]; then
-  echo "❌ Backend не поднялся. Смотри $BACKEND_LOG"
+  echo "❌ Backend не поднялся. Проверьте вывод терминала."
   cleanup
   exit 1
 fi
@@ -171,13 +165,12 @@ echo ">>> Стартую frontend (rspack dev)..."
   cd "$ROOT_DIR/frontend"
   if [[ ! -d node_modules ]]; then
     echo "    node_modules не найден — npm install..."
-    npm install --no-audit --no-fund >> "$FRONTEND_LOG" 2>&1
+    npm install --no-audit --no-fund
   fi
-  : > "$FRONTEND_LOG"
-  npm run dev >> "$FRONTEND_LOG" 2>&1 &
+  npm run dev &
   echo $! > "$FRONTEND_PID_FILE"
 )
-echo "    pid=$(cat "$FRONTEND_PID_FILE")  log=$FRONTEND_LOG"
+echo "    pid=$(cat "$FRONTEND_PID_FILE")  output=terminal"
 
 echo ">>> Жду :5173..."
 FE_READY=0
@@ -189,7 +182,7 @@ for _ in $(seq 1 60); do
   sleep 1
 done
 if [[ "$FE_READY" -ne 1 ]]; then
-  echo "❌ Frontend не отозвался. Смотри $FRONTEND_LOG"
+  echo "❌ Frontend не отозвался. Проверьте вывод терминала."
   cleanup
   exit 1
 fi
@@ -207,7 +200,7 @@ echo "════════════════════════�
 echo " ✅ Всё запущено."
 echo "    Frontend: http://localhost:5173"
 echo "    Backend:  http://localhost:8080"
-echo "    Логи:     $BACKEND_LOG  /  $FRONTEND_LOG"
+echo "    Вывод:    в текущем терминале (файлы логов не сохраняются)"
 echo
 echo " Ctrl+C — погасит оба процесса."
 echo " Или в отдельном терминале: ./scripts/dev-up.sh --stop"

@@ -1,10 +1,13 @@
 package com.interviewonline.controller
 
 import com.interviewonline.dto.AdminUserDto
+import com.interviewonline.dto.ProductMetricsResponse
 import com.interviewonline.dto.UpdateUserRoleRequest
 import com.interviewonline.service.AdminUserService
 import com.interviewonline.service.AuthService
+import com.interviewonline.service.ProductMetricsService
 import jakarta.validation.Valid
+import jakarta.servlet.http.HttpServletRequest
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
@@ -19,7 +22,18 @@ import org.springframework.web.bind.annotation.RestController
 class AdminController(
     private val authService: AuthService,
     private val adminUserService: AdminUserService,
+    private val productMetricsService: ProductMetricsService,
 ) {
+    @GetMapping("/product-metrics")
+    fun getProductMetrics(
+        @RequestHeader("Authorization", required = false) authorization: String?,
+        request: HttpServletRequest,
+    ): ProductMetricsResponse {
+        val token = authorization?.removePrefix("Bearer ")?.trim()
+        val user = authService.requireUserByToken(token)
+        return productMetricsService.getAggregateMetrics(user, request.parameterMap)
+    }
+
     @GetMapping("/users")
     fun listUsers(
         @RequestHeader("Authorization", required = false) authorization: String?,

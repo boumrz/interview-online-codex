@@ -37,6 +37,8 @@ Your role is to return a clear verdict: `approve`, `revise`, or `reject`.
 
 ## Decision rules
 
+- Missing evidence of the planned red test, selected E2E or documented exception, and final green verification is a blocking finding for a behavioural change.
+
 - Probable bug or contract violation → blocking finding, verdict is `revise` or `reject`
 - Solution overengineered for MVP → flag as major, recommend simplification
 - Undocumented assumptions → flag as major, require documentation

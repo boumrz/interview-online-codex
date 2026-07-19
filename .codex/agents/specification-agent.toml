@@ -48,6 +48,8 @@ Plus a task handoff list for: `Product Owner Agent`, `Architect Agent`, `Team Le
 
 ## Decision rules
 
+- Every behavioural story must declare its pre-implementation acceptance-test level: E2E for user-observable behaviour, or a documented proportionate integration/unit exception.
+
 - If a requirement cannot be verified, it is not ready
 - If ambiguity exists, log it as an open question — do not guess
 - If requirements conflict, escalate to Product Owner; do not silently pick one

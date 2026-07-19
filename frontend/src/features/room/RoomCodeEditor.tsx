@@ -67,6 +67,13 @@ export type YjsUpdateHandler = (
   baseServerYjsSequence?: number | null,
 ) => void;
 
+export type YjsRemoteUpdateApplier = (
+  yjsUpdate: string,
+  serverYjsSequence?: number | null,
+) => void;
+
+export type YjsSnapshotEmitter = () => void;
+
 export type RoomCodeEditorProps = {
   height: string;
   language: string;
@@ -83,7 +90,8 @@ export type RoomCodeEditorProps = {
   sendAwarenessUpdate: (awarenessUpdate: string) => void;
   onAwarenessBridgeReady: (applyFn: ((b64: string) => void) | null) => void;
   onYjsUpdate: YjsUpdateHandler;
-  onYjsBridgeReady: (applyUpdate: ((yjsUpdate: string) => void) | null) => void;
+  onYjsBridgeReady: (applyUpdate: YjsRemoteUpdateApplier | null) => void;
+  onYjsSnapshotBridgeReady?: (emitSnapshot: YjsSnapshotEmitter | null) => void;
   onEditorValueChange: (value: string) => void;
   onKeyPress: (payload: KeyPressPayload) => void;
   onPaste?: (payload: PastePayload) => void;
@@ -121,6 +129,7 @@ export function RoomCodeEditor({
   onAwarenessBridgeReady,
   onYjsUpdate,
   onYjsBridgeReady,
+  onYjsSnapshotBridgeReady,
   onEditorValueChange,
   onKeyPress,
   onPaste,
@@ -226,6 +235,7 @@ export function RoomCodeEditor({
   useEffect(() => {
     return () => {
       onYjsBridgeReady(null);
+      onYjsSnapshotBridgeReady?.(null);
       onAwarenessBridgeReady(null);
       viewRef.current?.destroy();
       viewRef.current = null;
@@ -238,7 +248,7 @@ export function RoomCodeEditor({
       yTextRef.current = null;
       awarenessRef.current = null;
     };
-  }, [onAwarenessBridgeReady, onYjsBridgeReady]);
+  }, [onAwarenessBridgeReady, onYjsBridgeReady, onYjsSnapshotBridgeReady]);
 
   useEffect(() => {
     if (!hostRef.current || viewRef.current) return;
@@ -448,14 +458,25 @@ export function RoomCodeEditor({
       );
     };
 
+    onYjsSnapshotBridgeReady?.(emitFullSnapshot);
+
     // Idle tabs still refresh the server snapshot so a reloaded peer does not bootstrap from stale CRDT state.
     const heartbeatId = window.setInterval(() => {
       emitFullSnapshot();
     }, 2500);
 
-    onYjsBridgeReady((encodedYjsUpdate: string) => {
+    onYjsBridgeReady((encodedYjsUpdate: string, remoteYjsSequence?: number | null) => {
       const activeDoc = yDocRef.current;
       if (!activeDoc) return;
+      if (
+        typeof remoteYjsSequence === "number" &&
+        Number.isFinite(remoteYjsSequence)
+      ) {
+        latestServerYjsSequenceRef.current = Math.max(
+          latestServerYjsSequenceRef.current,
+          Math.max(0, Math.floor(remoteYjsSequence)),
+        );
+      }
       const updateBytes = base64ToBytes(encodedYjsUpdate);
       if (updateBytes.length === 0) return;
       Y.applyUpdate(activeDoc, updateBytes, "remote");
@@ -471,6 +492,7 @@ export function RoomCodeEditor({
       yDoc.off("update", handleDocUpdate);
       awareness.off("update", onAwarenessChanged);
       if (awarenessFlushTimer != null) window.clearTimeout(awarenessFlushTimer);
+      onYjsSnapshotBridgeReady?.(null);
       onAwarenessBridgeReady(null);
       awareness.destroy();
       awarenessRef.current = null;

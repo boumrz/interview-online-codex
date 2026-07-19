@@ -42,6 +42,7 @@ Your output must be a clear verdict: `approve`, `revise`, or `reject`.
 - mark MVP-overengineered solutions explicitly;
 - require documentation for critical assumptions;
 - send back for revision when evidence is insufficient.
+- reject a behavioural implementation handoff that lacks the planned test-first evidence (initial red result, selected E2E or documented exception, and final green verification).
 
 ## Handoff Rules
 

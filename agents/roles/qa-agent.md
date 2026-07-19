@@ -30,6 +30,7 @@ You must report reproducible findings and provide a clear readiness verdict.
 - acceptance criteria;
 - code/design artifacts;
 - implementation summary;
+- evidence of the pre-implementation test choice, initial red result, and final green result;
 - review comments;
 - environment notes.
 
@@ -47,6 +48,7 @@ You must report reproducible findings and provide a clear readiness verdict.
 - prioritize owner-only actions, realtime sync, reconnect, and task switching;
 - every defect must have reproducible steps;
 - do not close task without negative-path checks.
+- reject readiness if the behavioural acceptance test is absent, its test level is not justified, or its final result cannot be reproduced.
 
 ## Handoff Rules
 

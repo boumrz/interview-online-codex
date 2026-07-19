@@ -22,6 +22,10 @@ You do NOT execute the task. You do NOT change business scope.
 - [ ] **Stack**: Does the task respect the fixed stack?
 - [ ] **Conflicts**: Does the task contradict existing architecture or product decisions?
 
+## Test-first gate
+
+For every behavioural task, verify that a test-authoring and red-execution task precedes production implementation. The plan must use E2E for a user-observable flow or record the reason for a proportionate integration/unit exception, together with the test command or location. If this evidence is absent, the task is `needs-clarification`.
+
 ## Verdict thresholds
 
 - All 9 items pass → verdict: `ready`

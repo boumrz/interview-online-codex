@@ -5,9 +5,11 @@ import com.interviewonline.dto.CreateRoomRequest
 import com.interviewonline.dto.RoomResponse
 import com.interviewonline.dto.RoomAccessMemberDto
 import com.interviewonline.dto.AddRoomTasksRequest
+import com.interviewonline.dto.RoomTaskWorkspaceDto
 import com.interviewonline.dto.SetVerdictRequest
 import com.interviewonline.dto.UpdateRoomParticipantRoleRequest
 import com.interviewonline.dto.UpdateRoomTaskRequest
+import com.interviewonline.dto.UpdateRoomTaskWorkspaceRequest
 import com.interviewonline.service.AuthService
 import com.interviewonline.service.RoomService
 import jakarta.validation.Valid
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
@@ -63,6 +66,50 @@ class RoomController(
         val authToken = authorization?.removePrefix("Bearer ")?.trim()
         val user = authService.resolveUserByToken(authToken)
         return roomService.getByInviteCode(inviteCode, ownerToken, interviewerToken, user)
+    }
+
+    @GetMapping("/rooms/{inviteCode}/tasks/{stepIndex}/workspace")
+    fun getTaskWorkspace(
+        @PathVariable inviteCode: String,
+        @PathVariable stepIndex: Int,
+        @RequestHeader("X-Room-Owner-Token", required = false) ownerToken: String?,
+        @RequestHeader("X-Room-Interviewer-Token", required = false) interviewerToken: String?,
+        @RequestHeader("X-Room-Event-Token", required = false) eventToken: String?,
+        @RequestHeader("Authorization", required = false) authorization: String?,
+    ): RoomTaskWorkspaceDto {
+        val authToken = authorization?.removePrefix("Bearer ")?.trim()
+        val user = authService.resolveUserByToken(authToken)
+        return roomService.getTaskWorkspace(
+            inviteCode,
+            stepIndex,
+            ownerToken,
+            interviewerToken,
+            user,
+            eventToken,
+        )
+    }
+
+    @PutMapping("/rooms/{inviteCode}/tasks/{stepIndex}/workspace")
+    fun updateTaskWorkspace(
+        @PathVariable inviteCode: String,
+        @PathVariable stepIndex: Int,
+        @RequestHeader("X-Room-Owner-Token", required = false) ownerToken: String?,
+        @RequestHeader("X-Room-Interviewer-Token", required = false) interviewerToken: String?,
+        @RequestHeader("X-Room-Event-Token", required = false) eventToken: String?,
+        @RequestHeader("Authorization", required = false) authorization: String?,
+        @RequestBody request: UpdateRoomTaskWorkspaceRequest,
+    ): RoomTaskWorkspaceDto {
+        val authToken = authorization?.removePrefix("Bearer ")?.trim()
+        val user = authService.resolveUserByToken(authToken)
+        return roomService.updateTaskWorkspace(
+            inviteCode = inviteCode,
+            stepIndex = stepIndex,
+            request = request,
+            ownerToken = ownerToken,
+            interviewerToken = interviewerToken,
+            user = user,
+            eventToken = eventToken,
+        )
     }
 
     @PostMapping("/rooms/{inviteCode}/next-step")

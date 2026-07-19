@@ -34,11 +34,14 @@ Required order:
 3. Add `design.md` when architecture, dependencies, security, migration, or cross-module behavior changes.
 4. Add `tasks.md`.
 5. Run `openspec validate <change-id> --strict`.
-6. Implement the tasks.
-7. Update task checkboxes as work completes.
-8. Verify with tests and archive completed specs with `openspec archive <change-id>` when appropriate.
+6. For executable behaviour, author the acceptance test before production implementation: prefer an E2E test for a user-observable flow; otherwise record why a focused integration or unit test is more proportionate or applicable.
+7. Run the new test and confirm it fails because the requested behaviour is missing or incorrect.
+8. Implement the smallest in-scope production change that makes the test pass.
+9. Update task checkboxes as work completes, run relevant regression verification, and archive completed specs with `openspec archive <change-id>` when appropriate.
 
-No production code work begins before steps 1-5 are done.
+Documentation-only, comment-only, formatting-only, and non-executable configuration work may omit an automated test only when the task records why it is not applicable.
+
+No production code work begins before steps 1-7 are done.
 
 ## Agent Roster
 
@@ -86,7 +89,7 @@ User request
 4. Return structured YAML output for agent handoffs, not free-form reasoning.
 5. Escalate conflicts; do not silently resolve them.
 6. Every handoff must include input summary, output summary, risks, and next owner.
-7. No task enters implementation without a validated OpenSpec change and ready task list.
+7. No task enters implementation without a validated OpenSpec change, a ready task list, and a test-first task that precedes production code. A user-observable flow uses E2E unless its documented exception selects a proportionate test level.
 8. Backend permissions must be enforced server-side regardless of UI restrictions.
 9. Realtime features must handle reconnect and conflict scenarios explicitly.
 

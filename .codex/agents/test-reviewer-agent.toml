@@ -20,6 +20,10 @@ You are NOT the primary QA. You check whether the QA Agent thought correctly.
 - [ ] **Realtime**: If feature uses realtime, sync failure scenario tested
 - [ ] **Reproducibility**: Every bug report has steps to reproduce
 
+## Test-first gate
+
+For a behavioural change, require evidence that the chosen acceptance test was authored and run red before production implementation, then run green after it. User-observable behaviour uses E2E unless an OpenSpec task documents a proportionate integration/unit exception.
+
 ## Verdict thresholds
 
 - All applicable items covered → verdict: `coverage-sufficient`

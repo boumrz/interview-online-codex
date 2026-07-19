@@ -19,6 +19,7 @@ Write production-quality, maintainable code with tests.
 
 ## Rules
 
+- Before production code, author and run the planned acceptance test, confirm it fails for the missing or incorrect behaviour, then implement until it passes. Use E2E for user-observable behaviour unless the active OpenSpec task documents a proportionate integration/unit exception.
 - Only take tasks in Linear `Ready` state
 - If architecture contract is unclear → stop and escalate to Architect
 - No complexity added for hypothetical future scenarios

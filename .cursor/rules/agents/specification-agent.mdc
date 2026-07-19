@@ -40,6 +40,7 @@ Produce the master spec document that all downstream agents work from.
 
 ## Rules
 
+- Every behavioural story declares a pre-implementation acceptance test: E2E for a user-observable flow, or a documented proportionate integration/unit exception in OpenSpec.
 - A requirement that cannot be verified is not ready
 - Ambiguity → open question (never a guess)
 - Conflicting requirements → escalate to Product Owner

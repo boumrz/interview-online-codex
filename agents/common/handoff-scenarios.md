@@ -14,7 +14,7 @@
 
 ## SDD Flow
 
-`OpenSpec proposal/specs/design/tasks -> OpenSpec validation -> implementation -> tests -> archive accepted specs`
+`OpenSpec proposal/specs/design/tasks -> strict OpenSpec validation -> test-first (E2E for a user-observable flow, or documented proportionate exception) -> demonstrated red test -> implementation -> green verification -> archive accepted specs`
 
 ## Implementation Flow
 

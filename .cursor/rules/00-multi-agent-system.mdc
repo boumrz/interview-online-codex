@@ -66,6 +66,7 @@ Do NOT invoke it for small bug fixes, minor UI copy changes, or already-specifie
 
 ## Mandatory rules (all agents)
 
+- Every feature, bug fix, or behaviour-changing refactor starts with an OpenSpec change. After strict validation, write and run the acceptance test red before production code; use E2E for a user-observable flow unless the OpenSpec task records why a proportionate integration/unit test is used instead.
 - Work only within your defined responsibility area
 - Use Linear as the single source of task state
 - Return structured YAML output, not free-form reasoning

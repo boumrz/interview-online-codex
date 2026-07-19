@@ -10,10 +10,12 @@ import com.interviewonline.dto.RoomNoteMessageDto
 import com.interviewonline.dto.RoomResponse
 import com.interviewonline.dto.RoomSummaryDto
 import com.interviewonline.dto.RoomTaskDto
+import com.interviewonline.dto.RoomTaskWorkspaceDto
 import com.interviewonline.dto.UpdateRoomParticipantRoleRequest
 import com.interviewonline.dto.UpdateRoomRequest
 import com.interviewonline.dto.SetVerdictRequest
 import com.interviewonline.dto.UpdateRoomTaskRequest
+import com.interviewonline.dto.UpdateRoomTaskWorkspaceRequest
 import com.interviewonline.model.Room
 import com.interviewonline.model.VerdictValue
 import com.interviewonline.model.RoomParticipant
@@ -43,6 +45,7 @@ class RoomService(
     private val roomAccessService: RoomAccessService,
     private val taskTemplateService: TaskTemplateService,
     private val collaborationService: CollaborationService,
+    private val roomProductMetricsProjector: RoomProductMetricsProjector,
     private val userTaskService: UserTaskService,
     private val objectMapper: ObjectMapper,
 ) {
@@ -74,6 +77,7 @@ class RoomService(
         room.tasks = tasks
         initializeCurrentStepSnapshot(room)
         val saved = roomRepository.save(room)
+        roomProductMetricsProjector.recordRoomCreated(saved, RoomProductMetricsProjector.SOURCE_GUEST)
         collaborationService.bootstrapRoom(saved)
         // Authenticated owner uses a Bearer token, so we don't have to
         // expose the session-token fallback to the client.
@@ -119,6 +123,7 @@ class RoomService(
         room.tasks = tasks
         initializeCurrentStepSnapshot(room)
         val saved = roomRepository.save(room)
+        roomProductMetricsProjector.recordRoomCreated(saved, RoomProductMetricsProjector.SOURCE_DASHBOARD)
         collaborationService.bootstrapRoom(saved)
         return toRoomResponse(
             room = saved,
@@ -142,6 +147,97 @@ class RoomService(
         )
     }
 
+    /**
+     * Returns a manager-only, persisted snapshot for an individual task.
+     *
+     * Unlike the normal room response this endpoint is never broadcast over
+     * SSE: it lets an interviewer inspect a locally selected non-published
+     * task without exposing its solution or briefing to candidates.
+     */
+    @Transactional(readOnly = true)
+    fun getTaskWorkspace(
+        inviteCode: String,
+        stepIndex: Int,
+        ownerToken: String?,
+        interviewerToken: String?,
+        user: User?,
+        eventToken: String? = null,
+    ): RoomTaskWorkspaceDto {
+        val room = roomRepository.findWithTasksByInviteCode(inviteCode)
+            ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+        val realtimeRole = collaborationService.resolveRoleByEventToken(inviteCode, eventToken)
+        roomAccessService.requireManager(room, user, ownerToken, interviewerToken, realtimeRole)
+        val task = room.tasks.firstOrNull { it.stepIndex == stepIndex }
+            ?: throw ApiException(HttpStatus.NOT_FOUND, "Задача не найдена")
+
+        return RoomTaskWorkspaceDto(
+            stepIndex = task.stepIndex,
+            title = task.title,
+            language = normalizeLanguage(task.solutionLanguage?.ifBlank { null } ?: task.language),
+            code = task.solutionCode ?: task.starterCode,
+            briefingMarkdown = task.briefingMarkdown?.takeIf { it.isNotBlank() } ?: task.description,
+            revision = task.workspaceRevision,
+            yjsDocumentBase64 = task.workspaceYjsDocumentBase64,
+            yjsSequence = task.workspaceYjsSequence,
+            focusMode = taskFocusMode(task),
+        )
+    }
+
+    /**
+     * REST recovery/save path for a manager-selected inactive task.  It is
+     * intentionally task-scoped: none of these values is copied into Room
+     * until a manager explicitly publishes that step.
+     */
+    @Transactional
+    fun updateTaskWorkspace(
+        inviteCode: String,
+        stepIndex: Int,
+        request: UpdateRoomTaskWorkspaceRequest,
+        ownerToken: String?,
+        interviewerToken: String?,
+        user: User?,
+        eventToken: String? = null,
+    ): RoomTaskWorkspaceDto {
+        val room = roomRepository.findWithTasksByInviteCode(inviteCode)
+            ?: throw ApiException(HttpStatus.NOT_FOUND, "РљРѕРјРЅР°С‚Р° РЅРµ РЅР°Р№РґРµРЅР°")
+        val realtimeRole = collaborationService.resolveRoleByEventToken(inviteCode, eventToken)
+        roomAccessService.requireManager(room, user, ownerToken, interviewerToken, realtimeRole)
+        if (stepIndex == room.currentStep) {
+            throw ApiException(HttpStatus.BAD_REQUEST, "РћРїСѓР±Р»РёРєРѕРІР°РЅРЅС‹Р№ С€Р°Рі РёР·РјРµРЅСЏРµС‚СЃСЏ С‡РµСЂРµР· РѕР±С‰РµРµ СЂР°Р±РѕС‡РµРµ РїСЂРѕСЃС‚СЂР°РЅСЃС‚РІРѕ")
+        }
+        val task = room.tasks.firstOrNull { it.stepIndex == stepIndex }
+            ?: throw ApiException(HttpStatus.NOT_FOUND, "Р—Р°РґР°С‡Р° РЅРµ РЅР°Р№РґРµРЅР°")
+
+        val requestedRevision = request.revision
+        if (requestedRevision != null && requestedRevision != task.workspaceRevision) {
+            throw ApiException(HttpStatus.CONFLICT, "Р§РµСЂРЅРѕРІРёРє Р·Р°РґР°С‡Рё РёР·РјРµРЅРёР»СЃСЏ; РїРѕР»СѓС‡РёС‚Рµ Р°РєС‚СѓР°Р»СЊРЅРѕРµ СЃРѕСЃС‚РѕСЏРЅРёРµ")
+        }
+
+        var changedNonCrdt = false
+        request.code?.let { task.solutionCode = it }
+        request.language?.let {
+            task.solutionLanguage = normalizeLanguage(it)
+            changedNonCrdt = true
+        }
+        request.briefingMarkdown?.let {
+            task.briefingMarkdown = it
+            changedNonCrdt = true
+        }
+        request.focusMode?.let {
+            task.workspaceFocusMode = it
+            changedNonCrdt = true
+        }
+        request.yjsDocumentBase64?.trim()?.takeIf { it.isNotEmpty() }?.let { task.workspaceYjsDocumentBase64 = it }
+        request.yjsSequence?.let { task.workspaceYjsSequence = it.coerceAtLeast(task.workspaceYjsSequence) }
+        if (changedNonCrdt || request.code != null || request.yjsDocumentBase64 != null) {
+            task.workspaceRevision += 1
+        }
+        val saved = roomRepository.saveAndFlush(room)
+        val savedTask = saved.tasks.first { it.stepIndex == stepIndex }
+        collaborationService.syncManagerWorkspaceFromTask(saved, savedTask)
+        return taskWorkspaceDto(savedTask)
+    }
+
     @Transactional(readOnly = true)
     fun getByInviteCodeEntity(inviteCode: String): Room {
         return roomRepository.findByInviteCode(inviteCode)
@@ -153,15 +249,7 @@ class RoomService(
         val room = roomRepository.findByInviteCode(inviteCode)
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
         val access = roomAccessService.requireManager(room, user, ownerToken, interviewerToken)
-        if (room.tasks.isEmpty()) {
-            throw ApiException(HttpStatus.BAD_REQUEST, "В комнате нет задач для переключения")
-        }
-        val maxStep = room.tasks.size - 1
-        saveCurrentStepSnapshot(room)
-        room.currentStep = (room.currentStep + 1).coerceAtMost(maxStep)
-        applyCurrentStepSnapshot(room)
-        val saved = roomRepository.save(room)
-        collaborationService.syncFromRoom(saved)
+        val saved = collaborationService.advancePublishedStep(inviteCode)
         return toRoomResponse(saved, access = access, includeOwnerToken = false, includeInterviewerToken = false)
     }
 
@@ -287,6 +375,9 @@ class RoomService(
         }
 
         val saved = roomRepository.save(room)
+        if (tasksToAppend.isNotEmpty()) {
+            roomProductMetricsProjector.recordPreparation(saved.id.orEmpty())
+        }
         collaborationService.syncFromRoom(saved)
         return toRoomResponse(saved, access = access, includeOwnerToken = false, includeInterviewerToken = false)
     }
@@ -465,6 +556,7 @@ class RoomService(
             roomKeystrokeEventRepository.deleteByRoomId(it)
             roomParticipantRepository.deleteAllByRoomId(it)
             roomParticipantRepository.flush()
+            roomProductMetricsProjector.deleteProjection(it)
         }
         roomRepository.delete(room)
         collaborationService.closeRoom(inviteCode)
@@ -501,6 +593,7 @@ class RoomService(
         room.finishedAt = Instant.now()
 
         roomRepository.save(room)
+        roomProductMetricsProjector.recordVerdictSaved(room.id.orEmpty(), room.finishedAt!!)
 
         // Capture values for use in the after-commit callback (room fields may change).
         val broadcastVerdict = verdictValue.wireValue
@@ -719,7 +812,27 @@ class RoomService(
         val currentTask = room.tasks.getOrNull(room.currentStep) ?: return
         room.code = currentTask.solutionCode ?: currentTask.starterCode
         room.language = normalizeLanguage(currentTask.solutionLanguage?.ifBlank { null } ?: currentTask.language)
-        room.briefingMarkdown = currentTask.briefingMarkdown.orEmpty()
+        room.briefingMarkdown = withTaskFocusMarker(currentTask.briefingMarkdown.orEmpty(), taskFocusMode(currentTask))
+    }
+
+    private fun taskWorkspaceDto(task: RoomTask): RoomTaskWorkspaceDto = RoomTaskWorkspaceDto(
+        stepIndex = task.stepIndex,
+        title = task.title,
+        language = normalizeLanguage(task.solutionLanguage?.ifBlank { null } ?: task.language),
+        code = task.solutionCode ?: task.starterCode,
+        briefingMarkdown = task.briefingMarkdown?.takeIf { it.isNotBlank() } ?: task.description,
+        revision = task.workspaceRevision,
+        yjsDocumentBase64 = task.workspaceYjsDocumentBase64,
+        yjsSequence = task.workspaceYjsSequence,
+        focusMode = taskFocusMode(task),
+    )
+
+    private fun taskFocusMode(task: RoomTask): Boolean =
+        task.workspaceFocusMode ?: task.briefingMarkdown.orEmpty().trimStart().startsWith(BRIEFING_FOCUS_ON_MARKER)
+
+    private fun withTaskFocusMarker(markdown: String, focusMode: Boolean): String {
+        val clean = markdown.removePrefix(BRIEFING_FOCUS_ON_MARKER).removePrefix("\n")
+        return if (focusMode) "$BRIEFING_FOCUS_ON_MARKER\n$clean" else clean
     }
 
 
@@ -787,5 +900,9 @@ class RoomService(
                 timestampEpochMs = 0L,
             ),
         )
+    }
+
+    private companion object {
+        const val BRIEFING_FOCUS_ON_MARKER = "<!--briefing:focus=on-->"
     }
 }

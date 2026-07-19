@@ -21,6 +21,25 @@ export type RoomTask = {
   sourceTaskTemplateId?: string | null;
 };
 
+/**
+ * A manager-only saved snapshot of a task that is not currently published to
+ * the room. It intentionally stays outside the realtime room payload: the
+ * candidate and inactive SSE subscribers must not receive other task answers.
+ */
+export type RoomTaskWorkspace = {
+  stepIndex: number;
+  title: string;
+  language: string;
+  code: string;
+  briefingMarkdown: string;
+  /** Monotonic revision for non-CRDT manager workspace fields. */
+  revision?: number;
+  /** Full Yjs state retained only for manager subscribers of an inactive task. */
+  yjsDocumentBase64?: string | null;
+  yjsSequence?: number;
+  focusMode?: boolean;
+};
+
 export type RoomNoteMessage = {
   id: string;
   sessionId: string;

@@ -52,6 +52,12 @@ data class RealtimeEventRequest(
     val yjsDocumentBase64: String? = null,
     /** Base64-encoded y-protocols awareness update (remote cursors / selections). */
     val awarenessUpdate: String? = null,
+    /** Optimistic revision of manager-workspace non-CRDT fields. */
+    val revision: Long? = null,
+    /** Generic non-CRDT manager-workspace value (briefing or language). */
+    val value: String? = null,
+    /** Manager workspace focus mode, scoped by [stepIndex]. */
+    val focusMode: Boolean? = null,
     val targetSessionId: String? = null,
     val targetUserId: String? = null,
     val role: String? = null,

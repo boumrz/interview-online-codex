@@ -16,7 +16,9 @@ interview-online is a platform for technical interviews with realtime collaborat
 - OpenSpec is the source of truth for product and technical specifications.
 - Every bug fix, feature, or behavior-changing refactor MUST start with an OpenSpec change under `openspec/changes/<change-id>/`.
 - A change MUST include at least `proposal.md`, capability specs under `specs/**/spec.md`, `design.md` when architecture or dependencies change, and `tasks.md` before implementation.
-- Implementation MUST follow the active OpenSpec change and update task checkboxes as work is completed.
+- After strict OpenSpec validation, executable behaviour MUST follow test-first delivery: choose an E2E acceptance test for a user-observable flow unless a documented integration/unit exception is more proportionate or applicable; author and run that test red before production code is written.
+- Implementation MUST follow the active OpenSpec change, make the prewritten test pass, and update task checkboxes as work is completed.
+- Documentation-only, comment-only, formatting-only, and non-executable configuration work MAY omit an automated test only when the task records why it is not applicable.
 - Completed changes SHOULD be archived with `openspec archive <change-id>` so `openspec/specs/` remains the current baseline.
 
 ## Legacy Specification Policy
@@ -28,13 +30,14 @@ interview-online is a platform for technical interviews with realtime collaborat
 ## Agent Orchestration
 
 - Multi-agent orchestration is the default delivery path, even when the user does not explicitly mention agents.
-- The first owner for any new change is `specification-agent`; implementation cannot begin until the OpenSpec artifacts and task-quality gate are ready.
+- The first owner for any new change is `specification-agent`; production implementation cannot begin until the OpenSpec artifacts and task-quality gate are ready and the planned test has demonstrated the missing behaviour.
 - The default route is: specification-agent -> product-owner-agent -> architect-agent -> team-lead-agent -> prompt-task-auditor-agent -> developer-agent/designer-agent -> solution-reviewer-agent -> security-reliability-agent when applicable -> qa-agent -> test-reviewer-agent -> ux-critic-agent for design work -> product-owner-agent acceptance.
 - Linear remains the single source of task state when a Linear issue exists; OpenSpec remains the single source of specification state.
 
 ## Quality Gates
 
 - Run `openspec validate --strict` for changed OpenSpec artifacts before implementation and before final handoff.
+- For a user-observable behaviour change, author and run its E2E acceptance test before production code, confirming the initial failure; document a proportionate integration/unit alternative when E2E is not applicable.
 - Run frontend typecheck/build and targeted E2E tests for frontend behavior changes.
 - Run backend tests when backend code, contracts, persistence, security, or realtime behavior changes.
 - Realtime, permissions, and security-sensitive changes require explicit reconnect/conflict/authorization coverage in the spec and tests.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Repository Hygiene"
+  short_description: "Safely clean project files and test structure"
+  default_prompt: "Use $repository-hygiene to safely clean this project and reorganize its tests."

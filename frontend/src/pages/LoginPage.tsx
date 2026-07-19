@@ -56,12 +56,10 @@ export function LoginPage() {
   }, [location.search]);
 
   useEffect(() => {
-    trackEvent("mkt_login_view", {
-      next_path: nextPath
-    });
+    trackEvent("mkt_login_view", { auth_status: "anonymous" });
     setVisitParams({
       entrypoint: "login",
-      next_path: nextPath
+      auth_status: "anonymous"
     });
   }, [nextPath]);
 
@@ -72,8 +70,7 @@ export function LoginPage() {
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     trackEvent(isRegisterMode ? "mkt_register_submit" : "mkt_login_submit", {
-      nickname_len: nickname.trim().length,
-      password_len: password.length
+      nickname_len: nickname.trim().length
     });
     try {
       setError("");
@@ -119,7 +116,7 @@ export function LoginPage() {
       dispatch(setCurrentUser(freshProfile));
       localStorage.setItem("display_name", freshProfile.displayName);
       trackEvent(isRegisterMode ? "mkt_register_success" : "mkt_login_success", {
-        next_path: nextPath
+        auth_status: "authenticated"
       });
       navigate(nextPath, { replace: true });
     } catch (err) {

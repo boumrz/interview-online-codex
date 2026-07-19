@@ -132,6 +132,20 @@ type WsMessage = {
   payload: unknown;
 };
 
+export type ManagerWorkspaceRealtimeState = {
+  stepIndex: number;
+  title: string;
+  language: string;
+  code: string;
+  briefingMarkdown: string;
+  revision: number;
+  yjsDocumentBase64?: string | null;
+  yjsSequence?: number | null;
+  /** The server rejected a manager snapshot and the active editor must rebase it. */
+  recovery?: boolean;
+  focusMode?: boolean;
+};
+
 type Options = {
   enabled?: boolean;
   inviteCode: string;
@@ -146,6 +160,21 @@ type Options = {
   onCandidateKey?: (payload: CandidateKeyPayload) => void;
   onRecoveryStateSync?: (lastYjsSequence: number) => void;
   onRequireRecoverySync?: () => void;
+  /** Manager-only inactive-task workspace; never delivered to candidate connections. */
+  onManagerWorkspaceSync?: (payload: ManagerWorkspaceRealtimeState) => void;
+  onManagerWorkspaceYjsUpdate?: (payload: {
+    stepIndex: number;
+    sessionId: string;
+    yjsUpdate: string;
+    yjsSequence?: number | null;
+  }) => void;
+  onManagerWorkspaceAwarenessUpdate?: (payload: {
+    stepIndex: number;
+    sessionId: string;
+    userId?: string | null;
+    participantId?: string | null;
+    awarenessUpdate: string;
+  }) => void;
 };
 
 type ClientMessage =
@@ -188,6 +217,40 @@ type ClientMessage =
       yjsDocumentBase64?: string | null;
     }
   | { type: "awareness_update"; awarenessUpdate: string }
+  | { type: "manager_workspace_open"; stepIndex: number }
+  | { type: "manager_workspace_close"; stepIndex: number }
+  | {
+      type: "manager_workspace_yjs_update";
+      stepIndex: number;
+      yjsUpdate: string;
+      code?: string | null;
+      yjsDocumentBase64?: string | null;
+      baseServerYjsSequence?: number | null;
+      operationId: string;
+    }
+  | {
+      type: "manager_workspace_briefing_update";
+      stepIndex: number;
+      briefingMarkdown: string;
+      revision: number;
+    }
+  | {
+      type: "manager_workspace_language_update";
+      stepIndex: number;
+      language: string;
+      revision: number;
+    }
+  | {
+      type: "manager_workspace_focus_mode_update";
+      stepIndex: number;
+      focusMode: boolean;
+      revision: number;
+    }
+  | {
+      type: "manager_workspace_awareness_update";
+      stepIndex: number;
+      awarenessUpdate: string;
+    }
   | {
       type: "key_press";
       key: string;
@@ -325,7 +388,10 @@ export function useRoomSocket({
   onCursorUpdate,
   onCandidateKey,
   onRecoveryStateSync,
-  onRequireRecoverySync
+  onRequireRecoverySync,
+  onManagerWorkspaceSync,
+  onManagerWorkspaceYjsUpdate,
+  onManagerWorkspaceAwarenessUpdate,
 }: Options) {
   const sseRef = useRef<EventSource | null>(null);
   const pendingMessagesRef = useRef<QueuedClientMessage[]>([]);
@@ -339,6 +405,7 @@ export function useRoomSocket({
   const queueDrainInProgressRef = useRef(false);
   const inFlightControllerRef = useRef<AbortController | null>(null);
   const tryDrainQueueRef = useRef<(() => void) | null>(null);
+  const terminalAccessFailureRef = useRef(false);
   const requiresEventSequence = (payload: ClientMessage) => payload.type !== "request_state_sync" && payload.type !== "presence_update";
   const nextClientEventSequence = () => {
     const next = eventSequenceRef.current + 1;
@@ -347,6 +414,7 @@ export function useRoomSocket({
     return next;
   };
   const queuePayload = (payload: ClientMessage, options: { dedupeSameType?: boolean } = {}) => {
+    if (terminalAccessFailureRef.current) return;
     let abortAndReplaceInFlight = false;
     if (options.dedupeSameType) {
       const currentHead = pendingMessagesRef.current[0];
@@ -376,7 +444,7 @@ export function useRoomSocket({
     pendingMessagesRef.current.push({
       payload,
       queuedAtEpochMs: Date.now(),
-      clientEventSequence: requiresEventSequence(payload) ? nextClientEventSequence() : null
+      clientEventSequence: requiresEventSequence(payload) ? nextClientEventSequence() : null,
     });
     if (pendingMessagesRef.current.length > MAX_PENDING_MESSAGES) {
       pendingMessagesRef.current.shift();
@@ -389,6 +457,7 @@ export function useRoomSocket({
     queuePayload(payload);
   });
   const [connected, setConnected] = useState(false);
+  const [accessDenied, setAccessDenied] = useState(false);
   const participantId = useMemo(() => getOrCreateParticipantId(), []);
   const sessionId = useMemo(() => getOrCreateSessionId(inviteCode), [inviteCode]);
 
@@ -402,6 +471,7 @@ export function useRoomSocket({
   useEffect(() => {
     if (!enabled) {
       setConnected(false);
+      setAccessDenied(false);
       sseRef.current?.close();
       sseRef.current = null;
       pendingMessagesRef.current = [];
@@ -420,6 +490,8 @@ export function useRoomSocket({
     let expectRecoveryStateSync = false;
     let reconnectTimerId: number | null = null;
     let reconnectScheduled = false;
+    let terminalAccessFailure = false;
+    let authorizationRecoveryAttempted = false;
     let leaveNotified = false;
     lastPresenceRef.current = null;
     const metricLastSentAt = new Map<string, number>();
@@ -464,8 +536,30 @@ export function useRoomSocket({
       pendingMessagesRef.current = [];
     };
 
+    const terminateForAccessFailure = () => {
+      if (disposed || terminalAccessFailure) return;
+      terminalAccessFailure = true;
+      terminalAccessFailureRef.current = true;
+      if (reconnectTimerId != null) {
+        window.clearTimeout(reconnectTimerId);
+        reconnectTimerId = null;
+      }
+      reconnectScheduled = false;
+      abortInFlightRequest();
+      const activeSource = sseRef.current;
+      sseRef.current = null;
+      activeSource?.close();
+      dropPendingQueue();
+      eventTokenRef.current = null;
+      lastPresenceRef.current = null;
+      sendRef.current = () => {};
+      setConnected(false);
+      setAccessDenied(true);
+      onError("Не удалось подтвердить доступ к комнате. Откройте актуальную ссылку-приглашение или войдите в аккаунт.");
+    };
+
     const scheduleReconnect = () => {
-      if (disposed || reconnectScheduled) return;
+      if (disposed || terminalAccessFailure || reconnectScheduled) return;
       reconnectScheduled = true;
       emitMetric(
         "prod_realtime_reconnect_scheduled",
@@ -558,12 +652,17 @@ export function useRoomSocket({
 
             const data = (await response.json().catch(() => ({}))) as { error?: string };
             if (response.status === 403) {
-              // Stale event token/session after reconnect. Keep head for retry with a fresh token.
               emitMetric(
                 "prod_realtime_post_rejected",
                 { status_code: 403, payload_type: head.payload.type },
                 { minIntervalMs: 2000, dedupeKey: `post_rejected_403_${head.payload.type}` }
               );
+              if (authorizationRecoveryAttempted) {
+                terminateForAccessFailure();
+                break;
+              }
+              authorizationRecoveryAttempted = true;
+              eventTokenRef.current = null;
               scheduleReconnect();
               break;
             }
@@ -683,7 +782,7 @@ export function useRoomSocket({
       sseRef.current = source;
 
       source.onopen = () => {
-        if (disposed) {
+        if (disposed || terminalAccessFailure) {
           source.close();
           return;
         }
@@ -729,6 +828,7 @@ export function useRoomSocket({
         if (message.type === "state_sync") {
           const payload = message.payload as RealtimeState;
           eventTokenRef.current = payload.eventToken?.trim() || null;
+          setAccessDenied(false);
           const shouldHydrateFromState = expectRecoveryStateSync;
           expectRecoveryStateSync = false;
           emitMetric(
@@ -758,6 +858,82 @@ export function useRoomSocket({
               { minIntervalMs: 1000 }
             );
             onRecoveryStateSync?.(typeof payload.lastYjsSequence === "number" ? payload.lastYjsSequence : 0);
+          }
+          return;
+        }
+        if (message.type === "manager_workspace_sync") {
+          const payload = message.payload as Partial<ManagerWorkspaceRealtimeState>;
+          if (
+            typeof payload?.stepIndex === "number" &&
+            typeof payload.language === "string" &&
+            typeof payload.code === "string" &&
+            typeof payload.briefingMarkdown === "string"
+          ) {
+            onManagerWorkspaceSync?.({
+              stepIndex: payload.stepIndex,
+              title: typeof payload.title === "string" ? payload.title : "",
+              language: payload.language,
+              code: payload.code,
+              briefingMarkdown: payload.briefingMarkdown,
+              revision:
+                typeof payload.revision === "number" && Number.isFinite(payload.revision)
+                  ? Math.max(0, Math.floor(payload.revision))
+                  : 0,
+              yjsDocumentBase64:
+                typeof payload.yjsDocumentBase64 === "string"
+                  ? payload.yjsDocumentBase64
+                  : null,
+              yjsSequence:
+                typeof payload.yjsSequence === "number" && Number.isFinite(payload.yjsSequence)
+                  ? Math.max(0, Math.floor(payload.yjsSequence))
+                  : 0,
+              recovery: payload.recovery === true,
+              focusMode: payload.focusMode === true,
+            });
+          }
+          return;
+        }
+        if (message.type === "manager_workspace_yjs_update") {
+          const payload = message.payload as {
+            stepIndex?: number;
+            sessionId?: string;
+            yjsUpdate?: string;
+            yjsSequence?: number | null;
+          };
+          if (
+            typeof payload?.stepIndex === "number" &&
+            typeof payload.sessionId === "string" &&
+            typeof payload.yjsUpdate === "string"
+          ) {
+            onManagerWorkspaceYjsUpdate?.({
+              stepIndex: payload.stepIndex,
+              sessionId: payload.sessionId,
+              yjsUpdate: payload.yjsUpdate,
+              yjsSequence: typeof payload.yjsSequence === "number" ? payload.yjsSequence : null,
+            });
+          }
+          return;
+        }
+        if (message.type === "manager_workspace_awareness_update") {
+          const payload = message.payload as {
+            stepIndex?: number;
+            sessionId?: string;
+            userId?: string | null;
+            participantId?: string | null;
+            awarenessUpdate?: string;
+          };
+          if (
+            typeof payload?.stepIndex === "number" &&
+            typeof payload.sessionId === "string" &&
+            typeof payload.awarenessUpdate === "string"
+          ) {
+            onManagerWorkspaceAwarenessUpdate?.({
+              stepIndex: payload.stepIndex,
+              sessionId: payload.sessionId,
+              userId: payload.userId ?? null,
+              participantId: payload.participantId ?? null,
+              awarenessUpdate: payload.awarenessUpdate,
+            });
           }
           return;
         }
@@ -888,6 +1064,7 @@ export function useRoomSocket({
       inFlightControllerRef.current = null;
       eventTokenRef.current = null;
       lastPresenceRef.current = null;
+      terminalAccessFailureRef.current = false;
       tryDrainQueueRef.current = null;
 
       sendRef.current = () => {};
@@ -903,6 +1080,9 @@ export function useRoomSocket({
     onError,
     onRecoveryStateSync,
     onRequireRecoverySync,
+    onManagerWorkspaceAwarenessUpdate,
+    onManagerWorkspaceSync,
+    onManagerWorkspaceYjsUpdate,
     onState,
     onYjsUpdate,
     ownerToken,
@@ -1069,6 +1249,78 @@ export function useRoomSocket({
     tryDrainQueueRef.current?.();
   };
 
+  const openManagerWorkspace = (stepIndex: number) => {
+    send({ type: "manager_workspace_open", stepIndex });
+  };
+
+  const closeManagerWorkspace = (stepIndex: number) => {
+    send({ type: "manager_workspace_close", stepIndex });
+  };
+
+  const sendManagerWorkspaceYjsUpdate = (
+    stepIndex: number,
+    yjsUpdate: string,
+    code?: string | null,
+    yjsDocumentBase64?: string | null,
+    baseServerYjsSequence?: number | null,
+  ) => {
+    send({
+      type: "manager_workspace_yjs_update",
+      stepIndex,
+      yjsUpdate: yjsUpdate.trim(),
+      code: code ?? null,
+      yjsDocumentBase64: yjsDocumentBase64?.trim() || null,
+      baseServerYjsSequence:
+        typeof baseServerYjsSequence === "number" && Number.isFinite(baseServerYjsSequence)
+          ? Math.max(0, Math.floor(baseServerYjsSequence))
+          : null,
+      operationId: `manager-yjs-op-${crypto.randomUUID()}`,
+    });
+  };
+
+  const sendManagerWorkspaceBriefingUpdate = (
+    stepIndex: number,
+    briefingMarkdown: string,
+    revision: number,
+  ) => {
+    send({ type: "manager_workspace_briefing_update", stepIndex, briefingMarkdown, revision });
+  };
+
+  const sendManagerWorkspaceLanguageUpdate = (
+    stepIndex: number,
+    language: string,
+    revision: number,
+  ) => {
+    send({ type: "manager_workspace_language_update", stepIndex, language, revision });
+  };
+
+  const sendManagerWorkspaceFocusModeUpdate = (
+    stepIndex: number,
+    focusMode: boolean,
+    revision: number,
+  ) => {
+    send({ type: "manager_workspace_focus_mode_update", stepIndex, focusMode, revision });
+  };
+
+  const sendManagerWorkspaceAwarenessUpdate = (stepIndex: number, awarenessUpdate: string) => {
+    const trimmed = awarenessUpdate.trim();
+    if (!trimmed) return;
+    const token = eventTokenRef.current;
+    if (!token) return;
+    void fetch(`${API_BASE_URL}/realtime/rooms/${inviteCode}/events`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId,
+        eventToken: token,
+        clientEventSequence: null,
+        type: "manager_workspace_awareness_update",
+        stepIndex,
+        awarenessUpdate: trimmed,
+      }),
+    }).catch(() => {});
+  };
+
   const sendKeyPress = (payload: {
     key: string;
     keyCode: string;
@@ -1129,6 +1381,7 @@ export function useRoomSocket({
 
   return {
     connected,
+    accessDenied,
     participantId,
     sessionId,
     sendCodeUpdate,
@@ -1144,6 +1397,13 @@ export function useRoomSocket({
     sendCursorUpdate,
     sendAwarenessUpdate,
     sendYjsUpdate,
+    openManagerWorkspace,
+    closeManagerWorkspace,
+    sendManagerWorkspaceYjsUpdate,
+    sendManagerWorkspaceBriefingUpdate,
+    sendManagerWorkspaceLanguageUpdate,
+    sendManagerWorkspaceFocusModeUpdate,
+    sendManagerWorkspaceAwarenessUpdate,
     sendKeyPress
   };
 }

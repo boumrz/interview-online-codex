@@ -22,6 +22,6 @@ RUN chmod +x /docker-entrypoint.sh
 EXPOSE 80 443
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
-  CMD-SHELL wget -qO- --header="Host: ${DOMAIN:-interview.vtools.tech}" http://127.0.0.1/healthz >/dev/null || exit 1
+  CMD wget -qO- --header="Host: ${DOMAIN:-interview.vtools.tech}" http://127.0.0.1/healthz >/dev/null || exit 1
 
 ENTRYPOINT ["/docker-entrypoint.sh"]

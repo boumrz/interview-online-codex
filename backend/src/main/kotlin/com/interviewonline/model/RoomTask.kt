@@ -47,6 +47,28 @@ class RoomTask(
     @Column(name = "solution_language")
     var solutionLanguage: String? = null,
 
+    /**
+     * A full Yjs document for the manager-only preparation workspace. This is
+     * deliberately stored on a task rather than on [Room], because a draft for
+     * an inactive task must survive a process restart without becoming public.
+     */
+    @Column(name = "workspace_yjs_document_base64", columnDefinition = "TEXT")
+    var workspaceYjsDocumentBase64: String? = null,
+
+    @Column(name = "workspace_yjs_sequence", nullable = false)
+    var workspaceYjsSequence: Long = 0,
+
+    /** Optimistic revision for non-CRDT fields (briefing, language, focus mode). */
+    @Column(name = "workspace_revision", nullable = false)
+    var workspaceRevision: Long = 0,
+
+    /**
+     * Canonical focus-mode value for a prepared task. Null is the legacy state;
+     * callers then fall back to the marker in briefingMarkdown.
+     */
+    @Column(name = "workspace_focus_mode")
+    var workspaceFocusMode: Boolean? = null,
+
     @Column(name = "score")
     var score: Int? = null,
 

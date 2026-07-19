@@ -42,6 +42,9 @@ frontend/.run*.pid
 coverage/
 playwright-report/
 test-results/
+output/
+**/__pycache__/
+~$*.pptx
 
 # Load/performance artifacts and ad-hoc load scripts
 artifacts/

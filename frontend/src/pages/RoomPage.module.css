@@ -14,11 +14,59 @@
   min-height: 100dvh;
 }
 
+.realtimeAccessPending,
+.realtimeAccessError {
+  width: min(560px, calc(100% - 32px));
+  margin: auto;
+  padding: 28px;
+  display: grid;
+  gap: 12px;
+  border: 1px solid rgba(87, 106, 133, 0.5);
+  border-radius: 16px;
+  background: #131922;
+  text-align: center;
+}
+
+.realtimeAccessError {
+  border-color: rgba(245, 101, 101, 0.55);
+}
+
 .topBar {
   min-height: 54px;
   border-bottom: 1px solid #252a32;
   background: #101318;
   flex-shrink: 0;
+}
+
+.stepChangeNotification {
+  position: fixed;
+  z-index: 320;
+  top: 66px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 32px));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px 10px 14px;
+  border: 1px solid rgba(96, 165, 250, 0.44);
+  border-radius: 12px;
+  background: rgba(17, 30, 49, 0.98);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.38);
+}
+
+.stepChangeNotificationCopy {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 3px;
+}
+
+@media (max-width: 600px) {
+  .stepChangeNotification {
+    top: 60px;
+    align-items: flex-start;
+  }
 }
 
 /*
@@ -442,7 +490,7 @@
   min-width: 0;
   display: flex;
   align-items: stretch;
-  border: 1px solid transparent;
+  border: none;
   border-radius: 8px;
   background: #14202c;
   color: #cdd5df;
@@ -450,7 +498,6 @@
   font-weight: 500;
   transition:
     background 120ms ease,
-    border-color 120ms ease,
     color 120ms ease;
 }
 
@@ -458,10 +505,9 @@
   background: #1a283a;
 }
 
-.stepRow[data-active="true"] {
+.stepRow[data-local-selected="true"] {
   background: #232f43;
   color: #f3f5f7;
-  border-color: #34465f;
 }
 
 .stepRowMain {
@@ -498,6 +544,34 @@
   padding: 4px 6px 4px 0;
 }
 
+.stepRowPublishAction {
+  flex: 0 0 auto;
+  align-self: center;
+  min-height: 20px;
+  margin: 4px 2px 4px 0;
+  padding: 0 7px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(76, 145, 235, 0.18);
+  color: #8fc7ff;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.stepRowPublishAction:hover {
+  background: rgba(76, 145, 235, 0.28);
+}
+
+.stepRowPublishAction:focus-visible {
+  outline: 2px solid rgba(117, 184, 255, 0.9);
+  outline-offset: 1px;
+}
+
 .stepRowActionsTrigger {
   opacity: 0.35;
   transition: opacity 120ms ease, background-color 120ms ease;
@@ -523,7 +597,7 @@
   flex-shrink: 0;
 }
 
-.stepRow[data-active="true"] .stepRowIndex {
+.stepRow[data-local-selected="true"] .stepRowIndex {
   background: rgba(255, 255, 255, 0.12);
   color: #f3f5f7;
 }
@@ -578,6 +652,20 @@
 
 .stepRowNotes svg {
   display: block;
+}
+
+.globalActiveStepMarker {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 7px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(38, 117, 94, 0.26);
+  color: #8be2c6;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .taskRatingCard {
@@ -794,6 +882,61 @@
   border: 1px solid #273242;
   border-radius: 10px;
   background: #11161f;
+}
+
+.managerWorkspacePreview {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 8px;
+}
+
+.managerWorkspacePreviewHeader {
+  min-width: 0;
+  padding: 1px 2px;
+}
+
+.managerWorkspacePreviewTitle {
+  min-width: 0;
+  overflow: hidden;
+  color: #f3f5f7;
+  font-size: 14px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.managerWorkspacePreviewLanguage {
+  flex: 0 0 auto;
+  color: #8d9caf;
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
+.managerWorkspacePreviewBriefing,
+.managerWorkspacePreviewCode {
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  overflow: auto;
+  border-radius: 12px;
+  background: #11151c;
+}
+
+.managerWorkspacePreviewBriefing {
+  padding: 12px;
+}
+
+.managerWorkspacePreviewCode {
+  padding: 14px;
+  color: #dbe8fa;
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  tab-size: 2;
+  white-space: pre;
 }
 
 .briefingEditorRoot:focus-within {

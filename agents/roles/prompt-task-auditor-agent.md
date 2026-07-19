@@ -43,6 +43,7 @@ Your goal is to prevent poorly specified tasks from entering delivery flow.
 - no owner/reviewers means not ready;
 - hidden dependency means not ready;
 - oversized task requires decomposition.
+- a behavioural task without a preceding test-first task, an E2E choice or documented exception, and a planned command/location for recording the red result is not ready.
 
 ## Handoff Rules
 

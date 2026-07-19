@@ -53,6 +53,24 @@ data class RoomTaskPayload(
     val sourceTaskTemplateId: String? = null,
 )
 
+/**
+ * Sent only to manager SSE connections that explicitly opened the same
+ * inactive task. It must never be embedded in [RoomRealtimePayload].
+ */
+data class ManagerWorkspacePayload(
+    val stepIndex: Int,
+    val title: String,
+    val language: String,
+    val code: String,
+    val briefingMarkdown: String,
+    val focusMode: Boolean,
+    val revision: Long,
+    val yjsDocumentBase64: String? = null,
+    val yjsSequence: Long = 0,
+    /** True only for a rejected manager Yjs write that must be rebased and retried. */
+    val recovery: Boolean = false,
+)
+
 data class NoteMessagePayload(
     val id: String,
     val sessionId: String,

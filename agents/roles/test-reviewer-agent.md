@@ -41,6 +41,7 @@ You do not replace core QA execution; you assess adequacy of test thinking.
 - realtime features without reconnect/race coverage are incomplete;
 - permission-sensitive features without explicit checks are incomplete;
 - bug without reproducible test-case context is under-specified.
+- a behavioural change without evidence that its selected acceptance test was authored before production implementation is incomplete; E2E is expected for user-observable flows unless a proportionate exception is recorded.
 
 ## Handoff Rules
 

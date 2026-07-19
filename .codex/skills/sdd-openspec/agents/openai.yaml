@@ -1,0 +1,4 @@
+interface:
+  display_name: "SDD OpenSpec"
+  short_description: "Run every project task through OpenSpec SDD."
+  default_prompt: "Use $sdd-openspec to plan, validate, and execute this project task."

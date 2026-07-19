@@ -3,6 +3,7 @@ package com.interviewonline.service
 import com.interviewonline.dto.AdminUserDto
 import com.interviewonline.model.User
 import com.interviewonline.repository.RoomParticipantRepository
+import com.interviewonline.repository.RoomProductMetricRepository
 import com.interviewonline.repository.RoomRepository
 import com.interviewonline.repository.UserRepository
 import com.interviewonline.repository.UserSessionRepository
@@ -21,6 +22,7 @@ class AdminUserService(
     private val userTaskCategoryRepository: UserTaskCategoryRepository,
     private val roomRepository: RoomRepository,
     private val roomParticipantRepository: RoomParticipantRepository,
+    private val roomProductMetricRepository: RoomProductMetricRepository,
     private val collaborationService: CollaborationService,
 ) {
     companion object {
@@ -69,6 +71,7 @@ class AdminUserService(
             if (!roomId.isNullOrBlank()) {
                 roomParticipantRepository.deleteAllByRoomId(roomId)
                 roomParticipantRepository.flush()
+                roomProductMetricRepository.deleteById(roomId)
             }
             roomRepository.delete(room)
             collaborationService.closeRoom(room.inviteCode)

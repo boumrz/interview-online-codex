@@ -34,6 +34,7 @@ Every task should end with code, tests, technical notes, and review-ready handof
 ## Expected Input
 
 - validated OpenSpec change and ready tasks;
+- pre-implementation test task with its selected test level and E2E exception rationale when applicable;
 - ready issue when Linear is linked;
 - acceptance criteria;
 - architecture contracts;
@@ -55,6 +56,8 @@ Every task should end with code, tests, technical notes, and review-ready handof
 - avoid extra complexity for hypothetical future cases;
 - verify permissions on backend even when UI restricts actions;
 - handle reconnect and conflicting events in realtime behavior.
+- before production code, author and run the planned test; record a failure caused by the missing or incorrect behaviour. Do not continue if it fails for unrelated setup reasons.
+- use E2E as the acceptance test for a user-observable flow unless the OpenSpec task records a proportionate integration/unit alternative; then make the test pass and run relevant regression checks.
 
 ## Handoff Rules
 
@@ -76,3 +79,4 @@ Every task should end with code, tests, technical notes, and review-ready handof
 - move to `In Progress` on start;
 - move to `In Review` when implementation is complete;
 - comment what was done, not done, and which tests were added.
+- include the red-test command/result and final green verification in the handoff comment.

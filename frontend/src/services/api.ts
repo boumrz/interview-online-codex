@@ -9,6 +9,7 @@ import type {
   PresetSummary,
   Room,
   RoomSummary,
+  RoomTaskWorkspace,
   TaskLanguageGroup,
   TaskTemplate,
   User,
@@ -65,6 +66,41 @@ export const api = createApi({
       }),
       providesTags: ["Room"],
     }),
+    getRoomTaskWorkspace: builder.query<
+      RoomTaskWorkspace,
+      { inviteCode: string; stepIndex: number; ownerToken?: string; eventToken?: string }
+    >({
+      query: ({ inviteCode, stepIndex, ownerToken, eventToken }) => ({
+        url: `/rooms/${inviteCode}/tasks/${stepIndex}/workspace`,
+        headers: {
+          ...(ownerToken ? { "X-Room-Owner-Token": ownerToken } : {}),
+          ...(eventToken ? { "X-Room-Event-Token": eventToken } : {}),
+        },
+        }),
+      }),
+      updateRoomTaskWorkspace: builder.mutation<
+        RoomTaskWorkspace,
+        {
+          inviteCode: string;
+          stepIndex: number;
+          ownerToken?: string;
+          eventToken?: string;
+          code?: string;
+          language?: string;
+          briefingMarkdown?: string;
+          revision: number;
+        }
+      >({
+        query: ({ inviteCode, stepIndex, ownerToken, eventToken, ...body }) => ({
+          url: `/rooms/${inviteCode}/tasks/${stepIndex}/workspace`,
+          method: "PUT",
+          body,
+          headers: {
+            ...(ownerToken ? { "X-Room-Owner-Token": ownerToken } : {}),
+            ...(eventToken ? { "X-Room-Event-Token": eventToken } : {}),
+          },
+        }),
+      }),
     addRoomTasks: builder.mutation<
       Room,
       {
@@ -365,6 +401,8 @@ export const {
   useCreateGuestRoomMutation,
   useCreateRoomMutation,
   useGetRoomQuery,
+  useGetRoomTaskWorkspaceQuery,
+  useUpdateRoomTaskWorkspaceMutation,
   useAddRoomTasksMutation,
   useUpdateRoomTaskMutation,
   useDeleteRoomTaskMutation,

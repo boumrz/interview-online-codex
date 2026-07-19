@@ -49,6 +49,7 @@ Use `Linear` as the primary planning and status tool.
 - if inputs/outputs are unclear, return for clarification;
 - prioritize MVP blockers and critical dependencies first;
 - delivery order: foundation -> realtime -> execution/account -> hardening.
+- for every behavioural change, create a test-authoring and red-execution task before its production implementation task; E2E is the default for user-observable flows, otherwise record the proportionate test-level exception.
 
 ## Handoff Rules
 

@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Метрики продукта</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/dashboard.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">↗</span><span>Метрики продукта</span></div>
+      <div class="controls" aria-label="Выбор периода">
+        <label class="control-field" for="period-selector"><span>Период</span><select id="period-selector" aria-label="Период дашборда"><option value="30">30 дней</option><option value="90" selected>3 месяца</option><option value="custom">Свои даты</option></select></label>
+        <div id="custom-range" class="custom-range" hidden>
+          <label class="control-field" for="range-start"><span>С</span><input id="range-start" type="date" aria-label="Дата начала периода"></label>
+          <label class="control-field" for="range-end"><span>По</span><input id="range-end" type="date" aria-label="Дата окончания периода"></label>
+        </div>
+        <button id="refresh" type="button">Обновить</button><span id="period" class="period">Загрузка периода…</span>
+      </div>
+    </header>
+
+    <section class="headline" aria-live="polite">
+      <div><p class="eyebrow">Live Metrika dashboard</p><h1>Понимать, как пользуются продуктом</h1></div>
+      <p id="status" class="status">Подключаемся к Метрике…</p>
+    </section>
+
+    <section class="product-priority" aria-labelledby="product-priority-title">
+      <div class="product-priority-heading"><div><p class="eyebrow">Сначала — результат интервью</p><h2 id="product-priority-title">Продуктовые показатели</h2><p>Главный результат — готовое к решению интервью: кандидат подключился, начал техническую работу, а интервьюер сохранил вердикт.</p></div><span class="source-badge server">Сервер · результат интервью</span></div>
+      <article class="authoritative-unavailable"><p class="metric-name">Готовые к решению интервью</p><strong>Недоступно</strong><p>Серверная агрегированная метрика появится после безопасного подключения локального дашборда к защищённому API. Здесь намеренно не подменяем её браузерными целями.</p></article>
+    </section>
+
+    <section class="product-signals" aria-labelledby="product-signals-title">
+      <div class="panel-heading"><div><p class="eyebrow">Сигналы браузера</p><h2 id="product-signals-title">Как движется интервью в Метрике</h2><p>Цели показывают срабатывания в браузерах. Они полезны для диагностики пути, но не являются воронкой уникальных комнат или двух участников.</p></div><span id="product-source-badge" class="source-badge browser">Метрика · браузерное событие</span></div>
+      <p id="product-signal-note" class="source-note">Загружаем сигналы целей…</p>
+      <div id="product-signal-funnel" class="product-signal-funnel" aria-live="polite"></div>
+    </section>
+
+    <section class="legacy-goals" aria-labelledby="legacy-goals-title">
+      <div class="panel-heading"><div><p class="eyebrow">Существующие цели Метрики</p><h2 id="legacy-goals-title">Путь к интервью</h2><p>Собрали полезные цели в понятные этапы: доступ к продукту, подготовка и запуск интервью, работа в комнате. Значения — срабатывания целей, не уникальные люди и не сквозная воронка.</p></div><span id="legacy-goal-source-badge" class="source-badge browser">Метрика · браузерное событие</span></div>
+      <div id="legacy-goal-groups" class="legacy-goal-groups" aria-live="polite"></div>
+      <details class="legacy-goal-details">
+        <summary>Диагностика целей Метрики <span>Открыть детали</span></summary>
+        <p>Здесь — дополнительные сигналы для поиска проблем: неудачные входы и регистрации, ошибки подготовки комнаты и realtime-события. «Недоступно» не означает ноль.</p>
+        <div class="legacy-table-scroll" tabindex="0" aria-label="Таблица диагностических целей Метрики">
+          <table>
+            <caption>Дополнительные цели по этапам пути к интервью</caption>
+            <thead><tr><th scope="col">Этап</th><th scope="col">Цель</th><th scope="col">Срабатывания</th><th scope="col">Как читать</th></tr></thead>
+            <tbody id="legacy-goal-catalogue"></tbody>
+          </table>
+        </div>
+      </details>
+    </section>
+
+    <section class="panel reliability-panel" aria-labelledby="reliability-title">
+      <div class="panel-heading"><div><p class="eyebrow">Диагностика realtime</p><h2 id="reliability-title">Стабильность подключения</h2><p>Отношения считаются к срабатываниям «кандидат подключился». Это браузерный сигнал, а не доля сорванных интервью.</p></div><span class="source-badge browser">Метрика · браузерное событие</span></div>
+      <div id="reliability-cards" class="reliability-cards" aria-live="polite"></div>
+    </section>
+
+    <section class="period-summary" aria-labelledby="period-summary-title">
+      <div class="period-summary-heading"><div><p class="eyebrow">Сначала — главное</p><h2 id="period-summary-title">Что произошло за период</h2></div><p id="summary-line" class="summary-line">Собираем понятную сводку…</p></div>
+      <div class="period-stats">
+        <article><span>Уникальные за период</span><strong id="period-users">—</strong><p>Не сумма DAU: каждый посетитель учитывается один раз.</p></article>
+        <article><span>Впервые пришли</span><strong id="period-new-users">—</strong><p>Первый визит в Метрике, не обязательно регистрация.</p></article>
+        <article><span>Обычный день</span><strong id="average-dau">—</strong><p>Среднее число активных посетителей за день.</p></article>
+        <article><span>Динамика активности</span><strong id="activity-comparison">—</strong><p id="activity-comparison-note">Сравнение второй половины периода с первой.</p></article>
+      </div>
+    </section>
+
+    <details class="reading-guide" open>
+      <summary><span><span class="eyebrow">Памятка на 30 секунд</span><strong id="reading-guide-title">Как читать этот экран</strong></span><span class="guide-hint">Нажмите, чтобы свернуть</span></summary>
+      <ol aria-labelledby="reading-guide-title">
+        <li><strong>Сколько пользуются.</strong> Начните с блока выше и графика DAU: это размер аудитории за выбранный период и её дневная динамика.</li>
+        <li><strong>Сколько приходит впервые.</strong> Новые пользователи — первые визиты Метрики, а не обязательно новые аккаунты или регистрации.</li>
+        <li><strong>Сколько возвращается.</strong> Retention D1/D7/D30 показывает долю новичков, которые вернулись через 1, 7 или 30 дней. «Ещё рано» — это не ноль.</li>
+      </ol>
+    </details>
+
+    <section class="kpis" aria-label="Ключевые показатели">
+      <article class="kpi featured"><p class="metric-name">DAU</p><strong id="dau">—</strong><p id="dau-note" class="metric-note">Активные пользователи за день</p></article>
+      <article class="kpi"><p class="metric-name">WAU</p><strong id="wau">—</strong><p id="wau-note" class="metric-note">Уникальные за 7 дней</p></article>
+      <article class="kpi"><p class="metric-name">MAU</p><strong id="mau">—</strong><p id="mau-note" class="metric-note">Уникальные за 30 дней</p></article>
+      <article class="kpi"><p class="metric-name">Новые пользователи</p><strong id="new-users">—</strong><p id="new-users-note" class="metric-note">За последний полный день</p></article>
+    </section>
+
+    <section class="checkpoint-section" aria-label="Контрольные точки retention">
+      <div class="section-title"><h2>Возвращаемость новых пользователей</h2><span id="retention-scope">Когорты первого визита: D0 — контроль, важнее D1/D7/D30</span></div>
+      <div id="checkpoints" class="checkpoints"></div>
+    </section>
+
+    <section class="panels">
+      <article class="panel"><div class="panel-heading"><div><h2>Retention по дням</h2><p>D0–D30, взвешенно по доступным когортам</p></div><span class="legend coral">D1–D30</span></div><svg id="retention-chart" class="chart" viewBox="0 0 640 270" role="img" aria-label="График retention"></svg></article>
+      <article class="panel"><div class="panel-heading"><div><h2>Когорты retention</h2><p>Возврат новых пользователей по дню первого визита</p></div><span class="legend blue">D0 / D1 / D7</span></div><div class="cohort-scroll"><table><thead><tr><th>Когорта</th><th>D0</th><th>D1</th><th>D7</th><th>D14</th><th>D30</th></tr></thead><tbody id="cohorts"></tbody></table></div></article>
+    </section>
+
+    <section class="panel daily-panel"><div class="panel-heading"><div><h2>Активность аудитории по дням</h2><p>Каждая точка — уникальные посетители Метрики за один день. Ищите устойчивый тренд, а не один случайный пик.</p></div><span class="legend mint">Выбранный период</span></div><svg id="dau-chart" class="chart wide-chart" viewBox="0 0 1320 300" role="img" aria-label="График DAU по дням"></svg></section>
+
+    <section class="quality" aria-label="Состояние данных"><span id="quality-badge" class="quality-badge">Проверяем качество данных…</span><span id="freshness"></span></section>
+
+    <details class="glossary"><summary>Памятка: что означает каждый параметр</summary><div class="glossary-grid">
+      <article><h3>Готовое к решению интервью</h3><p>Будущая серверная метрика комнаты: кандидат подключился, начал техническую работу, а вердикт был сохранён. Это результат продукта, а не браузерная цель.</p></article>
+      <article><h3>Сигнал Метрики</h3><p>Срабатывание цели в браузерном визите. У одного интервью могут быть разные браузеры интервьюера и кандидата, поэтому такие сигналы нельзя читать как последовательную воронку комнат.</p></article>
+      <article><h3>Надёжность realtime</h3><p>Сигналы потери и восстановления соединения, поделённые на срабатывания «кандидат подключился». Они помогают искать технические проблемы, но не доказывают, что интервью не состоялось.</p></article>
+      <article><h3>DAU / активные за день</h3><p><code>ym:s:users</code> за календарный день: уникальные пользователи Метрики с хотя бы одним визитом. Это же число показано на графике DAU.</p></article>
+      <article><h3>WAU</h3><p><code>ym:s:users</code> за включительное скользящее окно из 7 дней. Это уникальные пользователи за окно, а не сумма семи DAU.</p></article>
+      <article><h3>MAU</h3><p><code>ym:s:users</code> за включительное скользящее окно из 30 дней. Это уникальные пользователи за окно, а не сумма 30 DAU.</p></article>
+      <article><h3>Уникальные за период</h3><p><code>ym:s:users</code> за выбранный завершённый период. Можно выбрать собственные даты от 1 до 365 дней; эту цифру нельзя считать суммой DAU.</p></article>
+      <article><h3>Свои даты и retention</h3><p>DAU, WAU и MAU заканчиваются выбранной датой «По». Если период длиннее 90 дней, retention строится по последним 90 дням когорт — это указано над панелями.</p></article>
+      <article><h3>Новые пользователи</h3><p><code>ym:s:newUsers</code> — пользователи, чей первый визит в Метрике пришёлся на этот календарный день.</p></article>
+      <article><h3>Динамика активности</h3><p>Сравнение среднего DAU второй половины выбранного периода с первой. Это наблюдение, а не доказательство причины роста или снижения.</p></article>
+      <article><h3>Когорта</h3><p>Группа пользователей, впервые посетивших продукт в один день. Источник: <code>ym:s:firstVisitDate</code>.</p></article>
+      <article><h3>Retention Dn</h3><p>Доля когорты первого визита, которая была активна ровно через N дней: <code>users(date=C+N, firstVisitDate=C) / users(date=C, firstVisitDate=C)</code>. День визита — <code>ym:s:date</code>.</p></article>
+      <article><h3>Пользователь Метрики</h3><p>Псевдонимный посетитель, обычно связанный с браузером/ClientID. Один человек в разных браузерах или после очистки cookies может считаться несколько раз; это не гарантированно аккаунт приложения.</p></article>
+      <article><h3>Часовой пояс и свежесть</h3><p>Все окна считаются в указанном часовом поясе. По умолчанию KPI привязаны к последнему полному дню; при своих датах — к выбранной дате окончания.</p></article>
+      <article><h3>Выборка и задержка</h3><p>Если Метрика вернула <code>sampled</code>, показана доля <code>sample_share</code>. <code>data_lag</code> — задержка обновления данных в секундах.</p></article>
+    </div></details>
+  </main>
+  <script src="/dashboard.js"></script>
+</body>
+</html>

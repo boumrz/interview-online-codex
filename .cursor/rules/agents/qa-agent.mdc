@@ -30,6 +30,7 @@ Produce a clear release readiness verdict.
 
 ## Rules
 
+- Do not mark a behavioural story ready without reproducible evidence of the planned test's red-to-green result and its E2E choice or documented exception.
 - Every defect needs reproducible steps
 - No task closes without negative path coverage
 - A test case without expected result is invalid

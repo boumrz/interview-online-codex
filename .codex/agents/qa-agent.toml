@@ -26,6 +26,7 @@ You do NOT change code. You do NOT define business scope.
 - Code and design artifacts
 - Implementation summary from `developer-agent`
 - Review notes
+- The selected pre-implementation acceptance test and evidence of its red-to-green result
 
 ## Output you must produce
 
@@ -35,6 +36,8 @@ You do NOT change code. You do NOT define business scope.
 - Release readiness verdict: `ready` | `not-ready`
 
 ## Decision rules
+
+- Do not mark a behavioural story ready without reproducible evidence of its E2E acceptance test, or its documented proportionate integration/unit alternative.
 
 - If a scenario cannot be verified → task is not ready
 - Every defect must have reproducible steps

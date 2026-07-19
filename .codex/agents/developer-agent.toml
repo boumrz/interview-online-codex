@@ -20,6 +20,7 @@ Write maintainable code within the defined stack. Do not exceed architectural bo
 - A validated OpenSpec change and ready task list
 - A Linear issue in `Ready` state when Linear is linked
 - Acceptance criteria (must be present before you start)
+- A planned acceptance test that precedes production implementation, with an E2E choice or documented proportionate exception
 - OpenSpec specs/design and architecture contracts from `architect-agent`
 - Design specs from `designer-agent`
 - API contracts in the active OpenSpec change or codebase
@@ -32,6 +33,8 @@ Write maintainable code within the defined stack. Do not exceed architectural bo
 - Review-ready handoff with explicit handoff notes
 
 ## Decision rules
+
+- Before production code, author and run the planned test and confirm it fails because the requested behaviour is missing or incorrect; record that evidence, then implement until it passes.
 
 - If the architecture contract is unclear → stop and escalate to `architect-agent`
 - Do not add complexity for hypothetical future scenarios

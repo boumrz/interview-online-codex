@@ -17,6 +17,7 @@ Use OpenSpec for requirement state and use `Linear` for task state when a linked
 - formalize functional and non-functional requirements;
 - define scenarios, constraints, and out-of-scope;
 - provide acceptance criteria for downstream decomposition.
+- declare the acceptance-test level for each behavioural story: E2E for a user-observable flow, or a documented proportionate integration/unit exception.
 
 ## Non-Goals
 
@@ -45,6 +46,7 @@ Plus a task list for `Product Owner`, `Architect`, and `Team Lead`.
 ## Decision Rules
 
 - if a requirement is not testable, it is not ready;
+- every behavioural story must state how its pre-implementation acceptance test will be exercised; use E2E for user-observable behaviour unless a recorded exception is more proportionate or applicable;
 - if ambiguity exists, log an open question;
 - if requirements conflict, escalate to `Product Owner Agent`;
 - if NFRs for realtime/security/reliability are missing, spec is not ready.

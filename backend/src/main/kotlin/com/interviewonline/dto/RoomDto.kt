@@ -25,6 +25,38 @@ data class RoomTaskDto(
     val sourceTaskTemplateId: String? = null,
 )
 
+/**
+ * Read-only saved workspace for a task that is not currently published to the
+ * whole room. This is deliberately a separate response from [RoomResponse]
+ * so inactive task code and briefing never enter the room-wide SSE payload.
+ */
+data class RoomTaskWorkspaceDto(
+    val stepIndex: Int,
+    val title: String,
+    val language: String,
+    val code: String,
+    val briefingMarkdown: String,
+    val revision: Long = 0,
+    val yjsDocumentBase64: String? = null,
+    val yjsSequence: Long = 0,
+    val focusMode: Boolean = false,
+)
+
+/**
+ * Durable non-public task preparation update.  The revision is intentionally
+ * separate from code: code collaboration is CRDT-based, while these fields
+ * use optimistic concurrency and return a resync on a stale write.
+ */
+data class UpdateRoomTaskWorkspaceRequest(
+    val code: String? = null,
+    val language: String? = null,
+    val briefingMarkdown: String? = null,
+    val focusMode: Boolean? = null,
+    val revision: Long? = null,
+    val yjsDocumentBase64: String? = null,
+    val yjsSequence: Long? = null,
+)
+
 data class RoomAccessMemberDto(
     val userId: String,
     val displayName: String,

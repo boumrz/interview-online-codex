@@ -4,6 +4,10 @@ description: Rules for all reviewer and auditor agents: solution-reviewer, secur
 
 # Reviewer and Auditor Agents
 
+## Mandatory test-first check
+
+For every behavioural change, reviewers require a selected acceptance test, evidence that it ran red before production implementation, and final green verification. User-observable behaviour uses E2E unless the active OpenSpec task records a proportionate integration/unit exception. The Prompt/Task Auditor returns `needs-clarification` and the Solution Reviewer returns `revise` when this evidence is absent.
+
 ## Solution Reviewer Agent
 **MODEL: Sonnet**
 

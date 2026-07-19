@@ -3,6 +3,7 @@ package com.interviewonline.service
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.interviewonline.model.Room
 import com.interviewonline.model.RoomParticipant
+import com.interviewonline.model.RoomTask
 import com.interviewonline.model.User
 import com.interviewonline.repository.RoomParticipantRepository
 import com.interviewonline.repository.RoomRepository
@@ -11,6 +12,7 @@ import com.interviewonline.service.LanguageNormalizer.normalize as normalizeLang
 import com.interviewonline.ws.CandidateKeyPayload
 import com.interviewonline.ws.CursorPayload
 import com.interviewonline.ws.NoteMessagePayload
+import com.interviewonline.ws.ManagerWorkspacePayload
 import com.interviewonline.ws.ParticipantPayload
 import com.interviewonline.ws.PersonalNoteEntryPayload
 import com.interviewonline.ws.RealtimeEventRequest
@@ -44,6 +46,7 @@ class CollaborationService(
     private val realtimeFaultInjectionService: RealtimeFaultInjectionService,
     private val objectMapper: ObjectMapper,
     private val keystrokePersistenceService: KeystrokePersistenceService,
+    private val roomProductMetricsProjector: RoomProductMetricsProjector,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val notesLockMillis = 3_000L
@@ -99,6 +102,8 @@ class CollaborationService(
         var lastYjsSequence: Long = 0,
         var lastIncrementalYjsSessionId: String? = null,
         var currentStep: Int,
+        /** Immutable identity of the task that owns this public realtime state. */
+        var publishedTaskId: String? = null,
         var notes: String,
         val notesMessages: MutableList<NoteMessagePayload> = mutableListOf(),
         /**
@@ -140,6 +145,32 @@ class CollaborationService(
         var selectionEndColumn: Int? = null,
     )
 
+    /** A room-level shared preparation workspace, visible only to managers who opened it. */
+    private data class ManagerWorkspaceKey(
+        val inviteCode: String,
+        val taskId: String,
+    )
+
+    private data class ManagerWorkspaceState(
+        val roomId: String,
+        var stepIndex: Int,
+        val title: String,
+        var language: String,
+        var code: String,
+        var briefingMarkdown: String,
+        var focusMode: Boolean,
+        var revision: Long,
+        var yjsDocumentBase64: String? = null,
+        var yjsSequence: Long = 0,
+        val appliedOperationIds: MutableMap<String, Long> = ConcurrentHashMap(),
+    )
+
+    /** A delayed public-code persistence operation is always tied to its source task. */
+    private data class PendingRoomCodeSave(
+        val taskId: String,
+        val code: String,
+    )
+
     /**
      * Payload-структуры (`NotesThreadPayload`, `RoomPrivateNotesPayload`,
      * `RoomPrivateNotesAuthorPayload`) живут в файле `PrivateNotesPayloads.kt`
@@ -150,13 +181,18 @@ class CollaborationService(
     private val sseConnections = ConcurrentHashMap<String, SseEmitter>()
     private val participants = ConcurrentHashMap<String, ParticipantMeta>()
     private val roomState = ConcurrentHashMap<String, RealtimeState>()
+    /** One inactive preparation scope may be open per SSE connection. */
+    private val managerWorkspaceSubscriptionByConnection = ConcurrentHashMap<String, ManagerWorkspaceKey>()
+    private val managerWorkspaceState = ConcurrentHashMap<ManagerWorkspaceKey, ManagerWorkspaceState>()
+    /** Serialises manager drafts, public mutations, and publication for one room. */
+    private val managerWorkspaceRoomLocks = ConcurrentHashMap<String, Any>()
     private val connectionByRoomSession = ConcurrentHashMap<String, String>()
     private val sseHeartbeatScheduler = Executors.newSingleThreadScheduledExecutor()
     private val yjsStateBroadcastScheduler = Executors.newSingleThreadScheduledExecutor()
     private val pendingYjsStateBroadcastByRoom = ConcurrentHashMap<String, ScheduledFuture<*>>()
     private val roomCodeDbSaveScheduler = Executors.newSingleThreadScheduledExecutor()
     private val pendingRoomCodeDbSaveByRoom = ConcurrentHashMap<String, ScheduledFuture<*>>()
-    private val latestCodeForDebouncedDbSaveByRoom = ConcurrentHashMap<String, String>()
+    private val latestCodeForDebouncedDbSaveByRoom = ConcurrentHashMap<String, PendingRoomCodeSave>()
     private val roomCandidateKeyHistorySaveScheduler = Executors.newSingleThreadScheduledExecutor()
     private val pendingCandidateKeyHistorySaveByRoom = ConcurrentHashMap<String, ScheduledFuture<*>>()
     private val latestCandidateKeyHistoryJsonByRoom = ConcurrentHashMap<String, String>()
@@ -177,6 +213,7 @@ class CollaborationService(
     fun syncFromRoom(room: Room) {
         val currentState = roomState[room.inviteCode]
         val nextState = toRealtimeState(room)
+        val continuingSamePublishedStep = currentState?.currentStep == nextState.currentStep
         val mergedCandidateKeyHistory = CandidateKeyHistoryHelpers.merge(
             inMemory = currentState?.candidateKeyHistory.orEmpty(),
             persisted = nextState.candidateKeyHistory,
@@ -192,8 +229,8 @@ class CollaborationService(
             lastYjsSnapshotSequenceBySessionId = currentState?.lastYjsSnapshotSequenceBySessionId ?: ConcurrentHashMap(),
             lastClientEventSequenceBySessionId = currentState?.lastClientEventSequenceBySessionId ?: ConcurrentHashMap(),
             grantedRoleBySessionId = currentState?.grantedRoleBySessionId ?: ConcurrentHashMap(),
-            lastYjsSequence = currentState?.lastYjsSequence ?: 0,
-            yjsDocumentBase64 = currentState?.yjsDocumentBase64,
+            lastYjsSequence = if (continuingSamePublishedStep) currentState?.lastYjsSequence ?: 0 else nextState.lastYjsSequence,
+            yjsDocumentBase64 = if (continuingSamePublishedStep) currentState?.yjsDocumentBase64 else nextState.yjsDocumentBase64,
             lastCandidateKey = mergedLastCandidateKey,
             candidateKeyHistory = mergedCandidateKeyHistory.toMutableList(),
             lastCandidateKeyAtEpochMs = mergedLastCandidateKey?.timestampEpochMs ?: 0L,
@@ -205,7 +242,41 @@ class CollaborationService(
         if (mergedCandidateKeyHistory.isNotEmpty()) {
             scheduleCandidateKeyHistorySave(room.inviteCode, mergedCandidateKeyHistory)
         }
+        room.tasks.firstOrNull { it.stepIndex == room.currentStep }?.let { publishedTask ->
+            cleanupPublishedManagerWorkspace(room.inviteCode, publishedTask)
+        }
         broadcastState(room.inviteCode)
+    }
+
+    /**
+     * Advances the public task through the same room-level transition boundary
+     * as realtime manager actions.  The legacy REST endpoint delegates here so
+     * that a pending public edit is saved against its source task before the
+     * newly published task becomes visible.
+     */
+    fun advancePublishedStep(inviteCode: String): Room {
+        synchronized(managerWorkspaceRoomLock(inviteCode)) {
+            val room = roomRepository.findWithTasksByInviteCode(inviteCode)
+                ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+            if (room.tasks.isEmpty()) {
+                throw ApiException(HttpStatus.BAD_REQUEST, "В комнате нет задач для переключения")
+            }
+            setStepInternal(inviteCode, room, (room.currentStep + 1).coerceAtMost(room.tasks.lastIndex))
+            return room
+        }
+    }
+
+    /**
+     * Keeps an already-open manager scope in sync after a manager uses the
+     * REST recovery/save route. The route is deliberately scoped and never
+     * calls [broadcastState], so candidates do not receive this data.
+     */
+    fun syncManagerWorkspaceFromTask(room: Room, task: RoomTask) {
+        if (task.stepIndex == room.currentStep) return
+        val key = managerWorkspaceKey(room.inviteCode, task)
+        val replacement = managerWorkspaceStateFromTask(room, task)
+        managerWorkspaceState[key] = replacement
+        broadcastManagerWorkspaceSync(key, replacement)
     }
 
     @Transactional
@@ -251,6 +322,9 @@ class CollaborationService(
             role = effectiveRole,
             presenceStatus = PresenceStatus.ACTIVE,
         )
+        room.id?.let { roomId ->
+            roomProductMetricsProjector.recordParticipantJoin(roomId, effectiveRole)
+        }
         connectionByRoomSession[roomSessionKey(inviteCode, sessionId)] = connectionId
         sseConnections[connectionId] = emitter
         roomSseConnections.computeIfAbsent(inviteCode) { ConcurrentHashMap.newKeySet() }.add(connectionId)
@@ -363,6 +437,50 @@ class CollaborationService(
                 yjsDocumentBase64 = request.yjsDocumentBase64,
                 eventReceivedAt = eventReceivedAt,
             )
+            "manager_workspace_open" -> openManagerWorkspace(connectionId, request.stepIndex)
+            "manager_workspace_close" -> closeManagerWorkspace(connectionId)
+            "manager_workspace_yjs_update" -> if (!shouldIgnoreLatePublishedManagerWorkspaceEvent(connectionId, request.stepIndex)) {
+                relayManagerWorkspaceYjsUpdate(
+                    connectionId = connectionId,
+                    stepIndex = request.stepIndex,
+                    yjsUpdate = request.yjsUpdate.orEmpty(),
+                    codeSnapshot = request.code,
+                    yjsDocumentBase64 = request.yjsDocumentBase64,
+                    baseServerYjsSequence = request.baseServerYjsSequence,
+                    operationId = request.operationId,
+                )
+            }
+            "manager_workspace_briefing_update" -> if (!shouldIgnoreLatePublishedManagerWorkspaceEvent(connectionId, request.stepIndex)) {
+                updateManagerWorkspaceBriefing(
+                    connectionId = connectionId,
+                    stepIndex = request.stepIndex,
+                    markdown = request.briefingMarkdown ?: request.value.orEmpty(),
+                    revision = request.revision,
+                )
+            }
+            "manager_workspace_language_update" -> if (!shouldIgnoreLatePublishedManagerWorkspaceEvent(connectionId, request.stepIndex)) {
+                updateManagerWorkspaceLanguage(
+                    connectionId = connectionId,
+                    stepIndex = request.stepIndex,
+                    language = request.language ?: request.value.orEmpty(),
+                    revision = request.revision,
+                )
+            }
+            "manager_workspace_focus_mode_update" -> if (!shouldIgnoreLatePublishedManagerWorkspaceEvent(connectionId, request.stepIndex)) {
+                updateManagerWorkspaceFocusMode(
+                    connectionId = connectionId,
+                    stepIndex = request.stepIndex,
+                    focusMode = request.focusMode,
+                    revision = request.revision,
+                )
+            }
+            "manager_workspace_awareness_update" -> if (!shouldIgnoreLatePublishedManagerWorkspaceEvent(connectionId, request.stepIndex)) {
+                relayManagerWorkspaceAwareness(
+                    connectionId = connectionId,
+                    stepIndex = request.stepIndex,
+                    awarenessBase64 = request.awarenessUpdate.orEmpty(),
+                )
+            }
             "request_state_sync" -> sendStateToConnection(connectionId)
             "grant_interviewer_access" -> updateParticipantRoomRole(
                 connectionId = connectionId,
@@ -421,29 +539,39 @@ class CollaborationService(
 
     private fun updateCode(connectionId: String, code: String, codeSequence: Long?) {
         val participant = participants[connectionId] ?: return
-        val state = roomState[participant.inviteCode] ?: return
-        synchronized(state) {
-            if (codeSequence != null) {
-                val lastSequence = state.lastCodeSequenceBySessionId[participant.sessionId]
-                if (lastSequence != null && codeSequence <= lastSequence) {
-                    logger.debug(
-                        "Skipping stale code_update for room {} session {}: sequence {} <= {}",
-                        participant.inviteCode,
-                        participant.sessionId,
-                        codeSequence,
-                        lastSequence,
-                    )
-                    return
+        synchronized(managerWorkspaceRoomLock(participant.inviteCode)) {
+            val state = roomState[participant.inviteCode] ?: return
+            val taskId = synchronized(state) {
+                if (codeSequence != null) {
+                    val lastSequence = state.lastCodeSequenceBySessionId[participant.sessionId]
+                    if (lastSequence != null && codeSequence <= lastSequence) {
+                        logger.debug(
+                            "Skipping stale code_update for room {} session {}: sequence {} <= {}",
+                            participant.inviteCode,
+                            participant.sessionId,
+                            codeSequence,
+                            lastSequence,
+                        )
+                        return
+                    }
+                    state.lastCodeSequenceBySessionId[participant.sessionId] = codeSequence
                 }
-                state.lastCodeSequenceBySessionId[participant.sessionId] = codeSequence
+                state.code = code
+                state.lastCodeUpdatedBySessionId = participant.sessionId
+                state.publishedTaskId ?: return
             }
-            state.code = code
-            state.lastCodeUpdatedBySessionId = participant.sessionId
+            roomRepository.findWithTasksByInviteCode(participant.inviteCode)?.let { room ->
+                val sourceTask = room.tasks.firstOrNull { it.id == taskId } ?: return@let
+                sourceTask.solutionCode = code
+                if (room.currentStep == sourceTask.stepIndex) {
+                    room.code = code
+                }
+                roomRepository.save(room)
+            }
         }
-        roomRepository.findByInviteCode(participant.inviteCode)?.let {
-            it.code = code
-            it.tasks.getOrNull(it.currentStep)?.solutionCode = code
-            roomRepository.save(it)
+        val roomId = roomState[participant.inviteCode]?.roomId.orEmpty()
+        if (participant.role == RoomAccessService.RoomRole.CANDIDATE && roomId.isNotBlank()) {
+            roomProductMetricsProjector.recordMeaningfulCandidateActivity(roomId)
         }
         broadcastState(participant.inviteCode)
     }
@@ -476,6 +604,31 @@ class CollaborationService(
         baseServerYjsSequence: Long?,
         yjsDocumentBase64: String?,
         eventReceivedAt: Long = System.currentTimeMillis(),
+    ) {
+        val participant = participants[connectionId] ?: return
+        synchronized(managerWorkspaceRoomLock(participant.inviteCode)) {
+            relayYjsUpdateLocked(
+                connectionId = connectionId,
+                yjsUpdate = yjsUpdate,
+                syncKey = syncKey,
+                codeSnapshot = codeSnapshot,
+                yjsClientSequence = yjsClientSequence,
+                baseServerYjsSequence = baseServerYjsSequence,
+                yjsDocumentBase64 = yjsDocumentBase64,
+                eventReceivedAt = eventReceivedAt,
+            )
+        }
+    }
+
+    private fun relayYjsUpdateLocked(
+        connectionId: String,
+        yjsUpdate: String,
+        syncKey: String?,
+        codeSnapshot: String?,
+        yjsClientSequence: Long?,
+        baseServerYjsSequence: Long?,
+        yjsDocumentBase64: String?,
+        eventReceivedAt: Long,
     ) {
         val participant = participants[connectionId] ?: return
         val state = roomState[participant.inviteCode] ?: return
@@ -632,6 +785,9 @@ class CollaborationService(
             ),
             excludeConnectionId = connectionId,
         )
+        if (participant.role == RoomAccessService.RoomRole.CANDIDATE && state.roomId.isNotBlank()) {
+            roomProductMetricsProjector.recordMeaningfulCandidateActivity(state.roomId)
+        }
         logger.info(
             "yjs_relay_latency room={} seq={} relay_ms={}",
             participant.inviteCode,
@@ -641,16 +797,26 @@ class CollaborationService(
     }
 
     private fun scheduleDebouncedRoomCodeSave(inviteCode: String, code: String) {
-        latestCodeForDebouncedDbSaveByRoom[inviteCode] = code
+        val sourceTaskId = roomState[inviteCode]?.publishedTaskId ?: return
+        scheduleDebouncedRoomCodeSave(inviteCode, sourceTaskId, code)
+    }
+
+    private fun scheduleDebouncedRoomCodeSave(inviteCode: String, taskId: String, code: String) {
+        latestCodeForDebouncedDbSaveByRoom[inviteCode] = PendingRoomCodeSave(taskId = taskId, code = code)
         pendingRoomCodeDbSaveByRoom.remove(inviteCode)?.cancel(false)
         val next = roomCodeDbSaveScheduler.schedule({
             pendingRoomCodeDbSaveByRoom.remove(inviteCode)
             val latest = latestCodeForDebouncedDbSaveByRoom.remove(inviteCode) ?: return@schedule
             try {
-                roomRepository.findWithTasksByInviteCode(inviteCode)?.let { room ->
-                    room.code = latest
-                    room.tasks.getOrNull(room.currentStep)?.solutionCode = latest
-                    roomRepository.save(room)
+                synchronized(managerWorkspaceRoomLock(inviteCode)) {
+                    roomRepository.findWithTasksByInviteCode(inviteCode)?.let { room ->
+                        val sourceTask = room.tasks.firstOrNull { it.id == latest.taskId } ?: return@let
+                        sourceTask.solutionCode = latest.code
+                        if (room.currentStep == sourceTask.stepIndex) {
+                            room.code = latest.code
+                        }
+                        roomRepository.save(room)
+                    }
                 }
             } catch (ex: Exception) {
                 logger.warn("Debounced room code save failed for {}", inviteCode, ex)
@@ -687,25 +853,256 @@ class CollaborationService(
         pendingYjsStateBroadcastByRoom[inviteCode] = next
     }
 
+    private fun openManagerWorkspace(connectionId: String, requestedStepIndex: Int?) {
+        if (shouldIgnoreLatePublishedManagerWorkspaceEvent(connectionId, requestedStepIndex)) return
+        val participant = participants[connectionId] ?: return
+        requireManagerParticipant(participant)
+        val room = roomRepository.findWithTasksByInviteCode(participant.inviteCode)
+            ?: throw ApiException(HttpStatus.NOT_FOUND, "РљРѕРјРЅР°С‚Р° РЅРµ РЅР°Р№РґРµРЅР°")
+        val stepIndex = requestedStepIndex ?: throw ApiException(HttpStatus.BAD_REQUEST, "РќРµ РїРµСЂРµРґР°РЅ РЅРѕРјРµСЂ С€Р°РіР°")
+        val task = requireInactiveTask(room, stepIndex)
+        val key = managerWorkspaceKey(participant.inviteCode, task)
+        val workspace = managerWorkspaceState.computeIfAbsent(key) { managerWorkspaceStateFromTask(room, task) }
+        workspace.stepIndex = task.stepIndex
+        managerWorkspaceSubscriptionByConnection[connectionId] = key
+        sendManagerWorkspaceSync(connectionId, workspace)
+    }
+
+    private fun shouldIgnoreLatePublishedManagerWorkspaceEvent(
+        connectionId: String,
+        requestedStepIndex: Int?,
+    ): Boolean {
+        val participant = participants[connectionId] ?: return false
+        requireManagerParticipant(participant)
+        val stepIndex = requestedStepIndex ?: return false
+        val room = roomRepository.findWithTasksByInviteCode(participant.inviteCode) ?: return false
+        if (stepIndex != room.currentStep) return false
+        managerWorkspaceSubscriptionByConnection.remove(connectionId)
+        return true
+    }
+
+    private fun closeManagerWorkspace(connectionId: String) {
+        val participant = participants[connectionId] ?: return
+        requireManagerParticipant(participant)
+        val existing = managerWorkspaceSubscriptionByConnection[connectionId] ?: return
+        managerWorkspaceSubscriptionByConnection.remove(connectionId, existing)
+    }
+
+    private fun updateManagerWorkspaceBriefing(
+        connectionId: String,
+        stepIndex: Int?,
+        markdown: String,
+        revision: Long?,
+    ) {
+        val (key, workspace) = requireManagerWorkspaceSubscription(connectionId, stepIndex)
+        val normalized = markdown.replace("\u0000", "").take(120_000)
+        synchronized(managerWorkspaceRoomLock(key.inviteCode)) {
+            synchronized(workspace) {
+                requireWorkspaceRevision(connectionId, workspace, revision)
+                workspace.briefingMarkdown = normalized
+                workspace.revision += 1
+                persistManagerWorkspace(key, workspace)
+            }
+        }
+        broadcastManagerWorkspaceSync(key, workspace)
+    }
+
+    private fun updateManagerWorkspaceLanguage(
+        connectionId: String,
+        stepIndex: Int?,
+        language: String,
+        revision: Long?,
+    ) {
+        val (key, workspace) = requireManagerWorkspaceSubscription(connectionId, stepIndex)
+        synchronized(managerWorkspaceRoomLock(key.inviteCode)) {
+            synchronized(workspace) {
+                requireWorkspaceRevision(connectionId, workspace, revision)
+                workspace.language = normalizeLanguage(language)
+                workspace.revision += 1
+                persistManagerWorkspace(key, workspace)
+            }
+        }
+        broadcastManagerWorkspaceSync(key, workspace)
+    }
+
+    private fun updateManagerWorkspaceFocusMode(
+        connectionId: String,
+        stepIndex: Int?,
+        focusMode: Boolean?,
+        revision: Long?,
+    ) {
+        val (key, workspace) = requireManagerWorkspaceSubscription(connectionId, stepIndex)
+        val nextFocusMode = focusMode ?: throw ApiException(HttpStatus.BAD_REQUEST, "РќРµ РїРµСЂРµРґР°РЅ focusMode")
+        synchronized(managerWorkspaceRoomLock(key.inviteCode)) {
+            synchronized(workspace) {
+                requireWorkspaceRevision(connectionId, workspace, revision)
+                workspace.focusMode = nextFocusMode
+                workspace.revision += 1
+                persistManagerWorkspace(key, workspace)
+            }
+        }
+        broadcastManagerWorkspaceSync(key, workspace)
+    }
+
+    private fun relayManagerWorkspaceYjsUpdate(
+        connectionId: String,
+        stepIndex: Int?,
+        yjsUpdate: String,
+        codeSnapshot: String?,
+        yjsDocumentBase64: String?,
+        baseServerYjsSequence: Long?,
+        operationId: String?,
+    ) {
+        val participant = participants[connectionId] ?: return
+        val (key, workspace) = requireManagerWorkspaceSubscription(connectionId, stepIndex)
+        val trimmedUpdate = yjsUpdate.trim()
+        val document = yjsDocumentBase64?.trim()?.takeIf { it.isNotEmpty() }
+        if (document != null && document.length > maxYjsDocumentBase64Chars) {
+            throw ApiException(HttpStatus.BAD_REQUEST, "Yjs document is too large")
+        }
+        if (trimmedUpdate.isEmpty() && document == null) return
+
+        var yjsSequence: Long
+        synchronized(managerWorkspaceRoomLock(key.inviteCode)) {
+            synchronized(workspace) {
+                val hasMismatchedBase =
+                    baseServerYjsSequence == null ||
+                        baseServerYjsSequence != workspace.yjsSequence
+                if (hasMismatchedBase) {
+                    // A full Yjs document is authoritative only at the exact
+                    // server sequence it was built from. Reject both stale and
+                    // future bases; the client merges this canonical snapshot
+                    // with its local Y.Doc and retries from this sequence.
+                    sendManagerWorkspaceSync(connectionId, workspace, recovery = true)
+                    throw ApiException(
+                        HttpStatus.CONFLICT,
+                        "Manager workspace Yjs snapshot requires resynchronisation",
+                    )
+                }
+                if (!markOperationApplied(workspace.appliedOperationIds, operationId)) return
+                if (document != null) {
+                    workspace.yjsDocumentBase64 = document
+                    codeSnapshot?.let { workspace.code = it }
+                }
+                workspace.yjsSequence += 1
+                yjsSequence = workspace.yjsSequence
+                persistManagerWorkspace(key, workspace)
+            }
+        }
+
+        // Do not echo to candidates or to managers editing a different task.
+        broadcastManagerWorkspaceTransport(
+            key = key,
+            type = "manager_workspace_yjs_update",
+            payload = mapOf(
+                "stepIndex" to workspace.stepIndex,
+                "sessionId" to participant.sessionId,
+                "yjsUpdate" to yjsUpdate,
+                "yjsSequence" to yjsSequence,
+            ),
+            excludeConnectionId = connectionId,
+        )
+        // The incremental event is low-latency, while this authoritative full
+        // snapshot lets every subscribed manager converge after a concurrent
+        // write or an empty heartbeat update. Candidates never subscribe to
+        // this channel.
+        broadcastManagerWorkspaceSync(key, workspace)
+    }
+
+    private fun relayManagerWorkspaceAwareness(
+        connectionId: String,
+        stepIndex: Int?,
+        awarenessBase64: String,
+    ) {
+        val participant = participants[connectionId] ?: return
+        val (key, workspace) = requireManagerWorkspaceSubscription(connectionId, stepIndex)
+        val trimmed = awarenessBase64.trim()
+        if (trimmed.isEmpty() || trimmed.length > maxAwarenessUpdateBase64Chars) return
+        broadcastManagerWorkspaceTransport(
+            key = key,
+            type = "manager_workspace_awareness_update",
+            payload = mapOf(
+                "stepIndex" to workspace.stepIndex,
+                "sessionId" to participant.sessionId,
+                "userId" to participant.userId,
+                "participantId" to participant.participantId,
+                "awarenessUpdate" to trimmed,
+            ),
+            excludeConnectionId = connectionId,
+        )
+    }
+
+    private fun requireManagerWorkspaceSubscription(
+        connectionId: String,
+        requestedStepIndex: Int?,
+    ): Pair<ManagerWorkspaceKey, ManagerWorkspaceState> {
+        val participant = participants[connectionId]
+            ?: throw ApiException(HttpStatus.FORBIDDEN, "РќРµС‚ Р°РєС‚РёРІРЅРѕРіРѕ РїРѕРґРєР»СЋС‡РµРЅРёСЏ")
+        requireManagerParticipant(participant)
+        val stepIndex = requestedStepIndex ?: throw ApiException(HttpStatus.BAD_REQUEST, "РќРµ РїРµСЂРµРґР°РЅ РЅРѕРјРµСЂ С€Р°РіР°")
+        val room = roomRepository.findWithTasksByInviteCode(participant.inviteCode)
+            ?: throw ApiException(HttpStatus.NOT_FOUND, "РљРѕРјРЅР°С‚Р° РЅРµ РЅР°Р№РґРµРЅР°")
+        val task = requireInactiveTask(room, stepIndex)
+        val key = managerWorkspaceKey(participant.inviteCode, task)
+        if (managerWorkspaceSubscriptionByConnection[connectionId] != key) {
+            throw ApiException(HttpStatus.FORBIDDEN, "Р Р°Р±РѕС‡РµРµ РїСЂРѕСЃС‚СЂР°РЅСЃС‚РІРѕ Р·Р°РґР°С‡Рё РЅРµ РѕС‚РєСЂС‹С‚Рѕ")
+        }
+        val workspace = managerWorkspaceState[key]
+            ?: throw ApiException(HttpStatus.CONFLICT, "Р Р°Р±РѕС‡РµРµ РїСЂРѕСЃС‚СЂР°РЅСЃС‚РІРѕ Р±С‹Р»Рѕ РѕР±РЅРѕРІР»РµРЅРѕ")
+        return key to workspace
+    }
+
+    private fun requireWorkspaceRevision(
+        connectionId: String,
+        workspace: ManagerWorkspaceState,
+        revision: Long?,
+    ) {
+        if (revision == workspace.revision) return
+        sendManagerWorkspaceSync(connectionId, workspace)
+        throw ApiException(HttpStatus.CONFLICT, "Р§РµСЂРЅРѕРІРёРє Р·Р°РґР°С‡Рё РёР·РјРµРЅРёР»СЃСЏ; РІС‹РїРѕР»РЅРµРЅР° СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёСЏ")
+    }
+
+    private fun requireManagerParticipant(participant: ParticipantMeta) {
+        if (!participant.canManageRoom) {
+            throw ApiException(HttpStatus.FORBIDDEN, "РўРѕР»СЊРєРѕ РёРЅС‚РµСЂРІСЊСЋРµСЂ РјРѕР¶РµС‚ РѕС‚РєСЂС‹РІР°С‚СЊ РїРѕРґРіРѕС‚РѕРІРєСѓ Р·Р°РґР°С‡Рё")
+        }
+    }
+
+    private fun requireInactiveTask(room: Room, stepIndex: Int): RoomTask {
+        if (stepIndex < 0 || stepIndex >= room.tasks.size) {
+            throw ApiException(HttpStatus.BAD_REQUEST, "РќРѕРјРµСЂ С€Р°РіР° РІРЅРµ РґРёР°РїР°Р·РѕРЅР°")
+        }
+        if (stepIndex == room.currentStep) {
+            throw ApiException(HttpStatus.BAD_REQUEST, "РћРїСѓР±Р»РёРєРѕРІР°РЅРЅР°СЏ Р·Р°РґР°С‡Р° РёСЃРїРѕР»СЊР·СѓРµС‚ РѕР±С‰РёР№ РєР°РЅР°Р»")
+        }
+        return room.tasks.firstOrNull { it.stepIndex == stepIndex }
+            ?: throw ApiException(HttpStatus.NOT_FOUND, "Р—Р°РґР°С‡Р° РЅРµ РЅР°Р№РґРµРЅР°")
+    }
+
     private fun updateLanguage(connectionId: String, language: String) {
         val participant = participants[connectionId] ?: return
         if (!participant.canManageRoom) {
             throw ApiException(HttpStatus.FORBIDDEN, "Только интервьюер может менять язык")
         }
         val normalizedLanguage = normalizeLanguage(language)
-        roomState[participant.inviteCode]?.let { state ->
-            synchronized(state) {
+        synchronized(managerWorkspaceRoomLock(participant.inviteCode)) {
+            val state = roomState[participant.inviteCode] ?: return
+            val taskId = synchronized(state) {
                 state.language = normalizedLanguage
                 val currentTaskIndex = state.tasks.indexOfFirst { it.stepIndex == state.currentStep }
                 if (currentTaskIndex >= 0) {
                     state.tasks[currentTaskIndex] = state.tasks[currentTaskIndex].copy(language = normalizedLanguage)
                 }
+                state.publishedTaskId ?: return
             }
-        }
-        roomRepository.findByInviteCode(participant.inviteCode)?.let { room ->
-            room.language = normalizedLanguage
-            room.tasks.getOrNull(room.currentStep)?.solutionLanguage = normalizedLanguage
-            roomRepository.save(room)
+            roomRepository.findWithTasksByInviteCode(participant.inviteCode)?.let { room ->
+                val sourceTask = room.tasks.firstOrNull { it.id == taskId } ?: return@let
+                sourceTask.solutionLanguage = normalizedLanguage
+                if (room.currentStep == sourceTask.stepIndex) {
+                    room.language = normalizedLanguage
+                }
+                roomRepository.save(room)
+            }
         }
         broadcastState(participant.inviteCode)
     }
@@ -837,11 +1234,20 @@ class CollaborationService(
             throw ApiException(HttpStatus.FORBIDDEN, "Только интервьюер может редактировать markdown")
         }
         val normalized = markdown.replace("\u0000", "").take(120_000)
-        roomState[participant.inviteCode]?.briefingMarkdown = normalized
-        roomRepository.findWithTasksByInviteCode(participant.inviteCode)?.let { room ->
-            room.briefingMarkdown = normalized
-            room.tasks.getOrNull(room.currentStep)?.briefingMarkdown = normalized
-            roomRepository.save(room)
+        synchronized(managerWorkspaceRoomLock(participant.inviteCode)) {
+            val state = roomState[participant.inviteCode] ?: return
+            val taskId = synchronized(state) {
+                state.briefingMarkdown = normalized
+                state.publishedTaskId ?: return
+            }
+            roomRepository.findWithTasksByInviteCode(participant.inviteCode)?.let { room ->
+                val sourceTask = room.tasks.firstOrNull { it.id == taskId } ?: return@let
+                sourceTask.briefingMarkdown = normalized
+                if (room.currentStep == sourceTask.stepIndex) {
+                    room.briefingMarkdown = normalized
+                }
+                roomRepository.save(room)
+            }
         }
         broadcastState(participant.inviteCode)
     }
@@ -1170,6 +1576,11 @@ class CollaborationService(
         }
 
         scheduleCandidateKeyHistorySave(participant.inviteCode, historySnapshot)
+        if (normalizedEventKind == "keydown" || normalizedEventKind == "paste") {
+            state.roomId.takeIf { it.isNotBlank() }?.let { roomId ->
+                roomProductMetricsProjector.recordMeaningfulCandidateActivity(roomId)
+            }
+        }
 
         val managerConnectionIds = participants.entries
             .asSequence()
@@ -1206,13 +1617,15 @@ class CollaborationService(
         if (!participant.canManageRoom) {
             throw ApiException(HttpStatus.FORBIDDEN, "Только интервьюер может переключать шаги")
         }
-        val room = roomRepository.findByInviteCode(participant.inviteCode)
-            ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
-        if (room.tasks.isEmpty()) {
-            throw ApiException(HttpStatus.BAD_REQUEST, "В комнате нет задач для переключения")
+        synchronized(managerWorkspaceRoomLock(participant.inviteCode)) {
+            val room = roomRepository.findWithTasksByInviteCode(participant.inviteCode)
+                ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+            if (room.tasks.isEmpty()) {
+                throw ApiException(HttpStatus.BAD_REQUEST, "В комнате нет задач для переключения")
+            }
+            val maxStep = room.tasks.size - 1
+            setStepInternal(participant.inviteCode, room, (room.currentStep + 1).coerceAtMost(maxStep))
         }
-        val maxStep = room.tasks.size - 1
-        setStepInternal(participant.inviteCode, room, (room.currentStep + 1).coerceAtMost(maxStep))
     }
 
     private fun setStep(connectionId: String, stepIndex: Int) {
@@ -1220,15 +1633,17 @@ class CollaborationService(
         if (!participant.canManageRoom) {
             throw ApiException(HttpStatus.FORBIDDEN, "Только интервьюер может переключать шаги")
         }
-        val room = roomRepository.findByInviteCode(participant.inviteCode)
-            ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
-        if (room.tasks.isEmpty()) {
-            throw ApiException(HttpStatus.BAD_REQUEST, "В комнате нет задач для переключения")
+        synchronized(managerWorkspaceRoomLock(participant.inviteCode)) {
+            val room = roomRepository.findWithTasksByInviteCode(participant.inviteCode)
+                ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+            if (room.tasks.isEmpty()) {
+                throw ApiException(HttpStatus.BAD_REQUEST, "В комнате нет задач для переключения")
+            }
+            if (stepIndex < 0 || stepIndex >= room.tasks.size) {
+                throw ApiException(HttpStatus.BAD_REQUEST, "Номер шага вне диапазона")
+            }
+            setStepInternal(participant.inviteCode, room, stepIndex)
         }
-        if (stepIndex < 0 || stepIndex >= room.tasks.size) {
-            throw ApiException(HttpStatus.BAD_REQUEST, "Номер шага вне диапазона")
-        }
-        setStepInternal(participant.inviteCode, room, stepIndex)
     }
 
     fun broadcastVerdictSet(
@@ -1264,6 +1679,13 @@ class CollaborationService(
         pendingCandidateKeyHistorySaveByRoom.remove(inviteCode)?.cancel(false)
         latestCandidateKeyHistoryJsonByRoom.remove(inviteCode)
         roomState.remove(inviteCode)
+        managerWorkspaceState.keys
+            .filter { it.inviteCode == inviteCode }
+            .forEach { managerWorkspaceState.remove(it) }
+        managerWorkspaceRoomLocks.remove(inviteCode)
+        managerWorkspaceSubscriptionByConnection.entries
+            .filter { it.value.inviteCode == inviteCode }
+            .forEach { (connectionId, key) -> managerWorkspaceSubscriptionByConnection.remove(connectionId, key) }
         val connectionIds = participants.entries
             .asSequence()
             .filter { it.value.inviteCode == inviteCode }
@@ -1369,6 +1791,49 @@ class CollaborationService(
                 detachConnection(connectionId, closeTransport = true)
             }
         }
+    }
+
+    private fun sendManagerWorkspaceSync(
+        connectionId: String,
+        workspace: ManagerWorkspaceState,
+        recovery: Boolean = false,
+    ) {
+        val emitter = sseConnections[connectionId] ?: return
+        val participant = participants[connectionId] ?: return
+        if (!participant.canManageRoom) return
+        val payload = managerWorkspacePayload(workspace, recovery = recovery)
+        try {
+            sendSseMessage(emitter, objectMapper.writeValueAsString(WsOutgoingMessage("manager_workspace_sync", payload)))
+        } catch (ex: Exception) {
+            logger.warn("Failed to send manager workspace sync", ex)
+            detachConnection(connectionId, closeTransport = true)
+        }
+    }
+
+    private fun broadcastManagerWorkspaceSync(key: ManagerWorkspaceKey, workspace: ManagerWorkspaceState) {
+        broadcastManagerWorkspaceTransport(key, "manager_workspace_sync", managerWorkspacePayload(workspace))
+    }
+
+    private fun broadcastManagerWorkspaceTransport(
+        key: ManagerWorkspaceKey,
+        type: String,
+        payload: Any,
+        excludeConnectionId: String? = null,
+    ) {
+        val subscribers = managerWorkspaceSubscriptionByConnection.entries
+            .asSequence()
+            .filter { it.value == key }
+            .map { it.key }
+            .filter { connectionId -> participants[connectionId]?.canManageRoom == true }
+            .toSet()
+        if (subscribers.isEmpty()) return
+        broadcastTransportMessage(
+            inviteCode = key.inviteCode,
+            type = type,
+            payload = payload,
+            excludeConnectionId = excludeConnectionId,
+            includeConnectionIds = subscribers,
+        )
     }
 
     private fun sendSseMessage(emitter: SseEmitter, encodedMessage: String) {
@@ -1502,6 +1967,13 @@ class CollaborationService(
             current.solutionCode = currentState?.code ?: room.code
             current.solutionLanguage = normalizeLanguage(currentState?.language ?: room.language)
             current.briefingMarkdown = currentState?.briefingMarkdown ?: current.briefingMarkdown
+            // Once this public task becomes inactive, managers must resume the
+            // exact document they just edited, not the older draft snapshot
+            // that was used when the task was first published.
+            current.workspaceYjsDocumentBase64 = currentState?.yjsDocumentBase64
+                ?: current.workspaceYjsDocumentBase64
+            current.workspaceYjsSequence = currentState?.lastYjsSequence
+                ?: current.workspaceYjsSequence
         }
         if (room.notes.isNullOrBlank()) {
             room.notes = currentTask?.interviewerNotes?.takeIf { it.isNotBlank() }
@@ -1509,11 +1981,25 @@ class CollaborationService(
         }
         room.tasks.forEach { it.interviewerNotes = null }
 
-        room.currentStep = stepIndex
         val nextTask = room.tasks[stepIndex]
+        // Publication copies the exact durable manager workspace under the
+        // room lock.  A concurrent scoped update cannot interleave between the
+        // copy and Room.currentStep becoming public.
+        managerWorkspaceState[managerWorkspaceKey(inviteCode, nextTask)]?.let { workspace ->
+            synchronized(workspace) {
+                nextTask.solutionCode = workspace.code
+                nextTask.solutionLanguage = workspace.language
+                nextTask.briefingMarkdown = workspace.briefingMarkdown
+                nextTask.workspaceFocusMode = workspace.focusMode
+                nextTask.workspaceRevision = workspace.revision
+                nextTask.workspaceYjsDocumentBase64 = workspace.yjsDocumentBase64
+                nextTask.workspaceYjsSequence = workspace.yjsSequence
+            }
+        }
+        room.currentStep = stepIndex
         room.language = normalizeLanguage(nextTask.solutionLanguage?.ifBlank { null } ?: nextTask.language)
         room.code = nextTask.solutionCode ?: nextTask.starterCode
-        room.briefingMarkdown = nextTask.briefingMarkdown.orEmpty()
+        room.briefingMarkdown = withTaskFocusMarker(nextTask.briefingMarkdown.orEmpty(), taskFocusMode(nextTask))
         roomRepository.save(room)
         val mergedCandidateKeyHistory = CandidateKeyHistoryHelpers.merge(
             inMemory = currentState?.candidateKeyHistory.orEmpty(),
@@ -1526,15 +2012,19 @@ class CollaborationService(
             language = normalizeLanguage(room.language),
             code = room.code,
             lastCodeUpdatedBySessionId = null,
-            yjsDocumentBase64 = null,
-            lastYjsSequence = 0,
+            yjsDocumentBase64 = nextTask.workspaceYjsDocumentBase64,
+            lastYjsSequence = nextTask.workspaceYjsSequence,
             lastIncrementalYjsSessionId = null,
             currentStep = room.currentStep,
+            publishedTaskId = nextTask.id,
             notes = room.notes.orEmpty(),
             notesMessages = currentState?.notesMessages?.toMutableList()
                 ?: PrivateNotesSerialization.parseChatMessages(room.interviewerChat, room.notes, objectMapper),
             privateNotesByAuthor = currentState?.privateNotesByAuthor ?: parseRoomPrivateNotes(room),
-            briefingMarkdown = nextTask.briefingMarkdown?.takeIf { it.isNotBlank() } ?: nextTask.description,
+            briefingMarkdown = withTaskFocusMarker(
+                nextTask.briefingMarkdown?.takeIf { it.isNotBlank() } ?: nextTask.description,
+                taskFocusMode(nextTask),
+            ),
             tasks = taskPayloads,
             notesLockedBySessionId = currentState?.notesLockedBySessionId,
             notesLockedByDisplayName = currentState?.notesLockedByDisplayName,
@@ -1554,6 +2044,7 @@ class CollaborationService(
             status = room.status ?: "active",
             finishedAt = room.finishedAt?.toEpochMilli(),
         )
+        cleanupPublishedManagerWorkspace(inviteCode, nextTask)
         broadcastState(inviteCode)
     }
 
@@ -1605,6 +2096,7 @@ class CollaborationService(
     private fun detachConnection(connectionId: String, closeTransport: Boolean): String? {
         val participant = participants.remove(connectionId)
         val inviteCode = participant?.inviteCode
+        managerWorkspaceSubscriptionByConnection.remove(connectionId)
 
         if (participant != null) {
             connectionByRoomSession.remove(roomSessionKey(participant.inviteCode, participant.sessionId), connectionId)
@@ -1836,6 +2328,102 @@ class CollaborationService(
         return scores
     }
 
+    private fun managerWorkspaceKey(inviteCode: String, task: RoomTask): ManagerWorkspaceKey =
+        ManagerWorkspaceKey(
+            inviteCode = inviteCode,
+            taskId = requireNotNull(task.id) { "Manager workspace task must be persisted" },
+        )
+
+    private fun managerWorkspaceStateFromTask(room: Room, task: RoomTask): ManagerWorkspaceState =
+        ManagerWorkspaceState(
+            roomId = room.id.orEmpty(),
+            stepIndex = task.stepIndex,
+            title = task.title,
+            language = normalizeLanguage(task.solutionLanguage?.ifBlank { null } ?: task.language),
+            code = task.solutionCode ?: task.starterCode,
+            briefingMarkdown = task.briefingMarkdown?.takeIf { it.isNotBlank() } ?: task.description,
+            focusMode = taskFocusMode(task),
+            revision = task.workspaceRevision,
+            yjsDocumentBase64 = task.workspaceYjsDocumentBase64,
+            yjsSequence = task.workspaceYjsSequence,
+        )
+
+    private fun managerWorkspaceRoomLock(inviteCode: String): Any =
+        managerWorkspaceRoomLocks.computeIfAbsent(inviteCode) { Any() }
+
+    private fun managerWorkspacePayload(
+        workspace: ManagerWorkspaceState,
+        recovery: Boolean = false,
+    ): ManagerWorkspacePayload =
+        ManagerWorkspacePayload(
+            stepIndex = workspace.stepIndex,
+            title = workspace.title,
+            language = workspace.language,
+            code = workspace.code,
+            briefingMarkdown = workspace.briefingMarkdown,
+            focusMode = workspace.focusMode,
+            revision = workspace.revision,
+            yjsDocumentBase64 = workspace.yjsDocumentBase64,
+            yjsSequence = workspace.yjsSequence,
+            recovery = recovery,
+        )
+
+    /** Writes only RoomTask fields; it never mutates the published Room state. */
+    private fun persistManagerWorkspace(key: ManagerWorkspaceKey, workspace: ManagerWorkspaceState) {
+        val room = roomRepository.findWithTasksByInviteCode(key.inviteCode)
+            ?: throw ApiException(HttpStatus.NOT_FOUND, "РљРѕРјРЅР°С‚Р° РЅРµ РЅР°Р№РґРµРЅР°")
+        val task = room.tasks.firstOrNull { it.id == key.taskId }
+            ?: throw ApiException(HttpStatus.CONFLICT, "Manager workspace task was changed")
+        if (task.stepIndex == room.currentStep) {
+            throw ApiException(HttpStatus.CONFLICT, "Manager workspace task is now published")
+        }
+        task.solutionCode = workspace.code
+        task.solutionLanguage = workspace.language
+        task.briefingMarkdown = workspace.briefingMarkdown
+        task.workspaceFocusMode = workspace.focusMode
+        task.workspaceRevision = workspace.revision
+        task.workspaceYjsDocumentBase64 = workspace.yjsDocumentBase64
+        task.workspaceYjsSequence = workspace.yjsSequence
+        roomRepository.saveAndFlush(room)
+    }
+
+    private fun cleanupPublishedManagerWorkspace(inviteCode: String, publishedTask: RoomTask) {
+        val key = managerWorkspaceKey(inviteCode, publishedTask)
+        managerWorkspaceState.remove(key)
+        managerWorkspaceSubscriptionByConnection.entries
+            .filter { it.value == key }
+            .forEach { (connectionId, _) -> managerWorkspaceSubscriptionByConnection.remove(connectionId, key) }
+    }
+
+    private fun taskFocusMode(task: RoomTask): Boolean =
+        task.workspaceFocusMode ?: task.briefingMarkdown.orEmpty().trimStart().startsWith(BRIEFING_FOCUS_ON_MARKER)
+
+    private fun withTaskFocusMarker(markdown: String, focusMode: Boolean): String {
+        val clean = markdown.removePrefix(BRIEFING_FOCUS_ON_MARKER).removePrefix("\n")
+        return if (focusMode) "$BRIEFING_FOCUS_ON_MARKER\n$clean" else clean
+    }
+
+    private fun markOperationApplied(
+        appliedOperationIds: MutableMap<String, Long>,
+        operationIdRaw: String?,
+    ): Boolean {
+        val operationId = operationIdRaw?.trim().orEmpty()
+        if (operationId.isEmpty()) return true
+        val now = Instant.now().toEpochMilli()
+        val staleBefore = now - appliedOperationIdTtlMillis
+        if (appliedOperationIds.containsKey(operationId)) return false
+        appliedOperationIds.entries
+            .filter { it.value < staleBefore }
+            .map { it.key }
+            .forEach { appliedOperationIds.remove(it) }
+        appliedOperationIds[operationId] = now
+        val overflow = appliedOperationIds.size - appliedOperationIdCacheMaxSize
+        if (overflow > 0) {
+            appliedOperationIds.entries.sortedBy { it.value }.take(overflow).forEach { appliedOperationIds.remove(it.key) }
+        }
+        return true
+    }
+
     private fun buildTaskPayloads(room: Room): MutableList<RoomTaskPayload> {
         return room.tasks
             .sortedBy { it.stepIndex }
@@ -1866,14 +2454,18 @@ class CollaborationService(
             language = language,
             code = code,
             lastCodeUpdatedBySessionId = null,
-            yjsDocumentBase64 = null,
-            lastYjsSequence = 0,
+            yjsDocumentBase64 = currentTask?.workspaceYjsDocumentBase64,
+            lastYjsSequence = currentTask?.workspaceYjsSequence ?: 0,
             lastIncrementalYjsSessionId = null,
             currentStep = room.currentStep,
+            publishedTaskId = currentTask?.id,
             notes = notes,
             notesMessages = PrivateNotesSerialization.parseChatMessages(room.interviewerChat, notes, objectMapper),
             privateNotesByAuthor = parseRoomPrivateNotes(room),
-            briefingMarkdown = currentTask?.briefingMarkdown?.takeIf { it.isNotBlank() } ?: currentTask?.description.orEmpty(),
+            briefingMarkdown = withTaskFocusMarker(
+                currentTask?.briefingMarkdown?.takeIf { it.isNotBlank() } ?: currentTask?.description.orEmpty(),
+                currentTask?.let(::taskFocusMode) ?: false,
+            ),
             tasks = taskPayloads,
             notesLockedBySessionId = null,
             notesLockedByDisplayName = null,
@@ -1892,6 +2484,10 @@ class CollaborationService(
             finishedAt = room.finishedAt?.toEpochMilli(),
             roomId = room.id ?: "",
         )
+    }
+
+    private companion object {
+        const val BRIEFING_FOCUS_ON_MARKER = "<!--briefing:focus=on-->"
     }
 
 }
