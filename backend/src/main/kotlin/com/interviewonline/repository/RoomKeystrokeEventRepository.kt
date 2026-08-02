@@ -8,7 +8,11 @@ import org.springframework.data.repository.query.Param
 
 interface RoomKeystrokeEventRepository : JpaRepository<RoomKeystrokeEvent, String> {
 
-    fun findByRoomIdOrderByTimestampEpochMsAsc(roomId: String): List<RoomKeystrokeEvent>
+    fun findByRoomIdAndSourceEventId(roomId: String, sourceEventId: String): RoomKeystrokeEvent?
+
+    fun findFirstByRoomIdAndAcceptedSequenceIsNotNullOrderByAcceptedSequenceDesc(roomId: String): RoomKeystrokeEvent?
+
+    fun findByRoomIdOrderByTimestampEpochMsAscAcceptedSequenceAsc(roomId: String): List<RoomKeystrokeEvent>
 
     @Modifying
     @Query("DELETE FROM RoomKeystrokeEvent r WHERE r.roomId = :roomId")

@@ -26,10 +26,9 @@ const page = await context.newPage();
 const nickname = `qa_lang_${Date.now()}`;
 
 async function selectedLanguage() {
-  const input = page.locator(
-    '[data-testid="create-task-language-select"] input',
-  );
-  return input.first().inputValue();
+  return page
+    .locator('[data-testid="create-task-language-select"]')
+    .inputValue();
 }
 
 try {

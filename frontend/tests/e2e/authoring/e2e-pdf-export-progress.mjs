@@ -38,6 +38,23 @@ async function createGuestRoom() {
   return payload;
 }
 
+async function openTasksPanelIfNeeded(page) {
+  const privateNotesInput = page.locator(
+    '[data-testid="room-private-notes-input"]',
+  );
+  let railClickCount = 0;
+  if (!(await privateNotesInput.isVisible().catch(() => false))) {
+    const tasksRailButton = page.locator('[data-testid="room-rail-tasks"]');
+    if (await tasksRailButton.isVisible().catch(() => false)) {
+      await tasksRailButton.click();
+      railClickCount += 1;
+    }
+  }
+
+  await privateNotesInput.waitFor({ state: "visible", timeout: 15000 });
+  return { input: privateNotesInput, railClickCount };
+}
+
 const browser = await chromium.launch({ headless: true });
 
 try {
@@ -63,15 +80,32 @@ try {
   // Дожидаемся, пока редактор готов.
   await page.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
 
-  // Открыть таб заметок (мобильный layout) — для CI достаточно.
-  const tasksRailButton = page.locator('[data-testid="room-rail-tasks"]');
-  if (await tasksRailButton.isVisible().catch(() => false)) {
-    await tasksRailButton.click();
+  const initialPanelSetup = await openTasksPanelIfNeeded(page);
+  const privateNotesInput = initialPanelSetup.input;
+
+  const alreadyOpenProbe = await openTasksPanelIfNeeded(page);
+  if (alreadyOpenProbe.railClickCount !== 0) {
+    throw new Error(
+      `PDF_PANEL_OPEN_BRANCH_RAIL_CLICKS expected=0 got=${alreadyOpenProbe.railClickCount}`,
+    );
   }
 
+  await page.keyboard.press("Escape");
+  await privateNotesInput.waitFor({ state: "hidden", timeout: 5000 });
+
+  const closedPanelProbe = await openTasksPanelIfNeeded(page);
+  if (closedPanelProbe.railClickCount !== 1) {
+    throw new Error(
+      `PDF_PANEL_CLOSED_BRANCH_RAIL_CLICKS expected=1 got=${closedPanelProbe.railClickCount}`,
+    );
+  }
+  if (!(await closedPanelProbe.input.isVisible())) {
+    throw new Error("PDF_PANEL_CLOSED_BRANCH_INPUT_NOT_VISIBLE");
+  }
+  console.log("PDF_PANEL_SETUP_PROBE_OK open=0 closed=1");
+
   // Массово создаём приватные заметки через UI ввод.
-  const input = page.locator('[data-testid="room-private-notes-input"]');
-  await input.waitFor({ state: "visible", timeout: 15000 });
+  const input = closedPanelProbe.input;
   for (let i = 0; i < 120; i += 1) {
     await input.fill(`Заметка #${i} — длинный текст для нагрузки PDF-экспорта`);
     await page.keyboard.press("Enter");

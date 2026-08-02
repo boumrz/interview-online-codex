@@ -14,4 +14,6 @@ data class KeystrokeEventDto(
     val pasteLength: Int?,
     val pastePreview: String?,
     val timestampEpochMs: Long,
+    val sourceEventId: String?,
+    val acceptedSequence: Long?,
 )

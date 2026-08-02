@@ -50,7 +50,6 @@ class CollaborationService(
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val notesLockMillis = 3_000L
-    private val keyEventBroadcastThrottleMs = 20L
     private val candidateKeyHistoryMaxSize = 50
     private val notesHistoryLimit = 500
     private val privateNotesHistoryLimit = 2_000
@@ -94,6 +93,11 @@ class CollaborationService(
             get() = role.canGrantAccess
     }
 
+    private data class RoomStreamAdmission(
+        val room: Room,
+        val resolvedRole: RoomAccessService.RoomRole,
+    )
+
     private data class RealtimeState(
         var language: String,
         var code: String,
@@ -133,7 +137,7 @@ class CollaborationService(
         var status: String = "active",
         var finishedAt: Long? = null,
         /** Cached Room.id (UUID) to avoid DB lookup on every keystroke event. */
-        var roomId: String = "",
+        val roomId: String,
     )
 
     private data class CursorState(
@@ -279,6 +283,24 @@ class CollaborationService(
         broadcastManagerWorkspaceSync(key, replacement)
     }
 
+    /**
+     * Verifies that the caller could open the realtime stream without creating
+     * an SSE connection, participant, event token, or in-memory room state.
+     */
+    @Transactional(readOnly = true)
+    fun canOpenRoomStream(
+        inviteCode: String,
+        ownerToken: String?,
+        interviewerToken: String?,
+        user: User?,
+    ): Boolean {
+        // The live stream currently preserves this legacy parameter but does
+        // not use it in role resolution; retain that exact behavior here.
+        @Suppress("UNUSED_VARIABLE")
+        val legacyInterviewerToken = interviewerToken
+        return findRoomStreamAdmission(inviteCode, ownerToken, user) != null
+    }
+
     @Transactional
     fun joinRoomSse(
         inviteCode: String,
@@ -291,13 +313,14 @@ class CollaborationService(
     ): SseEmitter {
         @Suppress("UNUSED_VARIABLE")
         val legacyInterviewerToken = interviewerToken
-        val room = roomRepository.findByInviteCode(inviteCode)
+        val admission = findRoomStreamAdmission(inviteCode, ownerToken, user)
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+        val room = admission.room
         val state = roomState.computeIfAbsent(inviteCode) { toRealtimeState(room) }
 
         val connectionId = sseConnectionId(sessionId)
         val emitter = SseEmitter(0L)
-        val resolvedRole = resolveRole(room, ownerToken, user)
+        val resolvedRole = admission.resolvedRole
         val normalizedParticipantId = ParticipantIdentity.normalizeParticipantId(participantId)
         val identityRoleOverride = resolveIdentityRoleOverride(
             inviteCode = inviteCode,
@@ -511,6 +534,7 @@ class CollaborationService(
                 eventKind = request.eventKind,
                 pasteLength = request.pasteLength,
                 pastePreview = request.pastePreview,
+                sourceEventId = request.sourceEventId,
             )
             else -> throw ApiException(HttpStatus.BAD_REQUEST, "Неизвестный тип сообщения: ${request.type}")
         }
@@ -1511,6 +1535,7 @@ class CollaborationService(
         eventKind: String? = null,
         pasteLength: Int? = null,
         pastePreview: String? = null,
+        sourceEventId: String? = null,
     ) {
         val participant = participants[connectionId] ?: return
         if (participant.role != RoomAccessService.RoomRole.CANDIDATE) return
@@ -1519,34 +1544,33 @@ class CollaborationService(
         val isSyntheticEvent = normalizedEventKind != "keydown"
         val normalizedKey = CandidateKeyHistoryHelpers.normalizeIncomingKey(key)
         val normalizedCode = CandidateKeyHistoryHelpers.normalizeIncomingKeyCode(keyCode)
+        val normalizedSourceEventId = normalizeSourceEventId(sourceEventId)
         // Синтетические события (blur/visibility) могут не нести key/keyCode,
         // но всё равно важны для лога — пропускаем фильтр пустоты.
         if (!isSyntheticEvent && normalizedKey.isBlank() && normalizedCode.isBlank()) return
 
         val state = roomState[participant.inviteCode] ?: return
-        val keyEvent: CandidateKeyPayload
-        val historySnapshot: List<CandidateKeyPayload>
-        synchronized(state) {
-            val now = Instant.now().toEpochMilli()
-            // Троттлим только обычные keydown — синтетические события (смена
-            // окна/вкладки) пропускаем всегда, иначе можно потерять Alt+Tab,
-            // который приходит сразу за keydown модификатора.
-            if (!isSyntheticEvent && now - state.lastCandidateKeyAtEpochMs < keyEventBroadcastThrottleMs) {
-                return
-            }
-
-            keyEvent = CandidateKeyPayload(
+        // Hold the in-memory room monitor only for metadata/history. The durable
+        // database acceptance below may wait on the room row, so doing it while
+        // synchronized(state) would delay independent Yjs/code collaboration.
+        val roomId = synchronized(state) {
+            state.roomId.takeIf { it.isNotBlank() }
+                ?: throw ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Room activity state has no persisted room ID")
+        }
+        val acceptance = keystrokePersistenceService.accept(
+            roomId = roomId,
+            payload = CandidateKeyPayload(
                 sessionId = participant.sessionId,
                 displayName = participant.displayName,
                 key = when {
-                    normalizedKey.isNotBlank() -> normalizedKey
-                    normalizedCode.isNotBlank() -> normalizedCode
+                    normalizedKey.isNotEmpty() -> normalizedKey
+                    normalizedCode.isNotEmpty() -> normalizedCode
                     isSyntheticEvent -> ""
                     else -> "Unknown"
                 },
                 keyCode = when {
-                    normalizedCode.isNotBlank() -> normalizedCode
-                    normalizedKey.isNotBlank() -> normalizedKey
+                    normalizedCode.isNotEmpty() -> normalizedCode
+                    normalizedKey.isNotEmpty() -> normalizedKey
                     isSyntheticEvent -> ""
                     else -> "Unknown"
                 },
@@ -1554,32 +1578,34 @@ class CollaborationService(
                 altKey = altKey,
                 shiftKey = shiftKey,
                 metaKey = metaKey,
-                timestampEpochMs = now,
+                timestampEpochMs = 0,
                 eventKind = normalizedEventKind,
                 pasteLength = CandidateKeyHistoryHelpers.sanitizePasteLength(pasteLength),
                 pastePreview = CandidateKeyHistoryHelpers.sanitizePastePreview(pastePreview),
-            )
+                sourceEventId = normalizedSourceEventId,
+            ),
+        )
+        if (!acceptance.created) return
+        val keyEvent = acceptance.payload
+        val historySnapshot = synchronized(state) {
             state.lastCandidateKey = keyEvent
             state.candidateKeyHistory.add(keyEvent)
+            val canonicalHistory = CandidateKeyHistoryHelpers.canonicalize(state.candidateKeyHistory)
+            state.candidateKeyHistory.clear()
+            state.candidateKeyHistory.addAll(canonicalHistory)
+            state.lastCandidateKey = canonicalHistory.lastOrNull()
             if (state.candidateKeyHistory.size > candidateKeyHistoryMaxSize) {
                 val overflow = state.candidateKeyHistory.size - candidateKeyHistoryMaxSize
                 repeat(overflow) {
                     state.candidateKeyHistory.removeAt(0)
                 }
             }
-            // Троттл-таймер двигаем только для обычных нажатий — синтетические
-            // события (blur/visibility) не должны вытеснять последующие keydown.
-            if (!isSyntheticEvent) {
-                state.lastCandidateKeyAtEpochMs = now
-            }
-            historySnapshot = state.candidateKeyHistory.toList()
+            state.candidateKeyHistory.toList()
         }
 
         scheduleCandidateKeyHistorySave(participant.inviteCode, historySnapshot)
         if (normalizedEventKind == "keydown" || normalizedEventKind == "paste") {
-            state.roomId.takeIf { it.isNotBlank() }?.let { roomId ->
-                roomProductMetricsProjector.recordMeaningfulCandidateActivity(roomId)
-            }
+            roomProductMetricsProjector.recordMeaningfulCandidateActivity(roomId)
         }
 
         val managerConnectionIds = participants.entries
@@ -1597,19 +1623,15 @@ class CollaborationService(
             includeConnectionIds = managerConnectionIds,
         )
 
-        // Persist keystroke to DB for timeline export.
-        // Use cached roomId from RealtimeState to avoid a DB round-trip on every key event.
-        val cachedRoomId = roomState[participant.inviteCode]?.roomId
-        if (!cachedRoomId.isNullOrBlank()) {
-            keystrokePersistenceService.enqueue(roomId = cachedRoomId, payload = keyEvent)
-        } else {
-            logger.warn(
-                "Keystroke dropped: cachedRoomId is blank for room {} session {} — " +
-                    "RealtimeState may not have been bootstrapped with a persisted Room entity",
-                participant.inviteCode,
-                participant.sessionId,
-            )
-        }
+    }
+
+    private fun normalizeSourceEventId(rawSourceEventId: String?): String {
+        val candidate = rawSourceEventId?.trim().orEmpty()
+        if (candidate.isBlank()) return UUID.randomUUID().toString()
+        return runCatching { UUID.fromString(candidate).toString() }
+            .getOrElse {
+                throw ApiException(HttpStatus.BAD_REQUEST, "sourceEventId must be a UUID")
+            }
     }
 
     private fun nextStep(connectionId: String) {
@@ -1875,8 +1897,8 @@ class CollaborationService(
             tasks = state.tasks.toList(),
             taskScores = state.taskScoresByStepIndex.toMap(),
             cursors = cursorsPayload,
-            lastCandidateKey = state.lastCandidateKey,
-            candidateKeyHistory = state.candidateKeyHistory.toList(),
+            lastCandidateKey = if (participant.canManageRoom) state.lastCandidateKey else null,
+            candidateKeyHistory = if (participant.canManageRoom) state.candidateKeyHistory.toList() else null,
             verdict = state.verdict,
             verdictComment = state.verdictComment,
             status = state.status,
@@ -1961,6 +1983,7 @@ class CollaborationService(
     )
 
     private fun setStepInternal(inviteCode: String, room: Room, stepIndex: Int) {
+        val persistedRoomId = requirePersistedRoomId(room)
         val currentState = roomState[inviteCode]
         val currentTask = room.tasks.getOrNull(room.currentStep)
         currentTask?.let { current ->
@@ -2043,6 +2066,7 @@ class CollaborationService(
             verdictComment = room.verdictComment,
             status = room.status ?: "active",
             finishedAt = room.finishedAt?.toEpochMilli(),
+            roomId = persistedRoomId,
         )
         cleanupPublishedManagerWorkspace(inviteCode, nextTask)
         broadcastState(inviteCode)
@@ -2311,6 +2335,18 @@ class CollaborationService(
         return roomAccessService.resolveAccess(room, user, ownerToken, null).role
     }
 
+    private fun findRoomStreamAdmission(
+        inviteCode: String,
+        ownerToken: String?,
+        user: User?,
+    ): RoomStreamAdmission? {
+        val room = roomRepository.findByInviteCode(inviteCode) ?: return null
+        return RoomStreamAdmission(
+            room = room,
+            resolvedRole = resolveRole(room, ownerToken, user),
+        )
+    }
+
     private fun resolveStoredRole(room: Room, userId: String): RoomAccessService.RoomRole {
         if (room.ownerUser?.id == userId) {
             return RoomAccessService.RoomRole.OWNER
@@ -2443,6 +2479,7 @@ class CollaborationService(
     }
 
     private fun toRealtimeState(room: Room): RealtimeState {
+        val persistedRoomId = requirePersistedRoomId(room)
         val currentTask = room.tasks.getOrNull(room.currentStep)
         val language = normalizeLanguage(currentTask?.solutionLanguage?.ifBlank { null } ?: room.language)
         val code = currentTask?.solutionCode ?: room.code.ifBlank { currentTask?.starterCode.orEmpty() }
@@ -2482,9 +2519,13 @@ class CollaborationService(
             verdictComment = room.verdictComment,
             status = room.status ?: "active",
             finishedAt = room.finishedAt?.toEpochMilli(),
-            roomId = room.id ?: "",
+            roomId = persistedRoomId,
         )
     }
+
+    private fun requirePersistedRoomId(room: Room): String =
+        room.id?.takeIf { it.isNotBlank() }
+            ?: throw ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Room has no persisted Room ID")
 
     private companion object {
         const val BRIEFING_FOCUS_ON_MARKER = "<!--briefing:focus=on-->"

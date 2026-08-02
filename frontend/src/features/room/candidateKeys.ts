@@ -30,6 +30,17 @@ export type CandidateKeyEventKind =
   | "paste";
 
 export type CandidateKeyInfo = {
+  /**
+   * Stable identifier produced at source capture. It lets manager clients
+   * reconcile repeated state syncs and SSE delivery without comparing the
+   * contents of a sensitive activity event.
+   */
+  sourceEventId?: string;
+  /**
+   * Server-authoritative, room-local tie breaker for equal timestamps.
+   * Older retained events can omit it during the additive rollout.
+   */
+  acceptedSequence?: number;
   sessionId: string;
   displayName: string;
   key: string;

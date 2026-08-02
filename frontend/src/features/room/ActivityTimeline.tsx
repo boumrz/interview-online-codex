@@ -3,9 +3,10 @@ import { Box, Button, Group, ScrollArea, Stack, Text } from "@mantine/core";
 import { IconDownload } from "@tabler/icons-react";
 import type { CandidateKeyInfo } from "./candidateKeys";
 import {
-  formatCandidateKey,
-  formatCandidateKeyHistoryTimestamp,
-} from "./candidateKeys";
+  formatActivityTimelineSummary,
+  formatActivityTimelineParticipant,
+  projectActivityTimeline,
+} from "./activityTimelineProjection";
 import { API_BASE_URL } from "../../config/runtime";
 
 type ActivityTimelineProps = {
@@ -26,6 +27,16 @@ export function ActivityTimeline({
   canManageRoom,
 }: ActivityTimelineProps) {
   if (!canManageRoom) return null;
+  const groups = projectActivityTimeline(keyHistory);
+
+  const formatTime = (timestampEpochMs: number) =>
+    new Date(timestampEpochMs).toLocaleTimeString("ru-RU", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  const formatTimeRange = (start: number, end: number) =>
+    start === end ? formatTime(start) : `${formatTime(start)}–${formatTime(end)}`;
 
   const buildHeaders = (): HeadersInit => {
     const headers: HeadersInit = {};
@@ -106,27 +117,36 @@ export function ActivityTimeline({
         </Group>
       </Group>
       <ScrollArea style={{ flex: 1, minHeight: 0 }} type="auto">
-        {keyHistory.length === 0 ? (
+        {groups.length === 0 ? (
           <Text size="xs" c="#5a6070" ta="center" py="md">
             Активность не зафиксирована
           </Text>
         ) : (
-          <Stack gap={2}>
-            {keyHistory.map((ev, i) => (
+          <Stack gap="xs">
+            {groups.map((group) => (
               <Box
-                key={i}
+                key={group.sourceEventIds[0] ?? `${group.sessionId}:${group.startTimestampEpochMs}`}
                 px="xs"
-                py={2}
-                style={{ borderRadius: 4 }}
+                py={6}
+                data-testid="activity-timeline-entry"
+                style={{ borderRadius: 6, background: "rgba(255,255,255,0.02)" }}
               >
-                <Group gap="xs" wrap="nowrap">
-                  <Text size="xs" c="#5a6070" ff="monospace" style={{ minWidth: 60 }}>
-                    {formatCandidateKeyHistoryTimestamp(ev)}
+                <Group gap="xs" justify="space-between" wrap="nowrap" mb={2}>
+                  <Text size="xs" c="#8b919b" fw={600} truncate>
+                    {formatActivityTimelineParticipant(group, groups)}
                   </Text>
-                  <Text size="xs" c={ev.eventKind === "paste" ? "#f08c47" : "#c9d0db"} style={{ flex: 1 }}>
-                    {formatCandidateKey(ev)}
+                  <Text size="xs" c="#5a6070" ff="monospace" style={{ flexShrink: 0 }}>
+                    {formatTimeRange(group.startTimestampEpochMs, group.endTimestampEpochMs)}
                   </Text>
                 </Group>
+                <Text size="xs" c="#c9d0db" data-testid="activity-timeline-summary">
+                  {formatActivityTimelineSummary(group)}
+                </Text>
+                {group.sourceEventIds.map((sourceEventId) => (
+                  <span key={sourceEventId} data-testid="activity-timeline-source-id" style={{ display: "none" }}>
+                    {sourceEventId}
+                  </span>
+                ))}
               </Box>
             ))}
           </Stack>

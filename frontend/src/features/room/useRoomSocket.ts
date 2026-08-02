@@ -53,6 +53,10 @@ type CursorPayload = {
 };
 
 type CandidateKeyPayload = {
+  /** Stable source UUID used for idempotent activity delivery. */
+  sourceEventId?: string;
+  /** Server-assigned canonical order tie breaker. */
+  acceptedSequence?: number;
   sessionId: string;
   displayName: string;
   key: string;
@@ -253,6 +257,7 @@ type ClientMessage =
     }
   | {
       type: "key_press";
+      sourceEventId: string;
       key: string;
       keyCode: string;
       ctrlKey: boolean;
@@ -277,8 +282,25 @@ type QueuedClientMessage = {
   clientEventSequence: number | null;
 };
 
+type ActivityClientMessage = Extract<ClientMessage, { type: "key_press" }> & {
+  sourceEventId: string;
+};
+
+type QueuedActivityMessage = {
+  payload: ActivityClientMessage;
+  /** Consecutive server failures for this exact FIFO head only. */
+  failed5xxAttempts: number;
+  /** A retry timer, rather than SSE/state-sync callbacks, owns the next attempt. */
+  retryPending: boolean;
+  retryDueAt: number | null;
+};
+
 const MAX_PENDING_MESSAGES = 300;
-const KEY_PRESS_CLIENT_THROTTLE_MS = 120;
+const MAX_ACTIVITY_5XX_ATTEMPTS = 3;
+const ACTIVITY_5XX_RETRY_DELAYS_MS = [1_000, 2_000] as const;
+const STREAM_STATUS_PROBE_TIMEOUT_MS = 1_500;
+const ACTIVITY_RECORDING_UNAVAILABLE_ERROR =
+  "Запись активности временно недоступна. Вы можете продолжать редактирование; обновите комнату, чтобы повторить.";
 
 function sessionIdKey(inviteCode: string) {
   return `room_ws_session_id_${inviteCode}`;
@@ -401,11 +423,27 @@ export function useRoomSocket({
   const eventSequenceRef = useRef(0);
   const eventTokenRef = useRef<string | null>(null);
   const lastPresenceRef = useRef<"active" | "away" | null>(null);
-  const lastKeyPressSentAtRef = useRef(0);
   const queueDrainInProgressRef = useRef(false);
   const inFlightControllerRef = useRef<AbortController | null>(null);
   const tryDrainQueueRef = useRef<(() => void) | null>(null);
+  // Activity telemetry deliberately has its own delivery lane: a slow raw-log
+  // request must never sit ahead of a Yjs/document mutation in the main queue.
+  const pendingActivityRef = useRef<QueuedActivityMessage[]>([]);
+  const activityDrainInProgressRef = useRef(false);
+  const activityInFlightControllerRef = useRef<AbortController | null>(null);
+  const activityRetryTimerRef = useRef<number | null>(null);
+  const tryDrainActivityRef = useRef<(() => void) | null>(null);
+  const queueActivityRef = useRef<((payload: ActivityClientMessage) => void) | null>(null);
+  const activityCaptureConfirmedRef = useRef(false);
+  // This is deliberately independent from token/access state. A server outage
+  // must stop only the volatile activity lane, not room collaboration.
+  const activityDeliveryDisabledRef = useRef(false);
+  const activityDeliveryNoticeShownRef = useRef(false);
+  const activityDeliverySessionKeyRef = useRef<string | null>(null);
   const terminalAccessFailureRef = useRef(false);
+  /** A missing room is distinct from an authorization failure and is terminal for this page-room session. */
+  const terminalRoomUnavailableRef = useRef(false);
+  const roomUnavailableSessionKeyRef = useRef<string | null>(null);
   const requiresEventSequence = (payload: ClientMessage) => payload.type !== "request_state_sync" && payload.type !== "presence_update";
   const nextClientEventSequence = () => {
     const next = eventSequenceRef.current + 1;
@@ -414,7 +452,7 @@ export function useRoomSocket({
     return next;
   };
   const queuePayload = (payload: ClientMessage, options: { dedupeSameType?: boolean } = {}) => {
-    if (terminalAccessFailureRef.current) return;
+    if (terminalAccessFailureRef.current || terminalRoomUnavailableRef.current) return;
     let abortAndReplaceInFlight = false;
     if (options.dedupeSameType) {
       const currentHead = pendingMessagesRef.current[0];
@@ -458,6 +496,7 @@ export function useRoomSocket({
   });
   const [connected, setConnected] = useState(false);
   const [accessDenied, setAccessDenied] = useState(false);
+  const [roomUnavailable, setRoomUnavailable] = useState(false);
   const participantId = useMemo(() => getOrCreateParticipantId(), []);
   const sessionId = useMemo(() => getOrCreateSessionId(inviteCode), [inviteCode]);
 
@@ -472,15 +511,51 @@ export function useRoomSocket({
     if (!enabled) {
       setConnected(false);
       setAccessDenied(false);
+      if (!inviteCode) {
+        terminalRoomUnavailableRef.current = false;
+        roomUnavailableSessionKeyRef.current = null;
+        setRoomUnavailable(false);
+      }
       sseRef.current?.close();
       sseRef.current = null;
       pendingMessagesRef.current = [];
+      pendingActivityRef.current = [];
+      if (activityRetryTimerRef.current != null) {
+        window.clearTimeout(activityRetryTimerRef.current);
+        activityRetryTimerRef.current = null;
+      }
       eventTokenRef.current = null;
       queueDrainInProgressRef.current = false;
       inFlightControllerRef.current = null;
       tryDrainQueueRef.current = null;
+      activityDrainInProgressRef.current = false;
+      activityInFlightControllerRef.current = null;
+      tryDrainActivityRef.current = null;
+      queueActivityRef.current = null;
+      activityCaptureConfirmedRef.current = false;
+      activityDeliveryDisabledRef.current = false;
+      activityDeliveryNoticeShownRef.current = false;
+      activityDeliverySessionKeyRef.current = null;
       sendRef.current = () => {};
       return;
+    }
+
+    const roomUnavailableSessionKey = `${inviteCode}:${sessionId}`;
+    if (roomUnavailableSessionKeyRef.current !== roomUnavailableSessionKey) {
+      roomUnavailableSessionKeyRef.current = roomUnavailableSessionKey;
+      terminalRoomUnavailableRef.current = false;
+      setRoomUnavailable(false);
+    }
+
+    const activityDeliverySessionKey = `${inviteCode}:${sessionId}`;
+    if (activityDeliverySessionKeyRef.current !== activityDeliverySessionKey) {
+      if (activityRetryTimerRef.current != null) {
+        window.clearTimeout(activityRetryTimerRef.current);
+        activityRetryTimerRef.current = null;
+      }
+      activityDeliverySessionKeyRef.current = activityDeliverySessionKey;
+      activityDeliveryDisabledRef.current = false;
+      activityDeliveryNoticeShownRef.current = false;
     }
 
     let hasWindowFocus = typeof document !== "undefined" ? document.hasFocus() : true;
@@ -491,6 +566,11 @@ export function useRoomSocket({
     let reconnectTimerId: number | null = null;
     let reconnectScheduled = false;
     let terminalAccessFailure = false;
+    let terminalRoomUnavailable = false;
+    let streamLease = 0;
+    let statusProbeInFlight = false;
+    let statusProbeController: AbortController | null = null;
+    let statusProbeTimeoutId: number | null = null;
     let authorizationRecoveryAttempted = false;
     let leaveNotified = false;
     lastPresenceRef.current = null;
@@ -532,25 +612,103 @@ export function useRoomSocket({
       }
     };
 
+    const abortActivityInFlightRequest = () => {
+      if (activityInFlightControllerRef.current != null) {
+        activityInFlightControllerRef.current.abort();
+        activityInFlightControllerRef.current = null;
+      }
+    };
+
     const dropPendingQueue = () => {
       pendingMessagesRef.current = [];
     };
 
+    const dropPendingActivity = () => {
+      pendingActivityRef.current = [];
+    };
+
+    const clearActivityRetryTimer = () => {
+      if (activityRetryTimerRef.current != null) {
+        window.clearTimeout(activityRetryTimerRef.current);
+        activityRetryTimerRef.current = null;
+      }
+    };
+
+    const isTerminal = () =>
+      disposed ||
+      terminalAccessFailure ||
+      terminalRoomUnavailable ||
+      terminalAccessFailureRef.current ||
+      terminalRoomUnavailableRef.current;
+
+    const abortStatusProbe = () => {
+      statusProbeController?.abort();
+      statusProbeController = null;
+      if (statusProbeTimeoutId != null) {
+        window.clearTimeout(statusProbeTimeoutId);
+        statusProbeTimeoutId = null;
+      }
+      statusProbeInFlight = false;
+    };
+
+    const invalidateTransportLease = () => {
+      streamLease += 1;
+      eventTokenRef.current = null;
+      activityCaptureConfirmedRef.current = false;
+      abortInFlightRequest();
+      abortActivityInFlightRequest();
+    };
+
+    const presentActivityRecordingUnavailable = () => {
+      if (!activityDeliveryNoticeShownRef.current) {
+        activityDeliveryNoticeShownRef.current = true;
+      }
+      // Re-apply the same message after an unrelated reconnect in case another
+      // transport callback replaced the shared room error presenter. React still
+      // renders one notice because the value is identical.
+      onError(ACTIVITY_RECORDING_UNAVAILABLE_ERROR);
+    };
+
+    const disableActivityDeliveryForServerFailure = (statusCode: number, failedAttempts: number) => {
+      if (activityDeliveryDisabledRef.current) {
+        presentActivityRecordingUnavailable();
+        return;
+      }
+      activityDeliveryDisabledRef.current = true;
+      activityCaptureConfirmedRef.current = false;
+      clearActivityRetryTimer();
+      dropPendingActivity();
+      emitMetric(
+        "prod_realtime_activity_recording_disabled",
+        { reason: "persistent_server_error", status_code: statusCode, attempts: failedAttempts },
+        { minIntervalMs: 2_000, dedupeKey: "activity_recording_disabled" },
+      );
+      presentActivityRecordingUnavailable();
+    };
+
     const terminateForAccessFailure = () => {
-      if (disposed || terminalAccessFailure) return;
+      if (isTerminal()) return;
       terminalAccessFailure = true;
       terminalAccessFailureRef.current = true;
+      invalidateTransportLease();
+      abortStatusProbe();
       if (reconnectTimerId != null) {
         window.clearTimeout(reconnectTimerId);
         reconnectTimerId = null;
       }
       reconnectScheduled = false;
       abortInFlightRequest();
+      abortActivityInFlightRequest();
+      clearActivityRetryTimer();
       const activeSource = sseRef.current;
       sseRef.current = null;
       activeSource?.close();
       dropPendingQueue();
+      dropPendingActivity();
       eventTokenRef.current = null;
+      activityCaptureConfirmedRef.current = false;
+      tryDrainActivityRef.current = null;
+      queueActivityRef.current = null;
       lastPresenceRef.current = null;
       sendRef.current = () => {};
       setConnected(false);
@@ -558,8 +716,36 @@ export function useRoomSocket({
       onError("Не удалось подтвердить доступ к комнате. Откройте актуальную ссылку-приглашение или войдите в аккаунт.");
     };
 
+    const terminateForRoomUnavailable = () => {
+      if (isTerminal()) return;
+      terminalRoomUnavailable = true;
+      terminalRoomUnavailableRef.current = true;
+      invalidateTransportLease();
+      abortStatusProbe();
+      if (reconnectTimerId != null) {
+        window.clearTimeout(reconnectTimerId);
+        reconnectTimerId = null;
+      }
+      reconnectScheduled = false;
+      clearActivityRetryTimer();
+      const activeSource = sseRef.current;
+      sseRef.current = null;
+      activeSource?.close();
+      dropPendingQueue();
+      dropPendingActivity();
+      tryDrainQueueRef.current = null;
+      tryDrainActivityRef.current = null;
+      queueActivityRef.current = null;
+      lastPresenceRef.current = null;
+      sendRef.current = () => {};
+      setConnected(false);
+      setAccessDenied(false);
+      setRoomUnavailable(true);
+      onError("");
+    };
+
     const scheduleReconnect = () => {
-      if (disposed || terminalAccessFailure || reconnectScheduled) return;
+      if (isTerminal() || reconnectScheduled || statusProbeInFlight) return;
       reconnectScheduled = true;
       emitMetric(
         "prod_realtime_reconnect_scheduled",
@@ -567,7 +753,7 @@ export function useRoomSocket({
         { minIntervalMs: 3000 }
       );
       setConnected(false);
-      abortInFlightRequest();
+      invalidateTransportLease();
       const activeSource = sseRef.current;
       sseRef.current = null;
       activeSource?.close();
@@ -580,6 +766,33 @@ export function useRoomSocket({
         connectSse();
       }, 180);
     };
+
+    const scheduleActivityRetry = (head: QueuedActivityMessage, retryDelayMs: number) => {
+      if (head.retryPending || activityRetryTimerRef.current != null) return;
+      const retryDueAt = Date.now() + retryDelayMs;
+      const sourceEventId = head.payload.sourceEventId;
+      head.retryPending = true;
+      head.retryDueAt = retryDueAt;
+      activityRetryTimerRef.current = window.setTimeout(() => {
+        activityRetryTimerRef.current = null;
+        if (isTerminal() || activityDeliveryDisabledRef.current) return;
+        const currentHead = pendingActivityRef.current[0];
+        // State sync and SSE reconnect callbacks may wake the drain, but only
+        // this timer may release the same failed head for another POST.
+        if (
+          !currentHead ||
+          currentHead.payload.sourceEventId !== sourceEventId ||
+          !currentHead.retryPending ||
+          currentHead.retryDueAt !== retryDueAt
+        ) {
+          return;
+        }
+        currentHead.retryPending = false;
+        currentHead.retryDueAt = null;
+        tryDrainActivityRef.current?.();
+      }, retryDelayMs);
+    };
+
     const findNextProcessableQueueIndex = () => {
       if (pendingMessagesRef.current.length === 0) return -1;
       if (eventTokenRef.current) return 0;
@@ -599,15 +812,22 @@ export function useRoomSocket({
     };
 
     const tryDrainQueue = () => {
-      if (queueDrainInProgressRef.current || disposed) return;
+      if (
+        queueDrainInProgressRef.current ||
+        isTerminal() ||
+        statusProbeInFlight ||
+        sseRef.current?.readyState !== EventSource.OPEN
+      ) return;
       queueDrainInProgressRef.current = true;
 
       void (async () => {
         try {
-          while (!disposed) {
+          while (!isTerminal()) {
             const nextIndex = findNextProcessableQueueIndex();
             if (nextIndex < 0) break;
             const head = pendingMessagesRef.current[nextIndex];
+            const lease = streamLease;
+            const token = eventTokenRef.current;
 
             const controller = new AbortController();
             inFlightControllerRef.current = controller;
@@ -622,14 +842,14 @@ export function useRoomSocket({
                 },
                 body: JSON.stringify({
                   sessionId,
-                  eventToken: eventTokenRef.current,
+                  eventToken: token,
                   clientEventSequence: head.clientEventSequence,
                   ...head.payload
                 })
               });
             } catch {
               inFlightControllerRef.current = null;
-              if (disposed || controller.signal.aborted) break;
+              if (isTerminal() || controller.signal.aborted || lease !== streamLease) break;
               emitMetric(
                 "prod_realtime_post_failed",
                 { reason: "network_error" },
@@ -640,6 +860,8 @@ export function useRoomSocket({
               break;
             }
             inFlightControllerRef.current = null;
+
+            if (isTerminal() || lease !== streamLease) break;
 
             if (response.ok) {
               if (nextIndex === 0) {
@@ -706,7 +928,7 @@ export function useRoomSocket({
         } finally {
           queueDrainInProgressRef.current = false;
           const next = pendingMessagesRef.current[0];
-          if (next && !(requiresEventToken(next.payload) && !eventTokenRef.current)) {
+          if (!isTerminal() && next && !(requiresEventToken(next.payload) && !eventTokenRef.current)) {
             queueMicrotask(() => {
               tryDrainQueueRef.current?.();
             });
@@ -716,7 +938,161 @@ export function useRoomSocket({
     };
     tryDrainQueueRef.current = tryDrainQueue;
 
+    /**
+     * A lossless, one-in-flight delivery lane for candidate activity. Unlike the
+     * main mutation queue, this lane is never deduplicated or capped: every
+     * captured source action remains an individual request with its UUID until
+     * the relay acknowledges it. A reconnect retries the same head UUID.
+     */
+    const tryDrainActivityQueue = () => {
+      if (
+        activityDrainInProgressRef.current ||
+        isTerminal() ||
+        activityDeliveryDisabledRef.current ||
+        reconnectScheduled
+      ) {
+        return;
+      }
+      const queuedHead = pendingActivityRef.current[0];
+      if (!eventTokenRef.current || !queuedHead || queuedHead.retryPending) return;
+      activityDrainInProgressRef.current = true;
+
+      void (async () => {
+        try {
+          while (!isTerminal() && !activityDeliveryDisabledRef.current) {
+            const head = pendingActivityRef.current[0];
+            const token = eventTokenRef.current;
+            const lease = streamLease;
+            if (!head || !token || head.retryPending) break;
+
+            const controller = new AbortController();
+            activityInFlightControllerRef.current = controller;
+            let response: Response;
+            try {
+              response = await fetch(`${API_BASE_URL}/realtime/rooms/${inviteCode}/events`, {
+                method: "POST",
+                signal: controller.signal,
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  sessionId,
+                  eventToken: token,
+                  clientEventSequence: null,
+                  ...head.payload,
+                }),
+              });
+            } catch {
+              activityInFlightControllerRef.current = null;
+              if (isTerminal() || controller.signal.aborted || lease !== streamLease) break;
+              emitMetric(
+                "prod_realtime_activity_post_failed",
+                { reason: "network_error" },
+                { minIntervalMs: 2_000 },
+              );
+              scheduleReconnect();
+              onError("Не удалось отправить действие в комнату");
+              break;
+            }
+            activityInFlightControllerRef.current = null;
+
+            if (isTerminal() || lease !== streamLease) break;
+
+            if (response.ok) {
+              // The source ID, rather than a payload comparison, protects the
+              // queue from a late duplicate response after a reconnect.
+              if (pendingActivityRef.current[0]?.payload.sourceEventId === head.payload.sourceEventId) {
+                head.failed5xxAttempts = 0;
+                head.retryPending = false;
+                head.retryDueAt = null;
+                pendingActivityRef.current.shift();
+              }
+              continue;
+            }
+
+            if (response.status === 401 || response.status === 403) {
+              emitMetric(
+                "prod_realtime_activity_post_rejected",
+                { status_code: response.status },
+                { minIntervalMs: 2_000, dedupeKey: `activity_post_rejected_${response.status}` },
+              );
+              if (authorizationRecoveryAttempted) {
+                terminateForAccessFailure();
+                break;
+              }
+              authorizationRecoveryAttempted = true;
+              eventTokenRef.current = null;
+              scheduleReconnect();
+              break;
+            }
+
+            if (response.status >= 500) {
+              head.failed5xxAttempts += 1;
+              emitMetric(
+                "prod_realtime_activity_post_failed",
+                {
+                  reason: "server_error",
+                  status_code: response.status,
+                  attempt: head.failed5xxAttempts,
+                },
+                { minIntervalMs: 2_000 },
+              );
+              if (head.failed5xxAttempts >= MAX_ACTIVITY_5XX_ATTEMPTS) {
+                disableActivityDeliveryForServerFailure(response.status, head.failed5xxAttempts);
+                break;
+              }
+              const retryDelayMs = ACTIVITY_5XX_RETRY_DELAYS_MS[head.failed5xxAttempts - 1];
+              scheduleActivityRetry(head, retryDelayMs);
+              break;
+            }
+
+            const data = (await response.json().catch(() => ({}))) as { error?: string };
+
+            // Client-side validation is the only expected 4xx path here. Do not
+            // let one malformed legacy action block later source actions forever.
+            if (pendingActivityRef.current[0]?.payload.sourceEventId === head.payload.sourceEventId) {
+              pendingActivityRef.current.shift();
+            }
+            emitMetric(
+              "prod_realtime_activity_post_rejected",
+              { status_code: response.status },
+              { minIntervalMs: 2_000, dedupeKey: `activity_post_rejected_${response.status}` },
+            );
+            onError(data.error || "Не удалось отправить действие в комнату");
+          }
+        } finally {
+          activityDrainInProgressRef.current = false;
+          if (
+            !isTerminal() &&
+            !activityDeliveryDisabledRef.current &&
+            !reconnectScheduled &&
+            eventTokenRef.current &&
+            pendingActivityRef.current.length > 0 &&
+            !pendingActivityRef.current[0]?.retryPending
+          ) {
+            queueMicrotask(() => tryDrainActivityRef.current?.());
+          }
+        }
+      })();
+    };
+    tryDrainActivityRef.current = tryDrainActivityQueue;
+    queueActivityRef.current = (payload) => {
+      if (
+        terminalAccessFailureRef.current ||
+        terminalRoomUnavailableRef.current ||
+        activityDeliveryDisabledRef.current
+      ) {
+        return;
+      }
+      pendingActivityRef.current.push({
+        payload,
+        failed5xxAttempts: 0,
+        retryPending: false,
+        retryDueAt: null,
+      });
+      tryDrainActivityRef.current?.();
+    };
+
     const requestStateSync = (options: { expectHydration?: boolean } = {}) => {
+      if (isTerminal()) return;
       if (options.expectHydration) {
         expectRecoveryStateSync = true;
         onRequireRecoverySync?.();
@@ -739,6 +1115,7 @@ export function useRoomSocket({
     };
 
     const sendPresence = (status: "active" | "away", options: { force?: boolean } = {}) => {
+      if (isTerminal()) return;
       if (!options.force && lastPresenceRef.current === status) return;
       lastPresenceRef.current = status;
       queuePayload({ type: "presence_update", presenceStatus: status }, { dedupeSameType: true });
@@ -750,7 +1127,7 @@ export function useRoomSocket({
     };
 
     const notifyLeaveRoom = () => {
-      if (leaveNotified) return;
+      if (isTerminal() || leaveNotified) return;
       leaveNotified = true;
       const payload = JSON.stringify({
         sessionId,
@@ -773,16 +1150,61 @@ export function useRoomSocket({
       }).catch(() => {});
     };
 
+    const probeStreamStatus = (failedLease: number) => {
+      if (isTerminal() || statusProbeInFlight || failedLease !== streamLease) return;
+      statusProbeInFlight = true;
+      const controller = new AbortController();
+      statusProbeController = controller;
+      statusProbeTimeoutId = window.setTimeout(() => controller.abort(), STREAM_STATUS_PROBE_TIMEOUT_MS);
+      const params = buildParams();
+
+      void (async () => {
+        let response: Response | null = null;
+        try {
+          response = await fetch(
+            `${API_BASE_URL}/realtime/rooms/${inviteCode}/stream-status?${params.toString()}`,
+            { signal: controller.signal, cache: "no-store" },
+          );
+        } catch {
+          // A failed probe is not proof that the room is absent. Keep the
+          // established transient reconnect path in that case.
+        } finally {
+          if (statusProbeTimeoutId != null) {
+            window.clearTimeout(statusProbeTimeoutId);
+            statusProbeTimeoutId = null;
+          }
+        }
+
+        const probeIsCurrent =
+          !isTerminal() &&
+          failedLease === streamLease &&
+          statusProbeController === controller;
+        if (!probeIsCurrent) return;
+
+        statusProbeController = null;
+        statusProbeInFlight = false;
+        if (response?.status === 404) {
+          terminateForRoomUnavailable();
+          return;
+        }
+        if (!activityDeliveryDisabledRef.current) {
+          onError("Соединение с realtime временно потеряно. Пытаемся восстановить связь...");
+        }
+        scheduleReconnect();
+      })();
+    };
+
     function connectSse() {
-      if (disposed) return;
+      if (isTerminal() || statusProbeInFlight) return;
 
       eventTokenRef.current = null;
       const params = buildParams();
       const source = new EventSource(`${API_BASE_URL}/realtime/rooms/${inviteCode}/stream?${params.toString()}`);
+      const lease = ++streamLease;
       sseRef.current = source;
 
       source.onopen = () => {
-        if (disposed || terminalAccessFailure) {
+        if (isTerminal() || lease !== streamLease || sseRef.current !== source) {
           source.close();
           return;
         }
@@ -795,40 +1217,59 @@ export function useRoomSocket({
         setConnected(true);
         roomSyncTransportLog("sse_open", { inviteCode });
         emitMetric("prod_realtime_connected", {}, { minIntervalMs: 1000 });
-        onError("");
+        if (activityDeliveryDisabledRef.current) {
+          presentActivityRecordingUnavailable();
+        } else {
+          onError("");
+        }
         publishCurrentPresence({ force: true });
         requestStateSync({ expectHydration: true });
       };
 
       source.onmessage = (event) => {
-        handleIncomingMessage(event.data);
+        if (isTerminal() || lease !== streamLease || sseRef.current !== source) return;
+        handleIncomingMessage(event.data, lease);
       };
 
       source.onerror = () => {
-        if (disposed) return;
-        setConnected(false);
-        if (source.readyState === EventSource.CLOSED) {
-          scheduleReconnect();
+        if (isTerminal() || lease !== streamLease || sseRef.current !== source) {
+          source.close();
+          return;
         }
+        setConnected(false);
+        const readyState = source.readyState;
+        sseRef.current = null;
+        source.close();
+        invalidateTransportLease();
+        const failedLease = streamLease;
         if (!sseErrorNotified) {
           sseErrorNotified = true;
           emitMetric(
             "prod_realtime_connection_lost",
-            { ready_state: source.readyState },
+            { ready_state: readyState },
             { minIntervalMs: 2000 }
           );
-          onError("Соединение с realtime временно потеряно. Пытаемся восстановить связь...");
+          if (!activityDeliveryDisabledRef.current) {
+            onError("Соединение с realtime временно потеряно. Пытаемся восстановить связь...");
+          }
         }
+        probeStreamStatus(failedLease);
       };
     }
 
-    const handleIncomingMessage = (raw: string) => {
+    const handleIncomingMessage = (raw: string, lease: number) => {
+      if (isTerminal() || lease !== streamLease) return;
       try {
         const message = JSON.parse(raw) as WsMessage;
         if (message.type === "state_sync") {
           const payload = message.payload as RealtimeState;
           eventTokenRef.current = payload.eventToken?.trim() || null;
+          activityCaptureConfirmedRef.current =
+            Boolean(eventTokenRef.current) && !activityDeliveryDisabledRef.current;
           setAccessDenied(false);
+          if (activityDeliveryDisabledRef.current) {
+            presentActivityRecordingUnavailable();
+          }
           const shouldHydrateFromState = expectRecoveryStateSync;
           expectRecoveryStateSync = false;
           emitMetric(
@@ -848,6 +1289,9 @@ export function useRoomSocket({
           }
           if (eventTokenRef.current) {
             tryDrainQueueRef.current?.();
+            if (!activityDeliveryDisabledRef.current) {
+              tryDrainActivityRef.current?.();
+            }
           }
           if (shouldHydrateFromState) {
             emitMetric(
@@ -1049,6 +1493,7 @@ export function useRoomSocket({
       window.removeEventListener("beforeunload", handleBeforeUnload);
 
       disposed = true;
+      abortStatusProbe();
 
       const sse = sseRef.current;
       sseRef.current = null;
@@ -1059,13 +1504,21 @@ export function useRoomSocket({
       reconnectTimerId = null;
       reconnectScheduled = false;
       abortInFlightRequest();
+      abortActivityInFlightRequest();
+      clearActivityRetryTimer();
       dropPendingQueue();
+      dropPendingActivity();
       queueDrainInProgressRef.current = false;
       inFlightControllerRef.current = null;
+      activityDrainInProgressRef.current = false;
+      activityInFlightControllerRef.current = null;
       eventTokenRef.current = null;
+      activityCaptureConfirmedRef.current = false;
       lastPresenceRef.current = null;
       terminalAccessFailureRef.current = false;
       tryDrainQueueRef.current = null;
+      tryDrainActivityRef.current = null;
+      queueActivityRef.current = null;
 
       sendRef.current = () => {};
     };
@@ -1175,6 +1628,7 @@ export function useRoomSocket({
     selectionEndLineNumber?: number | null;
     selectionEndColumn?: number | null;
   }) => {
+    if (terminalAccessFailureRef.current || terminalRoomUnavailableRef.current) return;
     const cursorSequence = cursorSequenceRef.current + 1;
     cursorSequenceRef.current = cursorSequence;
     persistCursorSequence(inviteCode, cursorSequence);
@@ -1202,6 +1656,7 @@ export function useRoomSocket({
   };
 
   const sendAwarenessUpdate = (awarenessUpdate: string) => {
+    if (terminalAccessFailureRef.current || terminalRoomUnavailableRef.current) return;
     const trimmed = awarenessUpdate.trim();
     if (!trimmed) return;
     // Yjs awareness (presence/selection) is not code-sync critical.
@@ -1303,6 +1758,7 @@ export function useRoomSocket({
   };
 
   const sendManagerWorkspaceAwarenessUpdate = (stepIndex: number, awarenessUpdate: string) => {
+    if (terminalAccessFailureRef.current || terminalRoomUnavailableRef.current) return;
     const trimmed = awarenessUpdate.trim();
     if (!trimmed) return;
     const token = eventTokenRef.current;
@@ -1338,50 +1794,37 @@ export function useRoomSocket({
     pasteLength?: number;
     pastePreview?: string;
   }) => {
-    const now = Date.now();
-    const eventKind = payload.eventKind ?? "keydown";
-    // Синтетические события (blur/visibility) не должны теряться из-за
-    // троттлинга: они срабатывают редко, а пропустить «переключился на другое
-    // окно» — это потерять самый важный сигнал в логах.
     if (
-      eventKind === "keydown" &&
-      now - lastKeyPressSentAtRef.current < KEY_PRESS_CLIENT_THROTTLE_MS
+      terminalAccessFailureRef.current ||
+      terminalRoomUnavailableRef.current ||
+      activityDeliveryDisabledRef.current
     ) {
       return;
     }
-    if (eventKind === "keydown") {
-      lastKeyPressSentAtRef.current = now;
-    }
-    // key_press is telemetry (keystroke log), not code-sync critical.
-    // Fire-and-forget so it never blocks Yjs updates in the main queue.
-    // On slow networks, queued key_presses would otherwise delay the watcher
-    // from seeing code for tens of seconds.
-    const token = eventTokenRef.current;
-    if (!token) return;
-    void fetch(`${API_BASE_URL}/realtime/rooms/${inviteCode}/events`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId,
-        eventToken: token,
-        clientEventSequence: null,
-        type: "key_press",
-        key: payload.key,
-        keyCode: payload.keyCode,
-        ctrlKey: payload.ctrlKey,
-        altKey: payload.altKey,
-        shiftKey: payload.shiftKey,
-        metaKey: payload.metaKey,
-        eventKind,
-        ...(payload.pasteLength != null ? { pasteLength: payload.pasteLength } : {}),
-        ...(payload.pastePreview != null ? { pastePreview: payload.pastePreview } : {}),
-      }),
-    }).catch(() => {});
+    const eventKind = payload.eventKind ?? "keydown";
+    // Every observed key, paste, focus, or visibility source action enters the
+    // lossless activity FIFO without a source-event throttle or coalescing.
+    // Activity has a separate one-in-flight FIFO, so it cannot delay Yjs while
+    // still retaining every captured source action until acknowledgement.
+    queueActivityRef.current?.({
+      type: "key_press",
+      sourceEventId: crypto.randomUUID(),
+      key: payload.key,
+      keyCode: payload.keyCode,
+      ctrlKey: payload.ctrlKey,
+      altKey: payload.altKey,
+      shiftKey: payload.shiftKey,
+      metaKey: payload.metaKey,
+      eventKind,
+      ...(payload.pasteLength != null ? { pasteLength: payload.pasteLength } : {}),
+      ...(payload.pastePreview != null ? { pastePreview: payload.pastePreview } : {}),
+    });
   };
 
   return {
     connected,
     accessDenied,
+    roomUnavailable,
     participantId,
     sessionId,
     sendCodeUpdate,

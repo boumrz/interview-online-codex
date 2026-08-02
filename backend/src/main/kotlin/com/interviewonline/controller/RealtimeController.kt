@@ -3,6 +3,7 @@ package com.interviewonline.controller
 import com.interviewonline.service.AuthService
 import com.interviewonline.service.CollaborationService
 import com.interviewonline.ws.RealtimeEventRequest
+import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
@@ -35,8 +36,7 @@ class RealtimeController(
         @RequestParam(required = false) authToken: String?,
         @RequestHeader("Authorization", required = false) authorization: String?,
     ): SseEmitter {
-        val bearerToken = authorization?.removePrefix("Bearer ")?.trim()
-        val user = authService.resolveUserByToken(bearerToken ?: authToken)
+        val user = resolveRealtimeUser(authorization, authToken)
         return collaborationService.joinRoomSse(
             inviteCode = inviteCode,
             sessionId = sessionId,
@@ -48,6 +48,35 @@ class RealtimeController(
         )
     }
 
+    /**
+     * A one-shot, side-effect-free probe for an EventSource failure. It must
+     * use the same room/role inputs as the stream without opening a session.
+     */
+    @GetMapping("/{inviteCode}/stream-status")
+    fun streamRoomStatus(
+        @PathVariable inviteCode: String,
+        @RequestParam(required = false) ownerToken: String?,
+        @RequestParam(required = false) interviewerToken: String?,
+        @RequestParam(required = false) authToken: String?,
+        @RequestHeader("Authorization", required = false) authorization: String?,
+    ): ResponseEntity<Void> {
+        val canOpenStream = collaborationService.canOpenRoomStream(
+            inviteCode = inviteCode,
+            ownerToken = ownerToken,
+            interviewerToken = interviewerToken,
+            user = resolveRealtimeUser(authorization, authToken),
+        )
+        return if (canOpenStream) {
+            ResponseEntity.noContent()
+                .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
+                .build()
+        } else {
+            ResponseEntity.notFound()
+                .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
+                .build()
+        }
+    }
+
     @PostMapping("/{inviteCode}/events")
     fun postRealtimeEvent(
         @PathVariable inviteCode: String,
@@ -56,6 +85,9 @@ class RealtimeController(
         collaborationService.handleRealtimeEvent(inviteCode, request)
         return ResponseEntity.noContent().build()
     }
+
+    private fun resolveRealtimeUser(authorization: String?, authToken: String?) =
+        authService.resolveUserByToken(authorization?.removePrefix("Bearer ")?.trim() ?: authToken)
 
     private fun decodeDisplayName(encoded: String?, fallback: String?): String {
         val rawInput = when {

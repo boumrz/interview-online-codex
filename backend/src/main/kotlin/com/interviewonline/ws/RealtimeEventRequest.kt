@@ -63,4 +63,6 @@ data class RealtimeEventRequest(
     val role: String? = null,
     val pasteLength: Int? = null,
     val pastePreview: String? = null,
+    /** Stable UUID generated at source capture and reused for retries. */
+    val sourceEventId: String? = null,
 )

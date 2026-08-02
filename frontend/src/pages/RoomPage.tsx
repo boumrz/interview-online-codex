@@ -56,17 +56,13 @@ import {
 } from "../services/api";
 import { VerdictBadge } from "../features/room/VerdictBadge";
 import { ActivityTimeline } from "../features/room/ActivityTimeline";
+import { reconcileActivityEvents } from "../features/room/activityTimelineProjection";
 import { PRODUCT_METRIKA_EVENT, setVisitParams, trackEvent } from "../services/analytics";
 import {
   useRoomSocket,
   type ManagerWorkspaceRealtimeState,
 } from "../features/room/useRoomSocket";
 import {
-  buildModifierPrefix,
-  formatCandidateKey,
-  formatCandidateKeyHistoryTimestamp,
-  normalizeKeyCodeLabel,
-  normalizeKeyLabel,
   type CandidateKeyInfo,
   type KeyPressPayload,
 } from "../features/room/candidateKeys";
@@ -1245,6 +1241,15 @@ export function RoomPage() {
             .filter((item): item is RoomTask => Boolean(item))
             .sort((left, right) => left.stepIndex - right.stepIndex)
         : (previousState?.tasks ?? []);
+      const canonicalCandidateKeyHistory = incoming.canManageRoom
+        ? reconcileActivityEvents(
+            Array.isArray(incoming.candidateKeyHistory)
+              ? incoming.candidateKeyHistory
+              : incoming.lastCandidateKey
+                ? [incoming.lastCandidateKey]
+                : [],
+          ).slice(-LOG_HISTORY_LIMIT)
+        : [];
       const nextState: RealtimeState = {
         ...incoming,
         language: normalizeRoomLanguage(incoming.language),
@@ -1281,12 +1286,8 @@ export function RoomPage() {
             ? incoming.briefingMarkdown
             : "",
         canGrantAccess: Boolean(incoming.canGrantAccess),
-        lastCandidateKey: incoming.lastCandidateKey ?? null,
-        candidateKeyHistory: Array.isArray(incoming.candidateKeyHistory)
-          ? incoming.candidateKeyHistory
-          : incoming.lastCandidateKey
-            ? [incoming.lastCandidateKey]
-            : [],
+        candidateKeyHistory: canonicalCandidateKeyHistory,
+        lastCandidateKey: canonicalCandidateKeyHistory.at(-1) ?? null,
       };
       lastKnownServerYjsSequenceRef.current =
         typeof nextState.lastYjsSequence === "number" &&
@@ -1470,49 +1471,11 @@ export function RoomPage() {
         ...incomingKey,
         timestampEpochMs,
       };
-      const dedupeToken = [
-        normalizedKey.sessionId,
-        normalizedKey.timestampEpochMs,
-        normalizedKey.key,
-        normalizedKey.keyCode,
-        normalizedKey.ctrlKey ? "1" : "0",
-        normalizedKey.altKey ? "1" : "0",
-        normalizedKey.shiftKey ? "1" : "0",
-        normalizedKey.metaKey ? "1" : "0",
-        normalizedKey.eventKind ?? "keydown",
-      ].join(":");
-
-      const hasDuplicate = (previous.candidateKeyHistory ?? []).some(
-        (entry) => {
-          const entryToken = [
-            entry.sessionId,
-            entry.timestampEpochMs,
-            entry.key,
-            entry.keyCode,
-            entry.ctrlKey ? "1" : "0",
-            entry.altKey ? "1" : "0",
-            entry.shiftKey ? "1" : "0",
-            entry.metaKey ? "1" : "0",
-            entry.eventKind ?? "keydown",
-          ].join(":");
-          return entryToken === dedupeToken;
-        },
-      );
-
-      const currentHistory = previous.candidateKeyHistory ?? [];
-      const nextHistory = hasDuplicate
-        ? currentHistory
-        : [normalizedKey, ...currentHistory].slice(0, LOG_HISTORY_LIMIT);
-      const previousLastTimestamp =
-        previous.lastCandidateKey?.timestampEpochMs ?? 0;
-      const nextLastCandidateKey =
-        timestampEpochMs >= previousLastTimestamp
-          ? normalizedKey
-          : previous.lastCandidateKey;
-
-      if (hasDuplicate && nextLastCandidateKey === previous.lastCandidateKey) {
-        return previous;
-      }
+      const nextHistory = reconcileActivityEvents([
+        ...(previous.candidateKeyHistory ?? []),
+        normalizedKey,
+      ]).slice(-LOG_HISTORY_LIMIT);
+      const nextLastCandidateKey = nextHistory.at(-1) ?? null;
 
       return {
         ...previous,
@@ -1747,6 +1710,7 @@ export function RoomPage() {
   const {
     connected,
     accessDenied: realtimeAccessDenied,
+    roomUnavailable: realtimeRoomUnavailable,
     participantId,
     sessionId,
     sendLanguageUpdate,
@@ -2530,6 +2494,22 @@ export function RoomPage() {
     active: merged?.role === "candidate",
     onKeyEvent: handleCandidateKeyPress,
   });
+
+  if (realtimeRoomUnavailable) {
+    return (
+      <Box className={styles.shell} p="xl">
+        <section className={styles.realtimeRoomUnavailable} data-testid="room-realtime-unavailable" role="alert">
+          <Text fw={700} size="lg">Комната недоступна</Text>
+          <Text c="#b7c5d8" size="sm">
+            Откройте актуальную ссылку-приглашение или обратитесь к организатору интервью.
+          </Text>
+          <Button component={Link} to="/" variant="light" color="blue">
+            На главную
+          </Button>
+        </section>
+      </Box>
+    );
+  }
 
   if (isLoading || !merged) {
     return (
@@ -3507,9 +3487,7 @@ function OwnerLayout({
       : candidatePresenceState === "away"
         ? "Вне фокуса"
         : "В фокусе";
-  const recentCandidateKeyHistory = [...(candidateKeyHistory ?? [])]
-    .sort((a, b) => b.timestampEpochMs - a.timestampEpochMs)
-    .slice(0, LOG_HISTORY_LIMIT);
+  const recentCandidateKeyHistory = (candidateKeyHistory ?? []).slice(-LOG_HISTORY_LIMIT);
   if (recentCandidateKeyHistory.length === 0 && lastCandidateKey) {
     recentCandidateKeyHistory.push(lastCandidateKey);
   }
@@ -5001,7 +4979,7 @@ function CandidateLayout({
           onYjsUpdate={onYjsUpdate}
           onYjsBridgeReady={onYjsBridgeReady}
           onEditorValueChange={onEditorValueChange}
-          onKeyPress={onKeyPress}
+          onKeyPress={() => {}}
           onPaste={onPaste}
           panelClassName={styles.candidatePanel}
         />

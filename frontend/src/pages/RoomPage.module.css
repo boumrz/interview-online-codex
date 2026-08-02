@@ -15,7 +15,8 @@
 }
 
 .realtimeAccessPending,
-.realtimeAccessError {
+.realtimeAccessError,
+.realtimeRoomUnavailable {
   width: min(560px, calc(100% - 32px));
   margin: auto;
   padding: 28px;
@@ -29,6 +30,10 @@
 
 .realtimeAccessError {
   border-color: rgba(245, 101, 101, 0.55);
+}
+
+.realtimeRoomUnavailable {
+  border-color: rgba(245, 158, 11, 0.5);
 }
 
 .topBar {

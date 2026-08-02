@@ -7,12 +7,23 @@ import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
 import jakarta.persistence.Index
 import jakarta.persistence.Table
+import jakarta.persistence.UniqueConstraint
 
 @Entity
 @Table(
     name = "room_keystroke_events",
+    uniqueConstraints = [
+        UniqueConstraint(
+            name = "uk_rke_room_source_event",
+            columnNames = ["room_id", "source_event_id"],
+        ),
+    ],
     indexes = [
         Index(name = "idx_rke_room_ts", columnList = "room_id, timestamp_epoch_ms"),
+        Index(
+            name = "idx_rke_room_ts_accepted_sequence",
+            columnList = "room_id, timestamp_epoch_ms, accepted_sequence",
+        ),
     ]
 )
 class RoomKeystrokeEvent(
@@ -58,4 +69,10 @@ class RoomKeystrokeEvent(
 
     @Column(name = "timestamp_epoch_ms", nullable = false)
     var timestampEpochMs: Long = 0L,
+
+    @Column(name = "source_event_id", length = 36)
+    var sourceEventId: String? = null,
+
+    @Column(name = "accepted_sequence")
+    var acceptedSequence: Long? = null,
 )

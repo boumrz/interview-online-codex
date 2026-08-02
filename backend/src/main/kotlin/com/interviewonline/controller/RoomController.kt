@@ -221,13 +221,15 @@ class RoomController(
         val dtos = roomService.getKeystrokeEvents(inviteCode, ownerToken, interviewerToken, user, eventToken)
         return if (format == "csv") {
             val sb = StringBuilder()
-            sb.appendLine("timestamp_epoch_ms,session_id,display_name,event_kind,key_value,key_code,ctrl_key,alt_key,shift_key,meta_key,paste_length,paste_preview")
+            sb.appendLine("timestamp_epoch_ms,accepted_sequence,source_event_id,session_id,display_name,event_kind,key_value,key_code,ctrl_key,alt_key,shift_key,meta_key,paste_length,paste_preview")
             dtos.forEach { d ->
                 // All user-controlled string fields are wrapped in RFC-4180 quotes
                 // (csvQuote) to prevent formula injection and handle special chars.
                 // Only boolean/numeric fields that come from server code use csvSafe.
                 sb.appendLine(
                     "${d.timestampEpochMs}," +
+                    "${d.acceptedSequence ?: ""}," +
+                    "${csvQuote(d.sourceEventId ?: "")}," +
                     "${csvQuote(d.sessionId)}," +
                     "${csvQuote(d.displayName)}," +
                     "${csvSafe(d.eventKind)}," +

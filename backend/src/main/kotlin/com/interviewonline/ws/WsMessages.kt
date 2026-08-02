@@ -1,5 +1,7 @@
 package com.interviewonline.ws
 
+import com.fasterxml.jackson.annotation.JsonInclude
+
 data class WsOutgoingMessage(
     val type: String,
     val payload: Any,
@@ -34,8 +36,10 @@ data class RoomRealtimePayload(
     val tasks: List<RoomTaskPayload> = emptyList(),
     val taskScores: Map<Int, Int?> = emptyMap(),
     val cursors: List<CursorPayload> = emptyList(),
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     val lastCandidateKey: CandidateKeyPayload? = null,
-    val candidateKeyHistory: List<CandidateKeyPayload> = emptyList(),
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    val candidateKeyHistory: List<CandidateKeyPayload>? = null,
     val verdict: String? = null,
     val verdictComment: String? = null,
     val status: String = "active",
@@ -146,4 +150,8 @@ data class CandidateKeyPayload(
     val eventKind: String = "keydown",
     val pasteLength: Int? = null,
     val pastePreview: String? = null,
+    /** Client UUID, retained unchanged when a source action is retried. */
+    val sourceEventId: String? = null,
+    /** Server-assigned, room-local sequence used after timestamp for canonical order. */
+    val acceptedSequence: Long? = null,
 )

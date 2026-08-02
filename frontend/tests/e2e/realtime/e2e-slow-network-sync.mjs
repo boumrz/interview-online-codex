@@ -1,7 +1,7 @@
 import { chromium } from "playwright";
 
 const webBaseUrl = process.env.E2E_BASE_URL || "http://localhost:5173";
-const apiBaseUrl = process.env.E2E_API_URL || "http://localhost:8090/api";
+const apiBaseUrl = process.env.E2E_API_URL || "http://localhost:8080/api";
 
 // Two regression scenarios that cover the two root causes of watcher not seeing
 // candidate's edits under slow network conditions:
@@ -15,7 +15,8 @@ const apiBaseUrl = process.env.E2E_API_URL || "http://localhost:8090/api";
 //   Before fix: telemetry events (key_press, cursor_update, awareness_update) shared
 //   the main serial send queue with Yjs updates. 40 chars × 800ms RTT = 32s before
 //   the first Yjs heartbeat could get through.
-//   Fix: telemetry events are fire-and-forget (parallel fetch, not queued).
+//   Fix: activity uses its own one-in-flight FIFO, while cursor/awareness avoid
+//   the Yjs mutation queue. Telemetry therefore cannot hold Yjs behind it.
 
 const nickname = `slowsync_${Math.random().toString(36).slice(2, 8)}`;
 const password = "secret123";
@@ -286,7 +287,7 @@ try {
   console.log("Scenario 1 OK:", room.inviteCode);
 
   // SCENARIO 2: key_press / cursor_update / awareness_update queue blocker (CDP 3G)
-  // Without the fire-and-forget fix, ~35 telemetry events × 800ms RTT = 28s before
+  // Without the separated-delivery fix, ~35 telemetry events × 800ms RTT = 28s before
   // the first Yjs update reaches the watcher. With the fix, it takes ~3s.
   // Strict 15s timeout catches a regression while giving the fix plenty of margin.
   console.log("\n=== Scenario 2: telemetry queue-blocker regression (CDP 3G) ===");

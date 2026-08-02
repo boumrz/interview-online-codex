@@ -21,6 +21,11 @@ internal object CandidateKeyHistoryHelpers {
      */
     const val MAX_HISTORY_SIZE: Int = 50
 
+    private val canonicalOrder = compareBy<CandidateKeyPayload> { it.timestampEpochMs }
+        .thenBy { it.acceptedSequence ?: Long.MIN_VALUE }
+        .thenBy { it.sourceEventId.orEmpty() }
+        .thenBy { legacyDedupeKey(it) }
+
     /**
      * Парсит JSON-историю клавиш из БД (`Room.candidateKeyHistory`). Поддерживает
      * как «голый» массив событий, так и обёртку `{ "version": 1, "events": [...] }`.
@@ -46,9 +51,7 @@ internal object CandidateKeyHistoryHelpers {
                 }
             }
         }.getOrElse { emptyList() }
-        return parsed
-            .sortedBy { it.timestampEpochMs }
-            .takeLast(MAX_HISTORY_SIZE)
+        return canonicalize(parsed)
     }
 
     /**
@@ -57,9 +60,7 @@ internal object CandidateKeyHistoryHelpers {
      * обрезает до максимального размера, чтобы хранилище никогда не пухло.
      */
     fun serialize(history: List<CandidateKeyPayload>, objectMapper: ObjectMapper): String {
-        val normalized = history
-            .sortedBy { it.timestampEpochMs }
-            .takeLast(MAX_HISTORY_SIZE)
+        val normalized = canonicalize(history)
         return objectMapper.writeValueAsString(mapOf("version" to 1, "events" to normalized))
     }
 
@@ -73,33 +74,42 @@ internal object CandidateKeyHistoryHelpers {
         inMemory: List<CandidateKeyPayload>,
         persisted: List<CandidateKeyPayload>,
     ): List<CandidateKeyPayload> {
-        if (inMemory.isEmpty()) {
-            return persisted.sortedBy { it.timestampEpochMs }.takeLast(MAX_HISTORY_SIZE)
-        }
-        if (persisted.isEmpty()) {
-            return inMemory.sortedBy { it.timestampEpochMs }.takeLast(MAX_HISTORY_SIZE)
-        }
         val merged = linkedMapOf<String, CandidateKeyPayload>()
         (persisted + inMemory)
-            .sortedBy { it.timestampEpochMs }
+            .sortedWith(canonicalOrder)
             .forEach { event ->
-                val dedupeKey = listOf(
-                    event.sessionId,
-                    event.timestampEpochMs.toString(),
-                    event.key,
-                    event.keyCode,
-                    if (event.ctrlKey) "1" else "0",
-                    if (event.altKey) "1" else "0",
-                    if (event.shiftKey) "1" else "0",
-                    if (event.metaKey) "1" else "0",
-                    event.eventKind,
-                ).joinToString(":")
-                merged[dedupeKey] = event
+                merged[dedupeKey(event)] = event
             }
-        return merged.values
-            .sortedBy { it.timestampEpochMs }
+        return canonicalize(merged.values)
+    }
+
+    /** Canonicalizes retained history using durable source identity when present. */
+    fun canonicalize(history: Collection<CandidateKeyPayload>): List<CandidateKeyPayload> {
+        val deduplicated = linkedMapOf<String, CandidateKeyPayload>()
+        history.sortedWith(canonicalOrder).forEach { event ->
+            deduplicated[dedupeKey(event)] = event
+        }
+        return deduplicated.values
+            .sortedWith(canonicalOrder)
             .takeLast(MAX_HISTORY_SIZE)
     }
+
+    private fun dedupeKey(event: CandidateKeyPayload): String {
+        val sourceEventId = event.sourceEventId?.trim().orEmpty()
+        return if (sourceEventId.isNotEmpty()) "source:$sourceEventId" else "legacy:${legacyDedupeKey(event)}"
+    }
+
+    private fun legacyDedupeKey(event: CandidateKeyPayload): String = listOf(
+        event.sessionId,
+        event.timestampEpochMs.toString(),
+        event.key,
+        event.keyCode,
+        if (event.ctrlKey) "1" else "0",
+        if (event.altKey) "1" else "0",
+        if (event.shiftKey) "1" else "0",
+        if (event.metaKey) "1" else "0",
+        event.eventKind,
+    ).joinToString(":")
 
     /**
      * Приводит входящий `eventKind` к одному из поддерживаемых значений.
@@ -127,7 +137,8 @@ internal object CandidateKeyHistoryHelpers {
      */
     fun normalizeIncomingKey(rawKey: String?): String {
         val raw = rawKey?.take(64) ?: return ""
-        if (raw == " " || raw == "\u00A0") return "Space"
+        if (raw == " ") return raw
+        if (raw == "\u00A0") return "Space"
         if (raw == "\t") return "Tab"
         if (raw == "\n" || raw == "\r" || raw == "\r\n") return "Enter"
         val trimmed = raw.trim()

@@ -60,10 +60,8 @@ export function useCandidateKeyTracker({
       updateModifiers(event);
       // Если фокус в CodeMirror — у редактора есть свой keydown-хэндлер,
       // который уже отправит событие. Дублировать не нужно.
-      const target = event.target;
-      if (target instanceof Element && target.closest(".cm-content")) {
-        return;
-      }
+      // This capture-phase listener is the single source for candidate
+      // activity, including CodeMirror shortcuts that editor keymaps consume.
       onKeyEvent({
         key: event.key,
         keyCode: event.code,
@@ -104,6 +102,7 @@ export function useCandidateKeyTracker({
       modifierState.alt = false;
       modifierState.shift = false;
       modifierState.meta = false;
+      emitFocusEvent("window_focus");
     };
 
     const onVisibilityChange = () => {

@@ -645,7 +645,7 @@ class RoomService(
             throw ApiException(HttpStatus.FORBIDDEN, "Недостаточно прав")
         }
         return roomKeystrokeEventRepository
-            .findByRoomIdOrderByTimestampEpochMsAsc(room.id!!)
+            .findByRoomIdOrderByTimestampEpochMsAscAcceptedSequenceAsc(room.id!!)
             .map { e ->
                 KeystrokeEventDto(
                     id = e.id!!,
@@ -661,6 +661,8 @@ class RoomService(
                     pasteLength = e.pasteLength,
                     pastePreview = e.pastePreview,
                     timestampEpochMs = e.timestampEpochMs,
+                    sourceEventId = e.sourceEventId,
+                    acceptedSequence = e.acceptedSequence,
                 )
             }
     }
