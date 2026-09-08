@@ -67,6 +67,7 @@ import {
   useTasksGroupedQuery,
   useUpdateRoomMutation,
   useUpdateTaskTemplateMutation,
+  usePreviewHiringManagerMutation,
 } from "../services/api";
 import { setVisitParams, trackEvent } from "../services/analytics";
 import type { AdminUser, RoomSummary, TaskTemplate } from "../types";
@@ -74,6 +75,7 @@ import styles from "./DashboardPage.module.css";
 import {
   ADMIN_DASHBOARD_SECTION,
   BASE_DASHBOARD_SECTIONS,
+  HR_DASHBOARD_SECTION,
   type DashboardSection,
   LANGUAGE_OPTIONS,
 } from "./dashboard/dashboardConstants";
@@ -96,8 +98,27 @@ import { CreateRoomSection } from "./dashboard/CreateRoomSection";
 import { ManageRoomsSection } from "./dashboard/ManageRoomsSection";
 import { PasteTaskCodeField } from "./dashboard/PasteTaskCodeField";
 import { PresetsSection } from "./dashboard/PresetsSection";
+import { HrCabinetSection } from "./dashboard/HrCabinetSection";
+import { HrProfileSection } from "./dashboard/HrProfileSection";
+import type {
+  HiringManagerPickerFeedback,
+  HiringManagerSelection,
+} from "./dashboard/CreateRoomSection";
 
 declare const __FEATURE_AGENT_OPS__: string | undefined;
+
+const CANONICAL_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isOpaqueUnavailable(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "status" in error && error.status === 404;
+}
+
+function apiErrorMessage(error: unknown): string | null {
+  if (typeof error !== "object" || error === null || !("data" in error)) return null;
+  const data = error.data;
+  if (typeof data !== "object" || data === null || !("error" in data)) return null;
+  return typeof data.error === "string" ? data.error : null;
+}
 
 export function DashboardPage() {
   const dispatch = useAppDispatch();
@@ -105,11 +126,14 @@ export function DashboardPage() {
   const { section } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const auth = useAppSelector((s) => s.auth);
+  const authIdentityRef = useRef({ token: auth.token, userId: auth.user?.id ?? null });
+  authIdentityRef.current = { token: auth.token, userId: auth.user?.id ?? null };
   const agentOpsEnabled =
     (typeof __FEATURE_AGENT_OPS__ !== "undefined"
       ? __FEATURE_AGENT_OPS__
       : "false") === "true";
   const isAdmin = auth.user?.role === "admin";
+  const isHr = auth.user?.isHr === true;
 
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDescription, setTaskDescription] = useState("");
@@ -119,6 +143,16 @@ export function DashboardPage() {
 
   const [roomTitle, setRoomTitle] = useState("Техническое интервью");
   const [roomTaskIds, setRoomTaskIds] = useState<string[]>([]);
+  const [hiringManagerDraftId, setHiringManagerDraftId] = useState("");
+  const [hiringManagerSelections, setHiringManagerSelections] = useState<
+    HiringManagerSelection[]
+  >([]);
+  const [hiringManagerPickerFeedback, setHiringManagerPickerFeedback] = useState<
+    HiringManagerPickerFeedback
+  >({ kind: "idle", message: "" });
+  const pickerGenerationRef = useRef(0);
+  const pickerIdentityRef = useRef<string | null>(null);
+  const pickerRequestRef = useRef<{ abort: () => void } | null>(null);
   const [profileDisplayName, setProfileDisplayName] = useState(
     auth.user?.displayName ?? "",
   );
@@ -165,7 +199,9 @@ export function DashboardPage() {
   const dashboardSections = BASE_DASHBOARD_SECTIONS.filter(
     (dashboardSection) =>
       agentOpsEnabled || dashboardSection.value !== "agents",
-  ).concat(isAdmin ? [ADMIN_DASHBOARD_SECTION] : []);
+  )
+    .concat(isHr ? [HR_DASHBOARD_SECTION] : [])
+    .concat(isAdmin ? [ADMIN_DASHBOARD_SECTION] : []);
 
   const editTaskDescriptionHtml = useMemo(
     () => markdownToHtml(editTaskDescription),
@@ -195,6 +231,7 @@ export function DashboardPage() {
     useAdminUpdateUserRoleMutation();
   const [deleteAdminUser, deleteAdminUserState] = useAdminDeleteUserMutation();
   const [createRoom, createRoomState] = useCreateRoomMutation();
+  const [previewHiringManager] = usePreviewHiringManagerMutation();
   const [updateRoom, updateRoomState] = useUpdateRoomMutation();
   const [deleteRoom, deleteRoomState] = useDeleteRoomMutation();
   const [startAgentRun, startAgentRunState] = useStartAgentRunMutation();
@@ -269,7 +306,10 @@ export function DashboardPage() {
   const showError = (message: string) => pushNotif("error", message, "");
   const showSuccess = (title: string, message: string) => pushNotif("success", title, message);
 
-  const hasValidSection = isDashboardSection(section, agentOpsEnabled, isAdmin);
+  const profileIsResolving = Boolean(auth.token && !auth.user);
+  const hasValidSection =
+    (section === "hr" && profileIsResolving) ||
+    isDashboardSection(section, agentOpsEnabled, isAdmin, isHr);
   const activeSection: DashboardSection = hasValidSection ? section : "rooms";
   const activeTaskLanguage = normalizeLanguageKey(searchParams.get("lang"));
 
@@ -370,6 +410,27 @@ export function DashboardPage() {
   }, [allSelectableRoomTasks]);
 
   useEffect(() => {
+    const identity = `${auth.token ?? ""}:${auth.user?.id ?? ""}`;
+    const identityChanged = pickerIdentityRef.current !== identity;
+    pickerIdentityRef.current = identity;
+    pickerGenerationRef.current += 1;
+    pickerRequestRef.current?.abort();
+    pickerRequestRef.current = null;
+
+    if (identityChanged || activeSection !== "rooms" || !auth.token || !auth.user?.id) {
+      setHiringManagerDraftId("");
+      setHiringManagerSelections([]);
+      setHiringManagerPickerFeedback({ kind: "idle", message: "" });
+    }
+
+    return () => {
+      pickerGenerationRef.current += 1;
+      pickerRequestRef.current?.abort();
+      pickerRequestRef.current = null;
+    };
+  }, [activeSection, auth.token, auth.user?.id]);
+
+  useEffect(() => {
     setRoomTitleDrafts((prev) => {
       const allowedRoomIds = new Set(rooms.map((room) => room.id));
       const next = Object.fromEntries(
@@ -441,9 +502,92 @@ export function DashboardPage() {
     }
   };
 
+  const onHiringManagerDraftIdChange = (value: string) => {
+    setHiringManagerDraftId(value);
+    if (hiringManagerPickerFeedback.kind !== "checking") {
+      setHiringManagerPickerFeedback({ kind: "idle", message: "" });
+    }
+  };
+
+  const onAddHiringManager = async () => {
+    if (createRoomState.isLoading || hiringManagerPickerFeedback.kind === "checking") return;
+
+    const normalizedId = hiringManagerDraftId.trim().toLowerCase();
+    if (!normalizedId) {
+      setHiringManagerPickerFeedback({ kind: "error", message: "Введите ID нанимающего" });
+      return;
+    }
+    if (!CANONICAL_UUID_PATTERN.test(normalizedId)) {
+      setHiringManagerPickerFeedback({ kind: "error", message: "Введите полный UUID нанимающего" });
+      return;
+    }
+    if (hiringManagerSelections.some((selection) => selection.normalizedId === normalizedId)) {
+      setHiringManagerPickerFeedback({ kind: "error", message: "Этот нанимающий уже добавлен" });
+      return;
+    }
+
+    const generation = pickerGenerationRef.current + 1;
+    pickerGenerationRef.current = generation;
+    const requestIdentity = `${auth.token ?? ""}:${auth.user?.id ?? ""}`;
+    setHiringManagerPickerFeedback({ kind: "checking", message: "Проверяем нанимающего…" });
+    const request = previewHiringManager({ invitationId: normalizedId });
+    pickerRequestRef.current = request;
+
+    const isCurrentRequest = () => (
+      generation === pickerGenerationRef.current
+      && pickerIdentityRef.current === requestIdentity
+      && activeSection === "rooms"
+      && authIdentityRef.current.token === auth.token
+      && authIdentityRef.current.userId === auth.user?.id
+    );
+
+    try {
+      const response = await request.unwrap();
+      if (!isCurrentRequest()) return;
+      const responseId = response.normalizedId.toLowerCase();
+      if (responseId !== normalizedId) {
+        setHiringManagerPickerFeedback({
+          kind: "error",
+          message: "Не удалось проверить нанимающего. Повторите попытку.",
+        });
+        return;
+      }
+      setHiringManagerSelections((previous) => (
+        previous.some((selection) => selection.normalizedId === responseId)
+          ? previous
+          : [...previous, { normalizedId: responseId, displayName: response.displayName }]
+      ));
+      setHiringManagerDraftId("");
+      setHiringManagerPickerFeedback({
+        kind: "success",
+        message: `Нанимающий добавлен: ${response.displayName}`,
+      });
+    } catch (error) {
+      if (!isCurrentRequest()) return;
+      setHiringManagerPickerFeedback({
+        kind: "error",
+        message: isOpaqueUnavailable(error)
+          ? "Нанимающий не найден или недоступен"
+          : "Не удалось проверить нанимающего. Повторите попытку.",
+      });
+    } finally {
+      if (isCurrentRequest()) pickerRequestRef.current = null;
+    }
+  };
+
+  const onRemoveHiringManager = (normalizedId: string) => {
+    setHiringManagerSelections((previous) => (
+      previous.filter((selection) => selection.normalizedId !== normalizedId)
+    ));
+  };
+
   const onCreateRoom = async (e: FormEvent) => {
     e.preventDefault();
+    if (createRoomState.isLoading) return;
     const firstSelectedTaskLanguage = selectedRoomTasks[0]?.language ?? null;
+    const normalizedHiringManagerIds = hiringManagerSelections.map(
+      (selection) => selection.normalizedId,
+    );
     trackEvent("prod_room_create_submit", {
       selected_tasks: roomTaskIds.length,
       first_task_language: firstSelectedTaskLanguage,
@@ -458,6 +602,9 @@ export function DashboardPage() {
       const room = await createRoom({
         title: roomTitle,
         taskIds: normalizedTaskIds,
+        ...(normalizedHiringManagerIds.length > 0
+          ? { hiringManagerIds: normalizedHiringManagerIds }
+          : {}),
       }).unwrap();
       const ownerName = auth.user?.displayName?.trim() || "Интервьюер";
       localStorage.setItem(
@@ -471,9 +618,18 @@ export function DashboardPage() {
         first_task_language: firstSelectedTaskLanguage,
         room_invite_len: room.inviteCode.length,
       });
+      pickerGenerationRef.current += 1;
+      pickerRequestRef.current?.abort();
+      pickerRequestRef.current = null;
       navigate(`/room/${room.inviteCode}`);
-    } catch {
-      showError("Не удалось создать комнату");
+    } catch (error) {
+      const message = normalizedHiringManagerIds.length > 0
+        ? apiErrorMessage(error) ?? "Указанный нанимающий не найден или недоступен"
+        : "Не удалось создать комнату";
+      if (normalizedHiringManagerIds.length > 0) {
+        setHiringManagerPickerFeedback({ kind: "error", message });
+      }
+      showError(message);
       trackEvent("prod_room_create_failed", {
         first_task_language: firstSelectedTaskLanguage,
       });
@@ -628,7 +784,13 @@ export function DashboardPage() {
   const removeRoom = async (roomId: string) => {
     if (!window.confirm("Удалить комнату?")) return;
     try {
-      await deleteRoom({ roomId }).unwrap();
+      const result = await deleteRoom({ roomId }).unwrap();
+      showSuccess(
+        result.archived ? "Комната перенесена в архив" : "Комната удалена",
+        result.archived
+          ? "История сохранена в кабинетах назначенных нанимающих"
+          : "Комната и связанные данные удалены",
+      );
     } catch {
       showError("Не удалось удалить комнату");
     }
@@ -640,8 +802,14 @@ export function DashboardPage() {
       showError("Введите имя для отображения");
       return;
     }
+    const requestIdentity = { token: auth.token, userId: auth.user?.id ?? null };
     try {
       const updated = await updateProfile({ displayName: normalized }).unwrap();
+      if (
+        authIdentityRef.current.token !== requestIdentity.token ||
+        authIdentityRef.current.userId !== requestIdentity.userId ||
+        localStorage.getItem("auth_token") !== requestIdentity.token
+      ) return;
       dispatch(updateAuthProfile({ displayName: updated.displayName }));
       localStorage.setItem("display_name", updated.displayName);
       setProfileDisplayName(updated.displayName);
@@ -649,6 +817,34 @@ export function DashboardPage() {
     } catch {
       showError("Не удалось сохранить имя для комнаты");
     }
+  };
+
+  const saveHiringManagerCapability = async (isHr: boolean): Promise<boolean> => {
+    if (!auth.user) return false;
+    const requestIdentity = { token: auth.token, userId: auth.user.id };
+    const updated = await updateProfile({
+      displayName: auth.user.displayName,
+      isHr,
+    }).unwrap();
+    if (
+      authIdentityRef.current.token !== requestIdentity.token ||
+      authIdentityRef.current.userId !== requestIdentity.userId ||
+      localStorage.getItem("auth_token") !== requestIdentity.token
+    ) return false;
+    dispatch(updateAuthProfile({
+      displayName: updated.displayName,
+      isHr: updated.isHr,
+    }));
+    localStorage.setItem("display_name", updated.displayName);
+    if (!updated.isHr) {
+      dispatch(api.util.invalidateTags(["HrInterviews", "HrManagers"]));
+      if (activeSection === "hr") navigate("/dashboard/rooms", { replace: true });
+    }
+    showSuccess(
+      updated.isHr ? "Функции нанимающего включены" : "Функции нанимающего отключены",
+      updated.isHr ? "Теперь доступен личный список интервью" : "Доступ к комнатам и их история не изменились",
+    );
+    return true;
   };
 
   const openRoomFromDashboard = (room: RoomSummary) => {
@@ -746,6 +942,10 @@ export function DashboardPage() {
       navigate("/dashboard/rooms");
       return;
     }
+    if (nextSection === "hr" && !isHr) {
+      navigate("/dashboard/rooms");
+      return;
+    }
     if (nextSection === "tasks") {
       const params = new URLSearchParams(searchParams);
       params.set("lang", safeTaskLanguage);
@@ -760,6 +960,9 @@ export function DashboardPage() {
   }
   if (!hasValidSection) {
     return <Navigate to="/dashboard/rooms" replace />;
+  }
+  if (section === "hr" && profileIsResolving) {
+    return <Box p="xl" c="gray.2" bg="#0f1115" mih="100vh">Загрузка профиля...</Box>;
   }
 
   return (
@@ -934,7 +1137,7 @@ export function DashboardPage() {
             }}
           >
             <Container size="xl" py={20}>
-              <Card
+              {activeSection !== "hr" ? <Card
                 withBorder
                 bg="#11151c"
                 c="gray.1"
@@ -983,9 +1186,16 @@ export function DashboardPage() {
                     </Stack>
                   </Box>
                 </Group>
-              </Card>
+                {auth.user ? (
+                  <HrProfileSection
+                    user={auth.user}
+                    isLoading={updateProfileState.isLoading}
+                    onSave={saveHiringManagerCapability}
+                  />
+                ) : null}
+              </Card> : null}
 
-              <SimpleGrid cols={{ base: 1, md: 3 }} spacing="md" mb="md">
+              {activeSection !== "hr" ? <SimpleGrid cols={{ base: 1, md: 3 }} spacing="md" mb="md">
                 <Card
                   withBorder
                   bg="#11151c"
@@ -1034,7 +1244,7 @@ export function DashboardPage() {
                     {activeLanguagesCount}
                   </Title>
                 </Card>
-              </SimpleGrid>
+              </SimpleGrid> : null}
 
               <Card
                 withBorder
@@ -1070,6 +1280,12 @@ export function DashboardPage() {
                   selectedTasks={selectedRoomTasks}
                   selectedTaskIds={roomTaskIds}
                   onSelectedTaskIdsChange={setRoomTaskIds}
+                  hiringManagerDraftId={hiringManagerDraftId}
+                  onHiringManagerDraftIdChange={onHiringManagerDraftIdChange}
+                  onAddHiringManager={onAddHiringManager}
+                  hiringManagerSelections={hiringManagerSelections}
+                  hiringManagerPickerFeedback={hiringManagerPickerFeedback}
+                  onRemoveHiringManager={onRemoveHiringManager}
                   isSubmitting={createRoomState.isLoading}
                   onSubmit={onCreateRoom}
                   onError={showError}
@@ -1227,6 +1443,10 @@ export function DashboardPage() {
                   onFlushTitleChange={flushRoomAutoSave}
                 />
               )}
+
+              {activeSection === "hr" && auth.user?.isHr && auth.token ? (
+                <HrCabinetSection user={auth.user} token={auth.token} />
+              ) : null}
 
               {activeSection === "admin" && isAdmin && (
                 <AdminUsersSection

@@ -1,0 +1,49 @@
+agent: root
+change_id: add-hr-interview-cabinet
+status_recommendation: accepted
+input_summary: >-
+  The user authorized the complete HR scenario with a single optional account
+  checkbox. Candidate/interviewer authority remains specific to each room.
+output_summary: >-
+  Implemented and accepted the independent HR marker and stable UUID, authorized
+  invitations and automatic tracking, personal interview cabinet, candidate and
+  schedule metadata, outcomes, retained read-only history, and scoped XLSX export.
+  Test-first evidence, migration proof, independent reviews, QA and product
+  acceptance are recorded in the adjacent artifacts.
+implementation:
+  backend: "Additive V9 migration; server-enforced current permissions; locked writes; archival guards; bounded, scoped XLSX generation."
+  frontend: "Optional registration/profile opt-in; UUID copying; invitation and metadata controls; cabinet/detail/manual refresh; date-filtered Excel download."
+  compatibility: "Room-local roles, guest access, account isolation and realtime collaboration retained."
+verification:
+  backend_maven: "65 passed across 16 suites; zero failures/errors/skips."
+  backend_gradle: "65 passed across 16 suites; zero failures/errors/skips."
+  hr_browser: "10 passed; zero failures/cancellations/skips."
+  existing_browser_regressions: "7 scripts passed."
+  build: "Frontend typecheck/build and backend packaging passed."
+  postgres: "Clean V9, V8 upgrade and restart persistence passed; concurrent metadata/archive/invitation probes passed."
+  pool_reliability: "12 concurrent invitations returned HTTP 200; all 10 connections returned idle."
+  export_workload: "Parsed 1000 interviews and 5000 task scores; scoped period, isolation and cap checks passed."
+reviews:
+  solution: approve
+  security: pass-with-notes
+  reliability: pass
+  qa: "ready; 33/33 scenario groups"
+  test_review: "coverage-sufficient; no missing scenarios"
+  product_acceptance: "accepted; 11/11 product criteria groups"
+open_questions: []
+risks:
+  - "Backend/migration-first rollout and archive-compatible rollback are documented in design.md; no production deployment was performed."
+  - "Existing non-expiring account sessions remain a nonblocking baseline concern in security-review.yaml."
+  - "Export deadlines are transaction/cooperative bounds, not a hard end-to-end HTTP latency guarantee."
+completion:
+  state: archived
+  archive_path: openspec/changes/archive/2026-09-05-add-hr-interview-cabinet
+  accepted_specs: [hr-account-profile, hr-room-tracking, hr-room-export]
+  specification_sync: "14 added requirements; all three accepted specs pass strict validation."
+  incomplete_tasks: 0
+next_owner: none
+handoff_to: []
+linear_update:
+  applied: false
+  reason: "No linked Linear issue was supplied; no external update or message was sent."
+review_required: []

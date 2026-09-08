@@ -1,0 +1,74 @@
+change: fix-candidate-activity-history
+input_summary: Final proposal, capability spec, design, tasks, and root ownership contracts.
+output_summary: Product, architecture, decomposition, and task-quality gates completed in order.
+verdict: ready_for_test_first_execution
+production_gate: Each production task requires its matching observed product-red evidence first.
+review_scope: Planning only; no source edits, behavioral test execution, or release acceptance.
+reviews:
+  product_owner:
+    verdict: approve
+    outcome: Managers can review every retained event and recording recovers automatically.
+    acceptance: 451-event paging, reconnect gap above 200, reload, step continuity, and retry recovery.
+    scope: Supersedes exact-50 display and three-5xx shutdown; preserves grouping and raw exports.
+    exclusion: Pending browser actions remain volatile across full reload or close.
+  architect:
+    verdict: approve
+    rationale: Durable append-only rows support bounded transfer and independent loaded UI history.
+    access: Current owner, persisted interviewer, or promoted guest manager; authorize every read.
+    transaction: Only key_press bypasses the enclosing permission transaction; acceptance stays REQUIRES_NEW.
+    reliability: Commit before broadcast, stable source identity, room locking, and idempotency remain mandatory.
+  team_lead:
+    verdict: approve
+    sequence: 1.1 then relevant 2.x RED then matching 3.x GREEN then ordered review and QA.
+    delivery_path: Candidate POST to durable record to paged/SSE delivery to manager timeline.
+    horizontal_exception: Additive migration directly enables this path and has independent database verification.
+  prompt_task_auditor:
+    verdict: ready
+    finding_resolution: Exact execution owners and RED commands are recorded below.
+    evidence_location: verification.md records commands, failing assertions, cleanup, and later green results.
+    dependencies: Backend paging precedes frontend integration; no production edit precedes its relevant RED.
+contracts_checked:
+  - Latest page defaults to 200; limit 1..200; before/after are exclusive and mutually exclusive.
+  - throughSequence is inclusive and frozen; clamp requested upper bound to committed room maximum.
+  - Future after yields an empty bounded result; Long.MAX_VALUE cannot certify future events.
+  - Page progression uses sequence extrema; rendering/export use timestampEpochMs then acceptedSequence.
+  - V10 fills only null IDs/sequences, appends null sequences after existing maxima, and indexes room/sequence.
+  - Existing IDs, sequences, payloads, V8, V9, and unrelated HR changes are preserved.
+  - Durable rows hydrate the 50-event SSE tail; JSON fallback applies only when durable history is absent.
+  - Loaded history has no overall cap; stable-ID merging survives subset/empty snapshots and page overlap.
+  - Confirmed catch-up completion is separate from live maximum; reconnect and open-panel catch-up recover gaps.
+  - History reads serialize, time out after 10 seconds, retain data on error, and cancel on context/role loss.
+  - Retryable activity uses a 10-second deadline and indefinite 1/2/4/8/16/30-second capped retry delays.
+  - FIFO identity, one in-flight attempt/timer, due-time fences, and capture during temporary SSE loss persist.
+  - Existing 401/403/410 policy remains outside indefinite retries; raw server error text stays hidden.
+execution_ownership:
+  root:
+    files: useRoomSocket.ts, activityRetry.ts, activityRetry.test.ts, new recovery E2E, existing grouping E2E.
+    browser_red: node --test frontend/tests/e2e/interview/e2e-activity-history-recovery.mjs
+    retry_red: node --experimental-strip-types --test frontend/tests/unit/activityRetry.test.ts
+    evidence: output/activity-history-baseline/browser-red.log
+    additional: RoomPage integration, disposable PostgreSQL migration verification, runtime and final evidence.
+  activity_backend:
+    files: History service/controller/DTO/repository/model, V10, CollaborationService, and backend tests.
+    test_classes: CandidateActivityHistoryIntegrationTest, CandidateActivityPoolIntegrationTest
+    red_command: mvn -q -f backend/pom.xml -Dtest=CandidateActivityHistoryIntegrationTest,CandidateActivityPoolIntegrationTest test
+    runtime: Java 17
+    evidence: output/activity-history-baseline/backend-red.log
+  activity_frontend:
+    files: ActivityTimeline.tsx, new scoped history hook/helper, and candidateActivityHistory.test.ts.
+    red_command: node --experimental-strip-types --test frontend/tests/unit/candidateActivityHistory.test.ts
+    boundary: No useRoomSocket or RoomPage edits without root reassignment.
+test_level_exceptions:
+  integration: Cursor traversal, authorization, durable reconstruction, and pool-size-1 commit/broadcast invariants.
+  migration: Actual PostgreSQL/Flyway null-only fixtures and index verification; H2 is not migration evidence.
+  unit: Exhaustive merge/cursor permutations and fake-clock timeout, retry ceiling, and context fences.
+  e2e: Observable history/recovery/loading/error/privacy flows retain browser RED before production.
+release_sequence:
+  - Implementation GREEN then Solution Reviewer and Security/Reliability approval before QA task 4.1.
+  - QA regression evidence then Test Reviewer and final Product Owner acceptance; task 4.2 collects verdicts.
+risks:
+  - Loaded history and volatile outage queues grow with interview length; no silent count-based loss is allowed.
+  - The dispatch shortcut needs observed pool-size-1 RED and retained authorization/durability evidence.
+  - PostgreSQL migration verification must use a disposable database and preserve the existing HR database.
+  - This readiness verdict does not attest that pending RED, GREEN, migration, or release checks have passed.
+next_owner: Root and assigned developers execute the documented tests first, then only their scoped implementation.

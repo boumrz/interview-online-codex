@@ -1,0 +1,133 @@
+agent: test-reviewer-agent
+task_id: HR-055
+change_id: add-hr-interview-cabinet
+verdict: coverage-sufficient
+decision: approve
+summary: >-
+  Reviewed 33 QA scenario groups, all ten final HR browser cases and targeted
+  backend test bodies. Coverage is sufficient. The one loading/pending evidence
+  gap found in the first pass is closed by a focused browser case and the final
+  10/10 successful HR run. No blocking coverage gap remains.
+input_summary: >-
+  Read the accepted design and capability requirements, task audit, QA READY
+  matrix, verification history and independent solution/security approvals.
+  Independently parsed both JUnit report directories: each contains 65 tests
+  across 16 suites, including 36 HR tests, with zero failures/errors/skips.
+  Inspected final PostgreSQL race/workload/pool logs and browser regression
+  markers. Reused completed executions; no application, tests or runtime changed.
+output_summary: >-
+  Reviewed each mandatory coverage category and the actual RED-to-GREEN evidence.
+  Independently inspected the additional loading/pending test and its final
+  10/10 log after root supplied the missing evidence. Approve HR-055 and hand
+  off for final product acceptance; no production changes were required.
+coverage_checklist:
+  happy_path:
+    status: covered
+    evidence: "QA-HR-01..05, 13..17, 20..22; actual registration/invitation/cabinet/results/archive/download journey."
+  negative_paths:
+    status: covered
+    evidence: "QA-HR-02, 03, 06..08, 11, 16, 22, 29; malformed metadata, candidate/non-HR/other-HR requests, missing targets and stale credentials."
+  race_conditions:
+    status: covered
+    evidence: "Commit/rollback, delayed callback and stale-authority tests; PostgreSQL CAS one 200/three 409; blocked archive writer 410; 12-request pool probe; queue-rejection failure case."
+  reconnect_recovery:
+    status: covered
+    evidence: "HR reload retains manager authority; revoked HR reconnect retains candidate tombstone; short SSE outage restores all markers; authorization recovery stops retry storms."
+  permission_checks:
+    status: covered
+    evidence: "Invited HR cannot perform owner deletion; direct metadata/tracking/export checks enforce current authority. Accepted room-local interviewer permissions govern other manager operations."
+  guest_vs_registered:
+    status: covered
+    evidence: "Owner, ordinary interviewer and promoted guest invite HR; anonymous archived entry is terminal; baseline guest/account flows pass."
+  empty_error_states:
+    status: covered
+    evidence: "Empty cabinet/date range, list error/retry, export failure/retry and stale metadata are asserted. The added case explicitly verifies initial aria-busy/no false empty, retained rows during disabled refresh and disabled pending export followed by successful real download."
+  realtime:
+    status: covered
+    evidence: "No new realtime cabinet transport. Affected room sync covers concurrent editing, publication, disconnect/reconnect, stale authority and terminal 410; candidate payload exclusion also receives dedicated REST assertions and security projection review."
+  reproducibility:
+    status: covered
+    evidence: "QA gives steps, expected/actual outcomes and probe command for resolved BUG-HR-QA-001; verification records exact behavioral failures and commands for review fixes."
+test_first_gate:
+  verdict: sufficient
+  original_feature: >-
+    Actual baseline browser RED recorded absent optional HR checkbox, cabinet route
+    and endpoint before production. The five focused backend suites also ran RED
+    before their implementation; proportionate persistence/authorization/OOXML
+    integration exceptions are documented in the accepted capability specs.
+  review_fixes: >-
+    Delayed export, terminal 410, late private metadata, DELETE contract,
+    transaction ordering, cleanup and pool starvation each have actual behavioral
+    failure evidence before their fixes. Three of four small-pool entrypoint
+    cases failed before correction; the already-working tracking case is not
+    misrepresented as a failing baseline.
+  later_test_strength_evidence: >-
+    Queue-rejection coverage was added after the production branch existed.
+    Omitting its connection-close call caused the test to fail with an old
+    credential still resolving as CANDIDATE. Production was restored byte-for-byte
+    before both final 65-test runs. This is an honest controlled mutation check,
+    not initial test-first evidence and not a later production behavior change.
+  additional_ui_coverage: >-
+    The loading/pending case was added during this review and passed against
+    unchanged production. It closes missing assertions in an already test-first
+    feature; its immediate GREEN is not represented as original RED evidence.
+missing_scenarios: []
+resolved_coverage_gaps:
+  - scenario: "Visible cabinet loading/refresh and Excel pending state"
+    why_needed: >-
+      hr-room-tracking/spec.md explicitly selects E2E for initial/loading/empty/error
+      views; hr-room-export/spec.md selects E2E for empty/pending/failure. The current
+      delayed response tests assert cancellation/private-data safety, but do not
+      inspect busy feedback or disabled repeated export. This was a gap in the
+      original QA-HR-14 execution evidence.
+    resolution: >-
+      Added case 'cabinet loading and pending actions stay visible without false
+      empty or duplicate export controls' uses explicit request gates with the
+      real backend. It asserts initial aria-busy and no false empty/rows, releases
+      the list and checks loaded rows, holds refresh with disabled 'Обновляем…'
+      and retained rows, and holds export with disabled 'Готовим Excel…' before
+      successful download and restoration of the normal button. Gates are
+      released in finally; no production change was made.
+    evidence: "frontend/tests/e2e/hr/e2e-hr-cabinet.mjs; output/hr-accepted-e2e.log: 10 passed, 0 failed/cancelled/skipped/todo, 20599.265041 ms."
+    blocking_for_gate: false
+test_design_quality:
+  method: "Dave Farley eight-property rubric; weighted score out of ten."
+  reference: "https://www.linkedin.com/pulse/tdd-properties-good-tests-dave-farley-iexge/"
+  browser_suite:
+    scores: { understandable: 8, maintainable: 7, repeatable: 8, atomic: 8, necessary: 9, granular: 6, fast: 8, first: 9 }
+    weighted_score: 7.83
+    evidence: >-
+      Behavioral names and accessible selectors, real authority and unique account
+      fixtures, explicit latency gates and browser cleanup make failures useful.
+      The main journey spans many behaviors; a single exact input-value DOM selector
+      is more coupled than the surrounding accessible locators. Bounded no-event
+      observation windows are justified for retry/download absence.
+  backend_hr_suites:
+    scores: { understandable: 8, maintainable: 7, repeatable: 8, atomic: 7, necessary: 9, granular: 8, fast: 8, first: 8 }
+    weighted_score: 7.83
+    evidence: >-
+      HTTP/OOXML outcomes, transaction boundaries, latches and real pool constraints
+      assert consequential behavior. Reflection is limited to otherwise inaccessible
+      active-session/executor seams and restored in finally. Shared JVM temp-file
+      enumeration and duration-based overlapping exports reduce isolation compared
+      with the strongest deterministic transaction tests.
+  nonblocking_improvements:
+    - "When maintaining export concurrency coverage, hold a renderer gate instead of relying on 600 rows to keep the first request active."
+    - "If backend tests become parallel, isolate workbook temp-file observations and injected executor seams per test context."
+    - "Add named phases or narrower journey helpers when the main HR E2E grows; preserve the integrated happy-path scenario."
+verification_limits:
+  - "The workbook test checks configured 30-second transaction timeout, not a hard end-to-end HTTP deadline."
+  - "Global export permits and the separate 100000-task cap are security source-reviewed; measured workload is 1000 interviews/5000 tasks and the interview cap is runtime-tested."
+  - "Existing platform account sessions lack wall-clock expiry; superseded room tokens are tested without claiming account-expiry coverage."
+risks:
+  - "No unresolved coverage blocker. Existing operational limits remain explicitly distinguished from tested guarantees."
+safe_to_close: true
+closure_scope: "HR-055 coverage gate; final product acceptance remains a separate downstream gate."
+next_owner:
+  agent: product-owner-agent
+  reason: "HR-055 is approved; perform final product acceptance before root reconciles and archives the change."
+handoff_to:
+  - agent: product-owner-agent
+    reason: "Coverage sufficient: 33 QA groups, 10 HR browser cases, 65 backend tests in each build system and seven existing browser regressions."
+linear_update:
+  comment_summary: "Test review: SUFFICIENT. Loading/pending evidence gap resolved; all applicable coverage categories covered. HR-055 safe to close; await product acceptance. No external update was sent."

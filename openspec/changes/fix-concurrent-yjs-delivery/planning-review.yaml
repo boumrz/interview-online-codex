@@ -1,0 +1,59 @@
+agent: specification-agent
+task_id: SPEC-YJS-DELIVERY-001
+input_summary: User explicitly requests fixing reproducible concurrent shared-editor divergence; coordinating owner supplies confirmed queue-loss paths and technical fences.
+output_summary: Separate repair change defines complete convergence, lossless incremental delivery, retry identity, recovery and authorization boundaries with deterministic browser RED preceding production edits.
+review_mode: Consolidated bounded planning review by one specification agent using product-owner, architect, team-lead and prompt-task-auditor role contracts; not four independent approvals.
+status_recommendation: clarified
+verdict: ready_for_test_authoring
+production_preconditions:
+  - Coordinating owner confirms the supplied architecture constraints and this readiness review in task 1.2.
+  - Deterministic acceptance test is authored and demonstrates behavior RED before production edits.
+product_alignment:
+  priority: Critical interview correctness defect explicitly authorized by the user.
+  outcome: Every authorized participant sees the complete same shared document after concurrent typing and recoverable transport delay.
+  exclusions: No HR feature expansion, durable offline storage, historic data reconstruction, transport migration or production SLA claim.
+architecture_review:
+  source: Coordinating owner investigation; specification records and checks constraints rather than independently selecting architecture.
+  constraints:
+    - Nonempty deltas remain FIFO and retain mutation identity; coalesce only replaceable messages.
+    - Remove acknowledged object by identity after concurrent queue filtering.
+    - Retain applicable recovery deltas only for unchanged invite/step/language context.
+    - Server snapshot freshness and bounded authorization recovery remain unchanged.
+  confirmation_owner: root
+task_readiness:
+  owners: Specification agent for artifacts; coordinating developer for test-first repair; QA for executed acceptance; independent solution/security reviewers for release gates.
+  dependencies: Readiness confirmation -> deterministic E2E RED -> queue repair -> recovery repair -> regressions -> independent review -> acceptance.
+  acceptance_level: E2E, including actual backlog above 300 and ten-context full document comparison; optional pure queue tests only if independently justified.
+  evidence: verification.md and output files with exact commands, exit statuses and per-editor counts.
+open_questions: []
+risks:
+  - Retaining pending deltas increases page memory during prolonged interruption.
+  - An independent missed-inbound-update path may require an additional reproduced RED and documented repair.
+  - Existing unrelated HR/activity working-tree changes must be preserved.
+handoff_to:
+  - agent: product-owner-agent
+    reason: Confirm requested correctness scope and final outcome; supplied user authorization is unambiguous.
+  - agent: architect-agent
+    reason: Coordinating owner confirms provided delivery and fencing constraints before production work.
+  - agent: team-lead-agent
+    reason: Execute the explicit small test-first and repair tasks with recorded dependencies.
+  - agent: prompt-task-auditor-agent
+    reason: Bounded task-readiness check completed here; coordinating owner confirms readiness and exact test command before implementation.
+review_required:
+  - solution-reviewer-agent
+  - security-reliability-agent
+  - qa-agent
+  - test-reviewer-agent
+next_owner: root
+linear_update:
+  state: Refinement
+  applied: false
+  comment_summary: No linked Linear issue supplied. Repair spec created; zero open product questions; test-first and independent release gates remain.
+
+coordinating_owner_confirmation:
+  owner: root
+  verdict: ready_for_test_first_execution
+  architecture: Preserve in-flight and pending incremental identities; coalesce only replaceables, preserve same-context recovery deltas, keep server freshness and authorization checks. No extra queue module required.
+  implementation_owner: root
+  tests: bounded worker for delayed delivery/backlog/retry E2E; root for step-fence scenario and runtime coordination
+  release_gates: independent solution/security review after repair plus QA and final product acceptance

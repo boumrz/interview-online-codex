@@ -1,0 +1,179 @@
+agent: product-owner-agent
+task_id: HR-056
+change_id: add-hr-interview-cabinet
+verdict: accepted
+status_recommendation: accepted
+blocking: false
+summary: >-
+  Accepted the complete agreed HR MVP. An HR specialist can enable the independent
+  account marker, share the existing UUID, receive interviewer-authorized room
+  assignments, track planned interviews and retained outcomes in a personal cabinet,
+  and export the currently permitted history to Excel for all time or a date range.
+  Registration remains a single optional HR checkbox; candidate/interviewer roles
+  remain local to each room.
+input_summary: >-
+  Read the user-authorized proposal, accepted product-scope.yaml, all three capability
+  specs, current verification evidence, solution/security approvals, QA READY matrix
+  and approved test review. QA reports 33/33 passing scenario groups; the final
+  evidence contains 65 passing backend tests in each of Maven and Gradle, 10 passing
+  HR browser cases and seven passing existing browser regression scripts.
+output_summary: >-
+  Mapped the agreed product outcomes to binary acceptance criteria and accepted
+  evidence. No unresolved agreed-MVP requirement or feature-specific blocker remains.
+  This is a product acceptance of the reviewed implementation, not a new test run,
+  deployment claim, architecture decision or scope expansion. Only this artifact was
+  created; source, tests, runtime and task checkboxes remain owned by the orchestrator.
+acceptance_mapping:
+  - id: PA-HR-01
+    user_story: "As a user, I can optionally mark my account as HR while keeping room-specific participation roles."
+    priority: P1
+    pass_if: >-
+      Registration offers only an initially unchecked HR checkbox; omitted/unchecked
+      registration remains non-HR. Existing users can enable HR without changing
+      their UUID or account authority. The marker persists after reload/login.
+    evidence: [QA-HR-01, QA-HR-02]
+    result: pass
+  - id: PA-HR-02
+    user_story: "As HR, I can give an interviewer a stable invitation ID."
+    priority: P1
+    pass_if: >-
+      Profile/cabinet show the existing account UUID; copying provides visible
+      feedback, and reload or HR enablement does not allocate a different identity.
+    evidence: [QA-HR-01, QA-HR-02]
+    result: pass
+  - id: PA-HR-03
+    user_story: "As HR entering an authorized manager room, I automatically retain it in my tracked interviews."
+    priority: P1
+    pass_if: >-
+      Authorized owner/interviewer entry creates one durable association; repeated
+      entry or invitation does not duplicate it. HR candidate-only entry creates
+      no tracking or manager authority. Later permission loss removes data access.
+    evidence: [QA-HR-03, QA-HR-05, QA-HR-08, QA-HR-09]
+    result: pass
+  - id: PA-HR-04
+    user_story: "As a room interviewer, I can assign an existing HR specialist by UUID before they visit the room."
+    priority: P1
+    pass_if: >-
+      Owner, non-owner interviewer and supported promoted guest can invite an
+      existing HR account. Successful invitation immediately grants durable
+      interviewer-equivalent access and tracking, supports multiple HRs and is
+      idempotent. The target sees the room on manual refresh without an acceptance
+      step or prior visit; invalid targets and unauthorized inviters are rejected.
+    evidence: [QA-HR-04, QA-HR-05, QA-HR-06, QA-HR-14, QA-HR-32]
+    result: pass
+  - id: PA-HR-05
+    user_story: "As HR, I can identify the candidates and scheduled interviews I oversee."
+    priority: P1
+    pass_if: >-
+      Authorized managers save candidate name, optional position and planned time;
+      values survive refresh. Conflicting edits preserve the draft and offer explicit
+      reload. The personal list distinguishes upcoming live, completed, unscheduled
+      and archived interviews; missing legacy identity or appointment stays unspecified.
+    evidence: [QA-HR-11, QA-HR-13, QA-HR-14, QA-HR-15]
+    result: pass
+  - id: PA-HR-06
+    user_story: "As HR, I can review completed interview outcomes from my cabinet."
+    priority: P1
+    pass_if: >-
+      Authorized detail displays the current verdict, comment and existing task
+      scores without requiring room admission. Corrections preserve the first
+      authoritative completion time; missing values do not become invented results.
+    evidence: [QA-HR-13, QA-HR-14, QA-HR-20]
+    result: pass
+  - id: PA-HR-07
+    user_story: "As HR, I retain readable interview history when the owner removes a tracked room from active use."
+    priority: P1
+    pass_if: >-
+      Owner removal archives tracked rooms and retains authorized detail/export
+      after restart. Archived rooms are read-only and cannot resume live editing;
+      connected and fresh clients enter a terminal state. Untracked deletion keeps
+      its existing destructive behavior; HR assignment never grants owner removal.
+    evidence: [QA-HR-16, QA-HR-17, QA-HR-18, QA-HR-19]
+    result: pass
+  - id: PA-HR-08
+    user_story: "As HR, I can download all my permitted tracked interviews or an inclusive period as a real Excel workbook."
+    priority: P1
+    pass_if: >-
+      A valid XLSX contains the complete authorized scope across list pages,
+      including retained archives and linked task scores. Default export is all
+      time. Paired inclusive Moscow dates use scheduled, then first-completed,
+      then created time; the actual date source and range are explicit. Invalid
+      ranges are rejected and an empty range produces a valid empty workbook.
+    evidence: [QA-HR-20, QA-HR-21, QA-HR-22, QA-HR-23]
+    result: pass
+  - id: PA-HR-09
+    user_story: "As HR, I understand loading and recoverable failures without receiving misleading results or files."
+    priority: P1
+    pass_if: >-
+      Cabinet loading, empty, stale refresh and recoverable error states differ;
+      pending refresh/export controls show progress and prevent repeated submission.
+      Failed generation does not download a false workbook, and manual retry works.
+      A late former-account export cannot download after logout or account switching.
+    evidence: [QA-HR-14, QA-HR-22, QA-HR-24, QA-HR-25, QA-HR-31]
+    result: pass
+  - id: PA-HR-10
+    user_story: "As a participant, I retain the existing room permission and confidentiality boundaries when HR is added."
+    priority: P0
+    pass_if: >-
+      Stored HR status and current room authority are enforced server-side; other
+      HR accounts and ordinary interviewers cannot read this personal scope or
+      export. HR gets no owner/admin or another participant's private-note rights.
+      Candidate payloads omit new HR metadata; revocation and stale responses cannot
+      restore removed authority or prior-account data.
+    evidence: [QA-HR-07, QA-HR-08, QA-HR-09, QA-HR-10, QA-HR-12, QA-HR-25, QA-HR-30, QA-HR-33]
+    result: pass
+  - id: PA-HR-11
+    user_story: "As an existing guest or registered participant, I can continue using the established interview flow."
+    priority: P0
+    pass_if: >-
+      Anonymous room creation/admission, account history, current manager task
+      workspaces, simultaneous code collaboration, short reconnect and invalid-token
+      rejection continue to pass the affected regression checks.
+    evidence: [QA-HR-26, QA-HR-27, QA-HR-28, QA-HR-29, QA-HR-30]
+    result: pass
+priority_rationale:
+  P0: "Preserve existing participation and data-authority boundaries; failure would block delivery."
+  P1: "The requested HR workflow requires profile identity, assignment, useful interview history and reporting as one complete scenario."
+mvp_scope_boundary:
+  unit: "One room is one interview; the cabinet tracks interviews for the authenticated HR."
+  accepted: "All agreed feature outcomes above; no unimplemented MVP remainder."
+  excluded:
+    - "Cross-room candidate CRM, deduplication and candidate profiles."
+    - "Organizations, a new global interviewer/candidate role hierarchy or a new HR room role."
+    - "Email/calendar integration, invitation acceptance and live cabinet updates."
+    - "HR disablement, archive restoration and unrelated platform cleanup."
+  rationale: >-
+    These exclusions do not prevent the authorized UUID invitation, manual-refresh
+    tracking, planned/past review and Excel reporting workflow. They remain outside
+    this change; no new post-MVP implementation or external backlog update is authorized
+    by this acceptance artifact.
+review_gates:
+  task_quality: "HR-004 ready; task-audit.yaml."
+  ux: "HR-013 approve; ux-review.yaml."
+  solution: "HR-052 approve; solution-review.yaml; no unresolved findings."
+  security_reliability: "HR-053 security pass-with-notes, reliability pass; no feature-specific blocker."
+  qa: "HR-054 ready; 33/33 scenario groups; BUG-HR-QA-001 resolved."
+  test_review: "HR-055 coverage-sufficient / approve; missing_scenarios is empty."
+decisions:
+  - "Accept HR-056; no additional product clarification, requirement or implementation is needed for this MVP."
+  - "Preserve room-local candidate/interviewer semantics and the optional HR account marker exactly as the user clarified."
+  - "Treat the security review's pre-existing account-session hardening note as a separate future scope, not a newly imposed acceptance condition."
+risks:
+  - "Existing non-expiring account sessions remain the explicitly nonblocking platform note in security-review.yaml."
+  - "Export bounds are documented transaction/cooperative limits, not a hard end-to-end HTTP latency guarantee; verified workload is 1000 interviews and 5000 task scores."
+  - "Backend/migration-first rollout and archive-compatible rollback remain operational requirements; production deployment has not been asserted by product acceptance."
+artifacts_created:
+  - type: product-acceptance
+    title: "Final agreed-MVP acceptance and evidence mapping"
+    path: openspec/changes/add-hr-interview-cabinet/product-acceptance.yaml
+next_owner:
+  agent: root
+  reason: "Reconcile HR-056/HR-057 checkboxes and evidence, run final strict validation, then archive the completed change."
+handoff_to:
+  - agent: root
+    reason: "Product acceptance passed; the remaining work is the authorized reconciliation/archive gate."
+linear_update:
+  state: Done
+  applied: false
+  comment_summary: "Recommended only: agreed HR MVP accepted. No Linear issue ID was supplied and no external message or update was sent."
+review_required: []

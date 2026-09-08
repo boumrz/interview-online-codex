@@ -1,17 +1,46 @@
 package com.interviewonline.dto
 
+import com.fasterxml.jackson.core.JsonParser
+import com.fasterxml.jackson.databind.DeserializationContext
+import com.fasterxml.jackson.databind.JsonDeserializer
+import com.fasterxml.jackson.databind.JsonMappingException
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import jakarta.validation.constraints.NotBlank
+
+class HiringManagerIdsDeserializer : JsonDeserializer<List<String>>() {
+    override fun deserialize(parser: JsonParser, context: DeserializationContext): List<String> {
+        val node = parser.codec.readTree<JsonNode>(parser)
+        if (!node.isArray) throw malformed(parser)
+        return node.map { value ->
+            if (!value.isTextual) throw malformed(parser)
+            value.textValue()
+        }
+    }
+
+    override fun getNullValue(context: DeserializationContext): List<String>? {
+        throw malformed(context.parser)
+    }
+
+    private fun malformed(parser: JsonParser): JsonMappingException =
+        JsonMappingException.from(parser, "hiringManagerIds должен быть массивом строк")
+}
 
 data class CreateRoomRequest(
     @field:NotBlank val title: String,
     @field:NotBlank val language: String = "nodejs",
     val taskIds: List<String> = emptyList(),
+    @param:JsonDeserialize(using = HiringManagerIdsDeserializer::class)
+    val hiringManagerIds: List<String>? = null,
 )
 
 data class CreateGuestRoomRequest(
     val title: String = "Комната собеседования",
     val ownerDisplayName: String = "Интервьюер",
     val language: String = "nodejs",
+    /** Rejected by the public endpoint instead of silently ignoring it. */
+    @param:JsonDeserialize(using = HiringManagerIdsDeserializer::class)
+    val hiringManagerIds: List<String>? = null,
 )
 
 data class RoomTaskDto(

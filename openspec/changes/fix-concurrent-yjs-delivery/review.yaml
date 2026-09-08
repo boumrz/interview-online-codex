@@ -1,0 +1,109 @@
+agent: solution-reviewer-agent
+task_id: fix-concurrent-yjs-delivery
+verdict: approve
+security_verdict: approve
+reliability_verdict: approve
+independent_final_verdict: approve
+summary: "Final lossless batching and recovery implementation satisfies the reviewed contract; no blocking defect remains in this repair delta."
+blocking: false
+source_sha256: a96458f4bc3109018aedcaa09c9ce35f393654605a0d424577725e67df3e50e4
+review_mode: "One independent reviewer consolidates the solution-reviewer and security-reliability role contracts."
+input_summary: >-
+  Reviewed current useRoomSocket.ts against the preserved pre-fix baseline,
+  validated OpenSpec and slow-network amendment, focused test sources, initial
+  RED reports, final eleven-command matrix, post-mutation restoration checks
+  and exact ten-editor results. Prior HR/activity changes were excluded from
+  the repair diff. No competing runtime tests were started.
+output_summary: >-
+  Final batching preserves every included CRDT delta and its causal context,
+  fixes the demonstrated slow-network regression, keeps attempted envelopes
+  immutable and leaves backend authorization and snapshot guards unchanged.
+  The independent final implementation review previously interrupted by the
+  provider limit is now complete. Project-wide release readiness remains the
+  coordinating owner's separate audit.
+
+review_history:
+  - phase: original_queue_review
+    outcome: "Independent review approved lossless queuing, acknowledgment by identity and recovery/security fences."
+  - phase: slow_network_regression
+    outcome: "The existing 3-second relay-delay test exposed a delivery-latency regression; overall verdict changed to revise until repaired."
+  - phase: batching_architecture
+    outcome: "Independent review approved contiguous never-attempted same-key merging, immutable attempts and consistent latest metadata, with required RED/GREEN evidence."
+  - phase: previous_interruption
+    outcome: "The previous independent final implementation and QA turns stopped at a provider usage limit. Root recorded a manual approve while independent final approval and archival remained pending."
+  - phase: resumed_independent_final_review
+    outcome: "Final batching implementation and evidence reviewed independently: implementation/security/reliability approve. Separate final QA and project release audit remain with their owners."
+
+implementation_checks:
+  - "Heartbeat replacement cannot remove nonempty deltas or cancel the actual in-flight request, including a token-free request away from queue index zero."
+  - "The former 300-message content eviction is removed; remaining valid entries are retained for subsequent dispatch."
+  - "prepareQueuedMessage merges only adjacent nonempty public yjs_update entries sharing an original nonempty syncKey and never attempted. Heartbeats, other actions, attempted entries, another key or the 64 KiB encoded-input boundary stop the group."
+  - "Installed Y.mergeUpdates retains every constituent update. Decode/merge failure returns the original head before queue splice, preserving the remaining entries."
+  - "The latest constituent supplies operationId, clientEventSequence, yjsClientSequence, code, full snapshot and its original baseServerYjsSequence together; oldest queue time is retained. Contiguous grouping cannot overtake an intervening sequenced action."
+  - "The batch is marked attempted before fetch. Recovery and retries retain its complete payload; later edits cannot be merged into an uncertain accepted batch."
+  - "Acknowledgments remove the exact settled object, so concurrent recovery filtering cannot shift away another message."
+  - "Recovery retains public incremental edits only for the authoritative invite/step/language key. Task changes and terminal access failure retain their discard and server authorization fences."
+  - "Server operation deduplication, increasing mutation sequences, snapshot freshness and manager/candidate visibility checks are unchanged by the repair."
+
+evidence:
+  test_first:
+    - "output/playwright/multi-activity/1788711471455/report.json: original ten-editor divergence with intact activity history."
+    - "output/playwright/yjs-delivery/1788711831353/report.json: heartbeat/backlog and accepted-response-loss RED; initial recovery setup failure is not counted as product evidence."
+    - "output/playwright/yjs-delivery/1788712041894/report.json: corrected real SSE recovery fails complete-document convergence before production repair."
+    - "output/yjs-delivery-fix/regression-e2e-slow-network.log: first lossless version fails unchanged 30-second deadline, motivating validated batching."
+    - "output/playwright/yjs-delivery/1788713381420/report.json: merged-envelope acceptance authored before batching implementation."
+  final_functional:
+    matrix: output/yjs-delivery-fix/final-regression-report.json
+    result: "All 11 commands exited 0, including slow network, task preservation, stale snapshots and bounded authorization recovery."
+    focused_report: output/playwright/yjs-delivery/1788713952831/report.json
+    focused_result: >-
+      All four scenarios pass. Independent Y.Doc reconstruction uses initial
+      bootstrap plus actual incremental SSE, ignoring later full snapshots.
+      Backlog preserves 350 A and 100 B; reconnect preserves 50 A and 60 B;
+      single response loss preserves 50 A and 50 B; merged response loss
+      preserves 60 A and 50 B. The accepted/retried merged envelope contains
+      49 actual edits and its entire serialized mutation payload is unchanged.
+    ten_context_report: output/playwright/multi-activity/1788713972602/report.json
+    ten_context_result: >-
+      All ten documents are identical and contain 2,112 characters, including
+      exactly 300 from each of seven simultaneous writers. Owner and HR full
+      reloads receive the same complete code. All 2,100 activity identities,
+      exports, paging and candidate privacy assertions pass; unexpected runtime
+      errors are zero.
+    slow_network_result: "Complete marker observed after 20 seconds under the 3-second relay fault and 1,209 ms from typing completion under the 800 ms CDP profile, within unchanged 30-second/15-second deadlines."
+  mutation_strength:
+    historical: "mutation-report.json: three pre-batching mutations killed by missing-content assertions; retained as historical evidence."
+    final_batching: "batch-mutation-report.json: last-delta-only batching fails independent reconstruction; rewriting attempted envelopes fails retry-identity verification."
+    restoration: "Current source matches repaired-batched-useRoomSocket.ts byte-for-byte and by SHA-256. Both commands in restored-regression-report.json exited 0 after restoration."
+  static_and_backend:
+    - "output/yjs-delivery-fix/typecheck-batch.log: frontend typecheck passed."
+    - "output/yjs-delivery-fix/build-batch-final.log: frontend build passed with recorded size warnings."
+    - "output/yjs-delivery-fix/backend-tests.log: 96 backend tests, zero failures/errors/skips; backend code was unchanged by this repair."
+  harness_review:
+    - "Convergence assertions were strengthened with exact code equality after owner/HR reload, not weakened to obtain GREEN."
+    - "The old-document history-inspector exception requires the previous request generation and the full observed CDP Network.getResponseBody message. Malformed JSON, current-document errors and candidate privacy inspection failures remain failures."
+
+findings: []
+required_changes_before_approval: []
+risk_summary: >-
+  Residual risk is the documented live-page memory backlog and drain time during
+  prolonged interruption. Finite tested workloads do not establish a production
+  latency or capacity SLA. No new permission expansion, silent delta discard or
+  immutable-retry violation was found in the reviewed delta.
+risks:
+  - "Pending edits remain in current-page memory; no durable offline storage or recovery of historically lost edits is added."
+  - "Already open clients keep their old implementation until updated/reloaded."
+  - "The headless ten-context test explicitly leaves hidden/visible lifecycle coverage unverified; it is not a pixel baseline or proof of complete mobile/UI coverage."
+  - "Project-wide GO/NO-GO requires the separate full-project audit, QA/test review and final acceptance. This verdict covers fix-concurrent-yjs-delivery only."
+project_release_verdict: not_assessed_by_this_scoped_review
+next_owner: qa-agent
+handoff_to:
+  - agent: qa-agent
+    reason: "Implementation and security/reliability approved; finish independent test-evidence audit and release readiness assessment."
+  - agent: coordinating-owner
+    reason: "Use this scoped approval in the project audit and update task/document state after QA; preserve historical failures and the earlier interruption."
+linear_update:
+  state: QA
+  comment_summary: "Review verdict: APPROVE for fix-concurrent-yjs-delivery. Final batching/security review complete; no blocking findings. Project release GO/NO-GO remains a separate audit."
+  applied: false
+  reason: "No linked Linear issue was supplied for this scoped review."

@@ -33,6 +33,7 @@ class MeController(
             nickname = user.nickname,
             displayName = user.displayName.orEmpty(),
             role = user.role,
+            isHr = user.isHr,
         )
     }
 
@@ -60,11 +61,11 @@ class MeController(
     fun deleteRoom(
         @RequestHeader("Authorization", required = false) authorization: String?,
         @PathVariable roomId: String,
-    ): Map<String, String> {
+    ): Map<String, Any> {
         val token = authorization?.removePrefix("Bearer ")?.trim()
         val user = authService.requireUserByToken(token)
-        roomService.deleteRoomForUser(user, roomId)
-        return mapOf("status" to "ok")
+        val archived = roomService.deleteRoomForUser(user, roomId)
+        return mapOf("status" to "ok", "archived" to archived)
     }
 
     @PatchMapping("/profile")

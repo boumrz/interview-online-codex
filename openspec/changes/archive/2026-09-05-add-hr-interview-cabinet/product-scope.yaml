@@ -1,0 +1,14 @@
+agent: product-owner-agent
+status: accepted
+input_summary: User authorized the complete HR scenario with only an optional registration checkbox.
+output_summary: Registration, room-local permissions, tracking, metadata, retained history, and scoped XLSX satisfy the agreed MVP.
+adjustment_resolved: Archived future interviews are explicitly excluded from upcoming classification.
+decisions:
+  - isHr is independent from user/admin authority and room-local roles.
+  - One room represents one interview; no cross-room candidate CRM.
+  - Candidate-only participation is excluded from HR tracking.
+  - Existing accounts can enable HR; disabling HR is outside this MVP.
+  - Archive is required for retained history; restoration is outside scope.
+risks:
+  - Implementation acceptance remains dependent on actual test and review evidence.
+next_owner: architect-agent

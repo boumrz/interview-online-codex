@@ -1,0 +1,88 @@
+agent: test-reviewer-agent / ux-critic-agent / product-owner-agent
+task_id: fix-candidate-activity-history
+review_order: [test-reviewer-agent, ux-critic-agent, product-owner-agent]
+input_summary: >-
+  Reviewed the active proposal, capability spec, design, tasks, verification,
+  planning approval, solution/security approval and QA's 25-scenario matrix.
+  Independently inspected the recovery browser tests, cursor/retry helper tests,
+  history/pool integration assertions, selected grouping regressions, supplied
+  green artifacts, and ActivityTimeline/room-scoped history state.
+output_summary: >-
+  Test coverage is adequate, the scoped UI states are understandable, and the
+  original whole-interview history/recovery goal is accepted. No concrete
+  in-scope blocker or unresolved acceptance gap was found.
+verdict: approve
+blocking: false
+reviews:
+  test_reviewer:
+    verdict: approve
+    coverage: >-
+      Happy paths, negative reads/delivery, frozen multi-page traversal with a
+      concurrent live source, reconnect/backoff, response-loss idempotency,
+      durable reconstruction/state replacement, authorization/revocation,
+      grouping, full exports, and the additive PostgreSQL migration are covered.
+    test_first: >-
+      verification.md and original browser/backend RED evidence establish
+      missing behavior before implementation. The tab-lifetime and unfinished
+      error-body defects have separate RED/GREEN evidence. Focused integration
+      and unit exceptions are documented; later QA UI assertions supplement
+      the original acceptance tests without claiming a new test-first cycle.
+    evidence_assessment: >-
+      Six persistence/transport browser cases and two controlled UI cases are
+      distinct executions. The strengthened revocation case awaits DOM removal
+      and late-response settlement and has its own current green result.
+      Source-ID assertions are supported by visible 401-action grouping and
+      status assertions. Backend cursor tests assert complete identity/sequence
+      sets; the pool test exercises real HTTP with a five-second deadline.
+      Sixteen helper tests and eight killed targeted mutants support the merge,
+      cursor and delay invariants; they are not claimed as hook scheduling tests.
+    missing_scenarios: []
+    blocking_gaps: []
+    suggested_additions: []
+    quality_scores:
+      scale: 1-to-10
+      keys: "U understandable; M maintainable; R repeatable; A atomic; N necessary; G granular; F fast; T test-first"
+      browser_recovery_suite: { U: 9, M: 8, R: 8, A: 9, N: 9, G: 7, F: 7, T: 9, weighted: 8.3 }
+      backend_history_and_pool_suite: { U: 9, M: 8, R: 9, A: 9, N: 10, G: 8, F: 8, T: 9, weighted: 8.8 }
+      cursor_and_retry_helper_suite: { U: 9, M: 9, R: 10, A: 10, N: 9, G: 9, F: 10, T: 8, weighted: 9.2 }
+      aggregate_weighted_mean: 8.8
+      evidence:
+        understandable: Behavioral test names and explicit identity/cursor/error expectations state the intended outcomes.
+        maintainable: Shared room/event fixtures and public HTTP/browser boundaries reduce coupling; controlled EventSource interception is localized.
+        repeatable: Held responses and latches establish races; browser timing retains bounded real-clock tolerance.
+        atomic: Unique rooms/accounts and fresh browser contexts isolate cases; finally blocks release held requests and close contexts.
+        necessary: Cases reproduce data loss, frozen delivery, permission disclosure and resource starvation risks.
+        granular: Helper cases are focused; the whole-history browser journey intentionally combines related continuity assertions.
+        fast: Helpers complete in milliseconds; actual ten-second deadlines and application integration carry proportionate runtime cost.
+        test_first: Product-caused initial failures and later defect-specific RED/GREEN artifacts are recorded; helper import RED alone is not treated as full behavioral proof.
+      rubric_reference: https://www.linkedin.com/pulse/tdd-properties-good-tests-dave-farley-iexge/
+  ux_critic:
+    verdict: approve
+    review_basis: Component/state inspection and existing browser evidence; no new visual or runtime audit was performed.
+    assessment:
+      - Initial loading does not claim empty history; confirmed empty, partial, updating and complete states have explicit text and source counts.
+      - Older history is discoverable, preserves current rows and disables its action while a read is pending.
+      - Recoverable failure has generic feedback and an explicit retry; successful recovery clears the error without a room reload.
+      - The stable RoomPage history context preserves loaded rows and cursors across Logs/Chat changes; hidden panels pause reads.
+      - Manager gating, terminal access feedback and context invalidation prevent candidate display or restoration by a late private response.
+      - JSON and CSV remain available independently of the pages loaded for viewing.
+    friction_points: []
+    blocking_clarity_issues: []
+    recommended_changes: []
+  product_owner:
+    verdict: accepted
+    acceptance:
+      - All retained candidate activity is reviewable through bounded pages with no overall 50-event display limit.
+      - Loaded history survives empty/recent snapshots, tab changes, reload and missed broadcasts; published-step and realtime regressions remain green.
+      - Retryable failures and stalled requests recover automatically with stable FIFO identities and continued editing.
+      - Complete individual exports, existing grouping and current manager-only access are preserved.
+    scope_confirmation: >-
+      Bounded network pages and the latest-50 SSE tail are compatible with the
+      removal of the total review cap. No new retention policy, persistent
+      browser outbox or unrelated HR/platform behavior is required for acceptance.
+    unresolved_acceptance_criteria: []
+risks:
+  - Loaded history and the volatile pending queue may grow with interview length, as accepted in the design.
+  - Unacknowledged actions across full page close/reload and already deleted records remain outside the accepted scope.
+  - This is a scoped review of supplied runtime evidence; it does not claim deployment or a fresh platform-wide certification.
+next_owner: Root/team-lead-agent to complete task 4.2, run final strict validation, and archive only fix-candidate-activity-history.

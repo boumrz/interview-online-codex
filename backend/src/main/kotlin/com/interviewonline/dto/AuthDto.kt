@@ -13,6 +13,7 @@ data class RegisterRequest(
     @field:NotBlank(message = "Пароль обязателен")
     @field:Size(min = 6, message = "Пароль должен быть не короче 6 символов")
     val password: String,
+    val isHr: Boolean = false,
 )
 
 data class LoginRequest(
@@ -30,10 +31,12 @@ data class UserDto(
     val nickname: String,
     val displayName: String,
     val role: String,
+    val isHr: Boolean,
 )
 
 data class UpdateProfileRequest(
     @field:NotBlank(message = "Имя обязательно")
     @field:Size(min = 2, max = 64)
     val displayName: String,
+    val isHr: Boolean? = null,
 )

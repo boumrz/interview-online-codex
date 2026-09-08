@@ -12,6 +12,7 @@ import com.interviewonline.repository.UserSessionRepository
 import org.springframework.http.HttpStatus
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
 
 @Service
@@ -28,6 +29,7 @@ class AuthService(
 
     private val passwordEncoder = BCryptPasswordEncoder()
 
+    @Transactional
     fun register(request: RegisterRequest): AuthResponse {
         val displayName = request.displayName.trim()
         val nickname = request.nickname.trim()
@@ -50,6 +52,7 @@ class AuthService(
                 displayName = displayName,
                 passwordHash = passwordEncoder.encode(request.password),
                 role = role,
+                isHr = request.isHr,
             ),
         )
         userTaskService.initializeTaskBank(user)
@@ -82,13 +85,19 @@ class AuthService(
         return user
     }
 
+    @Transactional
     fun updateProfile(user: User, request: UpdateProfileRequest): UserDto {
+        val stored = userRepository.lockById(requireNotNull(user.id)) ?: throw ApiException(
+            HttpStatus.UNAUTHORIZED,
+            "Пользователь не найден",
+        )
         val displayName = request.displayName.trim()
         if (displayName.isBlank()) {
             throw ApiException(HttpStatus.BAD_REQUEST, "Имя обязательно")
         }
-        user.displayName = displayName
-        val saved = userRepository.save(user)
+        stored.displayName = displayName
+        request.isHr?.let { stored.isHr = it }
+        val saved = userRepository.save(stored)
         return saved.toDto()
     }
 
@@ -107,6 +116,7 @@ class AuthService(
             nickname = nickname,
             displayName = displayName.orEmpty(),
             role = role,
+            isHr = isHr,
         )
     }
 }

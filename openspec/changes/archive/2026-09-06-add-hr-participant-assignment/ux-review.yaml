@@ -1,0 +1,86 @@
+agent: ux-critic-agent
+task_id: HR-PARTICIPANT-UX
+change_id: add-hr-participant-assignment
+verdict: ux-approved
+summary: "Reviewed 1 changed screen, 2 actual screenshots and the participant assignment states. 0 issues found, 0 blocking."
+input_summary: >-
+  Reviewed accepted product-scope.yaml, final design.md, TopBar.tsx,
+  RoomPage.tsx, RoomPage.module.css, frontend-verification.md and verification.md.
+  Inspected actual hr-participant-menu.png and hr-participant-assigned.png images.
+output_summary: >-
+  A manager can identify the joined HR participant and use Назначить HR directly.
+  Owner-only ordinary role actions remain separate. The assigned HR badge,
+  disabled HR назначен status and named success message explain the result.
+  Pending actions prevent duplicates and contradictory local role changes;
+  persistent error feedback explains how to retry. No UX change is requested.
+scope: >-
+  Final review of the participant HR shortcut, not a fresh full-application UX audit.
+  All standard checklist items were considered for impact; unchanged surfaces
+  are explicitly identified below and are not claimed as newly tested.
+checklist:
+  room_creation:
+    applicability: unchanged
+    result: "No creation or registration flow is changed; the three-step guest creation criterion was not retested."
+  role_clarity:
+    applicability: changed
+    result: >-
+      Pass for the changed controls: eligible candidates offer Назначить HR;
+      assigned eligible interviewers show HR and HR назначен. Owners retain
+      ordinary role actions; non-owner managers do not acquire them. Owner
+      targets remain excluded. General pre-existing owner-badge presentation
+      is outside this bounded review.
+  step_visibility:
+    applicability: adjacent
+    result: "Pass in both screenshots: Шаг 1 из 1 and the active step remain visible when the participant menu is open."
+  step_switching:
+    applicability: unchanged
+    result: "No step-switching action or authority is changed by this shortcut; no new step UX claim."
+  run_code:
+    applicability: unchanged
+    result: "Code execution controls and permissions are explicitly outside this change and were not retested."
+  join_flow:
+    applicability: changed
+    result: >-
+      Pass against the recorded browser evidence: candidate-link admission
+      remains candidate admission; explicit manager assignment is the visible
+      transition, without asking the joined HR to find or copy an ID.
+  error_loading_empty_states:
+    applicability: changed
+    result: >-
+      Pass: Назначаем HR… disables repeat and ordinary role actions for the
+      target; named success uses role=status, errors use role=alert outside the
+      closed menu and give a retry instruction. Ineligible/absent targets have
+      no enabled shortcut. Current-context 410 uses the existing unavailable
+      screen. Browser evidence covers pending, failure and retry.
+  reconnect_state:
+    applicability: existing_transition_reused
+    result: >-
+      Existing room connection/unavailable presentation is reused. Recorded
+      reconnect, demotion, regrant and stale-completion checks preserve the
+      displayed authority; this change introduces no separate reconnect screen.
+  mobile_consideration:
+    applicability: changed
+    result: >-
+      Pass at the required laptop minimum: both 1280-pixel screenshots show
+      readable menu items and an unobscured HR badge. Long names truncate while
+      button accessible names retain full identity. No claim of a new mobile
+      device audit is made.
+accessibility_review:
+  - "Participant menu target is a native button with full participant name, presence, available-action label and aria-haspopup=menu."
+  - "Existing visible keyboard focus styling is retained; Mantine menu primitives are reused."
+  - "HR badge has an HR-менеджер accessible label and title; assignment feedback is visible beyond the menu lifecycle."
+  - "Keyboard/screen-reader runtime testing was not performed in this bounded source-and-screenshot review."
+evidence:
+  - "output/playwright/hr-participant-menu.png: owner sees separate Назначить HR and Назначить интервьюером actions."
+  - "output/playwright/hr-participant-assigned.png: HR badge, disabled HR назначен status and named persistent confirmation."
+  - "verification.md: final HR browser run 15/15, including the five participant HR cases and existing role/account-switch/presence regressions."
+issues: []
+mvp_blocking_issues: []
+risks: []
+next_owner: product-owner-agent
+handoff_to:
+  - agent: product-owner-agent
+    reason: "Scoped UX review approved with no requested changes; combine with completed QA and test review for final acceptance."
+linear_update:
+  applied: false
+  comment_summary: "UX review: APPROVED. No blocking issue in the joined-participant HR assignment shortcut."

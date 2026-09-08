@@ -1,0 +1,60 @@
+# HR interview cabinet delivery tasks
+
+State is evidence based. Production cannot start until the linked behavioral test has been run and failed because HR behavior is missing. Detailed ownership, commands, milestones, and risks are in `execution-plan.md`.
+
+## 1. Planning gates
+
+- [x] **1.1 / HR-001 Product acceptance** — Owner: `product-owner-agent`. Output: accepted `product-scope.yaml`; no unresolved P0 product question. Documentation review; automated test not applicable.
+- [x] **1.2 / HR-002 Architecture contract** — Owner: `architect-agent`. Depends: HR-001. Output: complete `design.md` covering API, schema, auth, archive/reconnect, XLSX, dates, migrations, NFRs, and rollback. Documentation review; automated test not applicable.
+- [x] **1.4 / HR-003 Strict planning validation** — Owner: root orchestrator. Depends: HR-001, HR-002. Output: success recorded in `verification.md`. Command: `npx --yes @fission-ai/openspec@latest validate add-hr-interview-cabinet --strict`.
+- [x] **1.3 / HR-004 Task quality audit** — Owner: `prompt-task-auditor-agent` (root may perform the same checklist if the agent slot remains unavailable). Depends: HR-003. Output: ready/needs-clarification verdict. AC: every executable task has one owner, bounded files, inputs/outputs, command, and test-first dependency; no owner collision. Documentation review; automated test not applicable.
+
+## 2. Acceptance and UX prerequisites
+
+- [x] **HR-010 Author browser acceptance and script** — Owner: root. Depends: HR-004. Files: `frontend/tests/e2e/hr/e2e-hr-cabinet.mjs`, `frontend/package.json`. Output: `e2e:hr-cabinet`. AC: real-browser sections cover registration/profile UUID, candidate-only exclusion, manager invite/two-HR isolation, metadata/results/cabinet refresh and states, archive/read-only/reconnect termination, all-time/date XLSX and errors. No mocked authority.
+- [x] **HR-011 Demonstrate actual UI RED** — Owner: root. Depends: HR-010. Runtime: DB `interview_hr_1788631751397`, backend `18080`, frontend `5173`. Command: `E2E_BASE_URL=http://localhost:5173 E2E_API_URL=http://localhost:18080/api npm --prefix frontend run e2e:hr-cabinet`. AC: failure is missing HR UI/API behavior, not harness, selector, service, or fixture failure; evidence recorded.
+- [x] **HR-012 Produce UX package** — Owner: `designer-agent`; root owns if no designer slot is available. Depends: HR-002. Files: `ux.md`, `storyboard.html`, `mocks/**` in this change. AC: registration/profile, invitation, metadata conflict, cabinet loading/empty/error/stale refresh/list/detail, archive, filters/download, copy feedback, focus and narrow viewport are specified without changing scope/API. Design artifact; automated test not applicable.
+- [x] **HR-013 UX critic gate** — Owner: `ux-critic-agent`; root performs the checklist if unavailable. Depends: HR-012. Output: approve/revise verdict; blocking gaps resolved before frontend starts. Review-only; automated test not applicable.
+
+## 3. Backend RED tasks (H2, backend developer)
+
+These integration tests supplement the browser journey where direct forged requests, concurrency, persistence, payload absence, workbook structure, and workload limits require server-level proof. Files are limited to `backend/src/test/**`.
+
+- [x] **HR-020 Account/profile RED** — Owner: backend `developer-agent`. Depends: HR-011. Output: `HrAccountProfileIntegrationTest.kt`. AC: default false/omitted value, checked registration, self-enable, disable rejection, stable UUID, forged identity/role, non-HR denial. Command: `mvn -f backend/pom.xml -Dtest=HrAccountProfileIntegrationTest test`.
+- [x] **HR-021 Tracking/invitation RED** — Owner: backend `developer-agent`. Depends: HR-011. Output: `HrRoomTrackingIntegrationTest.kt`. AC: owner/interviewer/event-token invite, invalid/non-HR parity, candidate/outsider denial, entry tracking, concurrent/repeated deduplication, multiple HRs, current authority, no owner/private-note grant, demotion/reinvite sync. Command: `mvn -f backend/pom.xml -Dtest=HrRoomTrackingIntegrationTest test`.
+- [x] **HR-022 Metadata/projection RED** — Owner: backend `developer-agent`. Depends: HR-011. Output: `HrInterviewProjectionIntegrationTest.kt`. AC: validation/revision 409, metadata-only writes, candidate REST/SSE/message absence, immutable first completion, legacy nulls, two-HR 404 isolation, paging/order/date/state/archive classification. Command: `mvn -f backend/pom.xml -Dtest=HrInterviewProjectionIntegrationTest test`.
+- [x] **HR-023 Archive/realtime RED** — Owner: backend `developer-agent`. Depends: HR-011. Output: `HrRoomArchiveIntegrationTest.kt`. AC: restart persistence, idempotent owner archive, interviewer denial, untracked delete compatibility, 410 for all live paths, archive/write race, pending-write/SSE closure and bounded reconnect. Command: `mvn -f backend/pom.xml -Dtest=HrRoomArchiveIntegrationTest test`.
+- [x] **HR-024 Workbook RED** — Owner: backend `developer-agent`. Depends: HR-011. Output: `HrWorkbookIntegrationTest.kt`. AC: parsed OOXML headers/sheets, empty/all/filtered and cross-page scope, task linkage/null scores, Moscow boundaries/date fallback, two-HR isolation, literal formula-like cells, no secrets, invalid ranges, row/deadline/concurrency/cleanup limits. Command: `mvn -f backend/pom.xml -Dtest=HrWorkbookIntegrationTest test`.
+
+## 4. Backend production tasks (backend developer, `backend/**`)
+
+- [x] **HR-030 Account/schema slice** — Owner: backend `developer-agent`. Depends: HR-020. Outputs: additive V9 schema/entities/repositories, auth/profile contracts, admin FK cleanup. AC: HR-020 green; roles unchanged; earlier migrations untouched; H2 mapping matches. Commands: `mvn -f backend/pom.xml -Dtest=HrAccountProfileIntegrationTest test`; `mvn -f backend/pom.xml test`.
+- [x] **HR-031 Tracking/invitation slice** — Owner: backend `developer-agent`. Depends: HR-021, HR-030. Outputs: locked tracking/invite operations and permission sync. AC: HR-021 green; writes are atomic/idempotent, authority server-derived, current-permission predicate enforced, durable demotion prevents credential re-elevation. Commands: `mvn -f backend/pom.xml -Dtest=HrRoomTrackingIntegrationTest test`; `mvn -f backend/pom.xml test`.
+- [x] **HR-032 Metadata/list/detail slice** — Owner: backend `developer-agent`. Depends: HR-022, HR-031. Outputs: metadata endpoints/revision, first completion preservation, protected projection/date filtering. AC: HR-022 green; frozen paging/status/timezone contract; no metadata in shared payloads. Commands: `mvn -f backend/pom.xml -Dtest=HrInterviewProjectionIntegrationTest test`; `mvn -f backend/pom.xml test`.
+- [x] **HR-033 Archive/realtime slice** — Owner: backend `developer-agent`. Depends: HR-023, HR-032. Outputs: tracked archive branch, central live guards, close/cancel cleanup. AC: HR-023 green; tracked history retained, untracked deletion compatible, owner-only idempotent archive, all live mutations/admission terminal, no stale write resurrection/retry storm. Commands: `mvn -f backend/pom.xml -Dtest=HrRoomArchiveIntegrationTest test`; `mvn -f backend/pom.xml test`.
+- [x] **HR-034 XLSX slice** — Owner: backend `developer-agent`. Depends: HR-024, HR-032, HR-033. Outputs: POI 5.5.1 in Maven/Gradle, snapshot workbook/export endpoint, CORS headers, limits/deadline/semaphores/cleanup. AC: HR-024 green; complete XLSX only, `/export` route precedence, safe 413/429/errors. Commands: `mvn -f backend/pom.xml -Dtest=HrWorkbookIntegrationTest test`; `mvn -f backend/pom.xml dependency:tree -Dincludes=org.apache.poi:*`; `mvn -f backend/pom.xml test`.
+- [x] **HR-035 PostgreSQL V8-to-V9/restart proof** — Owner: backend `developer-agent`. Depends: HR-034. Runtime: isolated DB/backend. AC: clean V9 and V8 upgrade succeed; defaults/nulls/constraints/indexes/first-verdict correction verified; tracked archive survives restart. Command: `SERVER_PORT=18080 DB_URL=jdbc:postgresql://localhost:5432/interview_hr_1788631751397 DB_USER=interview DB_PASSWORD=interview mvn -f backend/pom.xml spring-boot:run`. Recheck migration number immediately before HR-030.
+
+## 5. Frontend production tasks (frontend developer, `frontend/src/**` only)
+
+Every task depends on the real UI RED and approved UX gate. The root-owned E2E and package files are read-only inputs.
+
+- [x] **HR-040 Typed API/account state** — Owner: frontend `developer-agent`. Depends: HR-011, HR-013, frozen HR-002 API contract; integrated GREEN additionally waits for HR-030..035. AC: frozen DTOs/API, binary/error handling, refresh/no-store, relevant statuses and Moscow dates; no HR scope ID accepted. Commands: `npm --prefix frontend run typecheck`; `npm --prefix frontend run build`.
+- [x] **HR-041 Registration/profile UI** — Owner: frontend `developer-agent`. Depends: HR-011, HR-013, HR-040. AC: optional checkbox/no role selector, persistence, existing-user opt-in, disable policy, accessible copy success/failure, candidate-only no elevation. Commands: `npm --prefix frontend run typecheck`; `npm --prefix frontend run build`.
+- [x] **HR-042 Invitation/metadata UI** — Owner: frontend `developer-agent`. Depends: HR-011, HR-013, HR-041. AC: server-confirmed manager controls, safe invalid target feedback, repeat success, complete values/revision, 409 retains edits and offers reload, archived state read-only. Commands: `npm --prefix frontend run typecheck`; `npm --prefix frontend run build`.
+- [x] **HR-043 Cabinet/detail UI** — Owner: frontend `developer-agent`. Depends: HR-011, HR-013, HR-042, frozen archive contract. AC: loading/empty/error/stale refresh distinguished; explicit nulls; correct state/archive badges; refresh discovery; no client HR scoping or room SSE; archived detail cannot reopen room. Commands: `npm --prefix frontend run typecheck`; `npm --prefix frontend run build`.
+- [x] **HR-044 XLSX UI** — Owner: frontend `developer-agent`. Depends: HR-011, HR-013, HR-043, frozen XLSX contract. AC: all-time/inclusive dates, Moscow/date-source help, actionable 413/429, no auto-retry, JSON/partial failures never saved as XLSX. Commands: `npm --prefix frontend run typecheck`; `npm --prefix frontend run build`.
+- [x] **HR-045 Archived room terminal UI** — Owner: frontend `developer-agent`. Depends: HR-011, HR-013, HR-042, frozen archive contract. AC: one persisted check after close, controls disabled, reconnect/presence/state retries stop, cabinet history remains reachable. Commands: `npm --prefix frontend run typecheck`; `npm --prefix frontend run build`.
+
+Each HR-041..045 handoff ends with `npm --prefix frontend run typecheck` and `npm --prefix frontend run build`.
+
+## 6. Integration and review
+
+- [x] **HR-050 Browser GREEN** — Owner: root. Depends: HR-035, HR-041..045. Run HR-011 command. AC: exit 0, no skipped behavior section, evidence recorded.
+- [x] **HR-051 Regressions** — Owner: root. Depends: HR-050. Run full backend tests, frontend typecheck/build, `e2e:account-binding`, `e2e:account-switch`, `e2e:roles`, `e2e:realtime-auth-recovery` on ports 18080/5173. AC: all pass with exact evidence.
+- [x] **HR-052 Solution review** — Owner: `solution-reviewer-agent`. Depends: HR-051. AC: approve; architecture/regression findings resolved and affected tests rerun.
+- [x] **HR-053 Security/reliability review** — Owner: `security-reliability-agent`. Depends: HR-051. AC: approve; auth/enumeration/current permission/candidate payload/concurrency/archive/export/admin deletion reviewed; blocking finding stops release.
+- [x] **HR-054 QA verification** — Owner: `qa-agent`. Depends: HR-052, HR-053. Output: scenario/evidence matrix and readiness verdict.
+- [x] **HR-055 Test review** — Owner: `test-reviewer-agent`. Depends: HR-054. AC: approve multi-principal, reconnect, concurrency, date, migration, workbook and failure coverage.
+- [x] **HR-056 Product acceptance** — Owner: `product-owner-agent`. Depends: HR-055. AC: accepted MVP with no scope expansion.
+- [x] **HR-057 Reconcile/archive** — Owner: root. Depends: HR-056. AC: checkboxes/evidence/handoff agree; strict validation passes; archive only after all gates.

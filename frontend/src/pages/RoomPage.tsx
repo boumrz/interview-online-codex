@@ -2,12 +2,14 @@
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
 import {
   ActionIcon,
+  Alert,
   Badge,
   Box,
   Button,
@@ -53,9 +55,13 @@ import {
   useGetRoomTaskWorkspaceQuery,
   useTasksGroupedQuery,
   useSetVerdictMutation,
+  useTrackHrRoomMutation,
+  useAddHrManagerMutation,
+  useRemoveHrManagerMutation,
 } from "../services/api";
 import { VerdictBadge } from "../features/room/VerdictBadge";
 import { ActivityTimeline } from "../features/room/ActivityTimeline";
+import { useCandidateActivityHistory } from "../features/room/useCandidateActivityHistory";
 import { reconcileActivityEvents } from "../features/room/activityTimelineProjection";
 import { PRODUCT_METRIKA_EVENT, setVisitParams, trackEvent } from "../services/analytics";
 import {
@@ -109,9 +115,12 @@ import {
 import {
   TopBar,
   LANGUAGES,
+  isEligibleHrParticipant,
+  type HrAction,
   type Participant,
 } from "../features/room/TopBar";
-import type { RoomTask, RoomTaskWorkspace, TaskTemplate } from "../types";
+import type { HrManager, RoomTask, RoomTaskWorkspace, TaskTemplate } from "../types";
+import { RoomInterviewPanel } from "../features/room/RoomInterviewPanel";
 
 import styles from "./RoomPage.module.css";
 
@@ -601,6 +610,11 @@ function readStoredDisplayName(inviteCode: string) {
   return "";
 }
 
+function queryStatus(error: unknown): number | null {
+  if (!error || typeof error !== "object" || !("status" in error)) return null;
+  return typeof error.status === "number" ? error.status : null;
+}
+
 export function RoomPage() {
   const { inviteCode = "" } = useParams();
   const location = useLocation();
@@ -610,11 +624,13 @@ export function RoomPage() {
   const authUser = auth.user;
 
   const ownerToken = localStorage.getItem(`owner_token_${inviteCode}`);
+  const interviewerToken = localStorage.getItem(`interviewer_token_${inviteCode}`);
 
-  const { data: room, isLoading } = useGetRoomQuery({
+  const { data: room, isLoading, error: roomQueryError } = useGetRoomQuery({
     inviteCode,
     ownerToken: ownerToken ?? undefined,
   });
+  const initialRoomUnavailable = queryStatus(roomQueryError) === 410;
 
   const initialStoredName = authToken
     ? authUser?.displayName?.trim() || readStoredDisplayName(inviteCode)
@@ -683,6 +699,26 @@ export function RoomPage() {
   const [selectedVerdict, setSelectedVerdict] = useState<string>("HIRE");
   const [verdictComment, setVerdictComment] = useState("");
   const [setVerdict, { isLoading: isSettingVerdict }] = useSetVerdictMutation();
+  const [trackHrRoom, trackHrRoomState] = useTrackHrRoomMutation();
+  const [hrTrackingError, setHrTrackingError] = useState("");
+  const hrTrackedManagerKeyRef = useRef("");
+  const [addHrManager] = useAddHrManagerMutation();
+  const [removeHrManager] = useRemoveHrManagerMutation();
+  const hrAssignmentGenerationRef = useRef(0);
+  const hrAssignmentRequestsRef = useRef(new Map<string, { abort: () => void }>());
+  const [pendingHrActions, setPendingHrActions] = useState<ReadonlyMap<string, HrAction>>(new Map());
+  const [hrAssignmentFeedback, setHrAssignmentFeedback] = useState<{
+    kind: "success" | "error";
+    action: HrAction;
+    message: string;
+  } | null>(null);
+  const invalidateHrAssignments = useCallback(() => {
+    hrAssignmentGenerationRef.current += 1;
+    hrAssignmentRequestsRef.current.forEach((request) => request.abort());
+    hrAssignmentRequestsRef.current.clear();
+    setPendingHrActions(new Map());
+    setHrAssignmentFeedback(null);
+  }, []);
   const [briefingDraft, setBriefingDraft] = useState("");
   const [briefingDirty, setBriefingDirty] = useState(false);
   const [stepChangeNotification, setStepChangeNotification] = useState<{
@@ -1140,6 +1176,16 @@ export function RoomPage() {
   const onState = useCallback(
     (incoming: RealtimeState) => {
       const previousState = stateRef.current;
+      // Invalidate on each server transition, even if React batches loss and
+      // regain of manager access into one render.
+      if (
+        previousState?.inviteCode !== incoming.inviteCode ||
+        previousState?.role !== incoming.role ||
+        previousState?.canManageRoom !== incoming.canManageRoom ||
+        previousState?.eventToken !== incoming.eventToken
+      ) {
+        invalidateHrAssignments();
+      }
       const previousCursorByIdentity = new Map(
         (previousState?.cursors ?? []).map((cursor) => [
           participantIdentityKey(cursor) ?? `session:${cursor.sessionId}`,
@@ -1329,7 +1375,7 @@ export function RoomPage() {
       stateRef.current = nextState;
       setState(nextState);
     },
-    [clearRecoverySyncPending],
+    [clearRecoverySyncPending, invalidateHrAssignments],
   );
 
   const onEditorValueChange = useCallback((value: string) => {
@@ -1711,6 +1757,7 @@ export function RoomPage() {
     connected,
     accessDenied: realtimeAccessDenied,
     roomUnavailable: realtimeRoomUnavailable,
+    terminateRoomUnavailable,
     participantId,
     sessionId,
     sendLanguageUpdate,
@@ -1732,7 +1779,7 @@ export function RoomPage() {
     sendManagerWorkspaceAwarenessUpdate,
     sendKeyPress,
   } = useRoomSocket({
-    enabled: canConnect,
+    enabled: canConnect && !initialRoomUnavailable,
     inviteCode,
     authToken,
     displayName: effectiveDisplayName,
@@ -1749,6 +1796,122 @@ export function RoomPage() {
     onRecoveryStateSync,
     onRequireRecoverySync: markRecoverySyncPending,
   });
+
+  useLayoutEffect(() => {
+    invalidateHrAssignments();
+    return invalidateHrAssignments;
+  }, [
+    authToken,
+    authUser?.id,
+    inviteCode,
+    ownerToken,
+    interviewerToken,
+    canManageRoom,
+    merged?.role,
+    merged?.eventToken,
+    sessionId,
+    connected,
+    initialRoomUnavailable,
+    realtimeRoomUnavailable,
+    invalidateHrAssignments,
+  ]);
+
+  const isCurrentHrAuthority = useCallback((generation: number) =>
+    generation === hrAssignmentGenerationRef.current &&
+    stateRef.current?.inviteCode === inviteCode &&
+    stateRef.current.canManageRoom === true &&
+    localStorage.getItem("auth_token") === authToken,
+  [authToken, inviteCode]);
+
+  const changeHrAssignment = useCallback(async (
+    target: Pick<HrManager, "userId" | "displayName">,
+    action: HrAction,
+  ): Promise<boolean> => {
+    const userId = target.userId.trim();
+    if (
+      !canManageRoom || !connected || !stateRef.current?.canManageRoom ||
+      stateRef.current.inviteCode !== inviteCode ||
+      initialRoomUnavailable || realtimeRoomUnavailable ||
+      !userId ||
+      hrAssignmentRequestsRef.current.has(userId) ||
+      localStorage.getItem("auth_token") !== authToken
+    ) return false;
+
+    const generation = hrAssignmentGenerationRef.current;
+    setHrAssignmentFeedback(null);
+    const credentials = {
+      inviteCode,
+      userId,
+      ownerToken: ownerToken ?? undefined,
+      interviewerToken: interviewerToken ?? undefined,
+      eventToken: stateRef.current.eventToken ?? undefined,
+    };
+    const request = action === "remove"
+      ? removeHrManager(credentials)
+      : addHrManager(credentials);
+    hrAssignmentRequestsRef.current.set(userId, request);
+    setPendingHrActions((current) => new Map(current).set(userId, action));
+    const isCurrentRequest = () =>
+      isCurrentHrAuthority(generation) &&
+      hrAssignmentRequestsRef.current.get(userId) === request;
+    try {
+      await request.unwrap();
+      if (!isCurrentRequest()) return false;
+      setHrAssignmentFeedback({
+        kind: "success",
+        action,
+        message: `${target.displayName}: ${action === "remove" ? "роль нанимающего снята" : "назначен нанимающим"}`,
+      });
+      return true;
+    } catch (assignmentError) {
+      if (!isCurrentRequest()) return false;
+      if (queryStatus(assignmentError) === 410) {
+        terminateRoomUnavailable();
+        return false;
+      }
+      setHrAssignmentFeedback({
+        kind: "error",
+        action,
+        message: action === "remove"
+          ? "Не удалось снять роль нанимающего. Проверьте доступ к комнате и повторите попытку."
+          : queryStatus(assignmentError) === 403
+          ? "Недостаточно прав для назначения нанимающего. Проверьте доступ к комнате."
+          : queryStatus(assignmentError) === 404 || queryStatus(assignmentError) === 400
+            ? "Нанимающий недоступен. Обновите страницу и проверьте участника."
+            : "Не удалось назначить нанимающего. Откройте меню участника и повторите попытку.",
+      });
+      return false;
+    } finally {
+      if (isCurrentRequest()) {
+        hrAssignmentRequestsRef.current.delete(userId);
+        setPendingHrActions((current) => {
+          const next = new Map(current);
+          next.delete(userId);
+          return next;
+        });
+      }
+    }
+  }, [
+    addHrManager, removeHrManager, authToken, canManageRoom, connected, inviteCode, ownerToken,
+    interviewerToken, initialRoomUnavailable, realtimeRoomUnavailable,
+    terminateRoomUnavailable, isCurrentHrAuthority,
+  ]);
+
+  const assignParticipantHr = useCallback((participant: Participant) => {
+    if (!isEligibleHrParticipant(participant) || participant.role !== "candidate") return;
+    void changeHrAssignment({ userId: participant.userId ?? "", displayName: participant.displayName }, "assign");
+  }, [changeHrAssignment]);
+
+  const removeParticipantHr = useCallback((participant: Participant) => {
+    if (!isEligibleHrParticipant(participant) || participant.role !== "interviewer") return;
+    void changeHrAssignment({ userId: participant.userId ?? "", displayName: participant.displayName }, "remove");
+  }, [changeHrAssignment]);
+
+  const removeListedHr = useCallback((manager: HrManager): Promise<boolean> => {
+    if (manager.isOwner) return Promise.resolve(false);
+    return changeHrAssignment(manager, "remove");
+  }, [changeHrAssignment]);
+
   useEffect(() => {
     sessionIdRef.current = sessionId;
     localParticipantIdentityKeyRef.current = participantIdentityKey({
@@ -1925,6 +2088,50 @@ export function RoomPage() {
 
   const hasRealtimeState = Boolean(state);
   const participantsCount = state?.participants.length ?? 0;
+
+  const trackCurrentHrRoom = useCallback(async () => {
+    if (
+      !authToken ||
+      !authUser?.isHr ||
+      !merged?.canManageRoom ||
+      !hasRealtimeState
+    ) {
+      return;
+    }
+    const trackingKey = `${inviteCode}:${authUser.id}`;
+    if (hrTrackedManagerKeyRef.current === trackingKey) return;
+    hrTrackedManagerKeyRef.current = trackingKey;
+    setHrTrackingError("");
+    try {
+      await trackHrRoom({
+        inviteCode,
+        ownerToken: ownerToken ?? undefined,
+        eventToken: merged.eventToken ?? undefined,
+      }).unwrap();
+    } catch {
+      hrTrackedManagerKeyRef.current = "";
+      setHrTrackingError("Не удалось добавить интервью в кабинет нанимающего");
+    }
+  }, [
+    authToken,
+    authUser?.id,
+    authUser?.isHr,
+    hasRealtimeState,
+    inviteCode,
+    merged?.canManageRoom,
+    merged?.eventToken,
+    ownerToken,
+    trackHrRoom,
+  ]);
+
+  useEffect(() => {
+    if (!merged?.canManageRoom) {
+      hrTrackedManagerKeyRef.current = "";
+      setHrTrackingError("");
+      return;
+    }
+    void trackCurrentHrRoom();
+  }, [merged?.canManageRoom, trackCurrentHrRoom]);
 
   useEffect(() => {
     if (!merged || merged.role !== "candidate" || !connected || !hasRealtimeState) return;
@@ -2387,6 +2594,7 @@ export function RoomPage() {
     (participant: Participant) => {
       if (!merged?.canGrantAccess || participant.role === "owner") return;
       const targetUserId = participant.userId?.trim() ?? "";
+      if (hrAssignmentRequestsRef.current.has(targetUserId)) return;
       if (participant.role === "candidate") {
         trackEvent("prod_participant_role_grant_interviewer", {
           target_role: participant.role,
@@ -2495,7 +2703,7 @@ export function RoomPage() {
     onKeyEvent: handleCandidateKeyPress,
   });
 
-  if (realtimeRoomUnavailable) {
+  if (realtimeRoomUnavailable || initialRoomUnavailable) {
     return (
       <Box className={styles.shell} p="xl">
         <section className={styles.realtimeRoomUnavailable} data-testid="room-realtime-unavailable" role="alert">
@@ -2506,6 +2714,11 @@ export function RoomPage() {
           <Button component={Link} to="/" variant="light" color="blue">
             На главную
           </Button>
+          {authUser?.isHr ? (
+            <Button component={Link} to="/dashboard/hr" variant="outline" color="gray">
+              Открыть историю в кабинете нанимающего
+            </Button>
+          ) : null}
         </section>
       </Box>
     );
@@ -2760,8 +2973,55 @@ export function RoomPage() {
             sendLanguageUpdate(value);
           }}
           canGrantAccess={Boolean(merged.canGrantAccess)}
+          canAssignHr={canManageRoom}
+          pendingHrActions={pendingHrActions}
+          onAssignHr={assignParticipantHr}
+          onRemoveHr={removeParticipantHr}
           onToggleInterviewerRole={toggleParticipantInterviewerRole}
         />
+
+        <div className={styles.interviewPanelHost}>
+          {canManageRoom && hrAssignmentFeedback ? (
+            <Alert
+              color={hrAssignmentFeedback.kind === "error" ? "red" : "teal"}
+              role={hrAssignmentFeedback.kind === "error" ? "alert" : "status"}
+              aria-live="polite"
+              className={styles.hrTrackingAlert}
+            >
+              {hrAssignmentFeedback.message}
+            </Alert>
+          ) : null}
+          <RoomInterviewPanel
+            inviteCode={inviteCode}
+            identityKey={authUser?.id ?? `guest:${participantId}`}
+            canManageRoom={canManageRoom}
+            authorityGeneration={hrAssignmentGenerationRef.current}
+            isCurrentAuthority={isCurrentHrAuthority}
+            pendingHrActions={pendingHrActions}
+            onRemoveHr={removeListedHr}
+            removalError={hrAssignmentFeedback?.action === "remove" && hrAssignmentFeedback.kind === "error"
+              ? hrAssignmentFeedback.message : ""}
+            ownerToken={ownerToken ?? undefined}
+            interviewerToken={interviewerToken ?? undefined}
+            eventToken={merged.eventToken ?? undefined}
+          />
+          {hrTrackingError ? (
+            <Alert color="yellow" role="alert" className={styles.hrTrackingAlert}>
+              <Group gap="xs">
+                <Text size="sm">{hrTrackingError}</Text>
+                <Button
+                  type="button"
+                  size="compact-xs"
+                  variant="light"
+                  loading={trackHrRoomState.isLoading}
+                  onClick={() => void trackCurrentHrRoom()}
+                >
+                  Повторить
+                </Button>
+              </Group>
+            </Alert>
+          ) : null}
+        </div>
 
         {canManageRoom && stepChangeNotification ? (
           <section
@@ -3487,10 +3747,19 @@ function OwnerLayout({
       : candidatePresenceState === "away"
         ? "Вне фокуса"
         : "В фокусе";
-  const recentCandidateKeyHistory = (candidateKeyHistory ?? []).slice(-LOG_HISTORY_LIMIT);
-  if (recentCandidateKeyHistory.length === 0 && lastCandidateKey) {
-    recentCandidateKeyHistory.push(lastCandidateKey);
-  }
+  const recentCandidateKeyHistory = useMemo(() => {
+    const recent = (candidateKeyHistory ?? []).slice(-LOG_HISTORY_LIMIT);
+    return recent.length === 0 && lastCandidateKey ? [lastCandidateKey] : recent;
+  }, [candidateKeyHistory, lastCandidateKey]);
+  const activityHistory = useCandidateActivityHistory({
+    inviteCode,
+    ownerToken,
+    authToken,
+    eventToken: merged.eventToken,
+    keyHistory: recentCandidateKeyHistory,
+    canManageRoom: merged.canManageRoom,
+    active: showLeftPanel && currentSidePanel === "roomTools" && roomToolsTab === "logs",
+  });
   const canSubmitCustomTask = customTaskTitle.trim().length > 0;
 
   const handleTaskStepSelect = useCallback(
@@ -4616,11 +4885,7 @@ function OwnerLayout({
                       aria-labelledby={logsTabId}
                     >
                       <ActivityTimeline
-                        inviteCode={inviteCode}
-                        ownerToken={ownerToken}
-                        authToken={authToken}
-                        eventToken={merged.eventToken}
-                        keyHistory={recentCandidateKeyHistory}
+                        history={activityHistory}
                         canManageRoom={merged.canManageRoom}
                       />
 
@@ -5126,4 +5391,3 @@ function mergeCursorsByIdentity(cursors: CursorInfo[]): CursorInfo[] {
   });
   return Array.from(byIdentity.values());
 }
-

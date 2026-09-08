@@ -1,0 +1,199 @@
+agent: qa-agent
+task_id: fix-candidate-activity-history
+verdict: ready
+summary: "Verified 25 scoped scenarios: 25 passed, 0 failed. No unresolved production defect found."
+input_summary: >-
+  Validated OpenSpec proposal, specs, design and tasks; planning approval;
+  solution/security approval; production baseline copies; original red evidence;
+  implementation summary and final runtime logs. Existing unrelated HR changes
+  were excluded from this change's behavioral scope.
+output_summary: >-
+  Acceptance evidence and test assertions audited. QA added two focused browser
+  UI contract cases, both passed in the root-owned runtime. Three missing UI
+  assertions and the weak late-response revocation barrier are resolved. Clean
+  final grouping evidence supersedes the mixed interrupted grouping log.
+test_strategy:
+  scope: >-
+    Complete retained candidate activity, immutable source identity, bounded
+    paging and SSE tails, retry liveness, room-scoped history lifetime, grouping,
+    raw exports, authorization, migration and relevant realtime regressions.
+  approach:
+    - Six real-backend browser acceptance cases with controlled transport failures.
+    - Two actual-browser UI contract cases using explicitly controlled valid history responses.
+    - Real MVC and HTTP integration for cursor, permission, persistence, concurrency and one-connection pool boundaries.
+    - Pure helper tests for merge/cursor invariants and retry delay values; no fake-clock hook coverage is claimed.
+    - Inspect original product-red evidence separately from final passing tests.
+    - Audit independently supplied execution artifacts and assertions; root exclusively owns browser/backend runtime execution.
+  environments:
+    browser: Local Playwright Chromium on macOS; frontend http://localhost:5173.
+    api: Isolated local acceptance application at http://localhost:18080/api.
+    backend_tests: Java 17; Spring Boot MVC and real HTTP; H2 PostgreSQL mode for integration tests.
+    migration: Actual PostgreSQL 16.13 disposable V10 fixture plus application Flyway 9-to-10 upgrade.
+    isolation: Unique accounts/rooms and fresh browser contexts; contexts close in finally. Raw fixtures remain only in the isolated acceptance database.
+  reproduction:
+    browser: E2E_API_URL=http://localhost:18080/api E2E_BASE_URL=http://localhost:5173 node --test frontend/tests/e2e/interview/e2e-activity-history-recovery.mjs
+    grouping: From frontend, with the same E2E environment, run npm run e2e:activity-timeline.
+    ui_contract: With the same E2E environment, run node --test --test-name-pattern='history UI contract' frontend/tests/e2e/interview/e2e-activity-history-recovery.mjs.
+    helpers: node --experimental-strip-types --test frontend/tests/unit/activityRetry.test.ts frontend/tests/unit/activityTimeline.test.ts frontend/tests/unit/candidateActivityHistory.test.ts
+    backend: JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home mvn -q -f backend/pom.xml package
+  execution_note: >-
+    All eight browser cases have current green evidence: the original six-case
+    full run, the two-case UI supplement, and a focused rerun of the strengthened
+    revocation case. These are separate executions, not a claimed single eight-case run.
+test_matrix:
+  - scenario: Complete retained history and exports exceed the SSE tail
+    steps: "Create a real room; record 451 sources; open Logs; exhaust older pages; request JSON and CSV."
+    expected: "Every retained source appears once in loaded history and both raw exports."
+    result: pass
+    evidence: output/activity-history-baseline/browser-green.log
+  - scenario: Failed older read preserves recent and newly arriving activity
+    steps: "Fail the older GET with 503; record another source; restore the route; click Retry."
+    expected: "Recent and new live sources remain; retry merges older sources once and clears the error."
+    result: pass
+    evidence: output/activity-history-baseline/browser-green.log
+  - scenario: Same-room tab changes and empty state sync preserve loaded history
+    steps: "Load all sources; switch Logs to Chat and back; replay an empty candidate-history state sync."
+    expected: "Previously loaded sources remain available without reverting to the bounded SSE tail."
+    result: pass
+    evidence: output/activity-history-baseline/browser-green.log
+  - scenario: Multi-page missed broadcast gap and a future live source
+    steps: "Drop candidate broadcasts; record 201 sources; hold catch-up response; accept a future live source; release the response."
+    expected: "Catch-up retrieves every missed source despite the newer live sequence, without duplicates."
+    result: pass
+    evidence: output/activity-history-baseline/browser-green.log
+  - scenario: Browser reload restores acknowledged durable history
+    steps: "After recording and catching up over 650 sources, reload the manager page and exhaust older pages."
+    expected: "All acknowledged source IDs are restored and remain exportable."
+    result: pass
+    evidence: output/activity-history-baseline/browser-green.log
+  - scenario: Loading, confirmed empty, read deadline and explicit retry
+    steps: "Hold initial GET; return empty; supply two sources; hang catch-up; observe deadline; allow a 503 poll; click Retry."
+    expected: "Loading differs from empty; the read fails around 10 seconds; rows remain; polling waits five seconds; retry uses the unchanged cursor and clears generic feedback."
+    result: pass
+    evidence: output/activity-history-baseline/history-ui-green.log
+    test_level: Actual browser UI with controlled valid history responses.
+  - scenario: Grouping recomputes across page boundaries
+    steps: "Return 401 same-session same-timestamp sources in 200+200+1 pages; hold the first older read; exhaust pages."
+    expected: "Older action is disabled while pending; frozen cursors progress; one visible group contains all 401 typed actions."
+    result: pass
+    evidence: output/activity-history-baseline/history-ui-green.log
+    test_level: Actual browser UI with controlled valid history responses.
+  - scenario: Three 503 failures recover with FIFO identity and independent editing
+    steps: "Type ab; fail a three times; force SSE reconnect during backoff; observe the manager editor and durable sources."
+    expected: "Retries retain a's identity and 1/2/4-second delays; b follows once; feedback clears; Yjs code reaches the manager."
+    result: pass
+    evidence: output/activity-history-baseline/browser-green.log
+  - scenario: Hung activity POST cannot block the lane indefinitely
+    steps: "Hold the first activity POST indefinitely while a second action queues."
+    expected: "The request is aborted around 10 seconds, retried with the same identity, and both sources are stored once in FIFO order."
+    result: pass
+    evidence: output/activity-history-baseline/browser-green.log
+  - scenario: Rate-limit recovery
+    steps: "Return 429 for the first activity attempt, then allow delivery."
+    expected: "The same source retries after backoff, later input follows, and delayed feedback clears."
+    result: pass
+    evidence: output/activity-history-baseline/browser-green.log
+  - scenario: Unfinished rejected response body
+    steps: "Return HTTP 400 headers with an unfinished error body for a; then type b."
+    expected: "b is durably accepted within the bounded test window; raw server text is absent from UI."
+    result: pass
+    evidence: output/activity-history-baseline/browser-green.log
+  - scenario: Lost successful response is idempotent
+    steps: "Commit a real source but lose its acknowledgement; reconnect and retry the same source."
+    expected: "Exactly one durable record and manager broadcast exist; the queue advances once."
+    result: pass
+    evidence: output/activity-history-baseline/grouping-final-green.log
+  - scenario: Guest room and candidate activity flow
+    steps: "Create an ownerless guest room; enter a candidate name; type and paste; observe manager Logs and exports."
+    expected: "The guest flow works without registration, with durable activity and native paste capture."
+    result: pass
+    evidence: output/activity-history-baseline/grouping-final-green.log
+  - scenario: Current manager permission matrix
+    steps: "Request history as owner, persisted interviewer, promoted guest, ordinary candidate and revoked manager; reuse a guest credential in another room."
+    expected: "Only current managers of the requested room receive history; unauthorized reads return 403."
+    result: pass
+    evidence: backend/target/surefire-reports/TEST-com.interviewonline.controller.CandidateActivityHistoryIntegrationTest.xml
+  - scenario: Candidate SSE and raw export privacy
+    steps: "Join and reconnect as a candidate; observe complete SSE payloads; request raw JSON/CSV."
+    expected: "Candidate payloads omit raw history, source identities and acceptance sequences; exports are denied."
+    result: pass
+    evidence: output/activity-history-baseline/grouping-final-green.log
+  - scenario: Permission revocation during a pending history response
+    steps: "Load interviewer history; hold a successful GET; revoke the role; await source-node removal; release and await the late response; request history again."
+    expected: "Private nodes remain absent after the response settles and direct history access returns 403."
+    result: pass
+    evidence: output/activity-history-baseline/revocation-final-green.log
+  - scenario: Invalid boundaries and unavailable rooms
+    steps: "Send blank, negative, nonnumeric, oversized and mutually exclusive query parameters; request a missing or archived room."
+    expected: "Invalid queries return 400; missing returns 404; archived returns 410; cursors do not grant access."
+    result: pass
+    evidence: backend/target/surefire-reports/TEST-com.interviewonline.controller.CandidateActivityHistoryIntegrationTest.xml
+  - scenario: Stable paging with backward timestamps and concurrent append
+    steps: "Seed 451 equal/backward timestamp sources; traverse older and after pages at a frozen upper boundary; append sources; test Long.MAX_VALUE bounds."
+    expected: "Every sequence is traversed once, pages stay at most 200, display order is canonical, and future bounds never certify uncommitted rows."
+    result: pass
+    evidence: backend/target/surefire-reports/TEST-com.interviewonline.controller.CandidateActivityHistoryIntegrationTest.xml
+  - scenario: Durable restoration and state-replacement race
+    steps: "Persist 75 sources; clear volatile state and stale JSON; reconnect; race another acceptance with state replacement."
+    expected: "Managers receive the durable latest-50 tail; concurrent accepted activity survives in the next public snapshot."
+    result: pass
+    evidence: backend/target/surefire-reports/TEST-com.interviewonline.controller.CandidateActivityHistoryIntegrationTest.xml
+  - scenario: One-connection pool and committed acceptance
+    steps: "Use a pool of one; reject an invalid token; send and retry an authorized activity through real HTTP; read metrics and snapshot."
+    expected: "Requests finish within five seconds with one row and broadcast, retained authorization, usable metrics and snapshot."
+    result: pass
+    evidence: backend/target/surefire-reports/TEST-com.interviewonline.controller.CandidateActivityPoolIntegrationTest.xml
+  - scenario: Additive PostgreSQL migration
+    steps: "Apply V10 to two-room PostgreSQL fixtures with null and existing identities/sequences; inspect rows and index; replay migration SQL."
+    expected: "Only null values are backfilled; existing identity, sequence and payload survive; room/sequence index exists; replay is idempotent."
+    result: pass
+    evidence: output/activity-history-baseline/migration-postgres.log
+  - scenario: Short reconnect and collaboration remain functional
+    steps: "Disconnect one browser for less than 30 seconds while another edits; reconnect; exchange owner/candidate edits."
+    expected: "Both editors receive the latest content and acknowledged activity remains available."
+    result: pass
+    evidence: output/activity-history-baseline/realtime-regressions.json
+  - scenario: Published step changes preserve history and correct workspace
+    steps: "Exchange edits, publish the prepared next step, record further candidate activity, and reload prior workspace/history."
+    expected: "The candidate sees the new task/workspace; old edits do not overwrite it; accepted activity remains durable."
+    result: pass
+    evidence: output/activity-history-baseline/grouping-final-green.log
+  - scenario: Bounded authorization recovery and invalid activity credentials
+    steps: "Return two consecutive 403 responses; type further actions; directly submit an invalid event token."
+    expected: "Only the permitted bounded recovery occurs, later activity stops, and rejected sources create no durable record."
+    result: pass
+    evidence: output/activity-history-baseline/grouping-final-green.log
+  - scenario: Deterministic merge, cursor and backoff invariants
+    steps: "Run the 16 helper cases, including overlapping page permutations, malformed/nonprogressing cursors, grouping boundaries and retry ceiling values."
+    expected: "All assertions pass; all eight targeted history mutants are detected."
+    result: pass
+    evidence: output/activity-history-baseline/frontend-units-green.log
+quality_gates:
+  test_first: Original browser RED 0/5 and backend RED 0/8 reflect missing behavior; unfinished-body and tab-lifetime regressions also have separate red/green artifacts.
+  backend: Surefire XML independently totaled 96 tests, 0 failures, 0 errors, 0 skipped; package exited 0.
+  frontend: Typecheck and production build exited 0; helper suite 16/16 passed.
+  regression: Full grouping and public-step-preservation, sse-reconnect, realtime-auth-recovery passed.
+  specification: Strict validation passed; review and task evidence are consistent with the scoped change.
+resolved_qa_findings:
+  - Missing explicit loading/empty/history-timeout/cadence evidence was closed by history-ui-green.log.
+  - Missing visible grouping across a page boundary was closed by history-ui-green.log.
+  - A display-none source span was an ineffective revocation barrier; root replaced it with DOM removal and awaited late-response settlement, then recorded revocation-final-green.log.
+  - Native paste used the wrong platform modifier; an independent native diagnostic proved Meta+V on macOS, and the corrected full grouping suite passed without production paste changes.
+bugs: []
+risks:
+  - Readiness covers this OpenSpec change, not a fresh certification of every platform flow. Registered login/dashboard, non-activity owner controls and unrelated invite UI were not rerun by this scoped gate.
+  - Current accepted manager/publication semantics supersede generic owner-only/clear-editor assumptions; this QA does not redefine those business rules.
+  - Loaded history and the volatile outgoing queue can grow with session length as accepted in the design. Unacknowledged input across full page close/reload is excluded.
+  - Browser timing evidence uses real timers with bounded tolerance; pure helper tests prove the complete backoff value series, not a six-retry browser wall-clock run.
+  - PostgreSQL migration evidence is distinct from H2 integration evidence; production deployment was not performed.
+next_owner: test-reviewer-agent
+handoff_to:
+  - agent: test-reviewer-agent
+    reason: Independent coverage review of the scoped scenarios and supplemental browser contract tests.
+  - agent: product-owner-agent
+    reason: Final product acceptance after independent test and UX review.
+linear_update:
+  state: QA
+  comment_summary: "QA verdict: READY for fix-candidate-activity-history. 25 scoped scenarios passed; no unresolved bugs. Independent coverage/product gates remain. No Linear issue is linked."
+review_required:
+  - test-reviewer-agent

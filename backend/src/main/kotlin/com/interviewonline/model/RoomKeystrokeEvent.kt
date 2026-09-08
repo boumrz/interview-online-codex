@@ -19,6 +19,7 @@ import jakarta.persistence.UniqueConstraint
         ),
     ],
     indexes = [
+        Index(name = "idx_rke_room_accepted_sequence", columnList = "room_id, accepted_sequence"),
         Index(name = "idx_rke_room_ts", columnList = "room_id, timestamp_epoch_ms"),
         Index(
             name = "idx_rke_room_ts_accepted_sequence",

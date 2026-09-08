@@ -1,0 +1,39 @@
+agent: test-reviewer-agent
+task_id: HR-PARTICIPANT-4.3
+change_id: add-hr-participant-assignment
+verdict: coverage-sufficient
+summary: "Reviewed five new E2E cases, two projection tests and reused guard assertions; all eight acceptance criteria and 13 QA coverage groups are sufficient for this scoped change."
+input_summary: "QA READY, two added requirements/nine scenarios, product criteria, test sources, actual RED/GREEN logs, Surefire XML and completed engineering/security/UX reviews."
+output_summary: "No missing blocking scenario. Coverage gate passes; product acceptance and artifact reconciliation remain root-owned. No source/test edits or test reruns were needed."
+coverage_checklist:
+  happy_path: "Covered: candidate-link entry, explicit no-ID assignment, live interviewer controls, one cabinet row and assigned badge."
+  negative_paths: "Covered: ordinary/anonymous targets, forged identity/flag, missing/non-HR targets, candidate/revoked inviter, 503 retry and current 410."
+  race_conditions: "Covered: held request/pending guard, mixed old/refreshed sessions, obsolete 410 after demotion/regrant; reused concurrent PUT and delayed-publication assertions."
+  reconnect_recovery: "Covered: HR grant survives reload; demotion remains candidate with cabinet denial; explicit regrant restores one tracked row."
+  permission_checks: "Covered: registered/guest non-owner shortcut, absent owner-only promotion/removal, target DELETE rejection and reused server guard tests."
+  guest_vs_registered: "Covered: both inviter kinds; anonymous target ineligibility and authenticated HR identity provenance."
+  empty_error_states: "Covered: initially empty cabinet, disabled pending action, recoverable alert/retry, assigned state and archived terminal state; existing loading cases passed again."
+  realtime: "Covered: SSE eligibility and live role changes, stale authority/publication tests; prior accepted short-outage synchronization evidence reused for unchanged transport."
+  reproducibility: "Covered: QA records commands/steps/expected outcomes; original missing-action bug has an executable reproduction. No unresolved bug report."
+test_first:
+  verdict: pass
+  e2e: "Preimplementation missing-action RED in hr-participant-browser-red.log/all-red.log; all five new cases green in final 15/15 browser run."
+  integration_exception: "Recorded in specs/tasks for server projection/provenance; backend-red.log contains two intended eligibility failures, zero errors/skips."
+  final_green: "Independently parsed 17 Surefire suites: 67 tests, zero failures/errors/skips; browser-accepted.log: 15 passes; roles/account-switch/presence success markers present."
+  mutation: "Mixed-session aggregation mutant failed its intended assertion; restored projection tests passed during packaging. Focused mutation only."
+test_quality:
+  e2e: "U9 M8 R8 A8 N9 G7 F8 T10; weighted Farley 8.4/10. Semantic locators and controlled request barriers; primary case spans a coherent but lengthy lifecycle."
+  integration: "U9 M9 R9 A9 N9 G9 F9 T10; weighted Farley 9.1/10. HTTP/SSE observable assertions, unique fixtures, explicit cleanup and mutation-sensitive aggregation."
+  reference: "https://www.linkedin.com/pulse/tdd-properties-good-tests-dave-farley-iexge/"
+missing_scenarios: []
+safe_to_close: true
+closure_scope: "Test coverage gate only; final product acceptance and OpenSpec archive must still complete."
+risks:
+  - "Transport outage proof is prior baseline evidence, not a new execution; final HR reload/live-role paths and three selected regressions were executed."
+  - "Pending account/room changes use reviewer-approved shared generation/token guards; only authority loss/regrant has a new dedicated stale-response E2E."
+  - "Admission-time HR opt-in requires refreshed admission; abort cannot undo a committed assignment. These accepted semantics introduce no coverage blocker."
+next_owner: product-owner-agent
+handoff_to:
+  - agent: product-owner-agent
+    reason: "Coverage sufficient; perform final acceptance of the eight mapped criteria."
+linear_update: {applied: false, comment_summary: "Test review: SUFFICIENT. No missing scoped scenarios; no external issue supplied."}

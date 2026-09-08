@@ -13,9 +13,11 @@ import jakarta.persistence.OneToMany
 import jakarta.persistence.OrderBy
 import jakarta.persistence.Table
 import java.time.Instant
+import org.hibernate.annotations.DynamicUpdate
 
 @Entity
 @Table(name = "rooms")
+@DynamicUpdate
 class Room(
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -79,4 +81,19 @@ class Room(
 
     @Column(name = "finished_at", nullable = true)
     var finishedAt: java.time.Instant? = null,
+
+    @Column(name = "candidate_name", length = 200)
+    var candidateName: String? = null,
+
+    @Column(length = 200)
+    var position: String? = null,
+
+    @Column(name = "scheduled_at")
+    var scheduledAt: Instant? = null,
+
+    @Column(name = "archived_at")
+    var archivedAt: Instant? = null,
+
+    @Column(name = "interview_metadata_revision", nullable = false)
+    var interviewMetadataRevision: Long = 0,
 )

@@ -4,7 +4,14 @@ import type {
   AgentPolicyGateResult,
   AgentRun,
   AuthResponse,
+  CreateGuestRoomRequest,
+  CreateRoomRequest,
   EnvironmentDoctorReport,
+  HrInterview,
+  HrInterviewPage,
+  HrManager,
+  HiringManagerPreviewResponse,
+  InterviewMetadata,
   PresetDetail,
   PresetSummary,
   Room,
@@ -13,6 +20,7 @@ import type {
   TaskLanguageGroup,
   TaskTemplate,
   User,
+  UpdateProfileRequest,
 } from "../types";
 import type { RootState } from "../app/store";
 import { API_BASE_URL } from "../config/runtime";
@@ -29,11 +37,21 @@ export const api = createApi({
       return headers;
     },
   }),
-  tagTypes: ["Room", "MyRooms", "Tasks", "AdminUsers", "Presets"],
+  tagTypes: [
+    "Room",
+    "MyRooms",
+    "Tasks",
+    "AdminUsers",
+    "Presets",
+    "Profile",
+    "HrInterviews",
+    "InterviewMetadata",
+    "HrManagers",
+  ],
   endpoints: (builder) => ({
     register: builder.mutation<
       AuthResponse,
-      { nickname: string; displayName: string; password: string }
+      { nickname: string; displayName: string; password: string; isHr?: boolean }
     >({
       query: (body) => ({ url: "/auth/register", method: "POST", body }),
     }),
@@ -44,18 +62,30 @@ export const api = createApi({
       query: (body) => ({ url: "/auth/login", method: "POST", body }),
     }),
     meProfile: builder.query<User, void>({
-      query: () => "/me/profile",
+      query: () => ({ url: "/me/profile", cache: "no-store" }),
+      providesTags: ["Profile"],
     }),
     createGuestRoom: builder.mutation<
       Room,
-      { title?: string; ownerDisplayName?: string; language: string }
+      CreateGuestRoomRequest
     >({
       query: (body) => ({ url: "/public/rooms", method: "POST", body }),
       invalidatesTags: ["Room"],
     }),
-    createRoom: builder.mutation<Room, { title: string; taskIds: string[] }>({
+    createRoom: builder.mutation<Room, CreateRoomRequest>({
       query: (body) => ({ url: "/rooms", method: "POST", body }),
       invalidatesTags: ["MyRooms"],
+    }),
+    previewHiringManager: builder.mutation<
+      HiringManagerPreviewResponse,
+      { invitationId: string }
+    >({
+      query: (body) => ({
+        url: "/me/hiring-manager-preview",
+        method: "POST",
+        body,
+        cache: "no-store",
+      }),
     }),
     getRoom: builder.query<Room, { inviteCode: string; ownerToken?: string }>({
       query: ({ inviteCode, ownerToken }) => ({
@@ -188,19 +218,164 @@ export const api = createApi({
       }),
       invalidatesTags: ["MyRooms"],
     }),
-    deleteRoom: builder.mutation<{ status: string }, { roomId: string }>({
+    deleteRoom: builder.mutation<
+      { status: string; archived: boolean },
+      { roomId: string }
+    >({
       query: ({ roomId }) => ({
         url: `/me/rooms/${roomId}`,
         method: "DELETE",
       }),
       invalidatesTags: ["MyRooms"],
     }),
-    updateProfile: builder.mutation<User, { displayName: string }>({
+    updateProfile: builder.mutation<
+      User,
+      UpdateProfileRequest
+    >({
       query: (body) => ({
         url: "/me/profile",
         method: "PATCH",
         body,
       }),
+      invalidatesTags: ["Profile", "HrInterviews"],
+    }),
+    getInterviewMetadata: builder.query<
+      InterviewMetadata,
+      {
+        inviteCode: string;
+        ownerToken?: string;
+        interviewerToken?: string;
+        eventToken?: string;
+        requestGeneration?: number;
+      }
+    >({
+      query: ({ inviteCode, ownerToken, interviewerToken, eventToken }) => ({
+        url: `/rooms/${inviteCode}/interview-metadata`,
+        cache: "no-store",
+        headers: {
+          ...(ownerToken ? { "X-Room-Owner-Token": ownerToken } : {}),
+          ...(interviewerToken ? { "X-Room-Interviewer-Token": interviewerToken } : {}),
+          ...(eventToken ? { "X-Room-Event-Token": eventToken } : {}),
+        },
+      }),
+      providesTags: ["InterviewMetadata"],
+    }),
+    updateInterviewMetadata: builder.mutation<
+      InterviewMetadata,
+      {
+        inviteCode: string;
+        ownerToken?: string;
+        interviewerToken?: string;
+        eventToken?: string;
+        metadata: InterviewMetadata;
+      }
+    >({
+      query: ({ inviteCode, ownerToken, interviewerToken, eventToken, metadata }) => ({
+        url: `/rooms/${inviteCode}/interview-metadata`,
+        method: "PUT",
+        body: metadata,
+        headers: {
+          ...(ownerToken ? { "X-Room-Owner-Token": ownerToken } : {}),
+          ...(interviewerToken ? { "X-Room-Interviewer-Token": interviewerToken } : {}),
+          ...(eventToken ? { "X-Room-Event-Token": eventToken } : {}),
+        },
+      }),
+      invalidatesTags: ["InterviewMetadata", "HrInterviews"],
+    }),
+    getHrManagers: builder.query<
+      HrManager[],
+      {
+        inviteCode: string;
+        ownerToken?: string;
+        interviewerToken?: string;
+        eventToken?: string;
+        requestGeneration?: number;
+      }
+    >({
+      query: ({ inviteCode, ownerToken, interviewerToken, eventToken }) => ({
+        url: `/rooms/${inviteCode}/hr-managers`,
+        cache: "no-store",
+        headers: {
+          ...(ownerToken ? { "X-Room-Owner-Token": ownerToken } : {}),
+          ...(interviewerToken ? { "X-Room-Interviewer-Token": interviewerToken } : {}),
+          ...(eventToken ? { "X-Room-Event-Token": eventToken } : {}),
+        },
+      }),
+      providesTags: ["HrManagers"],
+    }),
+    addHrManager: builder.mutation<
+      HrManager[],
+      {
+        inviteCode: string;
+        userId: string;
+        ownerToken?: string;
+        interviewerToken?: string;
+        eventToken?: string;
+      }
+    >({
+      query: ({ inviteCode, userId, ownerToken, interviewerToken, eventToken }) => ({
+        url: `/rooms/${inviteCode}/hr-managers/${encodeURIComponent(userId.trim())}`,
+        method: "PUT",
+        headers: {
+          ...(ownerToken ? { "X-Room-Owner-Token": ownerToken } : {}),
+          ...(interviewerToken ? { "X-Room-Interviewer-Token": interviewerToken } : {}),
+          ...(eventToken ? { "X-Room-Event-Token": eventToken } : {}),
+        },
+      }),
+      invalidatesTags: ["HrManagers", "HrInterviews"],
+    }),
+    removeHrManager: builder.mutation<
+      void,
+      {
+        inviteCode: string;
+        userId: string;
+        ownerToken?: string;
+        interviewerToken?: string;
+        eventToken?: string;
+      }
+    >({
+      query: ({ inviteCode, userId, ownerToken, interviewerToken, eventToken }) => ({
+        url: `/rooms/${inviteCode}/hr-managers/${encodeURIComponent(userId.trim())}`,
+        method: "DELETE",
+        headers: {
+          ...(ownerToken ? { "X-Room-Owner-Token": ownerToken } : {}),
+          ...(interviewerToken ? { "X-Room-Interviewer-Token": interviewerToken } : {}),
+          ...(eventToken ? { "X-Room-Event-Token": eventToken } : {}),
+        },
+      }),
+      invalidatesTags: ["HrManagers", "HrInterviews"],
+    }),
+    trackHrRoom: builder.mutation<
+      { roomId: string; tracked: true },
+      { inviteCode: string; ownerToken?: string; eventToken?: string }
+    >({
+      query: ({ inviteCode, ownerToken, eventToken }) => ({
+        url: `/rooms/${inviteCode}/hr-tracking`,
+        method: "POST",
+        headers: {
+          ...(ownerToken ? { "X-Room-Owner-Token": ownerToken } : {}),
+          ...(eventToken ? { "X-Room-Event-Token": eventToken } : {}),
+        },
+      }),
+      invalidatesTags: ["HrInterviews"],
+    }),
+    getHrInterviews: builder.query<
+      HrInterviewPage,
+      { page: number; size: number; from?: string; to?: string }
+    >({
+      query: ({ page, size, from, to }) => ({
+        url: "/me/hr/rooms",
+        cache: "no-store",
+        params: { page, size, ...(from && to ? { from, to } : {}) },
+      }),
+      providesTags: ["HrInterviews"],
+    }),
+    getHrInterview: builder.query<HrInterview, { roomId: string }>({
+      query: ({ roomId }) => ({
+        url: `/me/hr/rooms/${roomId}`,
+        cache: "no-store",
+      }),
+      providesTags: ["HrInterviews"],
     }),
     tasksGrouped: builder.query<TaskLanguageGroup[], void>({
       query: () => "/me/tasks",
@@ -400,6 +575,7 @@ export const {
   useLazyMeProfileQuery,
   useCreateGuestRoomMutation,
   useCreateRoomMutation,
+  usePreviewHiringManagerMutation,
   useGetRoomQuery,
   useGetRoomTaskWorkspaceQuery,
   useUpdateRoomTaskWorkspaceMutation,
@@ -410,6 +586,14 @@ export const {
   useUpdateRoomMutation,
   useDeleteRoomMutation,
   useUpdateProfileMutation,
+  useLazyGetInterviewMetadataQuery,
+  useUpdateInterviewMetadataMutation,
+  useLazyGetHrManagersQuery,
+  useAddHrManagerMutation,
+  useRemoveHrManagerMutation,
+  useTrackHrRoomMutation,
+  useGetHrInterviewsQuery,
+  useLazyGetHrInterviewQuery,
   useTasksGroupedQuery,
   useCreateTaskTemplateMutation,
   useUpdateTaskTemplateMutation,

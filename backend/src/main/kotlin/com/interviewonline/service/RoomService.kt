@@ -22,8 +22,11 @@ import com.interviewonline.model.RoomParticipant
 import com.interviewonline.model.RoomTask
 import com.interviewonline.model.User
 import com.interviewonline.repository.RoomKeystrokeEventRepository
+import com.interviewonline.repository.RoomHrAssignmentRepository
 import com.interviewonline.repository.RoomParticipantRepository
 import com.interviewonline.repository.RoomRepository
+import com.interviewonline.repository.lockById
+import com.interviewonline.repository.lockByInviteCode
 import com.interviewonline.repository.UserRepository
 import com.interviewonline.service.LanguageNormalizer.normalize as normalizeLanguage
 import com.interviewonline.ws.NoteMessagePayload
@@ -41,12 +44,14 @@ class RoomService(
     private val roomRepository: RoomRepository,
     private val roomParticipantRepository: RoomParticipantRepository,
     private val roomKeystrokeEventRepository: RoomKeystrokeEventRepository,
+    private val roomHrAssignmentRepository: RoomHrAssignmentRepository,
     private val userRepository: UserRepository,
     private val roomAccessService: RoomAccessService,
     private val taskTemplateService: TaskTemplateService,
     private val collaborationService: CollaborationService,
     private val roomProductMetricsProjector: RoomProductMetricsProjector,
     private val userTaskService: UserTaskService,
+    private val roomHrTrackingService: RoomHrTrackingService,
     private val objectMapper: ObjectMapper,
 ) {
     /**
@@ -98,6 +103,7 @@ class RoomService(
     @Transactional
     fun createUserRoom(request: CreateRoomRequest, user: User): RoomResponse {
         val selectedTasks = userTaskService.resolveTasksForRoom(user, request.taskIds)
+        val hiringManagers = resolveHiringManagersForCreation(request.hiringManagerIds)
         val initialRoomLanguage = normalizeLanguage(selectedTasks.firstOrNull()?.language ?: "nodejs")
         val room = Room(
             title = request.title,
@@ -123,6 +129,7 @@ class RoomService(
         room.tasks = tasks
         initializeCurrentStepSnapshot(room)
         val saved = roomRepository.save(room)
+        roomHrTrackingService.assignHiringManagersOnRoomCreation(saved, hiringManagers)
         roomProductMetricsProjector.recordRoomCreated(saved, RoomProductMetricsProjector.SOURCE_DASHBOARD)
         collaborationService.bootstrapRoom(saved)
         return toRoomResponse(
@@ -132,6 +139,32 @@ class RoomService(
             includeInterviewerToken = false,
         )
     }
+
+    private fun resolveHiringManagersForCreation(rawIds: List<String>?): List<User> {
+        val targetIds = rawIds.orEmpty()
+            .map(::canonicalHiringManagerIdOrNotFound)
+            .distinct()
+            .sorted()
+        return targetIds.map { targetId ->
+            userRepository.lockById(targetId)
+                ?.takeIf { it.isHr }
+                ?: throw hiringManagerNotFound()
+        }
+    }
+
+    private fun canonicalHiringManagerIdOrNotFound(rawId: String): String {
+        val normalized = rawId.trim()
+        val parsed = runCatching { UUID.fromString(normalized) }.getOrNull()
+        if (parsed == null || !parsed.toString().equals(normalized, ignoreCase = true)) {
+            throw hiringManagerNotFound()
+        }
+        return parsed.toString()
+    }
+
+    private fun hiringManagerNotFound(): ApiException = ApiException(
+        HttpStatus.NOT_FOUND,
+        "Указанный нанимающий не найден или недоступен",
+    )
 
     @Transactional
     fun getByInviteCode(inviteCode: String, ownerToken: String?, interviewerToken: String?, user: User?): RoomResponse {
@@ -198,6 +231,9 @@ class RoomService(
         user: User?,
         eventToken: String? = null,
     ): RoomTaskWorkspaceDto {
+        val locked = roomRepository.lockByInviteCode(inviteCode)
+            ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+        if (locked.archivedAt != null) throw ApiException(HttpStatus.GONE, "Комната архивирована")
         val room = roomRepository.findWithTasksByInviteCode(inviteCode)
             ?: throw ApiException(HttpStatus.NOT_FOUND, "РљРѕРјРЅР°С‚Р° РЅРµ РЅР°Р№РґРµРЅР°")
         val realtimeRole = collaborationService.resolveRoleByEventToken(inviteCode, eventToken)
@@ -246,7 +282,7 @@ class RoomService(
 
     @Transactional
     fun nextStep(inviteCode: String, ownerToken: String?, interviewerToken: String?, user: User?): RoomResponse {
-        val room = roomRepository.findByInviteCode(inviteCode)
+        val room = roomRepository.lockByInviteCode(inviteCode)
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
         val access = roomAccessService.requireManager(room, user, ownerToken, interviewerToken)
         val saved = collaborationService.advancePublishedStep(inviteCode)
@@ -262,7 +298,7 @@ class RoomService(
         user: User?,
         eventToken: String? = null,
     ): RoomResponse {
-        val room = roomRepository.findByInviteCode(inviteCode)
+        val room = roomRepository.lockByInviteCode(inviteCode)
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
         val realtimeRole = collaborationService.resolveRoleByEventToken(inviteCode, eventToken)
         val access = roomAccessService.requireManager(room, user, ownerToken, interviewerToken, realtimeRole)
@@ -406,7 +442,7 @@ class RoomService(
         user: User?,
         eventToken: String? = null,
     ): RoomResponse {
-        val room = roomRepository.findByInviteCode(inviteCode)
+        val room = roomRepository.lockByInviteCode(inviteCode)
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
         val realtimeRole = collaborationService.resolveRoleByEventToken(inviteCode, eventToken)
         val access = roomAccessService.requireManager(room, user, ownerToken, interviewerToken, realtimeRole)
@@ -441,7 +477,7 @@ class RoomService(
         user: User?,
         eventToken: String? = null,
     ): RoomResponse {
-        val room = roomRepository.findByInviteCode(inviteCode)
+        val room = roomRepository.lockByInviteCode(inviteCode)
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
         val realtimeRole = collaborationService.resolveRoleByEventToken(inviteCode, eventToken)
         val access = roomAccessService.requireManager(room, user, ownerToken, interviewerToken, realtimeRole)
@@ -492,10 +528,10 @@ class RoomService(
             }
 
         val merged = linkedMapOf<String, Pair<Room, String>>()
-        ownedRooms.forEach { room ->
+        ownedRooms.filter { it.archivedAt == null }.forEach { room ->
             merged[room.id!!] = room to "owner"
         }
-        participantRooms.forEach { (room, participantRole) ->
+        participantRooms.filter { (room) -> room.archivedAt == null }.forEach { (room, participantRole) ->
             val roomId = room.id ?: return@forEach
             if (!merged.containsKey(roomId)) {
                 merged[roomId] = room to participantRole
@@ -522,8 +558,10 @@ class RoomService(
 
     @Transactional
     fun updateRoomForUser(user: User, roomId: String, request: UpdateRoomRequest): RoomSummaryDto {
-        val room = roomRepository.findByIdAndOwnerUserId(roomId, user.id!!)
+        val room = roomRepository.lockById(roomId)
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+        if (room.ownerUser?.id != user.id) throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+        if (room.archivedAt != null) throw ApiException(HttpStatus.GONE, "Комната архивирована")
         val title = request.title.trim()
         if (title.isEmpty()) {
             throw ApiException(HttpStatus.BAD_REQUEST, "Название комнаты не может быть пустым")
@@ -545,21 +583,34 @@ class RoomService(
     }
 
     @Transactional
-    fun deleteRoomForUser(user: User, roomId: String) {
-        val room = roomRepository.findByIdAndOwnerUserId(roomId, user.id!!)
+    fun deleteRoomForUser(user: User, roomId: String): Boolean {
+        val room = roomRepository.lockById(roomId)
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+        if (room.ownerUser?.id != user.id) throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
         val inviteCode = room.inviteCode
+        if (roomHrAssignmentRepository.existsByRoomId(roomId)) {
+            if (room.archivedAt == null) {
+                room.archivedAt = Instant.now()
+                roomRepository.save(room)
+            }
+            TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+                override fun afterCommit() = collaborationService.closeRoom(inviteCode)
+            })
+            return true
+        }
         room.id?.let {
             // Delete related rows that have no JPA cascade configured.
             // The V5 migration adds a DB-level FK ON DELETE CASCADE for PG;
             // this explicit delete also covers H2 (Flyway-disabled local profile).
             roomKeystrokeEventRepository.deleteByRoomId(it)
             roomParticipantRepository.deleteAllByRoomId(it)
+            roomHrAssignmentRepository.deleteAllByRoomId(it)
             roomParticipantRepository.flush()
             roomProductMetricsProjector.deleteProjection(it)
         }
         roomRepository.delete(room)
         collaborationService.closeRoom(inviteCode)
+        return false
     }
 
     @Transactional
@@ -571,7 +622,7 @@ class RoomService(
         user: User?,
         eventToken: String? = null,
     ): RoomResponse {
-        val room = roomRepository.findByInviteCode(inviteCode)
+        val room = roomRepository.lockByInviteCode(inviteCode)
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
 
         // eventToken lets a guest interviewer (promoted via realtime channel, no DB record)
@@ -590,10 +641,11 @@ class RoomService(
         room.verdict = verdictValue.wireValue
         room.verdictComment = request.verdictComment?.take(2000)
         room.status = "finished"
-        room.finishedAt = Instant.now()
+        val verdictSavedAt = Instant.now()
+        if (room.finishedAt == null) room.finishedAt = verdictSavedAt
 
         roomRepository.save(room)
-        roomProductMetricsProjector.recordVerdictSaved(room.id.orEmpty(), room.finishedAt!!)
+        roomProductMetricsProjector.recordVerdictSaved(room.id.orEmpty(), verdictSavedAt)
 
         // Capture values for use in the after-commit callback (room fields may change).
         val broadcastVerdict = verdictValue.wireValue
@@ -679,7 +731,6 @@ class RoomService(
         return buildAccessMembers(room)
     }
 
-    @Transactional
     fun updateParticipantRole(
         inviteCode: String,
         request: UpdateRoomParticipantRoleRequest,
@@ -688,7 +739,23 @@ class RoomService(
         interviewerToken: String?,
         user: User?,
     ): List<RoomAccessMemberDto> {
-        val room = roomRepository.findByInviteCode(inviteCode)
+        return collaborationService.mutateRoomPermissions(inviteCode) {
+            RoomPermissionMutation(
+                updateParticipantRoleInTransaction(inviteCode, request, targetUserId, ownerToken, interviewerToken, user),
+                setOf(targetUserId),
+            )
+        }
+    }
+
+    private fun updateParticipantRoleInTransaction(
+        inviteCode: String,
+        request: UpdateRoomParticipantRoleRequest,
+        targetUserId: String,
+        ownerToken: String?,
+        interviewerToken: String?,
+        user: User?,
+    ): List<RoomAccessMemberDto> {
+        val room = roomRepository.lockByInviteCode(inviteCode)
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
         roomAccessService.requireGrantAccess(room, user, ownerToken, interviewerToken)
         val roomId = room.id ?: throw ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Комната не сохранена")
@@ -718,11 +785,23 @@ class RoomService(
                 }
             }
             RoomAccessService.RoomRole.CANDIDATE -> {
-                roomParticipantRepository.deleteByRoomIdAndUserId(roomId, targetUserId)
+                val targetUser = userRepository.findById(targetUserId).orElseThrow {
+                    ApiException(HttpStatus.NOT_FOUND, "Пользователь не найден")
+                }
+                val existing = roomParticipantRepository.findByRoomIdAndUserId(roomId, targetUserId)
+                if (roomHrAssignmentRepository.existsByRoomIdAndUserId(roomId, targetUserId)) {
+                    if (existing == null) {
+                        roomParticipantRepository.save(RoomParticipant(room = room, user = targetUser, role = "candidate"))
+                    } else {
+                        existing.role = "candidate"
+                        roomParticipantRepository.save(existing)
+                    }
+                } else {
+                    roomParticipantRepository.deleteByRoomIdAndUserId(roomId, targetUserId)
+                }
             }
         }
 
-        collaborationService.syncParticipantPermissions(inviteCode, targetUserId)
         return buildAccessMembers(room)
     }
 

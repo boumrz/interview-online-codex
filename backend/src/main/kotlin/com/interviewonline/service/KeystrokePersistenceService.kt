@@ -2,8 +2,10 @@ package com.interviewonline.service
 
 import com.interviewonline.repository.RoomKeystrokeEventRepository
 import com.interviewonline.repository.RoomRepository
+import com.interviewonline.repository.lockById
 import com.interviewonline.ws.CandidateKeyPayload
 import org.springframework.stereotype.Service
+import org.springframework.http.HttpStatus
 import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
@@ -31,7 +33,8 @@ class KeystrokePersistenceService(
             return Acceptance(existing.toPayload(), created = false)
         }
 
-        requireNotNull(roomRepository.lockById(roomId)) { "Room $roomId was not found while accepting activity" }
+        val room = requireNotNull(roomRepository.lockById(roomId)) { "Room $roomId was not found while accepting activity" }
+        if (room.archivedAt != null) throw ApiException(HttpStatus.GONE, "Комната архивирована")
         roomKeystrokeEventRepository.findByRoomIdAndSourceEventId(roomId, sourceEventId)?.let { existing ->
             return Acceptance(existing.toPayload(), created = false)
         }

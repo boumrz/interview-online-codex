@@ -3,6 +3,7 @@ package com.interviewonline.service
 import com.interviewonline.dto.AdminUserDto
 import com.interviewonline.model.User
 import com.interviewonline.repository.RoomParticipantRepository
+import com.interviewonline.repository.RoomHrAssignmentRepository
 import com.interviewonline.repository.RoomProductMetricRepository
 import com.interviewonline.repository.RoomRepository
 import com.interviewonline.repository.UserRepository
@@ -22,6 +23,7 @@ class AdminUserService(
     private val userTaskCategoryRepository: UserTaskCategoryRepository,
     private val roomRepository: RoomRepository,
     private val roomParticipantRepository: RoomParticipantRepository,
+    private val roomHrAssignmentRepository: RoomHrAssignmentRepository,
     private val roomProductMetricRepository: RoomProductMetricRepository,
     private val collaborationService: CollaborationService,
 ) {
@@ -70,7 +72,9 @@ class AdminUserService(
             val roomId = room.id
             if (!roomId.isNullOrBlank()) {
                 roomParticipantRepository.deleteAllByRoomId(roomId)
+                roomHrAssignmentRepository.deleteAllByRoomId(roomId)
                 roomParticipantRepository.flush()
+                roomHrAssignmentRepository.flush()
                 roomProductMetricRepository.deleteById(roomId)
             }
             roomRepository.delete(room)
@@ -78,6 +82,9 @@ class AdminUserService(
         }
 
         roomParticipantRepository.deleteAllByUserId(targetUserId)
+        roomHrAssignmentRepository.deleteAllByUserId(targetUserId)
+        roomParticipantRepository.flush()
+        roomHrAssignmentRepository.flush()
         userSessionRepository.deleteAllByUserId(targetUserId)
         userTaskTemplateRepository.deleteAllByOwnerUserId(targetUserId)
         userTaskCategoryRepository.deleteAllByOwnerUserId(targetUserId)

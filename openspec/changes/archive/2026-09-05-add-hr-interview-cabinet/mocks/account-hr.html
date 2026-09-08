@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>HR — регистрация и профиль</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0d1015;
+        --panel: #11161d;
+        --line: #29313c;
+        --muted: #929aa7;
+        --text: #f2f4f7;
+        --soft: #1d242d;
+        --blue: #4c8dff;
+        --ok: #67d49b;
+        --danger: #ff7d7d;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          14px/1.45 ui-sans-serif,
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+      }
+      button,
+      input {
+        font: inherit;
+      }
+      .page {
+        min-height: 100vh;
+        padding: 32px;
+      }
+      .top {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .brand {
+        font-size: 20px;
+        font-weight: 750;
+      }
+      .tag {
+        color: var(--muted);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 5px 10px;
+      }
+      .grid {
+        max-width: 1180px;
+        margin: auto;
+        display: grid;
+        grid-template-columns: 400px 1fr;
+        gap: 24px;
+        align-items: start;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 15px;
+        padding: 28px;
+        box-shadow: 0 18px 55px #0005;
+      }
+      .eyebrow {
+        color: var(--muted);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+      }
+      .title {
+        font-size: 24px;
+        margin: 8px 0;
+      }
+      .sub {
+        color: var(--muted);
+        margin: 0 0 22px;
+      }
+      .tabs {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        background: #201f1e;
+        padding: 4px;
+        border-radius: 9px;
+        margin-bottom: 22px;
+      }
+      .tab {
+        border: 0;
+        background: transparent;
+        color: #c4c7ce;
+        padding: 9px;
+        border-radius: 7px;
+      }
+      .tab.active {
+        background: #464544;
+        color: #fff;
+        font-weight: 700;
+      }
+      .field {
+        margin: 15px 0;
+      }
+      .field label,
+      .label {
+        display: block;
+        color: #c8ced8;
+        font-weight: 650;
+        margin-bottom: 6px;
+      }
+      .input {
+        width: 100%;
+        height: 40px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #12171f;
+        color: var(--text);
+        padding: 0 12px;
+      }
+      .input:focus {
+        outline: 2px solid var(--blue);
+        outline-offset: 1px;
+      }
+      .check {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        margin: 18px 0;
+      }
+      .check input {
+        margin-top: 4px;
+        accent-color: var(--blue);
+      }
+      .check strong {
+        display: block;
+      }
+      .hint {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .primary,
+      .secondary {
+        min-height: 42px;
+        border-radius: 8px;
+        padding: 0 16px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .primary {
+        width: 100%;
+        border: 0;
+        background: #f2f4f7;
+        color: #15181d;
+      }
+      .secondary {
+        border: 1px solid #87909d;
+        background: transparent;
+        color: var(--text);
+      }
+      .profile {
+        padding: 0;
+      }
+      .profileHead {
+        padding: 22px 24px;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .profileBody {
+        padding: 24px;
+      }
+      .nav {
+        display: flex;
+        gap: 8px;
+        padding: 12px 24px;
+        border-bottom: 1px solid var(--line);
+      }
+      .nav button {
+        border: 0;
+        border-radius: 8px;
+        padding: 9px 14px;
+        background: transparent;
+        color: #c5cad3;
+        font-weight: 650;
+      }
+      .nav .active {
+        background: #39414b;
+        color: #fff;
+      }
+      .section {
+        display: grid;
+        grid-template-columns: minmax(190px, 1fr) minmax(260px, 1.35fr);
+        gap: 28px;
+        padding: 22px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .section:last-child {
+        border: 0;
+      }
+      .uuid {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .code {
+        flex: 1;
+        min-width: 0;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #0d1218;
+        color: #d7e4ff;
+        font:
+          13px ui-monospace,
+          SFMono-Regular,
+          monospace;
+        user-select: all;
+        overflow-wrap: anywhere;
+      }
+      .status {
+        color: var(--ok);
+        min-height: 20px;
+        margin-top: 8px;
+      }
+      .actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .copy {
+        white-space: nowrap;
+      }
+      .note {
+        margin-top: 20px;
+        padding: 13px 14px;
+        border-left: 3px solid var(--blue);
+        background: #172239;
+        color: #cddcff;
+      }
+      .mobileLabel {
+        display: none;
+      }
+      @media (max-width: 800px) {
+        .page {
+          padding: 16px;
+        }
+        .grid {
+          grid-template-columns: 1fr;
+        }
+        .card {
+          padding: 20px;
+        }
+        .profile {
+          padding: 0;
+        }
+        .section {
+          grid-template-columns: 1fr;
+          gap: 12px;
+        }
+        .profileHead {
+          align-items: flex-start;
+          gap: 12px;
+        }
+        .nav {
+          overflow: auto;
+        }
+        .uuid {
+          align-items: stretch;
+          flex-direction: column;
+        }
+        .copy {
+          width: 100%;
+        }
+        .top {
+          align-items: flex-start;
+          gap: 12px;
+        }
+        .tag {
+          display: none;
+        }
+      }
+      @media (max-width: 380px) {
+        .profileHead,
+        .profileBody,
+        .nav {
+          padding-left: 16px;
+          padding-right: 16px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="top">
+        <div>
+          <div class="eyebrow">HR-012 · экран 1</div>
+          <div class="brand">Личный кабинет</div>
+        </div>
+        <span class="tag">Account capability · dark Mantine baseline</span>
+      </header>
+      <div class="grid">
+        <section class="card" aria-labelledby="reg-title">
+          <div class="eyebrow">Регистрация</div>
+          <h1 class="title" id="reg-title">Личный кабинет</h1>
+          <p class="sub">
+            Вход по нику и паролю. При регистрации укажите имя для комнаты.
+          </p>
+          <div class="tabs">
+            <button class="tab">Вход</button
+            ><button class="tab active">Регистрация</button>
+          </div>
+          <div class="field">
+            <label for="login">Ник *</label
+            ><input class="input" id="login" value="hr_maria" />
+          </div>
+          <div class="field">
+            <label for="name">Имя для комнаты *</label
+            ><input class="input" id="name" value="Мария Волкова" />
+          </div>
+          <div class="field">
+            <label for="pass">Пароль *</label
+            ><input class="input" id="pass" type="password" value="password" />
+          </div>
+          <label class="check"
+            ><input type="checkbox" checked aria-label="Я HR-менеджер" /><span
+              ><strong>Я HR-менеджер</strong
+              ><span class="hint"
+                >Добавит личный список интервью. Права в комнатах выдаются
+                отдельно.</span
+              ></span
+            ></label
+          >
+          <button class="primary">Создать аккаунт</button>
+        </section>
+        <section class="card profile" aria-labelledby="profile-title">
+          <header class="profileHead">
+            <div>
+              <div class="eyebrow">Профиль · HR включён</div>
+              <h2 class="title" id="profile-title">Мария Волкова</h2>
+            </div>
+            <button class="secondary">Выйти</button>
+          </header>
+          <nav class="nav" aria-label="Разделы кабинета">
+            <button>Комнаты</button><button>Задачи</button
+            ><button>Профиль</button><button class="active">HR-кабинет</button>
+          </nav>
+          <div class="profileBody">
+            <section class="section">
+              <div>
+                <h3>Имя для комнаты</h3>
+                <p class="sub">Это имя видят участники комнаты.</p>
+              </div>
+              <div>
+                <label class="label" for="display">Имя для отображения</label
+                ><input class="input" id="display" value="Мария Волкова" />
+              </div>
+            </section>
+            <section class="section">
+              <div>
+                <h3>HR-функции</h3>
+                <p class="sub">
+                  ID нужен менеджеру комнаты, чтобы добавить вас к интервью.
+                </p>
+              </div>
+              <div>
+                <label class="label" for="hrid">Ваш HR ID</label>
+                <div class="uuid">
+                  <output class="code" id="hrid"
+                    >83d2b6b2-ec27-42c7-9cb5-15afc33e9c61</output
+                  ><button class="secondary copy" id="copy">
+                    Скопировать HR ID
+                  </button>
+                </div>
+                <div
+                  class="status"
+                  id="status"
+                  role="status"
+                  aria-live="polite"
+                ></div>
+                <div class="note">
+                  HR-функции не дают доступ к комнатам автоматически. Доступ
+                  выдаёт владелец или интервьюер конкретной комнаты.
+                </div>
+              </div>
+            </section>
+          </div>
+        </section>
+      </div>
+    </main>
+    <script>
+      const copy = document.querySelector("#copy"),
+        value = document.querySelector("#hrid"),
+        status = document.querySelector("#status");
+      copy.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(value.textContent.trim());
+          copy.textContent = "Скопировано";
+          status.textContent = "HR ID скопирован";
+          setTimeout(() => (copy.textContent = "Скопировать HR ID"), 1800);
+        } catch (e) {
+          const range = document.createRange();
+          range.selectNodeContents(value);
+          const sel = getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+          status.textContent =
+            "Не удалось скопировать. ID выделен — скопируйте вручную.";
+        }
+      });
+    </script>
+  </body>
+</html>

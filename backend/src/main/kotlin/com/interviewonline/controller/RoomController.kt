@@ -11,8 +11,10 @@ import com.interviewonline.dto.UpdateRoomParticipantRoleRequest
 import com.interviewonline.dto.UpdateRoomTaskRequest
 import com.interviewonline.dto.UpdateRoomTaskWorkspaceRequest
 import com.interviewonline.service.AuthService
+import com.interviewonline.service.ApiException
 import com.interviewonline.service.RoomService
 import jakarta.validation.Valid
+import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
@@ -37,6 +39,9 @@ class RoomController(
         @RequestHeader("Authorization", required = false) authorization: String?,
         @RequestBody request: CreateGuestRoomRequest,
     ): RoomResponse {
+        if (request.hiringManagerIds != null) {
+            throw ApiException(HttpStatus.BAD_REQUEST, "Нанимающих можно добавить только из личного кабинета")
+        }
         // Quick room from the landing page. We accept an optional Bearer
         // token so an authenticated user creating a "quick" room still gets
         // the room saved into their personal account ("Мои комнаты"),

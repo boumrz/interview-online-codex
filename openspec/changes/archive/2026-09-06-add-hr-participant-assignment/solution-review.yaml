@@ -1,0 +1,42 @@
+agent: solution-reviewer-agent
+task_id: add-hr-participant-assignment/4.2
+verdict: approve
+summary: "The participant HR shortcut matches the accepted design and preserves existing room authority boundaries."
+input_summary: "Reviewed the six scoped production files against output/hr-participant-baseline, the final design and delta specification, two new backend projection tests, five new browser scenarios, and completed verification evidence. The unrelated prior HR implementation was treated as baseline."
+output_summary: "No blocking, major, or minor defects found in the scoped implementation. Test-first evidence, final browser verification, frontend checks and the backend projection contract support approval."
+findings: []
+reviewed_contracts:
+  - "Participant eligibility comes only from the authenticated server User. Anonymous sessions remain ineligible; separate user, guest and session identity keys prevent cross-identity aggregation. Multiple authenticated sessions merge HR opt-in with any eligible session."
+  - "TopBar requires authenticated identity plus the explicit server HR flag. Missing flags remain ineligible. Manager HR assignment and owner-only ordinary role grant/removal use separate capabilities."
+  - "The existing idempotent HR PUT receives the selected server account ID and current account/room/event credentials. Existing server authority checks, stored HR validation, room locking, membership/tracking and post-commit role publication are reused unchanged."
+  - "A synchronous per-target request guard blocks duplicate assignment and the target's ordinary role mutation. Roles and the assigned badge follow server state; success feedback requires confirmed response."
+  - "Generation invalidation, abort and canonical account-token checks prevent obsolete completion effects across account, room, authority and session changes. Server transitions invalidate even batched loss and regain of authority."
+  - "Current-context 410 delegates to the existing terminal room-unavailable transition; stale-context 410 is ignored. No new reconnect, transaction or permission-sync mechanism was introduced."
+verification:
+  initial_red:
+    - "output/hr-participant-browser-red.log: the prewritten user flow failed because the HR menu action was absent."
+    - "output/hr-participant-browser-all-red.log: all five new scenarios failed on the missing action/menu before frontend implementation."
+    - "output/hr-participant-backend-red.log: two meaningful missing-eligibility assertion failures; the earlier fixture error is not counted as feature RED."
+  final_green:
+    - "output/hr-participant-backend-green.log and verification.md: full Maven suite recorded 67 passing tests; restored-source package verification also passed both projection tests."
+    - "output/hr-participant-browser-accepted.log: 15/15 browser scenarios passed, zero failures, cancellations or skips, 33.4 seconds."
+    - "output/hr-participant-roles.log, output/hr-participant-account-switch.log and output/hr-participant-presence.log: all three existing regression scripts passed."
+    - "output/hr-participant-frontend-typecheck.log and output/hr-participant-frontend-build.log: typecheck and build completed successfully."
+    - "Reviewer reran strict OpenSpec validation and git diff --check successfully."
+  supplemental_evidence:
+    - "output/hr-participant-mutation.log: mixed-session test rejected representative-only eligibility; production source was restored before final runtime packaging."
+    - "The first full browser run exposed an immediate menu-count timing assertion. The test now waits for menu mount; final production sources needed no correction and the complete rerun passed."
+risk_summary: "Low scoped regression risk: the change adds one server eligibility field and reuses the established assignment and transport paths. Admission-time HR eligibility requires refresh/reconnect after profile opt-in, as documented; current stored eligibility is still revalidated by the mutation. Browser abort does not roll back a server commit, so durable state remains authoritative."
+risks:
+  - "Documented admission-time eligibility and browser-abort semantics remain intentional constraints, not approval blockers."
+blocking: false
+required_changes_before_approval: []
+handoff_to:
+  - agent: qa-agent
+    reason: "approve: verify the completed evidence and accepted behavior matrix, then proceed to coverage/UX review and product acceptance."
+next_owner: qa-agent
+linear_update:
+  state: QA
+  comment_summary: "Review verdict: APPROVE. No blocking findings; participant HR assignment preserves server authority and request lifecycle boundaries."
+  applied: false
+  reason: "No related Linear issue was supplied; no external state was changed."

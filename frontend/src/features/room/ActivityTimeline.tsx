@@ -1,33 +1,24 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Box, Button, Group, ScrollArea, Stack, Text } from "@mantine/core";
 import { IconDownload } from "@tabler/icons-react";
-import type { CandidateKeyInfo } from "./candidateKeys";
 import {
   formatActivityTimelineSummary,
   formatActivityTimelineParticipant,
   projectActivityTimeline,
 } from "./activityTimelineProjection";
-import { API_BASE_URL } from "../../config/runtime";
+import type { CandidateActivityHistory } from "./useCandidateActivityHistory";
 
 type ActivityTimelineProps = {
-  inviteCode: string;
-  ownerToken?: string | null;
-  authToken?: string | null;
-  eventToken?: string | null;
-  keyHistory: CandidateKeyInfo[];
+  history: CandidateActivityHistory;
   canManageRoom: boolean;
 };
 
 export function ActivityTimeline({
-  inviteCode,
-  ownerToken,
-  authToken,
-  eventToken,
-  keyHistory,
+  history,
   canManageRoom,
 }: ActivityTimelineProps) {
+  const groups = useMemo(() => projectActivityTimeline(history.events), [history.events]);
   if (!canManageRoom) return null;
-  const groups = projectActivityTimeline(keyHistory);
 
   const formatTime = (timestampEpochMs: number) =>
     new Date(timestampEpochMs).toLocaleTimeString("ru-RU", {
@@ -37,57 +28,6 @@ export function ActivityTimeline({
     });
   const formatTimeRange = (start: number, end: number) =>
     start === end ? formatTime(start) : `${formatTime(start)}–${formatTime(end)}`;
-
-  const buildHeaders = (): HeadersInit => {
-    const headers: HeadersInit = {};
-    if (ownerToken) headers["X-Room-Owner-Token"] = ownerToken;
-    if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
-    // Forward realtime event token so guest interviewers (promoted via the
-    // realtime channel, no DB record) can also export keystroke logs.
-    if (eventToken) headers["X-Room-Event-Token"] = eventToken;
-    return headers;
-  };
-
-  const handleDownloadJson = () => {
-    const url = `${API_BASE_URL}/rooms/${inviteCode}/keystroke-events?format=json`;
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", `keystrokes-${inviteCode}.json`);
-    fetch(url, { headers: buildHeaders() })
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.blob();
-      })
-      .then((blob) => {
-        const objectUrl = URL.createObjectURL(blob);
-        link.href = objectUrl;
-        link.click();
-        URL.revokeObjectURL(objectUrl);
-      })
-      .catch((err) => {
-        console.error("[ActivityTimeline] JSON export failed", err);
-      });
-  };
-
-  const handleDownloadCsv = () => {
-    const url = `${API_BASE_URL}/rooms/${inviteCode}/keystroke-events?format=csv`;
-    fetch(url, { headers: buildHeaders() })
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.blob();
-      })
-      .then((blob) => {
-        const objectUrl = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = objectUrl;
-        link.setAttribute("download", `keystrokes-${inviteCode}.csv`);
-        link.click();
-        URL.revokeObjectURL(objectUrl);
-      })
-      .catch((err) => {
-        console.error("[ActivityTimeline] CSV export failed", err);
-      });
-  };
 
   return (
     <Stack gap="xs" style={{ flex: 1, minHeight: 0 }}>
@@ -101,7 +41,8 @@ export function ActivityTimeline({
             variant="subtle"
             color="gray"
             leftSection={<IconDownload size={12} />}
-            onClick={handleDownloadJson}
+            onClick={() => history.download("json")}
+            disabled={!history.canExport}
           >
             JSON
           </Button>
@@ -110,14 +51,35 @@ export function ActivityTimeline({
             variant="subtle"
             color="gray"
             leftSection={<IconDownload size={12} />}
-            onClick={handleDownloadCsv}
+            onClick={() => history.download("csv")}
+            disabled={!history.canExport}
           >
             CSV
           </Button>
         </Group>
       </Group>
+      {history.error && (
+        <Stack gap={4} data-testid="activity-history-error" role="alert">
+          <Text size="xs" c="red">{history.error}</Text>
+          {history.terminal == null && (
+            <Button size="xs" variant="subtle" onClick={history.retry} disabled={history.loading != null}>
+              Повторить загрузку
+            </Button>
+          )}
+        </Stack>
+      )}
+      {history.terminal == null && (
+        <Text size="xs" c="#8b919b" data-testid="activity-history-status" role="status">
+          {history.loading === "latest" ? "Загрузка истории…"
+            : history.loading === "older" ? "Загрузка более ранних событий…"
+            : history.error ? `Загружено событий: ${history.events.length} · История загружена не полностью`
+            : history.loading === "catchup" ? `Загружено событий: ${history.events.length} · Обновление истории…`
+            : history.initialized ? `Загружено событий: ${history.events.length}${history.hasMore ? " · Есть более ранние события" : " · Вся история загружена"}`
+            : "Загрузка истории…"}
+        </Text>
+      )}
       <ScrollArea style={{ flex: 1, minHeight: 0 }} type="auto">
-        {groups.length === 0 ? (
+        {groups.length === 0 && history.initialized && !history.error ? (
           <Text size="xs" c="#5a6070" ta="center" py="md">
             Активность не зафиксирована
           </Text>
@@ -152,6 +114,11 @@ export function ActivityTimeline({
           </Stack>
         )}
       </ScrollArea>
+      {history.hasMore && (
+        <Button size="xs" variant="subtle" onClick={history.loadOlder} disabled={history.loading != null}>
+          Показать более ранние события
+        </Button>
+      )}
     </Stack>
   );
 }

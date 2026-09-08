@@ -1,0 +1,132 @@
+agent: qa-agent
+task_id: fix-concurrent-yjs-delivery
+execution_verdict: pass
+independent_qa_verdict: approve
+independent_test_review_verdict: approve
+blocking: false
+input_summary: Approved final solution/security review, repair requirements, root execution evidence, test assertions, mutation reports and restored-source comparison.
+output_summary: Independent QA and test-completeness audit confirms every required repair scenario has matching final evidence. No blocking functional or coverage gap remains in this fix scope; project-wide release readiness is separate.
+review_mode: Independent read-only audit of existing execution evidence and assertions; all runtime execution remains attributed to root.
+project_release_verdict: not_assessed_by_this_scoped_review
+previous_independent_audit: output/yjs-delivery-fix/qa-before-batching.yaml
+prerequisite_review: review.yaml records independent final solution, security and reliability approval.
+review_history:
+  - phase: pre_batching_independent_qa
+    outcome: Initial lossless repair passed focused checks but failed the required unchanged slow-network deadline; QA correctly blocked acceptance.
+  - phase: provider_limit_interruption
+    outcome: Prior independent final implementation and QA turns stopped at a provider usage limit; root execution/manual review continued while independent approval and archival remained pending.
+  - phase: root_final_execution
+    outcome: Root recorded final functional GREEN, manual acceptance, mutation results and restoration checks; these remain execution evidence rather than an independent runtime rerun.
+  - phase: resumed_independent_qa_and_test_review
+    outcome: Final reports, log success markers, test oracles and restored-source hash independently inspected; fix-scoped QA and test-completeness gates now approve.
+source_verification:
+  file: frontend/src/features/room/useRoomSocket.ts
+  sha256: a96458f4bc3109018aedcaa09c9ce35f393654605a0d424577725e67df3e50e4
+  restored_baseline: output/yjs-delivery-fix/baseline/repaired-batched-useRoomSocket.ts
+  byte_equal: true
+  method: Independent filesystem byte comparison and SHA-256 calculation; no runtime or source changes.
+functional_findings: []
+blocking_coverage_gaps: []
+resolved_findings:
+  - id: QA-SLOW-RELAY-CONVERGENCE
+    resolved_by: Lossless merging of adjacent never-attempted Yjs updates with frozen attempted envelopes.
+    evidence: output/yjs-delivery-fix/slow-network-batch-green.log
+    observation: Unchanged deadlines pass; 20s under three-second server delay and 1209ms after typing under 800ms CDP latency.
+acceptance_matrix:
+  - criterion: Ten participants and seven concurrent writers converge without missing or duplicate characters.
+    result: pass
+    evidence: output/playwright/multi-activity/1788713972602/report.json
+    observation: All ten models are identical with 2112 total characters, including 300 from each of seven writers; owner and HR reloads retain the complete code.
+  - criterion: Heartbeat and backlog preserve all actual incremental edits.
+    result: pass
+    evidence: output/playwright/yjs-delivery/1788713952831/report.json
+    observation: Held first request survives 4304ms and heartbeat; all browser models equal the independent incremental-only Y.Doc with 350 A and 100 B.
+  - criterion: Actual SSE recovery retains pending local edits and receives remote edits during the gap.
+    result: pass
+    evidence: output/playwright/yjs-delivery/1788713952831/report.json
+    observation: Every model and independent reconstruction contain 50 A and 60 B.
+  - criterion: Accepted single and merged updates with lost responses retry unchanged and appear exactly once.
+    result: pass
+    evidence: output/playwright/yjs-delivery/1788713952831/report.json
+    observation: Complete serialized envelope equality is asserted across retries; the merged lost-response envelope contains 49 actual keyboard edits, final models contain 60 A and 50 B.
+  - criterion: Task switch and terminal authorization preserve boundaries.
+    result: pass
+    evidence: output/yjs-delivery-fix/final-e2e-yjs-queue-boundaries.log
+    observation: Old task input remains absent from the next task, new input synchronizes and exactly two 403 responses terminate delivery after one recovery.
+    report: output/yjs-delivery-fix/boundaries-1788713968985/report.json
+  - criterion: Slow relay and telemetry latency retain the unchanged recovery deadlines.
+    result: pass
+    evidence: output/yjs-delivery-fix/slow-network-batch-green.log
+    observation: The original harness checks the complete canary at watcher and owner under three-second delay; watcher sees it after 20 seconds. The 800ms CDP scenario passes after 1209ms within its 15-second deadline.
+  - criterion: Existing refresh, stale snapshot, privacy, authorization and collaboration contracts remain intact.
+    result: pass
+    evidence: output/yjs-delivery-fix/final-regression-report.json
+    observation: All 11 required commands exit zero; 2100 source logs and complete UI exports pass; candidate HTTP/SSE/private-history denials hold; unexpected runtime errors are zero.
+  - criterion: Compilation and backend regressions remain green.
+    result: pass
+    evidence: verification.md
+    observation: Typecheck and build exit zero; build has two size warnings; backend has 96 passing tests.
+  - criterion: Restoring production source after mutations leaves delivery and boundaries green.
+    result: pass
+    evidence: output/yjs-delivery-fix/restored-regression-report.json
+    observation: Both saved command records exit zero and both log files contain their expected success marker; current source matches the restored batched baseline.
+test_first_evidence:
+  - file: output/playwright/multi-activity/1788711471455/report.json
+    observation: Preserved pre-fix ten-editor divergence; activity preservation alone did not satisfy editor acceptance.
+  - file: output/playwright/yjs-delivery/1788711831353/report.json
+    observation: Heartbeat/backlog and accepted-response loss fail complete-document convergence before repair; the offline-only setup failure is excluded as product RED.
+  - file: output/playwright/yjs-delivery/1788712041894/report.json
+    observation: Corrected actual-SSE recovery fails the complete editor/independent-document oracle before repair.
+  - file: output/yjs-delivery-fix/regression-e2e-slow-network.log
+    observation: Existing slow-network deadline failed on the initial lossless queue and motivated the validated batching amendment.
+  - file: output/playwright/yjs-delivery/1788713381420/report.json
+    observation: The pre-batching merged-response test fails because the accepted delivery contains only one actual keyboard edit.
+test_review:
+  reviewer: independent QA agent consolidating QA and Test Reviewer contracts
+  verdict: adequate_for_all_required_fix_scenarios
+  previous_root_verdict: adequate_for_the_executed_fix_scope
+  assertions_inspected:
+    - frontend/tests/e2e/realtime/e2e-yjs-delivery-reliability.mjs compares every browser model with a separate Y.Doc from initial bootstrap plus actual incremental SSE, deliberately ignoring later full snapshots.
+    - The held request originates in real keyboard edits, crosses the actual heartbeat, preserves more than 300 edits and must remain un-aborted.
+    - Stream recovery uses actual server stream replacement and blocked reconnects; remote edits occur during the gap and pending local identities must retry.
+    - Accepted-response loss happens only after a successful real server response; retries compare the full mutation envelope, excluding only renewable session credentials.
+    - The merged-response scenario proves more than one keyboard edit in the lost batch and verifies unchanged identity while later edits are queued.
+    - frontend/tests/e2e/realtime/e2e-yjs-queue-boundaries.mjs checks stale-task exclusion, new-task progress, exactly two 403 rejections and removal of editable controls.
+    - frontend/tests/e2e/interview/e2e-multi-participant-activity.mjs checks exact model equality, seven per-writer counts, overlapping rounds, complete UUID sets, manager reloads and candidate privacy.
+    - Existing slow-network and stale-snapshot tests retain complete canary/code assertions and original deadlines; ordinary authorization regression counts all rejected room-event requests.
+  mutation_evidence:
+    historical_report: output/yjs-delivery-fix/mutation-report.json
+    historical_result: All three pre-batching mutants fail the matching missing-content oracle; these remain historical evidence.
+    final_report: output/yjs-delivery-fix/batch-mutation-report.json
+    final_result: Last-delta-only batching fails independent reconstruction; rewriting attempted envelopes fails preserved-identity retry completion.
+    inspected_reports:
+      - output/playwright/yjs-delivery/1788712419381/report.json
+      - output/playwright/yjs-delivery/1788712471337/report.json
+      - output/playwright/yjs-delivery/1788712520697/report.json
+      - output/playwright/yjs-delivery/1788714110048/report.json
+      - output/playwright/yjs-delivery/1788714162696/report.json
+    limitation: Five targeted mutation checks do not establish whole-project mutation coverage or exhaustive branch coverage.
+  quality_assessment:
+    basis: Static assertions plus saved execution evidence; scores are reviewer judgments, not newly measured runtime statistics.
+    framework: https://www.linkedin.com/pulse/tdd-properties-good-tests-dave-farley-iexge/
+    properties: U understandable, M maintainable, R repeatable, A atomic, N necessary, G granular, F fast, T test-first.
+    focused_delivery: {U: 9, M: 7, R: 8, A: 7, N: 10, G: 8, F: 7, T: 9, weighted_score: 8.14}
+    task_auth_boundaries: {U: 9, M: 8, R: 8, A: 7, N: 9, G: 8, F: 8, T: 9, weighted_score: 8.28}
+    ten_context_workload: {U: 8, M: 7, R: 7, A: 6, N: 10, G: 6, F: 6, T: 9, weighted_score: 7.42}
+    aggregate_score: 7.94
+    evidence: Named scenarios and independent content oracles give precise behavioral failures; fresh contexts isolate clients, while shared runtime, persistence fixtures, DOM probes and intentional timing faults limit isolation and speed.
+    nonblocking_note: Keep suites serial against an isolated runtime and preserve phase-specific failure reports; do not treat a headless visibility limitation as a completed criterion.
+product_acceptance:
+  owner: root
+  functional_outcome: accepted_against_the_requested_concurrent_editor_fix
+  independent_final_gate: solution_security_qa_and_test_review_complete
+  remaining_owner_action: Reconcile documentation/task state and final product acceptance before archival.
+limitations:
+  - The original visibility lifecycle criterion remains unverified in the separate activity verification change.
+  - No production capacity, mobile completeness, durable offline or historical recovery claim.
+  - This agent audited saved root execution and source assertions without rerunning browsers, Maven or mutations.
+  - The separate project release audit must preserve its original backend 95-of-96 failure and subsequent diagnostic targeted/full PASS; that audit is not replaced by this fix-scoped approval.
+risks:
+  - Pending edits consume memory within the live page during prolonged interruption.
+  - Existing deployed pages use their old code until updated and reloaded.
+next_owner: Coordinating owner reconciles final fix acceptance and archival; project-wide GO/NO-GO remains in verify-project-release-readiness.

@@ -1,0 +1,34 @@
+agent: architect-agent
+task_id: HR-PARTICIPANT-ARCH
+change_id: add-hr-participant-assignment
+summary: "Direct participant HR assignment reuses the existing durable invitation operation."
+status_recommendation: designed
+input_summary: "Accepted product scope/spec and exact participant, REST, role-capability and terminal source paths."
+output_summary: "Confirmed isHr projection, existing PUT, separate manager/owner capabilities, labels and request lifetime; no open technical questions."
+artifacts_created:
+  - type: design
+    title: "Participant HR assignment architecture and API contract"
+    location: openspec/changes/add-hr-participant-assignment/design.md
+decisions:
+  - "SSE plus POST relay stays authoritative; HR assignment reuses PUT hr-managers/{userId}."
+  - "isHr originates in authenticated admission; sessions of the same user aggregate any(true)."
+  - "HR uses canManageRoom; ordinary interviewer grant/revoke stays owner-only canGrantAccess."
+  - "Labels: Назначить HR, Назначаем HR…, HR назначен; HR indicator requires isHr and interviewer role."
+  - "Invalidate obsolete room/auth/manager-session completions; current-context 410 uses existing terminal callback."
+  - "No production code, tests, task checkboxes, new API or schema changed in this architecture pass."
+risks:
+  - "Admission eligibility refreshes on reconnect; mutation always revalidates current stored flag."
+  - "Review must reject accidental ordinary role privileges for non-owner managers."
+  - "Client cancellation cannot undo committed grants; current server state remains authoritative."
+next_owner: team-lead-agent
+handoff_to:
+  - agent: team-lead-agent
+    reason: "Ready for bounded task decomposition and task audit."
+  - agent: security-reliability-agent
+    reason: "Review current-role, identity, stale completion and archive boundaries."
+linear_update:
+  applied: false
+  comment_summary: "Architecture recorded locally; no external issue update requested."
+review_required:
+  - solution-reviewer-agent
+  - security-reliability-agent

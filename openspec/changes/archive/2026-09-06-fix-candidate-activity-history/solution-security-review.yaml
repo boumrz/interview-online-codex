@@ -1,0 +1,66 @@
+agent: solution-reviewer-agent
+task_id: fix-candidate-activity-history
+review_scope: Consolidated solution and security/reliability review of the activity-history change against output/activity-history-baseline.
+input_summary: Validated OpenSpec proposal/spec/design/tasks and planning-review.yaml; backend history API, persistence and dispatch changes; frontend history context and activity FIFO; available red/green evidence.
+output_summary: Scoped implementation approved after correcting loaded-history lifetime and unfinished error-body handling. Initial red evidence and final integrated green evidence are present; the legacy grouping suite also passes after a confirmed platform-shortcut harness correction.
+verdict: approve
+summary: Activity-history and retry implementation is approved for QA; no unresolved production defect was identified in the reviewed change.
+findings: []
+resolved_findings:
+  - id: LEGACY-GROUPING-CLIPBOARD-HARNESS
+    severity: minor
+    description: The legacy grouping harness used Control+V on macOS, producing keydowns without native paste events and failing downstream summary/export assertions.
+    resolution: Isolated browser evidence on MacIntel confirmed that Control+V produces no paste while Meta+V dispatches the native paste event. Two existing test keypresses now select the platform-appropriate modifier. The complete grouping suite exits zero with ACTIVITY_TIMELINE_GROUPING_OK; no production correction was needed.
+    evidence:
+      - output/activity-history-baseline/native-paste-diagnostic.log
+      - output/activity-history-baseline/grouping-final-green.log
+  - id: HISTORY-ROOM-CONTEXT
+    severity: blocking
+    description: Switching Logs to Chat and back unmounted the history hook and discarded previously loaded older pages in the same authorized room.
+    resolution: RoomPage now owns the hook above conditional panels and memoizes its bounded SSE feed. Visibility aborts requests and pauses polling without discarding loaded rows or cursors. Identity and role changes still clear private history; reopening a tab cannot bypass terminal authorization state.
+    evidence:
+      - output/activity-history-baseline/tab-history-red.log
+      - output/activity-history-baseline/browser-green.log
+  - id: HISTORY-FINAL-EVIDENCE
+    severity: blocking
+    description: Final integrated green evidence and accurate test-level documentation were initially pending.
+    resolution: The expanded browser suite passes all six cases, including history preservation and reconnect during retry backoff. Full backend, helper, build/typecheck and three realtime regression results are recorded. Documentation now correctly distinguishes pure helper assertions from actual browser timing/cancellation coverage.
+    evidence:
+      - openspec/changes/fix-candidate-activity-history/verification.md
+      - output/activity-history-baseline/browser-green.log
+      - output/activity-history-baseline/backend-full-green.log
+      - output/activity-history-baseline/realtime-regressions.json
+  - id: ACTIVITY-UNFINISHED-ERROR-BODY
+    severity: blocking
+    description: The activity deadline ended at response headers, followed by an unbounded response.json() for non-retryable 4xx responses. A stalled body blocked all later activity and raw error text could enter the UI.
+    resolution: Root added a product-red browser regression, replaced the awaited body read with asynchronous body cancellation, and uses generic feedback. Static review and the one-case browser green confirm the narrow correction.
+    evidence:
+      - output/activity-history-baseline/unfinished-body-red.log
+      - output/activity-history-baseline/unfinished-body-green.log
+investigated_without_finding:
+  - id: HISTORY-NULL-CURSORS
+    outcome: A suspected global NON_NULL mismatch was disproved by the actual JSON-response regression, which passes without production changes. Both null cursor fields are present under the tested runtime contract.
+    evidence: output/activity-history-baseline/backend-explicit-null-contract.log
+positive_assessments:
+  - The history API uses exclusive sequence bounds and sequence extrema for continuation, clamps the frozen upper boundary to committed rows, and sorts only presentation by timestamp/sequence.
+  - Every history query is scoped to the authorized room ID; current owner/interviewer and promoted guest access use existing manager authorization, and responses prohibit caching.
+  - Only key_press bypasses the outer permission transaction. The shared dispatcher still validates room and event token; independent acceptance retains room locking, deduplication and commit-before-publication.
+  - Durable reconstruction and atomic state replacement preserve accepted activity across stale JSON and concurrent state replacement; the SSE tail remains bounded.
+  - The frontend confirmed durable cursor is independent of incoming SSE sequence maxima; successful pages merge stable identities without removing previously loaded events.
+  - History responses are fenced by identity, token generation and abort state; losing manager permission prevents late reads or exports from repopulating private state.
+  - Activity retries retain FIFO identity, one drain/timer, capped delays and abortable requests; stream-lease and effect-disposal fences prevent old-context acknowledgements from advancing a new queue.
+  - V10 is additive and null-only; the supplied PostgreSQL 16 fixture log verifies existing payload/identity/sequence preservation and the room/sequence index.
+risk_summary: No unresolved production security, cursor-loss or retry-liveness defect was found in this scoped review. Loaded history and the volatile outage queue can grow with session length as explicitly accepted by the design. All review findings are resolved; final QA and product acceptance remain separate gates.
+risks:
+  - This solution/security approval permits QA handoff and does not substitute for QA, test-reviewer or final product acceptance.
+  - Unrelated HR changes present in the working tree were excluded using the supplied baseline.
+blocking: false
+security_verdict: approve
+reliability_verdict: approve
+next_owner: qa-agent
+handoff_to:
+  - agent: qa-agent
+    reason: Audit final acceptance evidence, including the passing full grouping suite, and complete the remaining QA coverage before release sign-off.
+linear_update:
+  state: QA
+  comment_summary: "Review verdict: APPROVE for QA. All review findings are resolved with verification evidence; the complete legacy grouping suite passes after a platform-shortcut test correction. No Linear issue is linked."

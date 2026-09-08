@@ -1,0 +1,38 @@
+agent: root
+change_id: add-hr-participant-assignment
+status_recommendation: complete
+input_summary: "User requested direct assignment of a joined HR participant without manual UUID input."
+output_summary: "Implemented participant HR action, assigned badge and request lifecycle using the existing durable invitation API. Authenticated isHr is projected by the server and aggregated across sessions."
+implementation:
+  backend: "Five additive projection lines; no permission, transaction, API or schema change."
+  frontend: "TopBar, RoomPage, useRoomSocket and existing room CSS; manager HR shortcut remains separate from owner-only ordinary role controls."
+  tests: "Two new backend projection tests and five new HR browser cases."
+verification:
+  backend: "67 tests across 17 suites passed."
+  browser: "15 HR cases and three existing regression scripts passed."
+  builds: "Frontend typecheck/build and restored backend package passed."
+  mutation: "Same-session aggregation mutant killed; source restored byte-for-byte and projection tests rerun green."
+  visual: "Actual assignment and assigned menu screenshots inspected."
+reviews:
+  solution: approve
+  security: pass
+  reliability: pass
+  qa: ready
+  test_review: coverage-sufficient
+  ux: ux-approved
+  product: accepted
+risks:
+  - "Existing open sessions refresh HR eligibility on reconnect; the mutation revalidates current stored eligibility."
+  - "Client abort does not undo a committed server assignment."
+open_questions: []
+completion:
+  state: archived
+  archive_path: openspec/changes/archive/2026-09-06-add-hr-participant-assignment
+  specification_sync: "Two added hr-room-tracking requirements; accepted spec strict validation passed."
+  incomplete_tasks: 0
+next_owner: none
+handoff_to: []
+linear_update:
+  applied: false
+  reason: "No linked issue or external update requested."
+review_required: []

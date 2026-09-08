@@ -1,0 +1,88 @@
+agent: product-owner-agent
+task_id: HR-004
+audit_role: delegated-scope-and-acceptance-reviewer
+status_recommendation: ready
+summary: "Requirements and executable task contracts are ready for root-owned browser acceptance authoring."
+input_summary: >
+  Reviewed proposal, all three capability specs, concrete design.md, tasks.md,
+  product-scope.yaml, and recorded strict-validation/runtime evidence.
+  Source-code exploration was outside this audit. The Team Lead execution-plan.md
+  is being finalized; current tasks already define the test-authoring contract.
+output_summary: >
+  HR-010 may start immediately. The original HR scenario has measurable acceptance,
+  explicit account/room authority boundaries, a bounded MVP, concrete APIs,
+  owners, dependencies, runtime ports, and verification commands.
+  This verdict permits test authoring, not production implementation or release.
+artifacts_created:
+  - type: task-audit
+    title: "HR acceptance readiness and production gates"
+    location: openspec/changes/add-hr-interview-cabinet/task-audit.yaml
+readiness:
+  browser_test_authoring: ready
+  backend_test_authoring: "After HR-011 demonstrates the actual missing UI behavior."
+  backend_production: "After HR-011 and the corresponding HR-020..024 test have executed RED for missing behavior."
+  frontend_production: "After HR-011 RED, approved HR-012/013 UX, and the frozen HR-002 API contract. Integrated GREEN still waits for backend production and migration proof."
+  release: "Pending GREEN, regression, solution/security, QA, test review, and product acceptance."
+ownership:
+  root:
+    - frontend/tests/e2e/hr/e2e-hr-cabinet.mjs
+    - frontend/package.json
+  backend_developer:
+    - backend/**
+  frontend_developer:
+    - frontend/src/**
+  shared_edit_rule: "Preserve others' edits; frontend does not modify root-owned test/script files."
+accepted_contracts:
+  - "Registration offers only an optional, initially unchecked isHr flag; no candidate/interviewer account selector."
+  - "Existing-account HR enablement preserves UUID, system authority, and room-local roles."
+  - "Only explicit HR assignment or authorized HR manager entry creates a unique durable tracked interview."
+  - "Candidate-only participation neither tracks the room nor grants manager/metadata access."
+  - "Owner, non-owner interviewer, and supported guest interviewer can invite an existing HR by UUID."
+  - "Assignment works before attendance; refreshing discovers it; multiple HRs and repeats are supported."
+  - "Current authorization governs list/detail/export, including after demotion and archive."
+  - "Managers maintain metadata; candidate payloads and other people's private notes remain excluded."
+  - "Existing outcomes and scores remain factual; legacy nulls stay unknown and first completion remains stable."
+  - "Tracked-room removal retains read-only history, closes live access, and stops reconnect retry loops."
+  - "XLSX defaults to all retained permitted records, with explicit Moscow date fallback and recoverable errors."
+commands:
+  strict_validation: "npx --yes @fission-ai/openspec@latest validate add-hr-interview-cabinet --strict"
+  browser_red_green: "E2E_BASE_URL=http://localhost:5173 E2E_API_URL=http://localhost:18080/api npm --prefix frontend run e2e:hr-cabinet"
+  backend_focused_example: "mvn -f backend/pom.xml -Dtest=HrRoomTrackingIntegrationTest test"
+  backend_full: "mvn -f backend/pom.xml test"
+  frontend_typecheck: "npm --prefix frontend run typecheck"
+  frontend_build: "npm --prefix frontend run build"
+required_evidence:
+  - "RED must execute and fail on absent requested behavior, not compilation, unavailable services, broken fixtures, or harness errors."
+  - "Final E2E GREEN must execute every behavior section, with actual server-derived roles and two HR accounts."
+  - "Backend integration proves concurrency/idempotency, direct authorization, payload absence, archive races, migration, and parsed workbook contents."
+  - "Record commands, exit results, and behavior evidence in verification.md before marking task checkboxes complete."
+  - "Rerun strict validation when final execution-plan.md and planning edits land; no requirements are waived by this audit."
+nonblocking_notes:
+  - >
+    The design's interviewState=scheduled may include overdue or archived records.
+    The visible upcoming classification must still require a non-archived,
+    unfinished room with a future scheduledAt, as required by the capability spec.
+    Verify this in HR-012/013 and HR-022 rather than mapping the enum directly to Upcoming.
+  - >
+    An assignment record never substitutes for current manager authorization.
+    An earlier failed permission test cannot be treated as unrelated infrastructure failure.
+  - >
+    Final execution-plan.md must preserve these file owners and test-first gates;
+    changes to behavior, scope, or ownership need a focused follow-up audit.
+risks:
+  - "Archive behavior spans live room access and retained history; targeted backend/reconnect evidence remains mandatory."
+  - "The existing strict-valid planning evidence is not RED or implementation acceptance."
+  - "UI mocks/UX approval are not yet evidence of completion and remain a frontend prerequisite."
+automated_test_for_audit: "Not applicable: documentation-only review; validate OpenSpec and inspect the YAML artifact."
+audit_verification:
+  strict_validation_exit_code: 0
+  strict_validation_output: "Change 'add-hr-interview-cabinet' is valid"
+next_owner:
+  agent: root
+  reason: "Author and run HR-010/011 now, then dispatch gated implementation with recorded RED evidence."
+review_required:
+  - solution-reviewer-agent
+  - security-reliability-agent
+  - qa-agent
+  - test-reviewer-agent
+  - product-owner-agent

@@ -1,0 +1,150 @@
+agent: solution-reviewer-agent
+task_id: HR-052
+verdict: approve
+summary: "HR cabinet frontend and backend satisfy the frozen API, lifecycle, date, archive, realtime, pagination, and XLSX contracts; review findings are fixed with RED-to-GREEN evidence."
+findings: []
+blocking: false
+input_summary: >
+  Reviewed the accepted add-hr-interview-cabinet OpenSpec design, capability
+  specs and UX contract; the final frontend and backend implementation; the
+  root-owned browser suite; focused integration tests; migration, concurrency,
+  workload, restart, build, and regression evidence. The independent
+  security/reliability gate remains owned by security-reliability-agent.
+output_summary: >
+  Approved HR-052 after the frontend lifecycle/responsive findings and the
+  backend DELETE, post-commit permission synchronization, stale-authority,
+  callback-ordering, connection-pool saturation, and workbook-cleanup findings
+  were corrected and rerun.
+  No unresolved correctness, architecture, complexity, or regression finding
+  remains in solution-review scope.
+resolved_findings:
+  - severity: blocking
+    description: >
+      A pending HR export could complete after logout or account switch and
+      download data from the prior account.
+    resolution: >
+      The export now aborts on token change/unmount and generation-checks the
+      canonical session before creating and activating the download anchor.
+  - severity: blocking
+    description: >
+      Direct relay and fresh-room HTTP 410 paths did not consistently stop
+      realtime retries and enter the terminal archived-room state.
+    resolution: >
+      Persisted 410 responses from room GET, main/activity relay, and
+      fire-and-forget presence paths now converge on one terminal state and
+      stop further retries.
+  - severity: blocking
+    description: >
+      A late private-panel request could restore sensitive metadata after role
+      loss and a later re-grant.
+    resolution: >
+      Panel requests are aborted and generation-guarded across close, role,
+      room, and identity changes, with distinct RTK query keys to avoid stale
+      pending-query deduplication.
+  - severity: major
+    description: >
+      Mobile cabinet controls were below the approved 44 px target, and an
+      unscheduled fallback timestamp could appear as the interview date without
+      a visible deterministic source.
+    resolution: >
+      Mobile cabinet, row, copy, and panel actions meet 44 px at 320 px without
+      horizontal overflow. Scheduled time is explicitly absent when unknown;
+      the effective fallback time and its finished/created source are visible,
+      and the helper states scheduled-then-finished-then-created precedence.
+  - severity: blocking
+    description: >
+      Untracked room deletion omitted the frozen `archived: false` response
+      member, and REST/realtime permission callbacks could publish before commit
+      or read a stale persistence context after a later demotion.
+    resolution: >
+      DELETE always returns the required boolean. Account role changes register
+      after-commit synchronization; the callback performs a fresh REQUIRES_NEW,
+      row-locked durable-role read. Rollback, pre-commit, reconnect, event-token,
+      realtime mutation, and delayed-callback ordering cases pass.
+  - severity: major
+    description: >
+      A workbook write failure could be masked by close failure, skip dispose,
+      and leave the candidate XLSX file on disk.
+    resolution: >
+      Cleanup attempts close, dispose, and delete independently, preserves the
+      primary failure, attaches cleanup failures as suppressed exceptions, and
+      passes the failure-injection cleanup test.
+  - severity: blocking
+    description: >
+      A fresh REQUIRES_NEW permission publication ran inside Spring afterCommit
+      while the completed write transaction still retained its connection. Ten
+      blocked requests could therefore occupy the entire pool and wait for a
+      second connection; the deterministic PostgreSQL probe returned four 500s
+      after about 30 seconds.
+    resolution: >
+      Permission-changing entrypoints now use a nontransactional facade and an
+      explicit TransactionTemplate write scope. Calls that own the transaction
+      publish synchronously only after transaction cleanup returns the write
+      connection; calls participating in an outer transaction enqueue after
+      successful commit on a bounded single-thread executor. Publication uses
+      a fresh row-locked durable-role read. Queue rejection or asynchronous
+      refresh failure closes affected account connections without running the
+      database work on the committing thread.
+verification:
+  openspec_strict: "pass: Change 'add-hr-interview-cabinet' is valid"
+  frontend_typecheck: "pass"
+  frontend_build: "pass with the repository's existing asset-size warnings"
+  integrated_hr_browser: "pass: 9/9, 0 failed, 0 skipped, final packaged backend runtime"
+  existing_browser_regressions:
+    - "ACCOUNT_ROOM_BINDING_OK"
+    - "ACCOUNT_SWITCH_FRESH_DATA_OK"
+    - "INTERVIEWER_ROLE_NOTES_CHAT_OK"
+    - "REALTIME_AUTHORIZATION_RECOVERY_OK with exactly 2 rejected requests"
+    - "SSE_RECONNECT_OK"
+    - "AUTH_INVITE_TOKEN_NEGATIVE_OK"
+    - "FIVE_PARTICIPANT_COLLABORATION_OK"
+  backend_maven: "pass: 65 tests across 16 suites, 0 failures/errors/skips"
+  backend_gradle: "pass: 65 tests across 16 suites, 0 failures/errors/skips"
+  backend_package: "pass"
+  postgresql_runtime: >
+    pass: clean V9 and V8-to-V9 migration, restart-retained archive history,
+    first-completion correction, real row-lock archive/write race, concurrent
+    invitation and metadata conflict, 1,000-room/5,000-task XLSX workload, and
+    10,001-room early 413 cap
+  pool_saturation: >
+    pass: the same probe that previously returned four 500 responses queued all
+    10 pooled connections, then completed 12/12 invitations with HTTP 200 in
+    0.183 seconds after lock release and observed all 10 connections idle
+  permission_facade: >
+    pass: four small-pool entrypoint cases, nested commit/rollback ordering, and
+    immediate normal-HTTP active-role publication; a focused queue-rejection
+    test proves affected credentials are invalidated while an unrelated owner
+    connection remains usable
+  queue_failure_mutation_proof: >
+    pass: temporarily omitting the rejection close call made the focused test
+    fail with the affected credential still resolving as CANDIDATE; the exact
+    production source hash was restored before the final 65-test runs. This is
+    recorded as post-review mutation evidence, not initial TDD evidence.
+  source_hygiene: "pass: git diff --check"
+risk_summary: >
+  Residual release risk is bounded and documented: the 30-second export control
+  combines a Spring transaction timeout with cooperative renderer deadline
+  checks, so an unresponsive database or transport is not a hard end-to-end
+  latency guarantee. Nested permission publication is serialized through one
+  bounded in-process worker; saturation and async failure fail closed by
+  invalidating affected account connections, so reconnect may be required
+  under exceptional load. Backend/migration must be deployed before the
+  frontend to preserve archive denial. These are documented operational
+  constraints, not unresolved implementation defects.
+risks:
+  - "Keep the documented backend-first deployment and archive-compatible rollback order."
+  - "Treat the independent HR-053 security/reliability verdict as a separate required release gate."
+next_owner:
+  agent: qa-agent
+  reason: "Run HR-054 after the independent HR-053 security/reliability gate also approves."
+handoff_to:
+  - agent: qa-agent
+    reason: "approve: correctness and architecture review is complete; proceed when HR-053 is satisfied"
+linear_update:
+  state: QA
+  comment_summary: >
+    Review verdict: APPROVE. All frontend and backend findings were fixed with
+    behavioral evidence; the final transaction-boundary correction passes the
+    formerly failing 12-request PostgreSQL pool probe, 9/9 HR browser scenarios,
+    seven existing browser regressions, and 65/65 Maven and Gradle tests. No
+    Linear issue ID was provided, so this is a recommended update only.

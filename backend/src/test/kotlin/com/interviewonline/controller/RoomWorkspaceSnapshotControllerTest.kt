@@ -9,6 +9,8 @@ import com.interviewonline.repository.RoomParticipantRepository
 import com.interviewonline.repository.RoomRepository
 import com.interviewonline.repository.UserRepository
 import com.interviewonline.repository.UserSessionRepository
+import com.interviewonline.repository.UserTaskCategoryRepository
+import com.interviewonline.repository.UserTaskTemplateRepository
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -27,6 +29,8 @@ class RoomWorkspaceSnapshotControllerTest(
     @Autowired private val roomRepository: RoomRepository,
     @Autowired private val roomParticipantRepository: RoomParticipantRepository,
     @Autowired private val userSessionRepository: UserSessionRepository,
+    @Autowired private val userTaskTemplateRepository: UserTaskTemplateRepository,
+    @Autowired private val userTaskCategoryRepository: UserTaskCategoryRepository,
     @Autowired private val userRepository: UserRepository,
 ) {
     @AfterEach
@@ -34,6 +38,8 @@ class RoomWorkspaceSnapshotControllerTest(
         roomParticipantRepository.deleteAll()
         roomRepository.deleteAll()
         userSessionRepository.deleteAll()
+        userTaskTemplateRepository.deleteAll()
+        userTaskCategoryRepository.deleteAll()
         userRepository.deleteAll()
     }
 

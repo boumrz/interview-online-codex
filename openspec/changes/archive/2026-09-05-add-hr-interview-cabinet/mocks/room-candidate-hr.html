@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Комната — кандидат и HR</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0d1015;
+        --panel: #12171e;
+        --panel2: #171d25;
+        --line: #2a323d;
+        --text: #f3f5f8;
+        --muted: #98a1ae;
+        --blue: #4e8fff;
+        --ok: #66d49a;
+        --warn: #f3be63;
+        --danger: #ff7e7e;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          14px/1.45 ui-sans-serif,
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+      }
+      button,
+      input {
+        font: inherit;
+      }
+      .room {
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at 80% 0, #17253c 0, transparent 32%),
+          var(--bg);
+      }
+      .bar {
+        height: 64px;
+        padding: 0 22px;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .brand {
+        font-size: 18px;
+        font-weight: 750;
+      }
+      .meta {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .controls {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .chip {
+        padding: 5px 9px;
+        border-radius: 999px;
+        background: #173926;
+        color: #9be8ba;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .button {
+        min-height: 38px;
+        padding: 0 14px;
+        border: 1px solid #7f8997;
+        border-radius: 8px;
+        background: #171d25;
+        color: var(--text);
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .button.primary {
+        background: #f3f5f8;
+        color: #15181d;
+        border: 0;
+      }
+      .button:focus,
+      .close:focus,
+      input:focus {
+        outline: 2px solid var(--blue);
+        outline-offset: 2px;
+      }
+      .workspace {
+        padding: 24px;
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        gap: 18px;
+      }
+      .side,
+      .editor {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: #11161d;
+        padding: 18px;
+      }
+      .step {
+        padding: 12px;
+        border-radius: 8px;
+        background: #1c232c;
+        margin: 8px 0;
+      }
+      .editor {
+        min-height: 540px;
+      }
+      .code {
+        margin-top: 16px;
+        border: 1px solid var(--line);
+        background: #0b0f14;
+        border-radius: 8px;
+        padding: 18px;
+        color: #b9c8df;
+        font:
+          13px/1.7 ui-monospace,
+          SFMono-Regular,
+          monospace;
+      }
+      .scrim {
+        position: fixed;
+        inset: 0;
+        background: #04070bbd;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+      }
+      .dialog {
+        width: min(700px, 100%);
+        max-height: calc(100vh - 40px);
+        overflow: auto;
+        background: var(--panel);
+        border: 1px solid #394453;
+        border-radius: 16px;
+        box-shadow: 0 30px 90px #000a;
+      }
+      .dialogHead {
+        padding: 21px 24px;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+      }
+      .dialogHead h1 {
+        font-size: 22px;
+        margin: 0 0 4px;
+      }
+      .close {
+        width: 36px;
+        height: 36px;
+        border: 1px solid var(--line);
+        background: var(--panel2);
+        color: var(--text);
+        border-radius: 8px;
+        font-size: 20px;
+        cursor: pointer;
+      }
+      .body {
+        padding: 22px 24px;
+      }
+      .section + .section {
+        border-top: 1px solid var(--line);
+        margin-top: 24px;
+        padding-top: 22px;
+      }
+      .section h2 {
+        font-size: 16px;
+        margin: 0 0 4px;
+      }
+      .lead {
+        color: var(--muted);
+        margin: 0 0 16px;
+      }
+      .fields {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+      .field label {
+        display: block;
+        color: #cbd1db;
+        font-weight: 650;
+        margin-bottom: 6px;
+      }
+      .field.wide {
+        grid-column: 1/-1;
+      }
+      .input {
+        width: 100%;
+        height: 40px;
+        padding: 0 11px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #0e1319;
+        color: var(--text);
+      }
+      .hint {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 5px;
+      }
+      .actions {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        justify-content: flex-end;
+        margin-top: 16px;
+      }
+      .status {
+        color: var(--ok);
+        margin-right: auto;
+      }
+      .invite {
+        display: flex;
+        gap: 9px;
+      }
+      .invite .input {
+        flex: 1;
+      }
+      .people {
+        margin-top: 14px;
+        display: grid;
+        gap: 8px;
+      }
+      .person {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border: 1px solid var(--line);
+        padding: 10px 12px;
+        border-radius: 8px;
+        background: var(--panel2);
+      }
+      .uuid {
+        font:
+          11px ui-monospace,
+          SFMono-Regular,
+          monospace;
+        color: var(--muted);
+      }
+      .badge {
+        font-size: 11px;
+        color: #cbdcff;
+        border: 1px solid #44638e;
+        border-radius: 999px;
+        padding: 3px 7px;
+      }
+      .alert {
+        display: none;
+        margin: 0 24px 0;
+        padding: 13px 15px;
+        border: 1px solid #9e7639;
+        background: #302410;
+        color: #ffe0a1;
+        border-radius: 9px;
+      }
+      .alert.show {
+        display: block;
+      }
+      .alert strong {
+        display: block;
+        color: #fff0cc;
+      }
+      .alert button {
+        margin-top: 10px;
+      }
+      .modebar {
+        position: fixed;
+        left: 16px;
+        bottom: 16px;
+        z-index: 3;
+        display: flex;
+        gap: 8px;
+        background: #11161de8;
+        border: 1px solid var(--line);
+        padding: 7px;
+        border-radius: 10px;
+      }
+      .modebar button {
+        border: 0;
+        background: #232a33;
+        color: #d7dce4;
+        padding: 7px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      .archived .input {
+        opacity: 0.65;
+      }
+      .archived .save,
+      .archived .add {
+        display: none;
+      }
+      .archiveNote {
+        display: none;
+        color: #f5d08e;
+        background: #302614;
+        border: 1px solid #71562a;
+        border-radius: 8px;
+        padding: 10px;
+        margin-bottom: 16px;
+      }
+      .archived .archiveNote {
+        display: block;
+      }
+      @media (max-width: 700px) {
+        .workspace {
+          grid-template-columns: 1fr;
+          padding: 14px;
+        }
+        .side {
+          display: none;
+        }
+        .bar {
+          padding: 0 14px;
+        }
+        .brand + .meta {
+          display: none;
+        }
+        .scrim {
+          padding: 0;
+          align-items: end;
+        }
+        .dialog {
+          border-radius: 16px 16px 0 0;
+          max-height: 94vh;
+        }
+        .fields {
+          grid-template-columns: 1fr;
+        }
+        .field.wide {
+          grid-column: auto;
+        }
+        .dialogHead,
+        .body {
+          padding-left: 18px;
+          padding-right: 18px;
+        }
+        .invite {
+          flex-direction: column;
+        }
+        .invite button {
+          width: 100%;
+        }
+        .actions {
+          position: sticky;
+          bottom: -22px;
+          background: var(--panel);
+          padding: 12px 0 2px;
+        }
+        .modebar {
+          left: 8px;
+          bottom: 8px;
+        }
+        .controls .chip {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="room">
+      <header class="bar">
+        <div>
+          <div class="brand">Frontend interview</div>
+          <div class="meta">Шаг 2 из 4 · JavaScript</div>
+        </div>
+        <div class="controls">
+          <span class="chip">Владелец</span
+          ><button class="button">Кандидат и HR</button>
+        </div>
+      </header>
+      <div class="workspace">
+        <aside class="side">
+          <strong>Шаги интервью</strong>
+          <div class="step">1. Разминка</div>
+          <div class="step">2. Работа с API</div>
+          <div class="step">3. Рефакторинг</div>
+        </aside>
+        <section class="editor">
+          <strong>Редактор · JavaScript</strong>
+          <div class="code">
+            function loadCandidates() {<br />&nbsp;&nbsp;return
+            fetch('/api/candidates')<br />}
+          </div>
+        </section>
+      </div>
+    </main>
+    <div class="scrim">
+      <section
+        class="dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="title"
+      >
+        <header class="dialogHead">
+          <div>
+            <h1 id="title">Кандидат и HR</h1>
+            <div class="meta">
+              Доступно владельцу и подтверждённым интервьюерам.
+            </div>
+          </div>
+          <button class="close" aria-label="Закрыть">×</button>
+        </header>
+        <div class="alert" id="conflict" role="alert">
+          <strong>Сведения изменил другой менеджер.</strong>Ваши изменения
+          сохранены в форме. Загрузка актуальных сведений заменит текущие
+          значения.<button class="button" id="reload">
+            Загрузить актуальные сведения
+          </button>
+        </div>
+        <div class="body">
+          <div class="archiveNote">Комната в архиве. Изменения недоступны.</div>
+          <section class="section">
+            <h2>Сведения о кандидате</h2>
+            <p class="lead">Видны только менеджерам и в HR-кабинете.</p>
+            <div class="fields">
+              <div class="field">
+                <label for="candidate">Имя кандидата</label
+                ><input class="input" id="candidate" value="Алексей Крылов" />
+              </div>
+              <div class="field">
+                <label for="position">Позиция</label
+                ><input
+                  class="input"
+                  id="position"
+                  value="Frontend-разработчик"
+                />
+              </div>
+              <div class="field wide">
+                <label for="date">Дата и время интервью (МСК)</label
+                ><input
+                  class="input"
+                  id="date"
+                  type="datetime-local"
+                  value="2030-10-12T15:30"
+                />
+                <div class="hint">
+                  Время сохраняется и показывается в часовом поясе Москвы,
+                  независимо от настроек устройства.
+                </div>
+              </div>
+            </div>
+            <div class="actions">
+              <span class="status" role="status" id="saved"
+                >Сведения сохранены</span
+              ><button class="button primary save" id="save">
+                Сохранить сведения
+              </button>
+            </div>
+          </section>
+          <section class="section">
+            <h2>HR-специалисты</h2>
+            <p class="lead">
+              Добавление выдаёт HR права интервьюера в этой комнате.
+            </p>
+            <label class="field"
+              ><span class="label">ID HR-специалиста</span
+              ><span class="invite"
+                ><input
+                  class="input"
+                  aria-label="ID HR-специалиста"
+                  value="83d2b6b2-ec27-42c7-9cb5-15afc33e9c61"
+                /><button class="button primary add">Добавить HR</button></span
+              ></label
+            >
+            <div class="people">
+              <div class="person">
+                <div>
+                  <strong>Мария Волкова</strong>
+                  <div class="uuid">83d2b6b2…e9c61</div>
+                </div>
+                <span class="badge">HR</span>
+              </div>
+              <div class="person">
+                <div>
+                  <strong>Анна Смирнова</strong>
+                  <div class="uuid">21aa68a1…ff2a0</div>
+                </div>
+                <span class="badge">Владелец</span>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+    </div>
+    <div class="modebar" aria-label="Состояние макета">
+      <button id="normal">Обычное</button
+      ><button id="conflictBtn">Конфликт</button
+      ><button id="archiveBtn">Архив</button>
+    </div>
+    <script>
+      const d = document.querySelector(".dialog"),
+        a = document.querySelector("#conflict"),
+        saved = document.querySelector("#saved");
+      document.querySelector("#conflictBtn").onclick = () => {
+        d.classList.remove("archived");
+        a.classList.add("show");
+        saved.textContent = "";
+      };
+      document.querySelector("#archiveBtn").onclick = () => {
+        a.classList.remove("show");
+        d.classList.add("archived");
+        saved.textContent = "";
+      };
+      document.querySelector("#normal").onclick = () => {
+        a.classList.remove("show");
+        d.classList.remove("archived");
+        saved.textContent = "Сведения сохранены";
+      };
+      document.querySelector("#reload").onclick = () => {
+        a.classList.remove("show");
+        document.querySelector("#candidate").value =
+          "Алексей Крылов (обновлено)";
+        saved.textContent = "Загружены актуальные сведения";
+      };
+      document.querySelector("#save").onclick = () =>
+        (saved.textContent = "Сведения сохранены");
+    </script>
+  </body>
+</html>

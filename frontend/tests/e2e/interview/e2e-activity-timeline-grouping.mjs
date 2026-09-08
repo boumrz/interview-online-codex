@@ -1,4 +1,5 @@
 import { chromium } from "playwright";
+import { execFileSync } from "node:child_process";
 
 const webBaseUrl = process.env.E2E_BASE_URL || "http://localhost:5173";
 const apiBaseUrl = process.env.E2E_API_URL || "http://localhost:8080/api";
@@ -1001,491 +1002,13 @@ async function runPostStepActivityPersistenceRegression(browser) {
   }
 }
 
-async function runPersistentActivity5xxRegression(browser) {
-  const room = await createGuestRoom();
-  const ownerContext = await browser.newContext();
-  const candidateContext = await browser.newContext();
-  let ownerPage = null;
-  let candidatePage = null;
-  const candidateApiResponses = [];
-  try {
-    await Promise.all([
-      ownerContext.addInitScript(
-        ({ inviteCode, ownerToken }) => {
-          localStorage.setItem(`owner_token_${inviteCode}`, ownerToken);
-          localStorage.setItem("display_name", "Persistent 5xx manager");
-          localStorage.setItem(`guest_display_name_${inviteCode}`, "Persistent 5xx manager");
-        },
-        { inviteCode: room.inviteCode, ownerToken: room.ownerToken },
-      ),
-      installActivitySseCapture(ownerContext, "__persistent5xxOwnerSseCapture"),
-      installActivitySseCapture(candidateContext, "__persistent5xxCandidateSseCapture"),
-    ]);
-    ownerPage = await ownerContext.newPage();
-    candidatePage = await candidateContext.newPage();
-    candidatePage.on("response", (response) => {
-      if (!response.url().includes("/api/")) return;
-      let eventType = null;
-      try {
-        eventType = JSON.parse(response.request().postData() || "{}").type ?? null;
-      } catch {
-        // Stream and ordinary REST requests have no JSON event body.
-      }
-      candidateApiResponses.push({
-        status: response.status(),
-        method: response.request().method(),
-        path: new URL(response.url()).pathname,
-        eventType,
-      });
-      if (candidateApiResponses.length > 40) candidateApiResponses.shift();
-    });
-    const attempts = [];
-    const retryFenceViolations = [];
-    const raw5xxErrorSentinel = `SYNTHETIC_ACTIVITY_503_RAW_SENTINEL_${Date.now()}_${Math.random()
-      .toString(36)
-      .slice(2)}`;
-    const raw5xxStatusDetail = `Synthetic activity HTTP 503 raw status detail ${Date.now()}`;
-    let activityRequestsInFlight = 0;
-    let maxActivityRequestsInFlight = 0;
-
-    await candidatePage.route(`**/api/realtime/rooms/${room.inviteCode}/events`, async (route) => {
-      let payload = null;
-      try {
-        payload = JSON.parse(route.request().postData() || "{}");
-      } catch {
-        // Non-JSON test traffic is not activity and reaches the actual relay.
-      }
-      if (payload?.type !== "key_press") {
-        await route.continue();
-        return;
-      }
-
-      activityRequestsInFlight += 1;
-      maxActivityRequestsInFlight = Math.max(maxActivityRequestsInFlight, activityRequestsInFlight);
-      const attempt = {
-        sourceEventId: payload.sourceEventId ?? null,
-        at: Date.now(),
-        respondedAt: null,
-      };
-      attempts.push(attempt);
-      try {
-        // This must never be forwarded: every recorded attempt is a synthetic
-        // server failure for the exact FIFO head.
-        await route.fulfill({
-          status: 503,
-          contentType: "application/json",
-          body: JSON.stringify({ error: raw5xxErrorSentinel, detail: raw5xxStatusDetail }),
-        });
-        attempt.respondedAt = Date.now();
-      } finally {
-        activityRequestsInFlight -= 1;
-      }
-    });
-
-    await ownerPage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
-    await ownerPage.locator("[data-testid='room-code-editor-host'] .cm-editor").waitFor({ timeout: rawExportTimeoutMs });
-    await candidatePage.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
-    await enterCandidate(candidatePage, "Persistent 5xx candidate");
-    await candidatePage.waitForTimeout(350);
-
-    const connectionBefore = await candidatePage.getByTestId("room-connection-status").getAttribute("data-state");
-    if (connectionBefore !== "online") {
-      throw new Error(`PERSISTENT_5XX_CONNECTION_NOT_READY state=${connectionBefore}`);
-    }
-
-    // The observer is installed before the first key so a raw failure that is
-    // briefly mounted and removed cannot make the candidate-error assertion green.
-    await installPersistent5xxRawErrorObserver(candidatePage, raw5xxErrorSentinel, raw5xxStatusDetail);
-    await candidatePage.locator("[data-testid='room-code-editor-host'] .cm-content").click({ force: true });
-    // Arrow movement is captured as candidate activity while preserving the
-    // editor document for the explicitly post-terminal Yjs assertion below.
-    await candidatePage.keyboard.press("ArrowLeft");
-    await waitForCondition(
-      `PERSISTENT_5XX_FIRST_ATTEMPT_NOT_OBSERVED attempts=${JSON.stringify(attempts)}`,
-      () => attempts.length >= 1 && attempts[0]?.respondedAt != null,
-      8_000,
-    );
-
-    const firstRetryDueAt = (attempts[0].respondedAt ?? attempts[0].at) + 1_000;
-    try {
-      const firstStateSync = await forcePersistent5xxStateSync(
-        candidatePage,
-        room.inviteCode,
-        "__persistent5xxCandidateSseCapture",
-        "PERSISTENT_5XX_FIRST_PENDING_STATE_SYNC",
-      );
-      if (firstStateSync.stateSync.at >= firstRetryDueAt) {
-        recordPersistent5xxViolation(
-          retryFenceViolations,
-          "PERSISTENT_5XX_FIRST_PENDING_STATE_SYNC_AFTER_DUE",
-          { stateSyncAt: firstStateSync.stateSync.at, firstRetryDueAt },
-        );
-      }
-    } catch (error) {
-      recordPersistent5xxViolation(
-        retryFenceViolations,
-        "PERSISTENT_5XX_FIRST_PENDING_STATE_SYNC_NOT_PROVEN",
-        error instanceof Error ? error.message : String(error),
-      );
-    }
-    try {
-      const firstReconnect = await forcePersistent5xxEventSourceReconnect(
-        candidatePage,
-        "__persistent5xxCandidateSseCapture",
-        "PERSISTENT_5XX_FIRST_PENDING_RECONNECT",
-      );
-      if (firstReconnect.reconnect.at >= firstRetryDueAt) {
-        recordPersistent5xxViolation(
-          retryFenceViolations,
-          "PERSISTENT_5XX_FIRST_PENDING_RECONNECT_AFTER_DUE",
-          { reconnectAt: firstReconnect.reconnect.at, firstRetryDueAt },
-        );
-      }
-    } catch (error) {
-      recordPersistent5xxViolation(
-        retryFenceViolations,
-        "PERSISTENT_5XX_FIRST_PENDING_RECONNECT_NOT_PROVEN",
-        error instanceof Error ? error.message : String(error),
-      );
-    }
-    const firstWindowEarlyAttempts = attempts.slice(1).filter((attempt) => attempt.at < firstRetryDueAt);
-    if (firstWindowEarlyAttempts.length > 0) {
-      recordPersistent5xxViolation(
-        retryFenceViolations,
-        "PERSISTENT_5XX_RETRY_FENCE_FIRST_WINDOW_EARLY_POST",
-        { firstRetryDueAt, attempts: summarizePersistent5xxAttempts(attempts) },
-      );
-    }
-
-    await waitForCondition(
-      `PERSISTENT_5XX_SECOND_ATTEMPT_NOT_OBSERVED attempts=${JSON.stringify(attempts)}`,
-      () => attempts.length >= 2 && attempts[1]?.respondedAt != null,
-      8_000,
-    );
-    const secondRetryDueAt = (attempts[1].respondedAt ?? attempts[1].at) + 2_000;
-    try {
-      const secondStateSync = await forcePersistent5xxStateSync(
-        candidatePage,
-        room.inviteCode,
-        "__persistent5xxCandidateSseCapture",
-        "PERSISTENT_5XX_SECOND_PENDING_STATE_SYNC",
-      );
-      if (secondStateSync.stateSync.at >= secondRetryDueAt) {
-        recordPersistent5xxViolation(
-          retryFenceViolations,
-          "PERSISTENT_5XX_SECOND_PENDING_STATE_SYNC_AFTER_DUE",
-          { stateSyncAt: secondStateSync.stateSync.at, secondRetryDueAt },
-        );
-      }
-    } catch (error) {
-      recordPersistent5xxViolation(
-        retryFenceViolations,
-        "PERSISTENT_5XX_SECOND_PENDING_STATE_SYNC_NOT_PROVEN",
-        error instanceof Error ? error.message : String(error),
-      );
-    }
-    const secondWindowEarlyAttempts = attempts.slice(2).filter((attempt) => attempt.at < secondRetryDueAt);
-    if (secondWindowEarlyAttempts.length > 0) {
-      recordPersistent5xxViolation(
-        retryFenceViolations,
-        "PERSISTENT_5XX_RETRY_FENCE_SECOND_WINDOW_EARLY_POST",
-        { secondRetryDueAt, attempts: summarizePersistent5xxAttempts(attempts) },
-      );
-    }
-
-    await waitForCondition(
-      `PERSISTENT_5XX_THIRD_ATTEMPT_NOT_OBSERVED attempts=${JSON.stringify(attempts)}`,
-      () => attempts.length >= 3 && attempts[2]?.respondedAt != null,
-      8_000,
-    );
-    const firstDelay = attempts[1].at - attempts[0].at;
-    const secondDelay = attempts[2].at - attempts[1].at;
-    if (firstDelay < 850 || secondDelay < 1_850) {
-      recordPersistent5xxViolation(
-        retryFenceViolations,
-        "PERSISTENT_5XX_RETRY_DELAY_TOO_SHORT",
-        { firstDelay, secondDelay, attempts: summarizePersistent5xxAttempts(attempts) },
-      );
-    }
-    if (maxActivityRequestsInFlight !== 1) {
-      recordPersistent5xxViolation(
-        retryFenceViolations,
-        "PERSISTENT_5XX_CONCURRENCY_INVALID",
-        { maxActivityRequestsInFlight, attempts: summarizePersistent5xxAttempts(attempts) },
-      );
-    }
-
-    // Start the exact quiet window at the third synthetic response. The state
-    // sync/reconnect below intentionally happen inside this window so they prove
-    // terminal activity delivery cannot be re-enabled by either callback.
-    const quietWindowStart = attempts[2].respondedAt ?? attempts[2].at;
-    const terminalAttemptLedger = persistent5xxAttemptLedger(attempts);
-    try {
-      await candidatePage.getByText(recordingUnavailableNotice, { exact: true }).waitFor({ timeout: 1_500 });
-    } catch {
-      recordPersistent5xxViolation(retryFenceViolations, "PERSISTENT_5XX_RECORDING_NOTICE_MISSING");
-    }
-    let noticeCount = await candidatePage.getByText(recordingUnavailableNotice, { exact: true }).count();
-    if (noticeCount !== 1) {
-      recordPersistent5xxViolation(retryFenceViolations, "PERSISTENT_5XX_RECORDING_NOTICE_COUNT", { noticeCount });
-    }
-
-    // A 5xx must not induce its own SSE recovery. Keep a baseline before any
-    // test-induced lifecycle callback, then wait beyond the normal reconnect
-    // cadence and require the transport to remain unchanged.
-    const transportAfterTerminalFailure = await candidatePage.evaluate(
-      () => window.__persistent5xxCandidateSseCapture,
-    );
-    await candidatePage.waitForTimeout(450);
-    const transportBeforeTerminalCallbacks = await candidatePage.evaluate(
-      () => window.__persistent5xxCandidateSseCapture,
-    );
-    if (
-      transportBeforeTerminalCallbacks?.createdCount !== transportAfterTerminalFailure?.createdCount ||
-      transportBeforeTerminalCallbacks?.openCount !== transportAfterTerminalFailure?.openCount ||
-      transportBeforeTerminalCallbacks?.errorCount !== transportAfterTerminalFailure?.errorCount
-    ) {
-      recordPersistent5xxViolation(
-        retryFenceViolations,
-        "PERSISTENT_5XX_ACTIVITY_CAUSED_SSE_RECOVERY",
-        {
-          afterFailure: summarizePersistent5xxTransport(transportAfterTerminalFailure),
-          beforeCallbacks: summarizePersistent5xxTransport(transportBeforeTerminalCallbacks),
-        },
-      );
-    }
-    if (!hasSamePersistent5xxAttemptLedger(attempts, terminalAttemptLedger)) {
-      recordPersistent5xxViolation(
-        retryFenceViolations,
-        "PERSISTENT_5XX_ACTIVITY_TRAFFIC_BEFORE_TERMINAL_CALLBACKS",
-        { attempts: summarizePersistent5xxAttempts(attempts) },
-      );
-    }
-
-    try {
-      await forcePersistent5xxStateSync(
-        candidatePage,
-        room.inviteCode,
-        "__persistent5xxCandidateSseCapture",
-        "PERSISTENT_5XX_TERMINAL_STATE_SYNC",
-      );
-    } catch (error) {
-      recordPersistent5xxViolation(
-        retryFenceViolations,
-        "PERSISTENT_5XX_TERMINAL_STATE_SYNC_NOT_PROVEN",
-        error instanceof Error ? error.message : String(error),
-      );
-    }
-    noticeCount = await candidatePage.getByText(recordingUnavailableNotice, { exact: true }).count();
-    if (noticeCount !== 1) {
-      recordPersistent5xxViolation(retryFenceViolations, "PERSISTENT_5XX_STATE_SYNC_NOTICE_COUNT", { noticeCount });
-    }
-    if (!hasSamePersistent5xxAttemptLedger(attempts, terminalAttemptLedger)) {
-      recordPersistent5xxViolation(
-        retryFenceViolations,
-        "PERSISTENT_5XX_STATE_SYNC_RESUMED_ACTIVITY",
-        { attempts: summarizePersistent5xxAttempts(attempts) },
-      );
-    }
-    try {
-      await forcePersistent5xxEventSourceReconnect(
-        candidatePage,
-        "__persistent5xxCandidateSseCapture",
-        "PERSISTENT_5XX_TERMINAL_RECONNECT",
-      );
-    } catch (error) {
-      recordPersistent5xxViolation(
-        retryFenceViolations,
-        "PERSISTENT_5XX_TERMINAL_RECONNECT_NOT_PROVEN",
-        error instanceof Error ? error.message : String(error),
-      );
-    }
-    noticeCount = await candidatePage.getByText(recordingUnavailableNotice, { exact: true }).count();
-    if (noticeCount !== 1) {
-      recordPersistent5xxViolation(retryFenceViolations, "PERSISTENT_5XX_RECONNECT_NOTICE_COUNT", { noticeCount });
-    }
-    if (!hasSamePersistent5xxAttemptLedger(attempts, terminalAttemptLedger)) {
-      recordPersistent5xxViolation(
-        retryFenceViolations,
-        "PERSISTENT_5XX_RECONNECT_RESUMED_ACTIVITY",
-        { attempts: summarizePersistent5xxAttempts(attempts) },
-      );
-    }
-    const transportAfterTerminalCallbacks = await candidatePage.evaluate(() => window.__persistent5xxCandidateSseCapture);
-    const connectionAfterTerminalCallbacks = await candidatePage
-      .getByTestId("room-connection-status")
-      .getAttribute("data-state");
-    if (
-      connectionAfterTerminalCallbacks !== "online" ||
-      (await candidatePage.getByTestId("room-realtime-access-error").count()) !== 0
-    ) {
-      recordPersistent5xxViolation(
-        retryFenceViolations,
-        "PERSISTENT_5XX_TERMINAL_ACCESS_OR_CONNECTION_CHANGED",
-        {
-          connectionAfterTerminalCallbacks,
-          transport: summarizePersistent5xxTransport(transportAfterTerminalCallbacks),
-        },
-      );
-    }
-
-    // This must be a real physical browser key while the CodeMirror editor owns
-    // focus. No focus/window event is used to manufacture a state synchronization.
-    await candidatePage.locator("[data-testid='room-code-editor-host'] .cm-content").click({ force: true });
-    const physicalSpaceAt = Date.now();
-    await candidatePage.keyboard.press("Space");
-    const remainingQuietWindow = Math.max(0, quietWindowStart + 2_500 - Date.now());
-    await candidatePage.waitForTimeout(remainingQuietWindow);
-
-    const sourceIds = new Set(attempts.map((attempt) => attempt.sourceEventId));
-    const sourceEventId = [...sourceIds][0];
-    if (attempts.length !== 3) {
-      recordPersistent5xxViolation(
-        retryFenceViolations,
-        "PERSISTENT_5XX_POST_TERMINAL_ACTIVITY_TRAFFIC",
-        { physicalSpaceAt, attempts: summarizePersistent5xxAttempts(attempts) },
-      );
-    }
-    if (sourceIds.size !== 1 || !sourceEventId) {
-      recordPersistent5xxViolation(
-        retryFenceViolations,
-        "PERSISTENT_5XX_SOURCE_ID_CHANGED",
-        { attempts: summarizePersistent5xxAttempts(attempts) },
-      );
-    }
-
-    const transportAfterQuietWindow = await candidatePage.evaluate(() => window.__persistent5xxCandidateSseCapture);
-    if (
-      transportAfterQuietWindow?.createdCount !== transportAfterTerminalCallbacks?.createdCount ||
-      transportAfterQuietWindow?.openCount !== transportAfterTerminalCallbacks?.openCount ||
-      transportAfterQuietWindow?.errorCount !== transportAfterTerminalCallbacks?.errorCount
-    ) {
-      recordPersistent5xxViolation(
-        retryFenceViolations,
-        "PERSISTENT_5XX_ACTIVITY_CAUSED_SSE_TRAFFIC_AFTER_TERMINAL",
-        {
-          before: summarizePersistent5xxTransport(transportAfterTerminalCallbacks),
-          after: summarizePersistent5xxTransport(transportAfterQuietWindow),
-        },
-      );
-    }
-
-    noticeCount = await candidatePage.getByText(recordingUnavailableNotice, { exact: true }).count();
-    if (noticeCount !== 1) {
-      recordPersistent5xxViolation(retryFenceViolations, "PERSISTENT_5XX_RECORDING_NOTICE_COUNT", { noticeCount });
-    }
-    const rawErrorObservation = await readPersistent5xxRawErrorObserver(candidatePage);
-    if (rawErrorObservation.observed.some((entry) => entry.kind === "sentinel")) {
-      recordPersistent5xxViolation(
-        retryFenceViolations,
-        "PERSISTENT_5XX_RAW_SENTINEL_VISIBLE",
-        summarizePersistent5xxRawErrorObservation(rawErrorObservation),
-      );
-    }
-    if (rawErrorObservation.observed.some((entry) => entry.kind === "status-detail")) {
-      recordPersistent5xxViolation(
-        retryFenceViolations,
-        "PERSISTENT_5XX_RAW_STATUS_DETAIL_VISIBLE",
-        summarizePersistent5xxRawErrorObservation(rawErrorObservation),
-      );
-    }
-    if ((await candidatePage.getByText("Room activity state has no persisted room ID", { exact: false }).count()) !== 0) {
-      recordPersistent5xxViolation(retryFenceViolations, "PERSISTENT_5XX_RAW_SERVER_ERROR_VISIBLE");
-    }
-
-    const rawEvents = await fetchRawEvents(room.inviteCode, room.ownerToken);
-    if (sourceEventId && rawEvents.some((event) => event.sourceEventId === sourceEventId)) {
-      recordPersistent5xxViolation(
-        retryFenceViolations,
-        "PERSISTENT_5XX_SYNTHETIC_REQUEST_REACHED_RAW_EXPORT",
-        { sourceEventId },
-      );
-    }
-    const ownerCapture = await ownerPage.evaluate(() => window.__persistent5xxOwnerSseCapture);
-    if (sourceEventId && (ownerCapture?.candidateKeySourceIds ?? []).includes(sourceEventId)) {
-      recordPersistent5xxViolation(
-        retryFenceViolations,
-        "PERSISTENT_5XX_SYNTHETIC_REQUEST_BROADCAST",
-        { sourceEventId },
-      );
-    }
-
-    try {
-      const yjsMarker = `PERSISTENT_5XX_YJS_${Date.now()}`;
-      const yjsResponse = candidatePage.waitForResponse(
-        (response) => {
-          const url = new URL(response.url());
-          if (!url.pathname.endsWith(`/api/realtime/rooms/${room.inviteCode}/events`)) return false;
-          try {
-            const payload = JSON.parse(response.request().postData() || "{}");
-            return payload?.type === "yjs_update" && payload?.code?.includes(yjsMarker);
-          } catch {
-            return false;
-          }
-        },
-        { timeout: rawExportTimeoutMs },
-      );
-      await appendYjsMarker(candidatePage, yjsMarker);
-      const yjsResult = await yjsResponse;
-      if (!yjsResult.ok()) {
-        recordPersistent5xxViolation(
-          retryFenceViolations,
-          "PERSISTENT_5XX_MAIN_QUEUE_YJS_FAILED",
-          { status: yjsResult.status() },
-        );
-      } else {
-        await waitForEditorMarker(ownerPage, yjsMarker, "PERSISTENT_5XX_OWNER");
-      }
-    } catch (error) {
-      recordPersistent5xxViolation(
-        retryFenceViolations,
-        "PERSISTENT_5XX_MAIN_QUEUE_YJS_NOT_PROVEN",
-        error instanceof Error ? error.message : String(error),
-      );
-    }
-    await candidatePage.waitForTimeout(250);
-    if (attempts.length !== 3) {
-      recordPersistent5xxViolation(
-        retryFenceViolations,
-        "PERSISTENT_5XX_ACTIVITY_RESUMED_AFTER_YJS",
-        { attempts: summarizePersistent5xxAttempts(attempts) },
-      );
-    }
-
-    if (retryFenceViolations.length > 0) {
-      throw new Error(retryFenceViolations.join("\n"));
-    }
-  } catch (error) {
-    const pageDiagnostic = await candidatePage
-      .evaluate(() => ({
-        url: window.location.href,
-        body: document.body?.innerText?.slice(0, 800) ?? "",
-        editorHostCount: document.querySelectorAll("[data-testid='room-code-editor-host']").length,
-        editorCount: document.querySelectorAll(".cm-editor").length,
-        editorContentCount: document.querySelectorAll(".cm-content").length,
-        pendingEditorCount: document.querySelectorAll("[data-testid='room-code-editor-pending']").length,
-        transport: window.__persistent5xxCandidateSseCapture
-          ? {
-              createdCount: window.__persistent5xxCandidateSseCapture.createdCount,
-              openCount: window.__persistent5xxCandidateSseCapture.openCount,
-              errorCount: window.__persistent5xxCandidateSseCapture.errorCount,
-              stateSyncCount: window.__persistent5xxCandidateSseCapture.stateSyncs?.length ?? 0,
-            }
-          : null,
-      }))
-      .catch(() => null);
-    const diagnostic = pageDiagnostic
-      ? { ...pageDiagnostic, recentApiResponses: candidateApiResponses }
-      : { recentApiResponses: candidateApiResponses };
-    throw new Error(
-      `${error instanceof Error ? error.message : String(error)} persistent5xxDiagnostic=${JSON.stringify(diagnostic)}`,
-    );
-  } finally {
-    // This regression intentionally intercepts a permanently failing route.
-    // Closing the isolated contexts cancels any pre-fix retry timer/transport
-    // before the rest of the activity suite continues.
-    await Promise.all([ownerContext.close(), candidateContext.close()].map((promise) => promise.catch(() => {})));
-  }
+async function runPersistentActivity5xxRegression() {
+  // The old three-failure queue-drop contract is superseded by recoverable,
+  // deadline-bounded delivery. Reuse the focused real-browser acceptance cases.
+  execFileSync(process.execPath, [
+    "--test", "--test-name-pattern=activity FIFO",
+    new URL("./e2e-activity-history-recovery.mjs", import.meta.url).pathname,
+  ], { env: process.env, timeout: 150000, stdio: "pipe" });
 }
 
 const browser = await chromium.launch({ headless: true });
@@ -1755,7 +1278,7 @@ try {
   await candidatePage.waitForTimeout(180);
   const pasteText = "paste-without-preview";
   await candidatePage.evaluate((text) => navigator.clipboard.writeText(text), pasteText);
-  await candidatePage.keyboard.press("Control+V");
+  await candidatePage.keyboard.press(process.platform === "darwin" ? "Meta+V" : "Control+V");
   await candidatePage.waitForTimeout(180);
   await candidatePage.evaluate(() => window.dispatchEvent(new Event("blur")));
   await candidatePage.waitForTimeout(180);
@@ -1939,6 +1462,7 @@ try {
     const canonicalExportEvents = canonicalEvents(allRawEvents);
     const expectedLiveEvents = canonicalExportEvents.slice(-50);
     const expectedLiveSourceIds = expectedLiveEvents.map((event) => event.sourceEventId);
+    const expectedTimelineSourceIds = canonicalExportEvents.map((event) => event.sourceEventId);
     if (expectedLiveSourceIds.length !== 50 || new Set(expectedLiveSourceIds).size !== 50) {
       throw new Error(`LIVE_HISTORY_EXPECTATION_INVALID ids=${JSON.stringify(expectedLiveSourceIds)}`);
     }
@@ -1966,7 +1490,7 @@ try {
     );
     await ownerPage.waitForFunction(
       (expectedCount) => document.querySelectorAll('[data-testid="activity-timeline-source-id"]').length === expectedCount,
-      expectedLiveSourceIds.length,
+      expectedTimelineSourceIds.length,
       { timeout: 15_000 },
     );
 
@@ -1988,24 +1512,24 @@ try {
     }
 
     const renderedLiveSourceIds = await ownerPage.locator('[data-testid="activity-timeline-source-id"]').allTextContents();
-    if (renderedLiveSourceIds.length !== 50 || new Set(renderedLiveSourceIds).size !== 50) {
+    if (renderedLiveSourceIds.length !== expectedTimelineSourceIds.length || new Set(renderedLiveSourceIds).size !== expectedTimelineSourceIds.length) {
       throw new Error(`RECONNECTED_MANAGER_TIMELINE_COUNT_MISMATCH ids=${JSON.stringify(renderedLiveSourceIds)}`);
     }
-    if (renderedLiveSourceIds.includes(oldestTruncationEvent.sourceEventId)) {
-      throw new Error(`EVICTED_OLDEST_EVENT_RENDERED_IN_LIVE_TIMELINE id=${oldestTruncationEvent.sourceEventId}`);
+    if (!renderedLiveSourceIds.includes(oldestTruncationEvent.sourceEventId)) {
+      throw new Error(`OLDEST_EVENT_MISSING_FROM_DURABLE_TIMELINE id=${oldestTruncationEvent.sourceEventId}`);
     }
     const rawEventsBySourceId = new Map(allRawEvents.map((event) => [event.sourceEventId, event]));
     const renderedLiveEvents = renderedLiveSourceIds.map((sourceEventId) => rawEventsBySourceId.get(sourceEventId));
     if (renderedLiveEvents.some((event) => !event)) {
       throw new Error(`RECONNECTED_MANAGER_TIMELINE_UNKNOWN_SOURCE ids=${JSON.stringify(renderedLiveSourceIds)}`);
     }
-    if (JSON.stringify(canonicalSourceIds(renderedLiveEvents)) !== JSON.stringify(expectedLiveSourceIds)) {
+    if (JSON.stringify(canonicalSourceIds(renderedLiveEvents)) !== JSON.stringify(expectedTimelineSourceIds)) {
       throw new Error(
-        `RECONNECTED_MANAGER_TIMELINE_HISTORY_MISMATCH expected=${JSON.stringify(expectedLiveSourceIds)} actual=${JSON.stringify(canonicalSourceIds(renderedLiveEvents))}`,
+        `RECONNECTED_MANAGER_TIMELINE_HISTORY_MISMATCH expected=${JSON.stringify(expectedTimelineSourceIds)} actual=${JSON.stringify(canonicalSourceIds(renderedLiveEvents))}`,
       );
     }
   } catch (error) {
-    fail(failures, "live history retains latest 50 while manager raw export preserves every source event", error);
+    fail(failures, "SSE stays bounded at 50 while durable timeline and export preserve all source events", error);
   }
 
   // 7.3: disconnect the manager's live EventSource transport without reloading
@@ -2017,7 +1541,7 @@ try {
       .locator('[data-testid="activity-timeline-source-id"]')
       .allTextContents();
     if (
-      managerSourceIdsBeforeDisconnect.length !== 50 ||
+      managerSourceIdsBeforeDisconnect.length < 51 ||
       new Set(managerSourceIdsBeforeDisconnect).size !== managerSourceIdsBeforeDisconnect.length
     ) {
       throw new Error(`MANAGER_PRE_DISCONNECT_HISTORY_INVALID ids=${JSON.stringify(managerSourceIdsBeforeDisconnect)}`);
@@ -2078,7 +1602,8 @@ try {
       );
     }
 
-    const expectedManagerReconnectSourceIds = canonicalSourceIds(managerReconnectRawEvents).slice(-50);
+    const expectedManagerTimelineIds = canonicalSourceIds(managerReconnectRawEvents);
+    const expectedManagerReconnectSourceIds = expectedManagerTimelineIds.slice(-50);
     if (
       expectedManagerReconnectSourceIds.length !== 50 ||
       new Set(expectedManagerReconnectSourceIds).size !== expectedManagerReconnectSourceIds.length ||
@@ -2151,7 +1676,7 @@ try {
           rendered.every((sourceEventId) => expectedSourceIds.includes(sourceEventId))
         );
       },
-      expectedManagerReconnectSourceIds,
+      expectedManagerTimelineIds,
       { timeout: 15_000 },
     );
     const renderedManagerSourceIdsAfterReconnect = await ownerPage
@@ -2164,10 +1689,10 @@ try {
     if (
       renderedManagerEventsAfterReconnect.some((event) => !event) ||
       JSON.stringify(canonicalSourceIds(renderedManagerEventsAfterReconnect)) !==
-        JSON.stringify(expectedManagerReconnectSourceIds)
+        JSON.stringify(expectedManagerTimelineIds)
     ) {
       throw new Error(
-        `MANAGER_POST_RECONNECT_TIMELINE_MISMATCH expected=${JSON.stringify(expectedManagerReconnectSourceIds)} actual=${JSON.stringify(renderedManagerSourceIdsAfterReconnect)}`,
+        `MANAGER_POST_RECONNECT_TIMELINE_MISMATCH expected=${JSON.stringify(expectedManagerTimelineIds)} actual=${JSON.stringify(renderedManagerSourceIdsAfterReconnect)}`,
       );
     }
 
@@ -2447,7 +1972,7 @@ try {
       );
     }
   } catch (error) {
-    fail(failures, "manager EventSource reconnect replaces activity history and candidate reconnect stays private", error);
+    fail(failures, "manager EventSource reconnect preserves activity history and candidate reconnect stays private", error);
   }
 
   // 7.4: keep the first activity request unresolved while the browser produces a
@@ -2770,7 +2295,7 @@ try {
     const csvPasteText = "paste-export-coverage";
     await guestEditor.click({ force: true });
     await authorizationGuestPage.evaluate((text) => navigator.clipboard.writeText(text), csvPasteText);
-    await authorizationGuestPage.keyboard.press("Control+V");
+    await authorizationGuestPage.keyboard.press(process.platform === "darwin" ? "Meta+V" : "Control+V");
     await waitForCondition(
       "NON_OWNER_PASTE_NOT_OBSERVED",
       () =>

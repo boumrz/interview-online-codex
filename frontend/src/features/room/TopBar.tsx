@@ -50,8 +50,16 @@ export type Participant = {
   role: "owner" | "interviewer" | "candidate";
   presenceStatus: "active" | "away";
   isAuthenticated?: boolean;
+  isHr?: boolean;
   canBeGrantedInterviewerAccess?: boolean;
 };
+
+export function isEligibleHrParticipant(participant: Participant): boolean {
+  return participant.isAuthenticated === true &&
+    Boolean(participant.userId?.trim()) && participant.isHr === true;
+}
+
+export type HrAction = "assign" | "remove";
 
 function getParticipantPresenceLabel(status: Participant["presenceStatus"]) {
   return status === "active" ? "В фокусе" : "Вне фокуса";
@@ -67,6 +75,10 @@ export type TopBarProps = {
   currentLanguage: string;
   onLanguageChange: (value: string | null) => void;
   canGrantAccess: boolean;
+  canAssignHr: boolean;
+  pendingHrActions: ReadonlyMap<string, HrAction>;
+  onAssignHr: (participant: Participant) => void;
+  onRemoveHr: (participant: Participant) => void;
   onToggleInterviewerRole: (participant: Participant) => void;
 };
 
@@ -88,8 +100,22 @@ export function TopBar({
   currentLanguage,
   onLanguageChange,
   canGrantAccess,
+  canAssignHr,
+  pendingHrActions,
+  onAssignHr,
+  onRemoveHr,
   onToggleInterviewerRole,
 }: TopBarProps) {
+  const hasHrControls = canAssignHr && participants.some(
+    (participant) => participant.role !== "owner" && isEligibleHrParticipant(participant),
+  );
+  const hasOrdinaryControls = canGrantAccess && participants.some(
+    (participant) => participant.role !== "owner" &&
+      (participant.canBeGrantedInterviewerAccess ?? true),
+  );
+  const participantHelp = hasHrControls
+    ? `Кликните по участнику, чтобы назначить или снять роль нанимающего${hasOrdinaryControls ? ", изменить роль интервьюера" : ""}`
+    : "Кликните по нику участника, чтобы назначить или снять роль интервьюера";
   return (
     <Box className={roomPageStyles.topBar}>
       <Box className={roomPageStyles.topInner}>
@@ -110,14 +136,27 @@ export function TopBar({
                 const presenceLabel = getParticipantPresenceLabel(
                   participant.presenceStatus,
                 );
-                const canOpenMenu =
+                const eligibleHr = isEligibleHrParticipant(participant);
+                const isInterviewer = participant.role === "interviewer";
+                const canChangeInterviewerRole =
                   canGrantAccess &&
                   participant.role !== "owner" &&
+                  !(eligibleHr && isInterviewer) &&
                   (participant.canBeGrantedInterviewerAccess ?? true);
-                const isInterviewer = participant.role === "interviewer";
+                const showHrAction = canAssignHr && eligibleHr && participant.role !== "owner";
+                const pendingHrAction = pendingHrActions.get(participant.userId?.trim() ?? "");
+                const hrPending = pendingHrAction !== undefined;
+                const canOpenMenu = canChangeInterviewerRole || showHrAction;
                 const menuActionLabel = isInterviewer
                   ? "Снять роль интервьюера"
                   : "Назначить интервьюером";
+                const hrActionLabel = pendingHrAction === "remove" ? "Снимаем роль нанимающего…" :
+                  pendingHrAction === "assign" ? "Назначаем нанимающего…" :
+                  isInterviewer ? "Снять роль нанимающего" : "Назначить нанимающим";
+                const menuHint = [
+                  ...(showHrAction ? [hrActionLabel] : []),
+                  ...(canChangeInterviewerRole ? [menuActionLabel] : []),
+                ].join(". ");
                 const { color: cursorColor, colorLight: cursorColorLight } =
                   awarenessUserColors(participant.sessionId);
                 const participantCard = (
@@ -125,7 +164,15 @@ export function TopBar({
                     <span className={roomPageStyles.participantName}>
                       {participant.displayName}
                     </span>
-                    {isInterviewer ? (
+                    {isInterviewer && eligibleHr ? (
+                      <span
+                        className={roomPageStyles.participantHrBadge}
+                        aria-label="Нанимающий"
+                        title="Нанимающий"
+                      >
+                        НМ
+                      </span>
+                    ) : isInterviewer ? (
                       <span
                         className={roomPageStyles.participantInterviewerStar}
                         aria-label="Интервьюер"
@@ -175,7 +222,7 @@ export function TopBar({
                   >
                     <Menu.Target>
                       <Tooltip
-                        label={menuActionLabel}
+                        label={menuHint}
                         withArrow
                         position="bottom"
                         openDelay={250}
@@ -187,7 +234,7 @@ export function TopBar({
                           data-presence={participant.presenceStatus}
                           data-testid={`participant-badge-${participant.presenceStatus}`}
                           style={participantStyle}
-                          aria-label={`${participant.displayName}, ${presenceLabel}. ${menuActionLabel}`}
+                          aria-label={`${participant.displayName}, ${presenceLabel}. ${menuHint}`}
                           aria-haspopup="menu"
                         >
                           {participantCard}
@@ -195,31 +242,30 @@ export function TopBar({
                       </Tooltip>
                     </Menu.Target>
                     <Menu.Dropdown>
-                      <Menu.Item
-                        onClick={() => onToggleInterviewerRole(participant)}
-                      >
-                        {menuActionLabel}
-                      </Menu.Item>
+                      {showHrAction ? (
+                        <Menu.Item
+                          disabled={hrPending}
+                          onClick={() => isInterviewer ? onRemoveHr(participant) : onAssignHr(participant)}
+                        >
+                          {hrActionLabel}
+                        </Menu.Item>
+                      ) : null}
+                      {canChangeInterviewerRole ? (
+                        <Menu.Item
+                          disabled={hrPending}
+                          onClick={() => onToggleInterviewerRole(participant)}
+                        >
+                          {menuActionLabel}
+                        </Menu.Item>
+                      ) : null}
                     </Menu.Dropdown>
                   </Menu>
                 );
               })}
 
-              {/*
-               * Compact discoverability helper: shown only when the owner can
-               * actually promote someone (canGrantAccess + ≥1 promotable
-               * participant). Lives in the same row as the chips, opacity 0.6,
-               * tooltip carries the full instruction. This avoids a permanent
-               * banner while still teaching the click-to-promote affordance.
-               */}
-              {canGrantAccess &&
-              participants.some(
-                (p) =>
-                  p.role !== "owner" &&
-                  (p.canBeGrantedInterviewerAccess ?? true),
-              ) ? (
+              {hasOrdinaryControls || hasHrControls ? (
                 <Tooltip
-                  label="Кликните по нику участника, чтобы назначить или снять роль интервьюера"
+                  label={participantHelp}
                   withArrow
                   multiline
                   w={260}
@@ -229,7 +275,7 @@ export function TopBar({
                   <span
                     className={roomPageStyles.participantsHelpHint}
                     role="note"
-                    aria-label="Подсказка: кликните по участнику, чтобы назначить или снять роль интервьюера"
+                    aria-label={`Подсказка: ${participantHelp}`}
                     tabIndex={0}
                     data-testid="participants-help-hint"
                   >

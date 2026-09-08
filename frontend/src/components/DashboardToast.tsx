@@ -50,6 +50,8 @@ function ToastItem({
 
   return (
     <div
+      role={entry.type === "error" ? "alert" : "status"}
+      aria-live={entry.type === "error" ? "assertive" : "polite"}
       className={[
         styles.toast,
         entry.type === "error" ? styles.toastError : styles.toastSuccess,

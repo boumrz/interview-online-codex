@@ -1,0 +1,605 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>HR interview cabinet — UX storyboard</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0c1015;
+        --panel: #12171e;
+        --soft: #1a212a;
+        --line: #2c3541;
+        --text: #f3f5f8;
+        --muted: #9aa3af;
+        --blue: #4e8fff;
+        --sage: #75d7a0;
+        --amber: #f1c56f;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at 15% -5%, #182842 0, transparent 30%),
+          var(--bg);
+        color: var(--text);
+        font:
+          14px/1.5 ui-sans-serif,
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+      }
+      a {
+        color: #9bc0ff;
+      }
+      .wrap {
+        max-width: 1440px;
+        margin: auto;
+        padding: 28px 24px 64px;
+      }
+      .crumb {
+        display: inline-block;
+        margin-bottom: 28px;
+        color: var(--muted);
+        text-decoration: none;
+      }
+      .pill {
+        display: inline-flex;
+        border: 1px solid #47699b;
+        background: #152640;
+        color: #b9d1ff;
+        padding: 5px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 750;
+        letter-spacing: 0.11em;
+        text-transform: uppercase;
+      }
+      h1,
+      h2,
+      h3 {
+        font-family: Georgia, "Times New Roman", serif;
+      }
+      h1 {
+        font-size: clamp(38px, 6vw, 72px);
+        line-height: 1.02;
+        margin: 16px 0;
+        max-width: 950px;
+        font-weight: 500;
+      }
+      h2 {
+        font-size: 32px;
+        margin: 0;
+      }
+      .sub {
+        color: #c4cad3;
+        font-size: 18px;
+        max-width: 780px;
+      }
+      .intro {
+        color: var(--muted);
+        max-width: 900px;
+      }
+      .links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 18px;
+      }
+      .links a {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 8px 11px;
+        text-decoration: none;
+      }
+      .section {
+        margin-top: 54px;
+      }
+      .sectionHead {
+        display: flex;
+        gap: 12px;
+        justify-content: space-between;
+        align-items: end;
+        margin-bottom: 18px;
+      }
+      .badge {
+        display: inline-flex;
+        border-radius: 999px;
+        padding: 5px 9px;
+        font-size: 11px;
+        font-weight: 750;
+        letter-spacing: 0.05em;
+      }
+      .exists {
+        color: #a8edc4;
+        background: #163624;
+        border: 1px solid #315d43;
+      }
+      .unclear {
+        color: #ffe1a2;
+        background: #3a2c14;
+        border: 1px solid #73582d;
+      }
+      .flow {
+        overflow: auto;
+        border: 1px solid var(--line);
+        background: #0c1118;
+        border-radius: 13px;
+        padding: 21px;
+        color: #dce3ee;
+        line-height: 1.65;
+      }
+      .flow .done {
+        color: var(--sage);
+      }
+      .flow .context {
+        color: var(--muted);
+      }
+      .flow .decision {
+        color: var(--amber);
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 18px;
+      }
+      .mock {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--panel);
+        overflow: hidden;
+      }
+      .mockInfo {
+        padding: 18px;
+      }
+      .file {
+        font:
+          11px ui-monospace,
+          SFMono-Regular,
+          monospace;
+        color: #a8c7ff;
+      }
+      .mock h3 {
+        font-size: 24px;
+        margin: 8px 0 4px;
+      }
+      .desc {
+        color: var(--muted);
+        min-height: 42px;
+      }
+      .frame {
+        width: 100%;
+        height: 720px;
+        border: 0;
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+        background: #0d1015;
+      }
+      .open {
+        display: inline-block;
+        margin-top: 12px;
+      }
+      .audit {
+        margin: 16px;
+        background: var(--soft);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 14px;
+      }
+      .audit strong {
+        display: block;
+        margin-bottom: 8px;
+      }
+      .audit ul,
+      .cards ul {
+        margin: 0;
+        padding-left: 19px;
+        color: #c5cbd5;
+      }
+      .audit li + li,
+      .cards li + li {
+        margin-top: 5px;
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 16px;
+      }
+      .card {
+        border: 1px solid #72592d;
+        background: #2b2315;
+        border-radius: 12px;
+        padding: 18px;
+      }
+      .card h3 {
+        font-size: 22px;
+        margin: 5px 0;
+      }
+      .none {
+        border-color: #386349;
+        background: #14261c;
+      }
+      .sequence {
+        border: 1px solid var(--line);
+        border-radius: 13px;
+        background: var(--panel);
+        padding: 20px 24px;
+      }
+      .sequence li + li {
+        margin-top: 8px;
+      }
+      .adjacent .frame {
+        height: 420px;
+        pointer-events: none;
+        opacity: 0.86;
+      }
+      .footer {
+        margin-top: 52px;
+        padding-top: 20px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+      }
+      @media (max-width: 1100px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+        .frame {
+          height: 680px;
+        }
+        .desc {
+          min-height: 0;
+        }
+      }
+      @media (max-width: 700px) {
+        .wrap {
+          padding: 20px 12px 48px;
+        }
+        .cards {
+          grid-template-columns: 1fr;
+        }
+        .sectionHead {
+          display: block;
+        }
+        .frame {
+          height: 620px;
+        }
+        h1 {
+          font-size: 42px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <a class="crumb" href="../../">← add-hr-interview-cabinet</a>
+      <header>
+        <span class="pill">HR-012 · UX review</span>
+        <h1>HR interview cabinet<br />whole-flow storyboard</h1>
+        <p class="sub">
+          A live audit of account activation, room metadata and assignment,
+          cabinet review, archive behavior and Excel scope.
+        </p>
+        <p class="intro">
+          The interface extends the existing dark Mantine cabinet. Every iframe
+          is interactive: use the state switchers inside the room and cabinet
+          mocks, open result dialogs, and exercise copy/refresh/export feedback.
+          The approved OpenSpec contract remains authoritative.
+        </p>
+        <div class="links">
+          <a href="ux.md">UX specification</a><a href="proposal.md">Proposal</a
+          ><a href="design.md">Architecture contract</a
+          ><a href="execution-plan.md">Execution plan</a>
+        </div>
+      </header>
+      <section class="section">
+        <div class="sectionHead">
+          <h2>User flow</h2>
+          <span class="badge exists">✓ all blocking surfaces mocked</span>
+        </div>
+        <pre
+          class="flow"
+        ><span class="context">Guest landing</span> ──create room──► <span class="context">Live editor immediately</span>
+                                      │ server confirms manager
+                                      ▼
+<span class="done">Registration: optional HR checkbox</span> ──► <span class="done">Profile: HR ID + HR nav</span>
+                                      │
+                                      ├──► <span class="done">Room · “Кандидат и HR”</span>
+                                      │       ├─ save candidate / position / Moscow time
+                                      │       ├─ assign existing HR by UUID
+                                      │       └─ <span class="decision">409: keep draft → explicit reload</span>
+                                      │
+                                      ▼ manual refresh / reload
+                              <span class="done">HR cabinet list</span>
+                                      ├─ active row ──► <span class="context">existing live room</span>
+                                      ├─ any row ─────► <span class="done">read-only results</span>
+                                      ├─ date scope ──► <span class="done">filtered list + XLSX</span>
+                                      └─ archived ────► <span class="done">history only; no room action</span>
+
+<span class="context">Candidate invite link</span> ──► <span class="context">candidate admission</span> ──► no HR tracking or manager panel</pre>
+      </section>
+      <section class="section">
+        <div class="sectionHead">
+          <h2>Existing mocks</h2>
+          <span class="badge exists">✓ ships with 3 live mocks</span>
+        </div>
+        <div class="grid">
+          <article class="mock">
+            <div class="mockInfo">
+              <div class="file">mocks/account-hr.html</div>
+              <h3>Account activation</h3>
+              <p class="desc">
+                Optional registration flag, enabled profile, HR navigation,
+                selectable UUID and working clipboard fallback.
+              </p>
+              <a class="open" href="mocks/account-hr.html" target="_blank"
+                >Open in new tab ↗</a
+              >
+            </div>
+            <iframe
+              class="frame"
+              src="mocks/account-hr.html"
+              title="Account HR mock"
+            ></iframe>
+            <div class="audit">
+              <strong>UX Critic checklist</strong>
+              <ul>
+                <li>
+                  Checkbox reads as optional capability, never a room role.
+                </li>
+                <li>HR ID and copy fallback are discoverable.</li>
+                <li>Keyboard focus and narrow layout preserve order.</li>
+                <li>Enabled state avoids an unsupported disable action.</li>
+              </ul>
+            </div>
+          </article>
+          <article class="mock">
+            <div class="mockInfo">
+              <div class="file">mocks/room-candidate-hr.html</div>
+              <h3>Candidate and HR panel</h3>
+              <p class="desc">
+                Manager-only metadata and assignment modal. Switch between
+                normal, conflict and archived states at the lower edge.
+              </p>
+              <a
+                class="open"
+                href="mocks/room-candidate-hr.html"
+                target="_blank"
+                >Open in new tab ↗</a
+              >
+            </div>
+            <iframe
+              class="frame"
+              src="mocks/room-candidate-hr.html"
+              title="Candidate and HR room modal mock"
+            ></iframe>
+            <div class="audit">
+              <strong>UX Critic checklist</strong>
+              <ul>
+                <li>Panel is separate from editor and step controls.</li>
+                <li>Moscow time is explicit and device-independent.</li>
+                <li>409 retains the draft and makes replacement explicit.</li>
+                <li>Archive removes mutations; candidate never sees panel.</li>
+              </ul>
+            </div>
+          </article>
+          <article class="mock">
+            <div class="mockInfo">
+              <div class="file">mocks/hr-cabinet.html</div>
+              <h3>Cabinet and results</h3>
+              <p class="desc">
+                Table/card layout with filters, export, state switcher, live
+                refresh feedback and active/archived result dialogs.
+              </p>
+              <a class="open" href="mocks/hr-cabinet.html" target="_blank"
+                >Open in new tab ↗</a
+              >
+            </div>
+            <iframe
+              class="frame"
+              src="mocks/hr-cabinet.html"
+              title="HR cabinet mock"
+            ></iframe>
+            <div class="audit">
+              <strong>UX Critic checklist</strong>
+              <ul>
+                <li>Empty, filtered-empty, loading and load error differ.</li>
+                <li>Stale refresh never looks freshly loaded.</li>
+                <li>
+                  Archived future records cannot appear upcoming or open live.
+                </li>
+                <li>
+                  Read-only detail omits private notes and inferred results.
+                </li>
+                <li>Applied export scope and Moscow date basis are legible.</li>
+              </ul>
+            </div>
+          </article>
+        </div>
+      </section>
+      <section class="section">
+        <div class="sectionHead">
+          <h2>Transition and state audit</h2>
+          <span class="badge unclear">? verify in implementation</span>
+        </div>
+        <div class="cards">
+          <article class="card">
+            <h3>Focus and announcements</h3>
+            <ul>
+              <li>Does modal focus return to the exact row/room trigger?</li>
+              <li>
+                Do copy, refresh and download messages announce without stealing
+                focus?
+              </li>
+              <li>
+                Are field errors connected to their labels and blocking error
+                focused?
+              </li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>Authorization changes</h3>
+            <ul>
+              <li>
+                Does role loss close and clear the manager modal immediately?
+              </li>
+              <li>
+                Does a terminal 410 perform one persisted check, freeze controls
+                and stop reconnect?
+              </li>
+              <li>
+                Does account switching clear prior HR cache and navigation?
+              </li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>Data truth</h3>
+            <ul>
+              <li>
+                Are missing values always `Не указано`, without participant-name
+                fallback?
+              </li>
+              <li>
+                Is `Предстоящее` limited to active, unfinished, future-scheduled
+                rooms?
+              </li>
+              <li>Does failed refresh label retained rows as stale?</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>Export recovery</h3>
+            <ul>
+              <li>
+                Does the client distinguish JSON errors from workbook bytes?
+              </li>
+              <li>
+                Do 413 and 429 messages guide a manual retry without automatic
+                generation?
+              </li>
+              <li>
+                Does zero-result export still download and announce zero
+                interviews?
+              </li>
+            </ul>
+          </article>
+        </div>
+      </section>
+      <section class="section">
+        <div class="sectionHead">
+          <h2>Gaps to fill</h2>
+          <span class="badge exists">none blocking</span>
+        </div>
+        <div class="cards">
+          <article class="card none">
+            <h3>Scope is mock-complete</h3>
+            <p>
+              All new HR surfaces have a live mock. Existing landing, candidate
+              admission, editor, step switching and language selection remain
+              governed by their current interfaces. Their only integration
+              question is absence or placement of the new manager trigger, which
+              is specified above.
+            </p>
+          </article>
+          <article class="card none">
+            <h3>Questions resolved by contract</h3>
+            <ul>
+              <li>
+                Entry: profile/navigation and server-confirmed manager room
+                header.
+              </li>
+              <li>Shape: cabinet section plus two dialogs.</li>
+              <li>
+                Cancel: retain no server change; pending requests prevent close.
+              </li>
+              <li>
+                Destructive behavior: none added; archived history is read-only.
+              </li>
+            </ul>
+          </article>
+        </div>
+      </section>
+      <section class="section adjacent">
+        <div class="sectionHead">
+          <h2>Upstream and adjacent context</h2>
+          <span class="badge">not additional scope</span>
+        </div>
+        <div class="grid">
+          <article class="mock">
+            <div class="mockInfo">
+              <div class="file">Account → cabinet</div>
+              <h3>Capability discovery</h3>
+              <p class="desc">
+                The profile context shows how the HR navigation appears after
+                server-confirmed activation.
+              </p>
+            </div>
+            <iframe
+              class="frame"
+              src="mocks/account-hr.html"
+              title="Account context"
+            ></iframe>
+          </article>
+          <article class="mock">
+            <div class="mockInfo">
+              <div class="file">Room manager context</div>
+              <h3>Existing editor shell</h3>
+              <p class="desc">
+                The modal mock retains step controls behind it to verify
+                separation from the shared workspace.
+              </p>
+            </div>
+            <iframe
+              class="frame"
+              src="mocks/room-candidate-hr.html"
+              title="Room editor context"
+            ></iframe>
+          </article>
+          <article class="mock">
+            <div class="mockInfo">
+              <div class="file">Cabinet → live/detail</div>
+              <h3>Destination split</h3>
+              <p class="desc">
+                Active records may enter the existing room; archived records
+                terminate at read-only results.
+              </p>
+            </div>
+            <iframe
+              class="frame"
+              src="mocks/hr-cabinet.html"
+              title="Cabinet destination context"
+            ></iframe>
+          </article>
+        </div>
+      </section>
+      <section class="section">
+        <div class="sectionHead"><h2>Proposed sequence</h2></div>
+        <ol class="sequence">
+          <li>
+            UX Critic reviews this page and records approve or concrete
+            revisions.
+          </li>
+          <li>Designer applies any findings to the UX spec and live mocks.</li>
+          <li>
+            Frontend Developer implements the approved account, room and cabinet
+            surfaces against the frozen APIs and action-label contract.
+          </li>
+          <li>
+            QA derives keyboard, responsive, state, conflict, archive and
+            copy-fallback cases from the state matrix.
+          </li>
+          <li>
+            Root runs the existing HR browser acceptance and required
+            regressions before final review gates.
+          </li>
+        </ol>
+      </section>
+      <footer class="footer">
+        add-hr-interview-cabinet · HR-012 · updated 2026-09-05 · pair-read:
+        <a href="ux.md">UX spec</a> / <a href="design.md">design contract</a>
+      </footer>
+    </main>
+  </body>
+</html>

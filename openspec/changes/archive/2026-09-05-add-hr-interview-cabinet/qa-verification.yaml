@@ -1,0 +1,346 @@
+agent: qa-agent
+task_id: HR-054
+change_id: add-hr-interview-cabinet
+verdict: ready
+summary: >-
+  Checked 33 scenario groups: 33 passed, 0 failed. Final evidence contains
+  65 backend tests in each of Maven and Gradle, 10 HR browser tests and 7
+  existing browser regressions, all successful without skips. The previously
+  blocking pool-saturation defect is resolved: the identical PostgreSQL probe
+  now completes 12/12 invitations successfully in 0.183 seconds.
+input_summary: >-
+  Read the accepted capability specs, design, product scope, tasks, QA role,
+  verification artifacts, solution approval and security approval; independently
+  inspected test bodies, final logs and both sets of JUnit XML reports. Reassessed
+  BUG-HR-QA-001 after its test-first correction and renewed solution/security
+  approvals. No source or test files,
+  task checkboxes, application processes or deployment configuration were changed by QA.
+output_summary: >-
+  Requirements-to-evidence matrix with reproducible steps and expected results;
+  confirmed 65/65 tests across 16 suites with no failures, errors or skips in
+  both build systems; added bounded live evidence for previously unverified
+  concurrent editing, short reconnect and stale-token/invalid-link paths.
+  Retained the reproducible pool defect's original failure and verified resolution;
+  reviewed four small-pool entrypoint cases and queue-rejection failure evidence.
+  No unresolved HR feature defect blocks QA readiness. Coverage review and final
+  product acceptance remain downstream gates.
+test_strategy:
+  scope: >-
+    Optional HR profile marker, UUID invitation, room-local manager admission,
+    automatic tracking, personal cabinet, metadata/results, date filtering,
+    retained read-only archive, XLSX, identity changes, current permissions,
+    transactions, migrations and affected realtime/guest/account regressions.
+  approach: >-
+    Audit actual assertions and raw outcomes rather than infer coverage from
+    test names. Reuse the completed final test runs; run an existing bounded
+    scenario only for a concrete missing priority area. Browser flows use real
+    PostgreSQL-backed authority. Network interception in HR E2E is limited to
+    explicitly controlled failure/latency cases. MockMvc covers forged requests
+    and transaction interleavings; OOXML parsing verifies workbook contents;
+    actual PostgreSQL proves migrations, locking, workload and restart behavior.
+  environments:
+    - "macOS; Java 17; Maven and Gradle 9; Spring Boot/H2 integration tests"
+    - "Chromium/Playwright; frontend http://localhost:5173; final packaged backend http://localhost:18080/api started 2026-09-05 23:05:04 Moscow"
+    - "PostgreSQL 16 isolated database interview_hr_1788631751397, upgraded V8 to V9"
+    - "Clean-V9/workload evidence uses isolated database interview_hr_clean_1788634575467"
+  acceptance_test_first: >-
+    verification.md records actual pre-implementation RED from missing checkbox,
+    cabinet route and HR endpoint; backend-verification.md records missing-HR
+    HTTP/DTO RED. Review fixes have separate behavioral RED evidence, including
+    late export, 410 lifecycle, stale private panel, DELETE response, transaction
+    ordering, workbook cleanup and connection-pool starvation. Four small-pool
+    cases were authored before the pool fix; three actually failed on the prior
+    implementation. The later queue-rejection test has controlled mutation
+    evidence and is not represented as initial TDD. Focused transaction/workbook failure tests
+    are the documented proportionate integration/unit alternatives to browser E2E.
+  reproduction_commands:
+    hr_browser: "E2E_BASE_URL=http://localhost:5173 E2E_API_URL=http://localhost:18080/api npm --prefix frontend run e2e:hr-cabinet"
+    backend_maven: "JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home mvn -f backend/pom.xml test"
+    backend_gradle: "JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home gradle -p backend test --no-daemon"
+    bounded_reconnect: "E2E_BASE_URL=http://localhost:5173 E2E_API_URL=http://localhost:18080/api npm --prefix frontend run e2e:sse-reconnect"
+    bounded_negative: "E2E_BASE_URL=http://localhost:5173 E2E_API_URL=http://localhost:18080/api npm --prefix frontend run e2e:auth-negative"
+    bounded_concurrency: "E2E_BASE_URL=http://localhost:5173 E2E_API_URL=http://localhost:18080/api E2E_COLLAB_REPETITIONS=1 npm --prefix frontend run e2e:five-participants"
+    pool_probe: "python3 output/hr-pool-probe.py"
+evidence_catalog:
+  B_ACCOUNT: "backend/src/test/kotlin/com/interviewonline/controller/HrAccountProfileIntegrationTest.kt"
+  B_TRACKING: "backend/src/test/kotlin/com/interviewonline/controller/HrRoomTrackingIntegrationTest.kt"
+  B_METADATA: "backend/src/test/kotlin/com/interviewonline/controller/HrInterviewProjectionIntegrationTest.kt"
+  B_ARCHIVE: "backend/src/test/kotlin/com/interviewonline/controller/HrRoomArchiveIntegrationTest.kt"
+  B_WORKBOOK: "backend/src/test/kotlin/com/interviewonline/controller/HrWorkbookIntegrationTest.kt"
+  B_CLEANUP: "backend/src/test/kotlin/com/interviewonline/service/HrWorkbookCleanupTest.kt"
+  B_POOL: "backend/src/test/kotlin/com/interviewonline/controller/HrPermissionPoolIntegrationTest.kt"
+  B_REPORTS: "backend/target/surefire-reports/TEST-*.xml and backend/build/test-results/test/TEST-*.xml: 16 suites; 65 tests; 0 failures/errors/skips each"
+  E_HR: "frontend/tests/e2e/hr/e2e-hr-cabinet.mjs; output/hr-accepted-e2e.log: 10/10, 0 skipped, 20599.265 ms; added loading/pending coverage without production changes"
+  E_REGRESSIONS: "output/hr-post-pool-account-binding.log, hr-post-pool-account-switch.log, hr-post-pool-roles.log, hr-post-pool-realtime-auth-recovery.log"
+  PG: "verification.md and backend-verification.md; output/hr-post-pool-pg-races.log; output/hr-post-pool-workload.log; output/hr-workload-verify.py"
+  POOL_RED: "output/hr-final-pool-probe.log; output/hr-pool-probe.py"
+  POOL_GREEN: "output/hr-post-pool-probe.log: 12/12 HTTP 200 in 0.183 seconds; verification.md confirms all ten connections idle"
+  BUILD: "output/hr-final-typecheck.log, hr-final-build.log, hr-accepted-backend-maven.log, hr-accepted-backend-gradle.log, hr-post-pool-package.log"
+  REVIEWS: "solution-review.yaml; security-review.yaml; frontend-solution-review.yaml; ux-review.yaml"
+  QA_RECONNECT: "Initial QA exec session 38839 passed; final unchanged scenario rerun output/hr-post-pool-sse-reconnect.log: SSE_RECONNECT_SYNC_OK"
+  QA_NEGATIVE: "Initial QA exec session 57721 passed; final unchanged scenario rerun output/hr-post-pool-auth-negative.log: AUTH_INVITE_TOKEN_NEGATIVE_OK"
+  QA_CONCURRENCY: "Initial QA exec session 51406 passed; final unchanged scenario rerun output/hr-post-pool-five-participants.log: FIVE_PARTICIPANT_COLLABORATION_OK; 48 public samples p95 17.1 ms/max 17.2 ms; 6 manager-workspace samples p95/max 17.7 ms"
+test_matrix:
+  - id: QA-HR-01
+    scenario: "Registration is an optional HR checkbox; stable identity and login"
+    steps: "Register without the checkbox, register with it, reload/login, inspect profile and copy HR ID."
+    expected: "Only HR capability differs; UUID persists and copied ID matches; no candidate/interviewer registration selector."
+    result: pass
+    evidence: "E_HR: HR registration is only an optional checkbox; identity persists and existing users opt in; B_ACCOUNT: registration profile and login expose the independent HR flag with a stable UUID"
+  - id: QA-HR-02
+    scenario: "Existing-account opt-in cannot change account identity/admin role"
+    steps: "Enable HR through profile; submit forged id/role; attempt HR disable."
+    expected: "HR enables for the authenticated account; ID/role remain unchanged; unsupported disable returns 400."
+    result: pass
+    evidence: "B_ACCOUNT: profile self-enable preserves identity and role while HR disable is rejected; E_HR registration/profile case"
+  - id: QA-HR-03
+    scenario: "HR candidate admission never tracks or grants manager UI"
+    steps: "Join as an HR account with candidate rights, inspect manager controls/list, then obtain interviewer rights and reenter."
+    expected: "Candidate has no HR room tracking/manager controls; confirmed manager entry creates one tracked room."
+    result: pass
+    evidence: "E_HR: HR candidate admission does not track; manager entry tracks and failed refresh is recoverable; B_TRACKING: authenticated manager tracking is idempotent and candidate tracking is forbidden"
+  - id: QA-HR-04
+    scenario: "Owner, ordinary interviewer and promoted guest invite offline HR"
+    steps: "Each supported manager uses the HR UUID control; target refreshes cabinet without a prior room visit."
+    expected: "Target receives durable interviewer-equivalent access and the room appears on refresh."
+    result: pass
+    evidence: "E_HR: interviewer invites offline HR...; owner and promoted guest interviewer can assign two HR managers through the room controls; B_TRACKING promoted guest manager can invite an HR account with its event token"
+  - id: QA-HR-05
+    scenario: "Repeated/concurrent invitation and entry deduplicate"
+    steps: "Repeat invitation and tracking, then submit eight invitations concurrently."
+    expected: "Successful responses retain one effective assignment/membership and do not demote an owner."
+    result: pass
+    evidence: "B_TRACKING: manager invitation is idempotent...; concurrent invitations deduplicate...; PG: eight 200 responses. Saturated pool is separately QA-HR-32."
+  - id: QA-HR-06
+    scenario: "Invalid targets and unauthorized inviters are rejected safely"
+    steps: "Submit missing/non-HR target IDs and invite as candidate; inspect status, error and assignments."
+    expected: "Missing/non-HR share safe 404; candidate receives 403; no assignment or account details leak."
+    result: pass
+    evidence: "B_TRACKING: invitation hides missing and non-HR targets and rejects candidate callers; E_HR invalid target UI in full journey"
+  - id: QA-HR-07
+    scenario: "Personal HR scope excludes ordinary and unrelated accounts"
+    steps: "Read own list/detail/export as assigned HR, unrelated HR and ordinary interviewer; alter room ID."
+    expected: "Non-HR cross-room operations are denied; other HR sees no row and detail 404; export remains personally scoped."
+    result: pass
+    evidence: "B_ACCOUNT non-HR list 403; B_METADATA personal list is scoped ordered paginated and detail is isolated from another HR; E_HR full journey; PG parsed other-HR export"
+  - id: QA-HR-08
+    scenario: "Revocation immediately removes current HR data authority"
+    steps: "Demote assigned HR through REST/realtime, read cabinet/detail/export, reconnect with old credentials, then explicitly reinvite."
+    expected: "Candidate tombstone prevents stale elevation; HR data is omitted/denied until explicit reinvitation."
+    result: pass
+    evidence: "B_TRACKING: demotion removes cabinet authority but keeps candidate tombstone and reinvitation restores it once; realtime revocation also persists the durable HR candidate tombstone; E_HR candidate case"
+  - id: QA-HR-09
+    scenario: "Permission publication respects commit, rollback and callback ordering"
+    steps: "Hold transaction/callback boundaries, roll back a role change, commit demotion before stale reconnect/token/event use, and deliver an older grant callback last."
+    expected: "Uncommitted/rolled-back changes never publish; current committed candidate authority wins across all paths."
+    result: pass
+    evidence: "B_TRACKING: active permission changes publish only after successful commit (2 cases); committed HR demotion overrides a stale active session before permission callback (3 cases); delayed invitation callback cannot restore a role revoked by a later commit. Pool resource behavior is separately QA-HR-32."
+  - id: QA-HR-10
+    scenario: "Late private-panel responses cannot restore revoked data"
+    steps: "Delay metadata response, demote HR, update metadata as owner, regrant and reopen panel."
+    expected: "Old pending data is discarded; reopened panel fetches the latest authorized metadata."
+    result: pass
+    evidence: "E_HR: permission loss invalidates pending private-panel data before a manager can open it again; recorded RED in verification.md"
+  - id: QA-HR-11
+    scenario: "Metadata validation and optimistic concurrency preserve drafts/state"
+    steps: "Submit incomplete/wrong-type/oversized/offsetless metadata and simultaneous same-revision writes; in UI save a stale draft then reload current data."
+    expected: "Invalid input returns 400; one competing write succeeds and others receive 409; local draft survives conflict; reload explicitly fetches current values."
+    result: pass
+    evidence: "B_METADATA: metadata requires complete correctly typed values and strict offset timestamps; concurrent metadata saves accept exactly one revision; E_HR full journey; PG one 200/three 409"
+  - id: QA-HR-12
+    scenario: "HR metadata stays outside shared room projection"
+    steps: "Save metadata, inspect normal room payload, access candidate-facing manager controls, and review candidate/shared DTO paths."
+    expected: "Shared projection lacks added candidateName/scheduledAt/revision fields; candidate cannot fetch the manager-only panel."
+    result: pass
+    evidence: "B_METADATA: metadata revision protects concurrent saves and remains absent from shared room payload; E_HR candidate admission; security-review.yaml candidate REST/realtime projection inspection. Dedicated integration assertion is REST payload absence, not an independent exhaustive SSE replay test."
+  - id: QA-HR-13
+    scenario: "Legacy nulls, first completion and current corrected result remain distinct"
+    steps: "Upgrade a V8 room with first-verdict metrics, inspect missing metadata, correct completed verdict and reload detail/export."
+    expected: "Unknown metadata stays unspecified; original authoritative first completion is restored/retained; current verdict/comment is displayed."
+    result: pass
+    evidence: "B_METADATA: first completion timestamp remains stable when verdict is corrected; PG V8-to-V9/restart proof; final desktop visual evidence"
+  - id: QA-HR-14
+    scenario: "Cabinet distinguishes loading, empty, refresh error, pending actions and current results"
+    steps: "Delay initial list, refresh and export requests; release each to the real server. Also open empty cabinet, invite externally, manually refresh, inject one list failure and retry; inspect results modal."
+    expected: "Initial list is aria-busy without false empty state; refresh shows disabled Обновляем… while retaining prior rows; export shows disabled Готовим Excel… and then a successful XLSX download. New assignment appears once on refresh; empty and recoverable error differ; result task/comment is visible without room admission."
+    result: pass
+    evidence: "E_HR: cabinet loading and pending actions stay visible without false empty or duplicate export controls; full journey and candidate/failed-refresh case; B_METADATA scoped page contract. Independently inspected the new assertions and accepted 10/10 log; no production change or additional QA rerun."
+  - id: QA-HR-15
+    scenario: "Scheduled, completed, active and archived states use explicit dates"
+    steps: "Save future appointment, finish interview, archive it; inspect badges, absent schedule and effective-date source."
+    expected: "Future live room is upcoming; completed has result; archived has no live-open action; absent appointment is not represented as a scheduled creation date."
+    result: pass
+    evidence: "E_HR full journey; PG 1000-room workload/date classification; solution-review.yaml date-source correction; output/playwright/hr-cabinet-desktop-final.png"
+  - id: QA-HR-16
+    scenario: "Tracked owner deletion archives; untracked deletion remains destructive"
+    steps: "Owner deletes tracked room twice and untracked room once; HR attempts deletion."
+    expected: "Tracked returns archived:true idempotently; untracked archived:false and later 404; HR assignment does not grant owner deletion."
+    result: pass
+    evidence: "B_ARCHIVE: tracked room deletion archives idempotently and every live path becomes terminal; untracked owner deletion keeps destructive compatibility; invited interviewer cannot archive the owners tracked room; E_HR owner/promoted-guest case"
+  - id: QA-HR-17
+    scenario: "Archived history survives server restart and remains read-only"
+    steps: "Archive populated tracked interview, restart packaged server, read detail/export and try opening live room."
+    expected: "Authorized history/current outcome/first completion persist; live access returns 410; results panel has no editing controls."
+    result: pass
+    evidence: "PG ARCHIVE_RESTART_DETAIL_EXPORT_OK in verification.md; E_HR full journey"
+  - id: QA-HR-18
+    scenario: "Archive terminates connected, fresh and relay-only browser paths"
+    steps: "Archive connected room; test relay 410 while SSE remains open; visit archive anonymously before name entry; refocus/reload."
+    expected: "Terminal unavailable UI appears; editor/controls stay unavailable; realtime retries/presence traffic stop."
+    result: pass
+    evidence: "E_HR full journey; a persisted relay 410 makes the room terminal even while its SSE connection is still open; a fresh anonymous visit to an archived room is terminal before entering a guest name"
+  - id: QA-HR-19
+    scenario: "Archive rejects queued and debounced writes"
+    steps: "Queue debounced Yjs save before archive; separately block verdict behind PostgreSQL row lock, commit archive and release writer."
+    expected: "Pending persistence is cancelled/guarded; old event token is rejected; truly queued database writer returns 410 without resurrecting live state."
+    result: pass
+    evidence: "B_ARCHIVE: archive cancels a pending debounced code save and rejects its former event token; PG output/hr-final-pg-races.log. H2 debounce coverage is not substituted for PostgreSQL lock proof."
+  - id: QA-HR-20
+    scenario: "XLSX contains complete authorized interviews and task linkage across pages"
+    steps: "Export all-time personal history with 1000 rooms/5000 tasks; parse all three OOXML sheets and compare exact IDs/null scores."
+    expected: "Valid XLSX, one interview row each, all task links retained, 3000 missing scores remain absent; unrelated/private/credential/formula/external-link content is excluded."
+    result: pass
+    evidence: "B_WORKBOOK: export returns a complete scoped OOXML workbook with safe download headers; PG workload exact row/link/formula/private-sentinel parsing"
+  - id: QA-HR-21
+    scenario: "Inclusive Moscow range and fallback match list/export; all-time is default"
+    steps: "Filter exact Moscow midnight and same-day range across scheduled/finished/created dates; try partial/reversed input; clear range."
+    expected: "Scheduled then first-finished then created precedence; inclusive boundaries; invalid ranges rejected; clear restores all retained history."
+    result: pass
+    evidence: "B_METADATA: Moscow date boundaries use scheduled then finished then created fallback; B_WORKBOOK empty export/date validation; E_HR period/clear UI; PG list/export both exactly 501 records"
+  - id: QA-HR-22
+    scenario: "Empty or failed export has clear recoverable behavior"
+    steps: "Export empty date range, inject JSON 503, observe failure and retry."
+    expected: "Empty result still downloads valid workbook; failure never becomes a false XLSX; user can retry manually."
+    result: pass
+    evidence: "E_HR full journey; B_WORKBOOK: empty export stays valid and date validation matches personal list"
+  - id: QA-HR-23
+    scenario: "Export workload and same-account concurrency are bounded"
+    steps: "Export 1000 rooms/5000 tasks; request 10001 rooms; start two exports for same account; inspect configured transaction timeout."
+    expected: "Normal workbook completes, oversized export returns 413 before task materialization, parallel same-account request returns 429/Retry-After:5, snapshot timeout is 30 seconds."
+    result: pass
+    evidence: "Final PG workload 0.590s/310579 bytes; original unchanged-cap 10001-room 413 in 0.120s; B_WORKBOOK: same HR concurrent export is rejected with retry guidance while first export completes; export snapshot transaction is bounded to the renderer deadline"
+  - id: QA-HR-24
+    scenario: "Failed workbook generation always cleans temporary files"
+    steps: "Inject write failure and close failure into workbook construction; inspect thrown cause, dispose invocation and temp directory."
+    expected: "Primary write failure survives, cleanup failures are suppressed, close/dispose/delete are each attempted and temp workbook is gone."
+    result: pass
+    evidence: "B_CLEANUP: render failure preserves its cause and attempts every cleanup even when close fails; verification.md RED-to-GREEN"
+  - id: QA-HR-25
+    scenario: "Account switch/logout clears cabinet and cancels former-account export"
+    steps: "Switch two HR accounts in one browser; separately delay XLSX until after logout."
+    expected: "Previous ID/list/results never remain as current data; no former-account file downloads after logout."
+    result: pass
+    evidence: "E_HR: switching HR accounts in one browser clears the previous cabinet and results; leaving the account cancels a pending HR export before a previous-account file can download; E_REGRESSIONS account-switch"
+  - id: QA-HR-26
+    scenario: "Reconnect within 30 seconds restores latest room content"
+    steps: "Take candidate context offline, type three markers in connected participant, wait 1200ms, restore network and inspect both editors after recovery."
+    expected: "Both editors contain every latest marker after short interruption; confirmed HR manager role also survives normal reload."
+    result: pass
+    evidence: "QA_RECONNECT; frontend/tests/e2e/realtime/e2e-sse-reconnect-sync.mjs; E_HR invited-HR reload; E_REGRESSIONS realtime authorization recovery exactly two rejected requests"
+  - id: QA-HR-27
+    scenario: "Simultaneous editing and published task switching synchronize correctly"
+    steps: "Use five participants; concurrently append different markers as interviewer and candidate; prepare another task privately and publish it while another manager previews a different task."
+    expected: "All current editors contain each marker once; candidate gets published task/code, private task stays hidden until publication, independent manager selection persists."
+    result: pass
+    evidence: "QA_CONCURRENCY; frontend/tests/e2e/realtime/e2e-five-participant-collaboration.mjs (both topologies, one repetition). This tests accepted task workspace semantics, not obsolete unconditional editor clearing."
+  - id: QA-HR-28
+    scenario: "Guest room flow and registered account room history remain functional"
+    steps: "Create anonymous room and join as guest candidate/owner; register/login, grant interviewer rights, refresh, inspect account history."
+    expected: "Guest creation/admission works; ordinary users retain room-local roles and account history after refresh."
+    result: pass
+    evidence: "E_REGRESSIONS account-binding and roles; QA_NEGATIVE guest owner room; E_HR owner/promoted guest invitation and normal profile"
+  - id: QA-HR-29
+    scenario: "Invalid invite and superseded event token cannot admit or mutate"
+    steps: "Open unknown invite; then reconnect valid candidate session and replay previous event token with a unique sourceEventId."
+    expected: "Unknown room returns 404 with no editable workspace or usable state sync; stale token returns 403, produces no manager broadcast or durable activity, and no retry storm occurs."
+    result: pass
+    evidence: "QA_NEGATIVE; frontend/tests/e2e/auth/e2e-invite-token-negative.mjs. This is superseded connection-token rejection, not a wall-clock account-token expiry claim."
+  - id: QA-HR-30
+    scenario: "Owner-exclusive authority and HR-compatible regressions remain bounded"
+    steps: "Attempt room removal/access elevation as invited HR; inspect role resolution, shared manager controls and candidate restrictions; delete account owning tracked rooms."
+    expected: "HR grants existing interviewer capability, never owner/admin authority; owner removal/access-role rules persist; administrative hard deletion cleans assignment foreign keys."
+    result: pass
+    evidence: "B_ARCHIVE interviewer deletion denial; B_ACCOUNT admin FK cleanup; B_TRACKING no ownerToken grant; RoomAccessServiceTest; E_REGRESSIONS account-binding; security-review.yaml owner-exclusive and private-note control inspection"
+  - id: QA-HR-31
+    scenario: "Final static/build and responsive cabinet verification"
+    steps: "Inspect final typecheck/build/package results and desktop/320px visual evidence."
+    expected: "Builds/typecheck complete; cabinet has no horizontal overflow at 320px, primary actions are at least 44px and unknown dates are explicit."
+    result: pass
+    evidence: "BUILD; verification.md final visual section; output/playwright/hr-cabinet-desktop-final.png; solution-review.yaml responsive approval"
+  - id: QA-HR-32
+    scenario: "Concurrent invitation remains successful when the database pool is saturated"
+    steps: "Run output/hr-pool-probe.py: hold room row lock externally, barrier-start 12 authorized invitations, wait until 10 database connections queue on the lock, commit external transaction and await responses."
+    expected: "All idempotent invitations complete successfully after the lock release; committed permission callbacks do not exhaust the connection pool or time out."
+    result: pass
+    evidence: "POOL_RED then POOL_GREEN: identical 12-request PostgreSQL saturation probe changes four 500 responses/30.028s to twelve 200 responses/0.183s; B_POOL: permission publication succeeds with only one pool connection available (invite, track, rest-role, realtime-role)"
+  - id: QA-HR-33
+    scenario: "Rejected nested permission publication invalidates only affected live sessions"
+    steps: "Open HR and owner sessions, force executor rejection, commit HR demotion inside an outer transaction, then use former HR and owner credentials/request_state_sync."
+    expected: "No role is published before commit; affected HR event token is invalidated and state request returns 403; unrelated owner stays OWNER and receives state with 204."
+    result: pass
+    evidence: "B_TRACKING: rejected nested permission publication closes only the affected account connections; output/hr-queue-mutation-red.log proves omitting close leaves CANDIDATE credential and fails; original source restored byte-for-byte before both 65-test GREEN runs"
+bugs:
+  - id: BUG-HR-QA-001
+    severity: high
+    status: resolved
+    summary: "After-commit permission callbacks exhaust the database pool under concurrent HR invitation"
+    steps: >-
+      1. Use the isolated PostgreSQL packaged runtime with the default ten-connection pool.
+      2. Create an owner, HR target and room.
+      3. In a separate PostgreSQL connection execute BEGIN and SELECT id FROM rooms
+      WHERE id = the created room ID FOR UPDATE.
+      4. Barrier-start twelve authorized PUT requests to the room's hr-managers/{targetId} endpoint.
+      5. Wait until pg_stat_activity shows ten connections waiting on a lock.
+      6. Commit the external transaction and collect all twelve responses.
+      The exact fixture/probe is python3 output/hr-pool-probe.py.
+    expected: "Every request succeeds idempotently; permission refresh completes without acquiring connections indefinitely while retaining all outer connections."
+    original_actual: >-
+      Four requests return HTTP 500 approximately 30 seconds after lock release.
+      Root observed Hikari active=10 and waiting=8. afterCommit invokes a
+      REQUIRES_NEW permission refresh while the originating transaction still
+      retains its connection, exhausting the pool.
+    resolution: >-
+      Permission mutation facades complete TransactionTemplate cleanup and release
+      their write connection before synchronous fresh locked role publication.
+      Mutations inside a pre-existing transaction enqueue publication only after
+      successful outer commit on a bounded worker; rejection/failure closes only
+      affected sessions. Fresh durable authority and rollback/callback ordering
+      remain covered and approved by solution/security review.
+    actual: "The original saturation probe now returns 12/12 HTTP 200 in 0.183 seconds and all ten pooled connections become idle."
+    evidence: "output/hr-final-pool-probe.log -> output/hr-post-pool-probe.log; HrPermissionPoolIntegrationTest four cases; HrRoomTrackingIntegrationTest 14 cases; renewed solution-review.yaml and security-review.yaml"
+    owner: developer-agent
+    release_blocking: false
+coverage_interpretations:
+  - >-
+    The generic QA role says next-step, run and language are owner-only, and
+    implies unconditional editor clearing on step changes. Accepted OpenSpec
+    independent-interviewer-step-navigation and this change explicitly preserve
+    interviewer management/published workspace semantics. This conflict was
+    escalated to root and resolved in favor of the accepted specification; QA
+    did not redefine those existing product permissions or invent failures.
+  - >-
+    Account sessions have no expiresAt in the existing platform. Actual invalid
+    and superseded room-event tokens were tested; account wall-clock expiry is
+    not claimed. The security review records a separate nonblocking auth-hardening follow-up.
+  - >-
+    The 30-second export check verifies configured transaction metadata plus
+    documented cooperative renderer checks. It does not prove a hard HTTP
+    deadline under an unresponsive database/transport. The separate task-row cap
+    and global export semaphore were source-reviewed by security, not independently
+    load-tested by this QA pass. The tested supported workload is 1000/5000.
+risks:
+  - "Nested permission publication is bounded and asynchronous; exceptional rejection/failure closes affected sessions and may require reconnect."
+  - "Final browser/runtime evidence uses the corrected 64-case production build; only one test was added afterward and production was restored byte-for-byte before final 65/65 Maven/Gradle verification. Security review's 64-test subtotal therefore describes the same reviewed production source, not a missing production recheck."
+  - "Backend/migration must be rolled out before the frontend; rollback must preserve archived-room denial."
+  - "Existing non-expiring account bearer sessions and cooperative export deadlines remain documented platform/operational limitations."
+next_owner:
+  agent: test-reviewer-agent
+  reason: "QA readiness is ready; independently review coverage completeness, including the resolved pool starvation and nested-publication failure path, before product acceptance."
+handoff_to:
+  - agent: test-reviewer-agent
+    reason: "Coverage review: 33/33 scenario groups passed; BUG-HR-QA-001 is resolved with identical PostgreSQL RED-to-GREEN evidence."
+linear_update:
+  state: QA
+  comment_summary: "QA verdict: READY. 33 scenario groups passed; 65/65 backend tests in each build system, 10 HR E2E tests and 7 regressions passed. BUG-HR-QA-001 resolved. Awaiting test coverage review/product acceptance. No Linear issue exists; no external update was sent."
+review_required:
+  - test-reviewer-agent

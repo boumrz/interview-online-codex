@@ -1,0 +1,83 @@
+agent: product-owner-agent
+task_id: HR-PARTICIPANT-PRODUCT
+change_id: add-hr-participant-assignment
+status: accepted
+status_recommendation: clarified
+summary: "Accepted scope: assign an already joined HR through the participant menu without typing or copying a UUID."
+input_summary: >-
+  Reviewed proposal.md and the hr-room-tracking delta spec against the user's
+  requested participant-menu shortcut and the existing HR cabinet requirements.
+output_summary: >-
+  Requirements are verifiable and sufficient for architecture and task planning.
+  No product gap blocks the agreed scope. This accepts the planned behavior;
+  implementation acceptance still requires the specified tests and review gates.
+user_story:
+  actor: "A server-authorized room owner or interviewer, including a supported promoted guest interviewer"
+  action: "Selects Назначить HR in an eligible joined participant's menu"
+  outcome: "That account receives durable interviewer access and one tracked interview visible on its next cabinet refresh."
+acceptance_criteria:
+  - id: AC-01
+    pass_if: >-
+      An authenticated HR entering via a candidate link remains a candidate with
+      no tracked row until explicit authorized assignment. The participant-menu
+      action then grants interviewer controls and one tracked row without ID entry.
+  - id: AC-02
+    pass_if: >-
+      Owner, ordinary non-owner interviewer and supported promoted guest can perform
+      the same action. The target receives no owner or account-admin authority.
+  - id: AC-03
+    pass_if: >-
+      HR eligibility and target identity come from the authenticated account's
+      server-confirmed participant data. Ordinary accounts and anonymous guests have
+      no enabled HR action; names or client-supplied flags cannot make them eligible.
+  - id: AC-04
+    pass_if: >-
+      Already assigned HR has an understandable assigned state. Repeated or concurrent
+      participant/ID invitations retain one membership and tracked association.
+      A selected account disconnecting does not change the existing durable ID-invitation semantics.
+  - id: AC-05
+    pass_if: >-
+      The affected control visibly waits and prevents duplicate submissions; success
+      follows server confirmation. Failure preserves the actual role and offers
+      retry. Archived-room responses use the existing terminal unavailable state.
+  - id: AC-06
+    pass_if: >-
+      Current inviter authority and stored target HR eligibility are checked on the
+      server. Forged candidate/revoked-manager requests change neither membership
+      nor tracking; new projection data contains no email, token or unrelated details.
+  - id: AC-07
+    pass_if: >-
+      Existing interviewer removal demotes HR durably; reconnect and cabinet refresh
+      do not restore access. A new explicit authorized assignment restores access
+      through the original unique association. Late responses cannot restore old
+      controls after account/room changes or loss of manager authority.
+  - id: AC-08
+    pass_if: >-
+      The optional account HR checkbox, room-local candidate/interviewer roles,
+      ordinary interviewer assignment, private-note boundaries and ID invitation
+      form for absent HR remain available with their existing semantics.
+priority:
+  feature: P1
+  rationale: "Removes UUID handling when the intended HR is already visible in the room."
+  invariants: "P0: preserve current server authority, explicit candidate-to-manager transition and privacy boundaries."
+mvp_scope_boundary:
+  included: "Explicit participant-menu assignment of a joined authenticated HR, reliable feedback and existing durable invitation effects."
+  excluded: "Automatic candidate-link promotion, enabling HR for someone else, anonymous HR, a new HR room role, replacing the ID flow, and cabinet/export changes."
+  rationale: "The shortcut completes the requested interaction using the established HR workflow."
+decisions:
+  - "No additional user clarification or scope expansion is required."
+  - "The account HR marker is eligibility; the explicit authorized room action grants interviewer access."
+risks:
+  - "Eligible HR and currently assigned HR must remain distinct in the participant controls; the existing spec covers demotion and explicit reassignment."
+artifacts_created:
+  - type: product-scope
+    title: "Joined HR participant assignment: scope and eight binary acceptance criteria"
+next_owner: architect-agent
+handoff_to:
+  - agent: architect-agent
+    reason: "Scope accepted; define the minimal participant eligibility/action contract within the existing invitation and authority model."
+linear_update:
+  applied: false
+  comment_summary: "Product scope accepted. No external task update or message was sent."
+review_required:
+  - prompt-task-auditor-agent

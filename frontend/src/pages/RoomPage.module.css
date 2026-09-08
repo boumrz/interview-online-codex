@@ -198,6 +198,17 @@
   font-weight: 700;
 }
 
+.participantHrBadge {
+  flex: 0 0 auto;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: rgba(108, 159, 255, 0.16);
+  color: #c0d7ff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+}
+
 /*
  * Caret hint that appears next to participant names whose role can be
  * toggled by the current viewer. Subtle (opacity 0.45) so it doesn't
@@ -2206,5 +2217,34 @@
 
   .briefingSplit {
     grid-template-columns: 1fr;
+  }
+}
+.interviewPanelHost {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-height: 40px;
+  padding: 6px 14px;
+  border-bottom: 1px solid #272b34;
+  background: #101318;
+}
+
+.hrTrackingAlert {
+  max-width: 560px;
+  padding: 6px 10px;
+}
+
+@media (max-width: 719px) {
+  .interviewPanelHost {
+    justify-content: stretch;
+  }
+
+  .interviewPanelHost > * {
+    max-width: 100%;
+  }
+
+  .interviewPanelHost button {
+    min-height: 44px;
   }
 }

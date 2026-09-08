@@ -1,5 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { mergeUpdates } from "yjs";
 import { API_BASE_URL } from "../../config/runtime";
+import { activityRetryDelay, ACTIVITY_REQUEST_TIMEOUT_MS } from "./activityRetry";
+import { base64ToBytes, bytesToBase64 } from "./yjsCodec";
 import type { RoomTask } from "../../types";
 import { trackEvent } from "../../services/analytics";
 
@@ -34,6 +37,7 @@ type Participant = {
   role: "owner" | "interviewer" | "candidate";
   presenceStatus: "active" | "away";
   isAuthenticated?: boolean;
+  isHr?: boolean;
   canBeGrantedInterviewerAccess?: boolean;
 };
 
@@ -280,6 +284,8 @@ type QueuedClientMessage = {
   payload: ClientMessage;
   queuedAtEpochMs: number;
   clientEventSequence: number | null;
+  /** Once attempted, the entire delivery envelope is immutable for retries. */
+  attempted?: boolean;
 };
 
 type ActivityClientMessage = Extract<ClientMessage, { type: "key_press" }> & {
@@ -288,19 +294,17 @@ type ActivityClientMessage = Extract<ClientMessage, { type: "key_press" }> & {
 
 type QueuedActivityMessage = {
   payload: ActivityClientMessage;
-  /** Consecutive server failures for this exact FIFO head only. */
-  failed5xxAttempts: number;
+  /** Consecutive transient failures for this exact FIFO head only. */
+  failedAttempts: number;
   /** A retry timer, rather than SSE/state-sync callbacks, owns the next attempt. */
   retryPending: boolean;
   retryDueAt: number | null;
 };
 
-const MAX_PENDING_MESSAGES = 300;
-const MAX_ACTIVITY_5XX_ATTEMPTS = 3;
-const ACTIVITY_5XX_RETRY_DELAYS_MS = [1_000, 2_000] as const;
+const MAX_YJS_BATCH_INPUT_CHARS = 64 * 1024;
 const STREAM_STATUS_PROBE_TIMEOUT_MS = 1_500;
-const ACTIVITY_RECORDING_UNAVAILABLE_ERROR =
-  "Запись активности временно недоступна. Вы можете продолжать редактирование; обновите комнату, чтобы повторить.";
+const ACTIVITY_RECORDING_DELAYED_ERROR =
+  "Запись активности задерживается. Повторяем отправку автоматически.";
 
 function sessionIdKey(inviteCode: string) {
   return `room_ws_session_id_${inviteCode}`;
@@ -425,24 +429,27 @@ export function useRoomSocket({
   const lastPresenceRef = useRef<"active" | "away" | null>(null);
   const queueDrainInProgressRef = useRef(false);
   const inFlightControllerRef = useRef<AbortController | null>(null);
+  const inFlightMessageRef = useRef<QueuedClientMessage | null>(null);
   const tryDrainQueueRef = useRef<(() => void) | null>(null);
   // Activity telemetry deliberately has its own delivery lane: a slow raw-log
   // request must never sit ahead of a Yjs/document mutation in the main queue.
   const pendingActivityRef = useRef<QueuedActivityMessage[]>([]);
-  const activityDrainInProgressRef = useRef(false);
+  const activityDrainInProgressRef = useRef<symbol | null>(null);
   const activityInFlightControllerRef = useRef<AbortController | null>(null);
   const activityRetryTimerRef = useRef<number | null>(null);
   const tryDrainActivityRef = useRef<(() => void) | null>(null);
   const queueActivityRef = useRef<((payload: ActivityClientMessage) => void) | null>(null);
   const activityCaptureConfirmedRef = useRef(false);
-  // This is deliberately independent from token/access state. A server outage
-  // must stop only the volatile activity lane, not room collaboration.
-  const activityDeliveryDisabledRef = useRef(false);
-  const activityDeliveryNoticeShownRef = useRef(false);
+  // Delivery delay is feedback only; it never disables capture or room collaboration.
+  const activityDeliveryDelayedRef = useRef(false);
   const activityDeliverySessionKeyRef = useRef<string | null>(null);
   const terminalAccessFailureRef = useRef(false);
   /** A missing room is distinct from an authorization failure and is terminal for this page-room session. */
   const terminalRoomUnavailableRef = useRef(false);
+  const terminateRoomUnavailableRef = useRef<() => void>(() => {});
+  const terminateRoomUnavailable = useCallback(() => {
+    terminateRoomUnavailableRef.current();
+  }, []);
   const roomUnavailableSessionKeyRef = useRef<string | null>(null);
   const requiresEventSequence = (payload: ClientMessage) => payload.type !== "request_state_sync" && payload.type !== "presence_update";
   const nextClientEventSequence = () => {
@@ -453,43 +460,31 @@ export function useRoomSocket({
   };
   const queuePayload = (payload: ClientMessage, options: { dedupeSameType?: boolean } = {}) => {
     if (terminalAccessFailureRef.current || terminalRoomUnavailableRef.current) return;
-    let abortAndReplaceInFlight = false;
     if (options.dedupeSameType) {
-      const currentHead = pendingMessagesRef.current[0];
-      const hasInFlight = inFlightControllerRef.current != null;
-      // A "heartbeat" is a yjs_update with an empty delta (full snapshot only).
-      // Never abort an in-flight heartbeat with another heartbeat: if the server
-      // is slow (response time > 2500 ms), mutual cancellation would starve the
-      // server indefinitely and watchers would see no updates at all.
-      const isIncomingHeartbeat =
-        payload.type === "yjs_update" &&
-        (payload as Extract<ClientMessage, { type: "yjs_update" }>).yjsUpdate === "";
-      const isInFlightHeartbeat =
-        currentHead?.payload.type === "yjs_update" &&
-        (currentHead?.payload as Extract<ClientMessage, { type: "yjs_update" }>).yjsUpdate === "";
-      const canReplaceInFlight =
-        (payload.type === "code_update" || payload.type === "yjs_update") &&
-        hasInFlight &&
-        currentHead?.payload.type === payload.type &&
-        !(isIncomingHeartbeat && isInFlightHeartbeat);
-      abortAndReplaceInFlight = canReplaceInFlight;
-      const preserveHead = (queueDrainInProgressRef.current || hasInFlight) && !abortAndReplaceInFlight;
-      const head = preserveHead ? pendingMessagesRef.current.slice(0, 1) : [];
-      const tail = preserveHead ? pendingMessagesRef.current.slice(1) : pendingMessagesRef.current;
-      const filteredTail = tail.filter((queued) => queued.payload.type !== payload.type);
-      pendingMessagesRef.current = [...head, ...filteredTail];
+      pendingMessagesRef.current = pendingMessagesRef.current.filter((queued) => {
+        // A token-free recovery request can be in flight away from index zero.
+        // Keep the actual request until it settles; never cancel it to coalesce.
+        if (queued === inFlightMessageRef.current) return true;
+        if (queued.payload.type !== payload.type) return true;
+        if (payload.type === "yjs_update" && queued.payload.type === "yjs_update") {
+          // Only empty-delta heartbeats are replaceable. Later Yjs deltas can
+          // depend on every earlier delta, even when a full snapshot is attached.
+          return payload.yjsUpdate !== "" || queued.payload.yjsUpdate !== "" ||
+            queued.payload.syncKey !== payload.syncKey;
+        }
+        if (payload.type === "code_update" && queued.payload.type === "code_update") {
+          return queued.payload.syncKey !== payload.syncKey;
+        }
+        return false;
+      });
     }
     pendingMessagesRef.current.push({
       payload,
       queuedAtEpochMs: Date.now(),
       clientEventSequence: requiresEventSequence(payload) ? nextClientEventSequence() : null,
     });
-    if (pendingMessagesRef.current.length > MAX_PENDING_MESSAGES) {
-      pendingMessagesRef.current.shift();
-    }
-    if (abortAndReplaceInFlight) {
-      inFlightControllerRef.current?.abort();
-    }
+    // Keep valid mutations until acknowledged or an explicit context/access
+    // boundary. A count cap must not silently evict causal document updates.
   };
   const sendRef = useRef<(payload: ClientMessage) => void>((payload: ClientMessage) => {
     queuePayload(payload);
@@ -528,13 +523,12 @@ export function useRoomSocket({
       queueDrainInProgressRef.current = false;
       inFlightControllerRef.current = null;
       tryDrainQueueRef.current = null;
-      activityDrainInProgressRef.current = false;
+      activityDrainInProgressRef.current = null;
       activityInFlightControllerRef.current = null;
       tryDrainActivityRef.current = null;
       queueActivityRef.current = null;
       activityCaptureConfirmedRef.current = false;
-      activityDeliveryDisabledRef.current = false;
-      activityDeliveryNoticeShownRef.current = false;
+      activityDeliveryDelayedRef.current = false;
       activityDeliverySessionKeyRef.current = null;
       sendRef.current = () => {};
       return;
@@ -554,8 +548,7 @@ export function useRoomSocket({
         activityRetryTimerRef.current = null;
       }
       activityDeliverySessionKeyRef.current = activityDeliverySessionKey;
-      activityDeliveryDisabledRef.current = false;
-      activityDeliveryNoticeShownRef.current = false;
+      activityDeliveryDelayedRef.current = false;
     }
 
     let hasWindowFocus = typeof document !== "undefined" ? document.hasFocus() : true;
@@ -610,6 +603,7 @@ export function useRoomSocket({
         inFlightControllerRef.current.abort();
         inFlightControllerRef.current = null;
       }
+      inFlightMessageRef.current = null;
     };
 
     const abortActivityInFlightRequest = () => {
@@ -659,31 +653,12 @@ export function useRoomSocket({
       abortActivityInFlightRequest();
     };
 
-    const presentActivityRecordingUnavailable = () => {
-      if (!activityDeliveryNoticeShownRef.current) {
-        activityDeliveryNoticeShownRef.current = true;
-      }
+    const presentActivityRecordingDelayed = () => {
+      activityDeliveryDelayedRef.current = true;
       // Re-apply the same message after an unrelated reconnect in case another
       // transport callback replaced the shared room error presenter. React still
       // renders one notice because the value is identical.
-      onError(ACTIVITY_RECORDING_UNAVAILABLE_ERROR);
-    };
-
-    const disableActivityDeliveryForServerFailure = (statusCode: number, failedAttempts: number) => {
-      if (activityDeliveryDisabledRef.current) {
-        presentActivityRecordingUnavailable();
-        return;
-      }
-      activityDeliveryDisabledRef.current = true;
-      activityCaptureConfirmedRef.current = false;
-      clearActivityRetryTimer();
-      dropPendingActivity();
-      emitMetric(
-        "prod_realtime_activity_recording_disabled",
-        { reason: "persistent_server_error", status_code: statusCode, attempts: failedAttempts },
-        { minIntervalMs: 2_000, dedupeKey: "activity_recording_disabled" },
-      );
-      presentActivityRecordingUnavailable();
+      onError(ACTIVITY_RECORDING_DELAYED_ERROR);
     };
 
     const terminateForAccessFailure = () => {
@@ -743,6 +718,7 @@ export function useRoomSocket({
       setRoomUnavailable(true);
       onError("");
     };
+    terminateRoomUnavailableRef.current = terminateForRoomUnavailable;
 
     const scheduleReconnect = () => {
       if (isTerminal() || reconnectScheduled || statusProbeInFlight) return;
@@ -775,7 +751,7 @@ export function useRoomSocket({
       head.retryDueAt = retryDueAt;
       activityRetryTimerRef.current = window.setTimeout(() => {
         activityRetryTimerRef.current = null;
-        if (isTerminal() || activityDeliveryDisabledRef.current) return;
+        if (isTerminal()) return;
         const currentHead = pendingActivityRef.current[0];
         // State sync and SSE reconnect callbacks may wake the drain, but only
         // this timer may release the same failed head for another POST.
@@ -799,15 +775,58 @@ export function useRoomSocket({
       return pendingMessagesRef.current.findIndex(({ payload }) => !requiresEventToken(payload));
     };
 
-    const dropQueuedRecoveryMutations = () => {
+    const discardObsoleteRecoveryMutations = (state: RealtimeState) => {
       if (pendingMessagesRef.current.length === 0) return;
+      const activeSyncKey = `${state.inviteCode}:${state.currentStep}:${state.language}`;
       const before = pendingMessagesRef.current.length;
       pendingMessagesRef.current = pendingMessagesRef.current.filter(({ payload }) => {
-        return payload.type !== "yjs_update" && payload.type !== "code_update";
+        if (payload.type === "code_update") return false;
+        if (payload.type !== "yjs_update") return true;
+        // Merge the recovery snapshot locally and retry original deltas only
+        // within their original task. Never rebind old edits to the new task.
+        return payload.yjsUpdate !== "" && payload.syncKey === activeSyncKey;
       });
       const dropped = before - pendingMessagesRef.current.length;
       if (dropped > 0) {
         roomSyncTransportLog("drop_stale_pending_mutations_after_recovery", { dropped });
+      }
+    };
+
+    const prepareQueuedMessage = (index: number): QueuedClientMessage => {
+      const head = pendingMessagesRef.current[index];
+      if (head.attempted || head.payload.type !== "yjs_update" ||
+        !head.payload.yjsUpdate || !head.payload.syncKey) return head;
+
+      // Merge only a contiguous unsent run. Crossing another action could move
+      // its client sequence behind this batch and make the server reject it.
+      try {
+        const updates = [base64ToBytes(head.payload.yjsUpdate)];
+        let inputChars = head.payload.yjsUpdate.length;
+        let latest = head;
+        let latestPayload = head.payload;
+        for (let next = index + 1; next < pendingMessagesRef.current.length; next++) {
+          const queued = pendingMessagesRef.current[next];
+          const payload = queued.payload;
+          if (queued.attempted || payload.type !== "yjs_update" || !payload.yjsUpdate ||
+            payload.syncKey !== head.payload.syncKey ||
+            inputChars + payload.yjsUpdate.length > MAX_YJS_BATCH_INPUT_CHARS) break;
+          updates.push(base64ToBytes(payload.yjsUpdate));
+          inputChars += payload.yjsUpdate.length;
+          latest = queued;
+          latestPayload = payload;
+        }
+        if (updates.length === 1) return head;
+        const batch: QueuedClientMessage = {
+          ...latest,
+          queuedAtEpochMs: head.queuedAtEpochMs,
+          // Keep the latest snapshot and its original freshness metadata together.
+          payload: { ...latestPayload, yjsUpdate: bytesToBase64(mergeUpdates(updates)) },
+        };
+        pendingMessagesRef.current.splice(index, updates.length, batch);
+        return batch;
+      } catch {
+        // Invalid local data must not remove other queued edits during batching.
+        return head;
       }
     };
 
@@ -825,12 +844,18 @@ export function useRoomSocket({
           while (!isTerminal()) {
             const nextIndex = findNextProcessableQueueIndex();
             if (nextIndex < 0) break;
-            const head = pendingMessagesRef.current[nextIndex];
+            const head = prepareQueuedMessage(nextIndex);
+            head.attempted = true;
             const lease = streamLease;
             const token = eventTokenRef.current;
 
             const controller = new AbortController();
             inFlightControllerRef.current = controller;
+            inFlightMessageRef.current = head;
+            const removeSettledMessage = () => {
+              const index = pendingMessagesRef.current.indexOf(head);
+              if (index >= 0) pendingMessagesRef.current.splice(index, 1);
+            };
 
             let response: Response;
             try {
@@ -849,6 +874,7 @@ export function useRoomSocket({
               });
             } catch {
               inFlightControllerRef.current = null;
+              if (inFlightMessageRef.current === head) inFlightMessageRef.current = null;
               if (isTerminal() || controller.signal.aborted || lease !== streamLease) break;
               emitMetric(
                 "prod_realtime_post_failed",
@@ -860,16 +886,18 @@ export function useRoomSocket({
               break;
             }
             inFlightControllerRef.current = null;
+            if (inFlightMessageRef.current === head) inFlightMessageRef.current = null;
 
             if (isTerminal() || lease !== streamLease) break;
 
             if (response.ok) {
-              if (nextIndex === 0) {
-                pendingMessagesRef.current.shift();
-              } else {
-                pendingMessagesRef.current.splice(nextIndex, 1);
-              }
+              removeSettledMessage();
               continue;
+            }
+
+            if (response.status === 410) {
+              terminateForRoomUnavailable();
+              break;
             }
 
             const data = (await response.json().catch(() => ({}))) as { error?: string };
@@ -895,11 +923,7 @@ export function useRoomSocket({
                 { status_code: 409, payload_type: head.payload.type },
                 { minIntervalMs: 2000, dedupeKey: `post_rejected_409_${head.payload.type}` }
               );
-              if (nextIndex === 0) {
-                pendingMessagesRef.current.shift();
-              } else {
-                pendingMessagesRef.current.splice(nextIndex, 1);
-              }
+              removeSettledMessage();
               continue;
             }
             if (response.status >= 400 && response.status < 500) {
@@ -909,11 +933,7 @@ export function useRoomSocket({
                 { status_code: response.status, payload_type: head.payload.type },
                 { minIntervalMs: 2000, dedupeKey: `post_rejected_${response.status}_${head.payload.type}` }
               );
-              if (nextIndex === 0) {
-                pendingMessagesRef.current.shift();
-              } else {
-                pendingMessagesRef.current.splice(nextIndex, 1);
-              }
+              removeSettledMessage();
             } else {
               emitMetric(
                 "prod_realtime_post_failed",
@@ -948,18 +968,18 @@ export function useRoomSocket({
       if (
         activityDrainInProgressRef.current ||
         isTerminal() ||
-        activityDeliveryDisabledRef.current ||
         reconnectScheduled
       ) {
         return;
       }
       const queuedHead = pendingActivityRef.current[0];
       if (!eventTokenRef.current || !queuedHead || queuedHead.retryPending) return;
-      activityDrainInProgressRef.current = true;
+      const drainToken = Symbol("activity-drain");
+      activityDrainInProgressRef.current = drainToken;
 
       void (async () => {
         try {
-          while (!isTerminal() && !activityDeliveryDisabledRef.current) {
+          while (!isTerminal()) {
             const head = pendingActivityRef.current[0];
             const token = eventTokenRef.current;
             const lease = streamLease;
@@ -967,6 +987,11 @@ export function useRoomSocket({
 
             const controller = new AbortController();
             activityInFlightControllerRef.current = controller;
+            let timedOut = false;
+            const deadline = window.setTimeout(() => {
+              timedOut = true;
+              controller.abort();
+            }, ACTIVITY_REQUEST_TIMEOUT_MS);
             let response: Response;
             try {
               response = await fetch(`${API_BASE_URL}/realtime/rooms/${inviteCode}/events`, {
@@ -981,18 +1006,21 @@ export function useRoomSocket({
                 }),
               });
             } catch {
-              activityInFlightControllerRef.current = null;
-              if (isTerminal() || controller.signal.aborted || lease !== streamLease) break;
+              if (activityInFlightControllerRef.current === controller) activityInFlightControllerRef.current = null;
+              if (isTerminal() || (controller.signal.aborted && !timedOut) || lease !== streamLease) break;
               emitMetric(
                 "prod_realtime_activity_post_failed",
-                { reason: "network_error" },
+                { reason: timedOut ? "timeout" : "network_error" },
                 { minIntervalMs: 2_000 },
               );
-              scheduleReconnect();
-              onError("Не удалось отправить действие в комнату");
+              head.failedAttempts += 1;
+              scheduleActivityRetry(head, activityRetryDelay(head.failedAttempts));
+              presentActivityRecordingDelayed();
               break;
+            } finally {
+              window.clearTimeout(deadline);
             }
-            activityInFlightControllerRef.current = null;
+            if (activityInFlightControllerRef.current === controller) activityInFlightControllerRef.current = null;
 
             if (isTerminal() || lease !== streamLease) break;
 
@@ -1000,12 +1028,21 @@ export function useRoomSocket({
               // The source ID, rather than a payload comparison, protects the
               // queue from a late duplicate response after a reconnect.
               if (pendingActivityRef.current[0]?.payload.sourceEventId === head.payload.sourceEventId) {
-                head.failed5xxAttempts = 0;
+                head.failedAttempts = 0;
                 head.retryPending = false;
                 head.retryDueAt = null;
                 pendingActivityRef.current.shift();
+                if (pendingActivityRef.current.length === 0 && activityDeliveryDelayedRef.current) {
+                  activityDeliveryDelayedRef.current = false;
+                  onError("");
+                }
               }
               continue;
+            }
+
+            if (response.status === 410) {
+              terminateForRoomUnavailable();
+              break;
             }
 
             if (response.status === 401 || response.status === 403) {
@@ -1024,30 +1061,27 @@ export function useRoomSocket({
               break;
             }
 
-            if (response.status >= 500) {
-              head.failed5xxAttempts += 1;
+            if (response.status >= 500 || response.status === 429) {
+              head.failedAttempts += 1;
               emitMetric(
                 "prod_realtime_activity_post_failed",
                 {
                   reason: "server_error",
                   status_code: response.status,
-                  attempt: head.failed5xxAttempts,
+                  attempt: head.failedAttempts,
                 },
                 { minIntervalMs: 2_000 },
               );
-              if (head.failed5xxAttempts >= MAX_ACTIVITY_5XX_ATTEMPTS) {
-                disableActivityDeliveryForServerFailure(response.status, head.failed5xxAttempts);
-                break;
-              }
-              const retryDelayMs = ACTIVITY_5XX_RETRY_DELAYS_MS[head.failed5xxAttempts - 1];
-              scheduleActivityRetry(head, retryDelayMs);
+              scheduleActivityRetry(head, activityRetryDelay(head.failedAttempts));
+              presentActivityRecordingDelayed();
               break;
             }
 
-            const data = (await response.json().catch(() => ({}))) as { error?: string };
-
             // Client-side validation is the only expected 4xx path here. Do not
             // let one malformed legacy action block later source actions forever.
+            // Error bodies are not part of the acknowledgement contract and may
+            // never finish streaming. Release them without blocking the FIFO.
+            void response.body?.cancel().catch(() => {});
             if (pendingActivityRef.current[0]?.payload.sourceEventId === head.payload.sourceEventId) {
               pendingActivityRef.current.shift();
             }
@@ -1056,13 +1090,13 @@ export function useRoomSocket({
               { status_code: response.status },
               { minIntervalMs: 2_000, dedupeKey: `activity_post_rejected_${response.status}` },
             );
-            onError(data.error || "Не удалось отправить действие в комнату");
+            onError("Не удалось отправить действие в комнату");
           }
         } finally {
-          activityDrainInProgressRef.current = false;
+          if (activityDrainInProgressRef.current !== drainToken) return;
+          activityDrainInProgressRef.current = null;
           if (
             !isTerminal() &&
-            !activityDeliveryDisabledRef.current &&
             !reconnectScheduled &&
             eventTokenRef.current &&
             pendingActivityRef.current.length > 0 &&
@@ -1077,14 +1111,13 @@ export function useRoomSocket({
     queueActivityRef.current = (payload) => {
       if (
         terminalAccessFailureRef.current ||
-        terminalRoomUnavailableRef.current ||
-        activityDeliveryDisabledRef.current
+        terminalRoomUnavailableRef.current
       ) {
         return;
       }
       pendingActivityRef.current.push({
         payload,
-        failed5xxAttempts: 0,
+        failedAttempts: 0,
         retryPending: false,
         retryDueAt: null,
       });
@@ -1183,11 +1216,11 @@ export function useRoomSocket({
 
         statusProbeController = null;
         statusProbeInFlight = false;
-        if (response?.status === 404) {
+        if (response?.status === 404 || response?.status === 410) {
           terminateForRoomUnavailable();
           return;
         }
-        if (!activityDeliveryDisabledRef.current) {
+        if (!activityDeliveryDelayedRef.current) {
           onError("Соединение с realtime временно потеряно. Пытаемся восстановить связь...");
         }
         scheduleReconnect();
@@ -1217,8 +1250,8 @@ export function useRoomSocket({
         setConnected(true);
         roomSyncTransportLog("sse_open", { inviteCode });
         emitMetric("prod_realtime_connected", {}, { minIntervalMs: 1000 });
-        if (activityDeliveryDisabledRef.current) {
-          presentActivityRecordingUnavailable();
+        if (activityDeliveryDelayedRef.current) {
+          presentActivityRecordingDelayed();
         } else {
           onError("");
         }
@@ -1249,7 +1282,7 @@ export function useRoomSocket({
             { ready_state: readyState },
             { minIntervalMs: 2000 }
           );
-          if (!activityDeliveryDisabledRef.current) {
+          if (!activityDeliveryDelayedRef.current) {
             onError("Соединение с realtime временно потеряно. Пытаемся восстановить связь...");
           }
         }
@@ -1265,10 +1298,10 @@ export function useRoomSocket({
           const payload = message.payload as RealtimeState;
           eventTokenRef.current = payload.eventToken?.trim() || null;
           activityCaptureConfirmedRef.current =
-            Boolean(eventTokenRef.current) && !activityDeliveryDisabledRef.current;
+            Boolean(eventTokenRef.current);
           setAccessDenied(false);
-          if (activityDeliveryDisabledRef.current) {
-            presentActivityRecordingUnavailable();
+          if (activityDeliveryDelayedRef.current) {
+            presentActivityRecordingDelayed();
           }
           const shouldHydrateFromState = expectRecoveryStateSync;
           expectRecoveryStateSync = false;
@@ -1283,15 +1316,11 @@ export function useRoomSocket({
           );
           onState(payload);
           if (shouldHydrateFromState) {
-            // After a recovery sync, discard stale queued code/yjs writes so we do not replay
-            // a partial local snapshot over the fresh server state.
-            dropQueuedRecoveryMutations();
+            discardObsoleteRecoveryMutations(payload);
           }
           if (eventTokenRef.current) {
             tryDrainQueueRef.current?.();
-            if (!activityDeliveryDisabledRef.current) {
-              tryDrainActivityRef.current?.();
-            }
+            tryDrainActivityRef.current?.();
           }
           if (shouldHydrateFromState) {
             emitMetric(
@@ -1510,12 +1539,14 @@ export function useRoomSocket({
       dropPendingActivity();
       queueDrainInProgressRef.current = false;
       inFlightControllerRef.current = null;
-      activityDrainInProgressRef.current = false;
+      inFlightMessageRef.current = null;
+      activityDrainInProgressRef.current = null;
       activityInFlightControllerRef.current = null;
       eventTokenRef.current = null;
       activityCaptureConfirmedRef.current = false;
       lastPresenceRef.current = null;
       terminalAccessFailureRef.current = false;
+      terminateRoomUnavailableRef.current = () => {};
       tryDrainQueueRef.current = null;
       tryDrainActivityRef.current = null;
       queueActivityRef.current = null;
@@ -1652,6 +1683,8 @@ export function useRoomSocket({
         selectionEndLineNumber: payload.selectionEndLineNumber,
         selectionEndColumn: payload.selectionEndColumn,
       }),
+    }).then((response) => {
+      if (response.status === 410) terminateRoomUnavailableRef.current();
     }).catch(() => {});
   };
 
@@ -1673,6 +1706,8 @@ export function useRoomSocket({
         type: "awareness_update",
         awarenessUpdate: trimmed,
       }),
+    }).then((response) => {
+      if (response.status === 410) terminateRoomUnavailableRef.current();
     }).catch(() => {});
   };
 
@@ -1774,6 +1809,8 @@ export function useRoomSocket({
         stepIndex,
         awarenessUpdate: trimmed,
       }),
+    }).then((response) => {
+      if (response.status === 410) terminateRoomUnavailableRef.current();
     }).catch(() => {});
   };
 
@@ -1796,8 +1833,7 @@ export function useRoomSocket({
   }) => {
     if (
       terminalAccessFailureRef.current ||
-      terminalRoomUnavailableRef.current ||
-      activityDeliveryDisabledRef.current
+      terminalRoomUnavailableRef.current
     ) {
       return;
     }
@@ -1825,6 +1861,7 @@ export function useRoomSocket({
     connected,
     accessDenied,
     roomUnavailable,
+    terminateRoomUnavailable,
     participantId,
     sessionId,
     sendCodeUpdate,

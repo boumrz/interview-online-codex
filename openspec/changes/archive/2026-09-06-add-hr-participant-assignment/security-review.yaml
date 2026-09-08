@@ -1,0 +1,106 @@
+agent: security-reliability-agent
+task_id: HR-PARTICIPANT-4.2
+change_id: add-hr-participant-assignment
+security_verdict: pass
+reliability_verdict: pass
+summary: >-
+  The participant shortcut preserves the existing server-authorized HR invitation
+  operation. No feature-specific security or reliability blocker was found in the
+  scoped production diff.
+input_summary: >-
+  Reviewed accepted product/design/specs, execution and verification artifacts,
+  output/hr-participant-baseline comparisons for all six changed production files,
+  and the unchanged invitation, access, identity aggregation and permission-publication
+  seams. The earlier uncommitted HR cabinet implementation is the review baseline.
+output_summary: >-
+  Verified authenticated HR provenance, account-scoped multisession aggregation,
+  stored target validation, current manager authority, owner-only ordinary role
+  administration, guest event credentials, durable reconnect behavior, request
+  generation/abort guards and the existing terminal 410 transition. This review
+  changes only this artifact; final packaged-browser execution remains root-owned.
+findings: []
+controls_verified:
+  identity_and_permissions:
+    - >-
+      CollaborationService initializes isHr from the authenticated User returned by
+      AuthService. RealtimeController accepts neither a claimed isHr nor userId as
+      identity. Anonymous participants remain ineligible.
+    - >-
+      ParticipantIdentity separates user, guest and session namespaces. any(isHr)
+      aggregates only sessions with the same identity; an older pre-opt-in session
+      cannot hide a refreshed authenticated HR session. No account/token/email
+      projection was added beyond the accepted public eligibility Boolean.
+    - >-
+      The existing PUT locks the active room, requires current manager authority
+      before resolving the target, rereads stored isHr, and atomically upserts durable
+      interviewer membership plus a unique HR assignment. Missing/non-HR targets
+      share the established 404 response. Owner membership is not downgraded.
+    - >-
+      TopBar uses separate canAssignHr/canManageRoom and owner-only canGrantAccess
+      gates. The server still rejects ordinary role grant/revoke by non-owners;
+      no role enum, code-execution path or owner capability was broadened.
+    - >-
+      The shortcut introduces no invite credential. A promoted guest uses the existing
+      random room-bound live-connection event token, which becomes invalid when its
+      connection is removed. Authenticated event-token authority is resolved from
+      current durable membership, so a stale session cannot bypass demotion.
+  consistency_and_lifetime:
+    - >-
+      Existing room locking, commit-before-publication, fresh durable permission reads
+      and the bounded permission-sync executor remain byte-for-byte unchanged.
+      Reconnect uses persisted membership; retrying the idempotent PUT cannot create
+      duplicate tracking rows. Browser cancellation does not pretend to undo a commit.
+    - >-
+      RoomPage synchronously records pending targets, prevents duplicate submission
+      and competing ordinary role actions, and applies no optimistic role or permission
+      update. Visible role state continues to arrive from the server.
+    - >-
+      Each operation is guarded by a request generation, request identity and canonical
+      auth token. Layout cleanup invalidates requests on room/account/token/authority/
+      connection/session changes and unmount. onState additionally invalidates each
+      authority transition synchronously, including loss and regain batched by React.
+    - >-
+      Only a current request may apply success, failure or 410. Current 410 delegates
+      to the existing terminal hook, which closes SSE, cancels retries and drops relay
+      and activity queues. Stale 410 cannot terminate a later authorized context.
+verification:
+  backend: "Observed Surefire XML: 67 tests, 17 suites, 0 failures/errors/skips."
+  focused_backend: >-
+    Two new tests cover authenticated/ordinary/guest provenance, spoofed query/name
+    inputs, absence of sensitive participant fields, candidate non-tracking and mixed
+    old/refreshed sessions. Existing integration cases cover target/actor rejection,
+    promoted guests, idempotency, demotion/regrant and delayed permission publication.
+  frontend_static: >-
+    Observed frontend typecheck/build logs passed; build has the existing two bundle
+    size warnings. Reviewed all five prewritten participant HR browser cases for
+    assignment, pending/error/retry, registered/guest authority, reconnect/demotion,
+    current 410 and stale 410 after demotion/regrant.
+  browser_execution: >-
+    Final packaged-browser results are pending root execution at review time. This
+    artifact approves the scoped security/reliability implementation, not completion
+    of QA or product acceptance; root records final execution in verification.md.
+blocking: false
+remediation_checklist:
+  - "[x] Derive eligibility from authenticated stored account data and revalidate on mutation"
+  - "[x] Preserve server-side manager/owner boundaries and current durable role checks"
+  - "[x] Reuse connection-scoped guest credentials without introducing a new invite token"
+  - "[x] Preserve atomic idempotent assignment and authoritative reconnect/publication"
+  - "[x] Invalidate stale requests and route only current 410 through terminal room handling"
+risks:
+  - >-
+    HR opt-in during an already-open session becomes visible after refreshed admission;
+    this is the accepted design, while mutation validation always uses stored isHr.
+  - >-
+    Platform-wide account-session lifetime/storage limitations recorded in the accepted
+    HR cabinet security review are unchanged; this shortcut does not create a new
+    credential format, token exposure, sandbox path or authorization bypass.
+next_owner: qa-agent
+handoff_to:
+  - agent: qa-agent
+    reason: "Scoped security/reliability gate passed; verify final packaged-browser evidence."
+linear_update:
+  state: In Progress
+  applied: false
+  comment_summary: >-
+    Security PASS; reliability PASS; no scoped blocking findings. Final browser/QA
+    evidence remains root-owned. No external issue update requested or performed.

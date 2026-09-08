@@ -106,6 +106,7 @@ data class ParticipantPayload(
     val role: String = "candidate",
     val presenceStatus: String = "active",
     val isAuthenticated: Boolean = false,
+    val isHr: Boolean = false,
     val canBeGrantedInterviewerAccess: Boolean = false,
 )
 

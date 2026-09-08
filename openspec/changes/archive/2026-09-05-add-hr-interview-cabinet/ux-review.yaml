@@ -1,0 +1,20 @@
+agent: root
+acting_role: ux-critic-agent
+task_id: HR-013
+verdict: approve
+input_summary: "Reviewed ux.md, all three HTML mocks, and rendered cabinet screenshot; designer resolved exact-label and obsolete-control findings."
+output_summary: "Frontend may implement frozen API and UX following demonstrated browser RED."
+reviewed:
+  - "Optional account HR checkbox and stable ID; room-local role remains clear."
+  - "Manager-only metadata and invitation, candidate exclusion, role-loss clearing."
+  - "Conflict retains draft and requires explicit reload before replacing it."
+  - "Initial/loading/empty/error/stale data and manual refresh have distinct states."
+  - "Archive overrides upcoming status; historical detail stays read-only."
+  - "Paired Moscow date range, all-page export, empty download and safe retry feedback."
+  - "Visible labels, focus return, keyboard behavior and narrow-screen field wrapping specified."
+resolved_findings:
+  - "Use exact badges Архив and Предстоящее to match acceptance."
+  - "Remove obsolete code-runner UI references."
+risks:
+  - "Mocks demonstrate interaction intent; production responsiveness and real permission transitions still require browser verification."
+next_owner: frontend-developer-agent

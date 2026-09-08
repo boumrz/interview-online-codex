@@ -1,0 +1,132 @@
+agent: qa-agent
+review_roles: [qa-agent, test-reviewer-agent]
+task_id: verify-project-release-readiness
+audit_verdict: accepted
+product_acceptance: NO-GO
+deployment_blocked: true
+input_summary: >-
+  Independently reviewed release-report.md, test-matrix.md, realtime-review.yaml,
+  current test entrypoints, retained execution logs, diagnostic JSON, Maven XML,
+  migration fixtures and production source fingerprints. Runtime execution was
+  performed by the coordinating owner; this reviewer ran no browser, server,
+  Maven or security exploit probe and changed only this review artifact.
+output_summary: >-
+  The verification scope is complete after correcting a filtered-child inventory
+  omission and inspecting the supplemental full recovery run. The evidence
+  supports NO-GO for users. Accepted audit completion permits final validation
+  and archival of this verification change, not deployment or approval of the
+  unresolved application behavior. Earlier scoped Yjs approval remains separate.
+evidence_root: output/release-audit/
+
+execution_reconciliation:
+  browser:
+    inventoried_files: 47
+    separately_executed_entrypoints: 47
+    original_pass: 39
+    original_fail: 7
+    original_commands: 46
+    docker_retries: {commands: 7, pass: 4, fail: 3}
+    metrika_corrected_teardown: PASS
+    supplemental_history: {tests: 8, pass: 8, fail: 0, skipped: 0}
+    eventual_entrypoint_results: {pass: 45, fail: 2}
+    clean_full_suite: false
+    evidence:
+      - browser-results.json
+      - browser-retry-results.json
+      - metrika-assets-teardown-recheck.log
+      - activity-history-recovery-complete.json
+      - activity-history-recovery-complete.log
+    interpretation: >-
+      Eventual PASS counts combine environments and justified repeats. They do
+      not erase original failures or imply that all 47 entrypoints passed on
+      the full Docker topology. The development chunk-recovery exception is explicit.
+  backend:
+    independently_summed_xml_suites: 20
+    first: {tests: 96, failures: 1, errors: 0, skipped: 0}
+    final: {tests: 96, failures: 0, errors: 0, skipped: 0}
+    evidence: [backend-first-run/, backend-final-run/, backend-final-results.json]
+    limitation: "The original 400-versus-403 failure remains unexplained; diagnostic-only instrumentation preserved assertions."
+  frontend_and_scripts:
+    unit: "16/16"
+    analytics_contract: "2/2"
+    scripts: "21/21"
+    typecheck: PASS
+    production_build: "PASS with two asset/entrypoint size warnings"
+    evidence: [static-results.json, frontend-unit.log, analytics-contract.log, scripts-unit.log, frontend-build.log]
+  hr:
+    native_upstream: "23/23"
+    supplemental_full_docker: "22/23"
+    unchanged_targeted_repeat: "1/1"
+    evidence: [e2e-hr-cabinet.log, hr-cabinet-full-docker.log, hr-metadata-targeted-retry.log]
+    limitation: >-
+      The initial panel close is consistent with identity/authority initialization
+      invalidation, but its exact transition was not captured. Neither a stable
+      full-Docker HR result nor a proven harmless harness defect is established.
+
+coverage_review:
+  corrected_inventory_gap:
+    source: "frontend/tests/e2e/interview/e2e-activity-timeline-grouping.mjs:1009"
+    initial_issue: >-
+      The child process uses --test-name-pattern=activity FIFO and executes only
+      three of eight recovery cases. File execution was initially mistaken for
+      execution of the full file, omitting five cases from this audit.
+    resolution: >-
+      Root ran the unchanged complete file separately on Docker15173: eight
+      passed, zero failed/skipped. Full history/reload, read failure/revocation,
+      unfinished error bodies, pending/empty/read timeout/retry and cross-page
+      grouping now have fresh evidence. The original 46-command run is retained.
+  remaining_entrypoints: >-
+    Source search found no other filtered child test suites or skip/only markers
+    in frontend unit/contract/script tests. The demo subprocess renders a PDF
+    preview. All four focused Yjs scenario names appear in the passing Docker log.
+    scenario-environment.json is a later snapshot; root separately confirmed
+    unchanged inherited environment without scenario or deadline overrides.
+  meaningful_oracles: >-
+    Coverage includes server-side negative authorization, account isolation,
+    HR assignment/removal and archive, real XLSX validation, durable UUID/history
+    assertions, paging, retry, reconnect, step/workspace changes and editor equality.
+    Process success is not substituted for these assertions or for unexecuted
+    later phases after a failing acceptance condition.
+  test_only_scope: >-
+    Backend HTTP diagnostic messages and Metrika finite-page teardown preserve
+    product assertions. This verification-only change requires no artificial
+    behavioral RED. Existing application failures remain evidence for separately
+    specified, test-first fixes; production behavior was not changed here.
+
+blocking_findings:
+  - id: RELEASE-ACTIVITY-DURABILITY
+    basis: "Full-Docker workload and later SQL aggregate retain 1399/1400 expected events."
+    evidence: multi-durable-counts.json
+    limit: "1400 successful-header diagnostics do not establish 1400 distinct acknowledged UUIDs; the exact loss path is unproven."
+    release_condition: "Reproduce with exact action/request/ACK UUID membership, repair the confirmed cause, then pass unchanged 2100-event and all-editor-equality workload."
+  - id: RELEASE-AUTH-NAVIGATION
+    basis: "Registration succeeds, token is set, clearAuth removes it on dashboard eight milliseconds later, and the next document starts without a token."
+    evidence: auth-navigation-diagnostic.json
+    release_condition: "Fix session loss during immediate post-registration navigation/reload; preserve and pass the original language-default scenario."
+  - id: RELEASE-ADMIN-REGISTRATION
+    basis: "Static source shows public nickname-based administrator assignment with case-sensitive uniqueness and case-insensitive privilege selection."
+    release_condition: "Remove public privilege selection and verify authorized provisioning plus nickname case variants with negative server tests."
+  - id: RELEASE-FAULT-CONTROL
+    basis: "Static source shows fault mutation accepts an authenticated actor without administrator or target-room authority checks."
+    release_condition: "Disable production fault control by default and enforce server authorization when explicitly enabled."
+
+verified_preservation:
+  production_files_independently_rehashed: 183
+  changed_production_files: []
+  fingerprint_sha256: b4a3e09975d7c7d1fc80d1903ac0a3bb546751a264998698cf4bf7e37331134d
+  migrations: >-
+    Fresh V1-V10 and V8-to-V10 evidence is consistent. Before/after fixtures
+    preserve room/task values and three event values/timestamps, retain existing
+    identities/sequences 100 and 50, and backfill the missing sequence as 101.
+  evidence: [source-fingerprint.json, source-verification.json, migration-report.json, upgrade-before.json, upgrade-after.json]
+
+risks:
+  - "Actual hidden-to-visible lifecycle remains UNVERIFIED: native minimize left document.visibilityState visible; headless PASS does not close this gap."
+  - "Runtime security exploit reproduction was blocked by automatic review and was not performed or attempted through an alternative path. Security findings remain source-based."
+  - "Delayed private-event delivery after revocation needs an explicit regression; no runtime disclosure is claimed."
+  - "The second-domain default mismatch is conditional on deployed environment; actual TLS/DNS/environment, backup restore and production-scale duration/load are unverified."
+  - "Backend status, briefing and HR failures are retained as unexplained instability. Native proxy faults explain specific observations, not the independent Docker durability failure."
+  - "Chromium and isolated fixtures do not establish cross-browser/mobile behavior, live external analytics/Linear behavior or exhaustive combination coverage."
+next_owner:
+  owner: coordinating-owner
+  action: "Finalize consistent 47-entrypoint report/matrix, validate and archive only the completed verification change; retain product NO-GO and scoped Yjs archival deferral."

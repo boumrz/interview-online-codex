@@ -1,0 +1,75 @@
+agent: independent-solution-security-reliability-review
+task_id: remove-hr-room-assignment
+input_summary: Validated OpenSpec, planning gate, baseline snapshots, implementation, and red/green evidence.
+output_summary: Both review scopes approve the focused HR removal implementation with no blocking findings.
+independence: Reviewer did not author production or acceptance-test implementation and changed only this artifact.
+scope:
+  baseline: output/hr-revoke-baseline
+  comparison: Feature-specific snapshot diffs, excluding unrelated prior uncommitted features.
+  changed_backend:
+    - backend/src/main/kotlin/com/interviewonline/controller/RoomHrController.kt
+    - backend/src/main/kotlin/com/interviewonline/service/RoomHrTrackingService.kt
+  changed_frontend:
+    - frontend/src/services/api.ts
+    - frontend/src/pages/RoomPage.tsx
+    - frontend/src/features/room/TopBar.tsx
+    - frontend/src/features/room/RoomInterviewPanel.tsx
+  unchanged_context: Existing permission synchronization, access filtering, account cleanup, and panel CSS.
+solution_review:
+  verdict: approve
+  findings: []
+  required_remediations: []
+  observations:
+    - DELETE returns empty 204 with no-store and reuses the existing permission mutation path.
+    - Candidate persistence supports idempotency and explicit later reassignment without duplicate tracking.
+    - Both removal surfaces share per-user request guards and confirmed-result handling.
+    - Offline list removal refreshes after confirmation; self-removal clears the private panel.
+    - Ordinary non-HR interviewer controls keep their existing owner-only permission rules.
+    - No added schema, dependency, transport, role enum, or unnecessary permission abstraction.
+security_review:
+  verdict: approve
+  blocking_findings: []
+  non_blocking_findings: []
+  mandatory_protections_verified:
+    - Fresh locked room authority precedes target UUID parsing, target lookup, and idempotency.
+    - Owner targets return 403 regardless of their HR flag; unrelated or non-HR targets create nothing.
+    - Supported promoted guests use existing server event-token authority.
+    - Durable candidate membership overrides prior account room access and automatic tracking.
+    - Global HR status, owner identity, tracking association, and private interview history are retained.
+    - Requests from revoked room members using existing account or event tokens deny subsequent manager operations and private writes.
+    - Current cabinet, detail, and export filters exclude revoked room access despite retained tracking.
+reliability_review:
+  verdict: approve
+  blocking_findings: []
+  non_blocking_findings: []
+  observations:
+    - Removal uses the room row lock and mutation transaction without an outer transactional facade.
+    - Existing fresh post-commit synchronization applies durable permissions to all active target sessions.
+    - Concurrent entry, tracking, assignment, and removal respect the committed room order.
+    - Reconnect resolves candidate membership; a later explicit authorized assignment can restore access.
+    - Generation, request identity, room, and account checks prevent stale asynchronous UI writes.
+    - Server authority transitions expire requests even when React batches permission loss and regrant.
+    - Current 410 reaches the terminal room state; stale 410 cannot terminate a newer authority context.
+    - Recoverable failures retain confirmed roles and expose retry feedback without optimistic grants.
+test_first_evidence:
+  browser_red: Eight new removal cases failed at missing controls before production implementation.
+  browser_logs: browser-red.log, browser-stale-red.log, browser-pending-red.log under the baseline directory.
+  backend_red: backend-red.log reports 20 failures, including missing DELETE 405 and ordering assertions.
+  level_choice: Browser E2E for visible flows; documented integration exception for security and transactions.
+green_evidence:
+  backend_targeted: 20 tests passed; backend-green-parity.log and HrRoleRemovalIntegrationTest report.
+  backend_regression: 18 Surefire XML suites total 87 tests, zero failures, errors, or skips.
+  backend_command: Maven package exited 0; output/hr-revoke-baseline/backend-full.log.
+  browser_regression: browser-green.log reports 23 passed, zero failed, cancelled, or skipped.
+  browser_coverage: Both surfaces, active tabs, offline target, self-removal, retry, current/stale 410, and regrant.
+  role_regression: roles-green.log reports INTERVIEWER_ROLE_NOTES_CHAT_OK.
+  account_regression: account-switch-green.log reports ACCOUNT_SWITCH_FRESH_DATA_OK.
+  frontend_static: Root confirms typecheck and build exit 0; corresponding named logs inspected.
+  environment_correction: Test-only open-in-view=false matches production and resolves MockMvc SSE pool exhaustion.
+  evidence_location: output/hr-revoke-baseline
+risks:
+  - Build retains two bundle-size warnings; no blocking compile or type error was observed.
+  - Current verdict covers the reviewed feature delta and existing single-server permission mechanism.
+  - QA, test-quality, UX, and final product acceptance remain separate downstream gates.
+next_owner: QA and Test Reviewer, then UX and Product Owner acceptance; root reconciles evidence and archival.
+linear_update: No linked issue supplied; no external messages or task state changed.

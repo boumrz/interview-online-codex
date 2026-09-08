@@ -3,11 +3,34 @@ export type User = {
   nickname: string;
   displayName: string;
   role: "user" | "admin" | string;
+  isHr: boolean;
 };
 
 export type AuthResponse = {
   token: string;
   user: User;
+};
+
+export type CreateRoomRequest = {
+  title: string;
+  taskIds: string[];
+  hiringManagerIds?: string[];
+};
+
+export type CreateGuestRoomRequest = {
+  title?: string;
+  ownerDisplayName?: string;
+  language: string;
+};
+
+export type HiringManagerPreviewResponse = {
+  normalizedId: string;
+  displayName: string;
+};
+
+export type UpdateProfileRequest = {
+  displayName: string;
+  isHr?: boolean;
 };
 
 export type RoomTask = {
@@ -87,6 +110,56 @@ export type RoomSummary = {
   interviewerToken: string | null;
   verdict?: string | null;
   status?: string;
+};
+
+export type InterviewMetadata = {
+  candidateName: string | null;
+  position: string | null;
+  scheduledAt: string | null;
+  revision: number;
+};
+
+export type HrManager = {
+  userId: string;
+  displayName: string;
+  isOwner: boolean;
+};
+
+export type HrTaskScore = {
+  taskId: string;
+  stepIndex: number;
+  title: string;
+  score: number | null;
+};
+
+export type HrInterview = {
+  roomId: string;
+  title: string;
+  inviteCode: string;
+  candidateName: string | null;
+  position: string | null;
+  scheduledAt: string | null;
+  createdAt: string;
+  finishedAt: string | null;
+  archivedAt: string | null;
+  status: "active" | "finished";
+  interviewState: "scheduled" | "active" | "finished";
+  verdict: string | null;
+  verdictComment: string | null;
+  effectiveAt: string;
+  dateSource: "scheduled" | "finished" | "created";
+  taskScores: HrTaskScore[];
+};
+
+export type HrInterviewPage = {
+  items: HrInterview[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  timezone: "Europe/Moscow";
+  from: string | null;
+  to: string | null;
 };
 
 export type TaskTemplate = {

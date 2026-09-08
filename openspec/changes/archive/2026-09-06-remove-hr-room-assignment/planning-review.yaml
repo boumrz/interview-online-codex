@@ -1,0 +1,76 @@
+agent: product-architecture-task-audit
+task_id: remove-hr-room-assignment
+input_summary: Authorized reversal of mistaken room HR assignment, including HR-flagged candidates.
+output_summary: Sequential product, architecture, ownership, and independent task-quality review.
+status_recommendation: ready-for-acceptance-tests
+scope_acceptance:
+  verdict: approved
+  actor: Any current manager, including a supported promoted guest interviewer.
+  trigger: Remove HR from participant menu or the existing online/offline manager list.
+  outcome: Non-owner target becomes a durable candidate and loses private and cabinet access.
+  exclusions: Global isHr changes, history deletion, ordinary non-HR authority expansion, schema changes.
+  open_product_questions: []
+architecture_acceptance:
+  verdict: approved
+  contract: DELETE /api/rooms/{inviteCode}/hr-managers/{userId} returns empty 204.
+  authorization: Fresh current-manager check precedes target validation and idempotency.
+  errors: Unauthorized or owner target 403; malformed/unknown/non-HR/unrelated target 404; archived 410.
+  durability: Persist candidate membership; preserve isHr and retained history association.
+  ordering: Reuse mutateRoomPermissions room lock and transaction, then fresh permission synchronization.
+  prohibition: No added transactional facade, dependency, schema, or ordinary-role permission expansion.
+  retries: Authorized retry stays 204; self-removal retry becomes 403; unrelated IDs create nothing.
+  recovery: Reconnect and tracking cannot regrant; explicit authorized assignment may regrant.
+task_decomposition:
+  slice: Managers can undo an HR assignment through either existing surface with durable access loss.
+  dependency_order: "1.1 -> 1.2 and 1.3 RED -> 2.1, 2.2, 2.3 -> 3.1 -> 3.2"
+  ownership:
+    root_backend:
+      - backend/src/main/kotlin/com/interviewonline/controller/RoomHrController.kt
+      - backend/src/main/kotlin/com/interviewonline/service/RoomHrTrackingService.kt
+    root_acceptance_tests:
+      - backend/src/test/kotlin/com/interviewonline/controller/HrRoleRemovalIntegrationTest.kt
+      - frontend/tests/e2e/hr/e2e-hr-cabinet.mjs
+    frontend_developer:
+      - frontend/src/features/room/TopBar.tsx
+      - frontend/src/pages/RoomPage.tsx
+      - frontend/src/features/room/RoomInterviewPanel.tsx
+      - frontend/src/features/room/RoomInterviewPanel.module.css
+      - frontend/src/services/api.ts
+    specification_agent: proposal.md, design.md, tasks.md, and capability delta spec.
+    planning_reviewer: planning-review.yaml only.
+    root_coordination: Runtime, evidence, task states, review routing, final acceptance, archival.
+  preservation: Keep prior uncommitted edits and compare with output/hr-revoke-baseline snapshots.
+task_quality_gate:
+  verdict: ready-for-acceptance-tests
+  independence: Review performed separately from the specification author and production executors.
+  production_gate: Strict-valid corrected spec plus browser and backend RED evidence are mandatory.
+  acceptance_level: Browser E2E for observable flows; integration for security and transactional invariants.
+  ui_checks: Both controls, offline and self-removal, pending/duplicate guard, retryable error, 410 terminal state.
+  stale_state_checks: Room/account switches and lost authority cannot apply stale results or restore controls.
+  server_checks: Current authority, owner/target boundaries, private projections, persistence, races, regrant.
+  integration_red: mvn -f backend/pom.xml -Dtest=HrRoleRemovalIntegrationTest test
+  browser_red: node --test --test-name-pattern='HR removal' frontend/tests/e2e/hr/e2e-hr-cabinet.mjs
+  evidence_location: output/hr-revoke-baseline/ with named backend-red.log, browser-red.log, and green logs.
+  red_requirement: Record command, exit code, and missing-behavior assertion before production edits.
+  environment_failures: Runtime/setup failures do not establish behavioral RED.
+verification_commands:
+  - mvn -f backend/pom.xml -Dtest=HrRoleRemovalIntegrationTest test
+  - mvn -f backend/pom.xml test
+  - node --test --test-name-pattern='HR removal' frontend/tests/e2e/hr/e2e-hr-cabinet.mjs
+  - npm --prefix frontend run e2e:hr-cabinet
+  - npm --prefix frontend run e2e:roles
+  - npm --prefix frontend run e2e:account-switch
+  - npm --prefix frontend run typecheck
+  - npm --prefix frontend run build
+  - npx --yes @fission-ai/openspec@latest validate remove-hr-room-assignment --strict
+validation_evidence: Strict validation passed on 2026-09-06 after the malformed-ID contract correction.
+risks:
+  - Retained associations and concurrent entry must never restore revoked authority.
+  - Delayed UI responses and active tabs must honor current server permissions.
+  - Existing unrelated uncommitted work must remain intact.
+remaining_gates:
+  - Solution Reviewer and Security/Reliability review the implementation before QA.
+  - QA executes agreed verification; Test Reviewer checks coverage; UX reviews state and action clarity.
+  - Product Owner accepts outcomes; root reconciles task/evidence state before archival.
+next_owner: root for acceptance-test RED, then frontend developer after the production gate.
+linear_update: No linked issue supplied; no external task state changed.

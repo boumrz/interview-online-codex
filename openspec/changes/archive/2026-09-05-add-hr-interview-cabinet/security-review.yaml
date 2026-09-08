@@ -1,0 +1,209 @@
+agent: security-reliability-agent
+task_id: HR-053
+security_verdict: pass-with-notes
+reliability_verdict: pass
+summary: >-
+  The HR cabinet change is approved for security and reliability. Server-side HR and
+  room authority, scoped projections, archived-room terminal behavior, realtime
+  credential binding, concurrent writes, and workbook isolation are implemented and
+  verified. The release-blocking stale-role, callback-order and connection-pool
+  starvation failures found during this review were reproduced before their fixes and
+  pass after durable role refresh plus transaction-boundary-safe locked synchronization.
+  One pre-existing platform-wide account-session lifetime weakness remains as a
+  nonblocking note.
+input_summary: >-
+  Reviewed AGENTS.md, the security-reliability role, openspec/project.md, the complete
+  add-hr-interview-cabinet proposal, design, tasks and capability specs, verification.md,
+  backend-verification.md, frontend-verification.md, frontend-solution-review.yaml,
+  migration V9, backend authorization/realtime/archive/export implementation, targeted
+  tests, and final root-owned PostgreSQL and packaged-browser evidence. Frontend review
+  was limited to security-sensitive session isolation, private-state invalidation and
+  terminal 410 behavior.
+output_summary: >-
+  No unresolved feature-specific blocker remains. The review verified that isHr is
+  reread from the authenticated account; HR visibility requires both a durable
+  assignment and current owner/interviewer authority; invitation IDs are canonicalized
+  and non-enumerating; archived rooms reject all live writes; candidate payloads omit HR
+  metadata; private notes remain author-scoped; event tokens are random, room/session
+  bound and connection-lived; and XLSX generation is scoped, bounded, formula-safe and
+  cleanup-safe. Security-sensitive permission changes publish only after commit, release
+  the mutation transaction's connection before the fresh authority read, and reread
+  durable authority under the room row lock.
+findings:
+  - severity: medium
+    description: >-
+      Account bearer sessions are stored as raw random tokens with createdAt but no
+      expiresAt, and token resolution performs no expiry or server-side logout/revocation
+      check (backend/src/main/kotlin/com/interviewonline/model/UserSession.kt:24 and
+      backend/src/main/kotlin/com/interviewonline/service/AuthService.kt:71). This is a
+      pre-existing platform-wide condition; the HR change uses the same session model
+      and increases the sensitivity of data reachable by a stolen long-lived token.
+    remediation: >-
+      Create a separate OpenSpec authentication-hardening change that defines a session
+      lifetime, server-side logout/revocation, rotation policy and safe token-at-rest
+      handling. This does not block this change because no new credential format or
+      exposure path was introduced and current tokens have UUID-strength entropy.
+resolved_during_review:
+  - severity: high
+    description: >-
+      A committed HR demotion could leave stale interviewer authority in an active
+      realtime participant, allowing reconnect, event-token metadata access or a
+      manager mutation before the permission callback refreshed memory.
+    remediation: >-
+      Authenticated joins now use the durable resolved role, authenticated event-token
+      checks and realtime mutations reread durable authority, and tracked demotions keep
+      a candidate tombstone. The five controlled RED cases now pass
+      (CollaborationService.kt:341, 385, 1353 and 2415;
+      HrRoomTrackingIntegrationTest.kt:78).
+  - severity: high
+    description: >-
+      An older after-commit invitation callback could read its stale persistence context
+      after a newer demotion commit and restore INTERVIEWER in the live participant map.
+    remediation: >-
+      Permission publication now runs in REQUIRES_NEW, takes the scalar room FOR UPDATE
+      lock, rereads the current durable role and updates/broadcasts while holding that
+      lock (CollaborationService.kt:1364; RoomRepository.kt:20). The deterministic test
+      first failed with expected CANDIDATE/actual INTERVIEWER and is green after the fix
+      (HrRoomTrackingIntegrationTest.kt:42).
+  - severity: high
+    description: >-
+      The first locked REQUIRES_NEW permission-sync fix ran directly inside Spring's
+      afterCommit callback while the committed outer EntityManager still held its pool
+      connection. With ten connections queued at one room lock, twelve concurrent
+      invitations exhausted the pool: four returned 500 after 30.028 seconds while
+      Hikari reported active=10, idle=0 and waiting=8.
+    remediation: >-
+      The four permission mutation entrypoints now return explicit RoomPermissionMutation
+      results from a TransactionTemplate. Ordinary HTTP calls perform the fresh locked
+      synchronization only after execute() has completed JpaTransactionManager cleanup;
+      genuinely nested outer transactions enqueue synchronization on a bounded
+      single-thread executor, with no caller-runs fallback, and disconnect only affected
+      sessions if enqueue or execution fails (CollaborationService.kt:1384). The original
+      PostgreSQL probe now returns twelve 200 responses in 0.183 seconds and all ten pool
+      connections return idle; four one-connection-available entrypoint cases and the
+      permission-order/rollback suite pass.
+  - severity: medium
+    description: >-
+      A workbook write failure followed by close failure skipped dispose and deletion,
+      replaced the primary error and left a temporary candidate workbook on disk.
+    remediation: >-
+      Cleanup now independently attempts close, dispose and file deletion, preserves the
+      primary failure and attaches cleanup failures as suppressed errors
+      (HrWorkbookService.kt:127). The construction-interception failure test is green
+      (HrWorkbookCleanupTest.kt:18).
+controls_verified:
+  authentication_and_authorization:
+    - >-
+      Stored isHr and authenticated user identity gate personal HR endpoints; clients
+      cannot select another HR identity or gain account-admin authority.
+    - >-
+      Personal list/detail/export queries require assignment plus current durable owner
+      or interviewer permission (HrInterviewQueryRepository.kt:34, 53 and 79).
+    - >-
+      HR invitation authorizes the caller before target lookup, canonicalizes UUID input,
+      returns the same 404 for missing/non-HR targets and serializes assignment under the
+      room lock (RoomHrTrackingService.kt:101).
+    - >-
+      Owner-exclusive archive and access-role administration remain server-enforced
+      (RoomService.kt:557 and 705; CollaborationService.kt:1402). HR assignment grants
+      only the existing interviewer capability defined by the accepted specs.
+  realtime_and_reconnect:
+    - >-
+      Server-issued event tokens are random, scoped to a live room connection, checked
+      with connection/session identity and invalidated on disconnect/archive. Replays
+      are constrained by operation IDs and per-session event sequences.
+    - >-
+      Reconnect and every authenticated privileged event resolve current durable role;
+      committed demotion takes precedence over stale in-memory grants
+      (CollaborationService.kt:332, 405, 1374 and 2462).
+    - >-
+      Normal HTTP permission mutations synchronize before returning only after their
+      write transaction has released its connection. Nested transactions use a bounded
+      FIFO executor and fail closed for affected live sessions, avoiding circular pool
+      waits while retaining durable-role ordering (CollaborationService.kt:1384).
+    - >-
+      Archive closes transports, cancels pending writers and makes REST, SSE entry,
+      realtime relays and delayed persistence terminal with 410.
+  privacy_and_data_integrity:
+    - >-
+      Candidate-facing REST and realtime payloads omit candidate/HR interview metadata;
+      manager metadata uses a dedicated authorized endpoint and optimistic revision CAS.
+    - >-
+      Private interviewer notes are projected only for their author. HR assignment does
+      not expose another manager's private notes or owner credentials.
+    - >-
+      Row locking uses scalar-ID FOR UPDATE before entity materialization, preventing the
+      PostgreSQL stale-entity archive/write race (RoomRepository.kt:17).
+  export_and_resource_safety:
+    - >-
+      XLSX uses the authenticated account's scoped projection, repeatable-read snapshot,
+      30-second transaction/cooperative deadline, 10,000-interview and 100,000-task caps,
+      one-per-account and two-global generation permits, and no-store/nosniff responses.
+    - >-
+      User text is emitted as literal STRING cells; exports exclude credentials, raw
+      activity, code and private notes; streaming temp data is disposed and deleted on
+      success and failure (HrWorkbookService.kt:57 and 142).
+    - >-
+      The change introduces no user-code execution path, so the execution-sandbox gate
+      is not applicable to this feature.
+verification:
+  openspec_strict: "pass: Change 'add-hr-interview-cabinet' is valid"
+  backend_maven: "pass: 64 tests, 0 failures, 0 errors, 0 skipped, 16 suites"
+  backend_gradle: "pass: 64 tests; BUILD SUCCESSFUL"
+  backend_package: "pass"
+  packaged_hr_e2e: "pass: 9/9, 0 failed, 0 skipped, 22.829 seconds"
+  packaged_regressions:
+    - "pass: ACCOUNT_ROOM_BINDING_OK"
+    - "pass: ACCOUNT_SWITCH_FRESH_DATA_OK"
+    - "pass: INTERVIEWER_ROLE_NOTES_CHAT_OK"
+    - "pass: REALTIME_AUTHORIZATION_RECOVERY_OK; exactly 2 rejected requests"
+    - "pass: SSE_RECONNECT_SYNC_OK"
+    - "pass: AUTH_INVITE_TOKEN_NEGATIVE_OK"
+    - "pass: FIVE_PARTICIPANT_COLLABORATION_OK"
+  postgresql:
+    - "pass: clean V9 and V8-to-V9 migration, restart and archived-history retention"
+    - "pass: 8 concurrent invitations returned 200 and produced one assignment"
+    - "pass: metadata CAS returned one 200 and three 409 responses"
+    - "pass: verdict blocked behind archive commit and returned 410"
+    - "pass: saturation rerun returned 12/12 HTTP 200 in 0.183 seconds and all 10 connections idle"
+    - "pass: 1,000-room/5,000-task scoped XLSX in 590 ms; 10,001-room request rejected with 413"
+blocking: false
+remediation_checklist:
+  - "[x] Enforce HR identity and room permissions server-side"
+  - "[x] Keep owner-exclusive archive and access administration owner-only"
+  - "[x] Bind guest event tokens to live room/session connections and reject replay/stale authority"
+  - "[x] Make reconnect and realtime mutation use current durable permissions"
+  - "[x] Serialize archive, invitation, metadata and permission publication races"
+  - "[x] Release permission write connections before fresh locked synchronization and prove pool recovery"
+  - "[x] Exclude HR metadata and private manager data from candidate payloads"
+  - "[x] Scope and bound XLSX generation; write literal cells and always remove temporary data"
+  - "[ ] Define platform account-session expiry, revocation and rotation in a separate OpenSpec change"
+risks:
+  - >-
+      Existing usr_ account bearer tokens remain valid indefinitely unless their database
+      row is removed; there is no user-facing server logout path in the reviewed baseline.
+  - >-
+      The 30-second export bound combines a database transaction timeout and cooperative
+      renderer checks; it is not a hard wall-clock HTTP cutoff if the database or
+      transport itself becomes unresponsive. Row and concurrency caps limit normal-load
+      amplification and the verified 1,000/5,000 workload completed well inside the bound.
+next_owner:
+  agent: qa-agent
+  reason: >-
+    Execute the final QA acceptance strategy against the frozen packaged runtime and
+    confirm the security regression cases remain included in release readiness.
+handoff_to:
+  - agent: qa-agent
+    reason: "Security/reliability gate passed; proceed with final release-readiness verification."
+  - agent: architect-agent
+    reason: >-
+      Nonblocking follow-up: define the platform-wide account-session expiry,
+      revocation, rotation and token-storage contract in a separate OpenSpec change.
+linear_update:
+  state: In Progress
+  comment_summary: >-
+    Security review PASS WITH NOTES; reliability PASS. No HR feature blocker remains.
+    Stale-role, callback-order, pool-starvation and workbook-cleanup defects have
+    RED-to-GREEN coverage; 64 backend tests, 9 HR E2E cases, 7 regressions, PostgreSQL
+    races and the 12-request saturation probe pass. Track non-expiring account sessions
+    separately. No Linear issue ID was provided, so this is a recommended update only.

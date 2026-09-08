@@ -27,6 +27,9 @@ class User(
     @Column(name = "role", nullable = false, length = 32)
     var role: String = "user",
 
+    @Column(name = "is_hr", nullable = false)
+    var isHr: Boolean = false,
+
     @Column(name = "created_at", nullable = false)
     var createdAt: Instant = Instant.now(),
 )

@@ -1,0 +1,10 @@
+input_summary: User requests multi-participant visual/browser verification of candidate activity recording.
+output_summary: Specification agent produced proposal/spec/design; root confirmed a bounded test-only scope and execution tasks.
+verdict: ready_for_verification
+product_scope: Ten independent browser participants, seven concurrent candidate writers, complete and private activity history, visible usable controls.
+architecture: No application architecture, API, schema, dependency or authorization changes proposed.
+test_first: Add assertions before executing; a first-pass coverage result is valid. Preserve real failures and amend scope before any production fix.
+risks:
+  - Local headless-browser observations do not establish production capacity or pixel-baseline visual equivalence.
+  - Deliberate transport interruptions and denied candidate reads must be classified separately from unexpected errors.
+next_owner: root

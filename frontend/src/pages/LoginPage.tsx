@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Card,
+  Checkbox,
   Container,
   Group,
   PasswordInput,
@@ -39,6 +40,7 @@ export function LoginPage() {
   const [nickname, setNickname] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
+  const [isHr, setIsHr] = useState(false);
   const [error, setError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [login, loginState] = useLoginMutation();
@@ -107,7 +109,7 @@ export function LoginPage() {
         return;
       }
       const auth = isRegisterMode
-        ? await register({ nickname: nickname.trim(), displayName, password }).unwrap()
+        ? await register({ nickname: nickname.trim(), displayName, password, isHr }).unwrap()
         : await login({ nickname, password }).unwrap();
       dispatch(clearAuth());
       dispatch(api.util.resetApiState());
@@ -237,6 +239,15 @@ export function LoginPage() {
                     "aria-label": "Показать символы",
                   }}
                 />
+                {isRegisterMode ? (
+                  <Checkbox
+                    label="Я нанимающий"
+                    description="Добавит личный список интервью. Права в комнатах выдаются отдельно."
+                    checked={isHr}
+                    onChange={(event) => setIsHr(event.currentTarget.checked)}
+                    disabled={isLoading}
+                  />
+                ) : null}
                 <Button
                   type="submit"
                   loading={isLoading}

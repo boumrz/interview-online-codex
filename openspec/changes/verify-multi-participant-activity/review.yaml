@@ -1,0 +1,154 @@
+input_summary: >-
+  Independent bounded final review of the ten-context Playwright harness,
+  completed runtime evidence, exported artifacts, and five screenshots. This is
+  one consolidated QA/test/UX assessment, not separate role-agent approvals.
+output_summary: >-
+  Many-participant verification executed through the activity, export, privacy,
+  and layout phases. Those checks passed for 2100 real keyboard sources. The
+  command correctly exits 1 because shared editors diverge. Product readiness
+  is not established; real tab visibility remains explicitly unverified.
+review_state: final
+verification_deliverable: approved_with_recorded_failure_and_limitations
+product_readiness: not_ready
+scope:
+  changed_by_reviewer: [review.yaml]
+  excluded: [production_edits, test_edits, browser_execution, backend_execution]
+  test_first: >-
+    Existing-behavior coverage only; no production change or manufactured RED.
+    Preserve this RED for separately scoped remediation with validated OpenSpec.
+evidence:
+  final_report: output/playwright/multi-activity/1788690452995/report.json
+  final_log: output/multi-activity-browser-final.log
+  command_result: FAIL
+  exit_status: 1
+  duration_seconds: 97.192
+  browser: Chromium 145.0.7632.6
+  browser_mode: 10 headless contexts
+  topology: 1 owner, 1 interviewer, 1 assigned HR, 7 candidates
+  keyboard_sources: 2100
+  keyboard_sources_per_candidate: 300
+  activity_retries: 0
+  manager_disconnected_accepted_gap: 700
+  candidate_1_sse_connections: 3
+  round_overlap_ms: [2640, 2168, 2292]
+  observed_history_responses: 98
+  maximum_observed_history_page: 200
+  export_independent_check: >-
+    activity.json and hr-narrow-activity.json each contain 2100 unique UUIDs and
+    identical UUID sets. Harness assertions also reconcile owner JSON/CSV with
+    captured POST UUIDs, durable raw rows, acceptance sequences, and canonical
+    timestamp/sequence order before complete UI history is loaded.
+  existing_regressions:
+    five_participants: output/multi-activity-five-participants.log; FIVE_PARTICIPANT_COLLABORATION_OK
+    yjs_multi: output/multi-activity-yjs-multi.log; YJS_MULTI_PARTICIPANT_SYNC_OK
+qa:
+  verdict: not_ready
+  passed:
+    - Ten independent authenticated contexts and three overlapping seven-keyboard rounds.
+    - All 2100 source UUIDs acknowledged, durable, unique, and visible to all three managers.
+    - Actual manager network interruption with a 700-event gap and candidate SSE reconnect during input.
+    - Complete JSON/CSV downloads through owner UI while older history remains unloaded.
+    - Owner history paging, exact rendered source identities, and retention across Chat/Logs switches.
+    - HR JSON download from partial history and complete older-history paging at 900x900.
+    - Seven candidates receive no tracked private activity fields and see no activity panel or JSON control.
+    - Candidate credential probes for history, JSON, and CSV return 403 without tracked source UUIDs.
+    - Desktop/narrow layout assertions and participant-strip end reachability.
+  blocking_finding:
+    id: concurrent_yjs_divergence
+    severity: P1
+    evidence: >-
+      After 45 seconds, owner/interviewer/HR models each contain 665 characters,
+      with digit counts [13,232,136,8,226,34,4]. Each candidate retains 300 of its
+      own digit but only those partial remote counts; candidate models contain
+      733-961 characters. All editor hooks are available. Diagnostic run
+      1788689867384 independently reproduced the pattern and only 1450 of 2100
+      incremental relays reached the server.
+    diagnosed_path: >-
+      useRoomSocket.ts heartbeat deduplication at lines 472-481 aborts/removes
+      nonempty queued Yjs deltas although line 1706 requests deduplication only
+      for empty-delta heartbeats. Missing CRDT clocks prevent later dependent
+      deltas from integrating. Recovery also drops queued Yjs mutations at
+      lines 784-788. Backend snapshot freshness/author guards do not generally
+      repair this loss.
+    action: >-
+      Retain RED. Specify a lossless Yjs queue/recovery correction before product
+      acceptance. Activity-log completeness does not establish editor integrity.
+  runtime_classification:
+    unexpected_count: 0
+    response_cancellations_after_success_headers: 4116
+    response_cancellation_detail: 4113 exact requests received HTTP 204; 3 SSE streams received HTTP 200.
+    superseded_yjs_or_code_requests: 24
+    injected_network_or_cleanup: 52
+    caveat: >-
+      Superseded Yjs requests describe existing lossy queue behavior, not harmless
+      delivery. The editor assertion still fails. Zero unexplained runtime
+      categories is not a clean product pass.
+test_review:
+  verdict: adequate_for_bounded_failure_report
+  strengths:
+    - Expected UUIDs come from actual browser POSTs independently of exports.
+    - Real keyboard input has verified overlapping per-candidate intervals.
+    - Editor failure is retained while independent verification phases finish.
+    - Privacy/history-inspection and page errors cannot be excused by network-fault windows.
+    - Named interaction measurements exclude screenshot generation.
+  limitation:
+    id: real_tab_transition
+    status: unverified
+    evidence: >-
+      New-tab activation and return produced no hidden visibility event in the
+      final headless run. Candidate 1 recorded only initial focus/visible; all
+      2100 captured actions were keyboard actions. A prior headed attempt also
+      failed to establish the transition, as recorded by the execution owner.
+    action: >-
+      Do not claim the tab-change acceptance scenario passed. Later typing and
+      actual SSE recovery were tested; lifecycle coverage needs an environment
+      exposing actual leave/return transitions.
+  property_scores:
+    understandable: 8
+    maintainable: 7
+    repeatable: 6
+    atomic: 8
+    necessary: 9
+    granular: 6
+    fast: 4
+    first: not_applicable_existing_behavior_coverage
+  weighted_score_without_inapplicable_first: 7.0
+  scoring_evidence: >-
+    Named phases and UUID oracles clarify intent. Fresh fixtures isolate runs,
+    but browser focus and local runtime remain environmental dependencies. One
+    97-second workload covers multiple contracts, with phase evidence assisting
+    diagnosis. Selectors/editor-model diagnostics retain some UI coupling.
+  framework_reference: https://www.linkedin.com/pulse/tdd-properties-good-tests-dave-farley-iexge/
+ux:
+  verdict: passed_within_recorded_viewports
+  inspected_images:
+    - output/playwright/multi-activity/1788690452995/owner-desktop-complete.png
+    - output/playwright/multi-activity/1788690452995/owner-desktop-complete-participants-end.png
+    - output/playwright/multi-activity/1788690452995/hr-narrow-complete.png
+    - output/playwright/multi-activity/1788690452995/hr-narrow-complete-participants-end.png
+    - output/playwright/multi-activity/1788690452995/candidate-no-private-logs.png
+  inspection: >-
+    At 1440x900 and 900x900, log status and JSON/CSV controls remain readable
+    without critical overlap. The loaded count is 2100 and complete history is
+    indicated. Both participant-strip end images expose candidate 7 through
+    intentional internal scrolling. Document scrollWidth equals viewport width.
+    Candidate screenshot has no manager log/download panel. The 900px view is
+    narrow desktop, not the separate mobile layout below 760px.
+  performance_observations:
+    chat_logs_round_1_ms: 246
+    chat_logs_round_3_ms: 1709
+    older_page_traversal_ms: 7647
+    loaded_chat_logs_ms: 1392
+    narrow_hr_open_logs_ms: 162
+    longest_observed_manager_task_ms: 482
+    interpretation: >-
+      Interactions completed, but the 1.7-second toggle and manager long tasks
+      warrant later performance work. These are local observations, not an SLA
+      or evidence of production capacity or absence of all UI stalls.
+  limitation: Screenshot inspection supplements DOM assertions; no pixel-baseline visual-regression claim.
+risks:
+  - Editor divergence remains a confirmed unresolved product defect.
+  - Actual tab leave/return remains unverified; not all specification scenarios passed.
+  - Local evidence does not measure saturation, extended interview duration, or mobile layout.
+  - Archival is appropriately deferred while product RED and the unverified criterion remain.
+next_owner: root execution owner; communicate tested outcomes, retained P1, and limitations

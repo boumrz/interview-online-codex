@@ -1,0 +1,117 @@
+agent: solution-reviewer-agent
+task_id: HR-052
+scope: frontend-only
+verdict: approve
+summary: "Frontend contracts are implemented and verified; all four review findings are resolved with dedicated RED-to-GREEN browser evidence."
+input_summary: >-
+  Reviewed AGENTS.md, the solution-reviewer role, OpenSpec project/change artifacts,
+  frozen design/API contracts, approved ux.md, frontend verification evidence,
+  root-owned HR E2E source, and the completed frontend/src implementation. The root
+  reports 9/9 integrated HR browser scenarios green on the final packaged backend.
+  Backend implementation and concurrency remain outside this frontend-only artifact.
+output_summary: >-
+  Approved after account query cache reset, HR route gating, Moscow conversion,
+  metadata 409 draft retention, authenticated binary validation, archive cabinet
+  presentation, terminal 410 handling, request cancellation, and the responsive
+  320 px layout were verified against the final implementation.
+findings: []
+resolved_findings:
+  - severity: blocking
+    description: >-
+      A pending HR workbook request outlives logout or account switch. HrCabinetSection
+      starts downloadHrWorkbook with a captured bearer token, while the helper exposes
+      no AbortSignal and always creates/clicks a download anchor after a successful
+      response (frontend/src/pages/dashboard/HrCabinetSection.tsx:242,
+      frontend/src/services/hrExport.ts:35). Dashboard logout resets Redux/API state
+      but cannot cancel this direct fetch (frontend/src/pages/DashboardPage.tsx:951).
+      A controlled browser reproduction delayed the export response, logged out, then
+      released it: the route was already `/`, auth_token was null, and the former
+      account's workbook still downloaded.
+    recommendation: >-
+      Give each export an AbortController, pass its signal into downloadHrWorkbook,
+      abort it when HrCabinetSection unmounts or its token changes, and suppress stale
+      success/error UI for an aborted generation. Add an E2E that delays export,
+      logs out or switches accounts, and proves that no former-account download occurs.
+  - severity: blocking
+    description: >-
+      HTTP 410 becomes terminal only when the SSE error path performs the separate
+      stream-status probe (frontend/src/features/room/useRoomSocket.ts:1153). A 410
+      returned directly by the main event relay is handled as an ordinary 4xx and can
+      continue draining queued work (lines 875-935); the activity lane likewise drops
+      the item without setting terminal flags (lines 1011-1059). The initial room query
+      also ignores its error, so a first-time anonymous visit to an archived room can
+      remain on `Загрузка комнаты...` because the socket is disabled until a name is
+      known (frontend/src/pages/RoomPage.tsx:617, frontend/src/pages/RoomPage.tsx:2569).
+      This does not satisfy the contract that one persisted 410 stops reconnect,
+      presence, state, and mutation retries for both connected and fresh entry paths.
+    recommendation: >-
+      Route every persisted 410 from room GET, main relay, and activity relay through
+      one terminal-room transition that aborts in-flight work, clears queues/timers,
+      closes SSE, disables future send paths, and renders the terminal screen. Extend
+      the E2E with a direct relay-410 case and a fresh anonymous archived-link case;
+      assert no subsequent realtime requests after the first terminal response.
+  - severity: major
+    description: >-
+      RoomInterviewPanel clears and hides private state when canManageRoom becomes
+      false, but in-flight load/save/invite promises are neither aborted nor guarded
+      by an access/request generation. Their completion handlers can repopulate
+      metadata or manager state after clearPrivateState runs
+      (frontend/src/features/room/RoomInterviewPanel.tsx:114,
+      frontend/src/features/room/RoomInterviewPanel.tsx:128,
+      frontend/src/features/room/RoomInterviewPanel.tsx:164,
+      frontend/src/features/room/RoomInterviewPanel.tsx:200). The modal stays hidden,
+      but the explicit clear-on-role-loss state contract is not reliable under latency.
+    recommendation: >-
+      Invalidate a request generation or abort outstanding panel requests on role loss
+      and close, and ignore every completion from an obsolete generation. Add a delayed
+      metadata/invite response test that demotes the viewer while the request is pending
+      and verifies the trigger/modal/private values remain cleared.
+  - severity: major
+    description: >-
+      The 320 px layout avoids horizontal page scrolling, but mobile interactive targets
+      do not meet the approved 44 px touch-target contract. Headless Chromium measured
+      mobile `Результаты` and `Открыть комнату` at 30 px high, toolbar actions at 36 px,
+      and the compact copy action as low as 22 px. These sizes originate from the xs and
+      compact-xs Mantine variants in frontend/src/pages/dashboard/HrCabinetSection.tsx:166,
+      frontend/src/pages/dashboard/HrCabinetSection.tsx:281, and
+      frontend/src/features/hr/CopyHrId.tsx:55.
+    recommendation: >-
+      Apply mobile-only minimum block sizes of 44 px to cabinet toolbar, row, copy, and
+      modal actions while retaining the current wrapping/full-width card layout. Add a
+      320 px browser assertion for no horizontal scroll, action ordering/full width,
+      and at least 44 px target height.
+risk_summary: >-
+  Residual frontend risk is low: the final browser suite covers normal flows plus
+  delayed export, direct/fresh 410, delayed private data, account switching, 320 px
+  layout, and explicit Moscow date-source presentation. Existing bundle-size warnings
+  predate this change and do not affect correctness approval.
+blocking: false
+resolved_requirements:
+  - "Cancel and suppress pending exports across logout/account-token change, with a green delayed-response E2E."
+  - "Make every room 410 path terminal and prove fresh-entry plus direct-relay retry stopping."
+  - "Prevent late panel requests from restoring private state after role loss."
+  - "Meet the 44 px mobile touch-target requirement and verify at 320 px."
+verification:
+  openspec_strict: "pass: Change 'add-hr-interview-cabinet' is valid"
+  frontend_typecheck: "pass"
+  frontend_build: "pass with existing asset-size warnings"
+  integrated_hr_e2e: "final packaged runtime: 9 passed, 0 failed, 0 skipped, 25.732 seconds"
+  reviewer_browser_checks:
+    - "320 px cabinet: document scrollWidth 320 equals viewport width 320"
+    - "mobile cabinet, row, copy, and panel actions meet the 44 px minimum"
+    - "unscheduled rows show an absent appointment plus the visible effective date source"
+    - "delayed export is cancelled on logout and produces no former-account download"
+    - "direct relay and fresh-entry 410 cases enter terminal state without retrying"
+    - "delayed private metadata cannot survive demotion and re-grant"
+risks:
+  - "The independent security/reliability review remains a separate required gate."
+  - "Backend behavior was not reviewed in this frontend-scoped verdict."
+next_owner:
+  agent: qa-agent
+  reason: "Proceed to HR-054 after the independent HR-053 security/reliability gate also approves."
+handoff_to:
+  - agent: qa-agent
+    reason: "approve: frontend solution review findings are resolved and final browser verification is green"
+linear_update:
+  state: QA
+  comment_summary: "Frontend review verdict: APPROVE. Four review findings were fixed test-first; final HR browser suite passes 9/9 with no skips. No Linear issue ID was provided, so this is a recommended update only."

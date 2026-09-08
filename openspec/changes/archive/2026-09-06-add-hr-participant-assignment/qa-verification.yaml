@@ -1,0 +1,134 @@
+agent: qa-agent
+task_id: HR-PARTICIPANT-4.3
+change_id: add-hr-participant-assignment
+verdict: ready
+summary: "Verified eight acceptance criteria against reproducible completed evidence. Eight passed, zero failed; final execution includes 67 backend tests, 15 HR browser cases and three additional browser regressions."
+input_summary: >-
+  Reviewed eight accepted product criteria, both added requirements and their nine
+  scenarios, final design and verification artifacts, solution-review APPROVE and
+  security/reliability PASS without blockers. Reviewed the scoped implementation
+  relative to output/hr-participant-baseline and the actual test assertions/logs.
+output_summary: >-
+  All requested participant-assignment behavior is supported by passing evidence.
+  No new defect or unresolved release blocker was found; ux-review.yaml is ux-approved without issues. This QA pass independently
+  checked existing results rather than rerunning already-green suites or changing code.
+test_strategy:
+  scope: "Joined authenticated HR assignment, eligibility provenance, existing manager authority, feedback, durable tracking, reconnect/demotion and stale-request handling; regressions for the reused HR flow."
+  approach: >-
+    User flows use the five prewritten participant E2E cases plus the ten prior HR
+    cases. Two new integration cases isolate server projection/provenance and mixed
+    sessions. Existing integration tests cover unchanged invitation authorization,
+    atomic uniqueness, archive denial and durable role precedence. Relevant prior
+    transport evidence is retained explicitly as baseline evidence, not reported
+    as freshly executed for this change.
+  environments:
+    backend_tests: "Java 17, Maven, Spring Boot MockMvc and repository-configured H2 test database."
+    browser: "Chromium/Playwright; frontend http://localhost:5173; packaged backend http://localhost:18080/api against isolated real PostgreSQL."
+    runtime_identity: "Restored-source package; backend PID 63152, ready 2026-09-06 09:06:54 MSK; output/hr-participant-runtime.log."
+  reproduction:
+    backend: "JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home mvn -f backend/pom.xml test"
+    hr_e2e: "E2E_BASE_URL=http://localhost:5173 E2E_API_URL=http://localhost:18080/api npm --prefix frontend run e2e:hr-cabinet"
+    regressions: "With the same E2E_BASE_URL/E2E_API_URL, run npm --prefix frontend run e2e:roles, e2e:account-switch and e2e:presence separately."
+    frontend: "npm --prefix frontend run typecheck; npm --prefix frontend run build (separate commands)."
+evidence:
+  B_ALL: "output/hr-participant-backend-green.log; independently parsed backend/target/surefire-reports/TEST-*.xml: 17 suites, 67 tests, 0 failures/errors/skips."
+  B_PROJECTION: "backend/src/test/kotlin/com/interviewonline/controller/HrParticipantProjectionIntegrationTest.kt: two passing tests, including forged name/query identity and old/refreshed account sessions."
+  B_TRACKING: "backend/src/test/kotlin/com/interviewonline/controller/HrRoomTrackingIntegrationTest.kt: 14 passing cases for invitation, concurrency, guest credentials, demotion, rollback and delayed permission publication."
+  B_ARCHIVE: "backend/src/test/kotlin/com/interviewonline/controller/HrRoomArchiveIntegrationTest.kt: four passing archive/access/delayed-write cases."
+  E_HR: "output/hr-participant-browser-accepted.log: 15/15, 0 failures/cancellations/skips/todo, 33.408 seconds; frontend/tests/e2e/hr/e2e-hr-cabinet.mjs."
+  E_ROLES: "output/hr-participant-roles.log: INTERVIEWER_ROLE_NOTES_CHAT_OK."
+  E_ACCOUNT: "output/hr-participant-account-switch.log: ACCOUNT_SWITCH_FRESH_DATA_OK."
+  E_PRESENCE: "output/hr-participant-presence.log: PARTICIPANTS_PRESENCE_OK."
+  BASELINE_SYNC: "output/hr-post-pool-five-participants.log: FIVE_PARTICIPANT_COLLABORATION_OK; published 48 samples p95 17.1 ms; unchanged collaboration path, prior accepted HR build."
+  BASELINE_RECONNECT: "output/hr-post-pool-sse-reconnect.log: SSE_RECONNECT_SYNC_OK; bounded offline/recovery behavior from the prior accepted HR build."
+  BASELINE_NEGATIVE: "output/hr-post-pool-auth-negative.log: AUTH_INVITE_TOKEN_NEGATIVE_OK; invalid invite and superseded event-token rejection on the prior accepted HR build."
+  VISUAL: "Root inspected output/playwright/hr-participant-menu.png and output/playwright/hr-participant-assigned.png; QA additionally checked semantic menu/badge/pending assertions in E_HR."
+test_first:
+  browser: "output/hr-participant-browser-red.log and output/hr-participant-browser-all-red.log: absent HR action caused initial failure and all five new cases failed before frontend implementation."
+  backend: "output/hr-participant-backend-red.log: two missing-eligibility assertion failures, zero errors/skips. Earlier fixture failure is not counted as feature RED."
+  mutation: "output/hr-participant-mutation.log: representative-only eligibility was killed by the mixed-session assertion; restored source subsequently passed projection tests and packaging. This is one focused mutation, not global mutation coverage."
+requirements_mapping:
+  managers_can_assign_joined_hr:
+    owner_candidate_entry: AC-01
+    non_owner_and_guest: AC-02
+    ordinary_and_anonymous_ineligible: AC-03
+    existing_assignment_state: AC-04
+  server_authoritative_and_reliable:
+    forged_or_revoked_actor: AC-06
+    repeat_or_target_disconnect: AC-04
+    pending_success_failure: AC-05
+    demotion_reconnect: AC-07
+    changed_inviter_or_context: AC-07
+test_matrix:
+  - id: AC-01
+    scenario: "Owner assigns an HR who entered through the candidate link, without entering an ID"
+    steps: "Join as authenticated HR; inspect candidate role and empty cabinet; owner opens that participant menu and selects Назначить HR; refresh the HR cabinet."
+    expected: "Entry alone grants nothing; confirmed assignment exposes interviewer controls and exactly one tracked room without UUID input."
+    result: pass
+    evidence: "E_HR: participant HR assignment works without ID entry, reports failure, waits, and survives reconnect and demotion."
+  - id: AC-02
+    scenario: "Registered and promoted guest interviewers use the same shortcut without gaining owner authority"
+    steps: "Owner promotes an ordinary registered or anonymous participant; that interviewer opens an eligible HR menu and assigns HR; inspect available ordinary role controls and reload HR."
+    expected: "Both inviter kinds grant durable interviewer access; non-owner inviters have no ordinary promotion/revocation action and target cannot delete the owner's room."
+    result: pass
+    evidence: "E_HR: separate registered/guest participant cases and primary owner case; B_TRACKING: promoted guest manager can invite an HR account with its event token."
+  - id: AC-03
+    scenario: "Only authenticated server-confirmed HR accounts are eligible, including mixed sessions"
+    steps: "Open menus for ordinary account and guest; connect with spoofed HR/name/userId query fields; enable HR on an account with an old connection, then join with a refreshed connection."
+    expected: "Ordinary/guest participants have no HR action; spoofing grants nothing; one merged authenticated participant preserves the refreshed HR flag while remaining a candidate."
+    result: pass
+    evidence: "E_HR primary and registered/guest cases; B_PROJECTION both cases; focused mixed-session mutation killed."
+  - id: AC-04
+    scenario: "Assigned state is clear and repeated/offline assignment remains idempotent"
+    steps: "Assign through the menu; reopen it; repeat the same existing PUT and run concurrent invitations; invite an account without a current room connection."
+    expected: "The HR badge and disabled HR назначен state follow server confirmation; only one membership/association remains and the account receives durable access on entry."
+    result: pass
+    evidence: "E_HR registered/guest assigned-state assertions and offline invitation case; B_TRACKING manager invitation is idempotent... and concurrent invitations deduplicate.... The shortcut uses that same unchanged account PUT, so disconnect does not alter its semantics."
+  - id: AC-05
+    scenario: "Pending, recoverable failure, retry and current archive response"
+    steps: "Inject one 503; retry with the request held; inspect disabled Назначаем HR and request count, then release to the real server. Separately return current-context 410 while SSE remains open."
+    expected: "Failure does not grant access; pending makes one request and retains candidate role; retry succeeds after server response; current 410 removes the live editor and shows terminal unavailable state."
+    result: pass
+    evidence: "E_HR primary pending/503 case and participant HR assignment handles current 410...; B_ARCHIVE verifies actual server archive denial independently of browser fault injection."
+  - id: AC-06
+    scenario: "Current actor authority, stored target eligibility and minimal projection"
+    steps: "Submit invitations as candidate or revoked manager and for missing/non-HR targets; attempt stale-token/state operations before delayed callbacks; inspect participant payload fields."
+    expected: "Unauthorized requests cannot create membership/tracking; current durable role wins; missing/non-HR targets retain established denial semantics; no email/auth/event token is added to participant entries."
+    result: pass
+    evidence: "B_TRACKING invitation hides missing and non-HR targets and rejects candidate callers, committed HR demotion overrides a stale active session..., and delayed invitation callback cannot restore...; B_PROJECTION payload assertions; security-review PASS."
+  - id: AC-07
+    scenario: "Demotion, reconnect, reassignment and obsolete response invalidation"
+    steps: "Remove assigned HR's interviewer access; reload and request cabinet detail; explicitly reassign. Hold inviter assignment, demote then regrant inviter, and deliver the old 410."
+    expected: "Demotion persists as candidate with cabinet denial; explicit assignment restores one original row; old completion cannot terminate the new authorized context or leave controls pending."
+    result: pass
+    evidence: "E_HR primary demotion/reload/regrant case, stale 410 case and existing private-panel lifecycle case; B_TRACKING durable tombstone/callback cases. Room/account/session generation dependencies and canonical token checks independently approved by solution/security review; those dimensions are not claimed as separate newly executed E2E cases."
+  - id: AC-08
+    scenario: "Existing optional HR profile, ordinary room roles, private notes and absent-HR ID flow persist"
+    steps: "Register with/without HR checkbox; opt in later; use ordinary interviewer promotion and the existing ID invitation form; inspect candidate note access and switch authenticated accounts."
+    expected: "HR stays an account eligibility marker; room roles retain existing meaning; absent-HR ID invitation and private note boundaries remain functional; account data is isolated."
+    result: pass
+    evidence: "E_HR all ten prior HR cases passed again; E_ROLES, E_ACCOUNT and E_PRESENCE passed on final runtime."
+bugs: []
+regression_coverage:
+  owner_permissions_and_task_switching: "Final E_HR preserves owner-only role administration/deletion; final backend workspace tests and unchanged accepted task-publication semantics pass."
+  simultaneous_editing: "BASELINE_SYNC proves two concurrent editors and task publication; transport path unchanged and reviewer-approved."
+  short_reconnect: "BASELINE_RECONNECT proves latest state after an outage under 30 seconds; final E_HR additionally proves durable grant/demotion after reload."
+  guest_and_registered_flows: "Final E_ROLES creates a guest room and drives owner/candidate UI; final E_HR and E_ACCOUNT prove registration, tracked history and account isolation."
+  negative_paths: "Final B_TRACKING/B_ARCHIVE prove current permissions and invalidated credentials; BASELINE_NEGATIVE proves unknown invite and superseded token denial."
+coverage_limits:
+  - "Baseline transport scripts above were not rerun for this additive projection/menu change. All 15 HR cases and the three selected regressions ran against the final PostgreSQL runtime."
+  - "Accepted existing interviewer workspace/publication semantics govern step/run/language access; this change does not redefine them. Account wall-clock expiry does not exist in the baseline, so only invalidated/superseded token denial is claimed."
+  - "The initial browser menu-mount timing assertion was fixed by waiting for menu mount; final 15/15 passed without a production correction."
+risks:
+  - "HR opt-in in an already open connection is reflected after refreshed admission; current stored HR eligibility is revalidated by the server on assignment."
+  - "Aborting a browser request does not undo a server commit; durable room membership remains authoritative and retry is idempotent."
+next_owner: test-reviewer-agent
+handoff_to:
+  - agent: test-reviewer-agent
+    reason: "Coverage review of the eight accepted criteria, nine requirement scenarios and stated proportional regression evidence."
+linear_update:
+  state: QA
+  applied: false
+  comment_summary: "QA verdict: READY. No defects found; 67 backend tests, 15 HR browser cases and three additional regressions passed. No related external issue was supplied."
+review_required:
+  - test-reviewer-agent

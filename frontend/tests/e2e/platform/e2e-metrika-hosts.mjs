@@ -57,6 +57,8 @@ async function assertMetrikaEnabled(browser, host) {
       throw new Error(`METRIKA_NOT_ENABLED host=${host} result=${JSON.stringify(result)}`);
     }
   } finally {
+    // Let this finite, mocked page finish its proxied lazy assets before teardown.
+    await page.waitForLoadState("networkidle");
     await context.close();
   }
 }
@@ -73,6 +75,7 @@ async function assertInviteRouteIsRedacted(browser) {
       throw new Error(`METRIKA_ROUTE_LEAK result=${serialised}`);
     }
   } finally {
+    await page.waitForLoadState("networkidle");
     await context.close();
   }
 }
@@ -89,6 +92,7 @@ async function assertMetrikaBlocked(browser, host) {
       throw new Error(`METRIKA_SHOULD_BE_BLOCKED host=${host} result=${JSON.stringify(result)}`);
     }
   } finally {
+    await page.waitForLoadState("networkidle");
     await context.close();
   }
 }

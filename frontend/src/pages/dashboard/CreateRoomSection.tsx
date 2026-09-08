@@ -1,4 +1,4 @@
-import React, { useState, type FormEvent } from "react";
+import React, { useRef, useState, type FormEvent } from "react";
 import {
   Button,
   Group,
@@ -36,6 +36,16 @@ export interface RoomTaskPreview {
   language: string;
 }
 
+export type HiringManagerSelection = {
+  normalizedId: string;
+  displayName: string;
+};
+
+export type HiringManagerPickerFeedback = {
+  kind: "idle" | "checking" | "success" | "error";
+  message: string;
+};
+
 interface CreateRoomSectionProps {
   title: string;
   onTitleChange: (value: string) => void;
@@ -43,6 +53,12 @@ interface CreateRoomSectionProps {
   selectedTasks: RoomTaskPreview[];
   selectedTaskIds: string[];
   onSelectedTaskIdsChange: (ids: string[]) => void;
+  hiringManagerDraftId: string;
+  onHiringManagerDraftIdChange: (value: string) => void;
+  onAddHiringManager: () => void;
+  hiringManagerSelections: HiringManagerSelection[];
+  hiringManagerPickerFeedback: HiringManagerPickerFeedback;
+  onRemoveHiringManager: (normalizedId: string) => void;
   isSubmitting: boolean;
   onSubmit: (event: FormEvent) => void;
   onError?: (message: string) => void;
@@ -64,11 +80,18 @@ export function CreateRoomSection({
   selectedTasks,
   selectedTaskIds,
   onSelectedTaskIdsChange,
+  hiringManagerDraftId,
+  onHiringManagerDraftIdChange,
+  onAddHiringManager,
+  hiringManagerSelections,
+  hiringManagerPickerFeedback,
+  onRemoveHiringManager,
   isSubmitting,
   onSubmit,
   onError,
 }: CreateRoomSectionProps) {
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
+  const hiringManagerInputRef = useRef<HTMLInputElement>(null);
 
   // RTK Query deduplicates this subscription against PresetsSection when both
   // are mounted — only one /me/presets request is issued.
@@ -153,6 +176,70 @@ export function CreateRoomSection({
               styles={darkSelectStyles}
               labelProps={{ onClick: (e: React.MouseEvent) => e.preventDefault() }}
             />
+            <Stack gap={6}>
+              <Group align="flex-end" gap="sm" wrap="nowrap">
+                <TextInput
+                  ref={hiringManagerInputRef}
+                  label="ID нанимающего"
+                  description="Введите ID нанимающего и нажмите «Добавить»."
+                  placeholder="UUID нанимающего"
+                  value={hiringManagerDraftId}
+                  onChange={(event) => onHiringManagerDraftIdChange(event.currentTarget.value)}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter") return;
+                    event.preventDefault();
+                    onAddHiringManager();
+                  }}
+                  disabled={isSubmitting || hiringManagerPickerFeedback.kind === "checking"}
+                  styles={darkFieldStyles}
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  type="button"
+                  onClick={onAddHiringManager}
+                  loading={hiringManagerPickerFeedback.kind === "checking"}
+                  disabled={isSubmitting || hiringManagerPickerFeedback.kind === "checking"}
+                >
+                  Добавить
+                </Button>
+              </Group>
+              {hiringManagerPickerFeedback.kind !== "idle" ? (
+                <Text
+                  size="sm"
+                  c={hiringManagerPickerFeedback.kind === "error" ? "red.4" : "gray.3"}
+                  role={hiringManagerPickerFeedback.kind === "error" ? "alert" : "status"}
+                  aria-live={hiringManagerPickerFeedback.kind === "error" ? "assertive" : "polite"}
+                >
+                  {hiringManagerPickerFeedback.message}
+                </Text>
+              ) : null}
+              {hiringManagerSelections.length > 0 ? (
+                <Stack gap={6} data-testid="hiring-manager-selection-list">
+                  <Title order={5}>Добавленные нанимающие</Title>
+                  <Stack gap={4} role="list">
+                    {hiringManagerSelections.map((selection) => (
+                      <Group key={selection.normalizedId} justify="space-between" wrap="nowrap" role="listitem">
+                        <Text size="sm">{selection.displayName}</Text>
+                        <Button
+                          type="button"
+                          variant="subtle"
+                          color="red"
+                          size="xs"
+                          aria-label={`Удалить нанимающего ${selection.displayName}`}
+                          disabled={isSubmitting}
+                          onClick={() => {
+                            onRemoveHiringManager(selection.normalizedId);
+                            requestAnimationFrame(() => hiringManagerInputRef.current?.focus());
+                          }}
+                        >
+                          Удалить
+                        </Button>
+                      </Group>
+                    ))}
+                  </Stack>
+                </Stack>
+              ) : null}
+            </Stack>
             {selectedTasks.length > 0 && (
               <Stack
                 gap={8}
@@ -186,7 +273,7 @@ export function CreateRoomSection({
                 })}
               </Stack>
             )}
-            <Button type="submit" loading={isSubmitting}>
+            <Button type="submit" loading={isSubmitting} disabled={isSubmitting}>
               Создать и открыть
             </Button>
           </Stack>

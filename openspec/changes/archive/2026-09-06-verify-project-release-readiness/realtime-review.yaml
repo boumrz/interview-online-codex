@@ -1,0 +1,129 @@
+agent: solution-reviewer-agent
+task_id: verify-project-release-readiness-realtime
+verdict: revise
+release_recommendation: NO-GO
+blocking: true
+summary: "Native-proxy failures have direct transport evidence, but the full-Docker rerun independently leaves 1,399 durable events out of 1,400 expected."
+input_summary: >-
+  Read first-pass multi-activity, focused Yjs and code-sync failures; inspected
+  their JSON diagnostics, the full-Docker multi-activity failure and passing
+  focused/code-sync reruns. Read filtered Docker logs and queried aggregate
+  counts only for the audit's synthetic room in a read-only transaction.
+output_summary: >-
+  The bounded queue/batching repair's earlier approval does not establish
+  release readiness for this new evidence. Native failures cannot all be
+  classified as code regressions, and the full-Docker activity failure cannot
+  be dismissed as the native upstream problem. No production code was changed.
+
+observations:
+  native_multi_activity:
+    report: output/playwright/multi-activity/1788725100639/report.json
+    log: output/release-audit/e2e-multi-participant-activity.log
+    actual: >-
+      All 2,100 activity events passed persistence/export checks. Nine editor
+      models contain all 2,100 inserted digits; candidate-1 contains only 214
+      occurrences of digit 6 and is missing 86 characters. The run records
+      14 HTTP 504 event responses and 83 unexpected runtime diagnostics.
+    proxy_evidence: >-
+      Read-only docker logs for interview-release-audit-native-web show exactly
+      14 matching room POST errors between 20:06:10 and 20:07:13 UTC on
+      2026-09-06: upstream timed out (110: Operation timed out) while connecting
+      to upstream, target 192.168.5.2:18081. This is direct evidence for this
+      room, independent of the separately diagnosed PDF failure.
+    interpretation: >-
+      A real network failure was still affecting the workload. The report does
+      not prove that all outstanding Yjs delivery and recovery had completed
+      before the convergence deadline; it also does not justify ignoring the
+      observed divergent document.
+  native_focused_delivery:
+    report: output/playwright/yjs-delivery/1788725389384/report.json
+    actual: >-
+      Backlog and pending-edit SSE recovery pass. In single accepted-response
+      loss, owner has 1 A and 6 B, candidate A has 50 A and no B, candidate B
+      has 1 A and 50 B. Candidate A's accepted first edit is not retried before
+      timeout and no second SSE open is recorded; candidate B has a pending
+      incremental request with no response status for the remaining run.
+    merged_case: >-
+      The merged scenario fails waiting for lostAccepted at line 216. The
+      actual merged request has clientEventSequence 51 and no response status;
+      lostAccepted remains false. The fault-injection acceptance precondition
+      never completed, so this is not evidence of a rewritten retry envelope.
+    proxy_evidence: >-
+      Both focused failure rooms have POST/stream 499 access-log records when
+      the browser tears down pending requests. Those records support an
+      unresolved transport wait but do not, by themselves, prove where it stalled.
+  native_code_sync:
+    log: output/release-audit/e2e-code-sync-regression.log
+    actual: >-
+      Source editor fragment assertion at line 157 passed; candidate fragment
+      assertion at line 158 timed out after 12 seconds. The test exits before
+      its detailed model dump, so the first-pass cause is not identifiable
+      from this log alone. It is not a missing editor selector failure.
+  full_docker_yjs_recheck:
+    logs:
+      - output/release-audit/e2e-yjs-delivery-reliability-docker-retry.log
+      - output/release-audit/e2e-code-sync-regression-docker-retry.log
+    result: "All four focused delivery scenarios pass; CODE_SYNC_REGRESSION_OK passes unchanged."
+    focused_report: output/playwright/yjs-delivery/1788725751007/report.json
+  full_docker_multi_activity:
+    report: output/playwright/multi-activity/1788725641308/report.json
+    durable_counts: output/release-audit/multi-durable-counts.json
+    actual: >-
+      Round 1 reaches 700 visible events. Round 2 fails the existing all captured
+      sources acknowledged and durable assertion, before round 3 or final
+      editor convergence. After browser teardown the synthetic room contains
+      1,399 rows and 1,399 distinct source UUIDs: digit 1 has 199, digits 2–7
+      each have 200. A second aggregate sample at 20:19:50 UTC still has 1,399.
+    network_context: >-
+      The report records no HTTP error response, and the full-Docker web log
+      has no nginx error lines for the inspected interval. It records 1,400
+      successful-header key_press body-cancellation diagnostics. Backend
+      diagnostics inspected primarily show broken pipes during SSE lifecycle;
+      no evidence establishes CPU emulation or pool exhaustion as this failure's cause.
+    evidence_limit: >-
+      The early-failure report does not serialize the action UUID/ack map.
+      Therefore 1,400 successful-header records are not proof that 1,400 distinct
+      UUIDs were acknowledged. The missing durable event is observed, but the
+      exact event identity and acceptance path remain unproven.
+
+findings:
+  - severity: blocking
+    description: "The production-topology full-Docker multi-participant acceptance test still fails activity durability with 1,399 of 1,400 expected keyboard events."
+    recommendation: >-
+      Keep NO-GO. Open a separate validated behavioral fix, preserve this RED,
+      and capture exact request UUID, response status and durable UUID membership
+      on early failure. Reproduce concurrent SSE replacement and activity
+      acceptance, fix the confirmed path, and rerun the unchanged full workload.
+
+candidate_cause_not_yet_proven:
+  description: >-
+    A connection-detach race can validate a connection, then find that its
+    participant has disappeared and return normally before durable acceptance.
+    The controller then returns 204. This source path is a concrete diagnostic
+    lead consistent with candidate-1's forced reconnect, not a demonstrated
+    explanation for this particular missing UUID.
+  source_references:
+    - "backend/src/main/kotlin/com/interviewonline/service/CollaborationService.kt:2207 validates connection/token and returns the connection ID."
+    - "backend/src/main/kotlin/com/interviewonline/service/CollaborationService.kt:440 rereads participants and returns null if absent."
+    - "backend/src/main/kotlin/com/interviewonline/service/CollaborationService.kt:1654 trackKeyPress rereads participants and returns if absent."
+    - "backend/src/main/kotlin/com/interviewonline/service/CollaborationService.kt:2235 detachConnection removes the participant."
+    - "backend/src/main/kotlin/com/interviewonline/controller/RealtimeController.kt:85 normal service completion becomes HTTP 204."
+
+risk_summary: >-
+  There is an unresolved full-Docker durability failure under reconnect. Earlier
+  bounded repair approval remains historical/scoped evidence, not permission to
+  declare the full project ready. Environment faults explain specific native
+  failures but do not explain away the new Docker failure.
+runtime_security_probe: unperformed
+scope_limits:
+  - "No browser/server starts, production edits or security exploit probes were performed by this reviewer."
+  - "Only synthetic fixture counts were queried; no session tokens or personal data are included."
+  - "The previous fix-concurrent-yjs-delivery review was not rewritten; this release-audit context is separate."
+next_owner: coordinating-owner
+handoff_to:
+  - agent: coordinating-owner
+    reason: "Finalize the audit as NO-GO with the unresolved durability blocker and plan a separate behavioral fix."
+linear_update:
+  state: In Progress
+  comment_summary: "Release audit realtime verdict: NO-GO. Full-Docker workload retains 1,399/1,400 expected activity events; exact race remains to be reproduced."
+  applied: false

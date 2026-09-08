@@ -25,5 +25,6 @@ class WebConfig(
             .allowedOrigins(*origins)
             .allowedMethods("*")
             .allowedHeaders("*")
+            .exposedHeaders("Content-Disposition", "Interview-Count")
     }
 }

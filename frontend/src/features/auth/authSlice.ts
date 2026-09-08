@@ -17,7 +17,8 @@ function normalizeUser(raw: User): User {
   return {
     ...raw,
     displayName,
-    role: normalizedRole
+    role: normalizedRole,
+    isHr: raw.isHr === true,
   };
 }
 
@@ -42,9 +43,17 @@ const authSlice = createSlice({
     setCurrentUser(state, action: PayloadAction<User>) {
       state.user = normalizeUser(action.payload);
     },
-    updateProfile(state, action: PayloadAction<{ displayName: string }>) {
+    updateProfile(
+      state,
+      action: PayloadAction<Partial<Pick<User, "displayName" | "isHr">>>,
+    ) {
       if (!state.user) return;
-      state.user.displayName = action.payload.displayName;
+      if (typeof action.payload.displayName === "string") {
+        state.user.displayName = action.payload.displayName;
+      }
+      if (typeof action.payload.isHr === "boolean") {
+        state.user.isHr = action.payload.isHr;
+      }
     },
     clearAuth(state) {
       state.token = null;

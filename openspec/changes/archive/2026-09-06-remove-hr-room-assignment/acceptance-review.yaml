@@ -1,0 +1,82 @@
+agent: independent-acceptance-review
+task_id: remove-hr-room-assignment
+input_summary: Validated OpenSpec, approved engineering/security review, executed evidence, tests, and screenshots.
+output_summary: Sequential QA, test-quality, UX, and product acceptance approve the scoped HR removal change.
+independence: Reviewer authored no production or test implementation and changed only this acceptance artifact.
+review_method: Inspected existing execution logs, current Surefire XML, test assertions, UI guards, and saved screenshots.
+evidence_location: output/hr-revoke-baseline
+qa:
+  verdict: approve
+  blocking_findings: []
+  test_first:
+    browser: Eight new cases failed at missing removal controls across browser-red, browser-stale-red, and browser-pending-red logs.
+    backend: backend-red.log records 20 failures, including DELETE 405 and missing transaction waiting.
+    level: Visible flows use E2E; server permission, projection, and transaction invariants use the documented integration exception.
+  execution_verified:
+    backend: Current Surefire XML contains 18 suites, 87 tests, zero failures, errors, or skips.
+    backend_removal: HrRoleRemovalIntegrationTest XML records 20 passing tests in 5.092 seconds.
+    browser: browser-green.log records 23 passed, zero failed, cancelled, or skipped; eight new removal cases.
+    regressions: roles-green.log and account-switch-green.log contain their success markers.
+    static: Typecheck log has no diagnostics; build completed with two bundle-size warnings.
+    environment: New MockMvc class disables OSIV, matching production; earlier SSE pool exhaustion is documented in verification.md.
+  acceptance_matrix:
+    current_manager: Registered and promoted guest actors remove HR through the real participant control.
+    offline_target: Manager-list removal remains effective at the target's next entry.
+    self_removal: Panel closes, manager controls disappear, and the former manager's retry returns 403.
+    durable_access_loss: Candidate membership survives retries, reconnect, tracking, and both serialized entry/removal orders.
+    private_access: Active SSE projections omit private data; old event tokens and JWT deny privileged requests.
+    retained_history: Global isHr, owner identity, original tracking/membership IDs, and private-note history remain intact.
+    cabinet_export: Cabinet omits the room, detail returns 404, and workbook response reports zero accessible interviews.
+    explicit_regrant: Authorized reassignment restores access with one retained tracking association.
+    boundaries: Owner HR/non-HR, malformed, unknown, ordinary, unrelated, unauthorized, and archived targets are covered.
+    ui_recovery: Both surfaces disable pending actions, preserve roles on failure, allow retry, and handle current/stale 410.
+    ordinary_roles: Non-owner managers remain unable to revoke an ordinary interviewer's role.
+  next_owner: Test Reviewer
+test_review:
+  verdict: approve
+  blocking_gaps: []
+  coverage_basis: Directly read the eight removal E2E cases, modified manager cases, and all 20 backend cases.
+  sensitivity: DELETE-to-PUT mutation failed at visible manager controls remaining; restored focused E2E passed.
+  mutation_scope: One selected mutation killed; no full mutation score or code-coverage percentage claimed.
+  browser_quality:
+    scores: {understandable: 8, maintainable: 7, repeatable: 7, atomic: 8, necessary: 9, granular: 7, fast: 7, first: 9}
+    farley_score: 7.7
+    evidence: Behavioral names and role locators are clear; fresh accounts/contexts isolate cases; held routes avoid sleep-based response races.
+    tradeoff: Full user journeys combine several assertions and require a live local runtime; suite completes in about 53 seconds.
+  backend_quality:
+    scores: {understandable: 9, maintainable: 8, repeatable: 8, atomic: 8, necessary: 9, granular: 8, fast: 9, first: 9}
+    farley_score: 8.5
+    evidence: Named parameterized matrices expose boundaries; real persistence/SSE checks cover revocation; fixtures isolate accounts and rooms.
+    tradeoff: Lock-order tests use a bounded 200ms wait and H2; some cases combine related persistence and access assertions.
+  reference: https://www.linkedin.com/pulse/tdd-properties-good-tests-dave-farley-iexge/
+  non_blocking_followups:
+    - If the shared authority lifecycle changes, add held-removal responses across room/account navigation, complementing permission-loss tests.
+  next_owner: UX Critic
+ux_review:
+  verdict: approve
+  blocking_findings: []
+  screenshots_inspected:
+    - output/hr-revoke-panel-desktop.png
+    - output/hr-revoke-panel-mobile.png
+  observations:
+    - Removal is attached to the named HR card and has a target-specific accessible label.
+    - Owner card has a visible owner badge and no removal action; participant menus keep distinct HR/interviewer labels.
+    - Desktop action is legible; at 390px the mobile action fits within the card and viewport.
+    - preview.log confirms the mobile action is at least 44px high and the owner action is absent.
+    - Pending wording and retry feedback are exercised on both surfaces; self-removal closes the private panel.
+  scope_note: Screenshots cover the manager panel; participant action and state clarity are supported by E2E and control inspection.
+  next_owner: Product Owner
+product_acceptance:
+  verdict: approve
+  blocking_findings: []
+  accepted_outcome: Managers can undo an accidental non-owner HR assignment online, offline, or for themselves, with durable candidate access.
+  requirements_preserved: Account HR status, interview history, ownership, ordinary interviewer restrictions, and explicit reassignment remain intact.
+  scope_alignment: Both requested existing surfaces are delivered without a new role enum, schema, or transport.
+  next_owner: Root for final strict validation, task reconciliation, and OpenSpec archival.
+risks:
+  - Browser evidence uses Chromium and the saved desktop/390px layouts; other browser engines were not exercised.
+  - Transaction ordering is tested with H2 in PostgreSQL mode; browser acceptance uses the isolated PostgreSQL runtime.
+  - Delayed removal across direct room/account switching is guard-reviewed and supported by account-switch regression, not a separate removal E2E.
+  - Existing bundle-size warnings remain; no new performance benchmark is claimed.
+next_owner: Root to finish validation and archive the accepted change.
+linear_update: No linked issue supplied; no external messages or task state changed.

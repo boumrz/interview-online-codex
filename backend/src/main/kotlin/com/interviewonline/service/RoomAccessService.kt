@@ -42,6 +42,9 @@ class RoomAccessService(
         interviewerToken: String? = null,
         realtimeRoleOverride: RoomRole? = null,
     ): RoomAccess {
+        if (room.archivedAt != null) {
+            throw ApiException(HttpStatus.GONE, "Комната архивирована")
+        }
         val ownerId = room.ownerUser?.id
         val userId = user?.id
         if (ownerId != null && userId != null && ownerId == userId) {

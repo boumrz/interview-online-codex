@@ -26,6 +26,7 @@ dependencies {
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("io.opentelemetry:opentelemetry-api:1.48.0")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
+    implementation("org.apache.poi:poi-ooxml:5.5.1")
     implementation("org.springframework.security:spring-security-crypto")
     runtimeOnly("org.postgresql:postgresql")
     implementation("org.flywaydb:flyway-core")
@@ -33,6 +34,7 @@ dependencies {
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testRuntimeOnly("com.h2database:h2")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 kotlin {
