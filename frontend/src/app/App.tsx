@@ -5,10 +5,18 @@ import { clearAuth, setCurrentUser } from "../features/auth/authSlice";
 import { api, useMeProfileQuery } from "../services/api";
 import { setVisitParams, trackPageView } from "../services/analytics";
 import { LegacyDomainNotice } from "../components/LegacyDomainNotice";
+import { normalizeLanguageKey } from "../pages/dashboard/dashboardHelpers";
+import { TEAM_WORKSPACES_ENABLED } from "../config/runtime";
+import { captureTeamInvitationFragment } from "../features/workspace/teamInvitationToken";
+
+captureTeamInvitationFragment();
 
 const LandingPage = lazy(() => import("../pages/LandingPage").then((module) => ({ default: module.LandingPage })));
 const LoginPage = lazy(() => import("../pages/LoginPage").then((module) => ({ default: module.LoginPage })));
 const DashboardPage = lazy(() => import("../pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
+const PersonalWorkspacePage = lazy(() => import("../pages/workspace/PersonalWorkspacePage").then((module) => ({ default: module.PersonalWorkspacePage })));
+const TeamWorkspacePage = lazy(() => import("../pages/workspace/TeamWorkspacePage").then((module) => ({ default: module.TeamWorkspacePage })));
+const TeamInvitationJoinPage = lazy(() => import("../pages/workspace/TeamInvitationJoinPage").then((module) => ({ default: module.TeamInvitationJoinPage })));
 const RoomPage = lazy(() => import("../pages/RoomPage").then((module) => ({ default: module.RoomPage })));
 
 const CHUNK_RECOVERY_GUARD_KEY = "interview-online:lazy-chunk-recovery";
@@ -61,7 +69,7 @@ function AuthSessionSync() {
   const dispatch = useAppDispatch();
   const token = useAppSelector((store) => store.auth.token);
   const user = useAppSelector((store) => store.auth.user);
-  const { data, error } = useMeProfileQuery(undefined, {
+  const { currentData: data, error } = useMeProfileQuery(token ?? "", {
     skip: !token,
     refetchOnMountOrArgChange: true
   });
@@ -99,6 +107,33 @@ function RoutePageTracker() {
   return null;
 }
 
+const LEGACY_PERSONAL_ROUTES: Record<string, string> = {
+  "/dashboard": "/workspace/personal/interviews",
+  "/dashboard/rooms": "/workspace/personal/interviews",
+  "/dashboard/manage": "/workspace/personal/interviews",
+  "/dashboard/tasks": "/workspace/personal/library",
+  "/dashboard/presets": "/workspace/personal/library?tab=sets",
+  "/dashboard/hr": "/workspace/personal/candidates",
+};
+
+function LegacyPersonalRedirect() {
+  const location = useLocation();
+  const target = LEGACY_PERSONAL_ROUTES[location.pathname] ?? "/workspace/personal/interviews";
+  if (location.pathname === "/dashboard/tasks") {
+    const legacy = new URLSearchParams(location.search);
+    const language = legacy.get("language") ?? legacy.get("lang");
+    const canonical = new URLSearchParams();
+    if (language) canonical.set("language", normalizeLanguageKey(language));
+    const search = canonical.toString();
+    return <Navigate to={`${target}${search ? `?${search}` : ""}`} replace />;
+  }
+  return <Navigate to={target.includes("?") ? target : `${target}${location.search}`} replace />;
+}
+
+function PersonalWorkspaceRoute() {
+  return <PersonalWorkspacePage />;
+}
+
 export function App() {
   return (
     <>
@@ -111,8 +146,20 @@ export function App() {
             <Routes>
               <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<LoginPage />} />
-              <Route path="/dashboard" element={<Navigate to="/dashboard/rooms" replace />} />
+              <Route path="/dashboard" element={<LegacyPersonalRedirect />} />
+              <Route path="/dashboard/rooms" element={<LegacyPersonalRedirect />} />
+              <Route path="/dashboard/manage" element={<LegacyPersonalRedirect />} />
+              <Route path="/dashboard/tasks" element={<LegacyPersonalRedirect />} />
+              <Route path="/dashboard/presets" element={<LegacyPersonalRedirect />} />
+              <Route path="/dashboard/hr" element={<LegacyPersonalRedirect />} />
               <Route path="/dashboard/:section" element={<DashboardPage />} />
+              <Route path="/workspace/personal/*" element={<PersonalWorkspaceRoute />} />
+              <Route
+                path="/workspace/teams/:teamId/*"
+                element={TEAM_WORKSPACES_ENABLED ? <TeamWorkspacePage /> : <Navigate to="/workspace/personal/interviews" replace />}
+              />
+              <Route path="/profile" element={<PersonalWorkspacePage />} />
+              <Route path="/join/team/*" element={<TeamInvitationJoinPage />} />
               <Route path="/room/:inviteCode" element={<RoomPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

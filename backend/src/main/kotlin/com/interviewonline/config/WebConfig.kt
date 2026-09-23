@@ -10,19 +10,16 @@ class WebConfig(
     @Value("\${app.cors.allowed-origins}") private val allowedOrigins: String,
 ) : WebMvcConfigurer {
     override fun addCorsMappings(registry: CorsRegistry) {
-        val origins = linkedSetOf(
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-        ).apply {
-            allowedOrigins
-                .split(",")
-                .map(String::trim)
-                .filter(String::isNotBlank)
-                .forEach(::add)
-        }.toTypedArray()
+        val origins = allowedOrigins
+            .split(",")
+            .map(String::trim)
+            .filter(String::isNotBlank)
+            .distinct()
+            .toTypedArray()
 
         registry.addMapping("/api/**")
             .allowedOrigins(*origins)
+            .allowCredentials(true)
             .allowedMethods("*")
             .allowedHeaders("*")
             .exposedHeaders("Content-Disposition", "Interview-Count")

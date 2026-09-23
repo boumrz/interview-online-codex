@@ -90,7 +90,7 @@ try {
 
   // (1) Включаем focus mode у интервьюера.
   const focusToggle = interviewerPage.locator(
-    '[data-testid="briefing-focus-toggle"]',
+    '[data-testid="room-markdown-scenario-toggle"]',
   );
   await focusToggle.waitFor({ state: "visible", timeout: 8000 });
   await focusToggle.click();
@@ -116,6 +116,13 @@ try {
       `FOCUS_MODE_CANDIDATE_DATA_FOCUS_NOT_SET got=${candidateFocus}`,
     );
   }
+
+  // Markdown-сценарий должен сохраняться и после нового подключения владельца.
+  await interviewerPage.reload();
+  await interviewerPage.locator('[data-testid="room-markdown-scenario-toggle"][aria-pressed="true"]')
+    .waitFor({ state: "visible", timeout: 8000 });
+  await interviewerPage.locator('[data-testid="room-code-editor-host"] .cm-editor')
+    .waitFor({ state: "detached", timeout: 8000 });
 
   // (3) Выключаем focus mode и убеждаемся, что код вернулся обоим.
   await focusToggle.click();

@@ -5,6 +5,7 @@ import { activityRetryDelay, ACTIVITY_REQUEST_TIMEOUT_MS } from "./activityRetry
 import { base64ToBytes, bytesToBase64 } from "./yjsCodec";
 import type { RoomTask } from "../../types";
 import { trackEvent } from "../../services/analytics";
+import { createRoomEventSource, roomRealtimeFetch } from "./roomRealtimeTransport";
 
 /** Same opt-out as RoomPage: localStorage room_sync_log = "0" or ?syncLog=0 */
 function isRoomSyncTransportLogEnabled(): boolean {
@@ -183,6 +184,22 @@ type Options = {
     participantId?: string | null;
     awarenessUpdate: string;
   }) => void;
+  onNoteMessageAck?: (payload: NoteMessageAckPayload) => void;
+  onNoteMessageFailure?: (payload: NoteMessageFailurePayload) => void;
+};
+
+type NoteMessageAckPayload = {
+  type: "note_message_ack";
+  status: "persisted";
+  clientMessageId: string;
+  messageId: string;
+  persistedAtEpochMs: number;
+};
+
+type NoteMessageFailurePayload = {
+  clientMessageId: string;
+  httpStatus: number;
+  code?: string | null;
 };
 
 type ClientMessage =
@@ -191,7 +208,7 @@ type ClientMessage =
   | { type: "set_step"; stepIndex: number }
   | { type: "task_rating_update"; stepIndex: number; rating: number | null }
   | { type: "notes_update"; notes: string }
-  | { type: "note_message"; noteId: string; noteText: string; noteTimestampEpochMs: number }
+  | { type: "note_message"; clientMessageId: string; noteText: string; noteTimestampEpochMs: number }
   | {
       type: "private_note_entry";
       privateNoteId: string;
@@ -418,6 +435,8 @@ export function useRoomSocket({
   onManagerWorkspaceSync,
   onManagerWorkspaceYjsUpdate,
   onManagerWorkspaceAwarenessUpdate,
+  onNoteMessageAck,
+  onNoteMessageFailure,
 }: Options) {
   const sseRef = useRef<EventSource | null>(null);
   const pendingMessagesRef = useRef<QueuedClientMessage[]>([]);
@@ -458,8 +477,11 @@ export function useRoomSocket({
     persistEventSequence(inviteCode, next);
     return next;
   };
-  const queuePayload = (payload: ClientMessage, options: { dedupeSameType?: boolean } = {}) => {
-    if (terminalAccessFailureRef.current || terminalRoomUnavailableRef.current) return;
+  const queuePayload = (
+    payload: ClientMessage,
+    options: { dedupeSameType?: boolean; clientEventSequence?: number | null } = {},
+  ): QueuedClientMessage | null => {
+    if (terminalAccessFailureRef.current || terminalRoomUnavailableRef.current) return null;
     if (options.dedupeSameType) {
       pendingMessagesRef.current = pendingMessagesRef.current.filter((queued) => {
         // A token-free recovery request can be in flight away from index zero.
@@ -478,16 +500,22 @@ export function useRoomSocket({
         return false;
       });
     }
-    pendingMessagesRef.current.push({
+    const queued: QueuedClientMessage = {
       payload,
       queuedAtEpochMs: Date.now(),
-      clientEventSequence: requiresEventSequence(payload) ? nextClientEventSequence() : null,
-    });
+      clientEventSequence: options.clientEventSequence ??
+        (requiresEventSequence(payload) ? nextClientEventSequence() : null),
+    };
+    pendingMessagesRef.current.push(queued);
     // Keep valid mutations until acknowledged or an explicit context/access
     // boundary. A count cap must not silently evict causal document updates.
+    return queued;
   };
-  const sendRef = useRef<(payload: ClientMessage) => void>((payload: ClientMessage) => {
-    queuePayload(payload);
+  const sendRef = useRef<(
+    payload: ClientMessage,
+    options?: { clientEventSequence?: number | null },
+  ) => number | null>((payload: ClientMessage, options = {}) => {
+    return queuePayload(payload, options)?.clientEventSequence ?? null;
   });
   const [connected, setConnected] = useState(false);
   const [accessDenied, setAccessDenied] = useState(false);
@@ -530,7 +558,7 @@ export function useRoomSocket({
       activityCaptureConfirmedRef.current = false;
       activityDeliveryDelayedRef.current = false;
       activityDeliverySessionKeyRef.current = null;
-      sendRef.current = () => {};
+      sendRef.current = () => null;
       return;
     }
 
@@ -564,6 +592,7 @@ export function useRoomSocket({
     let statusProbeInFlight = false;
     let statusProbeController: AbortController | null = null;
     let statusProbeTimeoutId: number | null = null;
+    let initialConnectTimerId: number | null = null;
     let authorizationRecoveryAttempted = false;
     let leaveNotified = false;
     lastPresenceRef.current = null;
@@ -685,7 +714,7 @@ export function useRoomSocket({
       tryDrainActivityRef.current = null;
       queueActivityRef.current = null;
       lastPresenceRef.current = null;
-      sendRef.current = () => {};
+      sendRef.current = () => null;
       setConnected(false);
       setAccessDenied(true);
       onError("Не удалось подтвердить доступ к комнате. Откройте актуальную ссылку-приглашение или войдите в аккаунт.");
@@ -712,7 +741,7 @@ export function useRoomSocket({
       tryDrainActivityRef.current = null;
       queueActivityRef.current = null;
       lastPresenceRef.current = null;
-      sendRef.current = () => {};
+      sendRef.current = () => null;
       setConnected(false);
       setAccessDenied(false);
       setRoomUnavailable(true);
@@ -859,7 +888,7 @@ export function useRoomSocket({
 
             let response: Response;
             try {
-              response = await fetch(`${API_BASE_URL}/realtime/rooms/${inviteCode}/events`, {
+              response = await roomRealtimeFetch(`${API_BASE_URL}/realtime/rooms/${inviteCode}/events`, {
                 method: "POST",
                 signal: controller.signal,
                 headers: {
@@ -876,6 +905,16 @@ export function useRoomSocket({
               inFlightControllerRef.current = null;
               if (inFlightMessageRef.current === head) inFlightMessageRef.current = null;
               if (isTerminal() || controller.signal.aborted || lease !== streamLease) break;
+              if (head.payload.type === "note_message") {
+                removeSettledMessage();
+                onNoteMessageFailure?.({
+                  clientMessageId: head.payload.clientMessageId,
+                  httpStatus: 0,
+                  code: "NETWORK_ERROR",
+                });
+                onError("Сообщение не отправлено. Можно повторить отправку.");
+                continue;
+              }
               emitMetric(
                 "prod_realtime_post_failed",
                 { reason: "network_error" },
@@ -891,6 +930,17 @@ export function useRoomSocket({
             if (isTerminal() || lease !== streamLease) break;
 
             if (response.ok) {
+              if (head.payload.type === "note_message") {
+                const ack = (await response.json().catch(() => null)) as NoteMessageAckPayload | null;
+                if (
+                  ack?.type === "note_message_ack" &&
+                  ack.status === "persisted" &&
+                  ack.clientMessageId === head.payload.clientMessageId &&
+                  typeof ack.messageId === "string"
+                ) {
+                  onNoteMessageAck?.(ack);
+                }
+              }
               removeSettledMessage();
               continue;
             }
@@ -901,6 +951,20 @@ export function useRoomSocket({
             }
 
             const data = (await response.json().catch(() => ({}))) as { error?: string };
+            if (head.payload.type === "note_message") {
+              onNoteMessageFailure?.({
+                clientMessageId: head.payload.clientMessageId,
+                httpStatus: response.status,
+                code: (data as { code?: string }).code ?? null,
+              });
+              removeSettledMessage();
+              onError(data.error || "Сообщение не отправлено. Можно повторить отправку.");
+              if (response.status === 403) {
+                terminateForAccessFailure();
+                break;
+              }
+              continue;
+            }
             if (response.status === 403) {
               emitMetric(
                 "prod_realtime_post_rejected",
@@ -994,7 +1058,7 @@ export function useRoomSocket({
             }, ACTIVITY_REQUEST_TIMEOUT_MS);
             let response: Response;
             try {
-              response = await fetch(`${API_BASE_URL}/realtime/rooms/${inviteCode}/events`, {
+              response = await roomRealtimeFetch(`${API_BASE_URL}/realtime/rooms/${inviteCode}/events`, {
                 method: "POST",
                 signal: controller.signal,
                 headers: { "Content-Type": "application/json" },
@@ -1173,7 +1237,7 @@ export function useRoomSocket({
         typeof navigator.sendBeacon === "function" &&
         navigator.sendBeacon(url, new Blob([payload], { type: "application/json" }));
       if (beaconQueued) return;
-      void fetch(url, {
+      void roomRealtimeFetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -1194,7 +1258,7 @@ export function useRoomSocket({
       void (async () => {
         let response: Response | null = null;
         try {
-          response = await fetch(
+          response = await roomRealtimeFetch(
             `${API_BASE_URL}/realtime/rooms/${inviteCode}/stream-status?${params.toString()}`,
             { signal: controller.signal, cache: "no-store" },
           );
@@ -1232,7 +1296,7 @@ export function useRoomSocket({
 
       eventTokenRef.current = null;
       const params = buildParams();
-      const source = new EventSource(`${API_BASE_URL}/realtime/rooms/${inviteCode}/stream?${params.toString()}`);
+      const source = createRoomEventSource(`${API_BASE_URL}/realtime/rooms/${inviteCode}/stream?${params.toString()}`);
       const lease = ++streamLease;
       sseRef.current = source;
 
@@ -1502,11 +1566,17 @@ export function useRoomSocket({
       notifyLeaveRoom();
     };
 
-    sendRef.current = (payload: ClientMessage) => {
-      queuePayload(payload);
+    sendRef.current = (payload: ClientMessage, options = {}) => {
+      const queued = queuePayload(payload, options);
       tryDrainQueueRef.current?.();
+      return queued?.clientEventSequence ?? null;
     };
-    connectSse();
+    // React development mode replays effects immediately. Defer the first stream
+    // until the replay settles so a cancelled EventSource cannot occupy a slot.
+    initialConnectTimerId = window.setTimeout(() => {
+      initialConnectTimerId = null;
+      connectSse();
+    }, 0);
 
     window.addEventListener("focus", handleFocus);
     window.addEventListener("blur", handleBlur);
@@ -1522,6 +1592,7 @@ export function useRoomSocket({
       window.removeEventListener("beforeunload", handleBeforeUnload);
 
       disposed = true;
+      if (initialConnectTimerId != null) window.clearTimeout(initialConnectTimerId);
       abortStatusProbe();
 
       const sse = sseRef.current;
@@ -1551,7 +1622,7 @@ export function useRoomSocket({
       tryDrainActivityRef.current = null;
       queueActivityRef.current = null;
 
-      sendRef.current = () => {};
+      sendRef.current = () => null;
     };
   }, [
     authToken,
@@ -1567,6 +1638,8 @@ export function useRoomSocket({
     onManagerWorkspaceAwarenessUpdate,
     onManagerWorkspaceSync,
     onManagerWorkspaceYjsUpdate,
+    onNoteMessageAck,
+    onNoteMessageFailure,
     onState,
     onYjsUpdate,
     ownerToken,
@@ -1574,8 +1647,11 @@ export function useRoomSocket({
     sessionId
   ]);
 
-  const send = (payload: ClientMessage) => {
-    sendRef.current(payload);
+  const send = (
+    payload: ClientMessage,
+    options: { clientEventSequence?: number | null } = {},
+  ) => {
+    return sendRef.current(payload, options);
   };
 
   const sendCodeUpdate = (code: string, syncKey?: string | null) => {
@@ -1602,13 +1678,18 @@ export function useRoomSocket({
     send({ type: "notes_update", notes });
   };
 
-  const sendNoteMessage = (noteId: string, noteText: string, noteTimestampEpochMs: number) => {
-    send({
+  const sendNoteMessage = (
+    clientMessageId: string,
+    noteText: string,
+    noteTimestampEpochMs: number,
+    clientEventSequence?: number | null,
+  ) => {
+    return send({
       type: "note_message",
-      noteId,
+      clientMessageId,
       noteText,
       noteTimestampEpochMs
-    });
+    }, { clientEventSequence });
   };
 
   const sendPrivateNoteEntry = (
@@ -1667,7 +1748,7 @@ export function useRoomSocket({
     // Fire-and-forget so cursor events never block Yjs updates in the main queue.
     const token = eventTokenRef.current;
     if (!token) return;
-    void fetch(`${API_BASE_URL}/realtime/rooms/${inviteCode}/events`, {
+    void roomRealtimeFetch(`${API_BASE_URL}/realtime/rooms/${inviteCode}/events`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1696,7 +1777,7 @@ export function useRoomSocket({
     // Fire-and-forget so awareness floods never block Yjs updates in the main queue.
     const token = eventTokenRef.current;
     if (!token) return;
-    void fetch(`${API_BASE_URL}/realtime/rooms/${inviteCode}/events`, {
+    void roomRealtimeFetch(`${API_BASE_URL}/realtime/rooms/${inviteCode}/events`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1798,7 +1879,7 @@ export function useRoomSocket({
     if (!trimmed) return;
     const token = eventTokenRef.current;
     if (!token) return;
-    void fetch(`${API_BASE_URL}/realtime/rooms/${inviteCode}/events`, {
+    void roomRealtimeFetch(`${API_BASE_URL}/realtime/rooms/${inviteCode}/events`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

@@ -13,18 +13,20 @@
 - `frontend` - web client
 - `backend` - API + realtime SSE server
 - `agents` - split English multi-agent prompt contracts (roles + shared rules)
-- `openspec` - OpenSpec SDD source of truth (`specs/` for accepted requirements, `changes/` for active work)
+- `SPEC.md` - feature index and current work order
+- `specs/features` - one active product/implementation specification per feature
+- `openspec` - historical archive of the previous OpenSpec workflow
 
-## SDD Workflow
+## Development Workflow
 
-All feature and bug work starts with OpenSpec:
+Use `SPEC.md` to find the relevant feature specification in `specs/features/`.
+Before implementing a feature or bug fix, read that file,
+update it if the requirement changed, write the most relevant test first when
+the behavior is executable, then implement the smallest scoped change and run
+targeted verification.
 
-```bash
-npx --yes @fission-ai/openspec@latest new change <change-id>
-npx --yes @fission-ai/openspec@latest validate <change-id> --strict
-```
-
-Do not recreate `TECHNICAL_SPECIFICATION.md`, `docs/specs/`, or `docs/adr/` for new work. Use `openspec/project.md`, `openspec/specs/`, and `openspec/changes/`.
+The `openspec/` directory is retained only for historical context and evidence.
+New work should not create OpenSpec changes or require the OpenSpec CLI.
 
 ## Quick Start
 
@@ -42,16 +44,29 @@ brew services start postgresql@16
 
 **Вариант A — PostgreSQL (как в проде):** поднимите БД (см. шаг 1) и:
 
+Один раз создайте 32-byte Base64URL secret без padding и сохраните его во внешнем
+менеджере секретов или локальном environment-файле вне репозитория:
+
+```bash
+export CHAT_RECEIPT_HMAC_SECRET="$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=\n')"
+```
+
+Один и тот же `CHAT_RECEIPT_HMAC_SECRET` должен использоваться после перезапуска
+и всеми репликами. Не ротируйте его до момента, когда прошло строго
+больше 48 часов после последнего успешного chat ACK: вторые 24 часа хранят tombstone.
+Смешивать реплики с разными HMAC secrets нельзя; непрерывная ротация требует отдельной dual-key migration.
+
 ```bash
 cd backend
 JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home \
 DB_URL=jdbc:postgresql://localhost:5432/interview_online \
 DB_USER=interview \
 DB_PASSWORD=interview \
+CHAT_RECEIPT_HMAC_SECRET="$CHAT_RECEIPT_HMAC_SECRET" \
 mvn spring-boot:run
 ```
 
-На Windows с Docker: `docker compose -f docker-compose.dev.yml up -d`, затем те же переменные `DB_*` и `mvn spring-boot:run`.
+На Windows с Docker: `docker compose -f docker-compose.dev.yml up -d`, затем те же переменные `DB_*`, обязательный стабильный `CHAT_RECEIPT_HMAC_SECRET` и `mvn spring-boot:run`.
 
 **Вариант B — без PostgreSQL (встроенная H2, только для локальной разработки):**
 
@@ -84,6 +99,43 @@ npm run dev
 ```
 
 Frontend default URL: `http://localhost:5173`
+
+### Локальная отладка командного сценария
+
+Для приглашений нужен постоянный 32-byte Base64URL ключ
+`app.team-invitation-link-encryption.keys` и его `active-key-id`; храните его
+вне репозитория и используйте тот же ключ после перезапуска. Если локальные
+секреты уже сохранены в игнорируемых файлах `backend/.run/chat-receipt.secret`
+и `backend/.run/team-invitation-link-encryption.key`, запустите PostgreSQL,
+затем backend и frontend в двух терминалах так:
+
+```bash
+cd backend
+chat_receipt_secret="$(<.run/chat-receipt.secret)"
+team_link_key="$(<.run/team-invitation-link-encryption.key)"
+spring_config_json="{\"app\":{\"team-invitation-link-encryption\":{\"active-key-id\":\"primary\",\"keys\":{\"primary\":\"$team_link_key\"}}}}"
+JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home \
+FEATURE_TEAM_WORKSPACES=true FEATURE_TEAM_MERGE_COMMIT=true \
+CHAT_RECEIPT_HMAC_SECRET="$chat_receipt_secret" \
+SPRING_APPLICATION_JSON="$spring_config_json" mvn spring-boot:run
+
+cd ../frontend
+FEATURE_TEAM_WORKSPACES=true FEATURE_TEAM_MERGE_COMMIT=true npm run dev
+```
+
+Эти переменные включают весь командный путь и финальный запуск объединения
+только в выбранных процессах. По умолчанию флаг запуска объединения выключен;
+общая проверка активности комнат для нескольких процессов находится в
+PostgreSQL. Если порт `5173` уже занят, используйте для frontend
+`npm run dev -- --port 5174`. Codex не перезапускает уже работающий локальный
+сервер без просьбы пользователя.
+
+Маршрут для ручной отладки: создать две команды и пригласить участников →
+завести трек, вакансию и задачи → собрать программу интервью → провести
+интервью в комнате → завершить его и проверить результат/экспорт → в первой
+команде создать план объединения со второй → получить согласование обоих
+владельцев → выполнить объединение и проверить старые ссылки и права доступа.
+Подробные критерии каждого шага находятся в [спецификациях фич](specs/features/).
 
 Опционально для вкладки Agent Ops (выключена по умолчанию):
 

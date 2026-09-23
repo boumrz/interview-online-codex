@@ -186,6 +186,75 @@ class HrRoleRemovalIntegrationTest(
     }
 
     @Test
+    fun `finished room rejects late access grants and revokes without changing memberships`() {
+        val (owner, hr, room) = assignedRoom()
+        val candidate = account(false)
+        try {
+            val ownerTab = join(room, owner)
+            val guestTab = join(room, null)
+            val participantRowsBeforeFinish = participantRows(room)
+
+            val verdict = mockMvc.post("/api/rooms/${room.inviteCode}/verdict") {
+                header("Authorization", "Bearer ${owner.token}")
+                contentType = MediaType.APPLICATION_JSON
+                content = objectMapper.writeValueAsString(mapOf("verdict" to "HIRE"))
+            }.andReturn()
+            assertEquals(200, verdict.response.status)
+
+            val lateRestGrant = mockMvc.post("/api/rooms/${room.inviteCode}/participants/${candidate.id}/role") {
+                header("Authorization", "Bearer ${owner.token}")
+                contentType = MediaType.APPLICATION_JSON
+                content = objectMapper.writeValueAsString(mapOf("role" to "interviewer"))
+            }.andReturn()
+            assertEquals(409, lateRestGrant.response.status)
+
+            val lateRestRevoke = mockMvc.post("/api/rooms/${room.inviteCode}/participants/${hr.id}/role") {
+                header("Authorization", "Bearer ${owner.token}")
+                contentType = MediaType.APPLICATION_JSON
+                content = objectMapper.writeValueAsString(mapOf("role" to "candidate"))
+            }.andReturn()
+            assertEquals(409, lateRestRevoke.response.status)
+
+            assertEquals(
+                409,
+                event(
+                    room,
+                    ownerTab,
+                    "grant_interviewer_access",
+                    mapOf("targetUserId" to candidate.id),
+                ).response.status,
+            )
+            assertEquals(
+                409,
+                event(
+                    room,
+                    ownerTab,
+                    "revoke_interviewer_access",
+                    mapOf("targetUserId" to hr.id),
+                ).response.status,
+            )
+            assertEquals(
+                409,
+                event(
+                    room,
+                    ownerTab,
+                    "grant_interviewer_access",
+                    mapOf("targetSessionId" to guestTab.sessionId),
+                ).response.status,
+            )
+            assertEquals(204, event(room, guestTab, "request_state_sync").response.status)
+            assertEquals("candidate", payload(guestTab).path("role").asText())
+            assertEquals(
+                participantRowsBeforeFinish,
+                participantRows(room),
+                "finished access mutations must not alter durable room memberships",
+            )
+        } finally {
+            collaborationService.closeRoom(room.inviteCode)
+        }
+    }
+
+    @Test
     fun `all active tabs lose private payload and old credentials cannot restore access after reconnect`() {
         val (owner, hr, room) = assignedRoom()
         try {
@@ -307,6 +376,10 @@ class HrRoleRemovalIntegrationTest(
     private fun track(room: HrTestRoom, hr: HrTestAccount) = mockMvc.post("/api/rooms/${room.inviteCode}/hr-tracking") {
         header("Authorization", "Bearer ${hr.token}")
     }.andReturn()
+
+    private fun participantRows(room: HrTestRoom): List<List<String>> =
+        participantRepository.findAllByRoomIdOrderByCreatedAtAsc(room.id)
+            .map { listOf(requireNotNull(it.user?.id), it.role) }
 
     private data class Tab(val sessionId: String, val eventToken: String, val result: MvcResult)
 

@@ -1,0 +1,114 @@
+[
+  {
+    "index": 0,
+    "tag": "A",
+    "name": "К содержимому merge-прототипа",
+    "outlineStyle": "solid",
+    "outlineWidth": "3px",
+    "inViewport": true
+  },
+  {
+    "index": 0,
+    "tag": "SELECT",
+    "name": "Роль",
+    "outlineStyle": "solid",
+    "outlineWidth": "3px",
+    "inViewport": true
+  },
+  {
+    "index": 0,
+    "tag": "SELECT",
+    "name": "Состояние",
+    "outlineStyle": "solid",
+    "outlineWidth": "3px",
+    "inViewport": true
+  },
+  {
+    "index": 0,
+    "tag": "SELECT",
+    "name": "Блокер commit",
+    "outlineStyle": "solid",
+    "outlineWidth": "3px",
+    "inViewport": true
+  },
+  {
+    "index": 0,
+    "tag": "INPUT",
+    "name": "Длинный RU",
+    "outlineStyle": "solid",
+    "outlineWidth": "3px",
+    "inViewport": true
+  },
+  {
+    "index": 0,
+    "tag": "A",
+    "name": "← Настройки команды",
+    "outlineStyle": "solid",
+    "outlineWidth": "3px",
+    "inViewport": true
+  },
+  {
+    "index": 0,
+    "tag": "BUTTON",
+    "name": "1Команды",
+    "outlineStyle": "solid",
+    "outlineWidth": "3px",
+    "inViewport": true
+  },
+  {
+    "index": 0,
+    "tag": "BUTTON",
+    "name": "2Сотрудники и роли",
+    "outlineStyle": "solid",
+    "outlineWidth": "3px",
+    "inViewport": true
+  },
+  {
+    "index": 0,
+    "tag": "BUTTON",
+    "name": "3Названия и конфликты",
+    "outlineStyle": "solid",
+    "outlineWidth": "3px",
+    "inViewport": true
+  },
+  {
+    "index": 0,
+    "tag": "BUTTON",
+    "name": "4Проверка",
+    "outlineStyle": "solid",
+    "outlineWidth": "3px",
+    "inViewport": true
+  },
+  {
+    "index": 0,
+    "tag": "BUTTON",
+    "name": "5Подтверждение",
+    "outlineStyle": "solid",
+    "outlineWidth": "3px",
+    "inViewport": true
+  },
+  {
+    "index": 0,
+    "tag": "INPUT",
+    "name": "Точный IDБез подсказок и поиска по чужим пространствам",
+    "outlineStyle": "solid",
+    "outlineWidth": "3px",
+    "inViewport": true
+  },
+  {
+    "index": 0,
+    "tag": "INPUT",
+    "name": "ID команды назначения",
+    "outlineStyle": "solid",
+    "outlineWidth": "3px",
+    "inViewport": true
+  },
+  {
+    "index": 0,
+    "tag": "BUTTON",
+    "name": "Пригласить владельца к согласованию",
+    "outlineStyle": "solid",
+    "outlineWidth": "3px",
+    "inViewport": true
+  }
+]

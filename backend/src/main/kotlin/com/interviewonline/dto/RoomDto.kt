@@ -52,6 +52,7 @@ data class RoomTaskDto(
     val categoryName: String?,
     val score: Int?,
     val sourceTaskTemplateId: String? = null,
+    val mandatory: Boolean = false,
 )
 
 /**
@@ -104,6 +105,7 @@ data class RoomNoteMessageDto(
 
 data class RoomResponse(
     val id: String,
+    val teamId: String? = null,
     val title: String,
     val inviteCode: String,
     val language: String,

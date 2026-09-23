@@ -1,0 +1,34 @@
+{
+  "testId": "teams/invitation-native-ax-lifecycle",
+  "receipt": {
+    "version": 1,
+    "testId": "teams/invitation-native-ax-lifecycle",
+    "phase": "ready",
+    "outcome": "TE",
+    "timestampMs": 1735689600000,
+    "checks": {
+      "admitted": false,
+      "leasesVerified": false,
+      "manualWitness": false
+    }
+  },
+  "forbiddenFields": [
+    "path",
+    "pid",
+    "parent",
+    "executable",
+    "argument",
+    "ax",
+    "url",
+    "endpoint",
+    "token",
+    "credential",
+    "cookie",
+    "header",
+    "idempotency",
+    "capability",
+    "marker",
+    "identity",
+    "diagnostic"
+  ]
+}

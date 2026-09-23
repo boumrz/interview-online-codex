@@ -1,0 +1,16 @@
+{
+  "visualViewport": {
+    "width": 390,
+    "height": 360
+  },
+  "button": {
+    "top": 146.1875,
+    "bottom": 214.5625,
+    "left": 33,
+    "right": 357,
+    "width": 324,
+    "height": 68.375
+  },
+  "insideViewport": true,
+  "safeAreaDeclared": false
+}

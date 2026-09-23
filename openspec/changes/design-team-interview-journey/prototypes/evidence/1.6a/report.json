@@ -1,0 +1,997 @@
+{
+  "task": "1.6a",
+  "generatedAt": "2026-09-09T12:45:27.166Z",
+  "source": "prototypes/index.html",
+  "note": "Prototype-only evidence; not production authorization or application acceptance evidence.",
+  "pageErrors": [],
+  "matrix": [
+    {
+      "viewport": {
+        "name": "desktop-wide",
+        "width": 1440,
+        "height": 900
+      },
+      "zoom": 1,
+      "screenshot": "shell-1440x900-z100.png",
+      "clientWidth": 1440,
+      "scrollWidth": 1440,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "desktop-wide",
+        "width": 1440,
+        "height": 900
+      },
+      "zoom": 1.25,
+      "screenshot": "shell-1440x900-z125.png",
+      "clientWidth": 1440,
+      "scrollWidth": 1440,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "desktop-wide",
+        "width": 1440,
+        "height": 900
+      },
+      "zoom": 1.5,
+      "screenshot": "shell-1440x900-z150.png",
+      "clientWidth": 1440,
+      "scrollWidth": 1440,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "desktop-wide",
+        "width": 1440,
+        "height": 900
+      },
+      "zoom": 2,
+      "screenshot": "shell-1440x900-z200.png",
+      "clientWidth": 1440,
+      "scrollWidth": 1440,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "laptop",
+        "width": 1366,
+        "height": 768
+      },
+      "zoom": 1,
+      "screenshot": "shell-1366x768-z100.png",
+      "clientWidth": 1366,
+      "scrollWidth": 1366,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "laptop",
+        "width": 1366,
+        "height": 768
+      },
+      "zoom": 1.25,
+      "screenshot": "shell-1366x768-z125.png",
+      "clientWidth": 1366,
+      "scrollWidth": 1366,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "laptop",
+        "width": 1366,
+        "height": 768
+      },
+      "zoom": 1.5,
+      "screenshot": "shell-1366x768-z150.png",
+      "clientWidth": 1366,
+      "scrollWidth": 1366,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "laptop",
+        "width": 1366,
+        "height": 768
+      },
+      "zoom": 2,
+      "screenshot": "shell-1366x768-z200.png",
+      "clientWidth": 1366,
+      "scrollWidth": 1366,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "laptop-compact",
+        "width": 1280,
+        "height": 720
+      },
+      "zoom": 1,
+      "screenshot": "shell-1280x720-z100.png",
+      "clientWidth": 1280,
+      "scrollWidth": 1280,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "laptop-compact",
+        "width": 1280,
+        "height": 720
+      },
+      "zoom": 1.25,
+      "screenshot": "shell-1280x720-z125.png",
+      "clientWidth": 1280,
+      "scrollWidth": 1280,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "laptop-compact",
+        "width": 1280,
+        "height": 720
+      },
+      "zoom": 1.5,
+      "screenshot": "shell-1280x720-z150.png",
+      "clientWidth": 1280,
+      "scrollWidth": 1280,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "laptop-compact",
+        "width": 1280,
+        "height": 720
+      },
+      "zoom": 2,
+      "screenshot": "shell-1280x720-z200.png",
+      "clientWidth": 1280,
+      "scrollWidth": 1280,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "short",
+        "width": 1024,
+        "height": 600
+      },
+      "zoom": 1,
+      "screenshot": "shell-1024x600-z100.png",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "short",
+        "width": 1024,
+        "height": 600
+      },
+      "zoom": 1.25,
+      "screenshot": "shell-1024x600-z125.png",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "short",
+        "width": 1024,
+        "height": 600
+      },
+      "zoom": 1.5,
+      "screenshot": "shell-1024x600-z150.png",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "short",
+        "width": 1024,
+        "height": 600
+      },
+      "zoom": 2,
+      "screenshot": "shell-1024x600-z200.png",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "short-480",
+        "width": 1024,
+        "height": 480
+      },
+      "zoom": 1,
+      "screenshot": "shell-1024x480-z100.png",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 18,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "short-480",
+        "width": 1024,
+        "height": 480
+      },
+      "zoom": 1.25,
+      "screenshot": "shell-1024x480-z125.png",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 18,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "short-480",
+        "width": 1024,
+        "height": 480
+      },
+      "zoom": 1.5,
+      "screenshot": "shell-1024x480-z150.png",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 18,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "short-480",
+        "width": 1024,
+        "height": 480
+      },
+      "zoom": 2,
+      "screenshot": "shell-1024x480-z200.png",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 18,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "tablet-portrait",
+        "width": 768,
+        "height": 1024
+      },
+      "zoom": 1,
+      "screenshot": "shell-768x1024-z100.png",
+      "clientWidth": 768,
+      "scrollWidth": 768,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "tablet-portrait",
+        "width": 768,
+        "height": 1024
+      },
+      "zoom": 1.25,
+      "screenshot": "shell-768x1024-z125.png",
+      "clientWidth": 768,
+      "scrollWidth": 768,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "tablet-portrait",
+        "width": 768,
+        "height": 1024
+      },
+      "zoom": 1.5,
+      "screenshot": "shell-768x1024-z150.png",
+      "clientWidth": 768,
+      "scrollWidth": 768,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "tablet-portrait",
+        "width": 768,
+        "height": 1024
+      },
+      "zoom": 2,
+      "screenshot": "shell-768x1024-z200.png",
+      "clientWidth": 768,
+      "scrollWidth": 768,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "tablet-landscape",
+        "width": 1024,
+        "height": 768
+      },
+      "zoom": 1,
+      "screenshot": "shell-1024x768-z100.png",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "tablet-landscape",
+        "width": 1024,
+        "height": 768
+      },
+      "zoom": 1.25,
+      "screenshot": "shell-1024x768-z125.png",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "tablet-landscape",
+        "width": 1024,
+        "height": 768
+      },
+      "zoom": 1.5,
+      "screenshot": "shell-1024x768-z150.png",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "tablet-landscape",
+        "width": 1024,
+        "height": 768
+      },
+      "zoom": 2,
+      "screenshot": "shell-1024x768-z200.png",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "phone-320",
+        "width": 320,
+        "height": 640
+      },
+      "zoom": 1,
+      "screenshot": "shell-320x640-z100.png",
+      "clientWidth": 320,
+      "scrollWidth": 320,
+      "horizontalOverflow": 0,
+      "interactiveCount": 21,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "phone-320",
+        "width": 320,
+        "height": 640
+      },
+      "zoom": 1.25,
+      "screenshot": "shell-320x640-z125.png",
+      "clientWidth": 320,
+      "scrollWidth": 320,
+      "horizontalOverflow": 0,
+      "interactiveCount": 21,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "phone-320",
+        "width": 320,
+        "height": 640
+      },
+      "zoom": 1.5,
+      "screenshot": "shell-320x640-z150.png",
+      "clientWidth": 320,
+      "scrollWidth": 320,
+      "horizontalOverflow": 0,
+      "interactiveCount": 21,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "phone-320",
+        "width": 320,
+        "height": 640
+      },
+      "zoom": 2,
+      "screenshot": "shell-320x640-z200.png",
+      "clientWidth": 320,
+      "scrollWidth": 320,
+      "horizontalOverflow": 0,
+      "interactiveCount": 21,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "phone-360",
+        "width": 360,
+        "height": 640
+      },
+      "zoom": 1,
+      "screenshot": "shell-360x640-z100.png",
+      "clientWidth": 360,
+      "scrollWidth": 360,
+      "horizontalOverflow": 0,
+      "interactiveCount": 21,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "phone-360",
+        "width": 360,
+        "height": 640
+      },
+      "zoom": 1.25,
+      "screenshot": "shell-360x640-z125.png",
+      "clientWidth": 360,
+      "scrollWidth": 360,
+      "horizontalOverflow": 0,
+      "interactiveCount": 21,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "phone-360",
+        "width": 360,
+        "height": 640
+      },
+      "zoom": 1.5,
+      "screenshot": "shell-360x640-z150.png",
+      "clientWidth": 360,
+      "scrollWidth": 360,
+      "horizontalOverflow": 0,
+      "interactiveCount": 21,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "phone-360",
+        "width": 360,
+        "height": 640
+      },
+      "zoom": 2,
+      "screenshot": "shell-360x640-z200.png",
+      "clientWidth": 360,
+      "scrollWidth": 360,
+      "horizontalOverflow": 0,
+      "interactiveCount": 21,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "phone-390",
+        "width": 390,
+        "height": 640
+      },
+      "zoom": 1,
+      "screenshot": "shell-390x640-z100.png",
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "horizontalOverflow": 0,
+      "interactiveCount": 21,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "phone-390",
+        "width": 390,
+        "height": 640
+      },
+      "zoom": 1.25,
+      "screenshot": "shell-390x640-z125.png",
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "horizontalOverflow": 0,
+      "interactiveCount": 21,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "phone-390",
+        "width": 390,
+        "height": 640
+      },
+      "zoom": 1.5,
+      "screenshot": "shell-390x640-z150.png",
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "horizontalOverflow": 0,
+      "interactiveCount": 21,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "phone-390",
+        "width": 390,
+        "height": 640
+      },
+      "zoom": 2,
+      "screenshot": "shell-390x640-z200.png",
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "horizontalOverflow": 0,
+      "interactiveCount": 21,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "phone-landscape",
+        "width": 667,
+        "height": 375
+      },
+      "zoom": 1,
+      "screenshot": "shell-667x375-z100.png",
+      "clientWidth": 667,
+      "scrollWidth": 667,
+      "horizontalOverflow": 0,
+      "interactiveCount": 20,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "phone-landscape",
+        "width": 667,
+        "height": 375
+      },
+      "zoom": 1.25,
+      "screenshot": "shell-667x375-z125.png",
+      "clientWidth": 667,
+      "scrollWidth": 667,
+      "horizontalOverflow": 0,
+      "interactiveCount": 20,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "phone-landscape",
+        "width": 667,
+        "height": 375
+      },
+      "zoom": 1.5,
+      "screenshot": "shell-667x375-z150.png",
+      "clientWidth": 667,
+      "scrollWidth": 667,
+      "horizontalOverflow": 0,
+      "interactiveCount": 20,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "name": "phone-landscape",
+        "width": 667,
+        "height": 375
+      },
+      "zoom": 2,
+      "screenshot": "shell-667x375-z200.png",
+      "clientWidth": 667,
+      "scrollWidth": 667,
+      "horizontalOverflow": 0,
+      "interactiveCount": 20,
+      "undersized": [],
+      "pass": true
+    }
+  ],
+  "states": [
+    {
+      "name": "personal-success",
+      "hash": "#/personal/interviews?actor=personal&state=success",
+      "screenshot": "state-personal-success.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 22,
+        "undersized": []
+      }
+    },
+    {
+      "name": "personal-no-teams",
+      "hash": "#/personal/interviews?actor=personal&state=empty",
+      "screenshot": "state-personal-no-teams.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 17,
+        "undersized": []
+      }
+    },
+    {
+      "name": "team-owner-success",
+      "hash": "#/teams/atlas/interviews?actor=owner&state=success",
+      "screenshot": "state-team-owner-success.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 19,
+        "undersized": []
+      }
+    },
+    {
+      "name": "team-admin-empty",
+      "hash": "#/teams/atlas/interviews?actor=admin&state=empty",
+      "screenshot": "state-team-admin-empty.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 21,
+        "undersized": []
+      }
+    },
+    {
+      "name": "team-member-loading",
+      "hash": "#/teams/atlas/interviews?actor=member&state=loading",
+      "screenshot": "state-team-member-loading.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 12,
+        "undersized": []
+      }
+    },
+    {
+      "name": "team-error",
+      "hash": "#/teams/atlas/interviews?actor=owner&state=error",
+      "screenshot": "state-team-error.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 19,
+        "undersized": []
+      }
+    },
+    {
+      "name": "team-revoked",
+      "hash": "#/teams/atlas/interviews?actor=member&state=revoked",
+      "screenshot": "state-team-revoked.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 13,
+        "undersized": []
+      }
+    },
+    {
+      "name": "profile-success",
+      "hash": "#/profile?actor=owner&state=success&fromTeam=1",
+      "screenshot": "state-profile-success.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 18,
+        "undersized": [
+          {
+            "name": "Я нанимающий",
+            "tag": "input",
+            "width": 58,
+            "height": 32
+          }
+        ]
+      }
+    },
+    {
+      "name": "profile-error",
+      "hash": "#/profile?actor=personal&state=error",
+      "screenshot": "state-profile-error.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 16,
+        "undersized": [
+          {
+            "name": "Я нанимающий",
+            "tag": "input",
+            "width": 58,
+            "height": 32
+          }
+        ]
+      }
+    },
+    {
+      "name": "invite-anonymous",
+      "hash": "#/join/team?actor=anonymous&state=success&invite=preview",
+      "screenshot": "state-invite-anonymous.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 10,
+        "undersized": []
+      }
+    },
+    {
+      "name": "invite-account",
+      "hash": "#/join/team?actor=invited&state=success&invite=preview",
+      "screenshot": "state-invite-account.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 11,
+        "undersized": []
+      }
+    },
+    {
+      "name": "invite-expired",
+      "hash": "#/join/team?actor=invited&state=success&invite=expired",
+      "screenshot": "state-invite-expired.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 10,
+        "undersized": []
+      }
+    },
+    {
+      "name": "invite-revoked",
+      "hash": "#/join/team?actor=invited&state=success&invite=revoked",
+      "screenshot": "state-invite-revoked.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 10,
+        "undersized": []
+      }
+    },
+    {
+      "name": "invite-error",
+      "hash": "#/join/team?actor=invited&state=error&invite=error",
+      "screenshot": "state-invite-error.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 10,
+        "undersized": []
+      }
+    },
+    {
+      "name": "invite-success",
+      "hash": "#/join/team?actor=invited&state=success&invite=success",
+      "screenshot": "state-invite-success.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 10,
+        "undersized": []
+      }
+    },
+    {
+      "name": "invite-already-member",
+      "hash": "#/join/team?actor=member&state=success&invite=already",
+      "screenshot": "state-invite-already-member.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 10,
+        "undersized": []
+      }
+    },
+    {
+      "name": "old-route-map",
+      "hash": "#/prototype/routes?actor=personal&state=success",
+      "screenshot": "state-old-route-map.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 18,
+        "undersized": []
+      }
+    }
+  ],
+  "roleAssertions": [
+    {
+      "role": "member",
+      "settingsVisible": false,
+      "candidatesVisible": false,
+      "roleLabelVisible": true
+    },
+    {
+      "role": "admin",
+      "settingsVisible": true,
+      "candidatesVisible": false,
+      "roleLabelVisible": true
+    },
+    {
+      "role": "owner",
+      "settingsVisible": true,
+      "candidatesVisible": false,
+      "roleLabelVisible": true
+    }
+  ],
+  "personalWorkspaceChoices": {
+    "atlasAbsent": true,
+    "createTeamVisible": true
+  },
+  "createValidation": {
+    "error": "Введите название от 1 до 100 символов.",
+    "focusedField": "teamName"
+  },
+  "createSuccess": {
+    "hash": "#/teams/nova/interviews?actor=owner&state=empty&created=1",
+    "heading": "Интервью",
+    "role": "Владелец команды"
+  },
+  "oldRoutes": {
+    "/dashboard": {
+      "hash": "#/personal/interviews?actor=personal&state=success&legacy=%2Fdashboard",
+      "text": "К основному содержимому\nПРОТОТИП · OPENSPEC 1.6a–1.6f\nНе production UI и не доказательство серверной авторизации\nСЦЕНАРИЙ РОЛИ\nЛичный пользователь\nУчастник Atlas\nАвтор командной задачи\nАдминистратор Atlas\nВладелец Atlas\nВладелец комнаты\nИнтервьюер\nНанимающий\nКандидат\nГостевой менеджер\nСотрудник с отозванным доступом\nПриглашённый аккаунт\nБез входа\nСОСТОЯНИЕ ДАННЫХ\nГотово\nЗагрузка\nПусто\nФильтр: пусто\nОшибка\nОтправка ожидает ACK\nПереподключение\nКонфликт 409\nИнтервью приостановлено\nАрхив\nДоступ отозван\nДЛИННЫЙ РУССКИЙ ТЕКСТ\nio\nInterview Online\nРабочая доска\nПРОСТРАНСТВО\nЛичное пространство\n↕\n\nРАБОТА\n\nИН\nИнтервью\nБЗ\nБиблиотека задач\nКА\nКандидаты\n↗\nСтарые входы\nАК\nАнна Крылова\nПрофиль аккаунта\nЛИЧНЫЙ АККАУНТ\n↗\nОткрыто со старого адреса /dashboard\n\nПереход восстановил личный контекст и не создал комнату автоматически.\n\nАККАУНТ · ЛИЧНОЕ ПРОСТРАНСТВО\n\nИнтервью\n\nПодготовка, проведение и результаты — в одном списке. Архив отделён, а расписание не изображается фактом начала.\n\n+ Создать интервью\nЛичное пространство\nСостояние: Готово\nПоиск\nТрек\nВсе треки\nFrontend\nБез трека\nВакансия\nВсе вакансии\nMiddle React\nБез вакансии\nСостояние\nАктивные\nЗавершено\nАрхив\nОбновить\nЗапланировано\nFrontend / Middle React\nFrontend · Middle\n\nКандидат: Денис Волков · 10 сентября, 15:30 МСК\n\nВаша роль: Владелец личной комнаты\nПрисутствуют: 0\nОткрыть подготовку\nМеню\nНе завершено\nБез трека · без вакансии\nАлгоритмы и структуры данных\n\nКандидат: Не указан · Без даты\n\nВаша роль: Владелец личной комнаты\nВойти в комнату\nЗавершено\nReact · Senior\n\nКандидат: Ирина Смирнова · Frontend / Senior Platform\n\nВаша роль: Владелец личной комнаты\nПосмотреть результат\nПриостановлено\nИнтервью требует нового владельца\n\nLive-вход закрыт. Доступна только разрешённая история; время расписания не меняет статус.\n\nРазрешённый просмотр\nЛичное участие\nBackend · гостевой кандидат\n\nВы — кандидат. Внутренний состав и manager actions скрыты.\n\nВойти как кандидат\n\nИнтерактивный прототип 1.6a–1.6f · локальные действия лишь переключают демонстрационные состояния · авторизация, realtime и сохранение сервером не моделируются.",
+      "created": false
+    },
+    "/dashboard/rooms": {
+      "hash": "#/personal/interviews/new?actor=personal&state=success&legacy=%2Fdashboard%2Frooms",
+      "text": "К основному содержимому\nПРОТОТИП · OPENSPEC 1.6a–1.6f\nНе production UI и не доказательство серверной авторизации\nСЦЕНАРИЙ РОЛИ\nЛичный пользователь\nУчастник Atlas\nАвтор командной задачи\nАдминистратор Atlas\nВладелец Atlas\nВладелец комнаты\nИнтервьюер\nНанимающий\nКандидат\nГостевой менеджер\nСотрудник с отозванным доступом\nПриглашённый аккаунт\nБез входа\nСОСТОЯНИЕ ДАННЫХ\nГотово\nЗагрузка\nПусто\nФильтр: пусто\nОшибка\nОтправка ожидает ACK\nПереподключение\nКонфликт 409\nИнтервью приостановлено\nАрхив\nДоступ отозван\nДЛИННЫЙ РУССКИЙ ТЕКСТ\nio\nInterview Online\nРабочая доска\nПРОСТРАНСТВО\nЛичное пространство\n↕\n\nРАБОТА\n\nИН\nИнтервью\nБЗ\nБиблиотека задач\nКА\nКандидаты\n↗\nСтарые входы\nАК\nАнна Крылова\nПрофиль аккаунта\nЛИЧНЫЙ АККАУНТ\n↗\nСтарый вход: /dashboard/rooms\n\nФорма только открыта. Комната ещё не создана.\n\nЛИЧНОЕ ПРОСТРАНСТВО · ИНТЕРВЬЮ\n\nНовое интервью\n\nОдна форма, пять последовательных блоков. Выбор до submit ничего не назначает.\n\n01\nКонтекст\n\nКоманда задана маршрутом. Вакансия всегда принадлежит выбранному треку.\n\nПространство\nНазвание интервью\nТрек\nFrontend\nBackend\nБез трека\nВакансия\nMiddle React\nSenior Platform\nБез вакансии\n02\nКандидат и время\n\nИмя и время необязательны. Часовой пояс не скрыт.\n\nИмя кандидата\nПозиция текстом\nДата и время · МСК · Europe/Moscow\n03\nУчастники\n\nПоиск только среди действующего состава Atlas. Непринятые ссылки не изображаются сотрудниками.\n\nАнна Крылова\nВладелец комнаты · всегда один\nOWNER\nВера Ким · vr-021\nИнтервьюер\nACTIVE\nБорис Лебедев · br-882\nНанимающий · isHr не требуется\nACTIVE\n↗\n2 приглашения ещё не приняты\n\nОни отображаются как ссылки со статусом без предполагаемых имён и недоступны для выбора.\n\n04\nПрограмма и задачи\n\nResolver: NONE. Обязательные позиции нельзя удалить, переставить или редактировать.\n\n—\nПрограмма не настроена\n\nСвободное интервью: выберите задачи или набор вручную. Это допустимо только для процесса без начатой programme configuration.\n\nВыбрать задачи\nПрименить набор\nPublished v3\nNone / свободно\nDraft-only\nArchive\n05\nИтог и доступ\n\nОдна запись и одна комната. Team role не заменяет назначения на это интервью.\n\nAtlas · Frontend / Middle React\n\nВладелец: Анна Крылова · интервьюер: Вера · нанимающие: пока не выбраны\n\n2 обязательные1 дополнительная\n\nНичего не создаётся до подтверждения сервером. Неизвестный результат сначала проверяется по receipt.\n\nЧерновик хранится локально в этой вкладке прототипа\n\nОтмена\nСмоделировать 409\nСоздать интервью\nСоздать и открыть комнату\n\nИнтерактивный прототип 1.6a–1.6f · локальные действия лишь переключают демонстрационные состояния · авторизация, realtime и сохранение сервером не моделируются.",
+      "created": false
+    },
+    "/dashboard/manage": {
+      "hash": "#/personal/interviews?actor=personal&state=success&legacy=%2Fdashboard%2Fmanage",
+      "text": "К основному содержимому\nПРОТОТИП · OPENSPEC 1.6a–1.6f\nНе production UI и не доказательство серверной авторизации\nСЦЕНАРИЙ РОЛИ\nЛичный пользователь\nУчастник Atlas\nАвтор командной задачи\nАдминистратор Atlas\nВладелец Atlas\nВладелец комнаты\nИнтервьюер\nНанимающий\nКандидат\nГостевой менеджер\nСотрудник с отозванным доступом\nПриглашённый аккаунт\nБез входа\nСОСТОЯНИЕ ДАННЫХ\nГотово\nЗагрузка\nПусто\nФильтр: пусто\nОшибка\nОтправка ожидает ACK\nПереподключение\nКонфликт 409\nИнтервью приостановлено\nАрхив\nДоступ отозван\nДЛИННЫЙ РУССКИЙ ТЕКСТ\nio\nInterview Online\nРабочая доска\nПРОСТРАНСТВО\nЛичное пространство\n↕\n\nРАБОТА\n\nИН\nИнтервью\nБЗ\nБиблиотека задач\nКА\nКандидаты\n↗\nСтарые входы\nАК\nАнна Крылова\nПрофиль аккаунта\nЛИЧНЫЙ АККАУНТ\n↗\nОткрыто со старого адреса /dashboard/manage\n\nПереход восстановил личный контекст и не создал комнату автоматически.\n\nАККАУНТ · ЛИЧНОЕ ПРОСТРАНСТВО\n\nИнтервью\n\nПодготовка, проведение и результаты — в одном списке. Архив отделён, а расписание не изображается фактом начала.\n\n+ Создать интервью\nЛичное пространство\nСостояние: Готово\nПоиск\nТрек\nВсе треки\nFrontend\nБез трека\nВакансия\nВсе вакансии\nMiddle React\nБез вакансии\nСостояние\nАктивные\nЗавершено\nАрхив\nОбновить\nЗапланировано\nFrontend / Middle React\nFrontend · Middle\n\nКандидат: Денис Волков · 10 сентября, 15:30 МСК\n\nВаша роль: Владелец личной комнаты\nПрисутствуют: 0\nОткрыть подготовку\nМеню\nНе завершено\nБез трека · без вакансии\nАлгоритмы и структуры данных\n\nКандидат: Не указан · Без даты\n\nВаша роль: Владелец личной комнаты\nВойти в комнату\nЗавершено\nReact · Senior\n\nКандидат: Ирина Смирнова · Frontend / Senior Platform\n\nВаша роль: Владелец личной комнаты\nПосмотреть результат\nПриостановлено\nИнтервью требует нового владельца\n\nLive-вход закрыт. Доступна только разрешённая история; время расписания не меняет статус.\n\nРазрешённый просмотр\nЛичное участие\nBackend · гостевой кандидат\n\nВы — кандидат. Внутренний состав и manager actions скрыты.\n\nВойти как кандидат\n\nИнтерактивный прототип 1.6a–1.6f · локальные действия лишь переключают демонстрационные состояния · авторизация, realtime и сохранение сервером не моделируются.",
+      "created": false
+    },
+    "/dashboard/tasks": {
+      "hash": "#/personal/library?actor=personal&state=success&legacy=%2Fdashboard%2Ftasks",
+      "text": "К основному содержимому\nПРОТОТИП · OPENSPEC 1.6a–1.6f\nНе production UI и не доказательство серверной авторизации\nСЦЕНАРИЙ РОЛИ\nЛичный пользователь\nУчастник Atlas\nАвтор командной задачи\nАдминистратор Atlas\nВладелец Atlas\nВладелец комнаты\nИнтервьюер\nНанимающий\nКандидат\nГостевой менеджер\nСотрудник с отозванным доступом\nПриглашённый аккаунт\nБез входа\nСОСТОЯНИЕ ДАННЫХ\nГотово\nЗагрузка\nПусто\nФильтр: пусто\nОшибка\nОтправка ожидает ACK\nПереподключение\nКонфликт 409\nИнтервью приостановлено\nАрхив\nДоступ отозван\nДЛИННЫЙ РУССКИЙ ТЕКСТ\nio\nInterview Online\nРабочая доска\nПРОСТРАНСТВО\nЛичное пространство\n↕\n\nРАБОТА\n\nИН\nИнтервью\nБЗ\nБиблиотека задач\nКА\nКандидаты\n↗\nСтарые входы\nАК\nАнна Крылова\nПрофиль аккаунта\nЛИЧНЫЙ АККАУНТ\n\nЛИЧНОЕ ПРОСТРАНСТВО\n\nБиблиотека задач\n\nЛичные задачи и прежние пресеты остаются независимыми от командных библиотек.\n\nЗадачи\nНаборы задач\nЛичная задача · TypeScript\nПроверка устойчивого порядка\n\nЭтот оригинал не виден Atlas или Orbit.\n\nОткрыть\nОпубликовать копию в команду\n\nИнтерактивный прототип 1.6a–1.6f · локальные действия лишь переключают демонстрационные состояния · авторизация, realtime и сохранение сервером не моделируются.",
+      "created": false
+    },
+    "/dashboard/presets": {
+      "hash": "#/personal/library?actor=personal&state=success&legacy=%2Fdashboard%2Fpresets&tab=sets",
+      "text": "К основному содержимому\nПРОТОТИП · OPENSPEC 1.6a–1.6f\nНе production UI и не доказательство серверной авторизации\nСЦЕНАРИЙ РОЛИ\nЛичный пользователь\nУчастник Atlas\nАвтор командной задачи\nАдминистратор Atlas\nВладелец Atlas\nВладелец комнаты\nИнтервьюер\nНанимающий\nКандидат\nГостевой менеджер\nСотрудник с отозванным доступом\nПриглашённый аккаунт\nБез входа\nСОСТОЯНИЕ ДАННЫХ\nГотово\nЗагрузка\nПусто\nФильтр: пусто\nОшибка\nОтправка ожидает ACK\nПереподключение\nКонфликт 409\nИнтервью приостановлено\nАрхив\nДоступ отозван\nДЛИННЫЙ РУССКИЙ ТЕКСТ\nio\nInterview Online\nРабочая доска\nПРОСТРАНСТВО\nЛичное пространство\n↕\n\nРАБОТА\n\nИН\nИнтервью\nБЗ\nБиблиотека задач\nКА\nКандидаты\n↗\nСтарые входы\nАК\nАнна Крылова\nПрофиль аккаунта\nЛИЧНЫЙ АККАУНТ\n\nЛИЧНОЕ ПРОСТРАНСТВО\n\nБиблиотека задач\n\nЛичные задачи и прежние пресеты остаются независимыми от командных библиотек.\n\nЗадачи\nНаборы задач\nЛичный набор · 3 задачи\nМой Frontend пресет\n\nСуществующий personal CRUD и выбор при создании сохраняются.\n\nОткрыть\n\nИнтерактивный прототип 1.6a–1.6f · локальные действия лишь переключают демонстрационные состояния · авторизация, realtime и сохранение сервером не моделируются.",
+      "created": false
+    },
+    "/dashboard/hr": {
+      "hash": "#/personal/candidates?actor=personal&state=success&legacy=%2Fdashboard%2Fhr",
+      "text": "К основному содержимому\nПРОТОТИП · OPENSPEC 1.6a–1.6f\nНе production UI и не доказательство серверной авторизации\nСЦЕНАРИЙ РОЛИ\nЛичный пользователь\nУчастник Atlas\nАвтор командной задачи\nАдминистратор Atlas\nВладелец Atlas\nВладелец комнаты\nИнтервьюер\nНанимающий\nКандидат\nГостевой менеджер\nСотрудник с отозванным доступом\nПриглашённый аккаунт\nБез входа\nСОСТОЯНИЕ ДАННЫХ\nГотово\nЗагрузка\nПусто\nФильтр: пусто\nОшибка\nОтправка ожидает ACK\nПереподключение\nКонфликт 409\nИнтервью приостановлено\nАрхив\nДоступ отозван\nДЛИННЫЙ РУССКИЙ ТЕКСТ\nio\nInterview Online\nРабочая доска\nПРОСТРАНСТВО\nЛичное пространство\n↕\n\nРАБОТА\n\nИН\nИнтервью\nБЗ\nБиблиотека задач\nКА\nКандидаты\n↗\nСтарые входы\nАК\nАнна Крылова\nПрофиль аккаунта\nЛИЧНЫЙ АККАУНТ\n\nЛИЧНОЕ ПРОСТРАНСТВО\n\nКандидаты\n\nТолько интервью, где вы назначены нанимающим.\n\n→\nПоверхность отмечена для следующего задания\n\nВ 1.6a–1.6c показано её устойчивое место в навигации. Полное содержимое будет спроектировано в соответствующей следующей части 1.6.\n\nИнтерактивный прототип 1.6a–1.6f · локальные действия лишь переключают демонстрационные состояния · авторизация, realtime и сохранение сервером не моделируются.",
+      "created": false
+    },
+    "/dashboard/admin": {
+      "hash": "#/service/admin?actor=personal&state=success&legacy=%2Fdashboard%2Fadmin",
+      "text": "К основному содержимому\nПРОТОТИП · OPENSPEC 1.6a–1.6f\nНе production UI и не доказательство серверной авторизации\nСЦЕНАРИЙ РОЛИ\nЛичный пользователь\nУчастник Atlas\nАвтор командной задачи\nАдминистратор Atlas\nВладелец Atlas\nВладелец комнаты\nИнтервьюер\nНанимающий\nКандидат\nГостевой менеджер\nСотрудник с отозванным доступом\nПриглашённый аккаунт\nБез входа\nСОСТОЯНИЕ ДАННЫХ\nГотово\nЗагрузка\nПусто\nФильтр: пусто\nОшибка\nОтправка ожидает ACK\nПереподключение\nКонфликт 409\nИнтервью приостановлено\nАрхив\nДоступ отозван\nДЛИННЫЙ РУССКИЙ ТЕКСТ\nio\nInterview Online\nРабочая доска\nПРОСТРАНСТВО\nЛичное пространство\n↕\n\nРАБОТА\n\nИН\nИнтервью\nБЗ\nБиблиотека задач\nКА\nКандидаты\n↗\nСтарые входы\nАК\nАнна Крылова\nПрофиль аккаунта\nЛИЧНЫЙ АККАУНТ\n\nСЛУЖЕБНЫЙ ЭКРАН\n\nАдминка\n\nСтарые условия доступа и feature flag сохраняются; этот экран не становится ролью администратора команды.\n\nИнтерактивный прототип 1.6a–1.6f · локальные действия лишь переключают демонстрационные состояния · авторизация, realtime и сохранение сервером не моделируются.",
+      "created": false
+    },
+    "/dashboard/agents": {
+      "hash": "#/service/agents?actor=personal&state=success&legacy=%2Fdashboard%2Fagents",
+      "text": "К основному содержимому\nПРОТОТИП · OPENSPEC 1.6a–1.6f\nНе production UI и не доказательство серверной авторизации\nСЦЕНАРИЙ РОЛИ\nЛичный пользователь\nУчастник Atlas\nАвтор командной задачи\nАдминистратор Atlas\nВладелец Atlas\nВладелец комнаты\nИнтервьюер\nНанимающий\nКандидат\nГостевой менеджер\nСотрудник с отозванным доступом\nПриглашённый аккаунт\nБез входа\nСОСТОЯНИЕ ДАННЫХ\nГотово\nЗагрузка\nПусто\nФильтр: пусто\nОшибка\nОтправка ожидает ACK\nПереподключение\nКонфликт 409\nИнтервью приостановлено\nАрхив\nДоступ отозван\nДЛИННЫЙ РУССКИЙ ТЕКСТ\nio\nInterview Online\nРабочая доска\nПРОСТРАНСТВО\nЛичное пространство\n↕\n\nРАБОТА\n\nИН\nИнтервью\nБЗ\nБиблиотека задач\nКА\nКандидаты\n↗\nСтарые входы\nАК\nАнна Крылова\nПрофиль аккаунта\nЛИЧНЫЙ АККАУНТ\n\nСЛУЖЕБНЫЙ ЭКРАН\n\nАгент-операции\n\nСтарые условия доступа и feature flag сохраняются; этот экран не становится ролью администратора команды.\n\nИнтерактивный прототип 1.6a–1.6f · локальные действия лишь переключают демонстрационные состояния · авторизация, realtime и сохранение сервером не моделируются.",
+      "created": false
+    }
+  },
+  "invitePrivacy": {
+    "containsCandidateName": false,
+    "containsMemberDirectory": false,
+    "explicitRole": true,
+    "explicitConsent": true
+  },
+  "returnedToInvite": true,
+  "keyboard": {
+    "menuButtonFocused": true,
+    "mobileMenuOpened": "true",
+    "focusedAfterOpen": {
+      "tag": "BUTTON",
+      "text": "ПространствоЛичное пространство↕",
+      "outline": "3px"
+    }
+  },
+  "keyboardSimulation": {
+    "mode": "headless viewport-height reduction; not a real software keyboard",
+    "viewport": {
+      "width": 390,
+      "height": 360,
+      "pageHeight": 2605
+    },
+    "primaryRect": {
+      "x": 174.78125,
+      "y": 305.65625,
+      "width": 171.21875,
+      "height": 46
+    },
+    "primaryReachable": true,
+    "safeAreaVariablePresent": true
+  },
+  "pass": true
+}

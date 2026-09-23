@@ -22,6 +22,15 @@ async function createGuestRoom() {
 
 async function openTasksPanelIfNeeded(page) {
   const privateInput = page.locator('[data-testid="room-private-notes-input"]');
+  const notesTab = page.getByRole("tab", { name: "Мои заметки", exact: true });
+  if (await notesTab.isVisible().catch(() => false)) {
+    await notesTab.click();
+    await page
+      .locator('[data-room-context-surface="notes"][data-room-context-visible="true"]')
+      .waitFor({ state: "visible", timeout: 10_000 });
+    return;
+  }
+
   if (await privateInput.isVisible().catch(() => false)) return;
 
   const mobileTasksTab = page.getByRole("tab", { name: /^Tasks$/ }).first();

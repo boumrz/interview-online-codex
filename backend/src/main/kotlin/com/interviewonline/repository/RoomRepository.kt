@@ -10,6 +10,10 @@ interface RoomRepository : JpaRepository<Room, String> {
     fun findByInviteCode(inviteCode: String): Room?
     @EntityGraph(attributePaths = ["tasks"])
     fun findWithTasksByInviteCode(inviteCode: String): Room?
+    @EntityGraph(attributePaths = ["tasks"])
+    fun findWithTasksById(id: String): Room?
+    @EntityGraph(attributePaths = ["tasks"])
+    fun findAllByTeamIdAndArchivedAtIsNullOrderByCreatedAtDescIdAsc(teamId: String): List<Room>
     fun findByOwnerUserId(ownerUserId: String): List<Room>
     fun findByIdAndOwnerUserId(id: String, ownerUserId: String): Room?
     fun deleteByIdAndOwnerUserId(id: String, ownerUserId: String): Long

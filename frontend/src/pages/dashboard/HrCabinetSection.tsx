@@ -355,9 +355,9 @@ export function HrCabinetSection({ user, token }: { user: User; token: string })
         </form>
 
         {error ? (
-          <Alert color={stale ? "yellow" : "red"} role="alert" title="Не удалось загрузить интервью">
+          <Alert className={styles.refreshAlert} color={stale ? "yellow" : "red"} role="alert" title="Не удалось загрузить интервью">
             <Text size="sm">{stale ? "Данные не обновлены. Показаны последние успешно загруженные сведения." : "Проверьте соединение и повторите попытку."}</Text>
-            <Button type="button" size="xs" variant="light" mt="xs" onClick={() => void refetch()}>Повторить</Button>
+            <Button className={styles.retryButton} type="button" size="xs" variant="light" mt="xs" onClick={() => void refetch()}>Повторить</Button>
           </Alert>
         ) : null}
         {exportError ? (
@@ -400,9 +400,9 @@ export function HrCabinetSection({ user, token }: { user: User; token: string })
                       const badge = interviewBadge(interview);
                       return (
                         <Table.Tr key={interview.roomId}>
-                          <Table.Td>{fallback(interview.candidateName)}</Table.Td>
-                          <Table.Td>{fallback(interview.position)}</Table.Td>
-                          <Table.Td>{interview.title}</Table.Td>
+                          <Table.Td className={styles.wrappingCell}>{fallback(interview.candidateName)}</Table.Td>
+                          <Table.Td className={styles.wrappingCell}>{fallback(interview.position)}</Table.Td>
+                          <Table.Td className={styles.wrappingCell}>{interview.title}</Table.Td>
                           <Table.Td>
                             <Text size="sm">{formatMoscowDateTime(interview.scheduledAt)}</Text>
                             {!interview.scheduledAt ? (
@@ -419,26 +419,6 @@ export function HrCabinetSection({ user, token }: { user: User; token: string })
                   </Table.Tbody>
                 </Table>
               </div>
-              <Stack className={styles.mobileCards}>
-                {items.map((interview) => {
-                  const badge = interviewBadge(interview);
-                  return (
-                    <Card key={interview.roomId} withBorder bg="#121720">
-                      <DetailItem label="Кандидат" value={fallback(interview.candidateName)} />
-                      <DetailItem label="Позиция" value={fallback(interview.position)} />
-                      <DetailItem label="Комната" value={interview.title} />
-                      <DetailItem label="Дата интервью" value={formatMoscowDateTime(interview.scheduledAt)} />
-                      {!interview.scheduledAt ? (
-                        <Text size="xs" c="gray.5">
-                          {dateSourceLabel(interview.dateSource)}: {formatMoscowDateTime(interview.effectiveAt)}
-                        </Text>
-                      ) : null}
-                      <Group my="sm"><Badge color={badge.color}>{badge.label}</Badge></Group>
-                      <RowActions interview={interview} onResults={() => setDetailRoomId(interview.roomId)} />
-                    </Card>
-                  );
-                })}
-              </Stack>
             </>
           )}
         </Box>

@@ -1,0 +1,87 @@
+.management {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+.management > * {
+  grid-column: 1 / -1;
+}
+
+.heading,
+.headingWithCreate {
+  min-width: 0;
+}
+
+.heading {
+  grid-row: 1;
+  grid-column: 1;
+}
+
+.heading > div,
+.headingWithCreate > div {
+  min-width: 0;
+}
+
+.panel {
+  min-width: 0;
+  border-color: transparent;
+  color: #f8fafc;
+  background: linear-gradient(160deg, rgba(17, 21, 28, 0.94), rgba(15, 18, 25, 0.9));
+  box-shadow: 0 12px 28px rgba(2, 4, 7, 0.3);
+}
+
+.primaryAction {
+  min-height: 44px;
+  min-width: 0;
+  max-width: 100%;
+  scroll-margin-block: 96px 24px;
+  background: #228be6;
+}
+
+.primaryAction:hover {
+  background: #1c7ed6;
+}
+
+.primaryAction:focus-visible,
+.secondaryAction:focus-visible {
+  outline: 3px solid #8ab4ff;
+  outline-offset: 3px;
+}
+
+.secondaryAction {
+  min-height: 44px;
+  min-width: 0;
+  max-width: 100%;
+  scroll-margin-block: 96px 24px;
+}
+
+.createAction {
+  grid-row: 1;
+  grid-column: 2;
+  justify-self: end;
+}
+
+.actions {
+  min-width: 0;
+  width: auto;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+}
+
+.actions > * {
+  min-width: 0;
+  max-width: 100%;
+  flex: 0 0 auto;
+}
+
+.linkInput input {
+  border-color: #334155;
+  color: #f8fafc;
+  background: #11161f;
+}
+
+.status {
+  min-height: 24px;
+  color: #94a3b8;
+}

@@ -5,6 +5,7 @@ spring:
     password:
     driver-class-name: org.h2.Driver
   jpa:
+    open-in-view: false
     hibernate:
       ddl-auto: create-drop
     properties:
@@ -16,5 +17,7 @@ spring:
     enabled: false
 
 app:
+  realtime:
+    chat-receipt-hmac-secret: AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8
   cors:
     allowed-origins: http://localhost:5173,http://127.0.0.1:5173

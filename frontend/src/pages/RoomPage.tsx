@@ -121,6 +121,20 @@ import {
 } from "../features/room/TopBar";
 import type { HrManager, RoomTask, RoomTaskWorkspace, TaskTemplate } from "../types";
 import { RoomInterviewPanel } from "../features/room/RoomInterviewPanel";
+import {
+  RoomContextPanels,
+  RoomStatusStrip,
+  RoomContextSurface,
+} from "../features/room/RoomContextPanels";
+import {
+  applyRoomChatAck,
+  applyRoomChatFailure,
+  beginRoomChatIntent,
+  createRoomChatDeliveryState,
+  resetRoomChatDeliveryContext,
+  retryRoomChatIntent,
+  updateRoomChatDraft,
+} from "../features/room/roomChatDelivery";
 
 import styles from "./RoomPage.module.css";
 
@@ -193,7 +207,17 @@ type NoteMessage = {
 
 type PendingNoteMessage = NoteMessage & {
   pending: true;
+  clientMessageId: string;
+  originalClientEventSequence: number;
+  deliveryState: "pending" | "retryable_error" | "persisted";
+  retryAllowed: boolean;
 };
+
+function noteMessageFingerprint(
+  message: Pick<NoteMessage, "sessionId" | "text" | "timestampEpochMs">,
+): string {
+  return `${message.sessionId}:${message.timestampEpochMs}:${message.text}`;
+}
 
 type PersonalNoteEntry = {
   id: string;
@@ -285,6 +309,18 @@ function debugCursorLog(event: string, payload: Record<string, unknown>) {
 
 function normalizeTaskText(value: string | null | undefined): string {
   return (value ?? "").replaceAll("\r\n", "\n").trim();
+}
+
+function awarenessStateSignature(encodedUpdate: string): string {
+  try {
+    const binary = window.atob(encodedUpdate);
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    const decoded = new TextDecoder().decode(bytes);
+    const stateStart = decoded.indexOf('{"user"');
+    return stateStart >= 0 ? decoded.slice(stateStart) : encodedUpdate;
+  } catch {
+    return encodedUpdate;
+  }
 }
 
 function taskSignature(
@@ -410,6 +446,7 @@ function normalizeRealtimeTask(value: unknown): RoomTask | null {
     typeof candidate.sourceTaskTemplateId === "string"
       ? candidate.sourceTaskTemplateId
       : null;
+  const mandatory = candidate.mandatory === true;
   if (!title) return null;
   return {
     stepIndex,
@@ -420,6 +457,7 @@ function normalizeRealtimeTask(value: unknown): RoomTask | null {
     categoryName,
     score,
     sourceTaskTemplateId,
+    mandatory,
   };
 }
 
@@ -645,7 +683,22 @@ export function RoomPage() {
   const [nameModalOpened, setNameModalOpened] = useState(
     () => !authToken && !initialStoredName,
   );
-  const [noteComposer, setNoteComposer] = useState("");
+  const roomChatAccountId = authUser?.id ?? "anonymous";
+  const previousRoomIdentityRef = useRef({
+    inviteCode,
+    authToken,
+    resolvedAccountId: authUser?.id ?? null,
+  });
+  const [roomChatDelivery, setRoomChatDelivery] = useState(() =>
+    createRoomChatDeliveryState({
+      roomId: inviteCode,
+      accountId: roomChatAccountId,
+    }),
+  );
+  const noteComposer = roomChatDelivery.draft;
+  const setNoteComposer = useCallback((value: string) => {
+    setRoomChatDelivery((current) => updateRoomChatDraft(current, value));
+  }, []);
   const [pendingNotes, setPendingNotes] = useState<PendingNoteMessage[]>([]);
   const [privateNoteComposer, setPrivateNoteComposer] = useState("");
   const [pendingPrivateNotes, setPendingPrivateNotes] = useState<
@@ -734,6 +787,11 @@ export function RoomPage() {
   const managerYjsSnapshotRef = useRef<YjsSnapshotEmitter | null>(null);
   const lastManagerYjsRecoveryKeyRef = useRef<string | null>(null);
   const managerAwarenessApplyRef = useRef<((update: string) => void) | null>(null);
+  const lastManagerAwarenessSentRef = useRef<{
+    stepIndex: number;
+    signature: string;
+    sentAt: number;
+  } | null>(null);
   const managerYjsPendingUpdatesRef = useRef<Array<{
     stepIndex: number;
     update: string;
@@ -797,14 +855,42 @@ export function RoomPage() {
     setDraftName(resolved);
     setCandidateNameError("");
     setNameModalOpened(shouldAskName);
-    setNoteComposer("");
+    const previousIdentity = previousRoomIdentityRef.current;
+    const resolvedAccountId = authUser?.id ?? null;
+    const identityChanged = previousIdentity.inviteCode !== inviteCode ||
+      previousIdentity.authToken !== authToken ||
+      Boolean(previousIdentity.resolvedAccountId && resolvedAccountId && previousIdentity.resolvedAccountId !== resolvedAccountId);
+    if (!identityChanged) {
+      if (resolvedAccountId) previousIdentity.resolvedAccountId = resolvedAccountId;
+      if (resolvedAccountId) {
+        setRoomChatDelivery((current) => current.accountId === "anonymous"
+          ? { ...current, accountId: resolvedAccountId }
+          : current);
+      }
+      return;
+    }
+    previousRoomIdentityRef.current = { inviteCode, authToken, resolvedAccountId };
+    setRoomChatDelivery((current) =>
+      resetRoomChatDeliveryContext(current, {
+        roomId: inviteCode,
+        accountId: roomChatAccountId,
+        reason: current.roomId === inviteCode ? "account_changed" : "room_changed",
+      }),
+    );
     setPendingNotes([]);
     setPrivateNoteComposer("");
     setPendingPrivateNotes([]);
     setActivePrivateBlock(null);
     lastAutoStepBlockRef.current = null;
     setLocalStepIntent(null);
-  }, [authToken, authUser?.displayName, authUser?.nickname, inviteCode]);
+  }, [
+    authToken,
+    authUser?.id,
+    authUser?.displayName,
+    authUser?.nickname,
+    inviteCode,
+    roomChatAccountId,
+  ]);
 
   const merged = useMemo<RealtimeState | null>(() => {
     if (state) return state;
@@ -857,6 +943,24 @@ export function RoomPage() {
   const mergedNotes = merged?.notes ?? "";
   const mergedBriefingMarkdown = merged?.briefingMarkdown ?? "";
   const canManageRoom = merged?.canManageRoom ?? false;
+  useEffect(() => {
+    if (!merged || canManageRoom) return;
+    setRoomChatDelivery((current) =>
+      current.roomId === inviteCode &&
+      current.accountId === roomChatAccountId &&
+      current.status === "idle" &&
+      current.draft === "" &&
+      current.intent === null &&
+      current.messages.length === 0
+        ? current
+        : resetRoomChatDeliveryContext(current, {
+            roomId: inviteCode,
+            accountId: roomChatAccountId,
+            reason: "access_revoked",
+          }),
+    );
+    setPendingNotes([]);
+  }, [canManageRoom, inviteCode, merged, roomChatAccountId]);
   const selectedManagerStep =
     localStepIntent !== null &&
     mergedTasks.some((task) => task.stepIndex === localStepIntent)
@@ -943,9 +1047,16 @@ export function RoomPage() {
   }, [briefingDirty, merged, mergedBriefingMarkdown]);
   const visibleNotes = useMemo(() => {
     const serverIds = new Set(notesMessages.map((message) => message.id));
+    const serverFingerprints = new Set(
+      notesMessages.map((message) => noteMessageFingerprint(message)),
+    );
     const next = [
       ...notesMessages,
-      ...pendingNotes.filter((message) => !serverIds.has(message.id)),
+      ...pendingNotes.filter(
+        (message) =>
+          !serverIds.has(message.id) &&
+          !serverFingerprints.has(noteMessageFingerprint(message)),
+      ),
     ];
     return next.sort(
       (a, b) =>
@@ -1753,6 +1864,64 @@ export function RoomPage() {
   const effectiveDisplayName = displayName.trim() || fallbackDisplayName;
   const canConnect =
     Boolean(inviteCode) && (Boolean(authToken) || Boolean(displayName.trim()));
+  const handleNoteMessageAck = useCallback(
+    (ack: {
+      type: "note_message_ack";
+      status: "persisted";
+      clientMessageId: string;
+      messageId: string;
+      persistedAtEpochMs: number;
+    }) => {
+      setRoomChatDelivery((current) =>
+        applyRoomChatAck(current, ack, current.contextGeneration),
+      );
+      setPendingNotes((current) =>
+        current.map((message) =>
+          message.clientMessageId === ack.clientMessageId
+            ? {
+                ...message,
+                id: ack.messageId,
+                deliveryState: "persisted",
+                retryAllowed: false,
+              }
+            : message,
+        ),
+      );
+    },
+    [],
+  );
+  const handleNoteMessageFailure = useCallback(
+    (failure: {
+      clientMessageId: string;
+      httpStatus: number;
+      code?: string | null;
+    }) => {
+      setRoomChatDelivery((current) => {
+        const next = applyRoomChatFailure(current, {
+          ...failure,
+          contextGeneration: current.contextGeneration,
+        });
+        return next.status === "retryable_error" &&
+          next.draft === "" &&
+          next.intent?.body
+          ? updateRoomChatDraft(next, next.intent.body)
+          : next;
+      });
+      setPendingNotes((current) => {
+        if (failure.httpStatus === 403) return [];
+        return current.map((message) =>
+          message.clientMessageId === failure.clientMessageId
+            ? {
+                ...message,
+                deliveryState: "retryable_error",
+                retryAllowed: failure.httpStatus !== 409,
+              }
+            : message,
+        );
+      });
+    },
+    [],
+  );
   const {
     connected,
     accessDenied: realtimeAccessDenied,
@@ -1795,6 +1964,8 @@ export function RoomPage() {
     onManagerWorkspaceAwarenessUpdate,
     onRecoveryStateSync,
     onRequireRecoverySync: markRecoverySyncPending,
+    onNoteMessageAck: handleNoteMessageAck,
+    onNoteMessageFailure: handleNoteMessageFailure,
   });
 
   useLayoutEffect(() => {
@@ -2003,9 +2174,16 @@ export function RoomPage() {
   useEffect(() => {
     if (pendingNotes.length === 0) return;
     const serverIds = new Set(notesMessages.map((message) => message.id));
-    if (serverIds.size === 0) return;
+    const serverFingerprints = new Set(
+      notesMessages.map((message) => noteMessageFingerprint(message)),
+    );
+    if (serverIds.size === 0 && serverFingerprints.size === 0) return;
     setPendingNotes((current) => {
-      const next = current.filter((message) => !serverIds.has(message.id));
+      const next = current.filter(
+        (message) =>
+          !serverIds.has(message.id) &&
+          !serverFingerprints.has(noteMessageFingerprint(message)),
+      );
       return next.length === current.length ? current : next;
     });
   }, [notesMessages, pendingNotes.length]);
@@ -2093,6 +2271,8 @@ export function RoomPage() {
     if (
       !authToken ||
       !authUser?.isHr ||
+      !room ||
+      room.teamId != null ||
       !merged?.canManageRoom ||
       !hasRealtimeState
     ) {
@@ -2121,6 +2301,7 @@ export function RoomPage() {
     merged?.canManageRoom,
     merged?.eventToken,
     ownerToken,
+    room,
     trackHrRoom,
   ]);
 
@@ -2188,19 +2369,35 @@ export function RoomPage() {
     const text = noteComposer.trim();
     if (!text) return;
     const timestampEpochMs = Date.now();
-    const noteId = crypto.randomUUID();
+    const clientMessageId = crypto.randomUUID();
+    const clientEventSequence = sendNoteMessage(
+      clientMessageId,
+      text,
+      timestampEpochMs,
+    );
+    if (clientEventSequence == null) return;
     const optimisticMessage: PendingNoteMessage = {
-      id: noteId,
+      id: clientMessageId,
       sessionId,
       displayName: effectiveDisplayName,
       role: merged.role,
       text,
       timestampEpochMs,
       pending: true,
+      clientMessageId,
+      originalClientEventSequence: clientEventSequence,
+      deliveryState: "pending",
+      retryAllowed: true,
     };
+    setRoomChatDelivery((current) => {
+      const next = beginRoomChatIntent(updateRoomChatDraft(current, noteComposer), {
+        clientEventSequence,
+        timestampEpochMs,
+        createClientMessageId: () => clientMessageId,
+      });
+      return next.status === "pending" ? { ...next, draft: "" } : next;
+    });
     setPendingNotes((current) => [...current, optimisticMessage]);
-    setNoteComposer("");
-    sendNoteMessage(noteId, text, timestampEpochMs);
     trackEvent("prod_note_sent", {
       role: merged.role,
       text_len: text.length,
@@ -2213,6 +2410,38 @@ export function RoomPage() {
     sendNoteMessage,
     sessionId,
   ]);
+
+  const retryNoteMessage = useCallback(() => {
+    const intent = roomChatDelivery.intent;
+    if (
+      roomChatDelivery.status !== "retryable_error" ||
+      !intent ||
+      !intent.retryAllowed
+    ) {
+      return;
+    }
+    setRoomChatDelivery((current) => {
+      const next = retryRoomChatIntent(current);
+      return next.status === "pending" ? { ...next, draft: "" } : next;
+    });
+    setPendingNotes((current) =>
+      current.map((message) =>
+        message.clientMessageId === intent.clientMessageId
+          ? {
+              ...message,
+              deliveryState: "pending",
+              retryAllowed: true,
+            }
+          : message,
+      ),
+    );
+    sendNoteMessage(
+      intent.clientMessageId,
+      intent.body,
+      intent.timestampEpochMs,
+      intent.originalClientEventSequence,
+    );
+  }, [roomChatDelivery.intent, roomChatDelivery.status, sendNoteMessage]);
 
   /**
    * Maps a raw block name (typed by the user or chosen from suggestions) to
@@ -2755,6 +2984,19 @@ export function RoomPage() {
   const ownerBriefingValue = stripFocusMarker(rawBriefingValue);
   const candidateBriefingValue = stripFocusMarker(mergedBriefingMarkdown);
   const candidateBriefingFocusMode = extractFocusMode(mergedBriefingMarkdown);
+  const localStatusTask = mergedTasks.find(
+    (task) => task.stepIndex === localSelectedStep,
+  );
+  const candidateParticipantsForStatus = merged.participants.filter(
+    (participant) => participant.role === "candidate",
+  );
+  const candidatePresenceStatus = candidateParticipantsForStatus.length === 0
+    ? "не подключен"
+    : candidateParticipantsForStatus.some(
+        (participant) => participant.presenceStatus === "away",
+      )
+      ? "вне фокуса"
+      : "в фокусе";
 
   /**
    * Переключение focus mode со стороны интервьюера. Состояние едет
@@ -2902,7 +3144,23 @@ export function RoomPage() {
 
   const sendManagerWorkspaceAwareness = (awarenessUpdate: string) => {
     const stepIndex = managerWorkspaceRef.current?.stepIndex;
-    if (stepIndex != null) sendManagerWorkspaceAwarenessUpdate(stepIndex, awarenessUpdate);
+    if (stepIndex == null) return;
+    const now = Date.now();
+    const signature = awarenessStateSignature(awarenessUpdate);
+    const previous = lastManagerAwarenessSentRef.current;
+    if (
+      previous?.stepIndex === stepIndex &&
+      previous.signature === signature &&
+      // Collapse only immediate duplicate bursts. Awareness itself renews its
+      // clock periodically and remote peers expire it after 30 seconds, so a
+      // wider window can accidentally push the outbound renewal to the expiry
+      // boundary and make cursors flicker under scheduler/network jitter.
+      now - previous.sentAt < 5_000
+    ) {
+      return;
+    }
+    lastManagerAwarenessSentRef.current = { stepIndex, signature, sentAt: now };
+    sendManagerWorkspaceAwarenessUpdate(stepIndex, awarenessUpdate);
   };
 
   return (
@@ -2958,11 +3216,14 @@ export function RoomPage() {
         <h1 className="visually-hidden">{`Комната «${room?.title ?? "Live-coding"}»`}</h1>
         <TopBar
           roomTitle={room?.title ?? "Комната"}
+          interviewListPath={room?.teamId && canManageRoom
+            ? `/workspace/teams/${room.teamId}/interviews`
+            : "/workspace/personal/interviews"}
           authToken={authToken}
           connected={connected}
           participants={merged.participants}
           showParticipants={canManageRoom}
-          showLanguageControl={canManageRoom}
+          showLanguageControl={canManageRoom && !(localWorkspacePreview ? localStatusTask?.mandatory : step?.mandatory)}
           currentLanguage={normalizeRoomLanguage(localWorkspacePreview?.language ?? merged.language)}
           onLanguageChange={(value) => {
             if (!value) return;
@@ -2981,46 +3242,60 @@ export function RoomPage() {
         />
 
         <div className={styles.interviewPanelHost}>
-          {canManageRoom && hrAssignmentFeedback ? (
-            <Alert
-              color={hrAssignmentFeedback.kind === "error" ? "red" : "teal"}
-              role={hrAssignmentFeedback.kind === "error" ? "alert" : "status"}
-              aria-live="polite"
-              className={styles.hrTrackingAlert}
-            >
-              {hrAssignmentFeedback.message}
-            </Alert>
-          ) : null}
-          <RoomInterviewPanel
-            inviteCode={inviteCode}
-            identityKey={authUser?.id ?? `guest:${participantId}`}
-            canManageRoom={canManageRoom}
-            authorityGeneration={hrAssignmentGenerationRef.current}
-            isCurrentAuthority={isCurrentHrAuthority}
-            pendingHrActions={pendingHrActions}
-            onRemoveHr={removeListedHr}
-            removalError={hrAssignmentFeedback?.action === "remove" && hrAssignmentFeedback.kind === "error"
-              ? hrAssignmentFeedback.message : ""}
-            ownerToken={ownerToken ?? undefined}
-            interviewerToken={interviewerToken ?? undefined}
-            eventToken={merged.eventToken ?? undefined}
+          <RoomStatusStrip
+            role={merged.role}
+            connected={connected}
+            localStep={canManageRoom && localStatusTask
+              ? { stepIndex: localStatusTask.stepIndex, title: localStatusTask.title }
+              : undefined}
+            publishedStep={canManageRoom && step
+              ? { stepIndex: step.stepIndex, title: step.title }
+              : undefined}
+            candidateStatus={canManageRoom ? candidatePresenceStatus : undefined}
           />
-          {hrTrackingError ? (
-            <Alert color="yellow" role="alert" className={styles.hrTrackingAlert}>
-              <Group gap="xs">
-                <Text size="sm">{hrTrackingError}</Text>
-                <Button
-                  type="button"
-                  size="compact-xs"
-                  variant="light"
-                  loading={trackHrRoomState.isLoading}
-                  onClick={() => void trackCurrentHrRoom()}
-                >
-                  Повторить
-                </Button>
-              </Group>
-            </Alert>
-          ) : null}
+          <div className={styles.interviewPanelActions}>
+            {canManageRoom && hrAssignmentFeedback ? (
+              <Alert
+                color={hrAssignmentFeedback.kind === "error" ? "red" : "teal"}
+                role={hrAssignmentFeedback.kind === "error" ? "alert" : "status"}
+                aria-live="polite"
+                className={styles.hrTrackingAlert}
+              >
+                {hrAssignmentFeedback.message}
+              </Alert>
+            ) : null}
+            <RoomInterviewPanel
+              inviteCode={inviteCode}
+              identityKey={authUser?.id ?? `guest:${participantId}`}
+              canManageRoom={canManageRoom}
+              isTeamRoom={room?.teamId != null}
+              authorityGeneration={hrAssignmentGenerationRef.current}
+              isCurrentAuthority={isCurrentHrAuthority}
+              pendingHrActions={pendingHrActions}
+              onRemoveHr={removeListedHr}
+              removalError={hrAssignmentFeedback?.action === "remove" && hrAssignmentFeedback.kind === "error"
+                ? hrAssignmentFeedback.message : ""}
+              ownerToken={ownerToken ?? undefined}
+              interviewerToken={interviewerToken ?? undefined}
+              eventToken={merged.eventToken ?? undefined}
+            />
+            {hrTrackingError ? (
+              <Alert color="yellow" role="alert" className={styles.hrTrackingAlert}>
+                <Group gap="xs">
+                  <Text size="sm">{hrTrackingError}</Text>
+                  <Button
+                    type="button"
+                    size="compact-xs"
+                    variant="light"
+                    loading={trackHrRoomState.isLoading}
+                    onClick={() => void trackCurrentHrRoom()}
+                  >
+                    Повторить
+                  </Button>
+                </Group>
+              </Alert>
+            ) : null}
+          </div>
         </div>
 
         {canManageRoom && stepChangeNotification ? (
@@ -3097,6 +3372,8 @@ export function RoomPage() {
             noteComposer={noteComposer}
             onNoteComposerChange={setNoteComposer}
             onSendNote={submitNoteMessage}
+            onRetryNote={retryNoteMessage}
+            noteSendPending={roomChatDelivery.status === "pending"}
             privateNoteComposer={privateNoteComposer}
             onPrivateNoteComposerChange={setPrivateNoteComposer}
             privateNotes={visiblePersonalNotes}
@@ -3223,6 +3500,8 @@ function OwnerLayout({
   noteComposer,
   onNoteComposerChange,
   onSendNote,
+  onRetryNote,
+  noteSendPending,
   privateNoteComposer,
   onPrivateNoteComposerChange,
   privateNotes,
@@ -3294,6 +3573,7 @@ function OwnerLayout({
     title: string;
     language: string;
     score: number | null;
+    mandatory?: boolean;
   }>;
   availableCatalogTasks: TaskTemplate[];
   localSelectedStep: number;
@@ -3309,6 +3589,8 @@ function OwnerLayout({
   noteComposer: string;
   onNoteComposerChange: (value: string) => void;
   onSendNote: () => void;
+  onRetryNote: () => void;
+  noteSendPending: boolean;
   privateNoteComposer: string;
   onPrivateNoteComposerChange: (value: string) => void;
   /** Room-wide private notes (single stream) for the current viewer. */
@@ -3399,6 +3681,7 @@ function OwnerLayout({
     "tasks" | "roomTools" | null
   >("tasks");
   const [roomToolsTab, setRoomToolsTab] = useState<"notes" | "logs">("notes");
+  const [scorePickerOpen, setScorePickerOpen] = useState(false);
   const [activeMobileTab, setActiveMobileTab] =
     useState<MobileRoomTab>("editor");
   const [addTaskModalOpened, setAddTaskModalOpened] = useState(false);
@@ -3539,6 +3822,95 @@ function OwnerLayout({
   const mobileTasksPanelId = `${mobileTabsId}-tasks-panel`;
   const notesFeedRef = useRef<HTMLDivElement | null>(null);
   const privateNotesFeedRef = useRef<HTMLDivElement | null>(null);
+  const [chatSurfaceVisible, setChatSurfaceVisible] = useState(false);
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
+  const knownChatMessageIdsRef = useRef<Set<string> | null>(null);
+  const chatUserPinnedAwayRef = useRef(false);
+  const isChatFeedAtBottom = useCallback(() => {
+    const host = notesFeedRef.current;
+    if (!host) return true;
+    return host.scrollHeight - host.clientHeight - host.scrollTop <= 2;
+  }, []);
+  const jumpToUnreadMessages = useCallback(() => {
+    const host = notesFeedRef.current;
+    if (host) {
+      host.scrollTop = host.scrollHeight;
+    }
+    chatUserPinnedAwayRef.current = false;
+    setChatUnreadCount(0);
+  }, []);
+  useEffect(() => {
+    const readVisibility = () => {
+      const surface = document.querySelector(
+        '[data-room-context-surface="chat"]',
+      );
+      setChatSurfaceVisible(
+        surface?.getAttribute("data-room-context-visible") === "true",
+      );
+    };
+
+    readVisibility();
+    const observer = new MutationObserver(readVisibility);
+    observer.observe(document.body, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["data-room-context-visible"],
+    });
+    return () => observer.disconnect();
+  }, [inviteCode]);
+  useEffect(() => {
+    const known = knownChatMessageIdsRef.current;
+    if (known === null) {
+      knownChatMessageIdsRef.current = new Set(
+        notesMessages.map((message) => message.id),
+      );
+      return;
+    }
+
+    const nextMessages = notesMessages.filter(
+      (message) => !known.has(message.id),
+    );
+    notesMessages.forEach((message) => known.add(message.id));
+    const newRemoteMessages = nextMessages.filter(
+      (message) => message.sessionId !== sessionId,
+    );
+    if (newRemoteMessages.length === 0) return;
+
+    if (
+      chatSurfaceVisible &&
+      (!chatUserPinnedAwayRef.current || isChatFeedAtBottom())
+    ) {
+      window.requestAnimationFrame(() => {
+        const host = notesFeedRef.current;
+        if (host) {
+          host.scrollTop = host.scrollHeight;
+        }
+      });
+      chatUserPinnedAwayRef.current = false;
+      return;
+    }
+    setChatUnreadCount((current) => current + newRemoteMessages.length);
+  }, [chatSurfaceVisible, isChatFeedAtBottom, notesMessages, sessionId]);
+  useEffect(() => {
+    const host = notesFeedRef.current;
+    if (!host) return undefined;
+    const handleScroll = () => {
+      const pinnedAway = !isChatFeedAtBottom();
+      chatUserPinnedAwayRef.current = pinnedAway;
+      if (!pinnedAway) {
+        setChatUnreadCount(0);
+      }
+    };
+    host.addEventListener("scroll", handleScroll, { passive: true });
+    return () => host.removeEventListener("scroll", handleScroll);
+  }, [chatSurfaceVisible, isChatFeedAtBottom]);
+  useEffect(() => {
+    knownChatMessageIdsRef.current = new Set(
+      notesMessages.map((message) => message.id),
+    );
+    chatUserPinnedAwayRef.current = false;
+    setChatUnreadCount(0);
+  }, [inviteCode]);
   const parsedPrivateNotesCommand = useMemo(
     () => parsePersonalNotesCommand(privateNoteComposer),
     [privateNoteComposer],
@@ -3751,6 +4123,31 @@ function OwnerLayout({
     const recent = (candidateKeyHistory ?? []).slice(-LOG_HISTORY_LIMIT);
     return recent.length === 0 && lastCandidateKey ? [lastCandidateKey] : recent;
   }, [candidateKeyHistory, lastCandidateKey]);
+  const [activitySurfaceVisible, setActivitySurfaceVisible] = useState(false);
+  useEffect(() => {
+    if (!merged.canManageRoom) {
+      setActivitySurfaceVisible(false);
+      return undefined;
+    }
+
+    const readVisibility = () => {
+      const surface = document.querySelector(
+        '[data-room-context-surface="activity"]',
+      );
+      setActivitySurfaceVisible(
+        surface?.getAttribute("data-room-context-visible") === "true",
+      );
+    };
+
+    readVisibility();
+    const observer = new MutationObserver(readVisibility);
+    observer.observe(document.body, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["data-room-context-visible"],
+    });
+    return () => observer.disconnect();
+  }, [inviteCode, merged.canManageRoom]);
   const activityHistory = useCandidateActivityHistory({
     inviteCode,
     ownerToken,
@@ -3758,9 +4155,10 @@ function OwnerLayout({
     eventToken: merged.eventToken,
     keyHistory: recentCandidateKeyHistory,
     canManageRoom: merged.canManageRoom,
-    active: showLeftPanel && currentSidePanel === "roomTools" && roomToolsTab === "logs",
+    active: activitySurfaceVisible,
   });
   const canSubmitCustomTask = customTaskTitle.trim().length > 0;
+  const renderLegacyOwnerPanels = Boolean(0);
 
   const handleTaskStepSelect = useCallback(
     (stepIndex: number) => {
@@ -3987,6 +4385,726 @@ function OwnerLayout({
           </Group>
         </Stack>
       </Modal>
+      <RoomContextPanels
+        layoutKey={inviteCode}
+        singleSurface={localWorkspacePreview ? managerWorkspaceFocusMode : briefingFocusMode}
+        headerAction={
+          <Group gap="xs" wrap="nowrap">
+            <Button
+              type="button"
+              size="sm"
+              color="blue"
+              variant="filled"
+              leftSection={(localWorkspacePreview ? managerWorkspaceFocusMode : briefingFocusMode)
+                ? <IconCode size={16} />
+                : <IconFileDescription size={16} />}
+              aria-pressed={localWorkspacePreview ? managerWorkspaceFocusMode : briefingFocusMode}
+              data-testid="room-markdown-scenario-toggle"
+              disabled={isLocalWorkspacePreview && !localWorkspacePreview}
+              onClick={() => {
+                if (localWorkspacePreview) onManagerWorkspaceFocusModeChange(!managerWorkspaceFocusMode);
+                else onBriefingFocusModeChange(!briefingFocusMode);
+              }}
+            >
+              {(localWorkspacePreview ? managerWorkspaceFocusMode : briefingFocusMode)
+                ? "Вернуть редактор кода"
+                : "Заменить код на Markdown"}
+            </Button>
+          </Group>
+        }
+      >
+        <RoomContextSurface name="editor">
+          <Box
+            className={styles.contextEditorWorkspace}
+            data-testid="room-current-local-step-context"
+            data-step-index={
+              localWorkspacePreview?.stepIndex ?? merged.currentStep
+            }
+          >
+            <Box className={styles.contextEditorBody}>
+            {localWorkspacePreview ? (
+              <ManagerWorkspaceEditor
+                workspace={localWorkspacePreview}
+                isRefreshing={isLocalWorkspaceSnapshotFetching}
+                focusMode={managerWorkspaceFocusMode}
+                onBriefingChange={onManagerWorkspaceBriefingChange}
+                sessionId={sessionId}
+                participantId={participantId}
+                participantLabel={participantLabel}
+                sendAwarenessUpdate={sendManagerWorkspaceAwarenessUpdate}
+                onAwarenessBridgeReady={onManagerWorkspaceAwarenessBridgeReady}
+                onYjsUpdate={onManagerWorkspaceYjsUpdate}
+                onYjsBridgeReady={onManagerWorkspaceYjsBridgeReady}
+                onYjsSnapshotBridgeReady={onManagerWorkspaceYjsSnapshotBridgeReady}
+              />
+            ) : isLocalWorkspacePreview ? (
+              <Box
+                className={styles.editorColumn}
+                data-testid="manager-workspace-loading"
+                aria-busy="true"
+              >
+                <Text size="sm" c="dimmed">
+                  Загружаем рабочее пространство задачи…
+                </Text>
+              </Box>
+            ) : (
+              <Box className={styles.editorColumn}>
+                {briefingFocusMode ? (
+                  <BriefingBoard
+                    mode="interviewer"
+                    readOnly={Boolean(tasks.find((task) => task.stepIndex === merged.currentStep)?.mandatory)}
+                    value={briefingMarkdown}
+                    onChange={onBriefingChange}
+                    focusMode
+                    showModeToggle={false}
+                  />
+                ) : <SharedRoomEditorPanel
+                  merged={merged}
+                  stepStarterCode={stepStarterCode}
+                  editorReady={editorReady}
+                  syncKey={syncKey}
+                  resyncSignal={resyncSignal}
+                  sessionId={sessionId}
+                  participantId={participantId}
+                  participantLabel={participantLabel}
+                  sendAwarenessUpdate={sendAwarenessUpdate}
+                  onAwarenessBridgeReady={onAwarenessBridgeReady}
+                  onYjsUpdate={onYjsUpdate}
+                  onYjsBridgeReady={onYjsBridgeReady}
+                  onEditorValueChange={onEditorValueChange}
+                  onKeyPress={onKeyPress}
+                  panelClassName={styles.editorPanel}
+                />}
+                {error && <Text className={styles.error}>{error}</Text>}
+              </Box>
+            )}
+            </Box>
+          </Box>
+        </RoomContextSurface>
+
+        <RoomContextSurface name="steps">
+          <div className={styles.contextSurfaceScroll}>
+            <Group
+              justify="space-between"
+              align="center"
+              gap={8}
+            >
+              <Text size="xs" c="#8b919b">
+                Шаг {localSelectedStep + 1} из {Math.max(tasks.length, 1)}
+              </Text>
+              <Button
+                size="xs"
+                variant="filled"
+                color="blue"
+                leftSection={<IconPlus size={12} />}
+                onClick={() => setAddTaskModalOpened(true)}
+              >
+                Задача
+              </Button>
+            </Group>
+
+            <Box className={styles.stepList}>
+              {tasks.map((task) => {
+                const taskRating =
+                  taskScores[String(task.stepIndex)] ?? task.score ?? null;
+                const notesCount =
+                  privateNotesCountByStep.get(task.stepIndex) ?? 0;
+                const isGlobalActive = task.stepIndex === merged.currentStep;
+                const isLocalSelected = task.stepIndex === localSelectedStep;
+                const fullLabel = `${task.stepIndex + 1}. ${task.title}${isLocalSelected ? ", выбран" : ""}${isGlobalActive ? ", активен для всех" : ""}`;
+                return (
+                  <div
+                    key={task.stepIndex}
+                    className={styles.stepRow}
+                    data-local-selected={isLocalSelected ? "true" : undefined}
+                    data-global-active={isGlobalActive ? "true" : undefined}
+                  >
+                    <button
+                      type="button"
+                      className={styles.stepRowMain}
+                      data-testid={`room-step-row-${task.stepIndex}`}
+                      data-local-selected={isLocalSelected ? "true" : undefined}
+                      aria-current={isLocalSelected ? "step" : undefined}
+                      aria-label={fullLabel}
+                      onClick={() => handleTaskStepSelect(task.stepIndex)}
+                      title={fullLabel}
+                    >
+                      <span className={styles.stepRowIndex} aria-hidden="true">
+                        {task.stepIndex + 1}
+                      </span>
+                      <span className={styles.stepRowTitle}>{task.title}</span>
+                      <span className={styles.stepRowMeta}>
+                        {task.mandatory ? (
+                          <span className={styles.mandatoryStepMarker}>Обязательная</span>
+                        ) : null}
+                        {taskRating ? (
+                          <span className={styles.stepRowRating}>★{taskRating}</span>
+                        ) : null}
+                        {notesCount > 0 ? (
+                          <span className={styles.stepRowNotes}>
+                            <IconNote size={11} stroke={2.2} />
+                            <span>{notesCount}</span>
+                          </span>
+                        ) : null}
+                        {isGlobalActive ? (
+                          <span
+                            className={styles.globalActiveStepMarker}
+                            data-testid={`room-global-active-step-${task.stepIndex}`}
+                            aria-label={`Активный для всех шаг: ${task.title}`}
+                          >
+                            Активен
+                          </span>
+                        ) : null}
+                      </span>
+                    </button>
+                    {isLocalSelected && !isGlobalActive ? (
+                      <button
+                        type="button"
+                        className={styles.stepRowPublishAction}
+                        data-testid="room-publish-step"
+                        aria-label={`Переключить всех участников комнаты на задачу «${task.title}»`}
+                        onClick={() => onPublishSelectedStep(task.stepIndex)}
+                      >
+                        Переключить
+                      </button>
+                    ) : null}
+                    {!task.mandatory ? (
+                      <div className={styles.stepRowActions}>
+                        <Menu withinPortal position="bottom-end" shadow="md" offset={4}>
+                          <Menu.Target>
+                            <ActionIcon
+                              size="sm"
+                              variant="subtle"
+                              color="gray"
+                              className={styles.stepRowActionsTrigger}
+                              aria-label={`Действия с задачей: ${task.title}`}
+                              data-testid={`room-task-actions-${task.stepIndex}`}
+                            >
+                              <IconDots size={14} stroke={2} />
+                            </ActionIcon>
+                          </Menu.Target>
+                          <Menu.Dropdown>
+                            <Menu.Item
+                              leftSection={<IconPencil size={14} />}
+                              onClick={() => {
+                                setRenameTaskTarget({
+                                  stepIndex: task.stepIndex,
+                                  originalTitle: task.title,
+                                });
+                                setRenameTaskDraft(task.title);
+                                setRenameTaskError(null);
+                              }}
+                              data-testid={`room-task-rename-${task.stepIndex}`}
+                            >
+                              Переименовать
+                            </Menu.Item>
+                            <Menu.Item
+                              color="red"
+                              leftSection={<IconTrash size={14} />}
+                              disabled={tasks.length <= 1}
+                              onClick={() => {
+                                if (tasks.length <= 1) return;
+                                setDeleteTaskTarget({
+                                  stepIndex: task.stepIndex,
+                                  title: task.title,
+                                });
+                              }}
+                              data-testid={`room-task-delete-${task.stepIndex}`}
+                            >
+                              Удалить
+                            </Menu.Item>
+                          </Menu.Dropdown>
+                        </Menu>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </Box>
+
+            {localWorkspacePreview === null ? (
+              <Box className={styles.taskRatingCard}>
+                <div className={styles.contextScorePicker}>
+                  <input
+                  className={styles.contextScoreInput}
+                  aria-label="Оценка активного для всех шага"
+                  aria-haspopup="listbox"
+                  aria-expanded={scorePickerOpen}
+                  readOnly
+                  placeholder="Нет оценки"
+                  value={currentTaskRating ? String(currentTaskRating) : ""}
+                  onClick={() => setScorePickerOpen((current) => !current)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setScorePickerOpen((current) => !current);
+                    }
+                    if (event.key === "Escape") {
+                      setScorePickerOpen(false);
+                    }
+                  }}
+                />
+                  {scorePickerOpen ? (
+                    <div
+                      className={styles.contextScoreOptions}
+                      role="listbox"
+                      aria-label="Доступные оценки шага"
+                    >
+                      {[1, 2, 3, 4, 5].map((rating) => (
+                        <button
+                          key={rating}
+                          type="button"
+                          role="option"
+                          aria-selected={currentTaskRating === rating}
+                          onClick={() => {
+                            onTaskRatingChange(rating);
+                            setScorePickerOpen(false);
+                          }}
+                        >
+                          {rating}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </Box>
+            ) : null}
+          </div>
+
+          {merged.canManageRoom ? (
+            <div className={styles.verdictStrip}>
+              <Text size="xs" c="#8b919b" style={{ flex: 1 }}>
+                {merged.status === "finished"
+                  ? "Интервью завершено"
+                  : "Активная сессия"}
+              </Text>
+              {merged.verdict ? (
+                <VerdictBadge verdict={merged.verdict} size="xs" />
+              ) : null}
+              <Button
+                size="xs"
+                variant="subtle"
+                color={merged.status === "finished" ? "gray" : "red"}
+                onClick={onOpenVerdictModal}
+              >
+                {merged.status === "finished" ? "Изменить" : "Завершить интервью"}
+              </Button>
+            </div>
+          ) : null}
+        </RoomContextSurface>
+
+        <RoomContextSurface name="condition">
+          <div className={styles.contextConditionIntro}>
+            <Text fw={650} c="#e2e8f0">
+              {tasks.find((task) => task.stepIndex === localSelectedStep)?.title ??
+                `Шаг ${localSelectedStep + 1}`}
+            </Text>
+            <Text size="sm" c="#a8b5c4" className={styles.contextConditionBody}>
+              {stripFocusMarker(
+                localWorkspacePreview?.briefingMarkdown ?? briefingMarkdown,
+              )}
+            </Text>
+          </div>
+          <BriefingBoard
+            key={`context-briefing-${localSelectedStep}`}
+            mode="interviewer"
+            readOnly={Boolean(tasks.find((task) => task.stepIndex === localSelectedStep)?.mandatory)}
+            value={stripFocusMarker(
+              localWorkspacePreview?.briefingMarkdown ?? briefingMarkdown,
+            )}
+            onChange={
+              localWorkspacePreview
+                ? onManagerWorkspaceBriefingChange
+                : onBriefingChange
+            }
+            focusMode={
+              localWorkspacePreview
+                ? managerWorkspaceFocusMode
+                : briefingFocusMode
+            }
+            onFocusModeChange={
+              localWorkspacePreview
+                ? onManagerWorkspaceFocusModeChange
+                : onBriefingFocusModeChange
+            }
+            showModeToggle={false}
+          />
+        </RoomContextSurface>
+
+        <RoomContextSurface name="notes">
+          <div className={styles.contextSurfaceScroll}>
+            <Group
+              justify="space-between"
+              align="center"
+              gap={8}
+              className={styles.contextNotesIntro}
+            >
+              <Text size="sm" c="#a8b5c4">
+                Видны только вам. Кандидат и другие интервьюеры их не увидят.
+              </Text>
+            </Group>
+
+            {activePrivateBlockName ? (
+              <div className={styles.privateNotesActiveBlock}>
+                <Badge
+                  color={getPrivateNoteBlockColor(activePrivateBlockName)}
+                  variant="light"
+                >
+                  Блок: {activePrivateBlockName}
+                </Badge>
+                <ActionIcon
+                  size="xs"
+                  radius="xl"
+                  variant="transparent"
+                  color="gray"
+                  aria-label="Закрыть блок и писать в свободной форме"
+                  data-testid="room-private-notes-active-block-close"
+                  onClick={onCloseActivePrivateBlock}
+                >
+                  <IconX size={12} stroke={2.4} />
+                </ActionIcon>
+              </div>
+            ) : null}
+
+            <div className={styles.privateNotesList} ref={privateNotesFeedRef}>
+              {privateNotes.length > 0 ? (
+                privateNotes.map((entry) => (
+                  <article key={entry.id} className={styles.privateNoteEntry}>
+                    <header className={styles.privateNoteEntryMeta}>
+                      <time className={styles.privateNoteEntryTime}>
+                        {formatNoteTimestamp(entry.timestampEpochMs)}
+                      </time>
+                      {typeof entry.blockStepIndex === "number" ? (
+                        <Badge size="xs" variant="light">
+                          {formatStepBlockLabel(entry.blockStepIndex)}
+                        </Badge>
+                      ) : entry.blockName ? (
+                        <Badge size="xs" variant="light">
+                          {entry.blockName}
+                        </Badge>
+                      ) : null}
+                    </header>
+                    <Text className={styles.privateNoteEntryText}>{entry.text}</Text>
+                  </article>
+                ))
+              ) : (
+                <Text size="sm" c="#64748b">
+                  Пока нет записей
+                </Text>
+              )}
+            </div>
+
+            <div className={styles.privateNotesComposer}>
+              <Textarea
+                value={privateNoteComposer}
+                onChange={(event) =>
+                  onPrivateNoteComposerChange(event.currentTarget.value)
+                }
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" || event.shiftKey) return;
+                  event.preventDefault();
+                  onPrivateNoteSubmit();
+                }}
+                data-testid="room-private-notes-input"
+                placeholder={privateNotesInputPlaceholder}
+                aria-label="Заметка интервьюера"
+                classNames={{ input: styles.privateNotesComposerInput }}
+              />
+              {showPrivateNotesCommandMenu ? (
+                <div
+                  className={styles.privateNotesCommandMenu}
+                  data-testid="room-private-notes-command-menu"
+                >
+                  <button
+                    type="button"
+                    className={styles.privateNotesCommandItem}
+                    onClick={() => onPrivateNotesCommandShortcut("/block")}
+                  >
+                    <span className={styles.privateNotesCommandLabel}>/block</span>
+                    <span className={styles.privateNotesCommandHint}>
+                      Открыть блок заметок
+                    </span>
+                  </button>
+                  <Text className={styles.privateNotesCommandHelper}>
+                    Введите своё название после <code>/block</code> — создастся
+                    новый блок. Или выберите ниже один из шагов интервью.
+                  </Text>
+                  {customBlockCandidate ? (
+                    <button
+                      type="button"
+                      className={styles.privateNotesCommandCreate}
+                      data-testid="room-private-notes-command-create-custom"
+                      onClick={() =>
+                        onPrivateNotesCommandShortcut(
+                          `/block ${customBlockCandidate}`,
+                        )
+                      }
+                    >
+                      <span className={styles.privateNotesCommandCreateLabel}>
+                        + Создать блок
+                      </span>
+                      <span className={styles.privateNotesCommandCreateName}>
+                        {customBlockCandidate}
+                      </span>
+                    </button>
+                  ) : null}
+                  {privateNotesCommandExamples.length > 0 ? (
+                    <div
+                      className={styles.privateNotesCommandSection}
+                      role="group"
+                      aria-label="Шаги интервью"
+                    >
+                      <Text className={styles.privateNotesCommandSectionTitle}>
+                        Шаги интервью
+                      </Text>
+                      {privateNotesCommandExamples.map((example) => (
+                        <button
+                          key={example}
+                          type="button"
+                          className={styles.privateNotesCommandExample}
+                          onClick={() =>
+                            onPrivateNotesCommandShortcut(`/block ${example}`)
+                          }
+                        >
+                          {`/block ${example}`}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+              {parsedPrivateNotesCommand.kind === "unknown" ? (
+                <Text className={styles.privateNotesCommandUnknown}>
+                  Команда не найдена. Доступно: <code>/block</code>.
+                </Text>
+              ) : null}
+              <Group
+                justify="space-between"
+                align="center"
+                className={styles.notesComposerFooter}
+              >
+                <Text className={styles.notesComposerHint}>
+                  Enter: добавить запись, Shift+Enter: новая строка
+                </Text>
+                <Button
+                  type="button"
+                  size="xs"
+                  onClick={onPrivateNoteSubmit}
+                  disabled={
+                    !privateNoteComposer.trim() ||
+                    parsedPrivateNotesCommand.kind === "menu" ||
+                    parsedPrivateNotesCommand.kind === "block_prompt" ||
+                    parsedPrivateNotesCommand.kind === "unknown"
+                  }
+                  data-testid="room-private-notes-send"
+                >
+                  {parsedPrivateNotesCommand.kind === "block_apply"
+                    ? "Применить блок"
+                    : "Добавить"}
+                </Button>
+                <Button
+                  size="xs"
+                  variant="light"
+                  color="gray"
+                  leftSection={<IconFileDescription size={14} />}
+                  onClick={onOpenPrivateNotesExportModal}
+                  data-testid="room-private-notes-export"
+                >
+                  Экспорт заметок
+                </Button>
+              </Group>
+            </div>
+          </div>
+        </RoomContextSurface>
+
+        <RoomContextSurface name="chat">
+          <div className={styles.contextSurfaceScroll}>
+            <Text size="sm" c="#a8b5c4">
+              Виден интервьюерам этой комнаты. Кандидат не видит чат.
+            </Text>
+            {chatUnreadCount > 0 ? (
+              <Group justify="space-between" gap="xs" role="status">
+                <Badge data-testid="room-chat-unread-count" color="blue">
+                  {chatUnreadCount}
+                </Badge>
+                <Button
+                  type="button"
+                  size="compact-xs"
+                  variant="light"
+                  onClick={jumpToUnreadMessages}
+                >
+                  Перейти к новым сообщениям
+                </Button>
+              </Group>
+            ) : null}
+            <div
+              className={styles.notesMessagesList}
+              ref={notesFeedRef}
+              role="log"
+              aria-label="История чата интервьюеров"
+            >
+              {notesMessages.length > 0 ? (
+                notesMessages.map((message) => {
+                  const pendingMessage = message as PendingNoteMessage;
+                  const deliveryState =
+                    pendingMessage.deliveryState ?? "persisted";
+                  return (
+                    <article
+                      key={message.id}
+                      className={`${styles.noteBubble} ${
+                        message.sessionId === sessionId ? styles.noteBubbleOwn : ""
+                      }`}
+                      data-pending={Boolean(pendingMessage.pending)}
+                      data-chat-delivery-state={deliveryState}
+                    >
+                      <header className={styles.noteBubbleHeader}>
+                        <span className={styles.noteBubbleAuthor}>
+                          {message.displayName}
+                        </span>
+                        <time className={styles.noteBubbleTime}>
+                          {formatNoteTimestamp(message.timestampEpochMs)}
+                        </time>
+                      </header>
+                      <Text className={styles.noteBubbleText}>{message.text}</Text>
+                      {deliveryState === "retryable_error" &&
+                      pendingMessage.retryAllowed ? (
+                        <Button
+                          type="button"
+                          size="compact-xs"
+                          variant="light"
+                          color="red"
+                          onClick={onRetryNote}
+                        >
+                          Повторить отправку
+                        </Button>
+                      ) : null}
+                    </article>
+                  );
+                })
+              ) : (
+                <Text size="sm" c="#64748b">
+                  Пока нет сообщений
+                </Text>
+              )}
+            </div>
+            <div className={styles.notesComposer}>
+              <Textarea
+                value={noteComposer}
+                onChange={(event) =>
+                  onNoteComposerChange(event.currentTarget.value)
+                }
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" || event.shiftKey) return;
+                  event.preventDefault();
+                  onSendNote();
+                }}
+                autosize
+                minRows={1}
+                maxRows={8}
+                data-testid="room-notes-input"
+                placeholder="Напишите сообщение для интервьюеров"
+                aria-label="Сообщение в чат интервьюеров"
+                classNames={{ input: styles.notesComposerInput }}
+              />
+              <Group justify="flex-end" className={styles.notesComposerFooter}>
+                <Button
+                  type="button"
+                  size="xs"
+                  onClick={onSendNote}
+                  disabled={!noteComposer.trim() || noteSendPending}
+                  data-testid="room-notes-send"
+                >
+                  Отправить
+                </Button>
+              </Group>
+            </div>
+          </div>
+        </RoomContextSurface>
+
+        <RoomContextSurface name="activity">
+          <div className={styles.contextSurfaceScroll}>
+            <Group justify="space-between" align="center" gap={8}>
+              <Text size="sm" c="#a8b5c4">
+                Кандидат
+              </Text>
+              <Badge variant="light" data-state={candidatePresenceState}>
+                {candidatePresenceLabel}
+              </Badge>
+            </Group>
+            <div
+              className={styles.contextActivityHistory}
+              role="region"
+              aria-label="История активности кандидата"
+            >
+              <ActivityTimeline
+                history={activityHistory}
+                canManageRoom={merged.canManageRoom}
+              />
+            </div>
+          </div>
+        </RoomContextSurface>
+      </RoomContextPanels>
+
+      <button type="button" hidden tabIndex={-1} data-testid="room-rail-tasks" />
+      <button type="button" hidden tabIndex={-1} data-testid="room-rail-tools" />
+
+      <Modal
+        opened={privateNotesExportModalOpened}
+        onClose={onClosePrivateNotesExportModal}
+        title="Экспорт личных заметок"
+        closeButtonProps={{ "aria-label": "Close" }}
+        centered
+        closeOnEscape={false}
+      >
+        <Stack gap="sm">
+          <Text size="sm" c="dimmed">
+            Экспортирует фактуру по всем шагам, объединяя повторяющиеся блоки
+            в каждом шаге.
+          </Text>
+          <Checkbox
+            checked={exportIncludeTimestamps}
+            onChange={(event) =>
+              onExportIncludeTimestampsChange(event.currentTarget.checked)
+            }
+            label="Включать время записей"
+          />
+          <Checkbox
+            checked={exportIncludeFreeNotes}
+            onChange={(event) =>
+              onExportIncludeFreeNotesChange(event.currentTarget.checked)
+            }
+            label="Включать заметки вне блока"
+          />
+          {pdfExportProgress ? (
+            <Text size="xs" c="gray.4" data-testid="private-notes-pdf-progress">
+              {pdfExportProgress.label}…{" "}
+              {Math.round(pdfExportProgress.progress * 100)}%
+            </Text>
+          ) : null}
+          <Group justify="flex-end">
+            <Button
+              variant="light"
+              color="gray"
+              leftSection={<IconDownload size={14} />}
+              onClick={onExportPrivateNotesMarkdown}
+              disabled={pdfExportProgress !== null}
+            >
+              Скачать .md
+            </Button>
+            <Button
+              leftSection={<IconDownload size={14} />}
+              onClick={onExportPrivateNotesPdf}
+              disabled={pdfExportProgress !== null}
+              data-testid="private-notes-pdf-export-button"
+            >
+              Скачать .pdf
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      {renderLegacyOwnerPanels && (
+        <>
       <nav className={styles.leftRail} aria-label="Панели владельца комнаты">
         {/*
          * Rail buttons used to be icon-only (16px), which made the chat/logs
@@ -4184,6 +5302,9 @@ function OwnerLayout({
                             {task.title}
                           </span>
                           <span className={styles.stepRowMeta}>
+                            {task.mandatory ? (
+                              <span className={styles.mandatoryStepMarker}>Обязательная</span>
+                            ) : null}
                             {taskRating ? (
                               <Tooltip
                                 label={`Оценка шага: ${taskRating} из 5`}
@@ -4240,7 +5361,7 @@ function OwnerLayout({
                          * itself shows up only on hover/focus to keep the
                          * row visually quiet (see `.stepRowActions` CSS).
                          */}
-                        <div className={styles.stepRowActions}>
+                        {!task.mandatory ? <div className={styles.stepRowActions}>
                           <Menu
                             withinPortal
                             position="bottom-end"
@@ -4298,7 +5419,7 @@ function OwnerLayout({
                               </Menu.Item>
                             </Menu.Dropdown>
                           </Menu>
-                        </div>
+                        </div> : null}
                       </div>
                     );
                   })}
@@ -4791,6 +5912,21 @@ function OwnerLayout({
                           <Text className={styles.panelSectionTitle}>Чат</Text>
                         </div>
                       </div>
+                      {chatUnreadCount > 0 ? (
+                        <Group justify="space-between" gap="xs" role="status">
+                          <Badge data-testid="room-chat-unread-count" color="blue">
+                            {chatUnreadCount}
+                          </Badge>
+                          <Button
+                            type="button"
+                            size="compact-xs"
+                            variant="light"
+                            onClick={jumpToUnreadMessages}
+                          >
+                            Перейти к новым сообщениям
+                          </Button>
+                        </Group>
+                      ) : null}
 
                       <div
                         className={styles.notesMessagesList}
@@ -4802,13 +5938,17 @@ function OwnerLayout({
                           notesMessages.map((message) => {
                             const isOwnMessage =
                               message.sessionId === sessionId;
+                            const pendingMessage = message as PendingNoteMessage;
+                            const deliveryState =
+                              pendingMessage.deliveryState ?? "persisted";
                             return (
                               <article
                                 key={message.id}
                                 className={`${styles.noteBubble} ${isOwnMessage ? styles.noteBubbleOwn : ""}`}
                                 data-pending={Boolean(
-                                  (message as PendingNoteMessage).pending,
+                                  pendingMessage.pending,
                                 )}
+                                data-chat-delivery-state={deliveryState}
                               >
                                 <header className={styles.noteBubbleHeader}>
                                   <div className={styles.noteBubbleAuthorWrap}>
@@ -4825,6 +5965,18 @@ function OwnerLayout({
                                 <Text className={styles.noteBubbleText}>
                                   {message.text}
                                 </Text>
+                                {deliveryState === "retryable_error" &&
+                                pendingMessage.retryAllowed ? (
+                                  <Button
+                                    type="button"
+                                    size="compact-xs"
+                                    variant="light"
+                                    color="red"
+                                    onClick={onRetryNote}
+                                  >
+                                    Повторить отправку
+                                  </Button>
+                                ) : null}
                               </article>
                             );
                           })
@@ -4868,7 +6020,7 @@ function OwnerLayout({
                             type="button"
                             size="xs"
                             onClick={onSendNote}
-                            disabled={!noteComposer.trim()}
+                            disabled={!noteComposer.trim() || noteSendPending}
                             data-testid="room-notes-send"
                           >
                             Отправить
@@ -4936,7 +6088,6 @@ function OwnerLayout({
                 isRefreshing={isLocalWorkspaceSnapshotFetching}
                 focusMode={managerWorkspaceFocusMode}
                 onBriefingChange={onManagerWorkspaceBriefingChange}
-                onFocusModeChange={onManagerWorkspaceFocusModeChange}
                 sessionId={sessionId}
                 participantId={participantId}
                 participantLabel={participantLabel}
@@ -4959,6 +6110,7 @@ function OwnerLayout({
                 <BriefingBoard
                   key={`briefing-${merged.currentStep}`}
                   mode="interviewer"
+                  readOnly={Boolean(tasks.find((task) => task.stepIndex === merged.currentStep)?.mandatory)}
                   value={briefingMarkdown}
                   onChange={onBriefingChange}
                   focusMode={briefingFocusMode}
@@ -4993,6 +6145,8 @@ function OwnerLayout({
             )}
           </Box>
         </Box>
+      )}
+        </>
       )}
 
       <Modal
@@ -5054,7 +6208,6 @@ function ManagerWorkspaceEditor({
   isRefreshing,
   focusMode,
   onBriefingChange,
-  onFocusModeChange,
   sessionId,
   participantId,
   participantLabel,
@@ -5068,7 +6221,6 @@ function ManagerWorkspaceEditor({
   isRefreshing: boolean;
   focusMode: boolean;
   onBriefingChange: (value: string) => void;
-  onFocusModeChange: (next: boolean) => void;
   sessionId: string;
   participantId: string;
   participantLabel: string;
@@ -5114,15 +6266,15 @@ function ManagerWorkspaceEditor({
       className={styles.editorColumn}
       aria-busy={isRefreshing || undefined}
     >
-      <BriefingBoard
-        key={`manager-briefing-${workspace.stepIndex}`}
-        mode="interviewer"
-        value={stripFocusMarker(workspace.briefingMarkdown)}
-        onChange={onBriefingChange}
-        focusMode={focusMode}
-        onFocusModeChange={onFocusModeChange}
-      />
-      {!focusMode ? (
+      {focusMode ? (
+        <BriefingBoard
+          mode="interviewer"
+          value={workspace.briefingMarkdown}
+          onChange={onBriefingChange}
+          focusMode
+          showModeToggle={false}
+        />
+      ) : (
         <Box className={styles.editorPanel}>
           <div className={styles.editorWrap}>
             <RoomCodeEditor
@@ -5149,7 +6301,7 @@ function ManagerWorkspaceEditor({
             />
           </div>
         </Box>
-      ) : null}
+      )}
     </Box>
   );
 }

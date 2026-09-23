@@ -4,6 +4,10 @@ $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Set-Location $Root
 
+if ([string]::IsNullOrWhiteSpace($env:CHAT_RECEIPT_HMAC_SECRET)) {
+  Write-Error "CHAT_RECEIPT_HMAC_SECRET обязателен (стабильный Base64URL secret из 32 байт; см. README)."
+}
+
 $docker = Get-Command docker -ErrorAction SilentlyContinue
 if (-not $docker) {
   Write-Error "Нужен Docker Desktop для автоматического подъёма PostgreSQL. Установите Docker или поднимите БД вручную (README)."
@@ -41,6 +45,7 @@ Write-Host "    `$env:JAVA_HOME='$env:JAVA_HOME'"
 Write-Host "    `$env:DB_URL='$env:DB_URL'"
 Write-Host "    `$env:DB_USER='$env:DB_USER'"
 Write-Host "    `$env:DB_PASSWORD='$env:DB_PASSWORD'"
+Write-Host "    `$env:CHAT_RECEIPT_HMAC_SECRET='<значение уже задано во внешнем environment>'"
 Write-Host "    cd `"$Root\backend`""
 Write-Host "    & `"$Maven`" spring-boot:run"
 Write-Host ""

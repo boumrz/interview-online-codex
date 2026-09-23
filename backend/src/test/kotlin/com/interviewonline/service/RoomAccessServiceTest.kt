@@ -4,6 +4,8 @@ import com.interviewonline.model.Room
 import com.interviewonline.model.RoomParticipant
 import com.interviewonline.model.User
 import com.interviewonline.repository.RoomParticipantRepository
+import com.interviewonline.repository.TeamMembershipRepository
+import com.interviewonline.repository.TeamRepository
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -12,7 +14,9 @@ import org.mockito.Mockito
 
 class RoomAccessServiceTest {
     private val roomParticipantRepository = Mockito.mock(RoomParticipantRepository::class.java)
-    private val roomAccessService = RoomAccessService(roomParticipantRepository)
+    private val teamMembershipRepository = Mockito.mock(TeamMembershipRepository::class.java)
+    private val teamRepository = Mockito.mock(TeamRepository::class.java)
+    private val roomAccessService = RoomAccessService(roomParticipantRepository, teamMembershipRepository, teamRepository, TeamRoomLineageService(teamRepository))
 
     @Test
     fun `room owner is resolved as owner without legacy room tokens`() {

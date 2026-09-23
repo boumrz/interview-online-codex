@@ -31,6 +31,34 @@ class HrAccountProfileIntegrationTest(
     @Autowired private val adminUserService: AdminUserService,
 ) {
     @Test
+    fun `enabling hiring role reveals existing personal interviews created by account`() {
+        val (owner, _) = HrHttpFixtures.register(mockMvc, objectMapper, isHr = false, prefix = "owner-enable")
+        val ownedRoom = HrHttpFixtures.createRoom(mockMvc, objectMapper, owner, "Existing personal interview")
+        assertFalse(assignmentRepository.existsByRoomIdAndUserId(ownedRoom.id, owner.id))
+
+        mockMvc.get("/api/me/hr/rooms") {
+            header("Authorization", "Bearer ${owner.token}")
+        }.andExpect { status { isForbidden() } }
+
+        mockMvc.patch("/api/me/profile") {
+            header("Authorization", "Bearer ${owner.token}")
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"displayName":"Hiring owner","isHr":true}"""
+        }.andExpect { status { isOk() } }
+
+        mockMvc.get("/api/me/hr/rooms") {
+            header("Authorization", "Bearer ${owner.token}")
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.items[0].roomId") { value(ownedRoom.id) }
+            jsonPath("$.totalElements") { value(1) }
+        }
+        mockMvc.get("/api/me/hr/rooms/${ownedRoom.id}") {
+            header("Authorization", "Bearer ${owner.token}")
+        }.andExpect { status { isOk() } }
+    }
+
+    @Test
     fun `registration profile and login expose the independent HR flag with a stable UUID`() {
         val (ordinary, ordinaryBody) = HrHttpFixtures.register(mockMvc, objectMapper, isHr = false, prefix = "ordinary")
         assertEquals(false, ordinaryBody.path("user").path("isHr").booleanValue())

@@ -1,0 +1,1427 @@
+{
+  "task": "1.6e",
+  "designAcceptance": "DA-05",
+  "generatedAt": "2026-09-09T12:45:22.257Z",
+  "baseUrl": "http://127.0.0.1:4173/programmes.html",
+  "pass": true,
+  "assertions": {
+    "runtimeClean": true,
+    "geometryPass": true,
+    "screenshotGeometryPass": true,
+    "rolePermissions": true,
+    "publishFlow": true,
+    "discardFlow": true,
+    "archiveRestoreFlow": true,
+    "conflicts": true,
+    "vacancyExplicitUpdate": true,
+    "stateSemantics": true,
+    "createIntegrity": true,
+    "roomIntegrity": true,
+    "resizePersistence": true,
+    "keyboardPass": true
+  },
+  "runtimeErrors": [],
+  "matrix": [
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "zoom": 1,
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=member&state=published&long=1",
+      "clientWidth": 1440,
+      "scrollWidth": 1440,
+      "horizontalOverflow": 0,
+      "interactiveCount": 10,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "zoom": 1.25,
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=admin&state=firstDraft&long=1",
+      "clientWidth": 1440,
+      "scrollWidth": 1440,
+      "horizontalOverflow": 0,
+      "interactiveCount": 21,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "zoom": 1.5,
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=owner&state=vacancyUpdate&long=1",
+      "clientWidth": 1440,
+      "scrollWidth": 1440,
+      "horizontalOverflow": 0,
+      "interactiveCount": 15,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "zoom": 2,
+      "hash": "#/teams/atlas/interviews/new?surface=create&actor=creator&state=createPublished&long=1",
+      "clientWidth": 1440,
+      "scrollWidth": 1440,
+      "horizontalOverflow": 0,
+      "interactiveCount": 18,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "zoom": 1,
+      "hash": "#/teams/atlas/interviews/new?surface=create&actor=creator&state=createConflict&long=1",
+      "clientWidth": 1366,
+      "scrollWidth": 1366,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "zoom": 1.25,
+      "hash": "#/teams/atlas/interviews/int-204?surface=room&actor=creator&state=programmedRoom&long=1",
+      "clientWidth": 1366,
+      "scrollWidth": 1366,
+      "horizontalOverflow": 0,
+      "interactiveCount": 17,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "zoom": 1.5,
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=member&state=published&long=1",
+      "clientWidth": 1366,
+      "scrollWidth": 1366,
+      "horizontalOverflow": 0,
+      "interactiveCount": 10,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "zoom": 2,
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=admin&state=firstDraft&long=1",
+      "clientWidth": 1366,
+      "scrollWidth": 1366,
+      "horizontalOverflow": 0,
+      "interactiveCount": 21,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "zoom": 1,
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=owner&state=vacancyUpdate&long=1",
+      "clientWidth": 1280,
+      "scrollWidth": 1280,
+      "horizontalOverflow": 0,
+      "interactiveCount": 15,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "zoom": 1.25,
+      "hash": "#/teams/atlas/interviews/new?surface=create&actor=creator&state=createPublished&long=1",
+      "clientWidth": 1280,
+      "scrollWidth": 1280,
+      "horizontalOverflow": 0,
+      "interactiveCount": 18,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "zoom": 1.5,
+      "hash": "#/teams/atlas/interviews/new?surface=create&actor=creator&state=createConflict&long=1",
+      "clientWidth": 1280,
+      "scrollWidth": 1280,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "zoom": 2,
+      "hash": "#/teams/atlas/interviews/int-204?surface=room&actor=creator&state=programmedRoom&long=1",
+      "clientWidth": 1280,
+      "scrollWidth": 1280,
+      "horizontalOverflow": 0,
+      "interactiveCount": 17,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "zoom": 1,
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=member&state=published&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 10,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "zoom": 1.25,
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=admin&state=firstDraft&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 21,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "zoom": 1.5,
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=owner&state=vacancyUpdate&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 15,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "zoom": 2,
+      "hash": "#/teams/atlas/interviews/new?surface=create&actor=creator&state=createPublished&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 18,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 480
+      },
+      "zoom": 1,
+      "hash": "#/teams/atlas/interviews/new?surface=create&actor=creator&state=createConflict&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 480
+      },
+      "zoom": 1.25,
+      "hash": "#/teams/atlas/interviews/int-204?surface=room&actor=creator&state=programmedRoom&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 17,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 480
+      },
+      "zoom": 1.5,
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=member&state=published&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 10,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 480
+      },
+      "zoom": 2,
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=admin&state=firstDraft&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 21,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "zoom": 1,
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=owner&state=vacancyUpdate&long=1",
+      "clientWidth": 768,
+      "scrollWidth": 768,
+      "horizontalOverflow": 0,
+      "interactiveCount": 13,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "zoom": 1.25,
+      "hash": "#/teams/atlas/interviews/new?surface=create&actor=creator&state=createPublished&long=1",
+      "clientWidth": 768,
+      "scrollWidth": 768,
+      "horizontalOverflow": 0,
+      "interactiveCount": 16,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "zoom": 1.5,
+      "hash": "#/teams/atlas/interviews/new?surface=create&actor=creator&state=createConflict&long=1",
+      "clientWidth": 768,
+      "scrollWidth": 768,
+      "horizontalOverflow": 0,
+      "interactiveCount": 17,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "zoom": 2,
+      "hash": "#/teams/atlas/interviews/int-204?surface=room&actor=creator&state=programmedRoom&long=1",
+      "clientWidth": 768,
+      "scrollWidth": 768,
+      "horizontalOverflow": 0,
+      "interactiveCount": 15,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "zoom": 1,
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=member&state=published&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 10,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "zoom": 1.25,
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=admin&state=firstDraft&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 21,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "zoom": 1.5,
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=owner&state=vacancyUpdate&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 15,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "zoom": 2,
+      "hash": "#/teams/atlas/interviews/new?surface=create&actor=creator&state=createPublished&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 18,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 640
+      },
+      "zoom": 1,
+      "hash": "#/teams/atlas/interviews/new?surface=create&actor=creator&state=createConflict&long=1",
+      "clientWidth": 320,
+      "scrollWidth": 320,
+      "horizontalOverflow": 0,
+      "interactiveCount": 17,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 640
+      },
+      "zoom": 1.25,
+      "hash": "#/teams/atlas/interviews/int-204?surface=room&actor=creator&state=programmedRoom&long=1",
+      "clientWidth": 320,
+      "scrollWidth": 320,
+      "horizontalOverflow": 0,
+      "interactiveCount": 15,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 640
+      },
+      "zoom": 1.5,
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=member&state=published&long=1",
+      "clientWidth": 320,
+      "scrollWidth": 320,
+      "horizontalOverflow": 0,
+      "interactiveCount": 8,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 640
+      },
+      "zoom": 2,
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=admin&state=firstDraft&long=1",
+      "clientWidth": 320,
+      "scrollWidth": 320,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 360,
+        "height": 640
+      },
+      "zoom": 1,
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=owner&state=vacancyUpdate&long=1",
+      "clientWidth": 360,
+      "scrollWidth": 360,
+      "horizontalOverflow": 0,
+      "interactiveCount": 13,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 360,
+        "height": 640
+      },
+      "zoom": 1.25,
+      "hash": "#/teams/atlas/interviews/new?surface=create&actor=creator&state=createPublished&long=1",
+      "clientWidth": 360,
+      "scrollWidth": 360,
+      "horizontalOverflow": 0,
+      "interactiveCount": 16,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 360,
+        "height": 640
+      },
+      "zoom": 1.5,
+      "hash": "#/teams/atlas/interviews/new?surface=create&actor=creator&state=createConflict&long=1",
+      "clientWidth": 360,
+      "scrollWidth": 360,
+      "horizontalOverflow": 0,
+      "interactiveCount": 17,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 360,
+        "height": 640
+      },
+      "zoom": 2,
+      "hash": "#/teams/atlas/interviews/int-204?surface=room&actor=creator&state=programmedRoom&long=1",
+      "clientWidth": 360,
+      "scrollWidth": 360,
+      "horizontalOverflow": 0,
+      "interactiveCount": 15,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "zoom": 1,
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=member&state=published&long=1",
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "horizontalOverflow": 0,
+      "interactiveCount": 8,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "zoom": 1.25,
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=admin&state=firstDraft&long=1",
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "zoom": 1.5,
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=owner&state=vacancyUpdate&long=1",
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "horizontalOverflow": 0,
+      "interactiveCount": 13,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "zoom": 2,
+      "hash": "#/teams/atlas/interviews/new?surface=create&actor=creator&state=createPublished&long=1",
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "horizontalOverflow": 0,
+      "interactiveCount": 16,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 667,
+        "height": 375
+      },
+      "zoom": 1,
+      "hash": "#/teams/atlas/interviews/new?surface=create&actor=creator&state=createConflict&long=1",
+      "clientWidth": 667,
+      "scrollWidth": 667,
+      "horizontalOverflow": 0,
+      "interactiveCount": 17,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 667,
+        "height": 375
+      },
+      "zoom": 1.25,
+      "hash": "#/teams/atlas/interviews/int-204?surface=room&actor=creator&state=programmedRoom&long=1",
+      "clientWidth": 667,
+      "scrollWidth": 667,
+      "horizontalOverflow": 0,
+      "interactiveCount": 15,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 667,
+        "height": 375
+      },
+      "zoom": 1.5,
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=member&state=published&long=1",
+      "clientWidth": 667,
+      "scrollWidth": 667,
+      "horizontalOverflow": 0,
+      "interactiveCount": 8,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 667,
+        "height": 375
+      },
+      "zoom": 2,
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=admin&state=firstDraft&long=1",
+      "clientWidth": 667,
+      "scrollWidth": 667,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    }
+  ],
+  "screenshots": [
+    {
+      "name": "member-published",
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=member&state=published&long=1",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "member-published.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 10,
+        "undersized": [],
+        "unnamed": []
+      }
+    },
+    {
+      "name": "admin-none",
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=admin&state=none",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "admin-none.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 11,
+        "undersized": [],
+        "unnamed": []
+      }
+    },
+    {
+      "name": "admin-first-draft",
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=admin&state=firstDraft&long=1",
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "file": "admin-first-draft.png",
+      "geometry": {
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "horizontalOverflow": 0,
+        "interactiveCount": 19,
+        "undersized": [],
+        "unnamed": []
+      }
+    },
+    {
+      "name": "admin-published-draft",
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=admin&state=publishedDraft",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "admin-published-draft.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 22,
+        "undersized": [],
+        "unnamed": []
+      }
+    },
+    {
+      "name": "duplicate-source",
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=owner&state=duplicate",
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "file": "duplicate-source.png",
+      "geometry": {
+        "clientWidth": 1024,
+        "scrollWidth": 1024,
+        "horizontalOverflow": 0,
+        "interactiveCount": 22,
+        "undersized": [],
+        "unnamed": []
+      }
+    },
+    {
+      "name": "stale-publish",
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=admin&state=stale",
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "file": "stale-publish.png",
+      "geometry": {
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "horizontalOverflow": 0,
+        "interactiveCount": 19,
+        "undersized": [],
+        "unnamed": []
+      }
+    },
+    {
+      "name": "vacancy-inherited",
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=member&state=vacancyInherited",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "vacancy-inherited.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 10,
+        "undersized": [],
+        "unnamed": []
+      }
+    },
+    {
+      "name": "vacancy-update",
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=owner&state=vacancyUpdate&long=1",
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "file": "vacancy-update.png",
+      "geometry": {
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "horizontalOverflow": 0,
+        "interactiveCount": 13,
+        "undersized": [],
+        "unnamed": []
+      }
+    },
+    {
+      "name": "programme-archived",
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=admin&state=archived",
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "file": "programme-archived.png",
+      "geometry": {
+        "clientWidth": 1024,
+        "scrollWidth": 1024,
+        "horizontalOverflow": 0,
+        "interactiveCount": 11,
+        "undersized": [],
+        "unnamed": []
+      }
+    },
+    {
+      "name": "programme-restored",
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=owner&state=restored",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "programme-restored.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 12,
+        "undersized": [],
+        "unnamed": []
+      }
+    },
+    {
+      "name": "create-none",
+      "hash": "#/teams/atlas/interviews/new?surface=create&actor=creator&state=createNone",
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "file": "create-none.png",
+      "geometry": {
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "horizontalOverflow": 0,
+        "interactiveCount": 11,
+        "undersized": [],
+        "unnamed": []
+      }
+    },
+    {
+      "name": "create-draft-blocked",
+      "hash": "#/teams/atlas/interviews/new?surface=create&actor=creator&state=createDraft",
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "file": "create-draft-blocked.png",
+      "geometry": {
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "horizontalOverflow": 0,
+        "interactiveCount": 10,
+        "undersized": [],
+        "unnamed": []
+      }
+    },
+    {
+      "name": "create-archive-blocked",
+      "hash": "#/teams/atlas/interviews/new?surface=create&actor=creator&state=createArchived",
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "file": "create-archive-blocked.png",
+      "geometry": {
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "horizontalOverflow": 0,
+        "interactiveCount": 10,
+        "undersized": [],
+        "unnamed": []
+      }
+    },
+    {
+      "name": "create-inherited",
+      "hash": "#/teams/atlas/interviews/new?surface=create&actor=creator&state=vacancyInherited&long=1",
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "file": "create-inherited.png",
+      "geometry": {
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "horizontalOverflow": 0,
+        "interactiveCount": 16,
+        "undersized": [],
+        "unnamed": []
+      }
+    },
+    {
+      "name": "create-conflict",
+      "hash": "#/teams/atlas/interviews/new?surface=create&actor=creator&state=createConflict",
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "file": "create-conflict.png",
+      "geometry": {
+        "clientWidth": 1024,
+        "scrollWidth": 1024,
+        "horizontalOverflow": 0,
+        "interactiveCount": 19,
+        "undersized": [],
+        "unnamed": []
+      }
+    },
+    {
+      "name": "programmed-room",
+      "hash": "#/teams/atlas/interviews/int-204?surface=room&actor=creator&state=programmedRoom&long=1",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "programmed-room.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 17,
+        "undersized": [],
+        "unnamed": []
+      }
+    },
+    {
+      "name": "loading",
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=member&state=loading",
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "file": "loading.png",
+      "geometry": {
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "horizontalOverflow": 0,
+        "interactiveCount": 8,
+        "undersized": [],
+        "unnamed": []
+      }
+    },
+    {
+      "name": "empty-filter",
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=member&state=empty",
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "file": "empty-filter.png",
+      "geometry": {
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "horizontalOverflow": 0,
+        "interactiveCount": 9,
+        "undersized": [],
+        "unnamed": []
+      }
+    },
+    {
+      "name": "error",
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=member&state=error",
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "file": "error.png",
+      "geometry": {
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "horizontalOverflow": 0,
+        "interactiveCount": 9,
+        "undersized": [],
+        "unnamed": []
+      }
+    },
+    {
+      "name": "revoked",
+      "hash": "#/teams/atlas/tracks/frontend/programme?surface=manage&actor=member&state=revoked",
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "file": "revoked.png",
+      "geometry": {
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "horizontalOverflow": 0,
+        "interactiveCount": 9,
+        "undersized": [],
+        "unnamed": []
+      }
+    }
+  ],
+  "roleEvidence": {
+    "member": {
+      "roleVisible": true,
+      "publishedVisible": true,
+      "versionVisible": true,
+      "createVersionCount": 0,
+      "archiveCount": 0
+    },
+    "admin": {
+      "roleVisible": true,
+      "createVersionCount": 1,
+      "archiveCount": 1
+    },
+    "owner": {
+      "roleVisible": true,
+      "createVersionCount": 1,
+      "archiveCount": 1
+    },
+    "creator": {
+      "roleVisible": true,
+      "programmeVisible": true,
+      "createVisible": true
+    }
+  },
+  "interactionEvidence": {
+    "publishDialog": {
+      "visible": true,
+      "futureOnlyText": true,
+      "focusInside": true,
+      "successToast": "Версия v4 опубликована только для будущих интервью."
+    },
+    "discard": {
+      "dialogVisible": true,
+      "allowedOnlyInitialText": true,
+      "noneVisible": true
+    },
+    "archive": {
+      "noFallbackText": true,
+      "blockerVisible": true,
+      "freeChoiceCount": 0,
+      "restoreDialogVisible": true,
+      "restoredVisible": true
+    },
+    "duplicate": {
+      "duplicateRows": 2,
+      "errorVisible": true,
+      "publishDisabled": true
+    },
+    "stale": {
+      "sourceAddressed": true,
+      "noAutomaticReplacement": true,
+      "publishDisabled": true
+    },
+    "vacancyUpdate": {
+      "updateVisible": true,
+      "pinnedBaseVisible": true,
+      "appliedToDraft": true,
+      "futurePublishNeeded": true
+    },
+    "createArchived": {
+      "blockerVisible": true,
+      "noFallbackVisible": true,
+      "freeChoiceCount": 0
+    },
+    "createNone": {
+      "noneVisible": true,
+      "freeChoiceVisible": true
+    },
+    "createPublished": {
+      "mandatoryCount": 3,
+      "mandatoryDeleteCount": 0,
+      "provenanceVisible": true,
+      "duplicateExtraBlocked": true
+    },
+    "createConflict": {
+      "conflictVisible": true,
+      "submitInitiallyDisabled": true,
+      "fieldsPreserved": true,
+      "submitEnabledAfterReview": true
+    },
+    "room": {
+      "pinnedVersionVisible": true,
+      "futureOnlyVisible": true,
+      "mandatoryCount": 3,
+      "mandatoryDeleteCount": 0,
+      "solutionEditable": true,
+      "contextLocked": true
+    }
+  },
+  "resizeTrace": [
+    {
+      "index": 1,
+      "viewport": {
+        "width": 320,
+        "height": 640
+      },
+      "candidatePreserved": true,
+      "titlePreserved": true,
+      "horizontalOverflow": 0
+    },
+    {
+      "index": 2,
+      "viewport": {
+        "width": 360,
+        "height": 480
+      },
+      "candidatePreserved": true,
+      "titlePreserved": true,
+      "horizontalOverflow": 0
+    },
+    {
+      "index": 3,
+      "viewport": {
+        "width": 390,
+        "height": 375
+      },
+      "candidatePreserved": true,
+      "titlePreserved": true,
+      "horizontalOverflow": 0
+    },
+    {
+      "index": 4,
+      "viewport": {
+        "width": 667,
+        "height": 720
+      },
+      "candidatePreserved": true,
+      "titlePreserved": true,
+      "horizontalOverflow": 0
+    },
+    {
+      "index": 5,
+      "viewport": {
+        "width": 320,
+        "height": 640
+      },
+      "candidatePreserved": true,
+      "titlePreserved": true,
+      "horizontalOverflow": 0
+    },
+    {
+      "index": 6,
+      "viewport": {
+        "width": 360,
+        "height": 480
+      },
+      "candidatePreserved": true,
+      "titlePreserved": true,
+      "horizontalOverflow": 0
+    },
+    {
+      "index": 7,
+      "viewport": {
+        "width": 390,
+        "height": 375
+      },
+      "candidatePreserved": true,
+      "titlePreserved": true,
+      "horizontalOverflow": 0
+    },
+    {
+      "index": 8,
+      "viewport": {
+        "width": 667,
+        "height": 720
+      },
+      "candidatePreserved": true,
+      "titlePreserved": true,
+      "horizontalOverflow": 0
+    },
+    {
+      "index": 9,
+      "viewport": {
+        "width": 320,
+        "height": 640
+      },
+      "candidatePreserved": true,
+      "titlePreserved": true,
+      "horizontalOverflow": 0
+    },
+    {
+      "index": 10,
+      "viewport": {
+        "width": 360,
+        "height": 480
+      },
+      "candidatePreserved": true,
+      "titlePreserved": true,
+      "horizontalOverflow": 0
+    },
+    {
+      "index": 11,
+      "viewport": {
+        "width": 390,
+        "height": 375
+      },
+      "candidatePreserved": true,
+      "titlePreserved": true,
+      "horizontalOverflow": 0
+    },
+    {
+      "index": 12,
+      "viewport": {
+        "width": 667,
+        "height": 720
+      },
+      "candidatePreserved": true,
+      "titlePreserved": true,
+      "horizontalOverflow": 0
+    },
+    {
+      "index": 13,
+      "viewport": {
+        "width": 320,
+        "height": 640
+      },
+      "candidatePreserved": true,
+      "titlePreserved": true,
+      "horizontalOverflow": 0
+    },
+    {
+      "index": 14,
+      "viewport": {
+        "width": 360,
+        "height": 480
+      },
+      "candidatePreserved": true,
+      "titlePreserved": true,
+      "horizontalOverflow": 0
+    },
+    {
+      "index": 15,
+      "viewport": {
+        "width": 390,
+        "height": 375
+      },
+      "candidatePreserved": true,
+      "titlePreserved": true,
+      "horizontalOverflow": 0
+    },
+    {
+      "index": 16,
+      "viewport": {
+        "width": 667,
+        "height": 720
+      },
+      "candidatePreserved": true,
+      "titlePreserved": true,
+      "horizontalOverflow": 0
+    },
+    {
+      "index": 17,
+      "viewport": {
+        "width": 320,
+        "height": 640
+      },
+      "candidatePreserved": true,
+      "titlePreserved": true,
+      "horizontalOverflow": 0
+    },
+    {
+      "index": 18,
+      "viewport": {
+        "width": 360,
+        "height": 480
+      },
+      "candidatePreserved": true,
+      "titlePreserved": true,
+      "horizontalOverflow": 0
+    },
+    {
+      "index": 19,
+      "viewport": {
+        "width": 390,
+        "height": 375
+      },
+      "candidatePreserved": true,
+      "titlePreserved": true,
+      "horizontalOverflow": 0
+    },
+    {
+      "index": 20,
+      "viewport": {
+        "width": 667,
+        "height": 720
+      },
+      "candidatePreserved": true,
+      "titlePreserved": true,
+      "horizontalOverflow": 0
+    }
+  ],
+  "keyboard": {
+    "emulationLabelVisible": true,
+    "focusableCount": 16,
+    "visualViewport": {
+      "width": 360,
+      "height": 640
+    },
+    "trace": [
+      {
+        "tag": "A",
+        "name": "К содержанию программы",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "tag": "SELECT",
+        "name": "Поверхность",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "tag": "SELECT",
+        "name": "Актор",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "tag": "SELECT",
+        "name": "Сценарий",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "tag": "INPUT",
+        "name": "Длинный русский текст",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "name": "Отмена",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "tag": "INPUT",
+        "name": "Кандидат",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "tag": "INPUT",
+        "name": "Название",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "tag": "INPUT",
+        "name": "Процесс",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "tag": "INPUT",
+        "name": "Я проверил обязательную основу Frontend v4",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "tag": "BUTTON",
+        "name": "Добавить дополнительную задачу",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "tag": "BUTTON",
+        "name": "Проверить дубликат основы",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "tag": "BUTTON",
+        "name": "Сохранить подготовку",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "name": "Интервью",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "name": "Процессы",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "name": "Библиотека",
+        "outlineWidth": "3px",
+        "visible": true
+      }
+    ],
+    "namedCount": 16,
+    "focusStyledCount": 16
+  }
+}

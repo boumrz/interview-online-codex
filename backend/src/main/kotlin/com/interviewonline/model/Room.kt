@@ -39,6 +39,39 @@ class Room(
     @JoinColumn(name = "owner_user_id")
     var ownerUser: User? = null,
 
+    @Column(name = "created_by_user_id")
+    var createdByUserId: String? = null,
+
+    @Column(name = "team_id")
+    var teamId: String? = null,
+
+    @Column(name = "origin_team_id")
+    var originTeamId: String? = null,
+
+    @Column(name = "team_interview_created", nullable = false)
+    var teamInterviewCreated: Boolean = false,
+
+    @Column(name = "team_track_id")
+    var teamTrackId: String? = null,
+
+    @Column(name = "team_vacancy_id")
+    var teamVacancyId: String? = null,
+
+    @Column(name = "team_task_set_id")
+    var teamTaskSetId: String? = null,
+
+    @Column(name = "team_task_set_revision")
+    var teamTaskSetRevision: Long? = null,
+
+    @Column(name = "team_interview_programme_id")
+    var teamInterviewProgrammeId: String? = null,
+
+    @Column(name = "team_interview_programme_origin", length = 32)
+    var teamInterviewProgrammeOrigin: String? = null,
+
+    @Column(name = "team_interview_programme_version")
+    var teamInterviewProgrammeVersion: Long? = null,
+
     @Column(nullable = false)
     var language: String = "nodejs",
 

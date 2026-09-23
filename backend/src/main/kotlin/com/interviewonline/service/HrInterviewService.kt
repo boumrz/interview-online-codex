@@ -43,6 +43,7 @@ class HrInterviewService(
     companion object {
         val REPORTING_ZONE: ZoneId = ZoneId.of("Europe/Moscow")
         private val STRICT_DATE: Pattern = Pattern.compile("\\d{4}-\\d{2}-\\d{2}")
+        private const val EXPORT_AUTH_CHUNK_SIZE = 500
         const val MAX_EXPORT_INTERVIEWS = 10_000
         const val MAX_EXPORT_TASKS = 100_000
     }
@@ -92,6 +93,23 @@ class HrInterviewService(
             return ExportSnapshot(emptyList(), range, overflow = true, taskCount = taskCount)
         }
         return ExportSnapshot(mapRows(rows), range, overflow = false, taskCount = taskCount)
+    }
+
+    @Transactional(readOnly = true)
+    fun requireExportAccess(user: User, roomIds: Collection<String>) {
+        val stored = requireHr(user)
+        val userId = requireNotNull(stored.id)
+        roomIds.toSet().chunked(EXPORT_AUTH_CHUNK_SIZE).forEach { chunk ->
+            val expected = chunk.toSet()
+            val authorized = queryRepository.findAuthorizedRoomIds(userId, chunk).toSet()
+            if (authorized != expected) {
+                throw ApiException(
+                    HttpStatus.CONFLICT,
+                    "Доступ к выгрузке изменился. Повторите экспорт",
+                    code = "HR_EXPORT_ACCESS_CHANGED",
+                )
+            }
+        }
     }
 
     fun parseRange(fromRaw: String?, toRaw: String?): DateRange {

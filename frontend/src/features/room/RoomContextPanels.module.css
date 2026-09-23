@@ -1,0 +1,445 @@
+.root {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.controls {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #2d3748;
+  background: #111827;
+}
+
+.tabList,
+.secondaryControls,
+.modeControls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.secondaryControls {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+}
+
+.tabList {
+  min-width: 0;
+}
+
+.tabListSpacer {
+  flex: 1 1 auto;
+}
+
+.surfaceTab,
+.modeButton,
+.showBothButton {
+  min-height: 44px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #94a3b8;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.surfaceTab {
+  padding: 0 12px;
+}
+
+.surfaceTab:hover,
+.modeButton:hover:not(:disabled),
+.showBothButton:hover {
+  border-color: #334155;
+  background: #1e293b;
+  color: #e2e8f0;
+}
+
+.surfaceTab:focus-visible,
+.modeButton:focus-visible,
+.showBothButton:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 2px;
+}
+
+.surfaceTabActive {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.16);
+  color: #dbeafe;
+}
+
+.modeControls {
+  flex: 0 0 auto;
+  padding: 3px;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  background: #0f172a;
+}
+
+.modeButton,
+.showBothButton {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+}
+
+.modeButtonActive {
+  border-color: #475569;
+  background: #334155;
+  color: #f8fafc;
+}
+
+.modeButton:disabled {
+  color: #475569;
+  cursor: not-allowed;
+}
+
+.showBothButton {
+  border-color: #3b82f6;
+  color: #dbeafe;
+}
+
+.statusRow {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 0;
+  scrollbar-width: thin;
+}
+
+.statusRoleBadge,
+.statusItem {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 24px;
+  flex: 0 0 auto;
+  align-items: center;
+  border: 1px solid #334155;
+  border-radius: 999px;
+  background: #111827;
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+
+.statusRoleBadge[data-role-tone="blue"] {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.16);
+  color: #dbeafe;
+}
+
+.statusRoleBadge[data-role-tone="teal"] {
+  border-color: #0f766e;
+  background: rgba(15, 118, 110, 0.18);
+  color: #99f6e4;
+}
+
+.surfaceGrid {
+  --room-grid-padding-inline: 12px;
+  --room-grid-padding-bottom: 12px;
+  display: grid;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  gap: 10px;
+  padding: 0 var(--room-grid-padding-inline) var(--room-grid-padding-bottom);
+  overflow: hidden;
+}
+
+.root[data-room-context-mode="focus"] .surfaceGrid {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.root[data-room-context-mode="work"] .surfaceGrid {
+  grid-template-columns: minmax(500px, 1fr) minmax(320px, var(--room-work-auxiliary-width, 0.65fr));
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.root[data-room-context-mode="overview"] .surfaceGrid {
+  grid-template-columns: minmax(240px, 0.7fr) minmax(480px, 1.4fr) minmax(320px, var(--room-overview-right-width, 0.85fr));
+  grid-template-rows: minmax(240px, 0.8fr) minmax(320px, var(--room-overview-chat-height, 1.1fr));
+}
+
+.workWidthSeparator,
+.overviewWidthSeparator,
+.overviewHeightSeparator {
+  position: absolute;
+  z-index: 2;
+  display: block;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(96, 165, 250, 0.48);
+  touch-action: none;
+  cursor: col-resize;
+}
+
+.workWidthSeparator,
+.overviewWidthSeparator {
+  top: 0;
+  bottom: var(--room-grid-padding-bottom);
+  width: 10px;
+  transform: translateX(-50%);
+}
+
+.workWidthSeparator {
+  left: calc(100% - var(--room-grid-padding-inline) - var(--room-work-auxiliary-width) - 5px);
+}
+
+.overviewWidthSeparator {
+  left: calc(100% - var(--room-grid-padding-inline) - var(--room-overview-right-width) - 5px);
+}
+
+.overviewHeightSeparator {
+  right: var(--room-grid-padding-inline);
+  bottom: calc(var(--room-grid-padding-bottom) + var(--room-overview-chat-height) + 5px);
+  width: var(--room-overview-right-width);
+  height: 10px;
+  transform: translateY(50%);
+  cursor: row-resize;
+}
+
+.workWidthSeparator:focus-visible,
+.overviewWidthSeparator:focus-visible,
+.overviewHeightSeparator:focus-visible {
+  outline: 3px solid #60a5fa;
+  outline-offset: -1px;
+  background: #60a5fa;
+}
+
+.surface {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  background: #111827;
+  box-shadow: 0 10px 28px rgba(2, 6, 23, 0.2);
+}
+
+.surface[data-room-context-visible="false"] {
+  position: absolute;
+  width: 0;
+  height: 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.surfaceTitle {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 10px 12px;
+  border-bottom: 1px solid #273449;
+  color: #e2e8f0;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 20px;
+}
+
+.surfaceBody {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.root[data-room-context-mode="overview"] .surface[data-room-context-surface="steps"] {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+
+.root[data-room-context-mode="overview"] .surface[data-room-context-surface="editor"] {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.root[data-room-context-mode="overview"] .surface[data-room-context-surface="activity"] {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.root[data-room-context-mode="overview"] .surface[data-room-context-surface="chat"] {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.root[data-room-context-mode="overview"] .surface[data-room-context-surface="condition"],
+.root[data-room-context-mode="overview"] .surface[data-room-context-surface="notes"] {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+}
+
+.root[data-room-context-narrow-tabs="true"] .controls {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.root[data-room-context-narrow-tabs="true"] .tabList {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.root[data-room-context-narrow-tabs="true"] .surfaceTab {
+  overflow: hidden;
+  padding: 0 6px;
+  text-overflow: ellipsis;
+}
+
+.root[data-room-context-narrow-tabs="true"] .modeControls {
+  align-self: flex-end;
+}
+
+.root[data-room-context-narrow-tabs="true"] .secondaryControls {
+  width: 100%;
+  justify-content: space-between;
+}
+
+@media (max-height: 550px) {
+  .root,
+  .controls,
+  .surfaceGrid {
+    gap: 4px;
+  }
+
+  .controls {
+    padding: 4px 6px;
+  }
+
+  .surfaceGrid {
+    margin-bottom: 2px;
+    --room-grid-padding-inline: 6px;
+    --room-grid-padding-bottom: 2px;
+  }
+
+  .secondaryControls {
+    gap: 4px;
+  }
+
+  .modeControls {
+    gap: 2px;
+  }
+
+  .modeButton,
+  .showBothButton {
+    padding: 0 6px;
+  }
+
+  .surfaceTitle {
+    padding: 6px 10px;
+  }
+}
+
+@media (max-height: 439px) {
+  .root {
+    /* Keep a small rounding reserve at 200% zoom: fractional CSS pixels in
+       form controls must not extend past the clipped room viewport. */
+    height: calc(100dvh - 46px);
+    max-height: calc(100dvh - 46px);
+    flex: 0 0 auto;
+    gap: 0;
+  }
+
+  .surfaceGrid {
+    margin-bottom: 0;
+    --room-grid-padding-bottom: 0px;
+  }
+
+  .statusRow.statusRow {
+    grid-template-columns: 64px minmax(0, 110px) minmax(0, 1fr);
+  }
+
+}
+
+@media (max-height: 650px) {
+  .statusRow {
+    width: 100%;
+    max-width: 100%;
+    height: 40px;
+    flex: 1 1 100%;
+    display: grid;
+    grid-template-columns: 72px minmax(0, 145px) minmax(0, 1fr);
+    grid-template-rows: repeat(2, 20px);
+    gap: 0 4px;
+    overflow: hidden;
+  }
+
+  .statusRoleBadge,
+  .statusItem {
+    width: 100%;
+    max-width: 100%;
+    height: 20px;
+    min-height: 20px;
+    overflow: hidden;
+    padding: 1px 5px;
+    font-size: 10px;
+    line-height: 14px;
+    text-overflow: ellipsis;
+  }
+
+  .statusRoleBadge {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .statusItem[data-testid="room-explicit-connection-status"] {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .statusItem[data-testid="room-local-step-status"] {
+    grid-column: 1 / span 2;
+    grid-row: 2;
+  }
+
+  .statusItem[data-testid="room-published-step-status"] {
+    grid-column: 3;
+    grid-row: 2;
+  }
+
+  .statusItem[data-testid="room-candidate-presence-status"] {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .surfaceTitle {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}

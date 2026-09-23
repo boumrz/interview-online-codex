@@ -76,6 +76,9 @@ class RoomTask(
     var sourceTaskTemplateId: String? = null,
 
     @Column(nullable = false)
+    var mandatory: Boolean = false,
+
+    @Column(nullable = false)
     var language: String = "nodejs",
 
     @Column(name = "category_name")

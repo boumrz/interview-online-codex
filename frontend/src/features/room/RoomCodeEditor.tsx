@@ -139,6 +139,8 @@ export function RoomCodeEditor({
   };
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const editorScrollSnapshotRef = useRef({ scrollTop: 0, scrollLeft: 0 });
+  const editorScrollRestorePendingRef = useRef(false);
   const yDocRef = useRef<Y.Doc | null>(null);
   const yTextRef = useRef<Y.Text | null>(null);
   const lastHandledResyncSignalRef = useRef(0);
@@ -424,6 +426,68 @@ export function RoomCodeEditor({
     if (hostElement) {
       hostElement.__roomEditorView = view;
     }
+    const scroller = view.scrollDOM;
+    let lastScrollViewport = { width: scroller.clientWidth, height: scroller.clientHeight };
+    let lastVerticalScrollIntentAt = -Infinity;
+    let lastHorizontalScrollIntentAt = -Infinity;
+    const markScrollIntent = () => {
+      lastVerticalScrollIntentAt = performance.now();
+      lastHorizontalScrollIntentAt = lastVerticalScrollIntentAt;
+    };
+    const onWheel = (event: WheelEvent) => {
+      if (event.deltaY !== 0) lastVerticalScrollIntentAt = performance.now();
+      if (event.deltaX !== 0 || event.shiftKey) lastHorizontalScrollIntentAt = performance.now();
+    };
+    const rememberEditorScroll = () => {
+      if (scroller.clientWidth === 0 || scroller.clientHeight === 0) return;
+      const previous = editorScrollSnapshotRef.current;
+      if (scroller.scrollTop > previous.scrollTop || scroller.scrollLeft > previous.scrollLeft) {
+        editorScrollSnapshotRef.current = {
+          scrollTop: Math.max(previous.scrollTop, scroller.scrollTop),
+          scrollLeft: Math.max(previous.scrollLeft, scroller.scrollLeft),
+        };
+      }
+      if (editorScrollRestorePendingRef.current) return;
+      if (scroller.clientWidth !== lastScrollViewport.width || scroller.clientHeight !== lastScrollViewport.height) {
+        restoreEditorScroll();
+        return;
+      }
+      const snapshot = editorScrollSnapshotRef.current;
+      editorScrollSnapshotRef.current = {
+        scrollTop: scroller.scrollHeight > scroller.clientHeight &&
+          (scroller.scrollTop >= snapshot.scrollTop || performance.now() - lastVerticalScrollIntentAt < 1_000)
+          ? scroller.scrollTop : snapshot.scrollTop,
+        scrollLeft: scroller.scrollWidth > scroller.clientWidth &&
+          (scroller.scrollLeft >= snapshot.scrollLeft || performance.now() - lastHorizontalScrollIntentAt < 1_000)
+          ? scroller.scrollLeft : snapshot.scrollLeft,
+      };
+    };
+    const restoreEditorScroll = () => {
+      if (editorScrollRestorePendingRef.current) return;
+      if (scroller.clientWidth === 0 || scroller.clientHeight === 0) return;
+      editorScrollRestorePendingRef.current = true;
+      window.requestAnimationFrame(() => {
+        scroller.scrollTop = editorScrollSnapshotRef.current.scrollTop;
+        scroller.scrollLeft = editorScrollSnapshotRef.current.scrollLeft;
+        window.requestAnimationFrame(() => {
+          editorScrollRestorePendingRef.current = false;
+          lastScrollViewport = { width: scroller.clientWidth, height: scroller.clientHeight };
+        });
+      });
+    };
+    scroller.addEventListener("scroll", rememberEditorScroll, {
+      passive: true,
+    });
+    scroller.addEventListener("wheel", onWheel, { passive: true });
+    scroller.addEventListener("pointerdown", markScrollIntent);
+    scroller.addEventListener("keydown", markScrollIntent);
+    window.addEventListener("resize", restoreEditorScroll);
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(restoreEditorScroll);
+    resizeObserver?.observe(scroller);
+    if (hostRef.current) resizeObserver?.observe(hostRef.current);
     onEditorValueChangeRef.current(view.state.doc.toString());
 
     syncKeyRef.current = syncKey;
@@ -491,6 +555,12 @@ export function RoomCodeEditor({
       window.clearInterval(heartbeatId);
       yDoc.off("update", handleDocUpdate);
       awareness.off("update", onAwarenessChanged);
+      scroller.removeEventListener("scroll", rememberEditorScroll);
+      scroller.removeEventListener("wheel", onWheel);
+      scroller.removeEventListener("pointerdown", markScrollIntent);
+      scroller.removeEventListener("keydown", markScrollIntent);
+      window.removeEventListener("resize", restoreEditorScroll);
+      resizeObserver?.disconnect();
       if (awarenessFlushTimer != null) window.clearTimeout(awarenessFlushTimer);
       onYjsSnapshotBridgeReady?.(null);
       onAwarenessBridgeReady(null);

@@ -44,8 +44,11 @@ class HrWorkbookService(
             if (snapshot.overflow) {
                 throw ApiException(HttpStatus.PAYLOAD_TOO_LARGE, "Слишком много данных. Уменьшите диапазон дат")
             }
+            val bytes = render(snapshot.interviews, snapshot.range, deadline)
+            interviewService.requireExportAccess(user, snapshot.interviews.map { it.roomId })
+            ensureBeforeDeadline(deadline)
             return HrWorkbookResult(
-                render(snapshot.interviews, snapshot.range, deadline),
+                bytes,
                 snapshot.interviews.size,
             )
         } finally {

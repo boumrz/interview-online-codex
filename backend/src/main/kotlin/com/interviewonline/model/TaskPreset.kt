@@ -17,6 +17,12 @@ class TaskPreset(
     @Column(nullable = false)
     var name: String = "",
 
+    @Column(nullable = false)
+    var status: String = "ACTIVE",
+
+    @Column(nullable = false)
+    var revision: Long = 0,
+
     @OneToMany(
         mappedBy = "preset",
         cascade = [CascadeType.ALL],
@@ -28,4 +34,7 @@ class TaskPreset(
 
     @Column(name = "created_at", nullable = false)
     var createdAt: Instant = Instant.now(),
+
+    @Column(name = "updated_at", nullable = false)
+    var updatedAt: Instant = Instant.now(),
 )

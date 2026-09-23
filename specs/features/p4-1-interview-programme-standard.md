@@ -1,0 +1,41 @@
+### P4.1 Стандарт трека/вакансии
+
+Цель: владелец/админ задаёт обязательную программу интервью для трека или вакансии.
+
+Готово:
+
+- backend добавляет отдельное хранилище `team_interview_programmes` +
+  `team_interview_programme_items`, поэтому отсутствие программы возвращается
+  как `programme: null`, а не как автоматически созданная пустая программа;
+- для track-level программы доступны preview, draft-save, publish,
+  archive/restore; ответы показывают `origin`, `targetType`, `targetId`,
+  `status`, `version`, `revision`, `mandatory` и упорядоченные mandatory tasks;
+- vacancy-level программа использует тот же lifecycle; если у вакансии нет
+  собственной программы, preview/list возвращает inherited track programme с
+  `origin: TRACK`, а после публикации собственной версии — `origin: VACANCY`;
+- draft-save требует непустой список активных задач команды, отклоняет дубли,
+  stale revision и попытку MEMBER менять стандарт;
+- publish увеличивает версию, archive/restore меняют только статус/revision;
+- создание TEAM-интервью с выбранным треком/вакансией останавливается до записи
+  комнаты, если resolved programme архивирована (`409 TEAM_PROGRAMME_ARCHIVED`);
+- UI раздела "Треки и вакансии" показывает происхождение программы, версию,
+  статус, обязательность и список mandatory tasks; inherited vacancy programme
+  помечается как унаследованная от трека, собственная vacancy programme
+  отображается отдельно;
+- UI управления программой доступен владельцу/админу в карточке трека или
+  вакансии: можно выбрать задачи, сохранить draft, publish, archive и restore
+  с проверкой текущей revision;
+- проверка:
+  - backend `TeamTrackVacancyIntegrationTest` — зелёный `5/5`;
+  - backend `TeamInterviewCreationIntegrationTest` — зелёный `22/22`;
+  - frontend `npm run typecheck` — зелёный;
+- frontend isolated E2E-сценарии для read-only отображения и lifecycle-управления
+    программы прошли `2/2` на отдельном runtime.
+
+Следующее развитие программы описано отдельно в P4.2.
+
+Acceptance:
+
+- пользователь видит происхождение, версию и обязательность;
+- обязательные задачи не выглядят редактируемыми в интервью;
+- архив программы блокирует создание с объяснением.

@@ -100,15 +100,15 @@ test("profile uses the hiring-manager term and confirmed opt-out removes only ca
     await page.getByLabel(/^Пароль(?:\s*\*)?$/).fill("test-password-123");
     await capability.check();
     await page.getByRole("button", { name: "Создать аккаунт", exact: true }).click();
-    await page.waitForURL(/\/dashboard\//);
-    await page.getByRole("button", { name: "Кабинет нанимающего", exact: true }).waitFor();
+    await page.waitForURL("**/workspace/personal/interviews/new");
+    await page.getByRole("link", { name: "Кандидаты", exact: true }).waitFor();
 
     const token = await page.evaluate(() => localStorage.getItem("auth_token"));
     const profile = await request("/me/profile", { token });
     const room = await createInterview({ token });
     await request(`/rooms/${room.inviteCode}/hr-tracking`, { token, method: "POST" });
 
-    await page.goto(`${web}/dashboard/rooms`);
+    await page.goto(`${web}/profile`);
     const profileToggle = page.getByRole("checkbox", { name: "Я нанимающий", exact: true });
     await profileToggle.waitFor();
     assert.equal(await profileToggle.isChecked(), true);
@@ -150,7 +150,7 @@ test("profile uses the hiring-manager term and confirmed opt-out removes only ca
     assert.equal(staleSaveRequests, 1, "A delayed save must not retry itself");
     assert.equal(await profileToggle.isChecked(), true,
       "A response for a replaced session must not apply a stale capability value");
-    assert.equal(await page.getByRole("button", { name: "Кабинет нанимающего", exact: true }).count(), 1);
+    assert.equal(await page.getByRole("link", { name: "Кандидаты", exact: true }).count(), 1);
     await page.evaluate((currentToken) => localStorage.setItem("auth_token", currentToken), token);
     await page.unroute("**/api/me/profile", delayedStaleSave);
     const rejectedSave = (route) => route.fulfill({
@@ -167,7 +167,7 @@ test("profile uses the hiring-manager term and confirmed opt-out removes only ca
 
     await profileToggle.uncheck();
     await page.getByRole("button", { name: "Сохранить профиль", exact: true }).click();
-    await page.getByRole("button", { name: "Кабинет нанимающего", exact: true }).waitFor({ state: "hidden" });
+    await page.getByRole("link", { name: "Кандидаты", exact: true }).waitFor({ state: "hidden" });
     await request("/me/hr/rooms", { token, status: 403 });
     await request(`/me/hr/rooms/${room.id}`, { token, status: 403 });
     await request("/me/hr/rooms/export", { token, status: 403 });
@@ -178,15 +178,16 @@ test("profile uses the hiring-manager term and confirmed opt-out removes only ca
     await page.getByLabel(/^Ник(?:\s*\*)?$/).fill(nickname);
     await page.getByLabel(/^Пароль(?:\s*\*)?$/).fill("test-password-123");
     await page.getByRole("button", { name: "Войти в кабинет", exact: true }).click();
-    await page.waitForURL(/\/dashboard\//);
-    assert.equal(await page.getByRole("button", { name: "Кабинет нанимающего", exact: true }).count(), 0);
+    await page.waitForURL("**/workspace/personal/interviews/new");
+    assert.equal(await page.getByRole("link", { name: "Кандидаты", exact: true }).count(), 0);
     const disabledProfile = await request("/me/profile", { token });
     assert.equal(disabledProfile.isHr, false);
     assert.equal(disabledProfile.id, profile.id, "Opt-out must not rotate the invitation UUID");
+    await page.getByRole("link", { name: `Открыть профиль @${nickname}` }).click();
     const reenabledToggle = page.getByRole("checkbox", { name: "Я нанимающий", exact: true });
     await reenabledToggle.check();
     await page.getByRole("button", { name: "Сохранить профиль", exact: true }).click();
-    await page.getByRole("button", { name: "Кабинет нанимающего", exact: true }).waitFor();
+    await page.getByRole("link", { name: "Кандидаты", exact: true }).waitFor();
     const reenabledProfile = await request("/me/profile", { token });
     assert.equal(reenabledProfile.isHr, true);
     assert.equal(reenabledProfile.id, profile.id, "Re-enabling must preserve the same invitation UUID");
@@ -239,7 +240,7 @@ test("authenticated creator adds verified hiring people one at a time and submit
     const { page, context } = await openAccount(browser, owner, "/dashboard/rooms");
     try {
       const title = `Комната с подборщиком ${unique()}`;
-      await page.getByLabel(/^Название комнаты(?:\s*\*)?$/).fill(title);
+      await page.getByLabel("Название интервью", { exact: true }).fill(title);
       const input = page.getByLabel("ID нанимающего", { exact: true });
       await input.waitFor();
       assert.equal(await input.getAttribute("placeholder"), "UUID нанимающего");
@@ -279,7 +280,7 @@ test("authenticated creator adds verified hiring people one at a time and submit
       await page.getByText("Проверяем нанимающего…", { exact: true }).waitFor();
       assert.equal(await input.isDisabled(), true);
       assert.equal(await add.isDisabled(), true);
-      assert.equal(await page.getByRole("button", { name: "Создать и открыть", exact: true }).isDisabled(), false);
+      assert.equal(await page.getByRole("button", { name: "Создать и открыть комнату", exact: true }).isDisabled(), false);
       releaseFirstPreview();
       await page.getByText(`Нанимающий добавлен: ${firstManager.user.displayName}`, { exact: true }).waitFor();
       await page.getByRole("heading", { name: "Добавленные нанимающие", exact: true }).waitFor();
@@ -312,7 +313,7 @@ test("authenticated creator adds verified hiring people one at a time and submit
       const submitted = page.waitForRequest((request) =>
         request.url().endsWith("/api/rooms") && request.method() === "POST",
       );
-      await page.getByRole("button", { name: "Создать и открыть", exact: true }).click();
+      await page.getByRole("button", { name: "Создать и открыть комнату", exact: true }).click();
       assert.deepEqual(JSON.parse((await submitted).postData() ?? "{}"), {
         title,
         taskIds: [],
@@ -336,7 +337,7 @@ test("room creation excludes an ID whose hiring preview is still pending", { tim
       const title = `Комната с pending подборщиком ${unique()}`;
       const input = page.getByLabel("ID нанимающего", { exact: true });
       const add = page.getByRole("button", { name: "Добавить", exact: true });
-      await page.getByLabel(/^Название комнаты(?:\s*\*)?$/).fill(title);
+      await page.getByLabel("Название интервью", { exact: true }).fill(title);
 
       let releasePendingPreview;
       const pendingPreviewRelease = new Promise((resolve) => { releasePendingPreview = resolve; });
@@ -376,7 +377,7 @@ test("room creation excludes an ID whose hiring preview is still pending", { tim
       const submitted = page.waitForRequest((request) =>
         request.url().endsWith("/api/rooms") && request.method() === "POST",
       );
-      await page.getByRole("button", { name: "Создать и открыть", exact: true }).click();
+      await page.getByRole("button", { name: "Создать и открыть комнату", exact: true }).click();
       assert.deepEqual(JSON.parse((await submitted).postData() ?? "{}"), {
         title,
         taskIds: [],
@@ -523,7 +524,7 @@ test("stale room validation retains selections and disables picker controls whil
     const { page, context } = await openAccount(browser, owner, "/dashboard/rooms");
     try {
       const title = `Комната с устаревшим нанимающим ${unique()}`;
-      await page.getByLabel(/^Название комнаты(?:\s*\*)?$/).fill(title);
+      await page.getByLabel("Название интервью", { exact: true }).fill(title);
       const input = page.getByLabel("ID нанимающего", { exact: true });
       const add = page.getByRole("button", { name: "Добавить", exact: true });
       await input.fill(manager.user.id);
@@ -543,14 +544,14 @@ test("stale room validation retains selections and disables picker controls whil
           body: JSON.stringify({ error: "Указанный нанимающий не найден или недоступен" }),
         });
       });
-      await page.getByRole("button", { name: "Создать и открыть", exact: true }).click();
+      await page.getByRole("button", { name: "Создать и открыть комнату", exact: true }).click();
       await createStarted;
       assert.equal(await input.isDisabled(), true);
       assert.equal(await add.isDisabled(), true);
       assert.equal(await page.getByRole("button", { name: `Удалить нанимающего ${manager.user.displayName}`, exact: true }).isDisabled(), true);
       releaseCreate();
       await page.getByTestId("create-room-card").getByText("Указанный нанимающий не найден или недоступен", { exact: true }).waitFor();
-      assert.equal(await page.getByLabel(/^Название комнаты(?:\s*\*)?$/).inputValue(), title);
+      assert.equal(await page.getByLabel("Название интервью", { exact: true }).inputValue(), title);
       await page.getByText(manager.user.displayName, { exact: true }).waitFor();
     } finally {
       await context.close();
@@ -565,7 +566,7 @@ test("authenticated creation with an empty hiring-manager field remains a normal
     const { page, context } = await openAccount(browser, owner, "/dashboard/rooms");
     try {
       const title = `Комната без менеджера ${unique()}`;
-      await page.getByLabel(/^Название комнаты(?:\s*\*)?$/).fill(title);
+      await page.getByLabel("Название интервью", { exact: true }).fill(title);
       const targets = page.getByLabel("ID нанимающего", { exact: true });
       await targets.waitFor();
       assert.equal(await targets.inputValue(), "");
@@ -573,7 +574,7 @@ test("authenticated creation with an empty hiring-manager field remains a normal
       const submitted = page.waitForRequest((request) =>
         request.url().endsWith("/api/rooms") && request.method() === "POST",
       );
-      await page.getByRole("button", { name: "Создать и открыть", exact: true }).click();
+      await page.getByRole("button", { name: "Создать и открыть комнату", exact: true }).click();
       assert.deepEqual(JSON.parse((await submitted).postData() ?? "{}"), {
         title,
         taskIds: [],
@@ -602,8 +603,8 @@ test("hiring-manager registration is only an optional checkbox; identity persist
     await page.getByLabel(/^Пароль(?:\s*\*)?$/).fill("test-password-123");
     await checkbox.check();
     await page.getByRole("button", { name: "Создать аккаунт", exact: true }).click();
-    await page.waitForURL(/\/dashboard\//);
-    await page.getByRole("button", { name: "Кабинет нанимающего", exact: true }).click();
+    await page.waitForURL("**/workspace/personal/interviews/new");
+    await page.getByRole("link", { name: "Кандидаты", exact: true }).click();
     await page.getByRole("heading", { name: "Кандидаты и интервью", exact: true }).waitFor();
     const token = await page.evaluate(() => localStorage.getItem("auth_token"));
     const profile = await request("/me/profile", { token });
@@ -616,13 +617,13 @@ test("hiring-manager registration is only an optional checkbox; identity persist
 
     const ordinary = await account(false, "Пользователь без роли менеджера");
     assert.equal(ordinary.user.isHr, false);
-    const existing = await openAccount(browser, ordinary, "/dashboard/rooms");
-    assert.equal(await existing.page.getByRole("button", { name: "Кабинет нанимающего", exact: true }).count(), 0);
+    const existing = await openAccount(browser, ordinary, "/profile");
+    assert.equal(await existing.page.getByRole("link", { name: "Кандидаты", exact: true }).count(), 0);
     await existing.page.getByRole("checkbox", { name: "Я нанимающий", exact: true }).check();
     await existing.page.getByRole("button", { name: "Сохранить профиль", exact: true }).click();
-    await existing.page.getByRole("button", { name: "Кабинет нанимающего", exact: true }).waitFor();
+    await existing.page.getByRole("link", { name: "Кандидаты", exact: true }).waitFor();
     await existing.page.reload();
-    await existing.page.getByRole("button", { name: "Кабинет нанимающего", exact: true }).waitFor();
+    await existing.page.getByRole("link", { name: "Кандидаты", exact: true }).waitFor();
     const updated = await request("/me/profile", { token: ordinary.token });
     assert.equal(updated.isHr, true);
     assert.equal(updated.id, ordinary.user.id);
@@ -853,8 +854,8 @@ test("switching hiring-manager accounts in one browser clears the previous cabin
       await page.getByLabel(/^Ник(?:\s*\*)?$/).fill(hr.user.nickname);
       await page.getByLabel(/^Пароль(?:\s*\*)?$/).fill("test-password-123");
       await page.getByRole("button", { name: "Войти в кабинет", exact: true }).click();
-      await page.waitForURL(/\/dashboard\//);
-      await page.getByRole("button", { name: "Кабинет нанимающего", exact: true }).click();
+      await page.waitForURL("**/workspace/personal/interviews/new");
+      await page.getByRole("link", { name: "Кандидаты", exact: true }).click();
       await page.getByRole("heading", { name: "Кандидаты и интервью", exact: true }).waitFor();
     };
     await login(firstHr);

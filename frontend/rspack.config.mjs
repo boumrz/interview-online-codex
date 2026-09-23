@@ -25,7 +25,11 @@ export default defineConfig({
       {
         context: ["/api"],
         target: process.env.DEV_API_PROXY_TARGET ?? "http://localhost:8080",
-        changeOrigin: true
+        changeOrigin: true,
+        onProxyReq(proxyReq, req, res) {
+          if (!/^\/api\/realtime\/rooms\/[^/]+\/stream(?:\?|$)/.test(req.url ?? "")) return;
+          res.once("close", () => proxyReq.destroy());
+        }
       }
     ]
   },
@@ -75,6 +79,8 @@ export default defineConfig({
     new rspack.DefinePlugin({
       __FEATURE_AGENT_OPS__: JSON.stringify(process.env.FEATURE_AGENT_OPS ?? "false"),
       "process.env.FEATURE_AGENT_OPS": JSON.stringify(process.env.FEATURE_AGENT_OPS ?? "false"),
+      "process.env.FEATURE_TEAM_WORKSPACES": JSON.stringify(process.env.FEATURE_TEAM_WORKSPACES ?? "false"),
+      "process.env.FEATURE_TEAM_MERGE_COMMIT": JSON.stringify(process.env.FEATURE_TEAM_MERGE_COMMIT ?? "false"),
       "process.env.VITE_API_BASE_URL": JSON.stringify(process.env.VITE_API_BASE_URL ?? "/api"),
       "process.env.VITE_LEGACY_PUBLIC_DOMAIN": JSON.stringify(
         process.env.VITE_LEGACY_PUBLIC_DOMAIN ?? "interview.domiknote.ru"

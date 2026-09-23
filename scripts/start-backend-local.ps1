@@ -4,6 +4,10 @@ $Root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $Maven = Join-Path $Root ".tools\apache-maven-3.9.9\bin\mvn.cmd"
 if (-not (Test-Path $Maven)) { $Maven = "mvn" }
 
+if ([string]::IsNullOrWhiteSpace($env:CHAT_RECEIPT_HMAC_SECRET)) {
+  Write-Error "CHAT_RECEIPT_HMAC_SECRET обязателен (стабильный Base64URL secret из 32 байт; см. README)."
+}
+
 $jdk = "C:\Program Files\Java\jdk-17"
 if (Test-Path $jdk) { $env:JAVA_HOME = $jdk }
 

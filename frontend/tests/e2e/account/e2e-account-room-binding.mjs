@@ -113,6 +113,12 @@ function escapeRegExp(value) {
 }
 
 async function openRoomToolsPanelIfAvailable(page) {
+  const directChatTab = page.getByRole("tab", { name: "Чат", exact: true });
+  const directChatVisible = await directChatTab.isVisible().catch(() => false);
+  if (directChatVisible) {
+    await directChatTab.click();
+    return;
+  }
   const roomToolsButton = page.locator('[data-testid="room-rail-tools"]');
   const isVisible = await roomToolsButton.isVisible().catch(() => false);
   if (!isVisible) return;
@@ -234,6 +240,7 @@ try {
 
   // Owner switches task; guest role should stay interviewer after refresh.
   await ownerPage.bringToFront();
+  await ownerPage.getByRole("tab", { name: "Шаги", exact: true }).click();
   await ownerPage.getByRole("button", { name: /2\./ }).first().click();
   await ownerPage.waitForTimeout(250);
   await guestPage.reload({ waitUntil: "domcontentloaded" });

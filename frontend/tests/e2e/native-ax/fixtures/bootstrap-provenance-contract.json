@@ -1,0 +1,35 @@
+{
+  "bootstrapSource": "Sources/BrowserLeaseBootstrap/main.swift",
+  "requiredTokens": [
+    "getpid()",
+    "openat(",
+    "O_CREAT | O_EXCL",
+    "execve("
+  ],
+  "forbiddenTokens": [
+    "AXUIElement",
+    "AXIsProcessTrusted",
+    "kAXRaiseAction",
+    "browser._",
+    "_browser",
+    "_connection",
+    "childProcess",
+    "internal/",
+    "chromium.connect",
+    "connect(",
+    "connectOverCDP",
+    "DevToolsActivePort",
+    "ws://",
+    "http://127.0.0.1",
+    "remote-debugging",
+    "ps ",
+    "pgrep",
+    "NSWorkspace.shared",
+    "runningApplications",
+    "CGWindowListCopyWindowInfo",
+    "localizedName",
+    "bundleIdentifier",
+    "document.title",
+    "page.url("
+  ]
+}

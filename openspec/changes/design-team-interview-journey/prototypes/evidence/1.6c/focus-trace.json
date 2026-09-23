@@ -1,0 +1,66 @@
+{
+  "trace": [
+    {
+      "name": "← К интервью · Atlas · Команда интерфейсных платформ для международных продуктов",
+      "tag": "A",
+      "outlineWidth": "3px",
+      "visible": true
+    },
+    {
+      "name": "КДРедактор",
+      "tag": "BUTTON",
+      "outlineWidth": "3px",
+      "visible": true
+    },
+    {
+      "name": "ШГШаги",
+      "tag": "BUTTON",
+      "outlineWidth": "3px",
+      "visible": true
+    },
+    {
+      "name": "УСУсловие",
+      "tag": "BUTTON",
+      "outlineWidth": "3px",
+      "visible": true
+    },
+    {
+      "name": "Мои заметки",
+      "tag": "BUTTON",
+      "outlineWidth": "3px",
+      "visible": true
+    },
+    {
+      "name": "ЧТЧат2",
+      "tag": "BUTTON",
+      "outlineWidth": "3px",
+      "visible": true
+    },
+    {
+      "name": "АКАктивность",
+      "tag": "BUTTON",
+      "outlineWidth": "3px",
+      "visible": true
+    },
+    {
+      "name": "Закрыть условие и вернуться в редактор",
+      "tag": "BUTTON",
+      "outlineWidth": "3px",
+      "visible": true
+    },
+    {
+      "name": "Открыть чат",
+      "tag": "BUTTON",
+      "outlineWidth": "3px",
+      "visible": true
+    },
+    {
+      "name": "Открыть активность",
+      "tag": "BUTTON",
+      "outlineWidth": "3px",
+      "visible": true
+    }
+  ],
+  "visibleFocusCount": 10,
+  "namedCount": 10
+}

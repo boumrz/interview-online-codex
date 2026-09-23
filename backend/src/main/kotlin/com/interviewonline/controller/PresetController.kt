@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 
@@ -26,9 +27,12 @@ class PresetController(
     private val userPresetService: UserPresetService,
 ) {
     @GetMapping
-    fun listPresets(@RequestHeader("Authorization", required = false) authorization: String?): List<PresetSummaryDto> {
+    fun listPresets(
+        @RequestHeader("Authorization", required = false) authorization: String?,
+        @RequestParam("status", required = false) status: String?,
+    ): List<PresetSummaryDto> {
         val user = authService.requireUserByToken(authorization?.removePrefix("Bearer ")?.trim())
-        return userPresetService.listPresets(user)
+        return userPresetService.listPresets(user, status)
     }
 
     @GetMapping("/{id}")
@@ -58,6 +62,34 @@ class PresetController(
     ): PresetDetailDto {
         val user = authService.requireUserByToken(authorization?.removePrefix("Bearer ")?.trim())
         return userPresetService.updatePreset(user, id, request)
+    }
+
+    @PostMapping("/{id}/copy")
+    @ResponseStatus(HttpStatus.CREATED)
+    fun copyPreset(
+        @RequestHeader("Authorization", required = false) authorization: String?,
+        @PathVariable id: String,
+    ): PresetDetailDto {
+        val user = authService.requireUserByToken(authorization?.removePrefix("Bearer ")?.trim())
+        return userPresetService.copyPreset(user, id)
+    }
+
+    @PostMapping("/{id}/archive")
+    fun archivePreset(
+        @RequestHeader("Authorization", required = false) authorization: String?,
+        @PathVariable id: String,
+    ): PresetDetailDto {
+        val user = authService.requireUserByToken(authorization?.removePrefix("Bearer ")?.trim())
+        return userPresetService.archivePreset(user, id)
+    }
+
+    @PostMapping("/{id}/restore")
+    fun restorePreset(
+        @RequestHeader("Authorization", required = false) authorization: String?,
+        @PathVariable id: String,
+    ): PresetDetailDto {
+        val user = authService.requireUserByToken(authorization?.removePrefix("Bearer ")?.trim())
+        return userPresetService.restorePreset(user, id)
     }
 
     @DeleteMapping("/{id}")

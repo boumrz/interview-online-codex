@@ -1,14 +1,20 @@
 package com.interviewonline.service
 
 import com.interviewonline.model.Room
+import com.interviewonline.model.RoomStatus
 import com.interviewonline.model.User
 import com.interviewonline.repository.RoomParticipantRepository
+import com.interviewonline.repository.TeamMembershipRepository
+import com.interviewonline.repository.TeamRepository
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 
 @Service
 class RoomAccessService(
     private val roomParticipantRepository: RoomParticipantRepository,
+    private val teamMembershipRepository: TeamMembershipRepository,
+    private val teamRepository: TeamRepository,
+    private val teamRoomLineageService: TeamRoomLineageService,
 ) {
     enum class RoomRole(val wireValue: String) {
         OWNER("owner"),
@@ -35,6 +41,12 @@ class RoomAccessService(
             get() = role.canGrantAccess
     }
 
+    fun requirePersonalScope(room: Room) {
+        if (room.teamId != null) {
+            throw roomNotFound()
+        }
+    }
+
     fun resolveAccess(
         room: Room,
         user: User?,
@@ -42,6 +54,10 @@ class RoomAccessService(
         interviewerToken: String? = null,
         realtimeRoleOverride: RoomRole? = null,
     ): RoomAccess {
+        if (room.teamId != null) {
+            if (!ownerToken.isNullOrBlank() || !interviewerToken.isNullOrBlank()) throw roomNotFound()
+            return resolveTeamAccess(room, user)
+        }
         if (room.archivedAt != null) {
             throw ApiException(HttpStatus.GONE, "Комната архивирована")
         }
@@ -107,5 +123,32 @@ class RoomAccessService(
             RoomRole.INTERVIEWER.wireValue -> RoomRole.INTERVIEWER
             else -> RoomRole.CANDIDATE
         }
+    }
+
+    private fun resolveTeamAccess(room: Room, user: User?): RoomAccess {
+        val teamId = room.teamId ?: throw roomNotFound()
+        if (!teamRoomLineageService.isCanonical(room)) {
+            throw roomNotFound()
+        }
+        if (room.archivedAt != null) throw roomNotFound()
+        teamRepository.findById(teamId).orElse(null)?.takeIf { it.state == ACTIVE }
+            ?: throw roomNotFound()
+        val roomId = room.id ?: throw roomNotFound()
+        val userId = user?.id
+        val membership = userId?.let { teamMembershipRepository.findByTeamIdAndUserId(teamId, it) }
+        val participant = userId?.let { roomParticipantRepository.findByRoomIdAndUserId(roomId, it) }
+        if (membership != null && (membership.state != ACTIVE || participant == null)) throw roomNotFound()
+        if (participant != null && membership == null) throw roomNotFound()
+        val role = participant?.let { normalizeRole(it.role) } ?: RoomRole.CANDIDATE
+        if (room.status == RoomStatus.FROZEN.wireValue && role == RoomRole.CANDIDATE) {
+            throw roomNotFound()
+        }
+        return RoomAccess(role)
+    }
+
+    private fun roomNotFound() = ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+
+    private companion object {
+        const val ACTIVE = "ACTIVE"
     }
 }

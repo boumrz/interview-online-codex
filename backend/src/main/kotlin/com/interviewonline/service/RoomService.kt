@@ -17,6 +17,7 @@ import com.interviewonline.dto.SetVerdictRequest
 import com.interviewonline.dto.UpdateRoomTaskRequest
 import com.interviewonline.dto.UpdateRoomTaskWorkspaceRequest
 import com.interviewonline.model.Room
+import com.interviewonline.model.RoomStatus
 import com.interviewonline.model.VerdictValue
 import com.interviewonline.model.RoomParticipant
 import com.interviewonline.model.RoomTask
@@ -171,7 +172,7 @@ class RoomService(
         val room = roomRepository.findByInviteCode(inviteCode)
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
         val access = roomAccessService.resolveAccess(room, user, ownerToken, interviewerToken)
-        val exposeLegacyTokens = room.ownerUser == null
+        val exposeLegacyTokens = room.teamId == null && room.ownerUser == null
         return toRoomResponse(
             room = room,
             access = access,
@@ -233,16 +234,18 @@ class RoomService(
     ): RoomTaskWorkspaceDto {
         val locked = roomRepository.lockByInviteCode(inviteCode)
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+        val realtimeRole = collaborationService.resolveRoleByEventToken(inviteCode, eventToken)
+        roomAccessService.requireManager(locked, user, ownerToken, interviewerToken, realtimeRole)
         if (locked.archivedAt != null) throw ApiException(HttpStatus.GONE, "Комната архивирована")
+        requireLiveMutableRoom(locked)
         val room = roomRepository.findWithTasksByInviteCode(inviteCode)
             ?: throw ApiException(HttpStatus.NOT_FOUND, "РљРѕРјРЅР°С‚Р° РЅРµ РЅР°Р№РґРµРЅР°")
-        val realtimeRole = collaborationService.resolveRoleByEventToken(inviteCode, eventToken)
-        roomAccessService.requireManager(room, user, ownerToken, interviewerToken, realtimeRole)
         if (stepIndex == room.currentStep) {
             throw ApiException(HttpStatus.BAD_REQUEST, "РћРїСѓР±Р»РёРєРѕРІР°РЅРЅС‹Р№ С€Р°Рі РёР·РјРµРЅСЏРµС‚СЃСЏ С‡РµСЂРµР· РѕР±С‰РµРµ СЂР°Р±РѕС‡РµРµ РїСЂРѕСЃС‚СЂР°РЅСЃС‚РІРѕ")
         }
         val task = room.tasks.firstOrNull { it.stepIndex == stepIndex }
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Р—Р°РґР°С‡Р° РЅРµ РЅР°Р№РґРµРЅР°")
+        requireEditableRoomTask(task)
 
         val requestedRevision = request.revision
         if (requestedRevision != null && requestedRevision != task.workspaceRevision) {
@@ -448,6 +451,7 @@ class RoomService(
         val access = roomAccessService.requireManager(room, user, ownerToken, interviewerToken, realtimeRole)
         val task = room.tasks.firstOrNull { it.stepIndex == stepIndex }
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Задача не найдена")
+        requireEditableRoomTask(task)
 
         val newTitle = request.title?.trim()
         if (newTitle != null) {
@@ -481,14 +485,15 @@ class RoomService(
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
         val realtimeRole = collaborationService.resolveRoleByEventToken(inviteCode, eventToken)
         val access = roomAccessService.requireManager(room, user, ownerToken, interviewerToken, realtimeRole)
+        val target = room.tasks.firstOrNull { it.stepIndex == stepIndex }
+            ?: throw ApiException(HttpStatus.NOT_FOUND, "Задача не найдена")
+        requireEditableRoomTask(target)
         if (room.tasks.size <= 1) {
             throw ApiException(
                 HttpStatus.BAD_REQUEST,
                 "В комнате должна остаться хотя бы одна задача",
             )
         }
-        val target = room.tasks.firstOrNull { it.stepIndex == stepIndex }
-            ?: throw ApiException(HttpStatus.NOT_FOUND, "Задача не найдена")
 
         val wasCurrent = room.currentStep == stepIndex
         if (wasCurrent) {
@@ -528,10 +533,10 @@ class RoomService(
             }
 
         val merged = linkedMapOf<String, Pair<Room, String>>()
-        ownedRooms.filter { it.archivedAt == null }.forEach { room ->
+        ownedRooms.filter { it.teamId == null && it.archivedAt == null }.forEach { room ->
             merged[room.id!!] = room to "owner"
         }
-        participantRooms.filter { (room) -> room.archivedAt == null }.forEach { (room, participantRole) ->
+        participantRooms.filter { (room) -> room.teamId == null && room.archivedAt == null }.forEach { (room, participantRole) ->
             val roomId = room.id ?: return@forEach
             if (!merged.containsKey(roomId)) {
                 merged[roomId] = room to participantRole
@@ -560,6 +565,7 @@ class RoomService(
     fun updateRoomForUser(user: User, roomId: String, request: UpdateRoomRequest): RoomSummaryDto {
         val room = roomRepository.lockById(roomId)
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+        if (room.teamId != null) throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
         if (room.ownerUser?.id != user.id) throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
         if (room.archivedAt != null) throw ApiException(HttpStatus.GONE, "Комната архивирована")
         val title = request.title.trim()
@@ -586,6 +592,7 @@ class RoomService(
     fun deleteRoomForUser(user: User, roomId: String): Boolean {
         val room = roomRepository.lockById(roomId)
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+        if (room.teamId != null) throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
         if (room.ownerUser?.id != user.id) throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
         val inviteCode = room.inviteCode
         if (roomHrAssignmentRepository.existsByRoomId(roomId)) {
@@ -758,6 +765,8 @@ class RoomService(
         val room = roomRepository.lockByInviteCode(inviteCode)
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
         roomAccessService.requireGrantAccess(room, user, ownerToken, interviewerToken)
+        if (room.archivedAt != null) throw ApiException(HttpStatus.GONE, "Комната архивирована")
+        requireLiveMutableRoom(room)
         val roomId = room.id ?: throw ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Комната не сохранена")
         if (room.ownerUser?.id == targetUserId) {
             throw ApiException(HttpStatus.BAD_REQUEST, "Нельзя менять роль администратора комнаты")
@@ -819,6 +828,7 @@ class RoomService(
 
         return RoomResponse(
             id = room.id!!,
+            teamId = room.teamId.takeIf { access.canManageRoom },
             title = room.title,
             inviteCode = room.inviteCode,
             language = activeLanguage,
@@ -853,6 +863,7 @@ class RoomService(
                     categoryName = it.categoryName?.let(::normalizeLanguage),
                     score = it.score,
                     sourceTaskTemplateId = it.sourceTaskTemplateId,
+                    mandatory = it.mandatory,
                 )
             },
             verdict = room.verdict,
@@ -910,6 +921,22 @@ class RoomService(
 
     private fun taskFocusMode(task: RoomTask): Boolean =
         task.workspaceFocusMode ?: task.briefingMarkdown.orEmpty().trimStart().startsWith(BRIEFING_FOCUS_ON_MARKER)
+
+    private fun requireLiveMutableRoom(room: Room) {
+        if (room.status == RoomStatus.FINISHED.wireValue || room.status == RoomStatus.FROZEN.wireValue) {
+            throw ApiException(HttpStatus.CONFLICT, "Комната недоступна для изменений")
+        }
+    }
+
+    private fun requireEditableRoomTask(task: RoomTask) {
+        if (task.mandatory) {
+            throw ApiException(
+                HttpStatus.CONFLICT,
+                "Обязательную задачу программы нельзя изменять",
+                code = "ROOM_MANDATORY_TASK_LOCKED",
+            )
+        }
+    }
 
     private fun withTaskFocusMarker(markdown: String, focusMode: Boolean): String {
         val clean = markdown.removePrefix(BRIEFING_FOCUS_ON_MARKER).removePrefix("\n")

@@ -28,6 +28,7 @@ type Props = {
   inviteCode: string;
   identityKey: string;
   canManageRoom: boolean;
+  isTeamRoom: boolean;
   authorityGeneration: number;
   isCurrentAuthority: (generation: number) => boolean;
   pendingHrActions: ReadonlyMap<string, HrAction>;
@@ -62,6 +63,7 @@ export function RoomInterviewPanel({
   inviteCode,
   identityKey,
   canManageRoom,
+  isTeamRoom,
   authorityGeneration,
   isCurrentAuthority,
   pendingHrActions,
@@ -389,7 +391,7 @@ export function RoomInterviewPanel({
               <Divider color="#272b34" />
               <Stack gap="sm">
                 <Title order={4}>Нанимающие</Title>
-                {removalError ? <Alert color="red" role="alert">{removalError}</Alert> : null}
+                {removalError && !isTeamRoom ? <Alert color="red" role="alert">{removalError}</Alert> : null}
                 {managers.length === 0 ? <Text size="sm" c="gray.5">Нанимающие пока не добавлены</Text> : null}
                 {managers.map((manager) => (
                   <div key={manager.userId} className={styles.managerRow}>
@@ -398,7 +400,7 @@ export function RoomInterviewPanel({
                       {manager.isOwner ? <Badge color="gray">Владелец</Badge> : null}
                     </Group>
                     <CopyHrId id={manager.userId} compact />
-                    {!manager.isOwner ? (
+                    {!manager.isOwner && !isTeamRoom ? (
                       <Button
                         type="button"
                         size="xs"
@@ -415,7 +417,7 @@ export function RoomInterviewPanel({
                     ) : null}
                   </div>
                 ))}
-                <form onSubmit={invite}>
+                {!isTeamRoom ? <form onSubmit={invite}>
                   <Stack gap="xs">
                     <TextInput
                       label="ID нанимающего"
@@ -431,7 +433,7 @@ export function RoomInterviewPanel({
                       <Text size="sm" c="teal.4" aria-live="polite">{inviteMessage}</Text>
                     </Group>
                   </Stack>
-                </form>
+                </form> : null}
               </Stack>
 
               <Group justify="flex-end" className={styles.footer}>

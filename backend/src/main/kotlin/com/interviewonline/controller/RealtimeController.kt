@@ -3,9 +3,12 @@ package com.interviewonline.controller
 import com.interviewonline.service.AuthService
 import com.interviewonline.service.CollaborationService
 import com.interviewonline.ws.RealtimeEventRequest
+import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
+import org.springframework.web.bind.annotation.CookieValue
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -35,9 +38,13 @@ class RealtimeController(
         @RequestParam(required = false) interviewerToken: String?,
         @RequestParam(required = false) authToken: String?,
         @RequestHeader("Authorization", required = false) authorization: String?,
+        @RequestHeader(HttpHeaders.COOKIE, required = false) cookieHeader: String?,
+        @CookieValue(name = GUEST_RECONNECT_COOKIE, required = false) reconnectCapability: String?,
+        servletRequest: HttpServletRequest,
+        servletResponse: HttpServletResponse,
     ): SseEmitter {
         val user = resolveRealtimeUser(authorization, authToken)
-        return collaborationService.joinRoomSse(
+        val connection = collaborationService.joinRoomSseWithReconnectCapability(
             inviteCode = inviteCode,
             sessionId = sessionId,
             participantId = participantId,
@@ -45,7 +52,15 @@ class RealtimeController(
             ownerToken = ownerToken,
             interviewerToken = interviewerToken,
             user = user,
+            reconnectCapability = resolveReconnectCapability(reconnectCapability, cookieHeader),
         )
+        connection.mintedReconnectCapability?.let { capability ->
+            servletResponse.addHeader(
+                HttpHeaders.SET_COOKIE,
+                buildGuestReconnectCookieHeader(inviteCode, capability, servletRequest.isSecure),
+            )
+        }
+        return connection.emitter
     }
 
     /**
@@ -81,9 +96,22 @@ class RealtimeController(
     fun postRealtimeEvent(
         @PathVariable inviteCode: String,
         @RequestBody request: RealtimeEventRequest,
-    ): ResponseEntity<Void> {
-        collaborationService.handleRealtimeEvent(inviteCode, request)
-        return ResponseEntity.noContent().build()
+        @RequestHeader(HttpHeaders.COOKIE, required = false) cookieHeader: String?,
+        @CookieValue(name = GUEST_RECONNECT_COOKIE, required = false) reconnectCapability: String?,
+    ): ResponseEntity<*> {
+        val ack = collaborationService.handleRealtimeEvent(
+            inviteCode,
+            request,
+            resolveReconnectCapability(reconnectCapability, cookieHeader),
+        )
+        return if (ack != null) {
+            ResponseEntity.ok()
+                .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(ack)
+        } else {
+            ResponseEntity.noContent().build<Void>()
+        }
     }
 
     private fun resolveRealtimeUser(authorization: String?, authToken: String?) =
@@ -104,4 +132,25 @@ class RealtimeController(
 
         return decoded.trim().ifBlank { "Участник" }.take(64)
     }
+
+    private fun resolveReconnectCapability(cookieValue: String?, cookieHeader: String?): String? {
+        if (!cookieValue.isNullOrBlank()) return cookieValue
+        return cookieHeader
+            ?.split(';')
+            ?.map(String::trim)
+            ?.firstOrNull { it.startsWith("$GUEST_RECONNECT_COOKIE=") }
+            ?.substringAfter('=')
+            ?.takeIf(String::isNotBlank)
+    }
+
+    private companion object {
+        const val GUEST_RECONNECT_COOKIE = "io_guest_reconnect"
+    }
+}
+
+internal fun buildGuestReconnectCookieHeader(inviteCode: String, capability: String, secure: Boolean): String {
+    val secureAttribute = if (secure) "; Secure" else ""
+    return "io_guest_reconnect=$capability; " +
+        "Path=/api/realtime/rooms/$inviteCode/; " +
+        "Max-Age=43200; HttpOnly$secureAttribute; SameSite=Strict"
 }

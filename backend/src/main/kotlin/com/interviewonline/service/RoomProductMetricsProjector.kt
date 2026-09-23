@@ -18,6 +18,7 @@ class RoomProductMetricsProjector(
     companion object {
         const val SOURCE_GUEST = "guest"
         const val SOURCE_DASHBOARD = "dashboard"
+        const val SOURCE_TEAM = "team"
         private const val MAX_REALTIME_CONNECTIONS = 100_000
     }
 

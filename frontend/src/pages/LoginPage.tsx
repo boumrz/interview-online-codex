@@ -36,7 +36,15 @@ export function LoginPage() {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const authToken = useAppSelector((store) => store.auth.token);
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const [mode, setMode] = useState<"login" | "register">(() => {
+    const locationState = location.state;
+    return locationState
+      && typeof locationState === "object"
+      && "initialMode" in locationState
+      && locationState.initialMode === "register"
+      ? "register"
+      : "login";
+  });
   const [nickname, setNickname] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
@@ -50,12 +58,21 @@ export function LoginPage() {
   const isRegisterMode = mode === "register";
   const feedbackText = error || " ";
   const nextPath = useMemo(() => {
+    const locationState = location.state;
+    if (
+      locationState
+      && typeof locationState === "object"
+      && "teamInvitationReturn" in locationState
+      && locationState.teamInvitationReturn === true
+    ) {
+      return "/join/team?resume=accept";
+    }
     const requested = new URLSearchParams(location.search).get("next")?.trim() ?? "";
     if (!requested.startsWith("/") || requested.startsWith("//")) {
-      return "/dashboard/rooms";
+      return "/workspace/personal/interviews";
     }
     return requested;
-  }, [location.search]);
+  }, [location.search, location.state]);
 
   useEffect(() => {
     trackEvent("mkt_login_view", { auth_status: "anonymous" });
@@ -114,8 +131,9 @@ export function LoginPage() {
       dispatch(clearAuth());
       dispatch(api.util.resetApiState());
       dispatch(setAuthToken(auth.token));
-      const freshProfile = await fetchMeProfile().unwrap();
+      const freshProfile = await fetchMeProfile(auth.token, false).unwrap();
       dispatch(setCurrentUser(freshProfile));
+      localStorage.setItem("auth_user", JSON.stringify(freshProfile));
       localStorage.setItem("display_name", freshProfile.displayName);
       trackEvent(isRegisterMode ? "mkt_register_success" : "mkt_login_success", {
         auth_status: "authenticated"
@@ -198,6 +216,7 @@ export function LoginPage() {
                       onChange={(e) => setNickname(e.currentTarget.value)}
                       styles={fieldStyles}
                       required
+                      withAsterisk={false}
                     />
                     <TextInput
                       label="Имя для комнаты"
@@ -207,6 +226,7 @@ export function LoginPage() {
                       onChange={(e) => setDisplayName(e.currentTarget.value)}
                       styles={fieldStyles}
                       required
+                      withAsterisk={false}
                     />
                   </>
                 ) : (
@@ -217,6 +237,7 @@ export function LoginPage() {
                     onChange={(e) => setNickname(e.currentTarget.value)}
                     styles={fieldStyles}
                     required
+                    withAsterisk={false}
                   />
                 )}
                 <PasswordInput
@@ -235,6 +256,7 @@ export function LoginPage() {
                   error={passwordError || undefined}
                   styles={fieldStyles}
                   required
+                  withAsterisk={false}
                   visibilityToggleButtonProps={{
                     "aria-label": "Показать символы",
                   }}

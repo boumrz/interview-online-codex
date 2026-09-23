@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <title>Interview Online — prototype merge UX-13 / DA-06</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #102d35;
+      --muted: #607278;
+      --paper: #f4efe2;
+      --sheet: #fffdf6;
+      --nav: #0b2933;
+      --nav2: #173e49;
+      --line: #c9bda8;
+      --lime: #c7e85a;
+      --orange: #ed6c38;
+      --red: #aa332f;
+      --green: #267554;
+      --yellow: #f2c860;
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+      --body: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+      --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+      font: 16px/1.45 var(--body);
+      color: var(--ink);
+      background: var(--paper);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-width: 0; min-height: 100%; overflow-x: clip; }
+    body {
+      min-height: 100dvh;
+      background:
+        linear-gradient(90deg, rgba(16,45,53,.045) 1px, transparent 1px) 0 0 / 24px 24px,
+        linear-gradient(rgba(16,45,53,.045) 1px, transparent 1px) 0 0 / 24px 24px,
+        var(--paper);
+    }
+    button, input, select { font: inherit; }
+    button, a, select, input { outline-offset: 4px; touch-action: manipulation; }
+    :focus-visible { outline: 3px solid var(--orange) !important; box-shadow: 0 0 0 6px rgba(199,232,90,.5); }
+    button:disabled { cursor: not-allowed; opacity: .56; }
+    [hidden] { display: none !important; }
+    .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+    .skip { position: fixed; z-index: 100; top: 8px; left: 8px; min-height: 44px; padding: 10px 14px; transform: translateY(-160%); color: white; background: var(--nav); }
+    .skip:focus { transform: none; }
+
+    .prototype-bar {
+      position: relative; z-index: 20; min-height: 72px; display: grid;
+      grid-template-columns: minmax(220px,1fr) repeat(3,minmax(150px,auto)) auto;
+      gap: 10px; align-items: end; padding: 9px 14px; color: white; background: #061c24; border-bottom: 4px solid var(--orange);
+    }
+    .prototype-mark { align-self: center; min-width: 0; }
+    .prototype-mark strong { display: block; color: var(--lime); font: 800 .74rem var(--mono); letter-spacing: .1em; }
+    .prototype-mark span { display: block; margin-top: 3px; color: #b8c9ce; font-size: .72rem; }
+    .control { min-width: 0; display: grid; gap: 3px; }
+    .control label, .long-label { color: #adbec4; font: 800 .65rem var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .control select { min-height: 44px; width: 100%; padding: 7px 30px 7px 9px; color: white; background: var(--nav2); border: 1px solid #5a7680; }
+    .long-toggle { min-height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 5px; }
+    .long-toggle input { width: 24px; height: 24px; accent-color: var(--orange); }
+
+    .app { min-height: calc(100dvh - 72px); }
+    .topbar { min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px clamp(14px,3vw,38px); color: white; background: var(--nav); }
+    .brand { min-width: 0; display: flex; align-items: center; gap: 11px; }
+    .brand-mark { width: 42px; height: 42px; flex: 0 0 42px; display: grid; place-items: center; color: var(--nav); background: var(--lime); border-radius: 50% 50% 10% 50%; font: 800 1rem var(--display); }
+    .brand strong, .brand small { display: block; overflow-wrap: anywhere; }
+    .brand small { color: #a9c1c8; font: .68rem var(--mono); }
+    .workspace-return, .button {
+      min-height: 46px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 15px;
+      color: white; background: var(--ink); border: 2px solid var(--ink); border-radius: 2px; text-decoration: none; font-weight: 800; cursor: pointer;
+    }
+    .button:hover, .workspace-return:hover { box-shadow: 4px 4px 0 var(--lime); transform: translateY(-1px); }
+    .button.secondary { color: var(--ink); background: transparent; }
+    .button.ghost { color: var(--ink); background: var(--sheet); border-color: var(--line); }
+    .button.danger { color: var(--red); background: #fff5f1; border-color: var(--red); }
+    .button.success { color: white; background: var(--green); border-color: var(--green); }
+    .button.small { min-height: 44px; padding: 7px 11px; }
+    .workspace-return { background: transparent; border-color: #56747e; }
+
+    .layout { min-width: 0; display: grid; grid-template-columns: minmax(220px,260px) minmax(0,1fr); }
+    .rail { min-height: calc(100dvh - 136px); padding: 22px 14px; color: white; background: #123640; border-right: 7px solid rgba(199,232,90,.55); }
+    .rail p { margin: 0 8px 14px; color: #bdd0d5; }
+    .step-list { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
+    .step-button { min-height: 52px; width: 100%; display: grid; grid-template-columns: 31px minmax(0,1fr); gap: 9px; align-items: center; padding: 8px; color: white; background: transparent; border: 1px solid transparent; text-align: left; cursor: pointer; }
+    .step-button span:first-child { width: 31px; height: 31px; display: grid; place-items: center; color: var(--nav); background: #78919a; border-radius: 50%; font: 800 .7rem var(--mono); }
+    .step-button[aria-current="step"] { color: var(--nav); background: var(--lime); border-color: var(--lime); font-weight: 800; }
+    .step-button[aria-current="step"] span:first-child { color: white; background: var(--orange); }
+    .rail-note { margin-top: 24px; padding: 13px; color: #c8d7db; background: rgba(0,0,0,.16); border-left: 3px solid var(--orange); font-size: .78rem; }
+
+    .main { min-width: 0; padding: clamp(22px,4vw,54px) clamp(14px,4vw,62px) calc(72px + var(--safe-bottom)); }
+    .sheet { width: min(1060px,100%); margin: 0 auto; }
+    .eyebrow { margin: 0 0 7px; color: #a53d17; font: 800 .7rem var(--mono); letter-spacing: .11em; text-transform: uppercase; }
+    h1 { max-width: 820px; margin: 0; font: 700 clamp(2.25rem,5vw,4.8rem)/.94 var(--display); letter-spacing: -.04em; overflow-wrap: anywhere; }
+    h2 { margin: 0; font: 700 clamp(1.35rem,2.5vw,2rem)/1.06 var(--display); }
+    h3 { margin: 0; font: 700 1.08rem/1.2 var(--display); }
+    .lede { max-width: 760px; margin: 13px 0 0; color: var(--muted); font-size: 1.03rem; }
+    .header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--line); }
+    .revision-stamp { min-width: 126px; padding: 12px; text-align: center; color: white; background: var(--nav); box-shadow: 5px 5px 0 var(--lime); }
+    .revision-stamp small, .revision-stamp strong { display: block; }
+    .revision-stamp strong { font: 800 1.35rem var(--mono); }
+    .revision-stamp small { color: #b8cbd0; }
+
+    .notice { min-height: 54px; display: flex; align-items: flex-start; gap: 12px; margin: 18px 0; padding: 13px 15px; color: #513b08; background: #fff2bf; border: 1px solid #caaa4d; }
+    .notice.error { color: #76241f; background: #fff0ec; border-color: #d98f88; }
+    .notice.success { color: #165039; background: #e9f6ee; border-color: #82b99e; }
+    .notice.neutral { color: #294b55; background: #e9f1f1; border-color: #9bb8bc; }
+    .notice strong { display: block; }
+    .notice p { margin: 3px 0 0; }
+    .notice-code { flex: 0 0 auto; min-width: 40px; min-height: 40px; display: grid; place-items: center; color: white; background: var(--orange); font: 800 .68rem var(--mono); }
+
+    .grid { display: grid; grid-template-columns: repeat(12,minmax(0,1fr)); gap: 15px; margin-top: 22px; }
+    .span-12 { grid-column: 1/-1; } .span-8 { grid-column: span 8; } .span-7 { grid-column: span 7; } .span-6 { grid-column: span 6; } .span-5 { grid-column: span 5; } .span-4 { grid-column: span 4; }
+    .card { min-width: 0; position: relative; padding: 20px; background: rgba(255,253,246,.96); border: 1px solid var(--line); box-shadow: 5px 5px 0 rgba(16,45,53,.08); }
+    .card::before { content: ""; position: absolute; left: -1px; top: 16px; width: 5px; height: 35px; background: var(--lime); }
+    .card.warning::before { background: var(--orange); }
+    .card p:last-child { margin-bottom: 0; }
+    .direction { display: grid; grid-template-columns: minmax(0,1fr) 60px minmax(0,1fr); gap: 12px; align-items: stretch; margin-top: 20px; }
+    .team-block { min-width: 0; padding: 17px; background: #eaf2ef; border: 1px solid #adc4c1; }
+    .team-block.destination { color: white; background: var(--nav); border-color: var(--nav); }
+    .team-block strong, .team-block small { display: block; overflow-wrap: anywhere; }
+    .team-block small { margin-top: 4px; color: var(--muted); font: .7rem var(--mono); }
+    .team-block.destination small { color: #b9cbd0; }
+    .arrow { display: grid; place-items: center; color: var(--orange); font: 800 1.7rem var(--display); }
+    .field { display: grid; gap: 6px; margin-top: 17px; }
+    .field label, .field legend { font-weight: 800; }
+    .field small { color: var(--muted); }
+    .field input, .field select { width: 100%; min-height: 48px; padding: 9px 11px; color: var(--ink); background: white; border: 2px solid #84969a; border-radius: 2px; }
+    .field input[aria-invalid="true"] { border-color: var(--red); }
+    .field-error { min-height: 22px; color: var(--red); font-weight: 800; }
+    .radio-list { display: grid; gap: 7px; margin-top: 8px; }
+    .radio-row { min-height: 52px; display: grid; grid-template-columns: 26px minmax(0,1fr); gap: 10px; align-items: center; padding: 8px 10px; background: white; border: 1px solid var(--line); }
+    .radio-row input { width: 22px; height: 22px; accent-color: var(--orange); }
+    .radio-row label { min-height: 44px; display: flex; flex-direction: column; justify-content: center; }
+    .radio-row small { color: var(--muted); }
+    .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 9px; margin-top: 22px; padding-bottom: var(--safe-bottom); }
+    .actions.start { justify-content: flex-start; }
+
+    .fact-list { display: grid; margin: 18px 0 0; border-top: 1px solid var(--line); }
+    .fact { min-height: 55px; display: grid; grid-template-columns: minmax(135px,.6fr) minmax(0,1fr); gap: 13px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); }
+    .fact dt { color: var(--muted); }
+    .fact dd { margin: 0; font-weight: 800; overflow-wrap: anywhere; }
+    .role-list, .collision-list, .approval-list { display: grid; gap: 9px; margin-top: 15px; }
+    .role-row, .collision-row, .approval-card { min-height: 68px; display: grid; grid-template-columns: minmax(0,1.3fr) minmax(130px,.7fr) minmax(130px,.7fr); gap: 12px; align-items: center; padding: 11px 12px; background: white; border: 1px solid var(--line); }
+    .role-row > select { min-height: 48px; width: 100%; padding: 9px 11px; color: var(--ink); background: white; border: 2px solid #84969a; }
+    .role-row small, .collision-row small, .approval-card small { display: block; color: var(--muted); }
+    .pill { min-height: 30px; display: inline-flex; align-items: center; width: fit-content; max-width: 100%; padding: 4px 9px; border-radius: 99px; color: #304d55; background: #e6eeee; border: 1px solid #b6c9cb; font: 800 .68rem var(--mono); overflow-wrap: anywhere; }
+    .pill.owner { color: #71320e; background: #ffe1cd; border-color: #efa274; }
+    .pill.ok { color: #155039; background: #e4f4e9; border-color: #89bca0; }
+    .pill.bad { color: #742823; background: #fde3df; border-color: #daa19b; }
+    .privacy-rule { margin-top: 18px; padding: 18px; color: white; background: var(--nav); border-left: 7px solid var(--orange); }
+    .privacy-rule h3 { color: var(--lime); }
+    .privacy-rule ul { margin-bottom: 0; padding-left: 19px; }
+    .privacy-rule code { color: #d5e9eb; }
+    .approval-card { grid-template-columns: minmax(0,1fr) auto; }
+    .approval-seal { min-width: 118px; min-height: 54px; display: grid; place-items: center; padding: 7px; border: 3px double #8e9da0; transform: rotate(-1deg); text-align: center; font: 800 .68rem var(--mono); }
+    .approval-seal.approved { color: var(--green); border-color: var(--green); }
+    .approval-seal.stale { color: var(--red); border-color: var(--red); }
+    .flag-card { margin-top: 18px; padding: 16px; background: #edf2e4; border: 2px dashed #8fa245; }
+    .flag-line { min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .flag-line input { width: 26px; height: 26px; accent-color: var(--green); }
+    .status-panel { min-height: 320px; display: grid; place-items: center; margin-top: 22px; padding: clamp(25px,6vw,70px); text-align: center; background: rgba(255,253,246,.75); border: 1px dashed #988b79; }
+    .status-panel > div { max-width: 650px; }
+    .status-symbol { width: 78px; height: 78px; display: grid; place-items: center; margin: 0 auto 19px; color: var(--nav); background: var(--lime); border-radius: 50% 50% 10% 50%; font: 800 1.25rem var(--mono); }
+    .status-panel.error .status-symbol, .status-panel.revoked .status-symbol { color: white; background: var(--red); }
+    .status-panel.success .status-symbol { color: white; background: var(--green); }
+    .skeleton { width: min(620px,100%); display: grid; gap: 13px; }
+    .skeleton span { height: 17px; background: linear-gradient(90deg,#ded5c5,#fffaf1,#ded5c5); background-size: 220% 100%; animation: shimmer 1.4s infinite; }
+    .skeleton span:first-child { width: 45%; height: 30px; }
+    @keyframes shimmer { to { background-position: -220% 0; } }
+    .commit-progress { margin-top: 22px; padding: 22px; color: white; background: var(--nav); }
+    .progress-track { height: 12px; margin: 16px 0; background: #355863; overflow: hidden; }
+    .progress-track span { display: block; width: 68%; height: 100%; background: var(--lime); animation: pulse 1s infinite alternate; }
+    @keyframes pulse { to { width: 82%; } }
+    .result-mark { font: 800 clamp(4rem,13vw,10rem)/.75 var(--display); color: var(--green); }
+    .prototype-note { margin-top: 28px; padding-top: 15px; border-top: 1px solid var(--line); color: var(--muted); font: .7rem/1.5 var(--mono); }
+
+    @media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+    @media (max-width: 980px) {
+      .prototype-bar { grid-template-columns: 1fr 1fr; }
+      .prototype-mark { grid-column: 1/-1; }
+      .layout { grid-template-columns: 1fr; }
+      .rail { min-height: 0; padding: 9px 12px; border-right: 0; border-bottom: 5px solid rgba(199,232,90,.55); }
+      .rail > p, .rail-note { display: none; }
+      .step-list { grid-template-columns: repeat(5,minmax(0,1fr)); }
+      .step-button { min-height: 48px; grid-template-columns: 26px minmax(0,1fr); padding: 5px; font-size: .73rem; }
+      .step-button span:first-child { width: 26px; height: 26px; }
+      .span-8,.span-7,.span-6,.span-5,.span-4 { grid-column: 1/-1; }
+    }
+    @media (max-width: 650px) {
+      .prototype-bar { grid-template-columns: 1fr 1fr; padding: 8px; }
+      .prototype-mark span { display: none; }
+      .long-toggle { grid-column: 1/-1; }
+      .topbar { align-items: stretch; flex-direction: column; }
+      .workspace-return { width: 100%; }
+      .main { padding: 24px 12px calc(50px + var(--safe-bottom)); }
+      .header { display: grid; }
+      .revision-stamp { justify-self: start; }
+      .step-list { grid-template-columns: 1fr; }
+      .step-button { grid-template-columns: 32px minmax(0,1fr); font-size: .85rem; }
+      .direction { grid-template-columns: 1fr; }
+      .arrow { min-height: 44px; transform: rotate(90deg); }
+      .role-row, .collision-row { grid-template-columns: 1fr; }
+      .approval-card { grid-template-columns: 1fr; }
+      .approval-seal { justify-self: start; }
+      .fact { grid-template-columns: 1fr; gap: 3px; }
+      .actions { display: grid; }
+      .actions .button { width: 100%; }
+      .flag-line { align-items: flex-start; flex-direction: column; }
+    }
+    @media (max-width: 390px) {
+      .prototype-bar { grid-template-columns: 1fr; }
+      .prototype-mark, .long-toggle { grid-column: auto; }
+    }
+    @media (max-height: 480px) {
+      .prototype-bar { min-height: 52px; grid-template-columns: minmax(110px,1fr) repeat(3,minmax(110px,.7fr)); align-items: center; }
+      .prototype-mark span, .control label, .long-toggle { display: none; }
+      .control { gap: 0; }
+      .topbar { min-height: 54px; }
+      .brand small { display: none; }
+      .rail { padding-block: 5px; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#main">К содержимому merge-прототипа</a>
+  <header class="prototype-bar" aria-label="Управление сценариями прототипа">
+    <div class="prototype-mark"><strong>ПРОТОТИП · UX-13 · DA-06</strong><span>Не production UI, не доказательство authorization или atomic commit</span></div>
+    <div class="control"><label for="actorSelect">Роль</label><select id="actorSelect"><option value="sourceOwner">Владелец источника</option><option value="destinationOwner">Владелец назначения</option><option value="sameOwner">Владелец обеих команд</option><option value="nonOwner">Не владелец</option></select></div>
+    <div class="control"><label for="stateSelect">Состояние</label><select id="stateSelect"><option value="success">Готово</option><option value="loading">Загрузка</option><option value="empty">Пусто</option><option value="error">Ошибка</option><option value="conflict">Конфликт / stale</option><option value="revoked">Доступ отозван</option></select></div>
+    <div class="control"><label for="blockerSelect">Блокер commit</label><select id="blockerSelect"><option value="none">Нет</option><option value="live">Незавершённая работа</option><option value="recovery">Recovery pending</option><option value="persistence">Persistence pending</option><option value="busy">MERGE_BUSY</option><option value="membership">Membership conflict</option></select></div>
+    <label class="long-toggle"><input id="longToggle" type="checkbox"><span class="long-label">Длинный RU</span></label>
+  </header>
+  <div id="application"></div>
+  <script src="mobile-input-fallback.js"></script>
+  <script>
+    (() => {
+      const app = document.querySelector('#application');
+      const actorSelect = document.querySelector('#actorSelect');
+      const stateSelect = document.querySelector('#stateSelect');
+      const blockerSelect = document.querySelector('#blockerSelect');
+      const longToggle = document.querySelector('#longToggle');
+      const draft = {
+        revision: 7,
+        destinationName: 'Engineering',
+        trackResolution: 'Frontend · Web',
+        sourceApproved: false,
+        destinationApproved: false,
+        approvalRevision: null,
+        reviewAccepted: false,
+        roleChoice: 'member',
+        commitInProgress: false,
+        committed: false
+      };
+      const actorLabels = { sourceOwner: 'Владелец источника', destinationOwner: 'Владелец назначения', sameOwner: 'Владелец обеих команд', nonOwner: 'Участник без права merge' };
+      const phaseLabels = { teams: 'Команды', members: 'Сотрудники и роли', names: 'Названия и конфликты', review: 'Проверка', approval: 'Подтверждение' };
+
+      function escapeHtml(value) { return String(value).replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' }[char])); }
+      function route() {
+        const raw = location.hash.slice(1) || '/merge';
+        const [path, query = ''] = raw.split('?');
+        return { path, params: new URLSearchParams(query) };
+      }
+      function scenario() {
+        const { path, params } = route();
+        return {
+          path,
+          params,
+          actor: params.get('actor') || actorSelect.value || 'sourceOwner',
+          state: params.get('state') || stateSelect.value || 'success',
+          blocker: params.get('blocker') || blockerSelect.value || 'none',
+          step: params.get('step') || 'target',
+          phase: params.get('phase') || 'teams',
+          commitFlag: params.get('commit') === '1',
+          exact: params.get('exact') === '1',
+          authorized: params.get('authorized') !== '0',
+          long: params.get('long') === '1' || longToggle.checked
+        };
+      }
+      function href(extra = {}) {
+        const s = scenario();
+        const params = new URLSearchParams(s.params);
+        Object.entries(extra).forEach(([key, value]) => {
+          if (value === null) params.delete(key); else params.set(key, String(value));
+        });
+        return `#/merge?${params.toString()}`;
+      }
+      function setParam(key, value) { location.hash = href({ [key]: value }); }
+      function teamName(s, which) {
+        if (!s.long) return which === 'source' ? 'Frontend' : which === 'destination' ? 'Backend' : 'Engineering';
+        if (which === 'source') return 'Frontend · Международная команда клиентских платформ и дизайн-систем';
+        if (which === 'destination') return 'Backend · Распределённые сервисы обработки интервью и событий';
+        return 'Engineering · Единая команда разработки платформы технических интервью';
+      }
+      function prototypeNote() { return '<p class="prototype-note">Prototype-only: действия меняют только локальную демонстрацию. Экран не доказывает server authorization, dual-owner signatures, transaction atomicity, persistence drain или redirect guard.</p>'; }
+
+      function rail(s) {
+        const phases = ['teams','members','names','review','approval'];
+        return `<aside class="rail" aria-label="Этапы плана"><p>Один план · одна revision</p><ol class="step-list">${phases.map((phase, index) => `<li><button class="step-button" type="button" data-phase="${phase}" ${s.phase === phase ? 'aria-current="step"' : ''}><span>${index + 1}</span><span>${phaseLabels[phase]}</span></button></li>`).join('')}</ol><div class="rail-note">Согласование не переносит данные. Commit — отдельное действие владельца итоговой команды после двух актуальных согласий.</div></aside>`;
+      }
+      function shell(s, content, options = {}) {
+        const showRail = options.rail !== false;
+        return `<div class="app"><header class="topbar"><div class="brand"><span class="brand-mark">io</span><div><strong>Объединение команд</strong><small>${escapeHtml(actorLabels[s.actor])} · ${s.step}</small></div></div><a class="workspace-return" href="index.html#/teams/atlas/settings?actor=owner&state=success">← Настройки команды</a></header>${showRail ? `<div class="layout">${rail(s)}<main class="main" id="main" tabindex="-1"><div class="sheet">${content}${prototypeNote()}</div></main></div>` : `<main class="main" id="main" tabindex="-1"><div class="sheet">${content}${prototypeNote()}</div></main>`}</div>`;
+      }
+      function header(s, eyebrow, title, lede, stamp = true) {
+        return `<header class="header"><div><p class="eyebrow">${eyebrow}</p><h1>${title}</h1><p class="lede">${lede}</p></div>${stamp ? `<div class="revision-stamp"><small>План</small><strong>rev ${draft.revision}</strong><small>digest 7F·A2</small></div>` : ''}</header>`;
+      }
+      function statePanel(s, type, title, text, action = '') {
+        const symbol = type === 'success' ? '✓' : type === 'loading' ? '…' : type === 'empty' ? '0' : '×';
+        const body = type === 'loading' ? '<div class="skeleton" aria-hidden="true"><span></span><span></span><span></span><span></span></div><span class="sr-only">Загружаем данные объединения</span>' : `<div class="status-symbol" aria-hidden="true">${symbol}</div><h2>${title}</h2><p>${text}</p>${action}`;
+        return shell(s, `${header(s, 'UX-13 · merge dossier', title, text, false)}<section class="status-panel ${type}" aria-busy="${type === 'loading'}"><div>${body}</div></section>`, { rail: false });
+      }
+
+      function targetView(s) {
+        const safeError = s.state === 'error' ? '<div class="notice error" role="alert"><span class="notice-code">!</span><div><strong>Команда недоступна для объединения</strong><p>Неизвестный и недоступный ID выглядят одинаково. Никаких названий, состава или каталога чужих команд.</p></div></div>' : '';
+        return shell(s, `${header(s, 'Шаг 1 · точное назначение', 'Куда переносим Frontend?', 'Выберите уже доступную вам команду или вставьте точный ID, полученный вне этого процесса. Глобального поиска команд нет.')}${safeError}<form class="grid" data-target-form novalidate><section class="card span-7"><h2>Команда назначения</h2><div class="radio-list"><div class="radio-row"><input id="knownTarget" type="radio" name="targetMethod" value="known" ${s.exact ? '' : 'checked'}><label for="knownTarget"><strong>Backend</strong><small>Доступна вам · team-be-204</small></label></div><div class="radio-row"><input id="exactTarget" type="radio" name="targetMethod" value="exact" ${s.exact ? 'checked' : ''}><label for="exactTarget"><strong>Точный ID</strong><small>Без подсказок и поиска по чужим пространствам</small></label></div></div><div class="field" data-exact-field ${s.exact ? '' : 'hidden'}><label for="targetId">ID команды назначения</label><input id="targetId" value="team-be-204" autocomplete="off" aria-describedby="targetHint targetError"><small id="targetHint">ID передаёт владелец назначения вне этого процесса.</small><span class="field-error" id="targetError" aria-live="polite"></span></div></section><aside class="card span-5 warning"><p class="eyebrow">Источник</p><h2>${escapeHtml(teamName(s,'source'))}</h2><dl class="fact-list"><div class="fact"><dt>Устойчивый ID</dt><dd>team-fr-101</dd></div><div class="fact"><dt>Ваше право</dt><dd>OWNER</dd></div><div class="fact"><dt>Направление</dt><dd>Frontend → существующая команда</dd></div></dl></aside><div class="actions span-12"><button class="button" type="submit">Пригласить владельца к согласованию</button></div></form>`);
+      }
+
+      function requestView(s) {
+        return shell(s, `${header(s, 'Запрос создан · не финальное согласие', 'Ждём владельца назначения', 'До разрешённого открытия второй стороной видны только ваша команда, точный target ID и статус запроса.', false)}<div class="grid"><section class="card span-8"><div class="notice neutral"><span class="notice-code">→</span><div><strong>Запрошено согласование</strong><p>Вторая сторона ещё не открыла review context.</p></div></div><dl class="fact-list"><div class="fact"><dt>Источник</dt><dd>${escapeHtml(teamName(s,'source'))} · team-fr-101</dd></div><div class="fact"><dt>Назначение</dt><dd>team-be-204</dd></div><div class="fact"><dt>Истекает</dt><dd>16 сентября 2026 · 14:20 МСК</dd></div></dl><p class="privacy-rule"><strong>Пока скрыто:</strong> имя команды назначения, состав, материалы, процессы и любые интервью.</p></section><aside class="card span-4"><h2>Дальше</h2><p>Владелец назначения откроет запрос в своих настройках. Открытие review не является approval.</p><div class="actions start"><a class="button ghost" href="${href({ actor: 'destinationOwner', step: 'inbox', state: 'success' })}">Посмотреть как владелец назначения</a><button class="button danger" type="button" data-cancel>Отменить запрос</button></div></aside></div>`);
+      }
+
+      function inboxView(s) {
+        if (s.state === 'empty') return statePanel(s, 'empty', 'Запросов нет', 'Ни входящих, ни исходящих merge-запросов в этой команде.', `<a class="button" href="${href({ state: 'success', step: 'target', actor: 'sourceOwner' })}">Создать запрос</a>`);
+        return shell(s, `${header(s, 'Настройки Backend · запросы', 'Входящий запрос', 'Открытие согласования показывает минимальный plan context. Это ещё не финальное согласие.', false)}<section class="card warning" style="margin-top:22px"><div class="fact"><dt>Инициатор</dt><dd>${escapeHtml(teamName(s,'source'))} · team-fr-101</dd></div><div class="fact"><dt>Ваша команда</dt><dd>${escapeHtml(teamName(s,'destination'))} · team-be-204</dd></div><div class="fact"><dt>Состояние</dt><dd><span class="pill">Ожидает review context</span></dd></div><div class="actions"><button class="button danger" type="button" data-decline>Отклонить</button><button class="button" type="button" data-open-review>Открыть согласование</button></div></section>`);
+      }
+
+      function declinedView(s) {
+        return statePanel(s, 'empty', 'Запрос отклонён', 'План и approvals не созданы. Обе команды продолжают работать отдельно; отправитель видит только нейтральный итог запроса.', `<a class="button" href="${href({ actor: 'destinationOwner', step: 'inbox', state: 'empty' })}">К запросам</a>`);
+      }
+
+      function blockerNotice(s) {
+        if (s.blocker === 'none') return '';
+        const copy = {
+          live: ['LIVE_SESSIONS_PRESENT', 'Объединение пока недоступно: есть незавершённая работа', 'Завершите разрешённую вам работу и повторите проверку. Кандидаты, комнаты и их количество не раскрываются.'],
+          recovery: ['RECOVERY_PENDING', 'Есть незавершённое восстановление ответственности', 'Примите или отмените предложение восстановления в его разрешённом контексте, затем повторите.'],
+          persistence: ['PERSISTENCE_PENDING', 'Подтверждённые изменения ещё сохраняются', 'Код не отбрасывается. Commit не начат; workers завершают сохранение, после чего проверку можно повторить.'],
+          busy: ['MERGE_BUSY', 'Команды временно заняты другой операцией', 'Ничего не перенесено. Повторите после Retry-After; занятость не выглядит как успех.'],
+          membership: ['MEMBERSHIP_CONFLICT', 'Состояние одного участия нужно решить отдельно', 'ACTIVE с одной стороны и SUSPENDED/LEFT/REMOVED с другой не реактивируется мастером. После исправления будет новая revision.']
+        }[s.blocker];
+        return `<div class="notice error" role="alert"><span class="notice-code">${copy[0] === 'MERGE_BUSY' ? '409' : '!'}</span><div><strong>${copy[1]}</strong><p>${copy[2]}</p><code>${copy[0]}</code></div></div>`;
+      }
+
+      function phaseTeams(s) {
+        return `<section class="card"><h2>Направление и итог</h2><div class="direction"><div class="team-block"><small>Источник · станет MERGED</small><strong>${escapeHtml(teamName(s,'source'))}</strong><small>team-fr-101</small></div><div class="arrow" aria-hidden="true">→</div><div class="team-block destination"><small>Итоговая команда · сохраняет ID</small><strong>${escapeHtml(draft.destinationName)}</strong><small>team-be-204 · владелец Борис</small></div></div><div class="field"><label for="destinationName">Итоговое название существующей Backend</label><input id="destinationName" value="${escapeHtml(draft.destinationName)}" maxlength="100"><small>Изменение создаст новую revision и сбросит оба согласия.</small></div><div class="privacy-rule"><h3>Что не меняется от merge</h3><ul><li>Устойчивые ID и snapshots сохраняются.</li><li>Текущие назначения сохраняются только у тех, кому они уже были выданы.</li><li>Team role не становится room OWNER/HIRING.</li></ul></div></section>`;
+      }
+      function phaseMembers(s) {
+        return `<section class="card"><h2>Сотрудники и итоговые роли</h2><p>Один аккаунт в обеих командах показан одной строкой. Исторический отозванный доступ не возвращается.</p><div class="role-list"><div class="role-row"><div><strong>Борис К. · usr-bo-12</strong><small>Backend OWNER</small></div><span class="pill owner">Итог: OWNER</span><span class="pill ok">Сохраняется</span></div><div class="role-row"><div><strong>Анна М. · usr-an-08</strong><small>Frontend OWNER</small></div><span class="pill">Итог: MEMBER</span><span>Без room-grant</span></div><div class="role-row"><div><strong>Вера Л. · usr-ve-31</strong><small>ACTIVE в обеих командах</small></div><span class="pill">Одна запись MEMBER</span><span class="pill ok">Dedupe</span></div><div class="role-row"><div><strong>Максим Р. · usr-ma-44</strong><small>Frontend ADMIN</small></div><label for="maximRole">Итоговая роль<span class="sr-only"> Максима</span></label><select id="maximRole"><option value="member" ${draft.roleChoice === 'member' ? 'selected' : ''}>MEMBER</option><option value="admin" ${draft.roleChoice === 'admin' ? 'selected' : ''}>ADMIN · требует двух согласий</option></select></div></div>${s.blocker === 'membership' ? blockerNotice(s) : '<div class="notice neutral"><span class="notice-code">i</span><div><strong>Командные роли не расширяют доступ к интервью</strong><p>Действующие room grants сохраняются адресно; revoked grants и старые epochs не восстанавливаются.</p></div></div>'}</section>`;
+      }
+      function phaseNames(s) {
+        return `<section class="card"><h2>Коллизии имён</h2><p>Одинаковое имя не означает одинаковую сущность. Треки требуют явного решения; задачи остаются отдельными по ID/происхождению.</p><div class="collision-list"><div class="collision-row"><div><strong>Трек Frontend</strong><small>team-fr-101 / track-fr-17</small></div><span class="pill bad">Конфликт unique name</span><div class="field" style="margin:0"><label for="trackResolution">Новое имя источника</label><input id="trackResolution" value="${escapeHtml(draft.trackResolution)}" aria-describedby="collisionHint"><small id="collisionHint">Родитель: Engineering</small></div></div><div class="collision-row"><div><strong>Задача «Очередь»</strong><small>task-fr-90 · автор Анна</small></div><span class="pill ok">Отдельная версия</span><span>Не склеивается</span></div><div class="collision-row"><div><strong>Задача «Очередь»</strong><small>task-be-51 · автор Вера</small></div><span class="pill ok">Отдельная версия</span><span>Не склеивается</span></div></div><div class="notice"><span class="notice-code">!</span><div><strong>Исторические подписи не переписываются</strong><p>Переименование справочника не меняет snapshots, программы и уже проведённые интервью.</p></div></div></section>`;
+      }
+      function phaseReview(s) {
+        return `<section class="card"><h2>Проверка одной revision</h2><dl class="fact-list"><div class="fact"><dt>Направление</dt><dd>Frontend · team-fr-101 → ${escapeHtml(draft.destinationName)} · team-be-204</dd></div><div class="fact"><dt>Владелец</dt><dd>Борис К. · OWNER назначения</dd></div><div class="fact"><dt>Роли</dt><dd>Анна → MEMBER; Максим → ${draft.roleChoice.toUpperCase()}; Вера → одна ACTIVE запись</dd></div><div class="fact"><dt>Явное переименование</dt><dd>track-fr-17 → ${escapeHtml(draft.trackResolution)}</dd></div><div class="fact"><dt>Приглашения</dt><dd>Все PENDING обеих команд будут отозваны</dd></div><div class="fact"><dt>Старые ссылки</dt><dd>ID сохраняются; переход только после текущей проверки прав</dd></div></dl><div class="privacy-rule" data-privacy-review><h3>Интервью · только правило, без данных</h3><p>Существующие назначения сохраняются. Объединение не открывает интервью всем сотрудникам.</p><ul><li>Нет перечня и количества комнат.</li><li>Нет кандидатов, дат, результатов, room tasks, чата или заметок.</li><li>Блокеры commit также остаются нейтральными.</li></ul></div><div class="notice neutral"><span class="notice-code">→</span><div><strong>Общая библиотека станет доступна объединённому ACTIVE составу</strong><p>Материалы и программы сохраняют исходные ID/versions. Frozen/archive не возобновляются.</p></div></div></section>`;
+      }
+      function approvals(s) {
+        const stale = s.state === 'conflict';
+        const sourceOk = draft.sourceApproved && draft.approvalRevision === draft.revision && !stale;
+        const destinationOk = draft.destinationApproved && draft.approvalRevision === draft.revision && !stale;
+        const canSource = s.actor === 'sourceOwner';
+        const canDestination = s.actor === 'destinationOwner';
+        const same = s.actor === 'sameOwner';
+        const both = sourceOk && destinationOk;
+        const commitOwner = canDestination || same;
+        return `<section class="card"><h2>Два согласия · одна revision</h2>${stale ? '<div class="notice error" role="alert"><span class="notice-code">409</span><div><strong>План изменился: прежние согласия недействительны</strong><p>Просмотрите rev '+draft.revision+'. Failure/stale не разрешает commit и не выглядит как частичный успех.</p></div></div>' : ''}<div class="approval-list"><div class="approval-card"><div><strong>Frontend · team-fr-101</strong><small>Текущий владелец: Анна · подтверждает rev ${draft.revision} / digest 7F·A2</small></div><div class="approval-seal ${sourceOk ? 'approved' : stale ? 'stale' : ''}">${sourceOk ? 'СОГЛАСОВАНО<br>Анна' : stale ? 'НУЖНО СНОВА' : 'ОЖИДАЕТ'}</div></div><div class="approval-card"><div><strong>Backend · team-be-204</strong><small>Текущий владелец: Борис · подтверждает rev ${draft.revision} / digest 7F·A2</small></div><div class="approval-seal ${destinationOk ? 'approved' : stale ? 'stale' : ''}">${destinationOk ? 'СОГЛАСОВАНО<br>Борис' : stale ? 'НУЖНО СНОВА' : 'ОЖИДАЕТ'}</div></div></div><div class="actions start">${same ? `<button class="button" type="button" data-approve-both ${stale ? 'disabled' : ''}>Я владею обеими: подтвердить две стороны</button>` : ''}${canSource ? `<button class="button" type="button" data-approve-source ${sourceOk || stale ? 'disabled' : ''}>Подтвердить как владелец Frontend</button>` : ''}${canDestination ? `<button class="button" type="button" data-approve-destination ${destinationOk || stale ? 'disabled' : ''}>Подтвердить как владелец Backend</button>` : ''}${!same && !canSource && !canDestination ? '<span class="pill bad">Только текущие OWNER</span>' : ''}</div>${both ? `<div class="notice success"><span class="notice-code">✓</span><div><strong>Обе стороны подтвердили rev ${draft.revision}</strong><p>Это не commit. Команды продолжают работать отдельно до отдельного запуска владельцем назначения.</p></div></div>` : '<div class="notice neutral"><span class="notice-code">2</span><div><strong>Нужны две актуальные отметки</strong><p>Approval хранится для team side + revision, а не как одно общее «готово».</p></div></div>'}<div class="flag-card"><div class="flag-line"><div><strong>FEATURE_TEAM_MERGE_COMMIT</strong><small>${s.commitFlag ? 'ON в сценарии прототипа · финальный запуск разрешён только после server recheck' : 'OFF · review/approval доступны, перенос недоступен'}</small></div><label class="long-toggle" style="color:var(--ink)"><input type="checkbox" data-commit-flag ${s.commitFlag ? 'checked' : ''}><span>Demo commit flag</span></label></div></div>${blockerNotice(s)}<div class="actions"><button class="button danger" type="button" data-cancel>Отменить план</button><button class="button success" type="button" data-commit ${!both || !commitOwner || !s.commitFlag || s.blocker !== 'none' || stale ? 'disabled' : ''}>Объединить команды в ${escapeHtml(draft.destinationName)}</button></div>${both && !commitOwner ? '<p class="notice neutral">План готов. Финальный запуск выполняет владелец итоговой Backend.</p>' : ''}</section>`;
+      }
+      function planView(s) {
+        const phaseContent = s.phase === 'teams' ? phaseTeams(s) : s.phase === 'members' ? phaseMembers(s) : s.phase === 'names' ? phaseNames(s) : s.phase === 'review' ? phaseReview(s) : approvals(s);
+        return shell(s, `${header(s, 'Review context открыт · approval ещё нет', `${escapeHtml(teamName(s,'source'))} → ${escapeHtml(draft.destinationName)}`, 'Черновик плана сохраняется при переходах. Любое значимое изменение создаёт новую revision и отменяет прежние согласия.')}${s.state === 'error' ? '<div class="notice error" role="alert"><span class="notice-code">!</span><div><strong>Не удалось обновить план</strong><p>Черновик сохранён. Команды остаются раздельными; повтор не показывает success до подтверждённого результата.</p></div></div>' : ''}${phaseContent}<div class="actions"><button class="button ghost" type="button" data-prev>Назад</button><button class="button" type="button" data-next>${s.phase === 'approval' ? 'Проверить блокеры' : 'Следующий шаг'}</button></div>`);
+      }
+      function commitView(s) {
+        if (s.state === 'error' || s.blocker === 'busy') return shell(s, `${header(s, 'Commit не подтверждён', 'Команды ещё раздельны', 'Ошибка до фиксации не меняет состав, grants, приглашения, данные или названия.', false)}${blockerNotice({ ...s, blocker: s.blocker === 'busy' ? 'busy' : 'none' })}<section class="status-panel error"><div><div class="status-symbol">!</div><h2>Объединение не выполнено</h2><p>Нет частичного результата. Повтор использует тот же operation intent и сначала разрешает неизвестный outcome.</p><div class="actions"><a class="button" href="${href({ step: 'plan', phase: 'approval', state: 'success' })}">Вернуться к rev ${draft.revision}</a></div></div></section>`);
+        return shell(s, `${header(s, 'Commit · отдельное действие', 'Объединяем команды…', 'Повторный запуск заблокирован. Новые изменения плана недоступны до подтверждённого outcome.', false)}<section class="commit-progress" role="status" aria-live="polite"><h2>Проверяем одну операцию</h2><div class="progress-track" aria-hidden="true"><span></span></div><p>Текущие владельцы · rev ${draft.revision} · оба approval · live/recovery/persistence blockers · atomic receipt.</p><button class="button ghost" type="button" disabled>Запуск уже выполняется</button></section>`);
+      }
+      function resultView(s) {
+        return shell(s, `${header(s, 'Outcome подтверждён · один receipt', 'Команды объединены', 'Backend сохранила идентичность team-be-204 и получила подтверждённое имя Engineering. Frontend стала служебной MERGED записью.', false)}<section class="card" style="margin-top:22px"><div class="result-mark" aria-hidden="true">E.</div><h2>${escapeHtml(teamName(s,'result'))}</h2><dl class="fact-list"><div class="fact"><dt>Outcome</dt><dd><span class="pill ok">MERGED · confirmed</span></dd></div><div class="fact"><dt>Receipt</dt><dd>merge-op-7fa2 · один результат при повторе</dd></div><div class="fact"><dt>Итоговая команда</dt><dd>team-be-204</dd></div><div class="fact"><dt>Источник</dt><dd>team-fr-101 · MERGED</dd></div><div class="fact"><dt>Доступ к интервью</dt><dd>Только прежние действующие назначения</dd></div><div class="fact"><dt>Обратное разделение</dt><dd>Не предусмотрено</dd></div></dl><div class="notice success"><span class="notice-code">✓</span><div><strong>Успех показан только после подтверждённой фиксации</strong><p>Не было промежуточного «перенесено несколько объектов». Поздний повтор возвращает этот же receipt.</p></div></div><div class="actions"><a class="button ghost" href="${href({ step: 'redirect', actor: s.actor, authorized: '1' })}">Проверить старый маршрут Frontend</a><a class="button success" href="index.html#/teams/atlas/interviews?actor=owner&state=success">Открыть Engineering</a></div></section>`);
+      }
+      function redirectView(s) {
+        const authorized = s.authorized && s.actor !== 'nonOwner' && s.state !== 'revoked';
+        if (!authorized) return statePanel(s, 'revoked', 'Страница недоступна', 'Текущих прав недостаточно. Старый URL не раскрывает имя/ID назначения, кандидатов, комнаты или причину.', '<a class="button" href="index.html#/personal/interviews?actor=personal&state=success">В личное пространство</a>');
+        return shell(s, `${header(s, 'Старый scope · текущая проверка пройдена', 'Frontend объединена', 'Старый маршрут не воспроизводит mutation. Разрешён только переход в актуальную команду после проверки current membership и object grants.', false)}<section class="status-panel success"><div><div class="status-symbol">→</div><h2>Продолжить в Engineering</h2><p>Ваш доступ к team-be-204 подтверждён сейчас. Прямые ссылки интервью проверяют отдельное действующее назначение.</p><a class="button success" href="index.html#/teams/atlas/interviews?actor=owner&state=success">Перейти в Engineering</a></div></section>`);
+      }
+      function terminalForRole(s) {
+        return statePanel(s, 'revoked', s.state === 'revoked' ? 'Доступ изменён' : 'Только владельцы согласуют объединение', s.state === 'revoked' ? 'Plan context очищен. Поздний ответ не возвращает роли, названия или destination.' : 'Администратор, участник и room manager без team ownership не видят план и не подтверждают сторону.', '<a class="button" href="index.html#/teams/atlas/settings?actor=member&state=success">Вернуться в настройки</a>');
+      }
+      function render() {
+        const s = scenario();
+        actorSelect.value = s.actor; stateSelect.value = s.state; blockerSelect.value = s.blocker; longToggle.checked = s.long;
+        if (s.state === 'loading') app.innerHTML = statePanel(s, 'loading', 'Загружаем запросы', 'Проверяем текущего владельца и безопасный merge context.');
+        else if ((s.actor === 'nonOwner' || s.state === 'revoked') && s.step !== 'redirect') app.innerHTML = terminalForRole(s);
+        else if (s.step === 'target') app.innerHTML = targetView(s);
+        else if (s.step === 'request') app.innerHTML = requestView(s);
+        else if (s.step === 'inbox') app.innerHTML = inboxView(s);
+        else if (s.step === 'declined') app.innerHTML = declinedView(s);
+        else if (s.step === 'plan') app.innerHTML = planView(s);
+        else if (s.step === 'commit') app.innerHTML = commitView(s);
+        else if (s.step === 'result') app.innerHTML = resultView(s);
+        else if (s.step === 'redirect') app.innerHTML = redirectView(s);
+        else app.innerHTML = targetView(s);
+        bind(s);
+        document.title = `Merge prototype · ${actorLabels[s.actor]} · ${s.step}`;
+      }
+      function bumpRevision() {
+        draft.revision += 1; draft.sourceApproved = false; draft.destinationApproved = false; draft.approvalRevision = null;
+      }
+      function bind(s) {
+        app.querySelectorAll('[data-phase]').forEach((button) => button.addEventListener('click', () => setParam('phase', button.dataset.phase)));
+        app.querySelector('[data-target-form]')?.addEventListener('submit', (event) => {
+          event.preventDefault();
+          const exact = app.querySelector('#exactTarget')?.checked;
+          const input = app.querySelector('#targetId');
+          if (exact && input.value.trim() !== 'team-be-204') { input.setAttribute('aria-invalid','true'); app.querySelector('#targetError').textContent = 'Команда недоступна для объединения.'; input.focus(); return; }
+          location.hash = href({ step: 'request', exact: exact ? '1' : '0', state: 'success' });
+        });
+        app.querySelectorAll('input[name="targetMethod"]').forEach((radio) => radio.addEventListener('change', () => setParam('exact', radio.value === 'exact' ? '1' : '0')));
+        app.querySelector('[data-open-review]')?.addEventListener('click', () => { draft.reviewAccepted = true; location.hash = href({ step: 'plan', phase: 'teams', state: 'success' }); });
+        app.querySelector('[data-decline]')?.addEventListener('click', () => { location.hash = href({ step: 'declined' }); });
+        app.querySelectorAll('[data-cancel]').forEach((button) => button.addEventListener('click', () => { draft.sourceApproved = false; draft.destinationApproved = false; location.hash = href({ step: 'target', actor: 'sourceOwner', state: 'success', blocker: 'none' }); }));
+        app.querySelector('#destinationName')?.addEventListener('change', (event) => { draft.destinationName = event.target.value.trim() || 'Backend'; bumpRevision(); render(); });
+        app.querySelector('#maximRole')?.addEventListener('change', (event) => { draft.roleChoice = event.target.value; bumpRevision(); render(); });
+        app.querySelector('#trackResolution')?.addEventListener('change', (event) => { draft.trackResolution = event.target.value.trim(); bumpRevision(); render(); });
+        const phases = ['teams','members','names','review','approval'];
+        app.querySelector('[data-prev]')?.addEventListener('click', () => { const index = phases.indexOf(s.phase); setParam('phase', phases[Math.max(0,index - 1)]); });
+        app.querySelector('[data-next]')?.addEventListener('click', () => { const index = phases.indexOf(s.phase); setParam('phase', phases[Math.min(phases.length - 1,index + 1)]); });
+        app.querySelector('[data-approve-source]')?.addEventListener('click', () => { draft.sourceApproved = true; draft.approvalRevision = draft.revision; render(); });
+        app.querySelector('[data-approve-destination]')?.addEventListener('click', () => { draft.destinationApproved = true; draft.approvalRevision = draft.revision; render(); });
+        app.querySelector('[data-approve-both]')?.addEventListener('click', () => { draft.sourceApproved = true; draft.destinationApproved = true; draft.approvalRevision = draft.revision; render(); });
+        app.querySelector('[data-commit-flag]')?.addEventListener('change', (event) => setParam('commit', event.target.checked ? '1' : '0'));
+        app.querySelector('[data-commit]')?.addEventListener('click', () => {
+          draft.commitInProgress = true; location.hash = href({ step: 'commit', state: 'success' });
+          window.setTimeout(() => { if (scenario().step === 'commit') { draft.committed = true; location.hash = href({ step: 'result', state: 'success' }); } }, 650);
+        });
+      }
+      actorSelect.addEventListener('change', () => setParam('actor', actorSelect.value));
+      stateSelect.addEventListener('change', () => setParam('state', stateSelect.value));
+      blockerSelect.addEventListener('change', () => setParam('blocker', blockerSelect.value));
+      longToggle.addEventListener('change', () => setParam('long', longToggle.checked ? '1' : '0'));
+      window.addEventListener('hashchange', render);
+      if (!location.hash) location.replace('#/merge?actor=sourceOwner&state=success&blocker=none&step=target'); else render();
+    })();
+  </script>
+</body>
+</html>

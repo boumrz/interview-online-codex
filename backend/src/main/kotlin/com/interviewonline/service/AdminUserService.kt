@@ -6,6 +6,9 @@ import com.interviewonline.repository.RoomParticipantRepository
 import com.interviewonline.repository.RoomHrAssignmentRepository
 import com.interviewonline.repository.RoomProductMetricRepository
 import com.interviewonline.repository.RoomRepository
+import com.interviewonline.repository.CommandReceiptRepository
+import com.interviewonline.repository.TeamMembershipRepository
+import com.interviewonline.repository.TeamRepository
 import com.interviewonline.repository.UserRepository
 import com.interviewonline.repository.UserSessionRepository
 import com.interviewonline.repository.UserTaskCategoryRepository
@@ -13,6 +16,8 @@ import com.interviewonline.repository.UserTaskTemplateRepository
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.time.format.DateTimeFormatter
 
 @Service
@@ -25,6 +30,9 @@ class AdminUserService(
     private val roomParticipantRepository: RoomParticipantRepository,
     private val roomHrAssignmentRepository: RoomHrAssignmentRepository,
     private val roomProductMetricRepository: RoomProductMetricRepository,
+    private val teamRepository: TeamRepository,
+    private val teamMembershipRepository: TeamMembershipRepository,
+    private val commandReceiptRepository: CommandReceiptRepository,
     private val collaborationService: CollaborationService,
 ) {
     companion object {
@@ -60,14 +68,22 @@ class AdminUserService(
             throw ApiException(HttpStatus.BAD_REQUEST, "Нельзя удалить собственный аккаунт")
         }
 
-        val target = userRepository.findById(targetUserId).orElseThrow {
-            ApiException(HttpStatus.NOT_FOUND, "Пользователь не найден")
-        }
+        val target = userRepository.lockById(targetUserId)
+            ?: throw ApiException(HttpStatus.NOT_FOUND, "Пользователь не найден")
         if (target.nickname.equals(PRIMARY_ADMIN_NICKNAME, ignoreCase = true)) {
             throw ApiException(HttpStatus.BAD_REQUEST, "Нельзя удалить системного администратора")
         }
 
-        val ownedRooms = roomRepository.findByOwnerUserId(targetUserId)
+        if (
+            teamRepository.existsByOwnerUserId(targetUserId) ||
+            teamMembershipRepository.existsByUserId(targetUserId) ||
+            commandReceiptRepository.existsForActor(targetUserId)
+        ) {
+            throw ApiException(HttpStatus.CONFLICT, "Нельзя удалить аккаунт, связанный с командой")
+        }
+
+        val ownedRooms = roomRepository.findByOwnerUserId(targetUserId).filter { it.teamId == null }
+        val inviteCodesToClose = ownedRooms.map { it.inviteCode }
         ownedRooms.forEach { room ->
             val roomId = room.id
             if (!roomId.isNullOrBlank()) {
@@ -78,7 +94,6 @@ class AdminUserService(
                 roomProductMetricRepository.deleteById(roomId)
             }
             roomRepository.delete(room)
-            collaborationService.closeRoom(room.inviteCode)
         }
 
         roomParticipantRepository.deleteAllByUserId(targetUserId)
@@ -89,6 +104,11 @@ class AdminUserService(
         userTaskTemplateRepository.deleteAllByOwnerUserId(targetUserId)
         userTaskCategoryRepository.deleteAllByOwnerUserId(targetUserId)
         userRepository.delete(target)
+        TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+            override fun afterCommit() {
+                inviteCodesToClose.forEach(collaborationService::closeRoom)
+            }
+        })
     }
 
     private fun requireAdmin(user: User) {

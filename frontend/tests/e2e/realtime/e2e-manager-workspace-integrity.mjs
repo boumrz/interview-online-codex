@@ -178,6 +178,7 @@ async function bootstrapManager(page, auth, inviteCode) {
   const status = page.locator("[data-testid='room-connection-status']");
   await page.waitForFunction((element) => element.getAttribute("data-state") === "online", await status.elementHandle(), { timeout: 10_000 });
   await page.waitForTimeout(250);
+  await page.getByRole("tab", { name: "Шаги", exact: true }).click();
 }
 
 async function bootstrapCandidate(page, inviteCode) {
@@ -414,12 +415,76 @@ async function runFormerPublicTaskConvergenceRegression(browser) {
   }
 }
 
+async function runAwarenessRenewalSafetyMarginRegression(browser) {
+  const fixture = await createFixture("integrity_awareness", 2);
+  const ownerContext = await browser.newContext();
+  const interviewerContext = await browser.newContext();
+  try {
+    await Promise.all([
+      configureBrowserApiTransport(ownerContext),
+      configureBrowserApiTransport(interviewerContext),
+    ]);
+    const ownerPage = await ownerContext.newPage();
+    const interviewerPage = await interviewerContext.newPage();
+    const ownerRenewals = [];
+    const interviewerRenewals = [];
+    const recordRenewal = (target) => (request) => {
+      if (!request.url().includes(`/api/realtime/rooms/${fixture.room.inviteCode}/events`)) return;
+      try {
+        if (request.postDataJSON()?.type === "manager_workspace_awareness_update") {
+          target.push(Date.now());
+        }
+      } catch {}
+    };
+    ownerPage.on("request", recordRenewal(ownerRenewals));
+    interviewerPage.on("request", recordRenewal(interviewerRenewals));
+
+    await Promise.all([
+      bootstrapManager(ownerPage, fixture.owner, fixture.room.inviteCode),
+      bootstrapManager(interviewerPage, fixture.interviewer, fixture.room.inviteCode),
+    ]);
+    await Promise.all([
+      ownerPage.locator("[data-testid='room-step-row-1']").click(),
+      interviewerPage.locator("[data-testid='room-step-row-1']").click(),
+    ]);
+    await Promise.all([
+      waitForManagerWorkspaceEditor(ownerPage, 1),
+      waitForManagerWorkspaceEditor(interviewerPage, 1),
+    ]);
+    ownerRenewals.length = 0;
+    interviewerRenewals.length = 0;
+
+    await sleep(32_500);
+
+    for (const [label, renewals] of [
+      ["OWNER", ownerRenewals],
+      ["INTERVIEWER", interviewerRenewals],
+    ]) {
+      assertCondition(
+        renewals.length >= 2,
+        `${label}_AWARENESS_RENEWAL_HAS_NO_TIMEOUT_MARGIN count=${renewals.length}`,
+      );
+      const gaps = renewals.slice(1).map((at, index) => at - renewals[index]);
+      assertCondition(
+        gaps.every((gap) => gap <= 17_500),
+        `${label}_AWARENESS_RENEWAL_GAP_TOO_LARGE gaps=${gaps.join(",")}`,
+      );
+    }
+  } finally {
+    await Promise.all([
+      ownerContext.close().catch(() => {}),
+      interviewerContext.close().catch(() => {}),
+    ]);
+  }
+}
+
 const browser = await chromium.launch({ headless: true });
 
 try {
   await runDelayedHydrationRegression(browser);
   await runTaskReindexRegression(browser);
   await runFormerPublicTaskConvergenceRegression(browser);
+  await runAwarenessRenewalSafetyMarginRegression(browser);
   console.log("MANAGER_WORKSPACE_INTEGRITY_OK");
 } catch (error) {
   console.error("MANAGER_WORKSPACE_INTEGRITY_FAIL", error);

@@ -11,6 +11,7 @@ import com.interviewonline.model.User
 import com.interviewonline.repository.RoomHrAssignmentRepository
 import com.interviewonline.repository.RoomParticipantRepository
 import com.interviewonline.repository.RoomRepository
+import com.interviewonline.repository.TeamMembershipRepository
 import com.interviewonline.repository.lockByInviteCode
 import com.interviewonline.repository.UserRepository
 import org.springframework.http.HttpStatus
@@ -26,6 +27,7 @@ class RoomHrTrackingService(
     private val roomRepository: RoomRepository,
     private val assignmentRepository: RoomHrAssignmentRepository,
     private val participantRepository: RoomParticipantRepository,
+    private val teamMembershipRepository: TeamMembershipRepository,
     private val userRepository: UserRepository,
     private val roomAccessService: RoomAccessService,
     private val collaborationService: CollaborationService,
@@ -61,6 +63,7 @@ class RoomHrTrackingService(
         if (request.revision < 0) throw ApiException(HttpStatus.BAD_REQUEST, "Некорректная ревизия метаданных")
         val room = roomRepository.lockByInviteCode(inviteCode)
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+        roomAccessService.requirePersonalScope(room)
         if (room.archivedAt != null) throw ApiException(HttpStatus.GONE, "Комната архивирована")
         roomAccessService.requireManager(
             room,
@@ -122,6 +125,7 @@ class RoomHrTrackingService(
     ): List<HrManagerDto> {
         val room = roomRepository.lockByInviteCode(inviteCode)
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+        roomAccessService.requirePersonalScope(room)
         if (room.archivedAt != null) throw ApiException(HttpStatus.GONE, "Комната архивирована")
         roomAccessService.requireManager(
             room,
@@ -157,6 +161,7 @@ class RoomHrTrackingService(
         collaborationService.mutateRoomPermissions(inviteCode) {
             val room = roomRepository.lockByInviteCode(inviteCode)
                 ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+            roomAccessService.requirePersonalScope(room)
             if (room.archivedAt != null) throw ApiException(HttpStatus.GONE, "Комната архивирована")
             roomAccessService.requireManager(
                 room, user, ownerToken, interviewerToken,
@@ -211,9 +216,10 @@ class RoomHrTrackingService(
         val stored = userRepository.findById(requireNotNull(user.id)).orElseThrow {
             ApiException(HttpStatus.UNAUTHORIZED, "Пользователь не найден")
         }
-        if (!stored.isHr) throw ApiException(HttpStatus.FORBIDDEN, "Требуется профиль нанимающего")
         val room = roomRepository.lockByInviteCode(inviteCode)
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+        roomAccessService.requirePersonalScope(room)
+        if (!stored.isHr) throw ApiException(HttpStatus.FORBIDDEN, "Требуется профиль нанимающего")
         if (room.archivedAt != null) throw ApiException(HttpStatus.GONE, "Комната архивирована")
         val access = roomAccessService.requireManager(
             room,
@@ -234,11 +240,28 @@ class RoomHrTrackingService(
 
     private fun currentManagers(room: Room): List<HrManagerDto> {
         val roomId = requireNotNull(room.id)
+        val ownerId = room.ownerUser?.id
+        room.teamId?.let { teamId ->
+            return participantRepository.findAllByRoomIdOrderByCreatedAtAsc(roomId)
+                .mapNotNull { participant ->
+                    val assigned = participant.user ?: return@mapNotNull null
+                    val userId = assigned.id ?: return@mapNotNull null
+                    if (!assigned.isHr ||
+                        (userId != ownerId && participant.role != "interviewer") ||
+                        !teamMembershipRepository.existsByTeamIdAndUserIdAndState(teamId, userId, "ACTIVE")
+                    ) return@mapNotNull null
+                    HrManagerDto(
+                        userId = userId,
+                        displayName = assigned.displayName.orEmpty(),
+                        isOwner = userId == ownerId,
+                    )
+                }
+                .distinctBy { it.userId }
+        }
         val interviewerIds = participantRepository.findAllByRoomIdOrderByCreatedAtAsc(roomId)
             .filter { it.role == "interviewer" }
             .mapNotNull { it.user?.id }
             .toSet()
-        val ownerId = room.ownerUser?.id
         return assignmentRepository.findAllByRoomIdOrderByCreatedAtAscIdAsc(roomId)
             .filter { assignment ->
                 val assigned = assignment.user

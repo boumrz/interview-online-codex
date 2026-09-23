@@ -66,10 +66,12 @@ try {
   await page.waitForURL(`${webBaseUrl}/`, { timeout: 15000 });
 
   await page.locator('a[href="/dashboard/rooms"]').first().click();
-  await page.waitForURL(/\/dashboard\/rooms/, { timeout: 15000 });
+  await page.waitForURL(/\/workspace\/personal\/interviews$/, { timeout: 15000 });
 
   await page.goto(`${webBaseUrl}/login`, { waitUntil: "domcontentloaded" });
-  await page.waitForURL(/\/dashboard\/rooms/, { timeout: 15000 });
+  await page.waitForURL(/\/workspace\/personal\/interviews$/, { timeout: 15000 }).catch((error) => {
+    throw new Error(`LOGIN_REDIRECT_FAILED actual=${page.url()}`, { cause: error });
+  });
 
   console.log("AUTH_NAVIGATION_OK");
   await context.close();

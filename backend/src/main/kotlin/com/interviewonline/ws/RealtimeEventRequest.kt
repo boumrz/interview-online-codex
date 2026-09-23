@@ -13,6 +13,7 @@ data class RealtimeEventRequest(
     val rating: Int? = null,
     val notes: String? = null,
     val noteId: String? = null,
+    val clientMessageId: String? = null,
     val noteText: String? = null,
     val noteTimestampEpochMs: Long? = null,
     val privateNoteId: String? = null,

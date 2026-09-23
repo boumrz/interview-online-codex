@@ -11,6 +11,350 @@ export type AuthResponse = {
   user: User;
 };
 
+export type WorkspaceKind = "PERSONAL" | "TEAM";
+
+export type WorkspaceSummary = {
+  id: string;
+  name: string;
+  role: string;
+  epoch: number;
+  capabilities: string[];
+};
+
+export type TeamDetail = Omit<WorkspaceSummary, "role"> & {
+  role: TeamMemberRole;
+  revision: number;
+};
+
+export type TeamMemberRole = "OWNER" | "ADMIN" | "MEMBER";
+
+export type TeamMemberState = "ACTIVE" | "SUSPENDED" | "LEFT" | "REMOVED";
+
+export type TeamProcessLabel = {
+  readonly trackId: string;
+  readonly trackName: string;
+  readonly vacancyId: string | null;
+  readonly vacancyTitle: string | null;
+};
+
+export type TeamProcessListResponse = {
+  readonly items: readonly TeamProcessLabel[];
+};
+
+export type TeamMergeRedirect = { readonly teamId: string };
+
+export type TeamMemberDirectoryItem = {
+  readonly userId: string;
+  readonly displayName: string;
+  readonly role: TeamMemberRole;
+  readonly state: TeamMemberState;
+  readonly revision: number;
+  readonly processes?: readonly TeamProcessLabel[];
+};
+
+export type TeamMemberDirectoryPage = {
+  readonly items: ReadonlyArray<TeamMemberDirectoryItem>;
+  readonly page: number;
+  readonly size: number;
+  readonly totalElements: number;
+  readonly totalPages: number;
+};
+
+export type TeamMemberDirectoryQuery = {
+  readonly accountId: string;
+  readonly teamId: string;
+  readonly page: number;
+  readonly size: number;
+  readonly q?: string;
+  readonly state?: Extract<TeamMemberState, "ACTIVE" | "SUSPENDED">;
+};
+
+export type TeamManagementTeam = {
+  readonly id: string;
+  readonly name: string;
+  readonly role: TeamMemberRole;
+  readonly revision: number;
+};
+
+export type TeamManagementMember = Omit<TeamMemberDirectoryItem, "state"> & {
+  readonly state: TeamMemberState;
+};
+
+export type TeamRenameResponse = {
+  readonly outcome: "RENAMED" | "UNCHANGED";
+  readonly recovered: boolean;
+  readonly team: TeamManagementTeam;
+};
+
+export type TeamMemberRoleResponse = {
+  readonly outcome: "ROLE_UPDATED" | "UNCHANGED";
+  readonly recovered: boolean;
+  readonly member: TeamManagementMember;
+};
+
+export type TeamMemberLifecycleResponse = {
+  readonly outcome: "MEMBER_LEFT" | "MEMBER_REMOVED" | "MEMBER_SUSPENDED" | "MEMBER_RESUMED";
+  readonly recovered: boolean;
+  readonly member: TeamManagementMember;
+};
+
+export type TeamOwnershipTransferResponse = {
+  readonly outcome: "OWNERSHIP_TRANSFERRED";
+  readonly recovered: boolean;
+  readonly team: TeamManagementTeam;
+  readonly affectedMembers: readonly [TeamManagementMember, TeamManagementMember];
+};
+
+export type TeamInterviewProgrammeTask = {
+  readonly taskId: string;
+  readonly title: string;
+  readonly language: string;
+  readonly position: number;
+  readonly mandatory: boolean;
+};
+
+export type TeamInterviewProgramme = {
+  readonly id: string;
+  readonly origin: "TRACK" | "VACANCY";
+  readonly targetType: "TRACK" | "VACANCY";
+  readonly targetId: string;
+  readonly status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+  readonly version: number;
+  readonly revision: number;
+  readonly mandatory: boolean;
+  readonly tasks: readonly TeamInterviewProgrammeTask[];
+};
+
+export type TeamInterviewProgrammeResponse = {
+  readonly programme: TeamInterviewProgramme | null;
+};
+
+export type TeamVacancy = {
+  readonly id: string;
+  readonly title: string;
+  readonly status: "ACTIVE" | "ARCHIVED";
+  readonly revision: number;
+  readonly programme: TeamInterviewProgramme | null;
+};
+
+export type TeamTrack = {
+  readonly id: string;
+  readonly name: string;
+  readonly status: "ACTIVE" | "ARCHIVED";
+  readonly revision: number;
+  readonly programme: TeamInterviewProgramme | null;
+  readonly vacancies: readonly TeamVacancy[];
+};
+
+export type TeamTrackCounts = {
+  readonly activeTracks: number;
+  readonly archivedTracks: number;
+  readonly activeVacancies: number;
+  readonly archivedVacancies: number;
+};
+
+export type TeamTracksResponse = {
+  readonly items: readonly TeamTrack[];
+  readonly counts: TeamTrackCounts;
+};
+
+export type TeamTrackResponse = {
+  readonly track: TeamTrack;
+};
+
+export type TeamVacancyResponse = {
+  readonly vacancy: TeamVacancy;
+};
+
+export type TeamTaskTemplate = {
+  readonly id: string;
+  readonly title: string;
+  readonly description: string;
+  readonly starterCode: string;
+  readonly language: string;
+  readonly status: "ACTIVE" | "ARCHIVED";
+  readonly revision: number;
+  readonly createdByUserId: string;
+};
+
+export type TeamTaskLibraryCounts = {
+  readonly activeTasks: number;
+  readonly archivedTasks: number;
+};
+
+export type TeamTaskLibraryResponse = {
+  readonly items: readonly TeamTaskTemplate[];
+  readonly counts: TeamTaskLibraryCounts;
+};
+
+export type TeamTaskTemplateResponse = {
+  readonly task: TeamTaskTemplate;
+};
+
+export type TeamTaskSetItem = {
+  readonly taskId: string;
+  readonly title: string;
+  readonly language: string;
+  readonly position: number;
+};
+
+export type TeamTaskSet = {
+  readonly id: string;
+  readonly name: string;
+  readonly items: readonly TeamTaskSetItem[];
+  readonly status: "ACTIVE" | "ARCHIVED";
+  readonly revision: number;
+  readonly createdByUserId: string;
+};
+
+export type TeamTaskSetCounts = {
+  readonly activeSets: number;
+  readonly archivedSets: number;
+};
+
+export type TeamTaskSetLibraryResponse = {
+  readonly items: readonly TeamTaskSet[];
+  readonly counts: TeamTaskSetCounts;
+};
+
+export type TeamTaskSetResponse = {
+  readonly taskSet: TeamTaskSet;
+};
+
+export type TeamInterviewTask = {
+  readonly stepIndex: number;
+  readonly title: string;
+  readonly description: string;
+  readonly starterCode: string;
+  readonly language: string;
+  readonly sourceTaskTemplateId: string;
+  readonly mandatory: boolean;
+};
+
+export type TeamInterviewAssignee = {
+  readonly userId: string;
+  readonly displayName: string;
+  readonly role: "owner" | "interviewer" | "candidate";
+};
+
+export type TeamInterview = {
+  readonly id: string;
+  readonly title: string;
+  readonly inviteCode: string;
+  readonly teamId: string;
+  readonly status: "active" | "frozen" | "finished";
+  readonly trackId: string | null;
+  readonly vacancyId: string | null;
+  readonly taskSetId: string | null;
+  readonly taskSetRevision: number | null;
+  readonly programmeId: string | null;
+  readonly programmeOrigin: "TRACK" | "VACANCY" | null;
+  readonly programmeVersion: number | null;
+  readonly tasks: readonly TeamInterviewTask[];
+  readonly assignees: readonly TeamInterviewAssignee[];
+};
+
+export type TeamInterviewResponse = {
+  readonly interview: TeamInterview;
+};
+
+export type TeamInterviewListTask = {
+  readonly stepIndex: number;
+  readonly title: string;
+  readonly language: string;
+  readonly mandatory: boolean;
+};
+
+export type TeamInterviewTaskScore = {
+  readonly stepIndex: number;
+  readonly title: string;
+  readonly score: number | null;
+};
+
+export type TeamInterviewListItem = {
+  readonly id: string;
+  readonly title: string;
+  readonly inviteCode: string;
+  readonly teamId: string;
+  readonly status: "active" | "frozen" | "finished";
+  readonly ownerUserId: string | null;
+  readonly createdByUserId: string | null;
+  readonly ownerDisplayName: string | null;
+  readonly ownershipState: "ACTIVE" | "OWNER_SUSPENDED" | "OWNER_LEFT" | "OWNER_REMOVED" | "OWNER_MISSING";
+  readonly trackId: string | null;
+  readonly trackName: string | null;
+  readonly vacancyId: string | null;
+  readonly vacancyTitle: string | null;
+  readonly taskSetId: string | null;
+  readonly taskSetRevision: number | null;
+  readonly programmeId: string | null;
+  readonly programmeOrigin: "TRACK" | "VACANCY" | null;
+  readonly programmeVersion: number | null;
+  readonly taskCount: number;
+  readonly createdAt: string;
+  readonly finishedAt: string | null;
+  readonly verdict: string | null;
+  readonly verdictComment: string | null;
+  readonly tasks: readonly TeamInterviewListTask[];
+  readonly taskScores: readonly TeamInterviewTaskScore[];
+  readonly assignees: readonly TeamInterviewAssignee[];
+};
+
+export type TeamInterviewListResponse = {
+  readonly items: readonly TeamInterviewListItem[];
+};
+
+export type TeamInterviewOwnerOffer = {
+  readonly id: string;
+  readonly teamId: string;
+  readonly interviewId: string;
+  readonly fromUserId: string;
+  readonly toUserId: string;
+  readonly status: "PENDING" | "ACCEPTED" | "DECLINED" | "EXPIRED" | "CANCELLED";
+  readonly createdAt: string;
+  readonly expiresAt: string;
+  readonly respondedAt: string | null;
+};
+
+export type TeamInterviewOwnerOfferResponse = {
+  readonly offer: TeamInterviewOwnerOffer;
+};
+
+export type TeamInterviewOwnerOfferListItem = {
+  readonly id: string;
+  readonly teamId: string;
+  readonly interviewId: string;
+  readonly interviewTitle: string;
+  readonly fromUserId: string;
+  readonly fromDisplayName: string;
+  readonly toUserId: string;
+  readonly status: "PENDING";
+  readonly createdAt: string;
+  readonly expiresAt: string;
+};
+
+export type TeamInterviewOwnerOfferListResponse = {
+  readonly items: readonly TeamInterviewOwnerOfferListItem[];
+};
+
+export type CreateTeamResponse = {
+  team: Pick<WorkspaceSummary, "id" | "name">;
+  membership: {
+    role: string;
+    state: string;
+    epoch: number;
+  };
+  capabilities: string[];
+};
+
+export type WorkspaceCacheScope = {
+  accountId: string;
+  kind: WorkspaceKind;
+  teamId: string;
+  query: string;
+  generation: number;
+};
+
 export type CreateRoomRequest = {
   title: string;
   taskIds: string[];
@@ -42,6 +386,7 @@ export type RoomTask = {
   categoryName: string | null;
   score: number | null;
   sourceTaskTemplateId?: string | null;
+  mandatory?: boolean;
 };
 
 /**
@@ -81,6 +426,7 @@ export type RoomAccessMember = {
 
 export type Room = {
   id: string;
+  teamId?: string | null;
   title: string;
   inviteCode: string;
   language: string;
@@ -104,7 +450,7 @@ export type RoomSummary = {
   title: string;
   inviteCode: string;
   language: string;
-  accessRole: "owner" | "participant";
+  accessRole: "owner" | "interviewer" | "candidate";
   createdAt: string;
   ownerToken: string | null;
   interviewerToken: string | null;
@@ -142,7 +488,7 @@ export type HrInterview = {
   createdAt: string;
   finishedAt: string | null;
   archivedAt: string | null;
-  status: "active" | "finished";
+  status: "active" | "frozen" | "finished";
   interviewState: "scheduled" | "active" | "finished";
   verdict: string | null;
   verdictComment: string | null;
@@ -259,10 +605,15 @@ export type PresetSummary = {
   id: string;
   name: string;
   itemCount: number;
+  languageCounts: Record<string, number>;
+  status: "ACTIVE" | "ARCHIVED";
+  revision: number;
 };
 
 export type PresetDetail = {
   id: string;
   name: string;
   items: PresetItem[];
+  status: "ACTIVE" | "ARCHIVED";
+  revision: number;
 };

@@ -1,0 +1,1269 @@
+{
+  "task": "1.6b",
+  "generatedAt": "2026-09-09T12:45:24.289Z",
+  "pass": true,
+  "note": "Prototype-only DA-02 evidence; not application acceptance or server authorization evidence.",
+  "pageErrors": [],
+  "matrix": [
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "zoom": 1,
+      "route": "#/teams/atlas/tracks?actor=admin&state=success&long=1",
+      "clientWidth": 1440,
+      "scrollWidth": 1440,
+      "horizontalOverflow": 0,
+      "interactiveCount": 22,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "zoom": 1.25,
+      "route": "#/teams/atlas/library?actor=author&state=success&long=1",
+      "clientWidth": 1440,
+      "scrollWidth": 1440,
+      "horizontalOverflow": 0,
+      "interactiveCount": 21,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "zoom": 1.5,
+      "route": "#/teams/atlas/library?actor=member&state=success&tab=sets&long=1",
+      "clientWidth": 1440,
+      "scrollWidth": 1440,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "zoom": 2,
+      "route": "#/teams/atlas/interviews?actor=roomOwner&state=success&long=1",
+      "clientWidth": 1440,
+      "scrollWidth": 1440,
+      "horizontalOverflow": 0,
+      "interactiveCount": 22,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "zoom": 1,
+      "route": "#/teams/atlas/interviews/new?actor=member&state=success&programme=published&long=1",
+      "clientWidth": 1366,
+      "scrollWidth": 1366,
+      "horizontalOverflow": 0,
+      "interactiveCount": 30,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "zoom": 1.25,
+      "route": "#/teams/atlas/interviews/int-204?actor=interviewer&state=success&long=1",
+      "clientWidth": 1366,
+      "scrollWidth": 1366,
+      "horizontalOverflow": 0,
+      "interactiveCount": 12,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "zoom": 1.5,
+      "route": "#/teams/atlas/tracks?actor=admin&state=success&long=1",
+      "clientWidth": 1366,
+      "scrollWidth": 1366,
+      "horizontalOverflow": 0,
+      "interactiveCount": 22,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "zoom": 2,
+      "route": "#/teams/atlas/library?actor=author&state=success&long=1",
+      "clientWidth": 1366,
+      "scrollWidth": 1366,
+      "horizontalOverflow": 0,
+      "interactiveCount": 21,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "zoom": 1,
+      "route": "#/teams/atlas/library?actor=member&state=success&tab=sets&long=1",
+      "clientWidth": 1280,
+      "scrollWidth": 1280,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "zoom": 1.25,
+      "route": "#/teams/atlas/interviews?actor=roomOwner&state=success&long=1",
+      "clientWidth": 1280,
+      "scrollWidth": 1280,
+      "horizontalOverflow": 0,
+      "interactiveCount": 22,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "zoom": 1.5,
+      "route": "#/teams/atlas/interviews/new?actor=member&state=success&programme=published&long=1",
+      "clientWidth": 1280,
+      "scrollWidth": 1280,
+      "horizontalOverflow": 0,
+      "interactiveCount": 30,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "zoom": 2,
+      "route": "#/teams/atlas/interviews/int-204?actor=interviewer&state=success&long=1",
+      "clientWidth": 1280,
+      "scrollWidth": 1280,
+      "horizontalOverflow": 0,
+      "interactiveCount": 12,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "zoom": 1,
+      "route": "#/teams/atlas/tracks?actor=admin&state=success&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 22,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "zoom": 1.25,
+      "route": "#/teams/atlas/library?actor=author&state=success&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 21,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "zoom": 1.5,
+      "route": "#/teams/atlas/library?actor=member&state=success&tab=sets&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "zoom": 2,
+      "route": "#/teams/atlas/interviews?actor=roomOwner&state=success&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 22,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 480
+      },
+      "zoom": 1,
+      "route": "#/teams/atlas/interviews/new?actor=member&state=success&programme=published&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 29,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 480
+      },
+      "zoom": 1.25,
+      "route": "#/teams/atlas/interviews/int-204?actor=interviewer&state=success&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 11,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 480
+      },
+      "zoom": 1.5,
+      "route": "#/teams/atlas/tracks?actor=admin&state=success&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 21,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 480
+      },
+      "zoom": 2,
+      "route": "#/teams/atlas/library?actor=author&state=success&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 20,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "zoom": 1,
+      "route": "#/teams/atlas/library?actor=member&state=success&tab=sets&long=1",
+      "clientWidth": 768,
+      "scrollWidth": 768,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "zoom": 1.25,
+      "route": "#/teams/atlas/interviews?actor=roomOwner&state=success&long=1",
+      "clientWidth": 768,
+      "scrollWidth": 768,
+      "horizontalOverflow": 0,
+      "interactiveCount": 22,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "zoom": 1.5,
+      "route": "#/teams/atlas/interviews/new?actor=member&state=success&programme=published&long=1",
+      "clientWidth": 768,
+      "scrollWidth": 768,
+      "horizontalOverflow": 0,
+      "interactiveCount": 30,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "zoom": 2,
+      "route": "#/teams/atlas/interviews/int-204?actor=interviewer&state=success&long=1",
+      "clientWidth": 768,
+      "scrollWidth": 768,
+      "horizontalOverflow": 0,
+      "interactiveCount": 12,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "zoom": 1,
+      "route": "#/teams/atlas/tracks?actor=admin&state=success&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 22,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "zoom": 1.25,
+      "route": "#/teams/atlas/library?actor=author&state=success&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 21,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "zoom": 1.5,
+      "route": "#/teams/atlas/library?actor=member&state=success&tab=sets&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "zoom": 2,
+      "route": "#/teams/atlas/interviews?actor=roomOwner&state=success&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 22,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 640
+      },
+      "zoom": 1,
+      "route": "#/teams/atlas/interviews/new?actor=member&state=success&programme=published&long=1",
+      "clientWidth": 320,
+      "scrollWidth": 320,
+      "horizontalOverflow": 0,
+      "interactiveCount": 32,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 640
+      },
+      "zoom": 1.25,
+      "route": "#/teams/atlas/interviews/int-204?actor=interviewer&state=success&long=1",
+      "clientWidth": 320,
+      "scrollWidth": 320,
+      "horizontalOverflow": 0,
+      "interactiveCount": 14,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 640
+      },
+      "zoom": 1.5,
+      "route": "#/teams/atlas/tracks?actor=admin&state=success&long=1",
+      "clientWidth": 320,
+      "scrollWidth": 320,
+      "horizontalOverflow": 0,
+      "interactiveCount": 24,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 640
+      },
+      "zoom": 2,
+      "route": "#/teams/atlas/library?actor=author&state=success&long=1",
+      "clientWidth": 320,
+      "scrollWidth": 320,
+      "horizontalOverflow": 0,
+      "interactiveCount": 23,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 360,
+        "height": 640
+      },
+      "zoom": 1,
+      "route": "#/teams/atlas/library?actor=member&state=success&tab=sets&long=1",
+      "clientWidth": 360,
+      "scrollWidth": 360,
+      "horizontalOverflow": 0,
+      "interactiveCount": 21,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 360,
+        "height": 640
+      },
+      "zoom": 1.25,
+      "route": "#/teams/atlas/interviews?actor=roomOwner&state=success&long=1",
+      "clientWidth": 360,
+      "scrollWidth": 360,
+      "horizontalOverflow": 0,
+      "interactiveCount": 24,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 360,
+        "height": 640
+      },
+      "zoom": 1.5,
+      "route": "#/teams/atlas/interviews/new?actor=member&state=success&programme=published&long=1",
+      "clientWidth": 360,
+      "scrollWidth": 360,
+      "horizontalOverflow": 0,
+      "interactiveCount": 32,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 360,
+        "height": 640
+      },
+      "zoom": 2,
+      "route": "#/teams/atlas/interviews/int-204?actor=interviewer&state=success&long=1",
+      "clientWidth": 360,
+      "scrollWidth": 360,
+      "horizontalOverflow": 0,
+      "interactiveCount": 14,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "zoom": 1,
+      "route": "#/teams/atlas/tracks?actor=admin&state=success&long=1",
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "horizontalOverflow": 0,
+      "interactiveCount": 24,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "zoom": 1.25,
+      "route": "#/teams/atlas/library?actor=author&state=success&long=1",
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "horizontalOverflow": 0,
+      "interactiveCount": 23,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "zoom": 1.5,
+      "route": "#/teams/atlas/library?actor=member&state=success&tab=sets&long=1",
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "horizontalOverflow": 0,
+      "interactiveCount": 21,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "zoom": 2,
+      "route": "#/teams/atlas/interviews?actor=roomOwner&state=success&long=1",
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "horizontalOverflow": 0,
+      "interactiveCount": 24,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 667,
+        "height": 375
+      },
+      "zoom": 1,
+      "route": "#/teams/atlas/interviews/new?actor=member&state=success&programme=published&long=1",
+      "clientWidth": 667,
+      "scrollWidth": 667,
+      "horizontalOverflow": 0,
+      "interactiveCount": 31,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 667,
+        "height": 375
+      },
+      "zoom": 1.25,
+      "route": "#/teams/atlas/interviews/int-204?actor=interviewer&state=success&long=1",
+      "clientWidth": 667,
+      "scrollWidth": 667,
+      "horizontalOverflow": 0,
+      "interactiveCount": 13,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 667,
+        "height": 375
+      },
+      "zoom": 1.5,
+      "route": "#/teams/atlas/tracks?actor=admin&state=success&long=1",
+      "clientWidth": 667,
+      "scrollWidth": 667,
+      "horizontalOverflow": 0,
+      "interactiveCount": 23,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 667,
+        "height": 375
+      },
+      "zoom": 2,
+      "route": "#/teams/atlas/library?actor=author&state=success&long=1",
+      "clientWidth": 667,
+      "scrollWidth": 667,
+      "horizontalOverflow": 0,
+      "interactiveCount": 22,
+      "undersized": [],
+      "pass": true
+    }
+  ],
+  "states": [
+    {
+      "name": "tracks-admin",
+      "hash": "#/teams/atlas/tracks?actor=admin&state=success&long=1",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "screenshot": "tracks-admin.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 22,
+        "undersized": []
+      }
+    },
+    {
+      "name": "track-member-process-empty",
+      "hash": "#/teams/atlas/tracks/frontend?actor=member&state=success",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "screenshot": "track-member-process-empty.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 12,
+        "undersized": []
+      }
+    },
+    {
+      "name": "tracks-conflict",
+      "hash": "#/teams/atlas/tracks?actor=admin&state=conflict",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "screenshot": "tracks-conflict.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 20,
+        "undersized": []
+      }
+    },
+    {
+      "name": "tracks-archive",
+      "hash": "#/teams/atlas/tracks?actor=member&state=archived",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "screenshot": "tracks-archive.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 15,
+        "undersized": []
+      }
+    },
+    {
+      "name": "library-member",
+      "hash": "#/teams/atlas/library?actor=member&state=success",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "screenshot": "library-member.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 21,
+        "undersized": []
+      }
+    },
+    {
+      "name": "library-sets",
+      "hash": "#/teams/atlas/library?actor=author&state=success&tab=sets",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "screenshot": "library-sets.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 20,
+        "undersized": []
+      }
+    },
+    {
+      "name": "library-conflict",
+      "hash": "#/teams/atlas/library/tasks/task-1/edit?actor=author&state=conflict&long=1",
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "screenshot": "library-conflict.png",
+      "geometry": {
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "horizontalOverflow": 0,
+        "interactiveCount": 23,
+        "undersized": []
+      }
+    },
+    {
+      "name": "library-filter-empty",
+      "hash": "#/teams/atlas/library?actor=member&state=filterEmpty",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "screenshot": "library-filter-empty.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 19,
+        "undersized": []
+      }
+    },
+    {
+      "name": "library-archive",
+      "hash": "#/teams/atlas/library?actor=admin&state=archived",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "screenshot": "library-archive.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 21,
+        "undersized": []
+      }
+    },
+    {
+      "name": "personal-publish-copy",
+      "hash": "#/personal/library?actor=personal&state=success&publish=1",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "screenshot": "personal-publish-copy.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 16,
+        "undersized": []
+      }
+    },
+    {
+      "name": "interviews-room-owner",
+      "hash": "#/teams/atlas/interviews?actor=roomOwner&state=success&long=1",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "screenshot": "interviews-room-owner.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 22,
+        "undersized": []
+      }
+    },
+    {
+      "name": "interviews-admin-no-grant",
+      "hash": "#/teams/atlas/interviews?actor=admin&state=success",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "screenshot": "interviews-admin-no-grant.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 19,
+        "undersized": []
+      }
+    },
+    {
+      "name": "interviews-filter-empty",
+      "hash": "#/teams/atlas/interviews?actor=interviewer&state=filterEmpty",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "screenshot": "interviews-filter-empty.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 18,
+        "undersized": []
+      }
+    },
+    {
+      "name": "interviews-archive",
+      "hash": "#/teams/atlas/interviews?actor=hiring&state=archived",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "screenshot": "interviews-archive.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 19,
+        "undersized": []
+      }
+    },
+    {
+      "name": "create-programme",
+      "hash": "#/teams/atlas/interviews/new?actor=member&state=success&programme=published&long=1",
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "screenshot": "create-programme.png",
+      "geometry": {
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "horizontalOverflow": 0,
+        "interactiveCount": 32,
+        "undersized": []
+      }
+    },
+    {
+      "name": "create-free",
+      "hash": "#/teams/atlas/interviews/new?actor=member&state=success&programme=none",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "screenshot": "create-free.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 31,
+        "undersized": []
+      }
+    },
+    {
+      "name": "create-draft-blocked",
+      "hash": "#/teams/atlas/interviews/new?actor=member&state=success&programme=draft",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "screenshot": "create-draft-blocked.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 30,
+        "undersized": []
+      }
+    },
+    {
+      "name": "create-conflict",
+      "hash": "#/teams/atlas/interviews/new?actor=member&state=conflict&programme=published",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "screenshot": "create-conflict.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 30,
+        "undersized": []
+      }
+    },
+    {
+      "name": "preparation-room-owner",
+      "hash": "#/teams/atlas/interviews/int-204?actor=roomOwner&state=success",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "screenshot": "preparation-room-owner.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 17,
+        "undersized": []
+      }
+    },
+    {
+      "name": "preparation-interviewer",
+      "hash": "#/teams/atlas/interviews/int-204?actor=interviewer&state=success",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "screenshot": "preparation-interviewer.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 12,
+        "undersized": []
+      }
+    }
+  ],
+  "roles": {
+    "member": {
+      "labelVisible": true,
+      "settingsVisible": false,
+      "candidatesVisible": false,
+      "interviewRowVisible": false
+    },
+    "author": {
+      "labelVisible": true,
+      "settingsVisible": false,
+      "candidatesVisible": false,
+      "interviewRowVisible": false
+    },
+    "admin": {
+      "labelVisible": true,
+      "settingsVisible": true,
+      "candidatesVisible": false,
+      "interviewRowVisible": false
+    },
+    "owner": {
+      "labelVisible": true,
+      "settingsVisible": true,
+      "candidatesVisible": false,
+      "interviewRowVisible": false
+    },
+    "roomOwner": {
+      "labelVisible": true,
+      "settingsVisible": false,
+      "candidatesVisible": false,
+      "interviewRowVisible": true
+    },
+    "interviewer": {
+      "labelVisible": true,
+      "settingsVisible": false,
+      "candidatesVisible": false,
+      "interviewRowVisible": true
+    },
+    "hiring": {
+      "labelVisible": true,
+      "settingsVisible": false,
+      "candidatesVisible": true,
+      "interviewRowVisible": true
+    }
+  },
+  "memberLibrary": {
+    "editVisible": false,
+    "copyVisible": true,
+    "trackFilterVisible": false
+  },
+  "authorLibrary": {
+    "editVisible": true
+  },
+  "taskConflict": {
+    "state": "conflict",
+    "titlePreserved": true,
+    "conditionPreserved": true,
+    "conflictVisible": true,
+    "afterNavigationPreserved": true
+  },
+  "interviewConflict": {
+    "state": "conflict",
+    "titlePreserved": true,
+    "conflictVisible": true,
+    "unsavedGuardVisible": true,
+    "afterStayPreserved": true,
+    "contextReset": {
+      "vacancy": "none",
+      "message": "Несовместимая вакансия очищена. Подтвердите новый контекст перед пересчётом программы."
+    }
+  },
+  "programmeResolver": {
+    "publishedProgramme": {
+      "mandatoryCount": 2,
+      "mandatoryRemoveCount": 0,
+      "submitDisabled": false
+    },
+    "noneProgramme": {
+      "freeChoiceVisible": true,
+      "submitDisabled": false
+    },
+    "draftProgramme": {
+      "blockerVisible": true,
+      "submitDisabled": true
+    }
+  },
+  "compactForm": {
+    "visualViewport": {
+      "width": 390,
+      "height": 360
+    },
+    "primaryRect": {
+      "x": 100.8125,
+      "y": 157.03125,
+      "width": 252.1875,
+      "height": 46
+    },
+    "primaryReachable": true,
+    "horizontalOverflow": 0
+  },
+  "safeArea": {
+    "closed": {
+      "count": 16,
+      "allInside": true,
+      "controls": [
+        {
+          "name": "К основному содержимому",
+          "left": 59,
+          "right": 301.625
+        },
+        {
+          "name": "Выбрать роль для просмотра прототипа",
+          "left": 59,
+          "right": 297.625
+        },
+        {
+          "name": "Выбрать состояние данных",
+          "left": 309.625,
+          "right": 452.8125
+        },
+        {
+          "name": "Открыть рабочую навигацию",
+          "left": 59,
+          "right": 107
+        },
+        {
+          "name": "+ Создать интервью",
+          "left": 61,
+          "right": 606
+        },
+        {
+          "name": "interviewSearch",
+          "left": 76,
+          "right": 591
+        },
+        {
+          "name": "Все трекиFrontendБез трека",
+          "left": 76,
+          "right": 591
+        },
+        {
+          "name": "Все вакансииMiddle ReactБез вакансии",
+          "left": 76,
+          "right": 591
+        },
+        {
+          "name": "АктивныеЗавершеноАрхив",
+          "left": 76,
+          "right": 591
+        },
+        {
+          "name": "Обновить",
+          "left": 76,
+          "right": 591
+        },
+        {
+          "name": "Открыть подготовку",
+          "left": 84,
+          "right": 587
+        },
+        {
+          "name": "Меню",
+          "left": 84,
+          "right": 587
+        },
+        {
+          "name": "Войти в комнату",
+          "left": 84,
+          "right": 587
+        },
+        {
+          "name": "Посмотреть результат",
+          "left": 84,
+          "right": 587
+        },
+        {
+          "name": "Разрешённый просмотр",
+          "left": 84,
+          "right": 587
+        },
+        {
+          "name": "Войти как кандидат",
+          "left": 84,
+          "right": 587
+        }
+      ],
+      "horizontalOverflow": 0
+    },
+    "open": {
+      "count": 6,
+      "allInside": true,
+      "controls": [
+        {
+          "name": "ПространствоЛичное пространство↕",
+          "left": 47,
+          "right": 263
+        },
+        {
+          "name": "ИНИнтервью",
+          "left": 47,
+          "right": 263
+        },
+        {
+          "name": "БЗБиблиотека задач",
+          "left": 47,
+          "right": 263
+        },
+        {
+          "name": "КАКандидаты",
+          "left": 47,
+          "right": 263
+        },
+        {
+          "name": "↗Старые входы",
+          "left": 47,
+          "right": 263
+        },
+        {
+          "name": "АК\n                  Александра Константинопольская-РождественскаяПрофиль аккаунта\n                  Личный аккаунт",
+          "left": 47,
+          "right": 263
+        }
+      ],
+      "horizontalOverflow": 0
+    },
+    "pass": true
+  },
+  "keyboard": {
+    "trace": [
+      {
+        "name": "К основному содержимому",
+        "tag": "A",
+        "outlineWidth": "3px"
+      },
+      {
+        "name": "Выбрать роль для просмотра прототипа",
+        "tag": "SELECT",
+        "outlineWidth": "3px"
+      },
+      {
+        "name": "Выбрать состояние данных",
+        "tag": "SELECT",
+        "outlineWidth": "3px"
+      },
+      {
+        "name": "Длинный русский текст",
+        "tag": "INPUT",
+        "outlineWidth": "3px"
+      },
+      {
+        "name": "Открыть рабочую навигацию",
+        "tag": "BUTTON",
+        "outlineWidth": "3px"
+      },
+      {
+        "name": "Закрыть рабочую навигацию",
+        "tag": "BUTTON",
+        "outlineWidth": "3px"
+      },
+      {
+        "name": "КомандаAtlas · Команда интерфейсных платформ для международных продуктов↕",
+        "tag": "BUTTON",
+        "outlineWidth": "3px"
+      },
+      {
+        "name": "ИНИнтервью",
+        "tag": "A",
+        "outlineWidth": "3px"
+      },
+      {
+        "name": "БЗБиблиотека задач",
+        "tag": "A",
+        "outlineWidth": "3px"
+      },
+      {
+        "name": "ТВТреки и вакансии",
+        "tag": "A",
+        "outlineWidth": "3px"
+      },
+      {
+        "name": "УЧУчастники",
+        "tag": "A",
+        "outlineWidth": "3px"
+      },
+      {
+        "name": "↗Старые входы",
+        "tag": "A",
+        "outlineWidth": "3px"
+      },
+      {
+        "name": "АК Александра Константинопольская-РождественскаяПрофиль аккаунта Автор задачи",
+        "tag": "A",
+        "outlineWidth": "3px"
+      },
+      {
+        "name": "Создать задачу",
+        "tag": "BUTTON",
+        "outlineWidth": "3px"
+      },
+      {
+        "name": "Задачи",
+        "tag": "A",
+        "outlineWidth": "3px"
+      },
+      {
+        "name": "Наборы задач",
+        "tag": "A",
+        "outlineWidth": "3px"
+      },
+      {
+        "name": "Название",
+        "tag": "INPUT",
+        "outlineWidth": "3px"
+      },
+      {
+        "name": "Язык",
+        "tag": "SELECT",
+        "outlineWidth": "3px"
+      }
+    ],
+    "visibleFocusCount": 18,
+    "namedCount": 18
+  }
+}

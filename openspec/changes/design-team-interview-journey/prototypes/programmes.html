@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <title>Interview Online — программы интервью · прототип 1.6e</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #102b3b;
+      --ink-2: #4c6169;
+      --nav: #082d35;
+      --nav-soft: #123f47;
+      --paper: #f4efe3;
+      --paper-2: #e9dfcc;
+      --white: #fffdf7;
+      --line: #c7baa5;
+      --aqua: #65c9c0;
+      --orange: #ed6b36;
+      --orange-dark: #a83b14;
+      --yellow: #f2ca63;
+      --green: #207457;
+      --red: #aa3832;
+      --blue: #1f677c;
+      --shadow: 7px 7px 0 rgba(8, 45, 53, .09);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+      --body: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+      --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+      font-family: var(--body);
+      font-size: 16px;
+      background: var(--paper);
+      color: var(--ink);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { min-width: 0; min-height: 100%; margin: 0; overflow-x: clip; }
+    body {
+      min-height: 100dvh;
+      background:
+        linear-gradient(90deg, rgba(8,45,53,.035) 1px, transparent 1px) 0 0 / 24px 24px,
+        linear-gradient(rgba(8,45,53,.035) 1px, transparent 1px) 0 0 / 24px 24px,
+        var(--paper);
+    }
+    button, input, select, textarea { font: inherit; }
+    button, a, select, input, textarea { outline-offset: 4px; }
+    button, a, select { touch-action: manipulation; }
+    :focus-visible { outline: 3px solid var(--orange) !important; box-shadow: 0 0 0 6px rgba(101,201,192,.45); }
+    button:disabled { cursor: not-allowed; opacity: .56; }
+    [hidden] { display: none !important; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    .skip-link { position: fixed; left: 12px; top: 10px; z-index: 100; min-height: 44px; padding: 11px 15px; color: white; background: var(--ink); transform: translateY(-160%); }
+    .skip-link:focus { transform: none; }
+
+    .lab-bar {
+      position: relative; z-index: 30; display: grid; grid-template-columns: minmax(190px,1fr) repeat(4,minmax(130px,auto));
+      gap: 12px; align-items: end; min-height: 82px; padding: 10px 18px; color: white; background: #051e26;
+      border-bottom: 4px solid var(--orange);
+    }
+    .lab-mark { align-self: center; min-width: 0; }
+    .lab-mark strong { display: block; color: var(--yellow); font: 800 .76rem var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+    .lab-mark span { display: block; margin-top: 4px; color: #bfd0d4; font-size: .78rem; }
+    .lab-control { display: grid; gap: 4px; min-width: 0; }
+    .lab-control label, .lab-toggle span { color: #b8cbcf; font: 800 .66rem var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .lab-control select { min-height: 44px; max-width: 230px; padding: 7px 32px 7px 10px; color: white; background: var(--nav-soft); border: 1px solid #55747a; border-radius: 3px; }
+    .lab-toggle { min-height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 4px; }
+    .lab-toggle input { width: 24px; height: 24px; accent-color: var(--orange); }
+
+    .shell { display: grid; grid-template-columns: 262px minmax(0,1fr); min-height: calc(100dvh - 82px); }
+    .sidebar { position: sticky; top: 0; align-self: start; height: calc(100dvh - 82px); padding: 18px 14px; overflow-y: auto; color: white; background: var(--nav); box-shadow: 7px 0 0 rgba(101,201,192,.25); }
+    .brand { display: flex; gap: 10px; align-items: center; min-height: 54px; padding: 0 8px 16px; }
+    .brand-badge { width: 42px; height: 42px; display: grid; place-items: center; flex: 0 0 auto; color: var(--nav); background: var(--aqua); border-radius: 50% 50% 48% 12%; font: 800 1.08rem var(--display); }
+    .brand strong { display: block; font: 700 1.08rem var(--display); }
+    .brand small { display: block; margin-top: 2px; color: #9db8bd; font: .68rem var(--mono); }
+    .workspace { width: 100%; min-height: 58px; display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 8px; padding: 8px 10px; color: white; background: var(--nav-soft); border: 1px solid #4d7278; text-align: left; }
+    .workspace small { display: block; color: var(--aqua); font: .67rem var(--mono); letter-spacing: .07em; text-transform: uppercase; }
+    .workspace strong { display: block; margin-top: 3px; overflow-wrap: anywhere; }
+    .nav-title { margin: 22px 10px 7px; color: #87a9af; font: .67rem var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+    .nav-list { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
+    .nav-link { min-height: 46px; display: flex; align-items: center; gap: 10px; padding: 10px 12px; color: #dbe7e9; text-decoration: none; border-left: 4px solid transparent; }
+    .nav-link[aria-current="page"] { color: white; font-weight: 800; background: rgba(101,201,192,.13); border-left-color: var(--orange); }
+    .nav-token { width: 25px; height: 25px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid #5f7f85; border-radius: 50%; font: .72rem var(--mono); }
+    .actor-card { margin-top: 24px; padding: 13px; border: 1px solid #3e6067; background: rgba(255,255,255,.04); }
+    .actor-card small { color: #9bb6bb; }
+    .actor-card strong { display: block; margin: 4px 0 8px; overflow-wrap: anywhere; }
+    .role-chip { display: inline-flex; min-height: 30px; align-items: center; padding: 4px 8px; color: var(--ink); background: var(--yellow); border-radius: 99px; font: 800 .66rem var(--mono); text-transform: uppercase; }
+
+    .mobile-head { display: none; }
+    .page { min-width: 0; padding: clamp(22px,4vw,54px) clamp(16px,4vw,62px) calc(76px + var(--safe-bottom)); }
+    .page-inner { width: min(1120px,100%); margin: 0 auto; }
+    .breadcrumb { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; color: var(--ink-2); font-size: .82rem; }
+    .breadcrumb span:not(:last-child)::after { content: "/"; margin-left: 6px; color: #968a78; }
+    .head { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 24px; align-items: start; padding-bottom: 24px; border-bottom: 1px solid var(--line); }
+    .eyebrow { margin: 0 0 8px; color: var(--orange-dark); font: 800 .72rem var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+    h1 { max-width: 780px; margin: 0; font: 700 clamp(2.25rem,5vw,4.5rem)/.94 var(--display); letter-spacing: -.045em; overflow-wrap: anywhere; }
+    h2 { margin: 0; font: 700 clamp(1.42rem,3vw,2.05rem)/1.06 var(--display); letter-spacing: -.025em; }
+    h3 { margin: 0; font: 700 1.08rem/1.2 var(--display); overflow-wrap: anywhere; }
+    p { line-height: 1.5; }
+    .lede { max-width: 760px; margin: 13px 0 0; color: var(--ink-2); font-size: 1.01rem; }
+    .head-actions, .actions { display: flex; flex-wrap: wrap; gap: 9px; justify-content: flex-end; }
+    .button { min-height: 46px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 15px; color: white; background: var(--ink); border: 2px solid var(--ink); border-radius: 3px; font-weight: 800; text-decoration: none; cursor: pointer; }
+    .button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 4px 4px 0 var(--aqua); }
+    .button.secondary { color: var(--ink); background: transparent; }
+    .button.ghost { color: var(--ink); background: var(--white); border-color: var(--line); }
+    .button.danger { color: var(--red); background: #fff7f2; border-color: var(--red); }
+    .button.small { min-height: 44px; padding: 8px 12px; }
+    .inline-link { min-height: 44px; display: inline-flex; align-items: center; color: #0b6471; font-weight: 800; text-underline-offset: 4px; }
+
+    .status-line { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0; }
+    .pill { min-height: 31px; display: inline-flex; align-items: center; padding: 5px 10px; color: var(--ink); background: #e2ecea; border: 1px solid #acc9c5; border-radius: 99px; font: 750 .73rem var(--mono); }
+    .pill.published { color: #164b38; background: #dcf1e5; border-color: #8dbca3; }
+    .pill.draft { color: #754314; background: #ffebc2; border-color: #d9ad58; }
+    .pill.archived { color: #732823; background: #f9dfda; border-color: #d69a93; }
+    .pill.version { color: #174e62; background: #e0f0f5; border-color: #9bc3cf; }
+    .pill.locked::before { content: "◆"; margin-right: 6px; font-size: .58rem; }
+    .notice { display: grid; grid-template-columns: 10px minmax(0,1fr) auto; gap: 13px; align-items: start; margin: 18px 0; padding: 14px 15px; border: 1px solid #d2af55; background: #fff3cf; }
+    .notice::before { content: ""; width: 10px; height: 10px; margin-top: 6px; background: var(--yellow); border-radius: 50%; }
+    .notice p { margin: 3px 0 0; color: #594a2b; }
+    .notice.error { color: #752924; border-color: #d3918b; background: #fff0ed; }
+    .notice.error::before { background: var(--red); }
+    .notice.error p { color: #752924; }
+    .notice.success { color: #17543d; border-color: #82b49a; background: #e8f6ee; }
+    .notice.success::before { background: var(--green); }
+    .notice.success p { color: #285f4b; }
+    .notice.info { border-color: #94bdc9; background: #e8f3f5; }
+    .notice.info::before { background: var(--blue); }
+    .notice.info p { color: #315b66; }
+    .notice .button { align-self: center; }
+
+    .grid { display: grid; grid-template-columns: repeat(12,minmax(0,1fr)); gap: 18px; margin-top: 22px; }
+    .span-8 { grid-column: span 8; }
+    .span-7 { grid-column: span 7; }
+    .span-5 { grid-column: span 5; }
+    .span-4 { grid-column: span 4; }
+    .span-12 { grid-column: 1 / -1; }
+    .card { min-width: 0; position: relative; padding: 21px; background: rgba(255,253,247,.94); border: 1px solid var(--line); box-shadow: var(--shadow); }
+    .card::before { content: ""; position: absolute; left: -1px; top: 18px; width: 4px; height: 32px; background: var(--aqua); }
+    .card.accent::before { background: var(--orange); }
+    .card.danger::before { background: var(--red); }
+    .card p:last-child { margin-bottom: 0; }
+    .card-head { display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; }
+    .meta { display: flex; flex-wrap: wrap; gap: 7px 15px; margin-top: 13px; color: var(--ink-2); font-size: .82rem; }
+    .meta strong { color: var(--ink); }
+    .section-kicker { margin: 0 0 6px; color: var(--ink-2); font: 800 .67rem var(--mono); letter-spacing: .09em; text-transform: uppercase; }
+    .section-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; align-items: flex-end; margin: 30px 0 13px; }
+    .section-head p { max-width: 600px; margin: 6px 0 0; color: var(--ink-2); }
+
+    .programme-stack { display: grid; gap: 10px; }
+    .programme-row { min-width: 0; display: grid; grid-template-columns: 44px minmax(0,1fr) auto; gap: 12px; align-items: center; min-height: 78px; padding: 12px; background: white; border: 1px solid var(--line); }
+    .programme-row.locked { background: #edf5f3; border-left: 5px solid var(--green); }
+    .programme-row.extra { border-left: 5px solid var(--orange); }
+    .programme-row.invalid { background: #fff1ee; border-color: #d88e87; }
+    .order { width: 44px; height: 44px; display: grid; place-items: center; background: var(--ink); color: white; font: 800 .78rem var(--mono); }
+    .row-main { min-width: 0; }
+    .row-main strong, .row-main small { display: block; overflow-wrap: anywhere; }
+    .row-main small { margin-top: 4px; color: var(--ink-2); }
+    .row-tools { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+    .icon-button { width: 44px; min-width: 44px; height: 44px; display: grid; place-items: center; color: var(--ink); background: var(--white); border: 1px solid #958a79; cursor: pointer; }
+    .icon-button:disabled { background: #e6e4dd; }
+    .source-ledger { display: grid; gap: 0; margin: 14px 0 0; border-top: 1px solid var(--line); }
+    .source-line { min-height: 52px; display: grid; grid-template-columns: minmax(120px,.55fr) minmax(0,1fr); gap: 14px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); }
+    .source-line dt { color: var(--ink-2); }
+    .source-line dd { min-width: 0; margin: 0; font-weight: 750; overflow-wrap: anywhere; }
+    code { font-family: var(--mono); font-size: .8rem; overflow-wrap: anywhere; }
+
+    .foundation { position: relative; padding: 18px; background: #e7f2ef; border: 2px solid #77aa9b; }
+    .foundation::after { content: "ЗАКРЕПЛЕНО"; position: absolute; top: -11px; right: 14px; padding: 4px 8px; color: white; background: var(--green); font: 800 .62rem var(--mono); letter-spacing: .08em; }
+    .extras { padding: 18px; background: #fff5eb; border: 1px dashed #d79568; }
+    .divider-label { display: flex; align-items: center; gap: 12px; margin: 20px 0 12px; color: var(--ink-2); font: 800 .68rem var(--mono); letter-spacing: .09em; text-transform: uppercase; }
+    .divider-label::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+    .field { display: grid; gap: 7px; margin-top: 17px; }
+    .field label { font-weight: 800; }
+    .field small { color: var(--ink-2); }
+    .field input, .field select, .field textarea { width: 100%; min-height: 48px; padding: 10px 12px; color: var(--ink); background: white; border: 2px solid #948977; border-radius: 3px; }
+    .field textarea { min-height: 128px; resize: vertical; line-height: 1.45; }
+    .field input[readonly] { color: #4b5c61; background: #e9ece8; }
+    .field-error { min-height: 22px; color: var(--red); font-weight: 750; }
+    .check-row { min-height: 48px; display: flex; gap: 10px; align-items: center; margin-top: 14px; }
+    .check-row input { width: 24px; height: 24px; accent-color: var(--green); }
+    .sticky-actions { position: sticky; bottom: 0; z-index: 8; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin: 24px -8px -8px; padding: 14px 8px calc(14px + var(--safe-bottom)); background: linear-gradient(to bottom,rgba(244,239,227,.72),var(--paper) 32%); }
+
+    .state-panel { min-height: 350px; display: grid; place-items: center; margin-top: 24px; padding: clamp(24px,7vw,72px); text-align: center; border: 1px dashed #9c907d; background: rgba(255,255,255,.35); }
+    .state-panel > div { max-width: 630px; }
+    .state-mark { width: 78px; height: 78px; display: grid; place-items: center; margin: 0 auto 18px; color: var(--ink); background: var(--aqua); border-radius: 50% 50% 10px 50%; font: 800 1.12rem var(--mono); }
+    .state-panel.error .state-mark, .state-panel.revoked .state-mark { color: white; background: var(--red); }
+    .state-panel.success .state-mark { color: white; background: var(--green); }
+    .state-panel p { color: var(--ink-2); }
+    .skeleton { width: min(660px,100%); display: grid; gap: 14px; }
+    .skeleton span { height: 18px; display: block; background: linear-gradient(90deg,#ddd3c1,#fffaf0,#ddd3c1); background-size: 220% 100%; animation: shimmer 1.4s infinite; }
+    .skeleton span:first-child { width: 46%; height: 34px; }
+    .skeleton span:nth-child(3) { width: 76%; }
+    @keyframes shimmer { to { background-position: -220% 0; } }
+    @media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
+
+    .timeline { position: relative; display: grid; gap: 16px; padding-left: 32px; }
+    .timeline::before { content: ""; position: absolute; left: 10px; top: 6px; bottom: 6px; width: 2px; background: var(--line); }
+    .timeline-item { position: relative; }
+    .timeline-item::before { content: ""; position: absolute; left: -28px; top: 5px; width: 12px; height: 12px; border: 3px solid var(--paper); border-radius: 50%; background: var(--green); box-shadow: 0 0 0 1px var(--green); }
+    .timeline-item.future::before { background: var(--yellow); box-shadow: 0 0 0 1px #a87821; }
+    .timeline-item p { margin: 4px 0 0; color: var(--ink-2); }
+    .locked-field { min-height: 58px; padding: 11px 13px; background: #e7ece9; border: 1px solid #aeb8b2; }
+    .locked-field small { display: block; color: var(--ink-2); }
+    .locked-field strong { display: block; margin-top: 4px; overflow-wrap: anywhere; }
+    .code-area textarea { min-height: 220px; color: #dcefea; background: #0b2931; border-color: #31545b; font: .86rem/1.55 var(--mono); tab-size: 2; }
+    .mobile-nav { display: none; }
+
+    dialog { width: min(620px,calc(100% - 24px)); max-height: calc(100dvh - 24px); padding: 0; color: var(--ink); background: var(--paper); border: 0; box-shadow: 0 28px 90px rgba(0,0,0,.45); }
+    dialog::backdrop { background: rgba(2,18,23,.74); backdrop-filter: blur(3px); }
+    .dialog-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; padding: 20px; color: white; background: var(--nav); }
+    .dialog-head .eyebrow { color: var(--yellow); }
+    .dialog-close { width: 44px; min-width: 44px; height: 44px; display: grid; place-items: center; color: white; background: transparent; border: 1px solid #66858b; cursor: pointer; }
+    .dialog-body { max-height: calc(100dvh - 108px); padding: 22px; padding-bottom: calc(22px + var(--safe-bottom)); overflow-y: auto; }
+    .toast { position: fixed; right: 18px; bottom: calc(18px + var(--safe-bottom)); z-index: 90; max-width: min(410px,calc(100% - 36px)); padding: 14px 18px; color: white; background: var(--green); box-shadow: 7px 7px 0 rgba(8,45,53,.22); transform: translateY(180%); visibility: hidden; transition: transform .18s,visibility 0s .18s; }
+    .toast[data-open="true"] { transform: none; visibility: visible; transition-delay: 0s; }
+
+    body.keyboard-open .page { padding-bottom: calc(96px + var(--safe-bottom)); }
+    body.keyboard-open::after { content: "Эмуляция экранной клавиатуры · visual viewport 360px"; position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; min-height: 52px; display: grid; place-items: center; padding: 8px 14px var(--safe-bottom); color: white; background: #2a3940; font: .7rem var(--mono); text-align: center; }
+    body.keyboard-open .sticky-actions { bottom: 52px; }
+
+    @media (max-width: 940px) {
+      .lab-bar { grid-template-columns: repeat(2,minmax(0,1fr)); }
+      .lab-mark { grid-column: 1 / -1; }
+      .lab-control select { width: 100%; max-width: none; }
+      .shell { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .mobile-head { min-height: 58px; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 7px 14px; color: white; background: var(--nav); }
+      .mobile-head strong { overflow-wrap: anywhere; }
+      .head { grid-template-columns: 1fr; }
+      .head-actions { justify-content: flex-start; }
+      .span-8,.span-7,.span-5,.span-4 { grid-column: 1 / -1; }
+      .mobile-nav { position: sticky; bottom: 0; z-index: 12; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); margin: 26px -16px calc(-76px - var(--safe-bottom)); padding: 6px 8px calc(6px + var(--safe-bottom)); background: var(--nav); }
+      .mobile-nav a { min-width: 0; min-height: 48px; display: grid; place-items: center; padding: 6px; color: #d8e5e7; text-align: center; text-decoration: none; font-size: .72rem; overflow-wrap: anywhere; }
+      .mobile-nav a[aria-current="page"] { color: var(--yellow); border-top: 3px solid var(--orange); font-weight: 800; }
+      body.keyboard-open .mobile-nav { bottom: 52px; }
+    }
+    @media (max-width: 560px) {
+      .lab-bar { grid-template-columns: 1fr; padding: 10px 12px; }
+      .lab-mark { grid-column: auto; }
+      .lab-toggle { justify-content: flex-start; }
+      .page { padding-top: 24px; }
+      .breadcrumb { font-size: .76rem; }
+      h1 { font-size: clamp(2.1rem,14vw,3.35rem); }
+      body.long-copy h1 { font-size: 2.15rem; line-height: 1.02; }
+      .head-actions,.actions,.sticky-actions { display: grid; grid-template-columns: 1fr; width: 100%; }
+      .button { width: 100%; }
+      .notice { grid-template-columns: 10px minmax(0,1fr); }
+      .notice .button { grid-column: 1 / -1; }
+      .programme-row { grid-template-columns: 44px minmax(0,1fr); }
+      .row-tools { grid-column: 1 / -1; justify-content: flex-start; }
+      .source-line { grid-template-columns: 1fr; gap: 3px; }
+      .card-head { display: grid; }
+      .sticky-actions { position: relative; bottom: auto !important; margin: 20px 0 0; padding: 0 0 calc(10px + var(--safe-bottom)); background: none; }
+      body.keyboard-open .mobile-nav { position: relative; bottom: auto; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">К содержанию программы</a>
+  <header class="lab-bar" aria-label="Панель сценариев прототипа">
+    <div class="lab-mark"><strong>Prototype · 1.6e · DA-05</strong><span>UX-12: программы, версии, основа и новые интервью</span></div>
+    <div class="lab-control"><label for="surfaceSelect">Поверхность</label><select id="surfaceSelect"><option value="manage">Программа процесса</option><option value="create">Создание интервью</option><option value="room">Созданная комната</option></select></div>
+    <div class="lab-control"><label for="actorSelect">Актор</label><select id="actorSelect"><option value="member">MEMBER · чтение</option><option value="admin">ADMIN · управление</option><option value="owner">Владелец команды</option><option value="creator">Создатель комнаты</option></select></div>
+    <div class="lab-control"><label for="stateSelect">Сценарий</label><select id="stateSelect">
+      <option value="published">Опубликовано</option><option value="none">NONE · не настроено</option><option value="firstDraft">Первый черновик</option><option value="publishedDraft">Опубликовано + черновик</option><option value="duplicate">Дубликат source task</option><option value="stale">Stale publish · 409</option><option value="vacancyInherited">Наследование вакансии</option><option value="vacancyUpdate">Обновление базы вакансии</option><option value="archived">Архивировано</option><option value="restored">Восстановлено</option><option value="createPublished">Создание · программа</option><option value="createNone">Создание · NONE</option><option value="createDraft">Создание · draft-only</option><option value="createArchived">Создание · archive</option><option value="createConflict">Создание · версия изменилась</option><option value="programmedRoom">Комната · закреплено</option><option value="loading">Загрузка</option><option value="empty">Пустой результат</option><option value="error">Ошибка</option><option value="revoked">Доступ отозван</option>
+    </select></div>
+    <label class="lab-toggle"><input id="longToggle" type="checkbox"><span>Длинный русский текст</span></label>
+  </header>
+
+  <div class="shell">
+    <aside class="sidebar" aria-label="Навигация команды">
+      <div class="brand"><span class="brand-badge">IO</span><div><strong>Interview Online</strong><small>TEAM WORKSPACE</small></div></div>
+      <button class="workspace" type="button" aria-label="Выбрать рабочее пространство"><span><small>Команда</small><strong>Atlas Engineering</strong></span><span aria-hidden="true">⌄</span></button>
+      <p class="nav-title">Работа</p>
+      <ul class="nav-list"><li><a class="nav-link" href="#/teams/atlas/interviews"><span class="nav-token">И</span>Интервью</a></li><li><a class="nav-link" href="#/teams/atlas/tracks" aria-current="page"><span class="nav-token">П</span>Процессы</a></li><li><a class="nav-link" href="#/teams/atlas/library"><span class="nav-token">Б</span>Библиотека</a></li><li><a class="nav-link" href="#/teams/atlas/members"><span class="nav-token">У</span>Участники</a></li></ul>
+      <div class="actor-card"><small>Текущая роль</small><strong id="actorNameSide">Борис Лебедев</strong><span class="role-chip" id="actorRoleSide">MEMBER</span></div>
+    </aside>
+    <section>
+      <div class="mobile-head"><strong>Atlas Engineering</strong><span class="role-chip" id="actorRoleMobile">MEMBER</span></div>
+      <main class="page" id="main" tabindex="-1"><div class="page-inner" id="screen"></div></main>
+    </section>
+  </div>
+
+  <dialog id="confirmDialog" aria-labelledby="dialogTitle"><div class="dialog-head"><div><p class="eyebrow" id="dialogEyebrow">Подтверждение</p><h2 id="dialogTitle">Подтвердите действие</h2></div><button class="dialog-close" type="button" data-dialog-close aria-label="Закрыть диалог">×</button></div><div class="dialog-body"><p id="dialogText"></p><div class="actions"><button class="button ghost" type="button" data-dialog-close>Отмена</button><button class="button" type="button" id="dialogConfirm">Подтвердить</button></div></div></dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite" data-open="false"></div>
+
+  <script src="mobile-input-fallback.js"></script>
+  <script>
+    const roles = {
+      member: { name: 'Борис Лебедев', label: 'MEMBER', canManage: false },
+      admin: { name: 'Максим Кузнецов', label: 'ADMIN', canManage: true },
+      owner: { name: 'Анна Петрова', label: 'ВЛАДЕЛЕЦ КОМАНДЫ', canManage: true },
+      creator: { name: 'Борис Лебедев', label: 'СОЗДАТЕЛЬ КОМНАТЫ', canManage: false }
+    };
+    const longName = 'Ведущий инженер пользовательских интерфейсов распределённой платформы для международных технических собеседований';
+    const shortName = 'Frontend · Senior';
+    const $ = (selector, root = document) => root.querySelector(selector);
+    const state = { surface: 'manage', actor: 'member', scenario: 'published', long: false, baseApplied: false, extraAdded: false, reviewed: false, lastFocus: null };
+
+    function parseHash() {
+      const raw = location.hash.slice(1) || '/teams/atlas/tracks/frontend/programme?actor=member&state=published&surface=manage';
+      const query = raw.includes('?') ? raw.split('?').slice(1).join('?') : '';
+      const params = new URLSearchParams(query);
+      state.surface = params.get('surface') || (raw.includes('/interviews/new') ? 'create' : raw.includes('/interviews/int-204') ? 'room' : 'manage');
+      state.actor = params.get('actor') || (state.surface === 'create' || state.surface === 'room' ? 'creator' : 'member');
+      state.scenario = params.get('state') || (state.surface === 'create' ? 'createPublished' : state.surface === 'room' ? 'programmedRoom' : 'published');
+      state.long = params.get('long') === '1';
+      document.body.classList.toggle('long-copy', state.long);
+      document.body.classList.toggle('keyboard-open', params.get('keyboard') === '1');
+    }
+
+    function syncControls() {
+      $('#surfaceSelect').value = state.surface;
+      $('#actorSelect').value = state.actor;
+      $('#stateSelect').value = state.scenario;
+      $('#longToggle').checked = state.long;
+      const role = roles[state.actor] || roles.member;
+      $('#actorNameSide').textContent = role.name;
+      $('#actorRoleSide').textContent = role.label;
+      $('#actorRoleMobile').textContent = role.label;
+    }
+
+    function setRoute(next = {}) {
+      Object.assign(state, next);
+      const path = state.surface === 'create' ? '/teams/atlas/interviews/new' : state.surface === 'room' ? '/teams/atlas/interviews/int-204' : '/teams/atlas/tracks/frontend/programme';
+      const params = new URLSearchParams({ actor: state.actor, state: state.scenario, surface: state.surface });
+      if (state.long) params.set('long', '1');
+      if (document.body.classList.contains('keyboard-open')) params.set('keyboard', '1');
+      location.hash = `${path}?${params}`;
+    }
+
+    function processTitle() { return state.long ? longName : shortName; }
+    function header(title, eyebrow, lede, actions = '') {
+      return `<div class="breadcrumb"><span>Atlas Engineering</span><span>Процессы</span><span>${processTitle()}</span><span>Программа интервью</span></div><header class="head"><div><p class="eyebrow">${eyebrow}</p><h1>${title}</h1><p class="lede">${lede}</p></div><div class="head-actions">${actions}</div></header>`;
+    }
+    function mobileNav(current = 'processes') {
+      return `<nav class="mobile-nav" aria-label="Мобильная навигация"><a href="#/teams/atlas/interviews" ${current === 'interviews' ? 'aria-current="page"' : ''}>Интервью</a><a href="#/teams/atlas/tracks" ${current === 'processes' ? 'aria-current="page"' : ''}>Процессы</a><a href="#/teams/atlas/library">Библиотека</a></nav>`;
+    }
+    function statePanel(kind, mark, title, text, action = '') {
+      return `<section class="state-panel ${kind}" aria-labelledby="stateTitle"><div><span class="state-mark" aria-hidden="true">${mark}</span><h2 id="stateTitle">${title}</h2><p>${text}</p>${action ? `<div class="actions" style="justify-content:center">${action}</div>` : ''}</div></section>`;
+    }
+    function skeleton() { return `<section class="state-panel" aria-label="Загрузка программы" aria-busy="true"><div class="skeleton"><span></span><span></span><span></span><span></span><span></span></div><span class="sr-only">Загружаем программу интервью</span></section>`; }
+    function programmeRows({ locked = true, vacancy = false, duplicate = false, extras = false } = {}) {
+      const rows = [
+        { n: 1, title: 'Поиск и группировка событий', meta: 'TypeScript · task v7 · набор «Frontend Core» v4', id: 'task-18' },
+        { n: 2, title: state.long ? 'Доступный комбобокс с асинхронной загрузкой и очень длинным русским названием' : 'Доступный комбобокс', meta: 'TypeScript · task v3 · набор «Frontend Core» v4', id: 'task-31' }
+      ];
+      if (!vacancy) rows.push({ n: 3, title: 'Оптимизация дерева', meta: 'JavaScript · task v6 · отдельная задача', id: 'task-47' });
+      if (duplicate) rows.push({ n: rows.length + 1, title: 'Доступный комбобокс', meta: 'TypeScript · task v2 · набор «UI Advanced» v2 · повтор task-31', id: 'task-31', invalid: true });
+      if (extras) rows.push({ n: rows.length + 1, title: 'Диагностика SSE reconnect', meta: 'TypeScript · task v5 · дополнительная задача интервью', id: 'task-64', extra: true });
+      return `<div class="programme-stack">${rows.map((row) => `<article class="programme-row ${locked && !row.extra ? 'locked' : ''} ${row.extra ? 'extra' : ''} ${row.invalid ? 'invalid' : ''}" data-source-id="${row.id}"><span class="order" aria-label="Позиция ${row.n}">${row.n}</span><div class="row-main"><strong>${row.title}</strong><small>${row.meta}</small>${row.invalid ? '<div class="field-error">Эта задача уже добавлена в позиции 2 · sourceTaskId task-31</div>' : ''}</div><div class="row-tools">${locked && !row.extra ? '<span class="pill locked">Обязательная</span>' : `<button class="icon-button" type="button" aria-label="Переместить ${row.title} выше">↑</button><button class="icon-button" type="button" aria-label="Удалить ${row.title}">×</button>`}</div></article>`).join('')}</div>`;
+    }
+    function publishedCard({ vacancy = false, restored = false } = {}) {
+      return `<section class="card accent"><div class="card-head"><div><p class="section-kicker">Действующая версия</p><h2>${vacancy ? 'Программа вакансии' : 'Программа трека'} · v3</h2></div><span class="pill published">${restored ? 'Восстановлена' : 'Опубликована'}</span></div><div class="status-line"><span class="pill version">Версия 3</span><span class="pill">Снимок · 3 задачи</span><span class="pill locked">Обязательная основа</span></div><p>Эта версия применяется к новым интервью. Уже созданные комнаты продолжают использовать закреплённые версии, даже если здесь выйдет v4.</p><dl class="source-ledger"><div class="source-line"><dt>Происхождение</dt><dd>${vacancy ? 'База Frontend v3 + дополнения вакансии' : 'Набор «Frontend Core» v4 + task-47 v6'}</dd></div><div class="source-line"><dt>Опубликована</dt><dd>Анна Петрова · 9 сентября, 10:42</dd></div><div class="source-line"><dt>Digest</dt><dd><code>prg-frontend-v3 · 9f2a…71c4</code></dd></div></dl></section>`;
+    }
+    function editorCard({ first = false, duplicate = false, stale = false, vacancy = false } = {}) {
+      const role = roles[state.actor];
+      const canManage = role.canManage;
+      return `<section class="card span-8"><div class="card-head"><div><p class="section-kicker">${first ? 'Первая настройка' : 'Редактируемая версия'}</p><h2>Черновик ${first ? 'без публикации' : 'v4'}</h2></div><span class="pill draft">Не опубликован</span></div><p>${first ? 'Пока нет действующей версии. Создание интервью в этом процессе заблокировано до публикации или удаления этой первоначальной настройки.' : 'Черновик не влияет на действующую v3 и существующие интервью.'}</p>${stale ? '<div class="notice error" role="alert"><span><strong>Источник изменился после открытия</strong><p>«Доступный комбобокс»: выбрана task v3, актуальна task v4. Черновик сохранён; пересмотрите именно эту строку. Автоматической подмены нет.</p></span><button class="button ghost small" type="button" data-action="review-source">Пересмотреть</button></div>' : ''}${vacancy ? `<div class="foundation"><p class="section-kicker">База программы трека · v${state.baseApplied ? '4' : '3'}</p><h3>${state.baseApplied ? 'Frontend v4 · обновление применено в черновик' : 'Frontend v3 · закреплённая база'}</h3><p>Базовые позиции нельзя удалить, редактировать или переставить. Новая база становится действующей для вакансии только после отдельной публикации.</p>${programmeRows({ locked: true, vacancy: true })}</div><p class="divider-label">Дополнения вакансии после базы</p>` : ''}${programmeRows({ locked: vacancy, duplicate })}${duplicate ? '<div class="notice error" role="alert"><span><strong>Публикация заблокирована</strong><p>sourceTaskId task-31 повторяется, хотя выбраны разные версии и наборы. Удалите один дубль; система не исправляет состав молча.</p></span></div>' : ''}<div class="actions" style="margin-top:18px;justify-content:flex-start"><button class="button ghost" type="button" data-action="add-duplicate" ${!canManage ? 'disabled' : ''}>Добавить из набора</button><button class="button ghost" type="button" data-action="simulate-stale" ${!canManage ? 'disabled' : ''}>Смоделировать stale source</button></div><div class="sticky-actions"><button class="button ghost" type="button" data-action="save-draft" ${!canManage ? 'disabled' : ''}>Сохранить черновик</button>${first ? `<button class="button danger" type="button" data-action="discard" ${!canManage ? 'disabled' : ''}>Удалить настройку</button>` : ''}<button class="button" type="button" data-action="publish" ${!canManage || duplicate || stale ? 'disabled' : ''}>Проверить и опубликовать</button></div></section><aside class="card span-4"><p class="section-kicker">Перед публикацией</p><h3>Что будет зафиксировано</h3><div class="timeline"><div class="timeline-item"><strong>Полные снимки задач</strong><p>Название, условие, starter code, язык и версии источников.</p></div><div class="timeline-item"><strong>Порядок 1–${vacancy ? '3' : '3'}</strong><p>Вся последовательность станет обязательной основой.</p></div><div class="timeline-item future"><strong>Только будущие интервью</strong><p>Существующие комнаты и рабочий код не изменятся.</p></div></div></aside>`;
+    }
+
+    function renderManage() {
+      const role = roles[state.actor];
+      const title = state.scenario === 'vacancyInherited' || state.scenario === 'vacancyUpdate' ? 'Frontend Platform Engineer' : processTitle();
+      const manageActions = role.canManage && ['published','publishedDraft','restored'].includes(state.scenario) ? `<button class="button secondary" type="button" data-action="new-version">Создать новую версию</button><button class="button danger" type="button" data-action="archive">Архивировать программу</button>` : '';
+      let body = header(title, 'Программа интервью', 'Версия, происхождение и обязательный порядок показаны отдельно от редактируемого черновика.', manageActions);
+      body += `<div class="status-line"><span class="pill">Команда · Atlas</span><span class="pill">${state.scenario.startsWith('vacancy') ? 'Вакансия' : 'Трек'}</span><span class="pill">${role.label}</span></div>`;
+      if (state.scenario === 'loading') body += skeleton();
+      else if (state.scenario === 'error') body += statePanel('error','!','Не удалось загрузить программу','Состав и состояние не подменяются пустым результатом. Повторите безопасное чтение.', '<button class="button" type="button" data-action="retry">Повторить</button>');
+      else if (state.scenario === 'revoked') body += statePanel('revoked','×','Доступ к команде отозван','Содержимое программы очищено. Старые ссылки не показывают названия задач, версии или черновики.', '<a class="button" href="#/personal/interviews">В личные интервью</a>');
+      else if (state.scenario === 'empty') body += statePanel('','0','Нет процессов по фильтру','Это пустой результат списка, а не состояние программы NONE. Сбросьте фильтры процессов.', '<button class="button ghost" type="button" data-action="retry">Сбросить фильтр</button>');
+      else if (state.scenario === 'none') body += statePanel('','∅','Программа не настроена','Состояние NONE: новые интервью этого трека могут использовать свободный выбор задач. Черновика, архива и опубликованной версии нет.', role.canManage ? '<button class="button" type="button" data-action="configure">Настроить программу</button>' : '');
+      else if (state.scenario === 'firstDraft') body += `<div class="notice error"><span><strong>Создание интервью заблокировано</strong><p>Есть первоначальный черновик, но ни одной опубликованной версии. Это не свободный сценарий.</p></span></div><div class="grid">${editorCard({ first: true })}</div>`;
+      else if (state.scenario === 'duplicate') body += `<div class="grid">${editorCard({ duplicate: true })}</div>`;
+      else if (state.scenario === 'stale') body += `<div class="grid">${editorCard({ stale: true })}</div>`;
+      else if (state.scenario === 'publishedDraft') body += `<div class="notice info"><span><strong>Новые интервью продолжают использовать v3</strong><p>Черновик v4 сохранён, но ещё не действует. Публикация затронет только будущие интервью.</p></span></div><div class="grid"><div class="span-12">${publishedCard()}</div>${editorCard()}</div>`;
+      else if (state.scenario === 'vacancyInherited') body += `<div class="notice info"><span><strong>Собственной настройки нет</strong><p>Вакансия наследует текущую опубликованную программу трека. При создании будет закреплена Frontend v3.</p></span>${role.canManage ? '<button class="button ghost small" type="button" data-action="new-vacancy-programme">Настроить дополнения</button>' : ''}</div><div class="grid"><div class="span-7">${publishedCard()}</div><aside class="card span-5"><p class="section-kicker">Разрешение программы</p><h2>Источник: трек</h2><dl class="source-ledger"><div class="source-line"><dt>Процесс</dt><dd>Frontend</dd></div><div class="source-line"><dt>Версия</dt><dd>v3 · опубликована</dd></div><div class="source-line"><dt>Поведение</dt><dd>Наследуется только при создании</dd></div></dl></aside></div>`;
+      else if (state.scenario === 'vacancyUpdate') body += `<div class="notice"><span><strong>Доступно обновление программы трека: v3 → v4</strong><p>Действующая программа вакансии сохраняет базу v3. Обновление не применяется автоматически.</p></span>${role.canManage ? `<button class="button small" type="button" data-action="apply-base">${state.baseApplied ? 'База v4 в черновике' : 'Просмотреть и применить'}</button>` : ''}</div><div class="grid"><div class="span-12">${publishedCard({ vacancy: true })}</div>${role.canManage ? editorCard({ vacancy: true }) : ''}</div>`;
+      else if (state.scenario === 'archived') body += `<div class="notice error"><span><strong>Программа архивирована · создание заблокировано</strong><p>Новые интервью этого процесса недоступны. Система не переключится на свободный выбор и не подставит родительскую программу.</p></span></div>${statePanel('revoked','A','Архивная версия v3','Уже созданные интервью сохраняют свои снимки. Восстановление — отдельное действие с проверкой актуального состояния.', role.canManage ? '<button class="button" type="button" data-action="restore">Восстановить программу</button>' : '')}`;
+      else {
+        if (state.scenario === 'restored') body += `<div class="notice success"><span><strong>Программа восстановлена</strong><p>Новые интервью снова могут закреплять v3. Ранее созданные комнаты не изменялись.</p></span></div>`;
+        if (!role.canManage) body += `<div class="notice info"><span><strong>Режим чтения</strong><p>MEMBER видит действующую версию и отметку о черновике, но не получает права публикации от авторства задачи или набора.</p></span></div>`;
+        body += `<div class="grid"><div class="span-7">${publishedCard({ restored: state.scenario === 'restored' })}</div><aside class="card span-5"><p class="section-kicker">Обязательный порядок · v3</p><h2>3 снимка</h2>${programmeRows({ locked: true })}</aside></div>`;
+      }
+      return body + mobileNav('processes');
+    }
+
+    function createFoundation(version = 3, inherited = false) {
+      return `<section class="foundation"><p class="section-kicker">Обязательная основа · ${inherited ? 'унаследована от трека' : 'программа вакансии'}</p><div class="card-head"><h2>${inherited ? 'Frontend' : 'Frontend Platform Engineer'} · v${version}</h2><span class="pill locked">Нельзя изменить</span></div><p>Источник и версия будут закреплены атомарно при создании. Удаление, замена и перестановка недоступны.</p>${programmeRows({ locked: true, vacancy: inherited })}</section>`;
+    }
+    function createForm({ version = 3, inherited = false, conflict = false } = {}) {
+      return `<div class="grid"><section class="card span-7"><h2>Детали встречи</h2><div class="field"><label for="candidateName">Кандидат</label><input id="candidateName" value="Мария Соколова" autocomplete="off"></div><div class="field"><label for="interviewTitle">Название</label><input id="interviewTitle" value="${state.long ? 'Техническое интервью для старшего инженера пользовательских интерфейсов международной команды' : 'Техническое интервью'}"></div><div class="field"><label for="processField">Процесс</label><input id="processField" readonly value="Frontend / Frontend Platform Engineer"><small>Для другого процесса создайте новое интервью.</small></div>${conflict ? '<div class="notice error" role="alert"><span><strong>Программа изменилась: v3 → v4</strong><p>Кандидат, время, сотрудники и дополнительные задачи сохранены. Проверьте новую основу и подтвердите её явно.</p></span></div><label class="check-row"><input id="reviewVersion" type="checkbox" data-action="review-version"><span>Я проверил обязательную основу Frontend v4</span></label>' : ''}</section><aside class="card span-5"><p class="section-kicker">Что будет сохранено</p><h2>Точный снимок</h2><dl class="source-ledger"><div class="source-line"><dt>Programme</dt><dd>${inherited ? 'Track Frontend' : 'Vacancy programme'}</dd></div><div class="source-line"><dt>Version</dt><dd>v${version}${conflict ? ' · требуется перепроверка' : ''}</dd></div><div class="source-line"><dt>Применение</dt><dd>Только эта новаяя комната</dd></div></dl></aside><div class="span-12">${createFoundation(version, inherited)}<p class="divider-label">Дополнительные задачи конкретного интервью</p><section class="extras"><p>Дополнения идут только после обязательной основы и не могут повторять её sourceTaskId.</p>${state.extraAdded ? programmeRows({ locked: true, extras: true }).replace(/<article class="programme-row locked"[\s\S]*?<\/article><article class="programme-row locked"[\s\S]*?<\/article><article class="programme-row locked"[\s\S]*?<\/article>/, '') : ''}<div class="actions" style="justify-content:flex-start"><button class="button ghost" type="button" data-action="add-extra">Добавить дополнительную задачу</button><button class="button ghost" type="button" data-action="duplicate-extra">Проверить дубликат основы</button></div><div class="field-error" id="extraError" aria-live="polite"></div></section><div class="sticky-actions"><button class="button secondary" type="button">Сохранить подготовку</button><button class="button" type="button" data-action="create-room" ${conflict && !state.reviewed ? 'disabled' : ''}>Создать и открыть комнату</button></div></div></div>`;
+    }
+    function renderCreate() {
+      let body = header('Новое интервью','Подготовка встречи','Эффективная программа выбирается процессом; обязательная основа и дополнения видны до создания.','<a class="button secondary" href="#/teams/atlas/interviews">Отмена</a>');
+      body += `<div class="status-line"><span class="pill">Atlas Engineering</span><span class="pill">Создатель комнаты</span><span class="pill">Frontend / Platform Engineer</span></div>`;
+      if (state.scenario === 'loading') body += skeleton();
+      else if (state.scenario === 'error') body += statePanel('error','!','Не удалось определить программу','Создание отключено: нельзя угадать версию или скрыто перейти к свободному выбору.', '<button class="button" type="button" data-action="retry-create">Повторить разрешение</button>');
+      else if (state.scenario === 'revoked') body += statePanel('revoked','×','Назначение отозвано','Поля и состав очищены. Комната не создана; старая форма не даёт обхода доступа.','<a class="button" href="#/teams/atlas/interviews">К доступным интервью</a>');
+      else if (state.scenario === 'createNone' || state.scenario === 'none') body += `<div class="notice info"><span><strong>Программа не настроена · NONE</strong><p>Это единственное состояние процесса, где разрешён свободный выбор задач и наборов.</p></span></div><section class="card"><h2>Свободный состав</h2><p>Выберите задачи вручную. Ни черновика, ни архива, ни опубликованной программы у процесса нет.</p><div class="field"><label for="freeTask">Задачи и наборы</label><select id="freeTask"><option>Выберите задачу или набор</option><option>Frontend Core · набор v4</option></select></div><div class="sticky-actions"><button class="button" type="button">Создать свободное интервью</button></div></section>`;
+      else if (state.scenario === 'createDraft' || state.scenario === 'firstDraft') body += statePanel('error','D','Программа ещё не опубликована','Есть первоначальная настройка с черновиком. Создание заблокировано: свободный выбор не предлагается.', roles[state.actor].canManage ? '<button class="button" type="button" data-action="go-configure">Перейти к настройке</button>' : '<a class="button" href="#/teams/atlas/interviews">Вернуться к списку</a>');
+      else if (state.scenario === 'createArchived' || state.scenario === 'archived') body += statePanel('revoked','A','Программа недоступна для новых интервью','Эффективная программа архивирована. Нет автоматического перехода на родительскую программу или свободный состав.', roles[state.actor].canManage ? '<button class="button" type="button" data-action="go-restore">Открыть архивную программу</button>' : '<a class="button" href="#/teams/atlas/interviews">Вернуться к списку</a>');
+      else if (state.scenario === 'createConflict') body += createForm({ version: 4, conflict: true });
+      else if (state.scenario === 'vacancyInherited') body += `<div class="notice info"><span><strong>Наследование от трека · Frontend v3</strong><p>У вакансии нет собственной настройки. Текущая разрешённая версия трека будет закреплена при создании.</p></span></div>${createForm({ version: 3, inherited: true })}`;
+      else body += `<div class="notice success"><span><strong>Разрешена программа вакансии · v3</strong><p>Все обязательные позиции будут закреплены. Новая публикация после создания изменит только будущие интервью.</p></span></div>${createForm({ version: 3 })}`;
+      return body + mobileNav('interviews');
+    }
+
+    function renderRoom() {
+      let body = header('Мария Соколова · Frontend','Программное интервью','Комната хранит закреплённый снимок v3. Действующая программа команды уже v4, но эта встреча не меняется.','<button class="button secondary" type="button">Завершить интервью</button>');
+      body += `<div class="status-line"><span class="pill published">Активно</span><span class="pill version">Закреплена программа v3</span><span class="pill locked">3 обязательных</span><span class="pill">1 дополнительная</span></div>`;
+      if (state.scenario === 'loading') body += skeleton();
+      else if (state.scenario === 'error') body += statePanel('error','!','Не удалось загрузить структуру комнаты','Рабочий код не сброшен. Повторите загрузку закреплённого снимка.','<button class="button" type="button" data-action="retry-room">Повторить</button>');
+      else if (state.scenario === 'revoked') body += statePanel('revoked','×','Доступ к комнате отозван','Кандидат, программа и рабочий код больше не отображаются в этом контексте.','<a class="button" href="#/teams/atlas/interviews">К доступным интервью</a>');
+      else body += `<div class="notice info"><span><strong>Новая программа команды v4 доступна только будущим интервью</strong><p>Эта комната продолжает использовать v3; обновить процесс или обязательную основу здесь нельзя.</p></span></div><div class="grid"><section class="card span-5"><p class="section-kicker">Структура встречи</p><h2>Задачи</h2>${programmeRows({ locked: true, extras: true })}<div class="notice"><span><strong>Основа защищена, решение — нет</strong><p>Условие, starter snapshot, язык и порядок v3 неизменяемы. Рабочий код участники редактируют по действующим правам.</p></span></div></section><section class="card span-7"><p class="section-kicker">Текущий шаг · 1 из 4</p><h2>Поиск и группировка событий</h2><div class="code-area field"><label for="solutionCode">Рабочий код решения</label><textarea id="solutionCode" spellcheck="false">function groupEvents(events) {\n  // Кандидат и интервьюер могут редактировать решение\n  return events;\n}</textarea><small>Стартовый код сохранён отдельно как исторический снимок программы.</small></div><div class="field"><label for="lockedContext">Процесс интервью</label><input id="lockedContext" readonly value="Frontend / Frontend Platform Engineer"><small>Для другого процесса создайте новое интервью. Текущие результаты сохранятся.</small></div><div class="actions" style="margin-top:18px"><button class="button ghost" type="button">Личные заметки</button><button class="button" type="button">Опубликовать шаг кандидату</button></div></section></div>`;
+      return body + mobileNav('interviews');
+    }
+
+    function render() {
+      syncControls();
+      const markup = state.surface === 'create' ? renderCreate() : state.surface === 'room' ? renderRoom() : renderManage();
+      $('#screen').innerHTML = markup.replace('новаяя', 'новая');
+      bindActions();
+    }
+
+    function toast(message) {
+      const node = $('#toast'); node.textContent = message; node.dataset.open = 'true'; clearTimeout(toast.timer); toast.timer = setTimeout(() => { node.dataset.open = 'false'; }, 2200);
+    }
+    function openDialog({ eyebrow, title, text, confirm, action }) {
+      state.lastFocus = document.activeElement;
+      $('#dialogEyebrow').textContent = eyebrow;
+      $('#dialogTitle').textContent = title;
+      $('#dialogText').textContent = text;
+      $('#dialogConfirm').textContent = confirm;
+      $('#dialogConfirm').dataset.confirmAction = action;
+      $('#confirmDialog').showModal();
+      $('[data-dialog-close]', $('#confirmDialog')).focus();
+    }
+    function closeDialog() { $('#confirmDialog').close(); state.lastFocus?.focus?.(); }
+    function bindActions() {
+      document.querySelectorAll('[data-action]').forEach((button) => button.addEventListener('click', () => {
+        const action = button.dataset.action;
+        if (action === 'configure') setRoute({ scenario: 'firstDraft' });
+        if (action === 'new-version') setRoute({ scenario: 'publishedDraft' });
+        if (action === 'new-vacancy-programme') setRoute({ scenario: 'vacancyUpdate' });
+        if (action === 'add-duplicate' || action === 'duplicate-extra') {
+          if (action === 'duplicate-extra') { $('#extraError').textContent = 'Нельзя добавить «Доступный комбобокс»: sourceTaskId task-31 уже есть в обязательной основе.'; button.focus(); }
+          else setRoute({ scenario: 'duplicate' });
+        }
+        if (action === 'simulate-stale') setRoute({ scenario: 'stale' });
+        if (action === 'review-source') { setRoute({ scenario: 'publishedDraft' }); }
+        if (action === 'save-draft') toast('Черновик сохранён. Действующая версия не изменилась.');
+        if (action === 'publish') openDialog({ eyebrow: 'Новая версия', title: 'Опубликовать программу?', text: 'Проверьте итоговый порядок и происхождение. Версия будет применяться только к новым интервью; существующие комнаты не изменятся.', confirm: 'Опубликовать v4', action: 'publish' });
+        if (action === 'archive') openDialog({ eyebrow: 'Остановка нового применения', title: 'Архивировать программу?', text: 'Новые интервью процесса будут заблокированы без свободного fallback. Уже созданные комнаты и снимки сохранятся.', confirm: 'Архивировать', action: 'archive' });
+        if (action === 'restore') openDialog({ eyebrow: 'Отдельное действие', title: 'Восстановить программу?', text: 'После проверки текущего состояния версия v3 снова станет доступна для новых интервью.', confirm: 'Восстановить', action: 'restore' });
+        if (action === 'discard') openDialog({ eyebrow: 'Только первоначальная настройка', title: 'Удалить настройку программы?', text: 'Публикаций ещё не было. Процесс вернётся в NONE со свободным выбором задач. Чужие программы и интервью не удаляются.', confirm: 'Удалить настройку', action: 'discard' });
+        if (action === 'apply-base') { state.baseApplied = true; render(); toast('База Frontend v4 применена только в черновик вакансии.'); }
+        if (action === 'add-extra') { state.extraAdded = true; render(); toast('Дополнительная задача добавлена после обязательной основы.'); }
+        if (action === 'review-version') {
+          state.reviewed = button.checked;
+          const submit = document.querySelector('[data-action="create-room"]');
+          if (submit) submit.disabled = !state.reviewed;
+        }
+        if (action === 'create-room') openDialog({ eyebrow: 'Атомарная фиксация', title: 'Создать интервью?', text: 'Будут сохранены программа, точные снимки обязательной основы, дополнения и назначения — одной операцией.', confirm: 'Создать комнату', action: 'create-room' });
+        if (action === 'retry') setRoute({ scenario: 'published' });
+        if (action === 'retry-create') setRoute({ scenario: 'createPublished' });
+        if (action === 'retry-room') setRoute({ scenario: 'programmedRoom' });
+        if (action === 'go-configure') setRoute({ surface: 'manage', actor: 'admin', scenario: 'firstDraft' });
+        if (action === 'go-restore') setRoute({ surface: 'manage', actor: 'admin', scenario: 'archived' });
+      }));
+    }
+
+    $('#dialogConfirm').addEventListener('click', (event) => {
+      const action = event.currentTarget.dataset.confirmAction;
+      $('#confirmDialog').close();
+      if (action === 'publish') { state.scenario = 'published'; render(); toast('Версия v4 опубликована только для будущих интервью.'); }
+      if (action === 'archive') { state.scenario = 'archived'; render(); toast('Программа архивирована. Новые интервью заблокированы.'); }
+      if (action === 'restore') { state.scenario = 'restored'; render(); toast('Программа восстановлена.'); }
+      if (action === 'discard') { state.scenario = 'none'; render(); toast('Первоначальная настройка удалена. Процесс снова в NONE.'); }
+      if (action === 'create-room') { state.surface = 'room'; state.scenario = 'programmedRoom'; state.actor = 'creator'; render(); toast('Комната создана со снимком программы v3.'); }
+      $('#main').focus();
+    });
+    document.querySelectorAll('[data-dialog-close]').forEach((button) => button.addEventListener('click', closeDialog));
+    $('#confirmDialog').addEventListener('cancel', (event) => { event.preventDefault(); closeDialog(); });
+    $('#surfaceSelect').addEventListener('change', (event) => {
+      const surface = event.target.value;
+      setRoute({ surface, actor: surface === 'manage' ? state.actor : 'creator', scenario: surface === 'manage' ? 'published' : surface === 'create' ? 'createPublished' : 'programmedRoom' });
+    });
+    $('#actorSelect').addEventListener('change', (event) => setRoute({ actor: event.target.value }));
+    $('#stateSelect').addEventListener('change', (event) => {
+      const scenario = event.target.value;
+      const surface = scenario.startsWith('create') ? 'create' : scenario === 'programmedRoom' ? 'room' : state.surface;
+      setRoute({ scenario, surface });
+    });
+    $('#longToggle').addEventListener('change', (event) => setRoute({ long: event.target.checked }));
+    window.addEventListener('hashchange', () => { parseHash(); render(); });
+    parseHash(); render();
+  </script>
+</body>
+</html>

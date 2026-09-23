@@ -13,6 +13,24 @@
   display: none;
 }
 
+.desktopTable {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.wrappingCell {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.refreshAlert,
+.retryButton {
+  position: relative;
+  z-index: 12;
+  scroll-margin-block: 96px 24px;
+}
+
 @media (max-width: 719px) {
   .cabinet button,
   .detailModalBody button,
@@ -30,14 +48,6 @@
   .rowActions,
   .rowActions button {
     width: 100%;
-  }
-
-  .desktopTable {
-    display: none;
-  }
-
-  .mobileCards {
-    display: flex;
   }
 
   .detailGrid {

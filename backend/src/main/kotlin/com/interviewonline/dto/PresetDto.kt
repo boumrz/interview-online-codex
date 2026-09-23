@@ -7,6 +7,9 @@ data class PresetSummaryDto(
     val id: String,
     val name: String,
     val itemCount: Int,
+    val languageCounts: Map<String, Int>,
+    val status: String = "ACTIVE",
+    val revision: Long = 0,
 )
 
 data class PresetItemDto(
@@ -20,6 +23,8 @@ data class PresetDetailDto(
     val id: String,
     val name: String,
     val items: List<PresetItemDto>,
+    val status: String = "ACTIVE",
+    val revision: Long = 0,
 )
 
 data class CreatePresetRequest(
@@ -30,4 +35,5 @@ data class CreatePresetRequest(
 data class UpdatePresetRequest(
     @field:NotBlank @field:Size(max = 255) val name: String,
     val taskTemplateIds: List<String> = emptyList(),
+    val revision: Long? = null,
 )

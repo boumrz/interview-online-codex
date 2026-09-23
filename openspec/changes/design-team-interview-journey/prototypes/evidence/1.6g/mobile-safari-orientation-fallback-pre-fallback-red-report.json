@@ -1,0 +1,2051 @@
+{
+  "task": "1.6g-mobile-safari-orientation-fallback",
+  "generatedAt": "2026-09-09T12:18:46.469Z",
+  "note": "Prototype-only deterministic iPhone Safari support-matrix check. Native keyboard behavior still requires the tenth real Safari review.",
+  "pageErrors": [],
+  "directLandscape": [
+    {
+      "surface": "DA-01",
+      "safeArea": {
+        "left": 47,
+        "right": 0
+      },
+      "before": {
+        "hash": "#/profile?actor=personal&state=success",
+        "value": "Черновик DA-01 landscape",
+        "selectionStart": 2,
+        "selectionEnd": 8,
+        "focused": false,
+        "activeTag": "BODY",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 0,
+        "room": null,
+        "runwayActive": false,
+        "visibleTargets": [
+          {
+            "name": "Выбрать роль для просмотра прототипа",
+            "width": 335,
+            "height": 44
+          },
+          {
+            "name": "Выбрать состояние данных",
+            "width": 201,
+            "height": 44
+          },
+          {
+            "name": "ПространствоЛичное пространство↕",
+            "width": 210,
+            "height": 58
+          },
+          {
+            "name": "ИНИнтервью",
+            "width": 210,
+            "height": 46
+          },
+          {
+            "name": "БЗБиблиотека задач",
+            "width": 210,
+            "height": 46
+          },
+          {
+            "name": "КАКандидаты",
+            "width": 210,
+            "height": 46
+          },
+          {
+            "name": "↗Старые входы",
+            "width": 210,
+            "height": 46
+          },
+          {
+            "name": "← Вернуться в личное пространство",
+            "width": 149.59375,
+            "height": 90
+          }
+        ]
+      },
+      "after": {
+        "hash": "#/profile?actor=personal&state=success",
+        "value": "Черновик DA-01 landscape",
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": true,
+        "activeTag": "INPUT",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 220,
+        "room": null,
+        "runwayActive": false,
+        "visibleTargets": [
+          {
+            "name": "ПространствоЛичное пространство↕",
+            "width": 210,
+            "height": 58
+          },
+          {
+            "name": "ИНИнтервью",
+            "width": 210,
+            "height": 46
+          },
+          {
+            "name": "БЗБиблиотека задач",
+            "width": 210,
+            "height": 46
+          },
+          {
+            "name": "КАКандидаты",
+            "width": 210,
+            "height": 46
+          },
+          {
+            "name": "↗Старые входы",
+            "width": 210,
+            "height": 46
+          },
+          {
+            "name": "АК Анна КрыловаПрофиль аккаунта Личный аккаунт",
+            "width": 210,
+            "height": 124
+          },
+          {
+            "name": "Сохранить изменения",
+            "width": 211.953125,
+            "height": 46
+          }
+        ]
+      },
+      "minTarget": false,
+      "safeHorizontal": false,
+      "allVisibleTargets44": true,
+      "navigationPreserved": true,
+      "pass": false
+    },
+    {
+      "surface": "DA-02",
+      "safeArea": {
+        "left": 0,
+        "right": 47
+      },
+      "before": {
+        "hash": "#/teams/atlas/library/tasks/task-31/edit?actor=member&state=success",
+        "value": "Черновик DA-02 landscape",
+        "selectionStart": 2,
+        "selectionEnd": 8,
+        "focused": false,
+        "activeTag": "BODY",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 0,
+        "room": null,
+        "runwayActive": false,
+        "visibleTargets": [
+          {
+            "name": "Выбрать роль для просмотра прототипа",
+            "width": 335,
+            "height": 44
+          },
+          {
+            "name": "Выбрать состояние данных",
+            "width": 201,
+            "height": 44
+          },
+          {
+            "name": "КомандаAtlas↕",
+            "width": 210,
+            "height": 58
+          },
+          {
+            "name": "ИНИнтервью",
+            "width": 210,
+            "height": 46
+          },
+          {
+            "name": "БЗБиблиотека задач",
+            "width": 210,
+            "height": 46
+          },
+          {
+            "name": "ТВТреки и вакансии",
+            "width": 210,
+            "height": 46
+          },
+          {
+            "name": "УЧУчастники",
+            "width": 210,
+            "height": 46
+          },
+          {
+            "name": "Создать задачу",
+            "width": 99.6875,
+            "height": 68
+          },
+          {
+            "name": "Задачи",
+            "width": 86.8125,
+            "height": 44
+          },
+          {
+            "name": "Наборы задач",
+            "width": 141.25,
+            "height": 44
+          }
+        ]
+      },
+      "after": {
+        "hash": "#/teams/atlas/library/tasks/task-31/edit?actor=member&state=success",
+        "value": "Черновик DA-02 landscape",
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": true,
+        "activeTag": "INPUT",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 526,
+        "room": null,
+        "runwayActive": false,
+        "visibleTargets": [
+          {
+            "name": "КомандаAtlas↕",
+            "width": 210,
+            "height": 58
+          },
+          {
+            "name": "ИНИнтервью",
+            "width": 210,
+            "height": 46
+          },
+          {
+            "name": "БЗБиблиотека задач",
+            "width": 210,
+            "height": 46
+          },
+          {
+            "name": "ТВТреки и вакансии",
+            "width": 210,
+            "height": 46
+          },
+          {
+            "name": "УЧУчастники",
+            "width": 210,
+            "height": 46
+          },
+          {
+            "name": "↗Старые входы",
+            "width": 210,
+            "height": 46
+          },
+          {
+            "name": "АК Анна КрыловаПрофиль аккаунта Участник",
+            "width": 210,
+            "height": 124
+          },
+          {
+            "name": "TypeScriptKotlinPython",
+            "width": 216.75,
+            "height": 48
+          }
+        ]
+      },
+      "minTarget": false,
+      "safeHorizontal": false,
+      "allVisibleTargets44": true,
+      "navigationPreserved": true,
+      "pass": false
+    },
+    {
+      "surface": "DA-03",
+      "safeArea": {
+        "left": 47,
+        "right": 0
+      },
+      "before": {
+        "hash": "#/room/int-204?actor=roomOwner&state=success",
+        "value": "Черновик DA-03 landscape",
+        "selectionStart": 2,
+        "selectionEnd": 8,
+        "focused": false,
+        "activeTag": "BUTTON",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 0,
+        "room": {
+          "sessionId": "prototype-room-session-int-204",
+          "editorInstanceId": "editor-instance-int-204",
+          "activePanel": "chat",
+          "selectedStep": "step-2",
+          "editorSelectionStart": 24,
+          "editorSelectionEnd": 35,
+          "editorScrollTop": 0,
+          "chatDraft": "Черновик DA-03 landscape",
+          "chatScrollTop": 0
+        },
+        "runwayActive": false,
+        "visibleTargets": [
+          {
+            "name": "Выбрать роль для просмотра прототипа",
+            "width": 230.703125,
+            "height": 44
+          },
+          {
+            "name": "Выбрать состояние данных",
+            "width": 230.703125,
+            "height": 44
+          },
+          {
+            "name": "КДРедактор",
+            "width": 126.828125,
+            "height": 44
+          },
+          {
+            "name": "ШГШаги",
+            "width": 126.828125,
+            "height": 44
+          },
+          {
+            "name": "УСУсловие",
+            "width": 126.84375,
+            "height": 44
+          },
+          {
+            "name": "Мои заметки",
+            "width": 126.828125,
+            "height": 44
+          },
+          {
+            "name": "ЧТЧат2",
+            "width": 126.828125,
+            "height": 44
+          },
+          {
+            "name": "АКАктивность",
+            "width": 126.84375,
+            "height": 44
+          },
+          {
+            "name": "Новые сообщения · 2",
+            "width": 759,
+            "height": 44
+          },
+          {
+            "name": "Получить новое",
+            "width": 152.609375,
+            "height": 44
+          },
+          {
+            "name": "Отправить",
+            "width": 111.21875,
+            "height": 44
+          }
+        ]
+      },
+      "after": {
+        "hash": "#/room/int-204?actor=roomOwner&state=success",
+        "value": "Черновик DA-03 landscape",
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": true,
+        "activeTag": "TEXTAREA",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 0,
+        "room": {
+          "sessionId": "prototype-room-session-int-204",
+          "editorInstanceId": "editor-instance-int-204",
+          "activePanel": "chat",
+          "selectedStep": "step-2",
+          "editorSelectionStart": 24,
+          "editorSelectionEnd": 35,
+          "editorScrollTop": 0,
+          "chatDraft": "Черновик DA-03 landscape",
+          "chatScrollTop": 0
+        },
+        "runwayActive": true,
+        "visibleTargets": [
+          {
+            "name": "КДРедактор",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "name": "ШГШаги",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "name": "УСУсловие",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "name": "Мои заметки",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "name": "ЧТЧат2",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "name": "АКАктивность",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "name": "Отправить",
+            "width": 111.21875,
+            "height": 44
+          }
+        ]
+      },
+      "minTarget": false,
+      "safeHorizontal": false,
+      "allVisibleTargets44": true,
+      "navigationPreserved": true,
+      "pass": false
+    },
+    {
+      "surface": "DA-04",
+      "safeArea": {
+        "left": 0,
+        "right": 47
+      },
+      "before": {
+        "hash": "#/teams/atlas/candidates?actor=hiring&state=success&isHr=false",
+        "value": "Черновик DA-04 landscape",
+        "selectionStart": 2,
+        "selectionEnd": 8,
+        "focused": false,
+        "activeTag": "BODY",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 0,
+        "room": null,
+        "runwayActive": false,
+        "visibleTargets": [
+          {
+            "name": "HIRING · назначена INTERVIEWER · назначен MEMBER · без назначения ADMIN · без на",
+            "width": 195.5,
+            "height": 44
+          },
+          {
+            "name": "Кандидаты Результат Участники Мои интервью процесса",
+            "width": 195.5,
+            "height": 44
+          },
+          {
+            "name": "Успех Загрузка Пусто Фильтр: пусто Ошибка Доступ отозван",
+            "width": 195.5,
+            "height": 44
+          },
+          {
+            "name": "Сменить рабочее пространство",
+            "width": 190,
+            "height": 58
+          },
+          {
+            "name": "ИИнтервью",
+            "width": 190,
+            "height": 46
+          },
+          {
+            "name": "Выгрузить Excel",
+            "width": 164.125,
+            "height": 46
+          }
+        ]
+      },
+      "after": {
+        "hash": "#/teams/atlas/candidates?actor=hiring&state=success&isHr=false",
+        "value": "Черновик DA-04 landscape",
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": true,
+        "activeTag": "INPUT",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 404,
+        "room": null,
+        "runwayActive": false,
+        "visibleTargets": [
+          {
+            "name": "Сменить рабочее пространство",
+            "width": 190,
+            "height": 58
+          },
+          {
+            "name": "ИИнтервью",
+            "width": 190,
+            "height": 46
+          },
+          {
+            "name": "ККандидаты",
+            "width": 190,
+            "height": 46
+          },
+          {
+            "name": "ББиблиотека задач",
+            "width": 190,
+            "height": 62
+          },
+          {
+            "name": "ТТреки и вакансии",
+            "width": 190,
+            "height": 62
+          },
+          {
+            "name": "FrontendBackendБез трекаВсе",
+            "width": 257.25,
+            "height": 46
+          },
+          {
+            "name": "Lead UI EngineerБез вакансииВсе",
+            "width": 257.25,
+            "height": 46
+          },
+          {
+            "name": "ВсеЗапланированоЗавершеноАрхив",
+            "width": 257.25,
+            "height": 46
+          }
+        ]
+      },
+      "minTarget": false,
+      "safeHorizontal": false,
+      "allVisibleTargets44": true,
+      "navigationPreserved": true,
+      "pass": false
+    },
+    {
+      "surface": "DA-05",
+      "safeArea": {
+        "left": 47,
+        "right": 0
+      },
+      "before": {
+        "hash": "#/teams/atlas/interviews/new?actor=creator&state=createPublished&surface=create",
+        "value": "Черновик DA-05 landscape",
+        "selectionStart": 2,
+        "selectionEnd": 8,
+        "focused": false,
+        "activeTag": "BODY",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 0,
+        "room": null,
+        "runwayActive": false,
+        "visibleTargets": [
+          {
+            "name": "Программа процессаСоздание интервьюСозданная комната",
+            "width": 398,
+            "height": 44
+          },
+          {
+            "name": "MEMBER · чтениеADMIN · управлениеВладелец командыСоздатель комнаты",
+            "width": 398,
+            "height": 44
+          },
+          {
+            "name": "ОпубликованоNONE · не настроеноПервый черновикОпубликовано + черновикДубликат so",
+            "width": 398,
+            "height": 44
+          },
+          {
+            "name": "Интервью",
+            "width": 264.15625,
+            "height": 48
+          },
+          {
+            "name": "Процессы",
+            "width": 264.171875,
+            "height": 48
+          },
+          {
+            "name": "Библиотека",
+            "width": 264.15625,
+            "height": 48
+          }
+        ]
+      },
+      "after": {
+        "hash": "#/teams/atlas/interviews/new?actor=creator&state=createPublished&surface=create",
+        "value": "Черновик DA-05 landscape",
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": true,
+        "activeTag": "INPUT",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 661,
+        "room": null,
+        "runwayActive": false,
+        "visibleTargets": [
+          {
+            "name": "Интервью",
+            "width": 264.15625,
+            "height": 48
+          },
+          {
+            "name": "Процессы",
+            "width": 264.171875,
+            "height": 48
+          },
+          {
+            "name": "Библиотека",
+            "width": 264.15625,
+            "height": 48
+          }
+        ]
+      },
+      "minTarget": false,
+      "safeHorizontal": false,
+      "allVisibleTargets44": true,
+      "navigationPreserved": true,
+      "pass": false
+    },
+    {
+      "surface": "DA-06",
+      "safeArea": {
+        "left": 0,
+        "right": 47
+      },
+      "before": {
+        "hash": "#/merge?actor=sourceOwner&state=success&blocker=none&step=target&exact=1",
+        "value": "Черновик DA-06 landscape",
+        "selectionStart": 2,
+        "selectionEnd": 8,
+        "focused": false,
+        "activeTag": "BODY",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 0,
+        "room": null,
+        "runwayActive": false,
+        "visibleTargets": [
+          {
+            "name": "Владелец источникаВладелец назначенияВладелец обеих командНе владелец",
+            "width": 253.546875,
+            "height": 44
+          },
+          {
+            "name": "ГотовоЗагрузкаПустоОшибкаКонфликт / staleДоступ отозван",
+            "width": 177.484375,
+            "height": 44
+          },
+          {
+            "name": "НетНезавершённая работаRecovery pendingPersistence pendingMERGE_BUSYMembership c",
+            "width": 177.484375,
+            "height": 44
+          },
+          {
+            "name": "← Настройки команды",
+            "width": 215.328125,
+            "height": 46
+          },
+          {
+            "name": "1Команды",
+            "width": 160,
+            "height": 48
+          },
+          {
+            "name": "2Сотрудники и роли",
+            "width": 160,
+            "height": 48
+          },
+          {
+            "name": "3Названия и конфликты",
+            "width": 160,
+            "height": 48
+          },
+          {
+            "name": "4Проверка",
+            "width": 160,
+            "height": 48
+          },
+          {
+            "name": "5Подтверждение",
+            "width": 160,
+            "height": 48
+          }
+        ]
+      },
+      "after": {
+        "hash": "#/merge?actor=sourceOwner&state=success&blocker=none&step=target&exact=1",
+        "value": "Черновик DA-06 landscape",
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": true,
+        "activeTag": "INPUT",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 463,
+        "room": null,
+        "runwayActive": false,
+        "visibleTargets": []
+      },
+      "minTarget": false,
+      "safeHorizontal": false,
+      "allVisibleTargets44": true,
+      "navigationPreserved": true,
+      "pass": false
+    }
+  ],
+  "rotateDuringInput": [
+    {
+      "surface": "DA-01",
+      "portrait": {
+        "hash": "#/profile?actor=personal&state=success",
+        "value": "Поворот сохраняет DA-01",
+        "selectionStart": 3,
+        "selectionEnd": 11,
+        "focused": true,
+        "activeTag": "INPUT",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 0,
+        "room": null,
+        "runwayActive": false,
+        "visibleTargets": [
+          {
+            "name": "Выбрать роль для просмотра прототипа",
+            "width": 366,
+            "height": 44
+          },
+          {
+            "name": "Выбрать состояние данных",
+            "width": 366,
+            "height": 44
+          },
+          {
+            "name": "Открыть рабочую навигацию",
+            "width": 48,
+            "height": 44
+          },
+          {
+            "name": "Закрыть рабочую навигацию",
+            "width": 390,
+            "height": 844
+          },
+          {
+            "name": "ПространствоЛичное пространство↕",
+            "width": 282,
+            "height": 58
+          },
+          {
+            "name": "ИНИнтервью",
+            "width": 282,
+            "height": 46
+          },
+          {
+            "name": "БЗБиблиотека задач",
+            "width": 282,
+            "height": 46
+          },
+          {
+            "name": "КАКандидаты",
+            "width": 282,
+            "height": 46
+          },
+          {
+            "name": "↗Старые входы",
+            "width": 282,
+            "height": 46
+          },
+          {
+            "name": "АК Анна КрыловаПрофиль аккаунта Личный аккаунт",
+            "width": 282,
+            "height": 102
+          },
+          {
+            "name": "← Вернуться в личное пространство",
+            "width": 362,
+            "height": 46
+          }
+        ]
+      },
+      "landscape": {
+        "hash": "#/profile?actor=personal&state=success",
+        "value": "Поворот сохраняет DA-01",
+        "selectionStart": 3,
+        "selectionEnd": 11,
+        "focused": true,
+        "activeTag": "INPUT",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 0,
+        "room": null,
+        "runwayActive": false,
+        "visibleTargets": [
+          {
+            "name": "Выбрать роль для просмотра прототипа",
+            "width": 356.359375,
+            "height": 44
+          },
+          {
+            "name": "Выбрать состояние данных",
+            "width": 213.8125,
+            "height": 44
+          },
+          {
+            "name": "ПространствоЛичное пространство↕",
+            "width": 210,
+            "height": 58
+          },
+          {
+            "name": "ИНИнтервью",
+            "width": 210,
+            "height": 46
+          },
+          {
+            "name": "БЗБиблиотека задач",
+            "width": 210,
+            "height": 46
+          },
+          {
+            "name": "КАКандидаты",
+            "width": 210,
+            "height": 46
+          },
+          {
+            "name": "↗Старые входы",
+            "width": 210,
+            "height": 46
+          },
+          {
+            "name": "← Вернуться в личное пространство",
+            "width": 164.765625,
+            "height": 90
+          }
+        ]
+      },
+      "returnedPortrait": {
+        "hash": "#/profile?actor=personal&state=success",
+        "value": "Поворот сохраняет DA-01",
+        "selectionStart": 3,
+        "selectionEnd": 11,
+        "focused": true,
+        "activeTag": "INPUT",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 0,
+        "room": null,
+        "runwayActive": false,
+        "visibleTargets": [
+          {
+            "name": "Выбрать роль для просмотра прототипа",
+            "width": 366,
+            "height": 44
+          },
+          {
+            "name": "Выбрать состояние данных",
+            "width": 366,
+            "height": 44
+          },
+          {
+            "name": "Открыть рабочую навигацию",
+            "width": 48,
+            "height": 44
+          },
+          {
+            "name": "Закрыть рабочую навигацию",
+            "width": 390,
+            "height": 844
+          },
+          {
+            "name": "ПространствоЛичное пространство↕",
+            "width": 282,
+            "height": 58
+          },
+          {
+            "name": "ИНИнтервью",
+            "width": 282,
+            "height": 46
+          },
+          {
+            "name": "БЗБиблиотека задач",
+            "width": 282,
+            "height": 46
+          },
+          {
+            "name": "КАКандидаты",
+            "width": 282,
+            "height": 46
+          },
+          {
+            "name": "↗Старые входы",
+            "width": 282,
+            "height": 46
+          },
+          {
+            "name": "АК Анна КрыловаПрофиль аккаунта Личный аккаунт",
+            "width": 282,
+            "height": 102
+          },
+          {
+            "name": "← Вернуться в личное пространство",
+            "width": 362,
+            "height": 46
+          }
+        ]
+      },
+      "explicitRefocus": {
+        "hash": "#/profile?actor=personal&state=success",
+        "value": "Поворот сохраняет DA-01",
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": true,
+        "activeTag": "INPUT",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 0,
+        "room": null,
+        "runwayActive": false,
+        "visibleTargets": [
+          {
+            "name": "Выбрать роль для просмотра прототипа",
+            "width": 366,
+            "height": 44
+          },
+          {
+            "name": "Выбрать состояние данных",
+            "width": 366,
+            "height": 44
+          },
+          {
+            "name": "Открыть рабочую навигацию",
+            "width": 48,
+            "height": 44
+          },
+          {
+            "name": "Закрыть рабочую навигацию",
+            "width": 390,
+            "height": 844
+          },
+          {
+            "name": "ПространствоЛичное пространство↕",
+            "width": 282,
+            "height": 58
+          },
+          {
+            "name": "ИНИнтервью",
+            "width": 282,
+            "height": 46
+          },
+          {
+            "name": "БЗБиблиотека задач",
+            "width": 282,
+            "height": 46
+          },
+          {
+            "name": "КАКандидаты",
+            "width": 282,
+            "height": 46
+          },
+          {
+            "name": "↗Старые входы",
+            "width": 282,
+            "height": 46
+          },
+          {
+            "name": "АК Анна КрыловаПрофиль аккаунта Личный аккаунт",
+            "width": 282,
+            "height": 102
+          },
+          {
+            "name": "← Вернуться в личное пространство",
+            "width": 362,
+            "height": 46
+          }
+        ]
+      },
+      "roomPreserved": true,
+      "pass": false
+    },
+    {
+      "surface": "DA-02",
+      "portrait": {
+        "hash": "#/teams/atlas/library/tasks/task-31/edit?actor=member&state=success",
+        "value": "Поворот сохраняет DA-02",
+        "selectionStart": 3,
+        "selectionEnd": 11,
+        "focused": true,
+        "activeTag": "INPUT",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 634,
+        "room": null,
+        "runwayActive": false,
+        "visibleTargets": [
+          {
+            "name": "Открыть рабочую навигацию",
+            "width": 48,
+            "height": 44
+          },
+          {
+            "name": "Закрыть рабочую навигацию",
+            "width": 390,
+            "height": 844
+          },
+          {
+            "name": "КомандаAtlas↕",
+            "width": 282,
+            "height": 58
+          },
+          {
+            "name": "ИНИнтервью",
+            "width": 282,
+            "height": 46
+          },
+          {
+            "name": "БЗБиблиотека задач",
+            "width": 282,
+            "height": 46
+          },
+          {
+            "name": "ТВТреки и вакансии",
+            "width": 282,
+            "height": 46
+          },
+          {
+            "name": "УЧУчастники",
+            "width": 282,
+            "height": 46
+          },
+          {
+            "name": "↗Старые входы",
+            "width": 282,
+            "height": 46
+          },
+          {
+            "name": "АК Анна КрыловаПрофиль аккаунта Участник",
+            "width": 282,
+            "height": 62
+          },
+          {
+            "name": "Задачи",
+            "width": 173.5,
+            "height": 44
+          },
+          {
+            "name": "Наборы задач",
+            "width": 173.5,
+            "height": 44
+          },
+          {
+            "name": "TypeScriptKotlinPython",
+            "width": 316,
+            "height": 48
+          }
+        ]
+      },
+      "landscape": {
+        "hash": "#/teams/atlas/library/tasks/task-31/edit?actor=member&state=success",
+        "value": "Поворот сохраняет DA-02",
+        "selectionStart": 3,
+        "selectionEnd": 11,
+        "focused": true,
+        "activeTag": "INPUT",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 634,
+        "room": null,
+        "runwayActive": false,
+        "visibleTargets": [
+          {
+            "name": "КомандаAtlas↕",
+            "width": 210,
+            "height": 58
+          },
+          {
+            "name": "ИНИнтервью",
+            "width": 210,
+            "height": 46
+          },
+          {
+            "name": "БЗБиблиотека задач",
+            "width": 210,
+            "height": 46
+          },
+          {
+            "name": "ТВТреки и вакансии",
+            "width": 210,
+            "height": 46
+          },
+          {
+            "name": "УЧУчастники",
+            "width": 210,
+            "height": 46
+          },
+          {
+            "name": "↗Старые входы",
+            "width": 210,
+            "height": 46
+          },
+          {
+            "name": "АК Анна КрыловаПрофиль аккаунта Участник",
+            "width": 210,
+            "height": 124
+          },
+          {
+            "name": "TypeScriptKotlinPython",
+            "width": 240.25,
+            "height": 48
+          }
+        ]
+      },
+      "returnedPortrait": {
+        "hash": "#/teams/atlas/library/tasks/task-31/edit?actor=member&state=success",
+        "value": "Поворот сохраняет DA-02",
+        "selectionStart": 3,
+        "selectionEnd": 11,
+        "focused": true,
+        "activeTag": "INPUT",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 991,
+        "room": null,
+        "runwayActive": false,
+        "visibleTargets": [
+          {
+            "name": "Открыть рабочую навигацию",
+            "width": 48,
+            "height": 44
+          },
+          {
+            "name": "Закрыть рабочую навигацию",
+            "width": 390,
+            "height": 844
+          },
+          {
+            "name": "КомандаAtlas↕",
+            "width": 282,
+            "height": 58
+          },
+          {
+            "name": "ИНИнтервью",
+            "width": 282,
+            "height": 46
+          },
+          {
+            "name": "БЗБиблиотека задач",
+            "width": 282,
+            "height": 46
+          },
+          {
+            "name": "ТВТреки и вакансии",
+            "width": 282,
+            "height": 46
+          },
+          {
+            "name": "УЧУчастники",
+            "width": 282,
+            "height": 46
+          },
+          {
+            "name": "↗Старые входы",
+            "width": 282,
+            "height": 46
+          },
+          {
+            "name": "АК Анна КрыловаПрофиль аккаунта Участник",
+            "width": 282,
+            "height": 62
+          },
+          {
+            "name": "TypeScriptKotlinPython",
+            "width": 316,
+            "height": 48
+          },
+          {
+            "name": "Перейти к трекам",
+            "width": 240.9375,
+            "height": 46
+          },
+          {
+            "name": "Смоделировать 409",
+            "width": 240.9375,
+            "height": 46
+          },
+          {
+            "name": "Сохранить новую версию",
+            "width": 240.9375,
+            "height": 46
+          }
+        ]
+      },
+      "explicitRefocus": {
+        "hash": "#/teams/atlas/library/tasks/task-31/edit?actor=member&state=success",
+        "value": "Поворот сохраняет DA-02",
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": true,
+        "activeTag": "INPUT",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 236,
+        "room": null,
+        "runwayActive": false,
+        "visibleTargets": [
+          {
+            "name": "Открыть рабочую навигацию",
+            "width": 48,
+            "height": 44
+          },
+          {
+            "name": "Закрыть рабочую навигацию",
+            "width": 390,
+            "height": 844
+          },
+          {
+            "name": "КомандаAtlas↕",
+            "width": 282,
+            "height": 58
+          },
+          {
+            "name": "ИНИнтервью",
+            "width": 282,
+            "height": 46
+          },
+          {
+            "name": "БЗБиблиотека задач",
+            "width": 282,
+            "height": 46
+          },
+          {
+            "name": "ТВТреки и вакансии",
+            "width": 282,
+            "height": 46
+          },
+          {
+            "name": "УЧУчастники",
+            "width": 282,
+            "height": 46
+          },
+          {
+            "name": "↗Старые входы",
+            "width": 282,
+            "height": 46
+          },
+          {
+            "name": "АК Анна КрыловаПрофиль аккаунта Участник",
+            "width": 282,
+            "height": 62
+          },
+          {
+            "name": "Создать задачу",
+            "width": 362,
+            "height": 46
+          },
+          {
+            "name": "Задачи",
+            "width": 173.5,
+            "height": 44
+          },
+          {
+            "name": "Наборы задач",
+            "width": 173.5,
+            "height": 44
+          }
+        ]
+      },
+      "roomPreserved": true,
+      "pass": false
+    },
+    {
+      "surface": "DA-03",
+      "portrait": {
+        "hash": "#/room/int-204?actor=roomOwner&state=success",
+        "value": "Поворот сохраняет DA-03",
+        "selectionStart": 3,
+        "selectionEnd": 11,
+        "focused": true,
+        "activeTag": "TEXTAREA",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 0,
+        "room": {
+          "sessionId": "prototype-room-session-int-204",
+          "editorInstanceId": "editor-instance-int-204",
+          "activePanel": "chat",
+          "selectedStep": "step-2",
+          "editorSelectionStart": 24,
+          "editorSelectionEnd": 35,
+          "editorScrollTop": 0,
+          "chatDraft": "Поворот сохраняет DA-03",
+          "chatScrollTop": 0
+        },
+        "runwayActive": false,
+        "visibleTargets": [
+          {
+            "name": "КДРедактор",
+            "width": 65,
+            "height": 44
+          },
+          {
+            "name": "ШГШаги",
+            "width": 65,
+            "height": 44
+          },
+          {
+            "name": "УСУсловие",
+            "width": 65,
+            "height": 44
+          },
+          {
+            "name": "Мои заметки",
+            "width": 65,
+            "height": 44
+          },
+          {
+            "name": "ЧТЧат2",
+            "width": 65,
+            "height": 44
+          },
+          {
+            "name": "АКАктивность",
+            "width": 65,
+            "height": 44
+          },
+          {
+            "name": "Отправить",
+            "width": 111.21875,
+            "height": 44
+          }
+        ]
+      },
+      "landscape": {
+        "hash": "#/room/int-204?actor=roomOwner&state=success",
+        "value": "Поворот сохраняет DA-03",
+        "selectionStart": 3,
+        "selectionEnd": 11,
+        "focused": true,
+        "activeTag": "TEXTAREA",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 0,
+        "room": {
+          "sessionId": "prototype-room-session-int-204",
+          "editorInstanceId": "editor-instance-int-204",
+          "activePanel": "chat",
+          "selectedStep": "step-2",
+          "editorSelectionStart": 24,
+          "editorSelectionEnd": 35,
+          "editorScrollTop": 0,
+          "chatDraft": "Поворот сохраняет DA-03",
+          "chatScrollTop": 0
+        },
+        "runwayActive": true,
+        "visibleTargets": [
+          {
+            "name": "КДРедактор",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "name": "ШГШаги",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "name": "УСУсловие",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "name": "Мои заметки",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "name": "ЧТЧат2",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "name": "АКАктивность",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "name": "Отправить",
+            "width": 111.21875,
+            "height": 44
+          }
+        ]
+      },
+      "returnedPortrait": {
+        "hash": "#/room/int-204?actor=roomOwner&state=success",
+        "value": "Поворот сохраняет DA-03",
+        "selectionStart": 3,
+        "selectionEnd": 11,
+        "focused": true,
+        "activeTag": "TEXTAREA",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 0,
+        "room": {
+          "sessionId": "prototype-room-session-int-204",
+          "editorInstanceId": "editor-instance-int-204",
+          "activePanel": "chat",
+          "selectedStep": "step-2",
+          "editorSelectionStart": 24,
+          "editorSelectionEnd": 35,
+          "editorScrollTop": 0,
+          "chatDraft": "Поворот сохраняет DA-03",
+          "chatScrollTop": 0
+        },
+        "runwayActive": false,
+        "visibleTargets": [
+          {
+            "name": "КДРедактор",
+            "width": 65,
+            "height": 44
+          },
+          {
+            "name": "ШГШаги",
+            "width": 65,
+            "height": 44
+          },
+          {
+            "name": "УСУсловие",
+            "width": 65,
+            "height": 44
+          },
+          {
+            "name": "Мои заметки",
+            "width": 65,
+            "height": 44
+          },
+          {
+            "name": "ЧТЧат2",
+            "width": 65,
+            "height": 44
+          },
+          {
+            "name": "АКАктивность",
+            "width": 65,
+            "height": 44
+          },
+          {
+            "name": "Отправить",
+            "width": 111.21875,
+            "height": 44
+          }
+        ]
+      },
+      "explicitRefocus": {
+        "hash": "#/room/int-204?actor=roomOwner&state=success",
+        "value": "Поворот сохраняет DA-03",
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": true,
+        "activeTag": "TEXTAREA",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 0,
+        "room": {
+          "sessionId": "prototype-room-session-int-204",
+          "editorInstanceId": "editor-instance-int-204",
+          "activePanel": "chat",
+          "selectedStep": "step-2",
+          "editorSelectionStart": 24,
+          "editorSelectionEnd": 35,
+          "editorScrollTop": 0,
+          "chatDraft": "Поворот сохраняет DA-03",
+          "chatScrollTop": 0
+        },
+        "runwayActive": false,
+        "visibleTargets": [
+          {
+            "name": "КДРедактор",
+            "width": 65,
+            "height": 44
+          },
+          {
+            "name": "ШГШаги",
+            "width": 65,
+            "height": 44
+          },
+          {
+            "name": "УСУсловие",
+            "width": 65,
+            "height": 44
+          },
+          {
+            "name": "Мои заметки",
+            "width": 65,
+            "height": 44
+          },
+          {
+            "name": "ЧТЧат2",
+            "width": 65,
+            "height": 44
+          },
+          {
+            "name": "АКАктивность",
+            "width": 65,
+            "height": 44
+          },
+          {
+            "name": "Отправить",
+            "width": 111.21875,
+            "height": 44
+          }
+        ]
+      },
+      "roomPreserved": true,
+      "pass": false
+    },
+    {
+      "surface": "DA-04",
+      "portrait": {
+        "hash": "#/teams/atlas/candidates?actor=hiring&state=success&isHr=false",
+        "value": "Поворот сохраняет DA-04",
+        "selectionStart": 3,
+        "selectionEnd": 11,
+        "focused": true,
+        "activeTag": "INPUT",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 657,
+        "room": null,
+        "runwayActive": false,
+        "visibleTargets": [
+          {
+            "name": "Выгрузить Excel",
+            "width": 366,
+            "height": 46
+          },
+          {
+            "name": "FrontendBackendБез трекаВсе",
+            "width": 340,
+            "height": 46
+          },
+          {
+            "name": "Lead UI EngineerБез вакансииВсе",
+            "width": 340,
+            "height": 46
+          },
+          {
+            "name": "ВсеЗапланированоЗавершеноАрхив",
+            "width": 340,
+            "height": 46
+          }
+        ]
+      },
+      "landscape": {
+        "hash": "#/teams/atlas/candidates?actor=hiring&state=success&isHr=false",
+        "value": "Поворот сохраняет DA-04",
+        "selectionStart": 3,
+        "selectionEnd": 11,
+        "focused": true,
+        "activeTag": "INPUT",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 305,
+        "room": null,
+        "runwayActive": false,
+        "visibleTargets": [
+          {
+            "name": "Сменить рабочее пространство",
+            "width": 190,
+            "height": 58
+          },
+          {
+            "name": "ИИнтервью",
+            "width": 190,
+            "height": 46
+          },
+          {
+            "name": "ККандидаты",
+            "width": 190,
+            "height": 46
+          },
+          {
+            "name": "ББиблиотека задач",
+            "width": 190,
+            "height": 62
+          },
+          {
+            "name": "ТТреки и вакансии",
+            "width": 190,
+            "height": 62
+          },
+          {
+            "name": "FrontendBackendБез трекаВсе",
+            "width": 257.25,
+            "height": 46
+          },
+          {
+            "name": "Lead UI EngineerБез вакансииВсе",
+            "width": 257.25,
+            "height": 46
+          },
+          {
+            "name": "ВсеЗапланированоЗавершеноАрхив",
+            "width": 257.25,
+            "height": 46
+          }
+        ]
+      },
+      "returnedPortrait": {
+        "hash": "#/teams/atlas/candidates?actor=hiring&state=success&isHr=false",
+        "value": "Поворот сохраняет DA-04",
+        "selectionStart": 3,
+        "selectionEnd": 11,
+        "focused": true,
+        "activeTag": "INPUT",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 616,
+        "room": null,
+        "runwayActive": false,
+        "visibleTargets": [
+          {
+            "name": "Выгрузить Excel",
+            "width": 366,
+            "height": 46
+          },
+          {
+            "name": "FrontendBackendБез трекаВсе",
+            "width": 340,
+            "height": 46
+          },
+          {
+            "name": "Lead UI EngineerБез вакансииВсе",
+            "width": 340,
+            "height": 46
+          },
+          {
+            "name": "ВсеЗапланированоЗавершеноАрхив",
+            "width": 340,
+            "height": 46
+          }
+        ]
+      },
+      "explicitRefocus": {
+        "hash": "#/teams/atlas/candidates?actor=hiring&state=success&isHr=false",
+        "value": "Поворот сохраняет DA-04",
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": true,
+        "activeTag": "INPUT",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 616,
+        "room": null,
+        "runwayActive": false,
+        "visibleTargets": [
+          {
+            "name": "Выгрузить Excel",
+            "width": 366,
+            "height": 46
+          },
+          {
+            "name": "FrontendBackendБез трекаВсе",
+            "width": 340,
+            "height": 46
+          },
+          {
+            "name": "Lead UI EngineerБез вакансииВсе",
+            "width": 340,
+            "height": 46
+          },
+          {
+            "name": "ВсеЗапланированоЗавершеноАрхив",
+            "width": 340,
+            "height": 46
+          }
+        ]
+      },
+      "roomPreserved": true,
+      "pass": false
+    },
+    {
+      "surface": "DA-05",
+      "portrait": {
+        "hash": "#/teams/atlas/interviews/new?actor=creator&state=createPublished&surface=create",
+        "value": "Поворот сохраняет DA-05",
+        "selectionStart": 3,
+        "selectionEnd": 11,
+        "focused": true,
+        "activeTag": "INPUT",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 755,
+        "room": null,
+        "runwayActive": false,
+        "visibleTargets": [
+          {
+            "name": "Интервью",
+            "width": 124.65625,
+            "height": 48
+          },
+          {
+            "name": "Процессы",
+            "width": 124.671875,
+            "height": 48
+          },
+          {
+            "name": "Библиотека",
+            "width": 124.65625,
+            "height": 48
+          }
+        ]
+      },
+      "landscape": {
+        "hash": "#/teams/atlas/interviews/new?actor=creator&state=createPublished&surface=create",
+        "value": "Поворот сохраняет DA-05",
+        "selectionStart": 3,
+        "selectionEnd": 11,
+        "focused": true,
+        "activeTag": "INPUT",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 536,
+        "room": null,
+        "runwayActive": false,
+        "visibleTargets": [
+          {
+            "name": "Интервью",
+            "width": 264.15625,
+            "height": 48
+          },
+          {
+            "name": "Процессы",
+            "width": 264.171875,
+            "height": 48
+          },
+          {
+            "name": "Библиотека",
+            "width": 264.15625,
+            "height": 48
+          }
+        ]
+      },
+      "returnedPortrait": {
+        "hash": "#/teams/atlas/interviews/new?actor=creator&state=createPublished&surface=create",
+        "value": "Поворот сохраняет DA-05",
+        "selectionStart": 3,
+        "selectionEnd": 11,
+        "focused": true,
+        "activeTag": "INPUT",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 754,
+        "room": null,
+        "runwayActive": false,
+        "visibleTargets": [
+          {
+            "name": "Интервью",
+            "width": 124.65625,
+            "height": 48
+          },
+          {
+            "name": "Процессы",
+            "width": 124.671875,
+            "height": 48
+          },
+          {
+            "name": "Библиотека",
+            "width": 124.65625,
+            "height": 48
+          }
+        ]
+      },
+      "explicitRefocus": {
+        "hash": "#/teams/atlas/interviews/new?actor=creator&state=createPublished&surface=create",
+        "value": "Поворот сохраняет DA-05",
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": true,
+        "activeTag": "INPUT",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 754,
+        "room": null,
+        "runwayActive": false,
+        "visibleTargets": [
+          {
+            "name": "Интервью",
+            "width": 124.65625,
+            "height": 48
+          },
+          {
+            "name": "Процессы",
+            "width": 124.671875,
+            "height": 48
+          },
+          {
+            "name": "Библиотека",
+            "width": 124.65625,
+            "height": 48
+          }
+        ]
+      },
+      "roomPreserved": true,
+      "pass": false
+    },
+    {
+      "surface": "DA-06",
+      "portrait": {
+        "hash": "#/merge?actor=sourceOwner&state=success&blocker=none&step=target&exact=1",
+        "value": "Поворот сохраняет DA-06",
+        "selectionStart": 3,
+        "selectionEnd": 11,
+        "focused": true,
+        "activeTag": "INPUT",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 904,
+        "room": null,
+        "runwayActive": false,
+        "visibleTargets": []
+      },
+      "landscape": {
+        "hash": "#/merge?actor=sourceOwner&state=success&blocker=none&step=target&exact=1",
+        "value": "Поворот сохраняет DA-06",
+        "selectionStart": 3,
+        "selectionEnd": 11,
+        "focused": true,
+        "activeTag": "INPUT",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 333,
+        "room": null,
+        "runwayActive": false,
+        "visibleTargets": []
+      },
+      "returnedPortrait": {
+        "hash": "#/merge?actor=sourceOwner&state=success&blocker=none&step=target&exact=1",
+        "value": "Поворот сохраняет DA-06",
+        "selectionStart": 3,
+        "selectionEnd": 11,
+        "focused": true,
+        "activeTag": "INPUT",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 843,
+        "room": null,
+        "runwayActive": false,
+        "visibleTargets": []
+      },
+      "explicitRefocus": {
+        "hash": "#/merge?actor=sourceOwner&state=success&blocker=none&step=target&exact=1",
+        "value": "Поворот сохраняет DA-06",
+        "selectionStart": 0,
+        "selectionEnd": 0,
+        "focused": true,
+        "activeTag": "INPUT",
+        "fallbackVisible": false,
+        "fallbackText": "",
+        "fallbackBox": null,
+        "closeBox": null,
+        "fallbackState": "off",
+        "mutations": 0,
+        "scrollY": 843,
+        "room": null,
+        "runwayActive": false,
+        "visibleTargets": []
+      },
+      "roomPreserved": true,
+      "pass": false
+    }
+  ],
+  "otherBrowser": {
+    "hash": "#/profile?actor=personal&state=success",
+    "value": "Анна Крылова",
+    "selectionStart": 12,
+    "selectionEnd": 12,
+    "focused": true,
+    "activeTag": "INPUT",
+    "fallbackVisible": false,
+    "fallbackText": "",
+    "fallbackBox": null,
+    "closeBox": null,
+    "fallbackState": "off",
+    "scrollY": 231,
+    "room": null,
+    "runwayActive": false,
+    "visibleTargets": [
+      {
+        "name": "ПространствоЛичное пространство↕",
+        "width": 210,
+        "height": 58
+      },
+      {
+        "name": "ИНИнтервью",
+        "width": 210,
+        "height": 46
+      },
+      {
+        "name": "БЗБиблиотека задач",
+        "width": 210,
+        "height": 46
+      },
+      {
+        "name": "КАКандидаты",
+        "width": 210,
+        "height": 46
+      },
+      {
+        "name": "↗Старые входы",
+        "width": 210,
+        "height": 46
+      },
+      {
+        "name": "АК Анна КрыловаПрофиль аккаунта Личный аккаунт",
+        "width": 210,
+        "height": 124
+      },
+      {
+        "name": "Сохранить изменения",
+        "width": 211.953125,
+        "height": 46
+      }
+    ],
+    "pass": true
+  },
+  "pass": false
+}

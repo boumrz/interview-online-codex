@@ -1,0 +1,623 @@
+{
+  "task": "1.6g",
+  "generatedAt": "2026-09-09T12:52:49.996Z",
+  "verdict": "ux-approved",
+  "pass": true,
+  "automatedReplay": {
+    "pass": true,
+    "iPhoneSafariOrientationFallback": {
+      "pass": true,
+      "directLandscape": "6/6",
+      "rotateDuringInput": "6/6",
+      "otherBrowserNegativeControl": true,
+      "surfaces": [
+        "DA-01",
+        "DA-02",
+        "DA-03",
+        "DA-04",
+        "DA-05",
+        "DA-06"
+      ]
+    },
+    "reports": {
+      "1.6a": {
+        "replayPass": true,
+        "matrix": {
+          "total": 44,
+          "passed": 44
+        },
+        "runtimeErrorCount": 0,
+        "screenshotCount": 61,
+        "expectedScreenshotCount": 61,
+        "screenshotEvidencePresent": true,
+        "sha256": "84fb0e767facc1d316ebcd26b4a5572518387a27ee9e3ae2b2977cb9b8d2764f"
+      },
+      "1.6b": {
+        "replayPass": true,
+        "matrix": {
+          "total": 44,
+          "passed": 44
+        },
+        "runtimeErrorCount": 0,
+        "screenshotCount": 20,
+        "expectedScreenshotCount": 20,
+        "screenshotEvidencePresent": true,
+        "sha256": "f2d5d9d4556886d4690295cf48a9be511304c42131474a720700c51c4332b338"
+      },
+      "1.6c": {
+        "replayPass": true,
+        "matrix": {
+          "total": 44,
+          "passed": 44
+        },
+        "runtimeErrorCount": 0,
+        "screenshotCount": 15,
+        "expectedScreenshotCount": 15,
+        "screenshotEvidencePresent": true,
+        "sha256": "031bdaf57350daa765d8af6222d35825f28b4aaa3a832f86120d384681e82579"
+      },
+      "1.6d": {
+        "replayPass": true,
+        "matrix": {
+          "total": 44,
+          "passed": 44
+        },
+        "runtimeErrorCount": 0,
+        "screenshotCount": 33,
+        "expectedScreenshotCount": 33,
+        "screenshotEvidencePresent": true,
+        "sha256": "01fcfb39b17a434d7295c7ccb9a8818558bd38e1ce9738d77b278607a57e03b0"
+      },
+      "1.6e": {
+        "replayPass": true,
+        "matrix": {
+          "total": 44,
+          "passed": 44
+        },
+        "runtimeErrorCount": 0,
+        "screenshotCount": 20,
+        "expectedScreenshotCount": 20,
+        "screenshotEvidencePresent": true,
+        "sha256": "58ea0a22fba7982fc2ff19f1dbf21cfef94a1cdd17eff4c9245b33a06ae14fb2"
+      },
+      "1.6f": {
+        "replayPass": true,
+        "matrix": {
+          "total": 44,
+          "passed": 44
+        },
+        "runtimeErrorCount": 0,
+        "screenshotCount": 14,
+        "expectedScreenshotCount": 14,
+        "screenshotEvidencePresent": true,
+        "sha256": "06a7640b8efcd09be78e8416a31943db2ebde450c43e66494b93a1b97d7940dd"
+      }
+    }
+  },
+  "coverage": {
+    "pass": true,
+    "totalRows": 72,
+    "byPrefix": {
+      "A": 17,
+      "B": 16,
+      "C": 13,
+      "D": 6,
+      "E": 8,
+      "F": 12
+    },
+    "expectedByPrefix": {
+      "A": 17,
+      "B": 16,
+      "C": 13,
+      "D": 6,
+      "E": 8,
+      "F": 12
+    }
+  },
+  "routeContinuity": {
+    "pass": true,
+    "legacyRouteCount": 8,
+    "legacySideEffects": 0,
+    "standaloneEntriesLinked": [
+      "hiring.html",
+      "programmes.html",
+      "merge.html"
+    ]
+  },
+  "rolePrivacy": {
+    "pass": true
+  },
+  "rolePolicy": {
+    "pass": true,
+    "acceptedPolicy": "A server-confirmed room OWNER or INTERVIEWER with an active room grant may explicitly publish; candidate and other labels without that authority may not.",
+    "publishControlByActor": {
+      "roomOwner": {
+        "publishControlCount": 1,
+        "managerRoomCount": 1,
+        "candidateRoomCount": 0,
+        "terminalCount": 0
+      },
+      "interviewer": {
+        "publishControlCount": 1,
+        "managerRoomCount": 1,
+        "candidateRoomCount": 0,
+        "terminalCount": 0
+      },
+      "candidate": {
+        "publishControlCount": 0,
+        "managerRoomCount": 0,
+        "candidateRoomCount": 1,
+        "terminalCount": 0
+      },
+      "hiring": {
+        "publishControlCount": 0,
+        "managerRoomCount": 1,
+        "candidateRoomCount": 0,
+        "terminalCount": 0
+      },
+      "guestManager": {
+        "publishControlCount": 0,
+        "managerRoomCount": 1,
+        "candidateRoomCount": 0,
+        "terminalCount": 0
+      },
+      "owner": {
+        "publishControlCount": 0,
+        "managerRoomCount": 0,
+        "candidateRoomCount": 0,
+        "terminalCount": 1
+      },
+      "admin": {
+        "publishControlCount": 0,
+        "managerRoomCount": 0,
+        "candidateRoomCount": 0,
+        "terminalCount": 1
+      }
+    }
+  },
+  "ux10": {
+    "automatedGeometryPass": true,
+    "realMobilePass": true,
+    "matrixComplete": true,
+    "representative44CssPxEvidence": {
+      "pass": true,
+      "devicePixelRatio": 3,
+      "expectedDevicePixels": 132,
+      "basis": "44 CSS px room navigation rows render at 132 device pixels on the 3x simulator screenshot."
+    },
+    "supportMatrix": {
+      "iPhoneSafariPortraitInput": "supported-real-safari-pass",
+      "iPhoneSafariLandscapeKeyboardClosed": "supported-real-safari-pass",
+      "iPhoneSafariLandscapeNativeInput": "unsupported-explicit-orientation-fallback",
+      "otherMobileBrowserLandscapeInput": "not-claimed"
+    },
+    "orientationFallbackAutomatedPass": true,
+    "orientationFallbackCopy": "Для ввода поверните iPhone вертикально",
+    "directLandscapeKeyboardPrevented": true,
+    "rotateBlursWithoutMutation": true,
+    "draftScopeSelectionPreserved": true,
+    "explicitPortraitRefocusRequired": true,
+    "allFallbackTargets44": true,
+    "safeAreaPass": true,
+    "roomNavigationLandscapeKeyboardClosed": true,
+    "roomNavigationWhileFallbackVisible": true,
+    "focusVisibleOnPersonalSearch": true,
+    "roomComposerFocusVisiblePortrait": true,
+    "roomComposerAndSendReachableAboveKeyboardPortrait": true,
+    "roomComposerAndSendReachableKeyboardClosedLandscape": true,
+    "horizontalOverflowObserved": false,
+    "keyboardPortraitPass": true,
+    "keyboardLandscapeInputInSupportMatrix": false,
+    "bothLandscapeDirectionsSafeAreaPass": true,
+    "bothLandscapeDirectionsTested": true,
+    "historyRestoredOnBlur": true,
+    "fallbackAnnouncementSemanticsPass": true,
+    "realSafariDirectLandscapeRoomBothDirections": true,
+    "realSafariDirectLandscapeCompactFormBothDirections": true,
+    "realSafariRotateFocusedPortraitRoomPass": true,
+    "realSafariRotateFocusedPortraitCompactFormPass": true,
+    "realSafariNoSubmitOrMutationObserved": true,
+    "realSafariReturnPortraitPreservesStateAndRequiresExplicitRefocus": true,
+    "realSafariRoomNavigationWhileFallbackVisible": true,
+    "historicalFailedScrollRunwayEvidenceRetained": true
+  },
+  "manualEnvironment": {
+    "browser": "Mobile Safari",
+    "browserVersion": "26.2",
+    "browserBuild": "8623.1.14.10.9",
+    "runtime": "iOS 26.2 (23C54)",
+    "device": "iPhone 17 Pro",
+    "udid": "0A8ABE46-E851-46AE-AC5D-361B1E3F14F0",
+    "nativeScreenDevicePixels": {
+      "width": 1206,
+      "height": 2622
+    },
+    "nominalCssScreen": {
+      "width": 402,
+      "height": 874
+    },
+    "devicePixelRatio": 3,
+    "normalizedLandscapeCaptureDevicePixels": {
+      "width": 2622,
+      "height": 1206
+    },
+    "testedUrl": "http://192.168.1.125:4173/index.html?uxg=tenth-*",
+    "testedAtUtc": "2026-09-09T12:28:00Z/2026-09-09T12:47:00Z",
+    "currentRetestScreenshots": [
+      "ios-safari-tenth-room-portrait-input-focused-before-rotate.png",
+      "ios-safari-tenth-room-landscape-right-keyboard-closed-upright.png",
+      "ios-safari-tenth-room-landscape-right-direct-fallback-upright.png",
+      "ios-safari-tenth-room-landscape-right-rotate-fallback-upright.png",
+      "ios-safari-tenth-room-landscape-left-keyboard-closed-upright.png",
+      "ios-safari-tenth-room-landscape-left-direct-fallback-upright.png",
+      "ios-safari-tenth-room-portrait-return-explicit-refocus.png",
+      "ios-safari-tenth-profile-landscape-right-rotate-fallback-upright.png",
+      "ios-safari-tenth-profile-landscape-right-direct-fallback-upright.png",
+      "ios-safari-tenth-profile-landscape-left-direct-fallback-upright.png",
+      "ios-safari-tenth-profile-portrait-return-explicit-refocus.png"
+    ],
+    "screenshots": {
+      "automated-tenth-da-03-direct-landscape-fallback.png": {
+        "bytes": 171527,
+        "sha256": "46358adcd00f53437716a17ff8a5619e4b489579ebee951f1a16e7f8ab1df1dd"
+      },
+      "automated-tenth-da-03-rotate-from-focused-portrait.png": {
+        "bytes": 162654,
+        "sha256": "bc51b893b7646fb7b4df8c677c020009a9f588f9378c8db312b1c0d7c9c57a5c"
+      },
+      "automated-tenth-da-06-direct-landscape-fallback.png": {
+        "bytes": 501933,
+        "sha256": "6dcb00255c05b322e8365ced184fede5e4ba495500f6b6cda3a9f36ddde51cb3"
+      },
+      "ios-safari-eighth-room-landscape-keyboard-closed-upright.png": {
+        "bytes": 252287,
+        "sha256": "961ac6dbcf737b2034e8b5b6b1cd8d5ecfc252dccaf4e31cd2a54c73e972fe49"
+      },
+      "ios-safari-eighth-room-landscape-keyboard-closed.png": {
+        "bytes": 331185,
+        "sha256": "f589086354c3b8d92614803c8c1c2835f0484c2485605291ef79bbb2ee107829"
+      },
+      "ios-safari-eighth-room-landscape-keyboard-open-upright.png": {
+        "bytes": 259935,
+        "sha256": "36d2bcbff8cb14453f902315654672209e5f50727884d0fa9ea5c36af55d82ea"
+      },
+      "ios-safari-eighth-room-landscape-keyboard-open.png": {
+        "bytes": 335124,
+        "sha256": "7027026fe428c0cb969a6d7d72b566bfe1dfd2ccc688c198db2b4d629548c064"
+      },
+      "ios-safari-eighth-room-landscape-left-keyboard-closed-upright.png": {
+        "bytes": 249027,
+        "sha256": "46fa393da51f611f4ee589c4b872e473997cd3d7698ce45036ee154e94f7502b"
+      },
+      "ios-safari-eighth-room-landscape-left-keyboard-closed.png": {
+        "bytes": 331203,
+        "sha256": "e0fe38c5e360f5918095409698de27cf5b52810c5867f1e7a37f4dc27810b61f"
+      },
+      "ios-safari-eighth-room-landscape-left-keyboard-open-upright.png": {
+        "bytes": 261734,
+        "sha256": "0b351f4d6b5b12b1db6d2684d2506ad9e8544c09e4d33b3d33f39c8f450ab5c2"
+      },
+      "ios-safari-eighth-room-landscape-left-keyboard-open.png": {
+        "bytes": 341530,
+        "sha256": "539906d066c7721f09aa1aeebc03e65e86df3e1021469bc4b156a030a61b2f62"
+      },
+      "ios-safari-eighth-room-portrait-keyboard-open.png": {
+        "bytes": 265666,
+        "sha256": "64f9666288fe0406496508105020bbdd1cf8f5a7a93c97de918587d93022d43c"
+      },
+      "ios-safari-final-room-landscape-keyboard-closed-upright.png": {
+        "bytes": 259382,
+        "sha256": "153987cf58ec1e3ff4159c1f4cf10c116cde6129165457371e7e20760fcd2147"
+      },
+      "ios-safari-final-room-landscape-keyboard-closed.png": {
+        "bytes": 331647,
+        "sha256": "4a8c3bd68867cf782c62a7817cb771fbb6ac202d517bd1179aaf1128efe33a14"
+      },
+      "ios-safari-final-room-landscape-keyboard-open-upright.png": {
+        "bytes": 245887,
+        "sha256": "6230c118168b7b393a410eaaaaacfd8d304703958a6ad1a8d9151716a86a2a19"
+      },
+      "ios-safari-final-room-landscape-keyboard-open.png": {
+        "bytes": 315027,
+        "sha256": "d2a5e97171bd434988a89aae9f1edb26948ea3752b1c3982235cc152677177e4"
+      },
+      "ios-safari-final-room-landscape-left-keyboard-closed-upright.png": {
+        "bytes": 295901,
+        "sha256": "c79f203a5a1be196e162ca096e54cb4614aa2102122653c76561f8d686642dc7"
+      },
+      "ios-safari-final-room-landscape-left-keyboard-closed.png": {
+        "bytes": 378941,
+        "sha256": "d9634f966a66a02496facef271fe1f6b8ce8d9a97b1c6795b0a65c3ea3290cca"
+      },
+      "ios-safari-final-room-landscape-left-keyboard-open-upright.png": {
+        "bytes": 272703,
+        "sha256": "f50dddcbb12cc81423c49a741268d40076403b762124794bbbb4516c520db2d9"
+      },
+      "ios-safari-final-room-landscape-left-keyboard-open.png": {
+        "bytes": 347626,
+        "sha256": "43befe976c405e73f7b4c294356e35dd32d0a64c3f3f1bded89ebc7cefee3472"
+      },
+      "ios-safari-final-room-portrait-keyboard-open.png": {
+        "bytes": 242785,
+        "sha256": "887bad8ceebccdee348fc625c08cabfe585b9487ac42fb403050700054d6f27c"
+      },
+      "ios-safari-ninth-room-landscape-keyboard-closed-upright.png": {
+        "bytes": 255499,
+        "sha256": "df54bb891d099859e7295d7e8b1f217f6178b1b98839335be050202cab542661"
+      },
+      "ios-safari-ninth-room-landscape-keyboard-closed.png": {
+        "bytes": 330117,
+        "sha256": "619025ad2e4de1056b3f1caf78008da349a136959199ed9473d4ee78dcddfb71"
+      },
+      "ios-safari-ninth-room-landscape-keyboard-open-after-one-gesture-upright.png": {
+        "bytes": 281144,
+        "sha256": "7e5fd17da19d9fda4462aa6f9d22557f59e3cf7c0e5d343333923dcf1fd5729a"
+      },
+      "ios-safari-ninth-room-landscape-keyboard-open-after-one-gesture.png": {
+        "bytes": 361011,
+        "sha256": "72b59ae14cecc010d321ebd4ea2192235db8919e392ec20aba6721ebbb376e4e"
+      },
+      "ios-safari-ninth-room-landscape-left-keyboard-closed-upright.png": {
+        "bytes": 249027,
+        "sha256": "46fa393da51f611f4ee589c4b872e473997cd3d7698ce45036ee154e94f7502b"
+      },
+      "ios-safari-ninth-room-landscape-left-keyboard-closed.png": {
+        "bytes": 331203,
+        "sha256": "e0fe38c5e360f5918095409698de27cf5b52810c5867f1e7a37f4dc27810b61f"
+      },
+      "ios-safari-ninth-room-landscape-left-keyboard-open-after-one-gesture-upright.png": {
+        "bytes": 276560,
+        "sha256": "d9e962c58ffb31afc2c73239543c5e4837e4229ac6dbe612663ba5434d1d7f9d"
+      },
+      "ios-safari-ninth-room-landscape-left-keyboard-open-after-one-gesture.png": {
+        "bytes": 358130,
+        "sha256": "d9c402a7e6fec04042b4e7167a392ff23d0bab932557002ad63f721298f6c955"
+      },
+      "ios-safari-ninth-room-portrait-keyboard-open.png": {
+        "bytes": 270256,
+        "sha256": "36120a3f3abaf69781feaee54466e04c7479445ffdb2ba18e4c37ac44b2c1feb"
+      },
+      "ios-safari-personal-landscape-keyboard-closed-upright.png": {
+        "bytes": 242720,
+        "sha256": "df6e12917d7f9a1cb287582663583c008d20f7b006a28ae90e50c25163f15783"
+      },
+      "ios-safari-personal-landscape-keyboard-closed.png": {
+        "bytes": 283870,
+        "sha256": "fadb6768fccf112bae595a029b976e6c5b3fd3b6586d072d674d10cdcaa77fca"
+      },
+      "ios-safari-personal-landscape-keyboard-open-upright.png": {
+        "bytes": 441107,
+        "sha256": "01c2396f58fa72f8aa42e0dd71a902eae92c1ea74711c0eef0fab4373a8bf521"
+      },
+      "ios-safari-personal-landscape-keyboard-open.png": {
+        "bytes": 486098,
+        "sha256": "72272e05bd93c794b11506c24aab7360add535b8c7a640953d2817b91247ca05"
+      },
+      "ios-safari-personal-landscape-left-keyboard-closed-upright.png": {
+        "bytes": 240859,
+        "sha256": "a50e7362862e03b2093a60b07f2f9fc28cd3d764313d7e708d7b4654c2391db1"
+      },
+      "ios-safari-personal-landscape-left-keyboard-closed.png": {
+        "bytes": 282458,
+        "sha256": "7b5df7731df0547ce7f37b2aff4f47194dcae185adf109da20d4d4a6fed23730"
+      },
+      "ios-safari-personal-landscape-left-keyboard-open-upright.png": {
+        "bytes": 381336,
+        "sha256": "b6ad8272e7b8126d89785aefee27828c9f0da5888225210df6c87f2c0d2e59a5"
+      },
+      "ios-safari-personal-landscape-left-keyboard-open.png": {
+        "bytes": 406563,
+        "sha256": "2862027951fdfd053f0437d9132b2af59d5de5a6e5a811e94b1b5449d31f17f7"
+      },
+      "ios-safari-personal-portrait-keyboard-closed.png": {
+        "bytes": 449640,
+        "sha256": "5f1797de70de7d1a6c60b91a06981f9cb5df44d112aeac4c6d07fec5bae3bb18"
+      },
+      "ios-safari-personal-portrait-keyboard-open.png": {
+        "bytes": 554765,
+        "sha256": "3e3c90fe341d6fbd65f8d8369970f7492e77e0ffca620bf6e288a080594b7a7c"
+      },
+      "ios-safari-room-chat-landscape-keyboard-closed-upright.png": {
+        "bytes": 200659,
+        "sha256": "3e1e50ab25ef57c9b2b73ebf62863eb568383cf9359d00f77136e2b20cf49357"
+      },
+      "ios-safari-room-chat-landscape-keyboard-closed.png": {
+        "bytes": 274700,
+        "sha256": "4b2a3c63ed200dfc4e3e1571797a8c545d62035d785de6dc5ffd26f8f5c43c02"
+      },
+      "ios-safari-room-chat-landscape-keyboard-open-upright.png": {
+        "bytes": 433819,
+        "sha256": "90aba49e0752cd84a821106dd150f6eb9e37b157615804141ccfad94ec6b4c74"
+      },
+      "ios-safari-room-chat-landscape-keyboard-open.png": {
+        "bytes": 502629,
+        "sha256": "d49617d2b254099a63d61feafe73d988df4d983b5af76224af69a575baeae88f"
+      },
+      "ios-safari-room-chat-landscape-left-keyboard-closed-upright.png": {
+        "bytes": 207005,
+        "sha256": "b74205ffe6c6ea724a1a10343d1c1d58406c8043852724235db0a77aadb31b90"
+      },
+      "ios-safari-room-chat-landscape-left-keyboard-closed.png": {
+        "bytes": 277886,
+        "sha256": "e551cb824ca08ae4d8692b237094383666feb7a5b644d94bb663dd4ff4a69f8d"
+      },
+      "ios-safari-room-chat-landscape-left-keyboard-open-upright.png": {
+        "bytes": 424697,
+        "sha256": "90d2d8f8da2267651df5a67415ccb5353dc198c9a6b86c22c5647d46609aab36"
+      },
+      "ios-safari-room-chat-landscape-left-keyboard-open.png": {
+        "bytes": 485019,
+        "sha256": "2ac0842a441785cd20ef953816078f1987850d0ac122788e1e3f10c2012af466"
+      },
+      "ios-safari-room-chat-portrait-keyboard-open.png": {
+        "bytes": 311830,
+        "sha256": "1dc55855642cd4d0442f0bbb59436aba565d61b8377d299bf7c182e1c131ea32"
+      },
+      "ios-safari-room-portrait-keyboard-closed.png": {
+        "bytes": 292642,
+        "sha256": "2121df001bd850d737c059f74e55f4b27daa8cdc3e811dc8a7e3bdadaf16a5ef"
+      },
+      "ios-safari-seventh-room-landscape-keyboard-closed-upright.png": {
+        "bytes": 251489,
+        "sha256": "bef9ecb2e4ac909c9a9e6abd919227d2fa680a9a5581b40e2e5baa65d8ce8cd7"
+      },
+      "ios-safari-seventh-room-landscape-keyboard-closed.png": {
+        "bytes": 315935,
+        "sha256": "afe86d210ec8370414669a52da7582e54e1540a6a2c36ead086b8de83a6acab5"
+      },
+      "ios-safari-seventh-room-landscape-keyboard-open-upright.png": {
+        "bytes": 295591,
+        "sha256": "9a9f1cff98b9df751851b346cd060379631b5d4f70cac945d666f1edc4b89634"
+      },
+      "ios-safari-seventh-room-landscape-keyboard-open.png": {
+        "bytes": 349749,
+        "sha256": "ce8989d5b2e70e885a80b00abe2c0196e56533fd4289e210f448f34b1e9e5582"
+      },
+      "ios-safari-seventh-room-landscape-left-keyboard-closed-upright.png": {
+        "bytes": 246322,
+        "sha256": "0a990fb0ea5cf948cc0ddbb2ef39d990eafc66e82f09cb2638c31679a56db642"
+      },
+      "ios-safari-seventh-room-landscape-left-keyboard-closed.png": {
+        "bytes": 315842,
+        "sha256": "e7e14aecc8c0d7669e32dd4fd4eacfe08177d505652a6531632bb643ba9e55bc"
+      },
+      "ios-safari-seventh-room-landscape-left-keyboard-open-upright.png": {
+        "bytes": 290720,
+        "sha256": "15d03480ec3cf6617308e3f2bf3ab465c19374fadbda699b44e8237d9a24109d"
+      },
+      "ios-safari-seventh-room-landscape-left-keyboard-open.png": {
+        "bytes": 347458,
+        "sha256": "ffcbdcf5201ca613d6f04eb12177aa6d6e877f5602a0193548ffc3dc63e14dac"
+      },
+      "ios-safari-seventh-room-portrait-keyboard-open.png": {
+        "bytes": 255565,
+        "sha256": "fff650edf4eaf763af94c48827124559c898faf8528ffe87a76bcd904b60fe8f"
+      },
+      "ios-safari-sixth-room-landscape-keyboard-closed-upright.png": {
+        "bytes": 299807,
+        "sha256": "f260f4e1270e4e38aa117aa51605b38dcabf8e04363e565ab530917a1cc68896"
+      },
+      "ios-safari-sixth-room-landscape-keyboard-closed.png": {
+        "bytes": 382836,
+        "sha256": "15ec08835b4910e93a24e6bfc65456977f10ca050eec6a0c05fc88bc9b8f568f"
+      },
+      "ios-safari-sixth-room-landscape-keyboard-open-upright.png": {
+        "bytes": 365650,
+        "sha256": "2c249d93a5aa0851780b0858076ca921eb1f344636b50941be22d8920597a655"
+      },
+      "ios-safari-sixth-room-landscape-keyboard-open.png": {
+        "bytes": 441735,
+        "sha256": "d848f2e8fc00fc125d303354a19eed3ebef229958501ba1e94276abc7d2ad9fb"
+      },
+      "ios-safari-sixth-room-landscape-left-keyboard-closed-upright.png": {
+        "bytes": 302066,
+        "sha256": "9ac2bb268a13212d7651800c5063c7f3f6e1a823445786ea4faecc63bf5cb586"
+      },
+      "ios-safari-sixth-room-landscape-left-keyboard-closed.png": {
+        "bytes": 383322,
+        "sha256": "b355e6b3eaf07eb2ff055a1a012f121e616fe5c1e4276f2c1246899829b144a2"
+      },
+      "ios-safari-sixth-room-landscape-left-keyboard-open-upright.png": {
+        "bytes": 320120,
+        "sha256": "6c96821e9ef02017d6961e0c6e028cedc15ba46fe2d69397073c06fd35200b4b"
+      },
+      "ios-safari-sixth-room-landscape-left-keyboard-open.png": {
+        "bytes": 393705,
+        "sha256": "ecbd59be712e971a20a450c60108f1d5f2f5ba3c6c5d3ef1cfb03788d8964cb8"
+      },
+      "ios-safari-sixth-room-portrait-keyboard-open.png": {
+        "bytes": 255430,
+        "sha256": "199d4007a25627a6607a93449c3b7d3be0180b4374f2dcefa680be852b03df01"
+      },
+      "ios-safari-tenth-profile-landscape-left-direct-fallback-upright.png": {
+        "bytes": 320392,
+        "sha256": "8986df3a577d399a446d7af7f0a6bb87971929c709049354df69144a06365019"
+      },
+      "ios-safari-tenth-profile-landscape-left-direct-fallback.png": {
+        "bytes": 376588,
+        "sha256": "c3bea01f73d23900826db67d2dab25183b44d6d281d6f1359ddddf6deaf60ee6"
+      },
+      "ios-safari-tenth-profile-landscape-right-direct-fallback-upright.png": {
+        "bytes": 322449,
+        "sha256": "fdfda183c6633c13c38f3545280405a50d5eb80f10174766807e763eb830bbb9"
+      },
+      "ios-safari-tenth-profile-landscape-right-direct-fallback.png": {
+        "bytes": 377724,
+        "sha256": "daa00fa179ff66e223f7092d8d4b4767078c563e4b1d389066469605607b57a5"
+      },
+      "ios-safari-tenth-profile-landscape-right-rotate-fallback-upright.png": {
+        "bytes": 322449,
+        "sha256": "fdfda183c6633c13c38f3545280405a50d5eb80f10174766807e763eb830bbb9"
+      },
+      "ios-safari-tenth-profile-landscape-right-rotate-fallback.png": {
+        "bytes": 377724,
+        "sha256": "daa00fa179ff66e223f7092d8d4b4767078c563e4b1d389066469605607b57a5"
+      },
+      "ios-safari-tenth-profile-portrait-return-explicit-refocus.png": {
+        "bytes": 454514,
+        "sha256": "32c339b213d38d529fc607421027ddf9296adb239dfba1ac66b74edc8f3660f6"
+      },
+      "ios-safari-tenth-room-landscape-left-direct-fallback-upright.png": {
+        "bytes": 301828,
+        "sha256": "96802bbfcf4890e5b4aa2169e67fbb0a925181b2e12f322fa968b37ddb0d2c56"
+      },
+      "ios-safari-tenth-room-landscape-left-direct-fallback.png": {
+        "bytes": 395311,
+        "sha256": "d80b0e36560b3bebc7591e90bcd2ad1fbc285a1163d70b5e4b1a5f6d84c1ef20"
+      },
+      "ios-safari-tenth-room-landscape-left-keyboard-closed-upright.png": {
+        "bytes": 255129,
+        "sha256": "bb9259ec4d4dd17762be3e89503f22e5e839f50903db0c93d6434b6c6c57c31f"
+      },
+      "ios-safari-tenth-room-landscape-left-keyboard-closed.png": {
+        "bytes": 331864,
+        "sha256": "0694d0cf89047f504c3c826ffd037396b42ba0d7230667f5627526b6303c960a"
+      },
+      "ios-safari-tenth-room-landscape-right-direct-fallback-upright.png": {
+        "bytes": 305178,
+        "sha256": "40ec0b63f50d6f5200ab18f934e582966091b6f66e4ce9221be33489e473c848"
+      },
+      "ios-safari-tenth-room-landscape-right-direct-fallback.png": {
+        "bytes": 394070,
+        "sha256": "5623f32eaaf017effb5e162f012f9b50feb6dad2720b4433bc23baf57eb5511e"
+      },
+      "ios-safari-tenth-room-landscape-right-keyboard-closed-upright.png": {
+        "bytes": 258351,
+        "sha256": "deebd00c0df9db2159b2de025632d713906a7dd987a5410712da23fb08a6d84e"
+      },
+      "ios-safari-tenth-room-landscape-right-keyboard-closed.png": {
+        "bytes": 331695,
+        "sha256": "fa96db4adb96d8840b80999db5171e680a0f40a2cd4642ae37bf2cfd52f46e9a"
+      },
+      "ios-safari-tenth-room-landscape-right-rotate-fallback-upright.png": {
+        "bytes": 303575,
+        "sha256": "06e8416893cd60227096d22a2ad43c0b9a3295a466c97308bb38126582bc340f"
+      },
+      "ios-safari-tenth-room-landscape-right-rotate-fallback.png": {
+        "bytes": 395754,
+        "sha256": "8cbca9765547ba4a6d697b66e75ecb1af4285f55451fa3ac892ab9b0038e54c7"
+      },
+      "ios-safari-tenth-room-portrait-input-focused-before-rotate.png": {
+        "bytes": 141588,
+        "sha256": "cee96c5ee235096bdcdb6e46ab8196a94841c73df9fff37b412753c46958e364"
+      },
+      "ios-safari-tenth-room-portrait-return-explicit-refocus.png": {
+        "bytes": 159766,
+        "sha256": "872a9adc87e90e4e8b4c21d6453a654d8a85a4e53a8e3f3d5e76060efb893d55"
+      },
+      "pre-fallback-red-da-03-direct-landscape-fallback.png": {
+        "bytes": 45408,
+        "sha256": "0ac6a92bd56ef075e4c6de938e8408a65ba8f7d6efa92372df5fd9553fab1912"
+      },
+      "pre-fallback-red-da-03-rotate-from-focused-portrait.png": {
+        "bytes": 116042,
+        "sha256": "156a2c9f948cec1e458741e810f2832d3b99542f48bccd429d62aada2fea4382"
+      },
+      "pre-fallback-red-da-06-direct-landscape-fallback.png": {
+        "bytes": 459753,
+        "sha256": "070c326b78be99071b101d3d81ff78cbd9947fc6d5b0563e75f8311e416fa0b1"
+      }
+    }
+  },
+  "findings": []
+}

@@ -1,5 +1,10 @@
 # interview-online OpenSpec Project Context
 
+> Deprecated workflow note: OpenSpec is no longer the active source of truth for
+> this repository. Use `SPEC.md` at the repository root for current scope,
+> priorities and acceptance criteria. This file and the rest of `openspec/`
+> remain as historical context only.
+
 ## Purpose
 
 interview-online is a platform for technical interviews with realtime collaborative code editing, interview steps, interviewer notes, markdown briefings, and an internal agent workflow.
@@ -13,30 +18,24 @@ interview-online is a platform for technical interviews with realtime collaborat
 
 ## OpenSpec Workflow
 
-- OpenSpec is the source of truth for product and technical specifications.
-- Every bug fix, feature, or behavior-changing refactor MUST start with an OpenSpec change under `openspec/changes/<change-id>/`.
-- A change MUST include at least `proposal.md`, capability specs under `specs/**/spec.md`, `design.md` when architecture or dependencies change, and `tasks.md` before implementation.
-- After strict OpenSpec validation, executable behaviour MUST follow test-first delivery: choose an E2E acceptance test for a user-observable flow unless a documented integration/unit exception is more proportionate or applicable; author and run that test red before production code is written.
-- Implementation MUST follow the active OpenSpec change, make the prewritten test pass, and update task checkboxes as work is completed.
-- Documentation-only, comment-only, formatting-only, and non-executable configuration work MAY omit an automated test only when the task records why it is not applicable.
-- Completed changes SHOULD be archived with `openspec archive <change-id>` so `openspec/specs/` remains the current baseline.
+- Deprecated. Do not create new OpenSpec changes for ordinary work.
+- Use `SPEC.md` instead.
+- Existing OpenSpec files may be read only as background evidence.
 
 ## Legacy Specification Policy
 
-- `TECHNICAL_SPECIFICATION.md`, `docs/specs/`, and `docs/adr/` are legacy specification locations and MUST NOT be used for new specification work.
+- `openspec/` itself is now legacy/historical.
 - Existing agent role contracts in `agents/` and `.codex/agents/` remain operational instructions, not product specifications.
-- Current requirements live in `openspec/specs/`; proposed deltas live in `openspec/changes/`.
+- Current requirements live in `SPEC.md`.
 
 ## Agent Orchestration
 
-- Multi-agent orchestration is the default delivery path, even when the user does not explicitly mention agents.
-- The first owner for any new change is `specification-agent`; production implementation cannot begin until the OpenSpec artifacts and task-quality gate are ready and the planned test has demonstrated the missing behaviour.
-- The default route is: specification-agent -> product-owner-agent -> architect-agent -> team-lead-agent -> prompt-task-auditor-agent -> developer-agent/designer-agent -> solution-reviewer-agent -> security-reliability-agent when applicable -> qa-agent -> test-reviewer-agent -> ux-critic-agent for design work -> product-owner-agent acceptance.
-- Linear remains the single source of task state when a Linear issue exists; OpenSpec remains the single source of specification state.
+- Multi-agent orchestration is optional and should be used only when explicitly requested or when an independent review is valuable.
+- Default to direct implementation from `SPEC.md`.
+- Linear remains the source of task state when a Linear issue exists.
 
 ## Quality Gates
 
-- Run `openspec validate --strict` for changed OpenSpec artifacts before implementation and before final handoff.
 - For a user-observable behaviour change, author and run its E2E acceptance test before production code, confirming the initial failure; document a proportionate integration/unit alternative when E2E is not applicable.
 - Run frontend typecheck/build and targeted E2E tests for frontend behavior changes.
 - Run backend tests when backend code, contracts, persistence, security, or realtime behavior changes.

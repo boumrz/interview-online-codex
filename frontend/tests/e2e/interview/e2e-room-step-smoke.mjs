@@ -16,6 +16,7 @@ try {
     throw new Error("NEXT_STEP_BUTTON_SHOULD_NOT_EXIST");
   }
 
+  await page.getByRole("tab", { name: "Шаги", exact: true }).click();
   await page.getByRole("button", { name: /2\./ }).first().click();
   await page.waitForTimeout(300);
   await page.getByRole("button", { name: /1\./ }).first().click();

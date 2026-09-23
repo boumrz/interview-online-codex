@@ -1,0 +1,637 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <title>Interview Online — прототип кандидатов и процессов 1.6d</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #142c3c;
+      --muted: #5f6d72;
+      --paper: #f3ecdf;
+      --paper-bright: #fffdf6;
+      --nav: #102b3f;
+      --nav-soft: #1a4057;
+      --cyan: #74d1cc;
+      --orange: #e9682d;
+      --orange-dark: #a93c12;
+      --green: #1f7653;
+      --red: #ac382f;
+      --amber: #d39b22;
+      --line: #c6b9a5;
+      --shadow: 7px 7px 0 rgba(16, 43, 63, .09);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --keyboard-inset: 0px;
+      --display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+      --body: "Avenir Next", Avenir, "Trebuchet MS", sans-serif;
+      --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+      font-family: var(--body);
+      font-size: 16px;
+      color: var(--ink);
+      background: var(--paper);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { min-width: 0; min-height: 100%; margin: 0; overflow-x: clip; }
+    body {
+      min-height: 100dvh;
+      background:
+        linear-gradient(90deg, rgba(16, 43, 63, .035) 1px, transparent 1px) 0 0 / 24px 24px,
+        linear-gradient(rgba(16, 43, 63, .035) 1px, transparent 1px) 0 0 / 24px 24px,
+        var(--paper);
+    }
+    button, input, select { font: inherit; }
+    button, a, input, select { outline-offset: 4px; }
+    button, a, input, select { touch-action: manipulation; }
+    :focus-visible { outline: 3px solid var(--orange) !important; box-shadow: 0 0 0 6px rgba(116, 209, 204, .5); }
+    [hidden] { display: none !important; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    .skip-link {
+      position: fixed; z-index: 200; top: 8px; left: 8px; min-height: 44px; padding: 11px 15px;
+      color: white; background: var(--ink); transform: translateY(-150%);
+    }
+    .skip-link:focus { transform: none; }
+
+    .prototype-bar {
+      position: relative; z-index: 60; display: grid; grid-template-columns: minmax(210px, 1fr) repeat(4, minmax(128px, auto));
+      gap: 10px; align-items: end; min-height: 78px; padding: 9px 16px 11px; color: white;
+      background: #071c2a; border-bottom: 4px solid var(--orange);
+    }
+    .prototype-title { align-self: center; min-width: 0; }
+    .prototype-title strong { display: block; font: 800 .76rem var(--mono); letter-spacing: .12em; color: #f2c75e; }
+    .prototype-title span { display: block; margin-top: 4px; font-size: .76rem; color: #c3d2d9; }
+    .prototype-control { min-width: 0; display: grid; gap: 4px; }
+    .prototype-control label { font: 800 .66rem var(--mono); letter-spacing: .08em; color: #b8cbd3; text-transform: uppercase; }
+    .prototype-control select {
+      width: 100%; min-width: 0; min-height: 44px; padding: 7px 28px 7px 9px; color: white;
+      border: 1px solid #547083; border-radius: 3px; background: var(--nav-soft);
+    }
+    .check-control { min-height: 44px; display: flex; align-items: center; gap: 8px; padding: 3px 6px; }
+    .check-control input { width: 24px; height: 24px; flex: 0 0 auto; accent-color: var(--orange); }
+    .check-control label { color: white; font-size: .79rem; overflow-wrap: anywhere; }
+
+    .app-shell { display: grid; grid-template-columns: 254px minmax(0, 1fr); min-height: calc(100dvh - 78px); }
+    .sidebar {
+      position: sticky; top: 0; align-self: start; height: calc(100dvh - 78px); min-width: 0;
+      display: flex; flex-direction: column; padding: 18px 14px 14px; overflow-y: auto;
+      color: white; background: var(--nav); box-shadow: 8px 0 0 rgba(116, 209, 204, .25);
+    }
+    .brand { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 8px 14px; }
+    .brand-mark { width: 42px; height: 42px; flex: 0 0 auto; display: grid; place-items: center; font: 800 1.2rem var(--display); color: var(--nav); background: var(--cyan); border-radius: 50% 50% 50% 12%; }
+    .brand strong { display: block; font: 700 1.08rem var(--display); }
+    .brand span { display: block; margin-top: 2px; font: .66rem var(--mono); color: #aac0ca; }
+    .workspace {
+      width: 100%; min-height: 58px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px;
+      align-items: center; padding: 8px 10px; text-align: left; color: white; background: var(--nav-soft);
+      border: 1px solid #49677a; border-radius: 4px;
+    }
+    .workspace small { display: block; font: .64rem var(--mono); letter-spacing: .08em; color: var(--cyan); text-transform: uppercase; }
+    .workspace strong { display: block; margin-top: 3px; overflow-wrap: anywhere; }
+    .nav-label { margin: 22px 10px 8px; font: .65rem var(--mono); letter-spacing: .12em; color: #96b0bd; text-transform: uppercase; }
+    .nav { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+    .nav a, .account {
+      width: 100%; min-height: 46px; display: flex; align-items: center; gap: 10px; padding: 9px 11px;
+      color: #dfebef; text-decoration: none; text-align: left; background: transparent;
+      border: 0; border-left: 4px solid transparent; border-radius: 2px;
+    }
+    .nav a:hover, .account:hover { background: rgba(255,255,255,.07); }
+    .nav a[aria-current="page"] { color: white; font-weight: 800; background: rgba(116,209,204,.14); border-left-color: var(--orange); }
+    .nav-icon { width: 24px; height: 24px; flex: 0 0 auto; display: grid; place-items: center; border: 1px solid #668092; border-radius: 50%; font: .76rem var(--mono); }
+    .account { margin-top: auto; border-top: 1px solid #3c5667; }
+    .account span { display: block; min-width: 0; overflow-wrap: anywhere; }
+    .account small { display: block; margin-top: 2px; color: #9db2bc; }
+    .account-role { margin-left: auto; padding: 4px 6px; color: var(--ink); background: #f2c75e; font: .61rem var(--mono); text-transform: uppercase; }
+    .mobile-nav { display: none; }
+
+    .page { min-width: 0; padding: clamp(22px, 4vw, 52px) clamp(16px, 4vw, 58px) calc(70px + var(--safe-bottom) + var(--keyboard-inset)); }
+    .page-inner { width: min(1160px, 100%); margin: 0 auto; }
+    .page-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: start; padding-bottom: 23px; border-bottom: 1px solid var(--line); }
+    .eyebrow { margin: 0 0 8px; font: 800 .72rem var(--mono); letter-spacing: .12em; color: var(--orange-dark); text-transform: uppercase; }
+    h1 { margin: 0; font: 700 clamp(2.15rem, 5vw, 4.5rem)/.94 var(--display); letter-spacing: -.045em; overflow-wrap: anywhere; }
+    h2 { margin: 0; font: 700 clamp(1.45rem, 3vw, 2.05rem)/1.04 var(--display); letter-spacing: -.025em; }
+    h3 { margin: 0; font: 700 1.16rem/1.2 var(--display); overflow-wrap: anywhere; }
+    p { line-height: 1.5; }
+    .lede { max-width: 720px; margin: 13px 0 0; color: var(--muted); }
+    .head-actions, .row-actions, .dialog-actions { display: flex; flex-wrap: wrap; gap: 9px; justify-content: flex-end; }
+    .button {
+      min-width: 44px; min-height: 46px; max-width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 9px 15px; color: white; background: var(--ink); border: 2px solid var(--ink); border-radius: 3px;
+      font-weight: 800; text-decoration: none; text-align: center; cursor: pointer; overflow-wrap: anywhere;
+    }
+    .button:hover { transform: translateY(-1px); box-shadow: 4px 4px 0 var(--cyan); }
+    .button.secondary { color: var(--ink); background: transparent; }
+    .button.ghost { color: var(--ink); background: var(--paper-bright); border-color: var(--line); }
+    .button.danger { color: var(--red); background: #fff4ef; border-color: var(--red); }
+    .button:disabled { opacity: .55; cursor: not-allowed; }
+    .inline-link { min-height: 44px; display: inline-flex; align-items: center; color: #0c6872; font-weight: 800; text-underline-offset: 4px; overflow-wrap: anywhere; }
+    .context { display: flex; flex-wrap: wrap; gap: 7px; margin: 18px 0; }
+    .chip { min-height: 32px; display: inline-flex; align-items: center; padding: 5px 9px; background: #e3ded4; border: 1px solid #cabca6; border-radius: 99px; font-size: .78rem; overflow-wrap: anywhere; }
+    .chip.manager { background: #d9f3ef; border-color: #8ccbc5; }
+    .chip.owner { color: #71310c; background: #ffe2cc; border-color: #e9a679; }
+    .chip.warning { color: #6f4104; background: #fff1c7; border-color: #dfbd59; }
+    .privacy-band {
+      display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 11px; align-items: start; margin: 19px 0;
+      padding: 13px 15px; color: #28535a; background: #e8f5f3; border-left: 4px solid var(--cyan);
+    }
+    .privacy-band strong { display: block; }
+    .privacy-band p { margin: 3px 0 0; font-size: .88rem; }
+
+    .filters {
+      display: grid; grid-template-columns: minmax(170px, 1.4fr) repeat(3, minmax(128px, .8fr)); gap: 10px;
+      margin-top: 22px; padding: 16px; background: rgba(255,253,246,.9); border: 1px solid var(--line); box-shadow: var(--shadow);
+    }
+    .field { min-width: 0; display: grid; gap: 5px; }
+    .field label { font-size: .78rem; font-weight: 800; }
+    .field input, .field select {
+      width: 100%; min-width: 0; min-height: 46px; padding: 8px 10px; color: var(--ink); background: white;
+      border: 2px solid #9b8f7c; border-radius: 3px;
+    }
+    .date-fields { grid-column: 1 / span 2; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .filter-actions { grid-column: 3 / -1; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: end; gap: 9px; }
+    .filter-note { grid-column: 1 / -1; margin: 2px 0 0; color: var(--muted); font-size: .81rem; }
+    .filter-summary { margin-top: 18px; padding: 12px 14px; background: #fff5d9; border: 1px solid #d7b96a; overflow-wrap: anywhere; }
+    .filter-summary strong { display: block; }
+    .filter-summary span { font-size: .86rem; color: #584a2d; }
+
+    .collection { display: grid; gap: 12px; margin-top: 20px; }
+    .record {
+      min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: center;
+      padding: 18px; background: rgba(255,253,246,.95); border: 1px solid var(--line); border-left: 5px solid var(--cyan); box-shadow: 4px 4px 0 rgba(16,43,63,.06);
+    }
+    .record.archived { border-left-color: #84939a; background: #ece8df; }
+    .record p { margin: 6px 0 0; color: var(--muted); }
+    .record-meta { display: flex; flex-wrap: wrap; gap: 7px 14px; margin-top: 11px; font-size: .83rem; }
+    .record-meta strong { color: var(--ink); }
+    .status { min-height: 30px; display: inline-flex; align-items: center; padding: 4px 9px; font: 700 .7rem var(--mono); border: 1px solid #acc3c8; border-radius: 99px; background: #e2edef; }
+    .status.finished { color: #164f39; background: #e3f4e9; border-color: #98c6a8; }
+    .status.archived { color: #45525a; background: #e5e8e8; border-color: #b8c0c2; }
+
+    .state-panel { min-height: 320px; display: grid; place-items: center; margin-top: 22px; padding: clamp(24px, 7vw, 72px); text-align: center; background: rgba(255,255,255,.3); border: 1px dashed #948773; }
+    .state-panel > div { width: min(610px, 100%); }
+    .state-symbol { width: 76px; height: 76px; display: grid; place-items: center; margin: 0 auto 18px; color: var(--nav); background: var(--cyan); border-radius: 50% 50% 10px 50%; font: 800 1.25rem var(--mono); }
+    .state-panel.error .state-symbol, .state-panel.revoked .state-symbol { color: white; background: var(--red); }
+    .state-panel.success .state-symbol { color: white; background: var(--green); }
+    .state-panel p { color: var(--muted); overflow-wrap: anywhere; }
+    .center-actions { display: flex; flex-wrap: wrap; gap: 9px; justify-content: center; margin-top: 18px; }
+    .skeleton { width: min(660px, 100%); display: grid; gap: 13px; text-align: left; }
+    .skeleton span { height: 20px; background: linear-gradient(90deg,#ddd3c3,#fffaf0,#ddd3c3); background-size: 220% 100%; animation: shimmer 1.4s infinite; }
+    .skeleton span:first-child { width: 48%; height: 32px; }
+    .skeleton span:nth-child(3) { width: 76%; }
+    @keyframes shimmer { to { background-position: -220% 0; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+
+    .result-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(270px, .75fr); gap: 18px; margin-top: 23px; }
+    .card { min-width: 0; padding: 21px; background: rgba(255,253,246,.94); border: 1px solid var(--line); box-shadow: var(--shadow); }
+    .card p:last-child { margin-bottom: 0; }
+    .fact-list { display: grid; margin: 17px 0 0; border-top: 1px solid var(--line); }
+    .fact { min-width: 0; display: grid; grid-template-columns: minmax(115px,.55fr) minmax(0,1fr); gap: 14px; padding: 11px 0; border-bottom: 1px solid var(--line); }
+    .fact dt { color: var(--muted); }
+    .fact dd { min-width: 0; margin: 0; font-weight: 800; overflow-wrap: anywhere; }
+    .score { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 15px; align-items: center; padding: 13px 0; border-bottom: 1px solid var(--line); }
+    .score strong { font: 700 1.25rem var(--display); }
+    .readonly { margin-top: 17px; padding: 12px 14px; color: #44545b; background: #e8ebeb; border-left: 4px solid #82939a; }
+
+    .members { display: grid; gap: 13px; margin-top: 22px; }
+    .member-card {
+      min-width: 0; display: grid; grid-template-columns: minmax(180px,.8fr) minmax(0,1.4fr) auto; gap: 18px;
+      align-items: start; padding: 19px; background: rgba(255,253,246,.95); border: 1px solid var(--line); box-shadow: 4px 4px 0 rgba(16,43,63,.06);
+    }
+    .member-id { font: .72rem var(--mono); color: var(--muted); }
+    .role-line { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+    .process-area h3 { font-size: .94rem; }
+    .process-area > p { margin: 5px 0 0; color: var(--muted); font-size: .82rem; }
+    .processes { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+    .process-link {
+      min-height: 44px; display: inline-flex; align-items: center; padding: 8px 11px; color: #0c6370; background: #e8f5f3;
+      border: 1px solid #95ccc7; border-radius: 99px; font-weight: 800; text-decoration: none; overflow-wrap: anywhere;
+    }
+    .process-error { margin-top: 10px; padding: 10px 12px; color: #7a2821; background: #fff0ed; border: 1px solid #dc9e98; }
+    .member-menu { width: 46px; height: 46px; display: grid; place-items: center; color: var(--ink); background: white; border: 1px solid var(--line); font-weight: 900; }
+    .member-menu:disabled { opacity: .45; }
+
+    dialog { width: min(680px, calc(100% - 24px)); max-height: calc(100dvh - 24px - var(--keyboard-inset)); padding: 0; color: var(--ink); background: var(--paper); border: 0; border-radius: 5px; box-shadow: 0 25px 80px rgba(0,0,0,.45); }
+    dialog::backdrop { background: rgba(4,17,25,.75); backdrop-filter: blur(3px); }
+    .dialog-head { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 14px; align-items: start; padding: 20px; color: white; background: var(--nav); }
+    .dialog-head .eyebrow { color: #f2c75e; }
+    .dialog-close { width: 44px; height: 44px; display: grid; place-items: center; color: white; background: transparent; border: 1px solid #698495; font-weight: 900; }
+    .dialog-body { max-height: calc(100dvh - 120px - var(--keyboard-inset)); padding: 20px; padding-bottom: calc(20px + var(--safe-bottom)); overflow-y: auto; }
+    .export-state { min-height: 190px; display: grid; align-content: center; }
+    .export-state p { color: var(--muted); }
+    .progress-track { height: 10px; margin: 16px 0; overflow: hidden; background: #ded4c4; }
+    .progress-track span { display: block; width: 62%; height: 100%; background: var(--orange); animation: progress 1.2s ease-in-out infinite alternate; }
+    @keyframes progress { to { width: 85%; } }
+    .scenario-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 17px; padding-top: 15px; border-top: 1px dashed var(--line); }
+    .scenario-actions button { min-height: 44px; padding: 7px 10px; color: var(--ink); background: #f8f3e9; border: 1px solid var(--line); }
+
+    .prototype-footnote { margin-top: 30px; padding: 13px 15px; color: #5a4830; background: #f9eac8; border: 1px solid #d6b56d; font-size: .82rem; }
+
+    @media (max-width: 1040px) {
+      .prototype-bar { grid-template-columns: repeat(4, minmax(0,1fr)); }
+      .prototype-title { grid-column: 1 / -1; }
+      .app-shell { grid-template-columns: 218px minmax(0, 1fr); }
+      .filters { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .date-fields, .filter-actions { grid-column: 1 / -1; }
+      .member-card { grid-template-columns: minmax(150px,.75fr) minmax(0,1.25fr) auto; }
+    }
+    @media (max-width: 780px) {
+      .prototype-bar { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .app-shell { display: block; }
+      .sidebar { display: none; }
+      .mobile-nav { display: flex; flex-wrap: wrap; gap: 5px; padding: 8px 10px; color: white; background: var(--nav); }
+      .mobile-nav a { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; padding: 8px 10px; color: white; text-decoration: none; border: 1px solid #587385; }
+      .mobile-nav a[aria-current="page"] { color: var(--nav); background: var(--cyan); font-weight: 800; }
+      .page-head, .result-grid { grid-template-columns: 1fr; }
+      .head-actions { justify-content: flex-start; }
+      .member-card { grid-template-columns: minmax(0,1fr) auto; }
+      .process-area { grid-column: 1 / -1; }
+    }
+    @media (max-width: 520px) {
+      .prototype-bar { grid-template-columns: 1fr; padding-inline: 10px; }
+      .prototype-title { grid-column: auto; }
+      .mobile-nav { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .mobile-nav a { justify-content: center; text-align: center; overflow-wrap: anywhere; }
+      .page { padding: 18px 12px calc(54px + var(--safe-bottom) + var(--keyboard-inset)); }
+      h1 { font-size: clamp(2rem, 14vw, 3rem); }
+      .filters { grid-template-columns: minmax(0,1fr); padding: 12px; }
+      .date-fields { grid-template-columns: minmax(0,1fr); }
+      .date-fields, .filter-actions { grid-column: auto; }
+      .filter-actions, .head-actions, .row-actions, .dialog-actions { justify-content: stretch; }
+      .filter-actions .button, .head-actions .button, .row-actions .button, .dialog-actions .button { width: 100%; }
+      .record { grid-template-columns: minmax(0,1fr); padding: 15px; }
+      .fact { grid-template-columns: minmax(0,1fr); gap: 4px; }
+      .member-card { grid-template-columns: minmax(0,1fr) auto; gap: 12px; padding: 15px; }
+      .process-area { grid-column: 1 / -1; }
+      .process-link { width: 100%; border-radius: 4px; }
+      .privacy-band { grid-template-columns: minmax(0,1fr); }
+      .state-panel { padding: 24px 12px; }
+      .scenario-actions button { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">К основному содержимому</a>
+  <header class="prototype-bar" aria-label="Управление сценарием прототипа">
+    <div class="prototype-title">
+      <strong>ПРОТОТИП · 1.6d · UX-09 / UX-11</strong>
+      <span>Только проверка интерфейса — не доказательство серверных прав</span>
+    </div>
+    <div class="prototype-control">
+      <label for="actorSelect">Актор</label>
+      <select id="actorSelect">
+        <option value="hiring">HIRING · назначена</option>
+        <option value="assigned">INTERVIEWER · назначен</option>
+        <option value="member">MEMBER · без назначения</option>
+        <option value="admin">ADMIN · без назначения</option>
+        <option value="owner">OWNER команды · без назначения</option>
+      </select>
+    </div>
+    <div class="prototype-control">
+      <label for="surfaceSelect">Поверхность</label>
+      <select id="surfaceSelect">
+        <option value="candidates">Кандидаты</option>
+        <option value="result">Результат</option>
+        <option value="members">Участники</option>
+        <option value="process">Мои интервью процесса</option>
+      </select>
+    </div>
+    <div class="prototype-control">
+      <label for="stateSelect">Состояние</label>
+      <select id="stateSelect">
+        <option value="success">Успех</option>
+        <option value="loading">Загрузка</option>
+        <option value="empty">Пусто</option>
+        <option value="filterEmpty">Фильтр: пусто</option>
+        <option value="error">Ошибка</option>
+        <option value="revoked">Доступ отозван</option>
+      </select>
+    </div>
+    <div class="check-control">
+      <input id="hrToggle" type="checkbox">
+      <label for="hrToggle">Личный isHr включён</label>
+    </div>
+    <div class="check-control">
+      <input id="longToggle" type="checkbox">
+      <label for="longToggle">Длинный русский текст</label>
+    </div>
+  </header>
+  <div id="app" aria-live="polite"></div>
+  <dialog id="exportDialog" aria-labelledby="exportTitle"></dialog>
+  <script src="mobile-input-fallback.js"></script>
+  <script>
+    const ACTORS = {
+      hiring: { label: 'Нанимающий', short: 'HIRING', teamRole: 'Участник', candidateAccess: true, resultAccess: true, canManage: false },
+      assigned: { label: 'Назначенный интервьюер', short: 'INTERVIEWER', teamRole: 'Участник', candidateAccess: false, resultAccess: true, canManage: false },
+      member: { label: 'Участник', short: 'MEMBER', teamRole: 'Участник', candidateAccess: false, resultAccess: false, canManage: false },
+      admin: { label: 'Администратор команды', short: 'ADMIN', teamRole: 'Администратор', candidateAccess: false, resultAccess: false, canManage: true },
+      owner: { label: 'Владелец команды', short: 'OWNER', teamRole: 'Владелец', candidateAccess: false, resultAccess: false, canManage: true }
+    };
+    const validStates = new Set(['success','loading','empty','filterEmpty','error','revoked']);
+    const validActors = new Set(Object.keys(ACTORS));
+    const validSurfaces = new Set(['candidates','result','members','process']);
+    const routeFor = {
+      candidates: '/teams/atlas/candidates',
+      result: '/teams/atlas/candidates/room-204',
+      members: '/teams/atlas/members',
+      process: '/teams/atlas/interviews'
+    };
+    const protectedTerms = ['Денис Орлов', 'Мария Лебедева', 'room-204', 'INT-204', 'Сильный hire'];
+    const app = document.querySelector('#app');
+    const exportDialog = document.querySelector('#exportDialog');
+    let filterModel = { q: '', track: 'frontend', vacancy: 'lead-ui', status: 'all', from: '2026-09-01', to: '2026-09-30' };
+    let exportState = 'ready';
+
+    function routeState() {
+      const raw = location.hash.replace(/^#/, '') || '/teams/atlas/candidates';
+      const [path, search = ''] = raw.split('?');
+      const params = new URLSearchParams(search);
+      let surface = 'candidates';
+      if (path.includes('/members')) surface = 'members';
+      else if (path.includes('/interviews')) surface = 'process';
+      else if (/\/candidates\/[^/]+/.test(path)) surface = 'result';
+      if (validSurfaces.has(params.get('surface'))) surface = params.get('surface');
+      const actor = validActors.has(params.get('actor')) ? params.get('actor') : 'hiring';
+      const state = validStates.has(params.get('state')) ? params.get('state') : 'success';
+      return { path, params, surface, actor, state, isHr: params.get('isHr') === 'true', long: params.get('long') === '1', keyboard: params.get('keyboard') === '1' };
+    }
+
+    function setRoute(updates) {
+      const current = routeState();
+      const next = { surface: current.surface, actor: current.actor, state: current.state, isHr: current.isHr, long: current.long, keyboard: current.keyboard, ...updates };
+      const params = new URLSearchParams();
+      params.set('actor', next.actor);
+      params.set('state', next.state);
+      params.set('isHr', String(next.isHr));
+      if (next.long) params.set('long', '1');
+      if (next.keyboard) params.set('keyboard', '1');
+      if (next.surface === 'process') {
+        params.set('trackId', 'frontend');
+        params.set('vacancyId', 'lead-ui');
+      }
+      location.hash = `${routeFor[next.surface]}?${params}`;
+    }
+
+    function esc(value) {
+      return String(value).replace(/[&<>"]/g, (char) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[char]));
+    }
+
+    function roleChip(actor) {
+      const details = ACTORS[actor];
+      const kind = actor === 'owner' ? 'owner' : ['hiring','assigned'].includes(actor) ? 'manager' : '';
+      return `<span class="chip ${kind}">${esc(details.label)}</span>`;
+    }
+
+    function navigation(current) {
+      const candidates = ACTORS[current.actor].candidateAccess ? `<li><a data-nav-candidates="true" href="#${routeFor.candidates}?actor=${current.actor}&state=success&isHr=${current.isHr}" ${current.surface === 'candidates' || current.surface === 'result' ? 'aria-current="page"' : ''}><span class="nav-icon">К</span>Кандидаты</a></li>` : '';
+      const items = `
+        <li><a href="#${routeFor.process}?actor=${current.actor}&state=success&isHr=${current.isHr}" ${current.surface === 'process' ? 'aria-current="page"' : ''}><span class="nav-icon">И</span>Интервью</a></li>
+        ${candidates}
+        <li><a href="#/teams/atlas/library?actor=${current.actor}&state=success"><span class="nav-icon">Б</span>Библиотека задач</a></li>
+        <li><a href="#/teams/atlas/tracks?actor=${current.actor}&state=success"><span class="nav-icon">Т</span>Треки и вакансии</a></li>
+        <li><a href="#${routeFor.members}?actor=${current.actor}&state=success&isHr=${current.isHr}" ${current.surface === 'members' ? 'aria-current="page"' : ''}><span class="nav-icon">У</span>Участники</a></li>`;
+      return { candidates, items };
+    }
+
+    function shell(current, content) {
+      const actor = ACTORS[current.actor];
+      const nav = navigation(current);
+      return `
+        <div class="app-shell">
+          <aside class="sidebar" aria-label="Навигация команды">
+            <div class="brand"><span class="brand-mark">io</span><span><strong>Interview Online</strong><span>рабочее пространство</span></span></div>
+            <button class="workspace" type="button" aria-label="Сменить рабочее пространство"><span><small>Команда</small><strong>${current.long ? 'Atlas — продуктовая команда с очень длинным названием для проверки переноса' : 'Atlas'}</strong></span><span aria-hidden="true">⌄</span></button>
+            <p class="nav-label">Работа команды</p>
+            <ul class="nav">${nav.items}</ul>
+            <button class="account" type="button" aria-label="Открыть меню Анны Соколовой"><span><strong>Анна Соколова</strong><small>${esc(actor.label)}</small></span><span class="account-role">${actor.short}</span></button>
+          </aside>
+          <nav class="mobile-nav" aria-label="Мобильная навигация">
+            <a href="#${routeFor.process}?actor=${current.actor}&state=success&isHr=${current.isHr}" ${current.surface === 'process' ? 'aria-current="page"' : ''}>Интервью</a>
+            ${ACTORS[current.actor].candidateAccess ? `<a data-nav-candidates="true" href="#${routeFor.candidates}?actor=${current.actor}&state=success&isHr=${current.isHr}" ${current.surface === 'candidates' || current.surface === 'result' ? 'aria-current="page"' : ''}>Кандидаты</a>` : ''}
+            <a href="#${routeFor.members}?actor=${current.actor}&state=success&isHr=${current.isHr}" ${current.surface === 'members' ? 'aria-current="page"' : ''}>Участники</a>
+            <a href="#/teams/atlas/library?actor=${current.actor}&state=success">Библиотека</a>
+          </nav>
+          <main class="page" id="main" tabindex="-1"><div class="page-inner">${content}<p class="prototype-footnote"><strong>Граница артефакта:</strong> это интерактивный UX-прототип. Он показывает ожидаемое скрытие и очистку данных, но не доказывает серверную авторизацию, payload filtering или защищённость XLSX.</p></div></main>
+        </div>`;
+    }
+
+    function pageHead(eyebrow, title, lede, actions = '') {
+      return `<header class="page-head"><div><p class="eyebrow">${eyebrow}</p><h1>${title}</h1><p class="lede">${lede}</p></div><div class="head-actions">${actions}</div></header>`;
+    }
+
+    function statePanel(kind, title, description, actions = '') {
+      const symbols = { loading:'···', empty:'0', filterEmpty:'⌁', error:'!', revoked:'×', success:'✓' };
+      if (kind === 'loading') {
+        return `<section class="state-panel" aria-busy="true" aria-label="Данные загружаются"><div class="skeleton"><span></span><span></span><span></span><span></span><p>Загружаем актуальные права и данные выбранного пространства…</p></div></section>`;
+      }
+      return `<section class="state-panel ${kind}" data-state-panel="${kind}"><div><span class="state-symbol" aria-hidden="true">${symbols[kind] || '·'}</span><h2>${title}</h2><p>${description}</p>${actions ? `<div class="center-actions">${actions}</div>` : ''}</div></section>`;
+    }
+
+    function accessDenied(current, isResult = false) {
+      const actor = ACTORS[current.actor];
+      const reason = isResult
+        ? `${actor.label} не назначен на эту комнату. Роль в команде не открывает карточку или результат.`
+        : `${actor.label} не имеет действующего назначения HIRING. Личный isHr=${current.isHr ? 'true' : 'false'} не меняет командные права.`;
+      return pageHead('Atlas · защищённый раздел', isResult ? 'Результат недоступен' : 'Кандидаты недоступны', reason)
+        + statePanel('revoked', 'Нет доступа к этой записи', 'Содержимое кандидата не загружено. Владелец или администратор команды без назначения видит ту же безопасную границу.', `<a class="button" href="#${routeFor.process}?actor=${current.actor}&state=success&isHr=${current.isHr}">К доступным интервью</a>`);
+    }
+
+    function revoked(current, label) {
+      return pageHead('Atlas · доступ изменился', label, 'Последняя проверка прав не подтвердила доступ.')
+        + statePanel('revoked', 'Доступ отозван', 'Защищённое содержимое удалено из страницы и не используется из кеша. Можно открыть доступные интервью или заново проверить права.', `<a class="button" href="#${routeFor.process}?actor=${current.actor}&state=success&isHr=${current.isHr}">К доступным интервью</a><button class="button secondary" type="button" data-action="retry">Проверить снова</button>`);
+    }
+
+    function filterSignature() {
+      return `space=atlas|q=${filterModel.q.trim()}|track=${filterModel.track}|vacancy=${filterModel.vacancy}|state=${filterModel.status}|from=${filterModel.from}|to=${filterModel.to}|tz=Europe/Moscow`;
+    }
+
+    function filters() {
+      return `<form class="filters" id="candidateFilters" aria-label="Фильтры списка кандидатов">
+        <div class="field"><label for="q">Кандидат или интервью</label><input id="q" name="q" value="${esc(filterModel.q)}" placeholder="Например, Денис"></div>
+        <div class="field"><label for="track">Трек</label><select id="track" name="track"><option value="frontend" ${filterModel.track === 'frontend' ? 'selected' : ''}>Frontend</option><option value="backend" ${filterModel.track === 'backend' ? 'selected' : ''}>Backend</option><option value="none" ${filterModel.track === 'none' ? 'selected' : ''}>Без трека</option><option value="all" ${filterModel.track === 'all' ? 'selected' : ''}>Все</option></select></div>
+        <div class="field"><label for="vacancy">Вакансия</label><select id="vacancy" name="vacancy"><option value="lead-ui" ${filterModel.vacancy === 'lead-ui' ? 'selected' : ''}>Lead UI Engineer</option><option value="none" ${filterModel.vacancy === 'none' ? 'selected' : ''}>Без вакансии</option><option value="all" ${filterModel.vacancy === 'all' ? 'selected' : ''}>Все</option></select></div>
+        <div class="field"><label for="status">Состояние</label><select id="status" name="status"><option value="all">Все</option><option value="planned">Запланировано</option><option value="finished">Завершено</option><option value="archived">Архив</option></select></div>
+        <div class="date-fields"><div class="field"><label for="from">Период с</label><input id="from" name="from" type="date" value="${filterModel.from}"></div><div class="field"><label for="to">Период по</label><input id="to" name="to" type="date" value="${filterModel.to}"></div></div>
+        <div class="filter-actions"><button class="button secondary" type="reset">Сбросить</button><button class="button" id="applyFilters" type="submit">Применить фильтры</button></div>
+        <p class="filter-note">Дата — запланированное время, иначе первое завершение, иначе создание. Часовой пояс: МСК.</p>
+      </form>`;
+    }
+
+    function filterSummary() {
+      const tracks = { frontend: 'Frontend', backend: 'Backend', none: 'Без трека', all: 'Все треки' };
+      const vacancies = { 'lead-ui': 'Lead UI Engineer', none: 'Без вакансии', all: 'Все вакансии' };
+      const statuses = { all: 'все', planned: 'запланировано', finished: 'завершено', archived: 'архив' };
+      return `<div class="filter-summary" data-filter-signature="${esc(filterSignature())}"><strong>Ваши назначения · Atlas · ${esc(tracks[filterModel.track])}</strong><span>Поиск: ${filterModel.q ? esc(filterModel.q) : 'любой'} · Вакансия: ${esc(vacancies[filterModel.vacancy])} · Состояние: ${esc(statuses[filterModel.status])} · ${esc(filterModel.from)} — ${esc(filterModel.to)} · МСК</span></div>`;
+    }
+
+    function candidates(current) {
+      if (current.state === 'revoked') return revoked(current, 'Кандидаты');
+      if (!ACTORS[current.actor].candidateAccess) return accessDenied(current, false);
+      const long = current.long ? ' — исследование системного мышления и внимательности к деталям в распределённой продуктовой команде' : '';
+      const head = pageHead('Atlas · Мои назначения', 'Кандидаты', 'Каждая строка — отдельное интервью, а не объединённый профиль человека.', `<button class="button" type="button" data-action="open-export">Выгрузить Excel</button>`)
+        + `<div class="context">${roleChip(current.actor)}<span class="chip">Командный HIRING: действует</span><span class="chip warning">Личный isHr: ${current.isHr ? 'включён' : 'выключен'}</span></div>`
+        + `<div class="privacy-band"><strong aria-hidden="true">↳</strong><div><strong>Почему список доступен</strong><p>Доступ даёт назначение HIRING в Atlas. Личная настройка нанимающего не расширяет и не отнимает командное назначение.</p></div></div>`;
+      if (current.state === 'loading') return head + statePanel('loading');
+      if (current.state === 'error') return head + statePanel('error', 'Не удалось загрузить назначения', 'Старые значения не считаются обновлёнными. Повторная попытка сначала заново проверит доступ.', `<button class="button" type="button" data-action="retry">Повторить</button>`);
+      const controls = filters() + filterSummary();
+      if (current.state === 'empty') return head + controls + statePanel('empty', 'Назначений пока нет', 'У вас нет действующих HIRING-назначений в Atlas. Пустой список не означает отсутствие интервью у команды.', `<a class="button secondary" href="#${routeFor.process}?actor=${current.actor}&state=success&isHr=${current.isHr}">Открыть мои интервью</a>`);
+      if (current.state === 'filterEmpty') return head + controls + statePanel('filterEmpty', 'По этим фильтрам ничего нет', 'Область остаётся «Ваши назначения · Atlas». Экспорт создаст пустой файл с заголовками и указанными фильтрами.', `<button class="button secondary" type="button" data-action="clear-filters">Сбросить фильтры</button><button class="button" type="button" data-action="open-export">Выгрузить пустой Excel</button>`);
+      return head + controls + `<section class="collection" aria-label="Список назначенных интервью" data-sensitive-list="true" data-filter-signature="${esc(filterSignature())}">
+        <article class="record" data-sensitive="candidate-record"><div><div class="context"><span class="status finished">Завершено</span><span class="chip">Вердикт: нанимаем</span></div><h3>Денис Орлов</h3><p>Frontend pairing${long}</p><div class="record-meta"><span><strong>Интервью:</strong> INT-204</span><span><strong>Процесс:</strong> Frontend / Lead UI Engineer</span><span><strong>Дата:</strong> 14.09.2026, 11:00 · запланировано</span></div></div><div class="row-actions"><a class="button" href="#${routeFor.result}?actor=${current.actor}&state=success&isHr=${current.isHr}${current.long ? '&long=1' : ''}">Открыть результат Дениса Орлова</a></div></article>
+        <article class="record archived" data-sensitive="candidate-record"><div><div class="context"><span class="status archived">Архив</span><span class="chip">Вердикт: нет решения</span></div><h3>Мария Лебедева</h3><p>Frontend pairing${long}</p><div class="record-meta"><span><strong>Интервью:</strong> INT-188</span><span><strong>Процесс:</strong> Frontend / Lead UI Engineer</span><span><strong>Дата:</strong> 08.09.2026, 18:42 · первое завершение</span></div></div><div class="row-actions"><a class="button secondary" href="#${routeFor.result}?actor=${current.actor}&state=success&isHr=${current.isHr}&archived=1">Открыть архивный результат Марии Лебедевой</a></div></article>
+      </section>`;
+    }
+
+    function result(current) {
+      if (current.state === 'revoked') return revoked(current, 'Результат интервью');
+      if (!ACTORS[current.actor].resultAccess) return accessDenied(current, true);
+      const archived = current.params.get('archived') === '1';
+      const backSurface = current.actor === 'hiring' ? 'candidates' : 'process';
+      const backLabel = current.actor === 'hiring' ? 'Вернуться к кандидатам' : 'Вернуться к моим интервью';
+      const head = pageHead(`Atlas · ${archived ? 'Архивный результат' : 'Результат'}`, archived ? 'Мария Лебедева' : 'Денис Орлов', 'Результат одной встречи. Одноимённые записи не объединяются.', `<a class="button secondary" href="#${routeFor[backSurface]}?actor=${current.actor}&state=success&isHr=${current.isHr}">${backLabel}</a>`)
+        + `<div class="context">${roleChip(current.actor)}<span class="chip manager">Доступ по назначению комнаты</span>${archived ? '<span class="chip">Только чтение</span>' : ''}</div>`;
+      if (current.state === 'loading') return head + statePanel('loading');
+      if (current.state === 'empty') return head + statePanel('empty', 'Результат ещё не заполнен', 'Отсутствие оценки не показано как ноль. Карточка встречи остаётся доступна по вашему назначению.');
+      if (current.state === 'filterEmpty') return head + statePanel('filterEmpty', 'Запись не входит в текущий фильтр', 'Вернитесь к списку: прежние фильтры и позиция будут восстановлены после повторной проверки прав.', `<a class="button" href="#${routeFor[backSurface]}?actor=${current.actor}&state=filterEmpty&isHr=${current.isHr}">${backLabel}</a>`);
+      if (current.state === 'error') return head + statePanel('error', 'Не удалось открыть результат', 'Ошибка не подменяется отсутствием результата. Повторная попытка проверит назначение ещё раз.', `<button class="button" type="button" data-action="retry">Повторить</button>`);
+      return head + `<section class="result-grid" data-sensitive-result="true">
+        <article class="card" data-sensitive="candidate-result"><h2>Карточка встречи</h2><dl class="fact-list"><div class="fact"><dt>Интервью</dt><dd>${archived ? 'INT-188' : 'INT-204'} · ${archived ? 'Frontend deep dive' : 'Frontend pairing'}</dd></div><div class="fact"><dt>Процесс</dt><dd>Frontend / Lead UI Engineer</dd></div><div class="fact"><dt>Дата</dt><dd>${archived ? '08.09.2026, 18:42 · первое завершение' : '14.09.2026, 11:00 · запланировано'} · МСК</dd></div><div class="fact"><dt>Назначения</dt><dd>Борис · OWNER; Вера · INTERVIEWER; Анна · HIRING</dd></div><div class="fact"><dt>Вердикт</dt><dd>${archived ? 'Нет решения' : 'Нанимаем · Сильный hire'}</dd></div><div class="fact"><dt>Комментарий</dt><dd>${archived ? 'Комментарий не заполнен.' : 'Уверенно объясняет компромиссы, задаёт точные вопросы и проверяет граничные случаи.'}</dd></div></dl>${archived ? '<p class="readonly"><strong>Архив:</strong> результат доступен только для чтения; изменить его или возобновить комнату нельзя.</p>' : ''}</article>
+        <aside class="card"><h2>Оценки задач</h2><div class="score"><span><strong>1. Дедупликация событий</strong><br><small>Есть оценка</small></span><span class="status finished">4 / 5</span></div><div class="score"><span><strong>2. Очередь с приоритетом</strong><br><small>Оценка отсутствует</small></span><span class="status">Не оценено</span></div><p class="privacy-band"><span>Личные заметки других интервьюеров не входят в результат.</span></p></aside>
+      </section>`;
+    }
+
+    function processPayload(trackId, trackName, vacancyId, vacancyName) {
+      return esc(JSON.stringify({ trackId, trackName, vacancyId, vacancyName }));
+    }
+
+    function memberCard(current, name, userId, role, processes, own = false) {
+      const processContent = current.state === 'error'
+        ? `<div class="process-error" role="status"><strong>Процессы не загрузились.</strong> Состав команды доступен отдельно. Старые метки не считаются актуальными. <button class="button ghost" type="button" data-action="retry">Повторить</button></div>`
+        : processes.length
+          ? `<div class="processes">${processes.slice(0, current.long ? processes.length : 3).map((item) => `<a class="process-link" data-process-link="true" data-process-payload="${processPayload(item.trackId,item.trackName,item.vacancyId,item.vacancyName)}" href="#${routeFor.process}?actor=${current.actor}&state=${['hiring','assigned'].includes(current.actor) ? 'success' : 'filterEmpty'}&isHr=${current.isHr}&trackId=${item.trackId}${item.vacancyId ? `&vacancyId=${item.vacancyId}` : ''}">Мои интервью: ${esc(item.trackName)}${item.vacancyName ? ` / ${esc(item.vacancyName)}` : ''}</a>`).join('')}</div>`
+          : `<p>Нет процессов по текущим назначениям</p>`;
+      return `<article class="member-card" data-member-projection="true"><div><h3>${esc(name)}${own ? ' · вы' : ''}</h3><span class="member-id">ID …${esc(userId)}</span><div class="role-line"><span class="chip">${esc(role)}</span><span class="chip">Активен</span></div></div><div class="process-area"><h3>Процессы</h3><p>По неархивированным интервью · вычисляются из текущих назначений</p>${processContent}</div><button class="member-menu" type="button" aria-label="Действия с участником ${esc(name)}" ${ACTORS[current.actor].canManage ? '' : 'disabled'}>•••</button></article>`;
+    }
+
+    function members(current) {
+      if (current.state === 'revoked') return revoked(current, 'Участники');
+      const head = pageHead('Atlas · Каталог', 'Участники', 'Безопасный состав команды и производные процессы по действующим назначениям.', `<button class="button secondary" type="button" data-action="retry">Обновить</button>`)
+        + `<div class="context">${roleChip(current.actor)}<span class="chip">Состав: минимальная проекция</span></div>`
+        + `<div class="privacy-band"><strong aria-hidden="true">◌</strong><div><strong>Процесс — не полномочие</strong><p>Карточка не раскрывает кандидатов, названия или количество интервью, ID комнат, даты и результаты. Ссылка всегда ищет интервью текущего пользователя.</p></div></div>`;
+      if (current.state === 'loading') return head + statePanel('loading');
+      if (current.state === 'empty') return head + statePanel('empty', 'В каталоге пока только вы', 'Процессов по текущим назначениям нет. Приглашение коллеги не назначает его на интервью.');
+      if (current.state === 'filterEmpty') return head + statePanel('filterEmpty', 'Участники не найдены', 'Поиск не нашёл совпадений. Команда и процессы не считаются пустыми.', `<button class="button secondary" type="button" data-action="retry">Сбросить поиск</button>`);
+      const longName = current.long ? 'Вера Константиновна Александрова-Смирнова' : 'Вера Смирнова';
+      return head + `<section class="members" aria-label="Каталог участников">
+        ${memberCard(current, 'Анна Соколова', '7A2F', current.actor === 'owner' ? 'Владелец' : ACTORS[current.actor].teamRole, [{ trackId:'frontend', trackName:'Frontend', vacancyId:'lead-ui', vacancyName:'Lead UI Engineer' }], true)}
+        ${memberCard(current, longName, '91BC', 'Участник', [{ trackId:'frontend', trackName:'Frontend', vacancyId:'lead-ui', vacancyName:'Lead UI Engineer' }, { trackId:'backend', trackName:'Backend', vacancyId:null, vacancyName:null }, { trackId:'mobile', trackName:'Мобильная платформа с очень длинным названием', vacancyId:'staff', vacancyName:'Старший инженер клиентских приложений' }])}
+        ${memberCard(current, 'Борис Ким', '4D10', 'Администратор', [])}
+      </section>`;
+    }
+
+    function processList(current) {
+      if (current.state === 'revoked') return revoked(current, 'Мои интервью в процессе');
+      const head = pageHead('Atlas · Интервью', 'Мои интервью в этом процессе', 'Показаны только интервью, доступные вам. Метка коллеги не открывает его комнаты.', `<a class="button secondary" href="#${routeFor.members}?actor=${current.actor}&state=success&isHr=${current.isHr}">Вернуться к участникам</a>`)
+        + `<div class="context">${roleChip(current.actor)}<span class="chip">Frontend / Lead UI Engineer</span><span class="chip">Только назначения текущего пользователя</span></div>`;
+      if (current.state === 'loading') return head + statePanel('loading');
+      if (current.state === 'error') return head + statePanel('error', 'Не удалось загрузить ваши интервью', 'Процесс выбран, но доступные записи не показаны до успешной повторной проверки.', `<button class="button" type="button" data-action="retry">Повторить</button>`);
+      if (current.state === 'empty' || current.state === 'filterEmpty' || !['hiring','assigned'].includes(current.actor)) return head + statePanel(current.state === 'empty' ? 'empty' : 'filterEmpty', 'У вас нет интервью в этом процессе', 'У коллеги может быть эта метка, но его кандидаты и число встреч вам не раскрываются.', `<a class="button secondary" href="#${routeFor.members}?actor=${current.actor}&state=success&isHr=${current.isHr}">К участникам</a>`);
+      return head + `<section class="collection" aria-label="Мои доступные интервью"><article class="record" data-sensitive="caller-interview"><div><div class="context"><span class="status finished">Завершено</span><span class="chip">Моё назначение: ${current.actor === 'hiring' ? 'HIRING' : 'INTERVIEWER'}</span></div><h3>Денис Орлов</h3><p>Frontend pairing</p><div class="record-meta"><span><strong>Процесс:</strong> Frontend / Lead UI Engineer</span><span><strong>Дата:</strong> 14.09.2026, 11:00 · МСК</span></div></div><div class="row-actions"><a class="button" href="#${routeFor.result}?actor=${current.actor}&state=success&isHr=${current.isHr}">Открыть моё интервью</a></div></article></section>`;
+    }
+
+    function exportMarkup(current) {
+      const signature = filterSignature();
+      const scope = exportState === 'revoked'
+        ? '<div class="privacy-band"><strong>Данные очищены</strong><p>Фильтры и строки прежней защищённой области больше не находятся в окне выгрузки.</p></div>'
+        : `<div class="filter-summary"><strong>Те же фильтры, что в списке</strong><span>${esc(signature)}</span></div>`;
+      const signatureAttribute = exportState === 'revoked' ? '' : ` data-export-filter-signature="${esc(signature)}"`;
+      const common = `<header class="dialog-head"><div><p class="eyebrow">Atlas · XLSX</p><h2 id="exportTitle">Выгрузка кандидатов</h2></div><button class="dialog-close" type="button" aria-label="Закрыть выгрузку" data-action="close-export">×</button></header><div class="dialog-body"${signatureAttribute}>${scope}`;
+      const states = {
+        ready: `<section class="export-state"><h3>Готово к формированию</h3><p>Файл использует ровно эти фильтры и включает все страницы. Выделенная строка не меняет область.</p><div class="dialog-actions"><button class="button" type="button" data-action="generate-export">Сформировать Excel</button></div></section>`,
+        forming: `<section class="export-state" aria-busy="true"><h3>Формируем файл</h3><p>Скачивание ещё не началось. Права проверяются до выдачи файла.</p><div class="progress-track" aria-label="Формирование"><span></span></div></section>`,
+        downloaded: `<section class="export-state"><h3>Скачивание инициировано</h3><p>В книге указаны Atlas, активные фильтры, часовой пояс МСК и все подходящие строки.</p><div class="dialog-actions"><button class="button secondary" type="button" data-action="close-export">Закрыть</button></div></section>`,
+        empty: `<section class="export-state"><h3>Пустой файл готов</h3><p>Совпадений нет. XLSX всё равно содержит заголовки, пространство и параметры фильтра — данные всей команды не подставляются.</p><div class="dialog-actions"><button class="button" type="button" data-action="download-export">Скачать пустой Excel</button></div></section>`,
+        error: `<section class="export-state"><h3>Не удалось сформировать</h3><p>Данные не скачаны, состояние не показано как успех. Повтор использует те же фильтры.</p><div class="dialog-actions"><button class="button" type="button" data-action="generate-export">Повторить</button></div></section>`,
+        tooLarge: `<section class="export-state"><h3>Слишком много строк</h3><p>Сузьте период или процесс и повторите выгрузку. Текущие фильтры сохранены.</p><div class="dialog-actions"><button class="button secondary" type="button" data-action="close-export">Вернуться к фильтрам</button></div></section>`,
+        busy: `<section class="export-state"><h3>Выгрузка временно занята</h3><p>Повторите через 30 секунд. Скачивание не началось.</p><div class="dialog-actions"><button class="button" type="button" data-action="generate-export">Повторить сейчас</button></div></section>`,
+        revoked: `<section class="export-state"><h3>Право на выгрузку отозвано</h3><p>Защищённые строки очищены, файл не выдан. Откройте доступные интервью.</p><div class="dialog-actions"><button class="button" type="button" data-action="close-export">Закрыть</button></div></section>`
+      };
+      return common + states[exportState] + `<div class="scenario-actions" aria-label="Сценарии выгрузки"><button type="button" data-export-state="ready">Готово</button><button type="button" data-export-state="forming">Формируется</button><button type="button" data-export-state="downloaded">Скачивание</button><button type="button" data-export-state="empty">Пустой файл</button><button type="button" data-export-state="error">Ошибка</button><button type="button" data-export-state="tooLarge">Превышен объём</button><button type="button" data-export-state="busy">Занято</button><button type="button" data-export-state="revoked">Отзыв</button></div></div>`;
+    }
+
+    function syncPrototypeControls(current) {
+      document.querySelector('#actorSelect').value = current.actor;
+      document.querySelector('#surfaceSelect').value = current.surface;
+      document.querySelector('#stateSelect').value = current.state;
+      document.querySelector('#hrToggle').checked = current.isHr;
+      document.querySelector('#longToggle').checked = current.long;
+      document.documentElement.style.setProperty('--keyboard-inset', current.keyboard ? '248px' : '0px');
+      document.body.dataset.prototypeOnly = 'true';
+    }
+
+    function render() {
+      const current = routeState();
+      syncPrototypeControls(current);
+      const surfaces = { candidates, result, members, process: processList };
+      app.innerHTML = shell(current, surfaces[current.surface](current));
+      app.dataset.surface = current.surface;
+      app.dataset.state = current.state;
+      app.dataset.actor = current.actor;
+      app.dataset.isHr = String(current.isHr);
+      if (current.state === 'revoked' && exportDialog.open) {
+        exportState = 'revoked';
+        exportDialog.innerHTML = exportMarkup(current);
+      }
+    }
+
+    function openExport() {
+      const current = routeState();
+      if (!ACTORS[current.actor].candidateAccess || current.state === 'revoked') return;
+      exportState = current.state === 'filterEmpty' || current.state === 'empty' ? 'empty' : 'ready';
+      exportDialog.innerHTML = exportMarkup(current);
+      exportDialog.showModal();
+    }
+
+    document.querySelector('#actorSelect').addEventListener('change', (event) => setRoute({ actor: event.target.value }));
+    document.querySelector('#surfaceSelect').addEventListener('change', (event) => setRoute({ surface: event.target.value }));
+    document.querySelector('#stateSelect').addEventListener('change', (event) => setRoute({ state: event.target.value }));
+    document.querySelector('#hrToggle').addEventListener('change', (event) => setRoute({ isHr: event.target.checked }));
+    document.querySelector('#longToggle').addEventListener('change', (event) => setRoute({ long: event.target.checked }));
+    addEventListener('hashchange', render);
+    document.addEventListener('submit', (event) => {
+      if (event.target.id !== 'candidateFilters') return;
+      event.preventDefault();
+      const data = new FormData(event.target);
+      filterModel = { q: data.get('q') || '', track: data.get('track'), vacancy: data.get('vacancy'), status: data.get('status'), from: data.get('from'), to: data.get('to') };
+      if (filterModel.q.toLowerCase().includes('несуществ')) setRoute({ state: 'filterEmpty' });
+      else if (routeState().state !== 'success') setRoute({ state: 'success' });
+      else render();
+    });
+    document.addEventListener('reset', (event) => {
+      if (event.target.id !== 'candidateFilters') return;
+      event.preventDefault();
+      filterModel = { q: '', track: 'frontend', vacancy: 'lead-ui', status: 'all', from: '2026-09-01', to: '2026-09-30' };
+      render();
+    });
+    document.addEventListener('click', (event) => {
+      const action = event.target.closest('[data-action]')?.dataset.action;
+      if (action === 'open-export') openExport();
+      if (action === 'close-export') exportDialog.close();
+      if (action === 'retry') setRoute({ state: 'success' });
+      if (action === 'clear-filters') { filterModel.q = ''; setRoute({ state: 'success' }); }
+      if (action === 'generate-export') {
+        exportState = 'forming';
+        exportDialog.innerHTML = exportMarkup(routeState());
+        setTimeout(() => {
+          if (!exportDialog.open || exportState !== 'forming') return;
+          exportState = routeState().state === 'revoked' ? 'revoked' : 'downloaded';
+          exportDialog.innerHTML = exportMarkup(routeState());
+        }, 450);
+      }
+      const selectedExportState = event.target.closest('[data-export-state]')?.dataset.exportState;
+      if (selectedExportState) { exportState = selectedExportState; exportDialog.innerHTML = exportMarkup(routeState()); }
+    });
+    render();
+  </script>
+</body>
+</html>

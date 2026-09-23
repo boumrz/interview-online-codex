@@ -14,8 +14,19 @@ import com.interviewonline.ws.PersonalNoteEntryPayload
  */
 
 internal data class NotesThreadPayload(
-    val version: Int = 1,
+    val version: Int = 2,
+    val chatRevision: Long = 0,
     val messages: List<NoteMessagePayload> = emptyList(),
+    val receipts: List<ChatReceiptPayload> = emptyList(),
+)
+
+internal data class ChatReceiptPayload(
+    val senderKey: String,
+    val clientMessageId: String,
+    val requestHash: String,
+    val messageId: String,
+    val persistedAtEpochMs: Long,
+    val expiresAtEpochMs: Long,
 )
 
 internal data class RoomPrivateNotesPayload(

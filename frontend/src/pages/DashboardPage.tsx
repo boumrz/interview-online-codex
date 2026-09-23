@@ -120,10 +120,15 @@ function apiErrorMessage(error: unknown): string | null {
   return typeof data.error === "string" ? data.error : null;
 }
 
-export function DashboardPage() {
+export function DashboardPage({
+  forcedSection,
+}: {
+  forcedSection?: DashboardSection;
+}) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { section } = useParams();
+  const { section: routeSection } = useParams();
+  const section = forcedSection ?? routeSection;
   const [searchParams, setSearchParams] = useSearchParams();
   const auth = useAppSelector((s) => s.auth);
   const authIdentityRef = useRef({ token: auth.token, userId: auth.user?.id ?? null });
@@ -370,6 +375,14 @@ export function DashboardPage() {
     return allSelectableRoomTasks.map((task) => ({
       value: task.id,
       label: `${task.title} (${labelForLanguage(task.language)})`,
+    }));
+  }, [allSelectableRoomTasks]);
+
+  const presetTaskOptions = useMemo(() => {
+    return allSelectableRoomTasks.map((task) => ({
+      value: task.id,
+      label: task.title,
+      language: normalizeLanguageKey(task.language),
     }));
   }, [allSelectableRoomTasks]);
 
@@ -1427,7 +1440,7 @@ export function DashboardPage() {
               )}
 
               {activeSection === "presets" && (
-                <PresetsSection taskOptions={taskSelectData} onError={showError} />
+                <PresetsSection taskOptions={presetTaskOptions} onError={showError} />
               )}
 
               {activeSection === "manage" && (

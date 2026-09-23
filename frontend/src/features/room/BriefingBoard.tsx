@@ -59,6 +59,7 @@ export type BriefingBoardProps = {
   mode: "interviewer" | "candidate";
   value: string;
   onChange?: (value: string) => void;
+  readOnly?: boolean;
   /**
    * Включён ли «focus mode»: код-редактор скрыт, и markdown
    * занимает всю рабочую область. Синхронизируется через
@@ -70,6 +71,7 @@ export type BriefingBoardProps = {
    * у кандидата кнопка не отображается, состояние приходит «сверху».
    */
   onFocusModeChange?: (next: boolean) => void;
+  showModeToggle?: boolean;
 };
 
 type MarkdownEditorHandle = {
@@ -99,8 +101,10 @@ export function BriefingBoard({
   mode,
   value,
   onChange,
+  readOnly = false,
   focusMode = false,
   onFocusModeChange,
+  showModeToggle = true,
 }: BriefingBoardProps) {
   const editorRef = useRef<MarkdownEditorHandle | null>(null);
   /**
@@ -232,7 +236,7 @@ export function BriefingBoard({
       data-expanded={isExpanded ? "on" : "off"}
       data-testid={`briefing-board-${mode}`}
     >
-      {mode === "interviewer" ? (
+      {mode === "interviewer" && !readOnly ? (
         <>
           <div className={roomPageStyles.briefingToolbar}>
             <button
@@ -339,7 +343,7 @@ export function BriefingBoard({
               (см. RoomPage → onFocusModeChange), expand — локальный.
             */}
             <span className={roomPageStyles.briefingToolbarSpacer} aria-hidden />
-            {onFocusModeChange ? (
+            {onFocusModeChange && showModeToggle ? (
               <Tooltip
                 label={
                   focusMode

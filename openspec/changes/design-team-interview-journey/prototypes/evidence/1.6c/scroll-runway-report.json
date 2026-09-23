@@ -1,0 +1,175 @@
+{
+  "task": "1.6c-scroll-runway",
+  "generatedAt": "2026-09-09T11:45:45.324Z",
+  "note": "Prototype-only deterministic model of the accepted one-gesture Safari chrome-collapse path; real Safari remains the 1.6g gate.",
+  "pageErrors": [],
+  "cases": [
+    {
+      "safeArea": {
+        "name": "island-left",
+        "left": 47,
+        "right": 0
+      },
+      "before": {
+        "keyboard": "true",
+        "stabilized": "false",
+        "scrollY": 0,
+        "scrollHeight": 535,
+        "clientHeight": 375,
+        "bodyOverflowY": "auto",
+        "draft": "Черновик runway · island-left",
+        "focus": true,
+        "unobscuredHeight": 24,
+        "safeArea": {
+          "left": 47,
+          "right": 0
+        }
+      },
+      "movedAfterOneGesture": true,
+      "after": {
+        "keyboard": "true",
+        "stabilized": "true",
+        "gestureCount": 1,
+        "scrollY": 160,
+        "visualHeight": 60,
+        "nav": {
+          "top": 0,
+          "bottom": 44,
+          "left": 47,
+          "right": 311,
+          "width": 264,
+          "height": 44
+        },
+        "composer": {
+          "top": 0,
+          "bottom": 44,
+          "left": 311,
+          "right": 667,
+          "width": 356,
+          "height": 44
+        },
+        "input": {
+          "top": 0,
+          "bottom": 44,
+          "left": 311,
+          "right": 549.78,
+          "width": 238.78,
+          "height": 44
+        },
+        "send": {
+          "top": 0,
+          "bottom": 44,
+          "left": 555.78,
+          "right": 667,
+          "width": 111.22,
+          "height": 44
+        },
+        "focus": true,
+        "draft": "Черновик runway · island-left",
+        "sixNav": true,
+        "fullNavBoxes": true,
+        "navUpperLowerHits": true,
+        "fullInputBox": true,
+        "inputUpperLowerHits": true,
+        "fullSendBox": true,
+        "sendUpperLowerHits": true,
+        "sameRow": true,
+        "safeHorizontal": true,
+        "horizontalOverflow": 0
+      },
+      "roundTrip": {
+        "passed": true,
+        "editorPanel": "editor",
+        "chatPanel": "chat",
+        "draftPreserved": true,
+        "editorPreserved": true,
+        "sessionPreserved": true
+      },
+      "pass": true
+    },
+    {
+      "safeArea": {
+        "name": "island-right",
+        "left": 0,
+        "right": 47
+      },
+      "before": {
+        "keyboard": "true",
+        "stabilized": "false",
+        "scrollY": 0,
+        "scrollHeight": 535,
+        "clientHeight": 375,
+        "bodyOverflowY": "auto",
+        "draft": "Черновик runway · island-right",
+        "focus": true,
+        "unobscuredHeight": 24,
+        "safeArea": {
+          "left": 0,
+          "right": 47
+        }
+      },
+      "movedAfterOneGesture": true,
+      "after": {
+        "keyboard": "true",
+        "stabilized": "true",
+        "gestureCount": 1,
+        "scrollY": 160,
+        "visualHeight": 60,
+        "nav": {
+          "top": 0,
+          "bottom": 44,
+          "left": 0,
+          "right": 264,
+          "width": 264,
+          "height": 44
+        },
+        "composer": {
+          "top": 0,
+          "bottom": 44,
+          "left": 264,
+          "right": 620,
+          "width": 356,
+          "height": 44
+        },
+        "input": {
+          "top": 0,
+          "bottom": 44,
+          "left": 264,
+          "right": 502.78,
+          "width": 238.78,
+          "height": 44
+        },
+        "send": {
+          "top": 0,
+          "bottom": 44,
+          "left": 508.78,
+          "right": 620,
+          "width": 111.22,
+          "height": 44
+        },
+        "focus": true,
+        "draft": "Черновик runway · island-right",
+        "sixNav": true,
+        "fullNavBoxes": true,
+        "navUpperLowerHits": true,
+        "fullInputBox": true,
+        "inputUpperLowerHits": true,
+        "fullSendBox": true,
+        "sendUpperLowerHits": true,
+        "sameRow": true,
+        "safeHorizontal": true,
+        "horizontalOverflow": 0
+      },
+      "roundTrip": {
+        "passed": true,
+        "editorPanel": "editor",
+        "chatPanel": "chat",
+        "draftPreserved": true,
+        "editorPreserved": true,
+        "sessionPreserved": true
+      },
+      "pass": true
+    }
+  ],
+  "pass": true
+}

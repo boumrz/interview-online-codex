@@ -67,6 +67,7 @@ function getParticipantPresenceLabel(status: Participant["presenceStatus"]) {
 
 export type TopBarProps = {
   roomTitle: string;
+  interviewListPath: string;
   authToken: string | null;
   connected: boolean;
   participants: Participant[];
@@ -92,6 +93,7 @@ export type TopBarProps = {
  */
 export function TopBar({
   roomTitle,
+  interviewListPath,
   authToken,
   connected,
   participants,
@@ -334,21 +336,15 @@ export function TopBar({
                 data-testid="room-connection-status"
               />
             </Tooltip>
-            {/*
-             * Cabinet is a secondary nav action. Keeps a light filled
-             * surface (variant="light") so it's clearly clickable without
-             * competing with the primary filled "Главная" CTA — `subtle`
-             * was too quiet and read as a passive label per UX feedback.
-             */}
             <Button
               component={Link}
-              to={authToken ? "/dashboard/rooms" : "/login"}
+              to={authToken ? interviewListPath : "/login"}
               size="xs"
-              variant="light"
-              color="blue"
+              variant="subtle"
+              color="gray"
               leftSection={<IconUserCircle size={14} />}
             >
-              Кабинет
+              Вернуться к списку интервью
             </Button>
             <Button
               component={Link}

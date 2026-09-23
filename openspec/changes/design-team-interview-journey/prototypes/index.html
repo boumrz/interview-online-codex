@@ -1,0 +1,1800 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <title>Interview Online — прототип рабочего пространства 1.6a–1.6f</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #13283b;
+      --ink-soft: #536370;
+      --paper: #f5f0e5;
+      --paper-deep: #e9dfcc;
+      --nav: #102b3f;
+      --nav-2: #183b51;
+      --white: #fffdf7;
+      --orange: #ec6f35;
+      --orange-dark: #b74016;
+      --cyan: #7dd5d1;
+      --green: #237b59;
+      --red: #b33a32;
+      --yellow: #f1c85b;
+      --line: #c9bdab;
+      --shadow: 0 16px 42px rgba(32, 43, 46, .13);
+      --safe-left: env(safe-area-inset-left, 0px);
+      --safe-right: env(safe-area-inset-right, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+      --body: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+      --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+      font-family: var(--body);
+      font-size: 16px;
+      background: var(--paper);
+      color: var(--ink);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-width: 0; min-height: 100%; overflow-x: clip; }
+    body {
+      min-height: 100dvh;
+      padding-left: var(--safe-left);
+      padding-right: var(--safe-right);
+      background:
+        linear-gradient(90deg, rgba(16, 43, 63, .035) 1px, transparent 1px) 0 0 / 24px 24px,
+        linear-gradient(rgba(16, 43, 63, .035) 1px, transparent 1px) 0 0 / 24px 24px,
+        var(--paper);
+    }
+    button, input, select { font: inherit; }
+    button, a, select, input[type="checkbox"] { touch-action: manipulation; }
+    button, a, select, input { outline-offset: 4px; }
+    :focus-visible { outline: 3px solid #f4a261 !important; box-shadow: 0 0 0 6px rgba(125, 213, 209, .55); }
+    button:disabled { cursor: not-allowed; opacity: .58; }
+    [hidden] { display: none !important; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+    .skip-link {
+      position: fixed; left: calc(12px + var(--safe-left)); top: 10px; z-index: 100;
+      min-height: 44px; padding: 11px 16px; border-radius: 6px;
+      color: var(--white); background: var(--ink); transform: translateY(-160%);
+    }
+    .skip-link:focus { transform: none; }
+
+    .prototype-bar {
+      position: relative; z-index: 30; display: grid;
+      grid-template-columns: minmax(210px, 1fr) auto auto auto;
+      align-items: end; gap: 12px; min-height: 74px; padding: 10px 18px;
+      color: var(--white); background: #091c2a;
+      border-bottom: 4px solid var(--orange);
+    }
+    .prototype-mark { align-self: center; min-width: 0; }
+    .prototype-mark strong { display: block; font-family: var(--mono); font-size: .79rem; letter-spacing: .11em; color: var(--yellow); }
+    .prototype-mark span { display: block; margin-top: 3px; font-size: .78rem; color: #c8d4da; }
+    .control { display: grid; gap: 4px; min-width: 132px; }
+    .control label, .toggle-label { font-size: .7rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #b9c9d2; }
+    .control select {
+      min-height: 44px; max-width: 210px; padding: 7px 34px 7px 10px;
+      border: 1px solid #557083; border-radius: 4px; color: var(--white); background: var(--nav-2);
+    }
+    .long-toggle { align-self: end; min-height: 44px; display: flex; align-items: center; gap: 9px; padding: 0 8px; }
+    .long-toggle input { width: 24px; height: 24px; accent-color: var(--orange); }
+
+    .app-shell { display: grid; grid-template-columns: 276px minmax(0, 1fr); min-height: calc(100dvh - 74px); }
+    .sidebar {
+      position: sticky; top: 0; align-self: start; height: calc(100dvh - 74px);
+      display: flex; flex-direction: column; min-width: 0; padding: 18px 14px 14px;
+      color: var(--white); background: var(--nav);
+      box-shadow: 8px 0 0 rgba(125, 213, 209, .28);
+      overflow-y: auto;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; min-height: 50px; padding: 0 8px 14px; }
+    .brand-sign {
+      width: 42px; height: 42px; display: grid; place-items: center; flex: 0 0 auto;
+      font: 800 1.2rem var(--display); color: var(--nav); background: var(--cyan); border-radius: 50% 50% 48% 12%;
+    }
+    .brand strong { display: block; font-family: var(--display); font-size: 1.12rem; letter-spacing: -.02em; }
+    .brand span { display: block; margin-top: 2px; font: .7rem var(--mono); color: #a9bcc7; }
+    .workspace-switcher {
+      min-height: 58px; width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center; gap: 8px; padding: 8px 10px; text-align: left;
+      color: var(--white); background: var(--nav-2); border: 1px solid #456277; border-radius: 5px; cursor: pointer;
+    }
+    .workspace-switcher small { display: block; font: .67rem var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--cyan); }
+    .workspace-switcher strong { display: block; margin-top: 2px; overflow-wrap: anywhere; }
+    .nav-heading { margin: 22px 10px 7px; font: .69rem var(--mono); letter-spacing: .12em; color: #8eabb9; text-transform: uppercase; }
+    .nav-list { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
+    .nav-link, .account-button {
+      min-height: 46px; display: flex; align-items: center; gap: 11px; width: 100%; padding: 10px 12px;
+      color: #dfe9ed; text-decoration: none; border: 0; border-left: 4px solid transparent; border-radius: 2px;
+      background: transparent; cursor: pointer; text-align: left;
+    }
+    .nav-link:hover, .account-button:hover { background: rgba(255, 255, 255, .07); }
+    .nav-link[aria-current="page"] { color: var(--white); background: rgba(125, 213, 209, .14); border-left-color: var(--orange); font-weight: 800; }
+    .nav-icon { width: 24px; height: 24px; display: grid; place-items: center; flex: 0 0 auto; font: .8rem var(--mono); border: 1px solid #607c8d; border-radius: 50%; }
+    .account-block { margin-top: auto; padding-top: 18px; border-top: 1px solid #385365; }
+    .account-meta { min-width: 0; }
+    .account-meta strong, .account-meta small { display: block; overflow-wrap: anywhere; }
+    .account-meta small { margin-top: 2px; color: #9bb0bc; }
+    .role-chip { margin-left: auto; padding: 4px 7px; font: .63rem var(--mono); text-transform: uppercase; color: var(--ink); background: var(--yellow); border-radius: 2px; }
+
+    .mobile-top { display: none; }
+    .scrim { display: none; }
+    .page { min-width: 0; padding: clamp(22px, 4vw, 54px) clamp(18px, 4vw, 64px) 72px; }
+    .page-inner { width: min(1100px, 100%); margin: 0 auto; }
+    .eyebrow { margin: 0 0 8px; font: 800 .73rem var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--orange-dark); }
+    .page-head { min-height: 92px; display: flex; align-items: flex-start; justify-content: space-between; gap: 28px; padding-bottom: 25px; border-bottom: 1px solid var(--line); }
+    h1 { max-width: 760px; margin: 0; font: 700 clamp(2.25rem, 5vw, 4.6rem)/.95 var(--display); letter-spacing: -.045em; overflow-wrap: anywhere; }
+    h2 { margin: 0; font: 700 clamp(1.45rem, 3vw, 2.1rem)/1.05 var(--display); letter-spacing: -.025em; }
+    h3 { margin: 0; font: 700 1.08rem/1.2 var(--display); }
+    p { line-height: 1.52; }
+    .lede { max-width: 680px; margin: 13px 0 0; color: var(--ink-soft); font-size: 1.02rem; }
+    .head-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
+    .button, button.button {
+      min-height: 46px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 10px 16px; border: 2px solid var(--ink); border-radius: 3px; font-weight: 800; text-decoration: none;
+      color: var(--white); background: var(--ink); cursor: pointer;
+    }
+    .button:hover { transform: translateY(-1px); box-shadow: 4px 4px 0 var(--cyan); }
+    .button.secondary { color: var(--ink); background: transparent; }
+    .button.ghost { color: var(--ink); background: var(--white); border-color: var(--line); }
+    .button.danger { color: var(--red); background: #fff7f3; border-color: var(--red); }
+    .button.small { min-height: 44px; padding: 8px 12px; }
+    .inline-link { min-height: 44px; display: inline-flex; align-items: center; color: #0c6370; font-weight: 800; text-underline-offset: 4px; }
+
+    .context-line { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0; }
+    .context-tag { display: inline-flex; min-height: 32px; align-items: center; padding: 5px 10px; background: var(--paper-deep); border-radius: 99px; font-size: .8rem; }
+    .context-tag.owner { color: #71310c; background: #ffe0c6; border: 1px solid #ec9f68; }
+    .context-tag.manager { color: #164a4a; background: #d7f5f0; border: 1px solid #7ac8c2; }
+    .context-tag.member { color: #314351; background: #e2e9ec; border: 1px solid #aab9c0; }
+
+    .grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 18px; margin-top: 24px; }
+    .span-8 { grid-column: span 8; } .span-6 { grid-column: span 6; } .span-4 { grid-column: span 4; } .span-12 { grid-column: 1 / -1; }
+    .card {
+      min-width: 0; position: relative; padding: 22px; background: rgba(255, 253, 247, .92);
+      border: 1px solid var(--line); border-radius: 6px; box-shadow: 5px 5px 0 rgba(16, 43, 63, .07);
+    }
+    .card::before { content: ""; position: absolute; left: -1px; top: 18px; width: 4px; height: 32px; background: var(--cyan); }
+    .card.highlight::before { background: var(--orange); }
+    .card p:last-child { margin-bottom: 0; }
+    .meta-row { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 14px; color: var(--ink-soft); font-size: .83rem; }
+    .meta-row strong { color: var(--ink); }
+    .card-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+    .responsibility { display: inline-flex; align-items: center; gap: 7px; font-weight: 800; }
+    .responsibility::before { content: ""; width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; background: var(--orange); }
+    .private-note { padding: 12px 14px; background: #eff6f5; border-left: 3px solid var(--cyan); color: #31535a; font-size: .88rem; }
+
+    .state-panel { margin-top: 26px; min-height: 280px; display: grid; place-items: center; padding: clamp(24px, 6vw, 70px); text-align: center; border: 1px dashed #9d907d; background: rgba(255,255,255,.34); }
+    .state-panel > div { max-width: 600px; }
+    .state-symbol { width: 76px; height: 76px; display: grid; place-items: center; margin: 0 auto 20px; border-radius: 50% 50% 8px 50%; background: var(--cyan); font: 800 1.35rem var(--mono); }
+    .state-panel.error .state-symbol, .state-panel.revoked .state-symbol { color: white; background: var(--red); }
+    .state-panel.success .state-symbol { color: white; background: var(--green); }
+    .state-panel p { color: var(--ink-soft); }
+    .skeleton { width: min(620px, 100%); display: grid; gap: 14px; }
+    .skeleton span { height: 18px; display: block; border-radius: 2px; background: linear-gradient(90deg, #ded5c5, #fffaf0, #ded5c5); background-size: 220% 100%; animation: shimmer 1.5s infinite; }
+    .skeleton span:nth-child(1) { width: 48%; height: 30px; } .skeleton span:nth-child(3) { width: 78%; }
+    @keyframes shimmer { to { background-position: -220% 0; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+
+    .onboarding { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 12px; margin-top: 26px; padding: 18px; background: var(--ink); color: white; border-radius: 6px; }
+    .onboarding p { margin: 8px 0 0; color: #c8d6dc; }
+    .onboarding .button { width: 100%; align-self: stretch; background: var(--orange); border-color: var(--orange); }
+
+    .notice { display: flex; gap: 12px; align-items: flex-start; margin: 18px 0; padding: 14px 16px; border: 1px solid #d5b562; background: #fff5d5; }
+    .notice.error { color: #76241f; border-color: #d88e87; background: #fff0ed; }
+    .notice.success { color: #18543d; border-color: #85b99f; background: #eaf7ef; }
+    .notice strong { display: block; }
+    .notice p { margin: 3px 0 0; }
+
+    .field { display: grid; gap: 7px; margin-top: 18px; }
+    .field label { font-weight: 800; }
+    .field small { color: var(--ink-soft); }
+    .field input, .field select, .field textarea {
+      width: 100%; min-height: 48px; padding: 10px 12px; color: var(--ink); background: white;
+      border: 2px solid #9a8e7c; border-radius: 3px;
+    }
+    .field textarea { min-height: 150px; resize: vertical; line-height: 1.45; }
+    .field [aria-invalid="true"] { border-color: var(--red); }
+    .field-error { min-height: 22px; color: var(--red); font-weight: 700; }
+    .form-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 24px; padding-bottom: var(--safe-bottom); }
+
+    .profile-layout { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(250px, .85fr); gap: 20px; margin-top: 28px; }
+    .profile-id { padding: 15px; background: #edf5f5; border: 1px solid #a8cdca; overflow-wrap: anywhere; }
+    .profile-id code { font: .82rem var(--mono); }
+    .setting-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; min-height: 72px; margin-top: 18px; padding: 12px 0; border-top: 1px solid var(--line); }
+    .switch { position: relative; width: 58px; height: 32px; display: inline-flex; }
+    .switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+    .switch span { width: 58px; height: 32px; display: block; background: #98a3a8; border-radius: 99px; cursor: pointer; }
+    .switch span::after { content: ""; width: 24px; height: 24px; position: absolute; top: 4px; left: 4px; background: white; border-radius: 50%; transition: transform .15s; }
+    .switch input:checked + span { background: var(--green); }
+    .switch input:checked + span::after { transform: translateX(26px); }
+    .switch input:focus-visible + span { outline: 3px solid #f4a261; box-shadow: 0 0 0 6px rgba(125, 213, 209, .55); }
+
+    .invite-shell { min-height: calc(100dvh - 74px); display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(330px, .95fr); }
+    .invite-art { position: relative; display: grid; align-content: end; min-height: 520px; padding: clamp(30px, 6vw, 90px); overflow: hidden; color: white; background: var(--nav); }
+    .invite-art::before { content: ""; position: absolute; width: min(60vw, 560px); aspect-ratio: 1; left: -13%; top: -30%; border: 2px solid var(--cyan); border-radius: 50%; box-shadow: 0 0 0 44px rgba(125, 213, 209,.07), 0 0 0 90px rgba(236,111,53,.08); }
+    .invite-art .giant { position: relative; font: 700 clamp(4rem, 14vw, 11rem)/.72 var(--display); color: var(--cyan); }
+    .invite-art p { position: relative; max-width: 520px; margin-bottom: 0; color: #cbd7dd; font-size: 1.05rem; }
+    .invite-content { display: grid; align-items: center; padding: clamp(22px, 6vw, 84px); background: var(--paper); }
+    .invite-card { width: min(560px, 100%); margin: 0 auto; }
+    .invite-card h1 { font-size: clamp(2.3rem, 6vw, 4.4rem); }
+    .invite-facts { display: grid; gap: 0; margin: 26px 0; border-top: 1px solid var(--line); }
+    .fact { min-height: 58px; display: grid; grid-template-columns: minmax(110px, .55fr) minmax(0, 1fr); gap: 16px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+    .fact dt { color: var(--ink-soft); } .fact dd { margin: 0; font-weight: 800; overflow-wrap: anywhere; }
+
+    .old-routes { display: grid; gap: 8px; margin-top: 24px; }
+    .route-row { min-height: 62px; display: grid; grid-template-columns: minmax(150px, .7fr) minmax(0, 1.2fr) auto; gap: 12px; align-items: center; padding: 8px 12px; background: var(--white); border: 1px solid var(--line); }
+    .route-row code { font: .78rem var(--mono); overflow-wrap: anywhere; }
+    .route-row span { color: var(--ink-soft); }
+
+    dialog { width: min(600px, calc(100% - 24px - var(--safe-left) - var(--safe-right))); max-height: calc(100dvh - 24px); padding: 0; color: var(--ink); background: var(--paper); border: 0; border-radius: 6px; box-shadow: 0 28px 90px rgba(0,0,0,.45); }
+    dialog::backdrop { background: rgba(3, 15, 23, .72); backdrop-filter: blur(3px); }
+    .dialog-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; padding: 22px; color: white; background: var(--nav); }
+    .dialog-head .eyebrow { color: var(--yellow); }
+    .dialog-close { width: 44px; min-width: 44px; height: 44px; display: grid; place-items: center; color: white; background: transparent; border: 1px solid #678092; cursor: pointer; }
+    .dialog-body { max-height: calc(100dvh - 110px); padding: 22px; padding-bottom: calc(22px + var(--safe-bottom)); overflow-y: auto; }
+    .workspace-choice { min-height: 62px; width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; margin: 8px 0; padding: 10px 12px; color: var(--ink); background: white; border: 1px solid var(--line); text-align: left; cursor: pointer; }
+    .workspace-choice[aria-current="true"] { border: 2px solid var(--orange); }
+    .workspace-choice small { display: block; margin-top: 3px; color: var(--ink-soft); }
+
+    .toast { position: fixed; right: calc(18px + var(--safe-right)); bottom: calc(18px + var(--safe-bottom)); z-index: 90; max-width: min(390px, calc(100% - 36px - var(--safe-left) - var(--safe-right))); padding: 14px 18px; color: white; background: var(--green); box-shadow: var(--shadow); transform: translateY(160%); visibility: hidden; transition: transform .18s ease, visibility 0s .18s; }
+    .toast[data-open="true"] { transform: none; visibility: visible; transition-delay: 0s; }
+    .scenario-strip { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 24px; padding-top: 16px; border-top: 1px dashed var(--line); }
+    .scenario-strip .button { font-size: .78rem; }
+
+    .filter-bar { display: grid; grid-template-columns: minmax(200px, 1.5fr) repeat(3, minmax(140px, .7fr)) auto; gap: 10px; align-items: end; margin-top: 22px; padding: 14px; background: rgba(255, 253, 247, .88); border: 1px solid var(--line); }
+    .filter-bar .field { margin: 0; gap: 4px; }
+    .filter-bar .field label { font-size: .75rem; }
+    .collection { display: grid; gap: 12px; margin-top: 20px; }
+    .collection-row { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: center; padding: 18px; background: rgba(255, 253, 247, .94); border: 1px solid var(--line); border-left: 5px solid var(--cyan); box-shadow: 4px 4px 0 rgba(16,43,63,.06); }
+    .collection-row.archived { border-left-color: #89949a; background: #eee9df; }
+    .collection-row.frozen { border-left-color: var(--red); }
+    .collection-row h3 { font-size: 1.25rem; overflow-wrap: anywhere; }
+    .collection-row p { margin: 6px 0 0; color: var(--ink-soft); }
+    .row-actions { min-width: 170px; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+    .status-pill { min-height: 30px; display: inline-flex; align-items: center; padding: 4px 9px; color: var(--ink); background: #e2ecee; border: 1px solid #b3c9cd; border-radius: 99px; font: 700 .72rem var(--mono); }
+    .status-pill.orange { color: #71310c; background: #ffe3ce; border-color: #edaa79; }
+    .status-pill.red { color: #702820; background: #fde2de; border-color: #dda09a; }
+    .status-pill.gray { color: #42525a; background: #e5e8e8; border-color: #b8c0c2; }
+    .tabs { display: flex; gap: 5px; margin-top: 22px; padding: 4px; width: fit-content; max-width: 100%; background: var(--paper-deep); border: 1px solid var(--line); }
+    .tab { min-height: 44px; display: inline-flex; align-items: center; padding: 8px 15px; color: var(--ink); text-decoration: none; font-weight: 800; }
+    .tab[aria-current="page"] { color: white; background: var(--nav); }
+    .track-tree { display: grid; gap: 16px; margin-top: 24px; }
+    .track-card { padding: 0; overflow: hidden; }
+    .track-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: center; padding: 20px 22px; }
+    .vacancy-list { display: grid; gap: 1px; margin: 0; padding: 0; list-style: none; background: var(--line); border-top: 1px solid var(--line); }
+    .vacancy-row { min-height: 58px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 10px 22px 10px 34px; background: var(--white); }
+    .vacancy-row a { min-height: 44px; display: inline-flex; align-items: center; color: #075b69; font-weight: 800; overflow-wrap: anywhere; }
+    .programme-summary { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 12px; margin-top: 20px; padding: 16px; background: #edf6f5; border: 1px solid #a9d5d1; }
+    .programme-summary .stamp { width: 48px; height: 48px; display: grid; place-items: center; color: white; background: var(--green); border-radius: 50%; font: 800 .72rem var(--mono); }
+    .programme-summary.blocked { background: #fff0ed; border-color: #dfa39e; }
+    .programme-summary.blocked .stamp { background: var(--red); }
+    .form-stack { display: grid; gap: 16px; margin-top: 24px; }
+    .form-section { position: relative; padding: 22px; background: rgba(255,253,247,.94); border: 1px solid var(--line); }
+    .section-number { position: absolute; top: 18px; right: 18px; font: 800 1.6rem var(--mono); color: #baad9a; }
+    .section-intro { max-width: 700px; margin: 6px 48px 18px 0; color: var(--ink-soft); }
+    .field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .choice-list { display: grid; gap: 8px; margin-top: 12px; }
+    .choice-row { min-height: 58px; display: grid; grid-template-columns: 28px minmax(0,1fr) auto; gap: 12px; align-items: center; padding: 10px 12px; background: white; border: 1px solid var(--line); }
+    .choice-row input { width: 22px; height: 22px; accent-color: var(--orange); }
+    .choice-row label { min-height: 44px; display: flex; flex-direction: column; justify-content: center; overflow-wrap: anywhere; }
+    .choice-row small { color: var(--ink-soft); }
+    .task-stack { display: grid; gap: 8px; margin-top: 12px; padding: 0; list-style: none; }
+    .task-row { min-height: 62px; display: grid; grid-template-columns: 32px minmax(0,1fr) auto; gap: 12px; align-items: center; padding: 10px 12px; background: white; border: 1px solid var(--line); }
+    .task-index { width: 32px; height: 32px; display: grid; place-items: center; color: var(--ink); background: var(--paper-deep); border-radius: 50%; font: 800 .75rem var(--mono); }
+    .task-row.mandatory { border-left: 5px solid var(--orange); }
+    .task-row.mandatory .task-index { color: white; background: var(--orange); }
+    .locked { font: 700 .7rem var(--mono); color: var(--orange-dark); text-transform: uppercase; }
+    .summary-box { padding: 18px; color: white; background: var(--nav); }
+    .summary-box p, .summary-box small { color: #c9d8de; }
+    .summary-box .status-pill { margin-right: 5px; }
+    .draft-marker { display: inline-flex; gap: 7px; align-items: center; margin-top: 10px; color: #92501e; font-weight: 800; }
+    .draft-marker::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--orange); }
+
+    .prototype-footnote { margin-top: 32px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--ink-soft); font: .73rem/1.5 var(--mono); }
+
+    /* UX-08 room prototype: a standalone surface, never production authorization evidence. */
+    .room-root {
+      --room-visible-height: calc(100dvh - 74px);
+      height: var(--room-visible-height); min-height: 260px; display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr); min-width: 0; overflow: hidden;
+      color: #eaf1f3; background: #071923;
+    }
+    .room-service {
+      min-height: 58px; display: grid; grid-template-columns: minmax(190px, .75fr) minmax(220px, 1.2fr) auto;
+      gap: 12px; align-items: center; padding: 7px 14px; border-bottom: 1px solid #34505d; background: #0d2938;
+    }
+    .room-return, .room-menu, .room-mode-button, .room-area-button, .room-action {
+      min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+      color: #eaf1f3; background: #14384a; border: 1px solid #527080; border-radius: 3px; text-decoration: none;
+      font-weight: 800; cursor: pointer;
+    }
+    .room-return { justify-content: flex-start; min-width: 0; padding: 8px 11px; overflow-wrap: anywhere; }
+    .room-title { min-width: 0; }
+    .room-title strong, .room-title small { display: block; overflow-wrap: anywhere; }
+    .room-title strong { font-family: var(--display); font-size: 1.05rem; }
+    .room-title small { margin-top: 2px; color: #a8c0ca; font: .68rem var(--mono); }
+    .room-service-actions { display: flex; align-items: center; justify-content: flex-end; gap: 7px; min-width: 0; }
+    .room-status { min-height: 32px; display: inline-flex; align-items: center; gap: 7px; padding: 4px 9px; color: #dbebef; border: 1px solid #4e6c78; border-radius: 99px; font: 700 .68rem var(--mono); white-space: nowrap; }
+    .room-status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #70d6a3; }
+    .room-status.pending::before, .room-status.reconnecting::before { background: var(--yellow); }
+    .room-status.error::before, .room-status.revoked::before { background: #ff8176; }
+    .room-menu { width: 44px; min-width: 44px; flex: 0 0 44px; padding: 0; font-size: 1.1rem; }
+    .room-mode-group { display: flex; gap: 3px; padding: 3px; background: #06151e; border: 1px solid #3b5663; }
+    .room-mode-button { min-width: 74px; padding: 7px 10px; background: transparent; border-color: transparent; font-size: .76rem; }
+    .room-mode-button[aria-pressed="true"] { color: #081c27; background: var(--cyan); }
+    .room-mode-button:disabled { color: #8599a1; }
+    .room-input-context { display: none; min-height: 28px; height: 28px; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 8px; color: #d9e8eb; background: #0d2938; font: 700 .68rem var(--mono); overflow: hidden; }
+    .room-input-context span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .room-input-context [data-room-step-compact] { flex: 1 1 auto; text-align: right; color: var(--yellow); }
+    .room-area-nav {
+      min-height: 52px; display: grid; grid-template-columns: repeat(6, minmax(84px, 1fr)); gap: 4px;
+      padding: 4px 8px; background: #0a202d; border-bottom: 2px solid #284553;
+    }
+    .room-area-button { position: relative; padding: 7px 9px; background: transparent; border-color: transparent; font-size: .78rem; }
+    .room-area-button[aria-selected="true"] { color: #071923; background: var(--yellow); }
+    .room-area-button .room-icon { font: 800 .72rem var(--mono); }
+    .unread-badge { min-width: 22px; min-height: 22px; display: inline-grid; place-items: center; padding: 0 5px; color: white; background: var(--orange); border-radius: 99px; font: 800 .66rem var(--mono); }
+    .room-stage { min-width: 0; min-height: 0; display: grid; gap: 6px; padding: 6px; overflow: hidden; background: #071923; }
+    .room-stage[data-mode="focus"] { grid-template-columns: minmax(0, 1fr); grid-template-areas: "focus"; }
+    .room-stage[data-mode="work"] { grid-template-columns: minmax(480px, 1fr) minmax(320px, .55fr); grid-template-areas: "editor side"; }
+    .room-stage[data-mode="overview"] { grid-template-columns: minmax(240px, .35fr) minmax(480px, 1fr) minmax(320px, .48fr); grid-template-rows: minmax(0, 1fr); grid-template-areas: "left editor right"; }
+    .room-stage[data-mode="overview"][data-both="true"] { grid-template-rows: minmax(240px, 1fr) minmax(320px, 1.2fr); grid-template-areas: "left editor rightTop" "left editor rightBottom"; overflow-y: auto; }
+    .room-panel {
+      min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden;
+      color: var(--ink); background: #f7f3e9; border: 1px solid #46606c; border-radius: 3px;
+    }
+    .room-stage[data-mode="focus"] .room-panel { grid-area: focus; }
+    .room-stage[data-mode="work"] .room-panel[data-slot="editor"] { grid-area: editor; }
+    .room-stage[data-mode="work"] .room-panel[data-slot="side"] { grid-area: side; }
+    .room-stage[data-mode="overview"] .room-panel[data-slot="left"] { grid-area: left; }
+    .room-stage[data-mode="overview"] .room-panel[data-slot="editor"] { grid-area: editor; }
+    .room-stage[data-mode="overview"] .room-panel[data-slot="right"] { grid-area: right; }
+    .room-stage[data-mode="overview"] .room-panel[data-slot="rightTop"] { grid-area: rightTop; }
+    .room-stage[data-mode="overview"] .room-panel[data-slot="rightBottom"] { grid-area: rightBottom; }
+    .room-stage[data-mode="overview"] .room-side-stack { grid-area: right; min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(240px, 1fr) minmax(320px, 1.2fr); gap: 6px; overflow: auto; }
+    .room-panel-head { min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 11px; color: #eaf1f3; background: #153848; border-bottom: 3px solid var(--cyan); }
+    .room-panel-head h2 { min-width: 0; font: 700 1rem var(--display); overflow-wrap: anywhere; }
+    .room-panel-head small { color: #bfd0d6; }
+    .room-panel-head [data-room-close] { width: 44px; min-width: 44px; flex: 0 0 44px; padding: 0; }
+    .room-panel-body { min-width: 0; min-height: 0; flex: 1 1 auto; padding: 12px; overflow: auto; scrollbar-gutter: stable; }
+    .room-panel-body p { margin-top: 0; }
+    .room-current-step {
+      min-height: 36px; display: flex; align-items: center; gap: 9px; padding: 5px 10px;
+      color: #dcebee; background: #0d2938; border-bottom: 1px solid #365461; font: 700 .72rem var(--mono);
+    }
+    .room-current-step > span:first-child { color: #91abb5; text-transform: uppercase; letter-spacing: .06em; }
+    .room-current-step strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: white; }
+    .room-current-step .room-published-step { margin-left: auto; color: #151f22; background: var(--yellow); border-radius: 99px; padding: 3px 8px; white-space: nowrap; }
+    .room-condition { overflow-wrap: anywhere; }
+    .room-condition pre { max-width: 100%; padding: 12px; overflow: auto; color: #d9f3f0; background: #0b2736; }
+    .room-condition table { width: 100%; border-collapse: collapse; }
+    .room-condition td, .room-condition th { padding: 8px; border: 1px solid var(--line); text-align: left; }
+    .room-step-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+    .room-step {
+      min-height: 56px; width: 100%; display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 10px; align-items: center;
+      padding: 8px; color: var(--ink); background: white; border: 1px solid var(--line); text-align: left; cursor: pointer;
+    }
+    .room-step[aria-current="step"] { border: 2px solid var(--orange); }
+    .room-step[data-published="true"] .task-index { color: #071923; background: var(--yellow); }
+    .room-editor-panel { background: #07131a; }
+    .room-editor-meta { min-height: 38px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 6px 12px; color: #a9bec7; background: #0d2531; font: .7rem var(--mono); }
+    .room-editor-input {
+      width: 100%; min-width: 0; min-height: 320px; flex: 1 1 auto; resize: none; padding: 17px 18px;
+      color: #d7f1ec; background: #07131a; border: 0; border-radius: 0; font: 16px/1.65 var(--mono); tab-size: 2; overflow: auto; white-space: pre;
+    }
+    .room-editor-input:focus-visible { outline-offset: -5px; }
+    .room-note-context { padding: 9px 12px; background: #e8f4f2; border-bottom: 1px solid #9fcac6; font-size: .78rem; }
+    .room-notes-input, .room-chat-input { width: 100%; min-height: 112px; padding: 10px 11px; resize: vertical; border: 2px solid #7c8d91; font: 16px/1.42 var(--body); }
+    .room-note-actions, .room-chat-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; margin-top: 8px; }
+    .room-action { min-height: 44px; padding: 8px 12px; color: white; background: var(--ink); border-color: var(--ink); }
+    .room-action.ghost { color: var(--ink); background: white; border-color: var(--line); }
+    .room-chat-panel .room-panel-body { display: flex; flex-direction: column; padding: 0; }
+    .room-chat-history { position: relative; min-height: 120px; flex: 1 1 120px; padding: 12px; overflow-y: auto; background: #fffdf8; }
+    .room-message { max-width: 92%; margin-bottom: 10px; padding: 9px 11px; background: #e4f1ef; border-left: 3px solid var(--cyan); }
+    .room-message strong, .room-message time { font-size: .72rem; }
+    .room-message time { margin-left: 6px; color: var(--ink-soft); }
+    .room-new-messages { position: sticky; bottom: 4px; min-height: 44px; width: 100%; color: white; background: var(--orange-dark); border: 0; font-weight: 800; cursor: pointer; }
+    .room-chat-composer { flex: 0 0 auto; padding: 10px 12px calc(10px + var(--safe-bottom)); background: #efe8da; border-top: 1px solid var(--line); }
+    .room-composer-step { display: none; min-height: 28px; align-items: center; gap: 8px; margin: -2px 0 6px; padding: 3px 7px; color: #dcebee; background: #0d2938; font: 700 .68rem var(--mono); }
+    .room-composer-step > span:first-child { flex: 0 0 auto; color: #91abb5; text-transform: uppercase; }
+    .room-composer-step strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: white; }
+    .room-composer-step .room-published-step { margin-left: auto; flex: 0 0 auto; color: var(--yellow); white-space: nowrap; }
+    .room-audience { margin: 0 0 7px; color: #455b64; font-size: .72rem; }
+    .room-inline-error { margin: 0 0 8px; padding: 8px; color: #7b251e; background: #ffe8e3; border-left: 3px solid var(--red); font-size: .78rem; }
+    .room-event-list { margin: 0; padding: 0; list-style: none; }
+    .room-event-list li { min-height: 48px; padding: 9px 4px 9px 18px; border-bottom: 1px solid var(--line); position: relative; }
+    .room-event-list li::before { content: ""; position: absolute; left: 2px; top: 17px; width: 8px; height: 8px; border-radius: 50%; background: var(--orange); }
+    .room-event-list time { display: block; color: var(--ink-soft); font: .67rem var(--mono); }
+    .room-state-banner { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 12px; color: #553a08; background: #fff0bd; border-bottom: 1px solid #c8a84e; }
+    .room-state-banner.error { color: #702820; background: #fde4df; border-color: #d18c85; }
+    .room-state-banner .room-action { flex: 0 0 auto; }
+    .room-work-area { min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+    .room-work-area .room-stage { flex: 1 1 auto; }
+    .room-diagnostic { color: #91abb5; font: .64rem var(--mono); white-space: nowrap; }
+    .room-terminal { min-height: calc(100dvh - 74px); display: grid; place-items: center; padding: 24px; color: var(--ink); background: var(--paper); }
+    .room-terminal-card { width: min(660px, 100%); padding: clamp(24px, 6vw, 58px); background: var(--white); border: 1px solid var(--line); border-top: 8px solid var(--red); box-shadow: var(--shadow); }
+    .room-terminal-card h1 { font-size: clamp(2.2rem, 6vw, 4.2rem); }
+    .room-terminal-card .button { margin-top: 14px; }
+    .room-candidate { min-height: calc(100dvh - 74px); display: grid; grid-template-rows: auto minmax(0, 1fr); color: #eaf1f3; background: #071923; }
+    .candidate-head { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 7px 14px; background: #0d2938; border-bottom: 3px solid var(--cyan); }
+    .candidate-head h1 { font-size: 1.15rem; line-height: 1.1; color: white; }
+    .candidate-surface { min-width: 0; min-height: 0; display: grid; grid-template-columns: minmax(280px, .42fr) minmax(0, 1fr); gap: 6px; padding: 6px; }
+    .candidate-surface .room-editor-input { min-height: 320px; }
+    .prototype-disclaimer { color: #9eb3bc; font: .64rem var(--mono); }
+
+    @media (max-width: 999px), (max-height: 547px) {
+      .room-service { grid-template-columns: minmax(160px, 1fr) auto; }
+      .room-title, .room-mode-group { display: none; }
+      .room-diagnostic { white-space: normal; }
+    }
+    @media (max-width: 599px) {
+      .room-service { grid-template-columns: minmax(0, 1fr) auto; }
+      .room-title { display: none; }
+      .room-return { min-width: 0; }
+      .room-return span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .room-mode-group { display: none; }
+      .room-diagnostic, .room-menu { display: none; }
+      .room-area-nav { min-height: 96px; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(2, 44px); gap: 4px; }
+      .room-area-button { min-height: 44px; padding: 4px 3px; font-size: .7rem; }
+      .room-stage { overflow: auto; }
+      .room-editor-input { min-height: 100%; }
+      .room-chat-panel .room-panel-body { display: block; overflow-y: auto; overflow-x: hidden; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; }
+      .room-chat-history { min-height: 96px; height: auto; overflow: visible; }
+      .candidate-head { align-items: flex-start; flex-direction: column; }
+      .candidate-surface { grid-template-columns: minmax(0, 1fr); overflow-y: auto; }
+      .candidate-surface .room-panel { min-height: 280px; }
+    }
+    body.room-prototype-active.room-keyboard-active { overflow: hidden; }
+    body.room-keyboard-active .prototype-bar { visibility: hidden; pointer-events: none; }
+    .room-root[data-keyboard="true"] {
+      position: fixed; z-index: 80; top: var(--room-fixed-top, 0); left: var(--room-fixed-left, 0);
+      width: var(--room-vv-width, 100vw); height: var(--room-vv-height, 100dvh); min-height: 0;
+      grid-template-rows: 28px 44px minmax(0, 1fr); overflow: hidden;
+    }
+    .room-root[data-keyboard="true"] .room-service { display: none; }
+    .room-root[data-keyboard="true"] .room-input-context { display: flex; }
+    .room-root[data-keyboard="true"] [data-room-compact-geometry],
+    .room-root[data-keyboard="true"] .room-current-step { display: none; }
+    .room-root[data-keyboard="true"] .room-area-nav {
+      min-height: 44px; height: 44px; grid-template-columns: repeat(6, minmax(44px, 1fr)); grid-template-rows: 44px; gap: 0;
+      padding: 0 var(--safe-right) 0 var(--safe-left);
+    }
+    .room-root[data-keyboard="true"] .room-area-button { min-width: 44px; min-height: 44px; height: 44px; padding: 0; border-radius: 0; font-size: 0; }
+    .room-root[data-keyboard="true"] .room-area-button .room-icon { font-size: .73rem; }
+    .room-root[data-keyboard="true"] .room-work-area { min-height: 0; overflow: hidden; }
+    .room-root[data-keyboard="true"] .room-stage {
+      min-height: 0; padding: 2px max(2px, var(--safe-right)) 2px max(2px, var(--safe-left)); overflow: hidden;
+    }
+    .room-root[data-keyboard="true"] .room-panel { min-height: 0; }
+    .room-root[data-keyboard="true"] .room-panel-head { display: none; }
+    .room-root[data-keyboard="true"] .room-chat-panel .room-panel-body {
+      min-height: 0; overflow: hidden; display: block;
+    }
+    .room-root[data-keyboard="true"] .room-chat-history,
+    .room-root[data-keyboard="true"] .room-audience,
+    .room-root[data-keyboard="true"] [data-room-incoming] { display: none; }
+    .room-root[data-keyboard="true"] .room-chat-composer {
+      position: static; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: 28px 44px;
+      gap: 4px 6px; padding: 3px max(4px, var(--safe-right)) calc(3px + var(--safe-bottom)) max(4px, var(--safe-left));
+    }
+    .room-root[data-keyboard="true"] .room-composer-step {
+      display: flex; grid-column: 1 / -1; min-height: 28px; height: 28px; margin: 0;
+    }
+    .room-root[data-keyboard="true"] .room-chat-input {
+      grid-column: 1; grid-row: 2; min-height: 44px; height: 44px; resize: none;
+    }
+    .room-root[data-keyboard="true"] .room-chat-actions {
+      grid-column: 2; grid-row: 2; align-self: stretch; flex-wrap: nowrap; margin: 0;
+    }
+    .room-root[data-keyboard="true"] .room-chat-actions .room-action { min-height: 44px; height: 44px; }
+    .room-root[data-keyboard="true"] .room-notes-input { min-height: 84px; resize: none; }
+
+    /*
+      Real iOS Safari's previous/next/Done accessory can cover the lower part
+      of the reported visual viewport in landscape. Use only the first 44 px:
+      six direct room actions and the focused composer share that top row, with
+      current/published step context integrated into the textarea cell. This is
+      keyed by CSS height + keyboard state, never by an orientation detector.
+    */
+    @media (min-width: 600px) and (max-height: 480px) {
+      .room-root[data-keyboard="true"] { grid-template-rows: 44px minmax(0, 1fr); overflow: visible; }
+      .room-root[data-keyboard="true"] .room-input-context { display: none; }
+      .room-root[data-keyboard="true"] .room-work-area,
+      .room-root[data-keyboard="true"] .room-stage,
+      .room-root[data-keyboard="true"] .room-chat-panel,
+      .room-root[data-keyboard="true"] .room-chat-panel .room-panel-body { overflow: visible; }
+      .room-root[data-keyboard="true"] .room-area-nav {
+        position: fixed; z-index: 83;
+        top: var(--room-fixed-top, 0px);
+        left: calc(var(--room-fixed-left, 0px) + var(--safe-left));
+        width: 264px; height: 44px; min-height: 44px;
+        grid-template-columns: repeat(6, 44px); grid-template-rows: 44px;
+        padding: 0;
+      }
+      .room-root[data-keyboard="true"] .room-chat-composer {
+        position: fixed; z-index: 84;
+        top: var(--room-fixed-top, 0px);
+        left: calc(var(--room-fixed-left, 0px) + var(--safe-left) + 264px);
+        width: calc(var(--room-vv-width, 100vw) - var(--safe-left) - var(--safe-right) - 264px);
+        height: 44px;
+        grid-template-columns: minmax(44px, 1fr) auto; grid-template-rows: 44px;
+        gap: 6px; padding: 0; border: 0;
+      }
+      .room-root[data-keyboard="true"] .room-composer-step {
+        z-index: 1; display: grid; grid-column: 1; grid-row: 1; align-self: start;
+        grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 3px;
+        min-height: 15px; height: 15px; margin: 0; padding: 0 5px;
+        border: 0; font-size: .48rem; line-height: 14px; pointer-events: none;
+      }
+      .room-root[data-keyboard="true"] .room-composer-step > span:first-child { display: none; }
+      .room-root[data-keyboard="true"] .room-chat-input {
+        grid-column: 1; grid-row: 1; min-width: 44px; min-height: 44px; height: 44px;
+        padding: 15px 8px 2px; line-height: 24px; overflow: hidden;
+      }
+      .room-root[data-keyboard="true"] .room-chat-actions {
+        grid-column: 2; grid-row: 1; min-width: 44px; height: 44px;
+      }
+    }
+
+    /*
+      Mobile Safari can expose less than 44 CSS px between expanded chrome and
+      its native input accessory. In that native short-height state the page,
+      not a nested panel, owns one bounded scroll runway. The shared dock stays
+      in sticky document flow while Safari collapses chrome; no visualViewport
+      offset is added to a fixed element.
+    */
+    body.room-prototype-active.room-keyboard-active.room-keyboard-landscape-runway {
+      min-height: calc(100dvh + var(--room-scroll-runway, 160px));
+      padding-left: 0; padding-right: 0;
+      overflow-x: clip; overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    body.room-keyboard-landscape-runway .prototype-bar { display: none; }
+    body.room-keyboard-landscape-runway #application {
+      min-height: calc(100dvh + var(--room-scroll-runway, 160px));
+    }
+    body.room-keyboard-landscape-runway .room-root[data-keyboard="true"] {
+      position: sticky; top: 0; left: 0;
+      width: var(--room-vv-width, 100vw); height: var(--room-vv-height, 100dvh);
+    }
+    body.room-keyboard-landscape-runway .room-root[data-keyboard="true"][data-chrome-stabilized="true"] {
+      position: absolute; top: var(--room-anchor-page-top, 0px);
+    }
+    body.room-keyboard-landscape-runway .room-root[data-keyboard="true"] .room-area-nav,
+    body.room-keyboard-landscape-runway .room-root[data-keyboard="true"] .room-chat-composer {
+      position: absolute; top: 0;
+    }
+
+    /* Keyboard-closed short view is pure CSS: no orientation detector is required. */
+    @media (max-height: 480px) {
+      .room-root[data-keyboard="false"] .room-service { display: none; }
+      .room-root[data-keyboard="false"] .room-chat-panel .room-panel-head { display: none; }
+      .room-root[data-keyboard="false"] .room-chat-panel .room-panel-body {
+        min-height: 0; display: grid; grid-template-rows: 64px auto; overflow: hidden;
+      }
+      .room-root[data-keyboard="false"] .room-chat-history {
+        min-height: 48px; height: 64px; max-height: 64px; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch;
+      }
+      .room-root[data-keyboard="false"] .room-chat-composer {
+        display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: 28px 44px;
+        gap: 4px 6px; padding: 3px max(4px, var(--safe-right)) calc(3px + var(--safe-bottom)) max(4px, var(--safe-left));
+      }
+      .room-root[data-keyboard="false"] .room-composer-step {
+        display: flex; grid-column: 1 / -1; min-height: 28px; height: 28px; margin: 0;
+      }
+      .room-root[data-keyboard="false"] .room-audience { display: none; }
+      .room-root[data-keyboard="false"] .room-chat-input {
+        grid-column: 1; grid-row: 2; min-height: 44px; height: 44px; resize: none;
+      }
+      .room-root[data-keyboard="false"] .room-chat-actions {
+        grid-column: 2; grid-row: 2; align-self: stretch; flex-wrap: nowrap; margin: 0;
+      }
+      .room-root[data-keyboard="false"] .room-chat-actions .room-action { min-height: 44px; height: 44px; }
+    }
+
+    @media (max-width: 900px) {
+      .prototype-bar { grid-template-columns: 1fr 1fr; align-items: end; }
+      .prototype-mark { grid-column: 1 / -1; }
+      .control select { max-width: none; width: 100%; }
+      .app-shell { grid-template-columns: 238px minmax(0, 1fr); }
+      .sidebar { width: 238px; }
+      .span-8, .span-6, .span-4 { grid-column: span 12; }
+      .onboarding { grid-template-columns: 1fr; }
+      .profile-layout { grid-template-columns: 1fr; }
+      .invite-shell { grid-template-columns: 1fr; }
+      .invite-art { min-height: 290px; }
+      .route-row { grid-template-columns: 1fr auto; }
+      .route-row span { grid-column: 1 / -1; grid-row: 2; }
+      .filter-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .filter-bar .button { width: 100%; }
+    }
+
+    @media (max-width: 700px) {
+      .prototype-bar { position: relative; min-height: 0; padding: 10px 12px; grid-template-columns: 1fr 1fr; }
+      .prototype-mark span { display: none; }
+      .long-toggle { grid-column: 1 / -1; }
+      .app-shell { display: block; min-height: auto; }
+      .mobile-top { position: sticky; top: 0; z-index: 20; min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 12px; color: white; background: var(--nav); border-bottom: 3px solid var(--cyan); }
+      .mobile-menu-button { min-width: 48px; min-height: 44px; color: white; background: transparent; border: 1px solid #698090; font-size: 1.3rem; }
+      .mobile-context { min-width: 0; text-align: right; }
+      .mobile-context small, .mobile-context strong { display: block; overflow-wrap: anywhere; }
+      .mobile-context small { font: .62rem var(--mono); color: var(--cyan); text-transform: uppercase; }
+      .sidebar { position: fixed; z-index: 50; inset: 0 auto 0 0; width: min(310px, calc(100vw - 42px)); height: 100dvh; padding-left: max(14px, var(--safe-left)); padding-right: max(14px, var(--safe-right)); transform: translateX(-110%); transition: transform .2s ease; box-shadow: 18px 0 45px rgba(0,0,0,.35); }
+      .sidebar[data-open="true"] { transform: none; }
+      .scrim { position: fixed; z-index: 45; inset: 0; display: block; border: 0; background: rgba(1, 14, 22, .68); opacity: 0; pointer-events: none; transition: opacity .2s; }
+      .scrim[data-open="true"] { opacity: 1; pointer-events: auto; }
+      .page { padding: 26px 14px calc(60px + var(--safe-bottom)); }
+      .page-head { min-height: 0; display: grid; gap: 20px; }
+      .head-actions { justify-content: stretch; }
+      .head-actions .button { width: 100%; }
+      .grid { gap: 12px; }
+      .card { padding: 18px 16px; }
+      .invite-shell { min-height: auto; }
+      .invite-art { min-height: 220px; padding: 28px 18px; }
+      .invite-art .giant { font-size: 5rem; }
+      .invite-content { padding: 30px 16px calc(50px + var(--safe-bottom)); }
+      .fact { grid-template-columns: 1fr; gap: 3px; }
+      .route-row { grid-template-columns: 1fr; padding: 12px; }
+      .route-row span { grid-column: auto; grid-row: auto; }
+      .route-row .button { width: 100%; }
+      .form-actions { display: grid; }
+      .form-actions .button { width: 100%; }
+      .filter-bar, .field-grid { grid-template-columns: 1fr; }
+      .collection-row, .track-head, .vacancy-row { grid-template-columns: 1fr; }
+      .row-actions { min-width: 0; justify-content: stretch; }
+      .row-actions .button { width: 100%; }
+      .tabs { width: 100%; }
+      .tab { flex: 1; justify-content: center; }
+      .choice-row { grid-template-columns: 28px minmax(0,1fr); }
+      .choice-row .status-pill { grid-column: 2; justify-self: start; }
+      .task-row { grid-template-columns: 32px minmax(0,1fr); }
+      .task-row > :last-child { grid-column: 2; justify-self: start; }
+      dialog { margin: auto calc(8px + var(--safe-right)) 8px calc(8px + var(--safe-left)); width: calc(100% - 16px - var(--safe-left) - var(--safe-right)); max-height: calc(100dvh - 8px); }
+      .dialog-body { max-height: calc(100dvh - 96px); padding: 18px 14px; padding-bottom: calc(18px + var(--safe-bottom)); }
+    }
+
+    @media (max-width: 420px) {
+      .prototype-bar { grid-template-columns: minmax(0, 1fr); }
+      .prototype-mark, .long-toggle { grid-column: auto; }
+      .control { min-width: 0; }
+    }
+
+    @media (max-height: 480px) {
+      .prototype-bar { min-height: 54px; }
+      .prototype-mark span, .control label, .long-toggle { display: none; }
+      .prototype-bar { grid-template-columns: minmax(150px, 1fr) minmax(120px, .6fr) minmax(120px, .6fr); align-items: center; }
+      .control { gap: 0; }
+      .app-shell { min-height: calc(100dvh - 54px); }
+      .sidebar { height: calc(100dvh - 54px); }
+      .brand { display: none; }
+      .nav-heading { margin-top: 12px; }
+      .page { padding-top: 20px; }
+      .page-head { min-height: auto; }
+      dialog { max-height: calc(100dvh - 8px); }
+    }
+
+    .room-prototype-active .prototype-bar {
+      min-height: 52px; height: 52px; grid-template-columns: minmax(88px, 1fr) minmax(96px, .75fr) minmax(96px, .75fr);
+      gap: 6px; padding: 4px 8px; align-items: center;
+    }
+    .room-prototype-active .prototype-mark { grid-column: auto; }
+    .room-prototype-active .prototype-mark strong { font-size: .62rem; letter-spacing: .06em; }
+    .room-prototype-active .prototype-mark span, .room-prototype-active .control label, .room-prototype-active .long-toggle { display: none; }
+    .room-prototype-active .control { min-width: 0; gap: 0; }
+    .room-prototype-active .control select { width: 100%; min-height: 44px; max-width: none; padding-left: 7px; font-size: .75rem; }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">К основному содержимому</a>
+
+  <header class="prototype-bar" aria-label="Панель сценариев прототипа">
+    <div class="prototype-mark">
+      <strong>ПРОТОТИП · OPENSPEC 1.6a–1.6f</strong>
+      <span>Не production UI и не доказательство серверной авторизации</span>
+    </div>
+    <div class="control">
+      <label for="actorSelect">Сценарий роли</label>
+      <select id="actorSelect" aria-label="Выбрать роль для просмотра прототипа">
+        <option value="personal">Личный пользователь</option>
+        <option value="member">Участник Atlas</option>
+        <option value="author">Автор командной задачи</option>
+        <option value="admin">Администратор Atlas</option>
+        <option value="owner">Владелец Atlas</option>
+        <option value="roomOwner">Владелец комнаты</option>
+        <option value="interviewer">Интервьюер</option>
+        <option value="hiring">Нанимающий</option>
+        <option value="candidate">Кандидат</option>
+        <option value="guestManager">Гостевой менеджер</option>
+        <option value="revokedStaff">Сотрудник с отозванным доступом</option>
+        <option value="invited">Приглашённый аккаунт</option>
+        <option value="anonymous">Без входа</option>
+      </select>
+    </div>
+    <div class="control">
+      <label for="stateSelect">Состояние данных</label>
+      <select id="stateSelect" aria-label="Выбрать состояние данных">
+        <option value="success">Готово</option>
+        <option value="loading">Загрузка</option>
+        <option value="empty">Пусто</option>
+        <option value="filterEmpty">Фильтр: пусто</option>
+        <option value="error">Ошибка</option>
+        <option value="pending">Отправка ожидает ACK</option>
+        <option value="reconnecting">Переподключение</option>
+        <option value="conflict">Конфликт 409</option>
+        <option value="frozen">Интервью приостановлено</option>
+        <option value="archived">Архив</option>
+        <option value="revoked">Доступ отозван</option>
+      </select>
+    </div>
+    <label class="long-toggle">
+      <input id="longToggle" type="checkbox">
+      <span class="toggle-label">Длинный русский текст</span>
+    </label>
+  </header>
+
+  <div id="application"></div>
+
+  <dialog id="workspaceDialog" aria-labelledby="workspaceDialogTitle">
+    <div class="dialog-head">
+      <div><p class="eyebrow">Рабочая область</p><h2 id="workspaceDialogTitle">Выберите пространство</h2></div>
+      <button class="dialog-close" type="button" data-close-dialog aria-label="Закрыть выбор пространства">×</button>
+    </div>
+    <div class="dialog-body" id="workspaceChoices"></div>
+  </dialog>
+
+  <dialog id="createTeamDialog" aria-labelledby="createTeamTitle">
+    <div class="dialog-head">
+      <div><p class="eyebrow">Новая команда</p><h2 id="createTeamTitle">Назовите рабочее пространство</h2></div>
+      <button class="dialog-close" type="button" data-close-dialog aria-label="Закрыть создание команды">×</button>
+    </div>
+    <form class="dialog-body" id="createTeamForm" novalidate>
+      <p>Треки и вакансии можно настроить позже. Вы станете единственным владельцем новой команды.</p>
+      <div class="field">
+        <label for="teamName">Название команды</label>
+        <input id="teamName" name="teamName" minlength="1" maxlength="100" autocomplete="organization" aria-describedby="teamNameHint teamNameError">
+        <small id="teamNameHint">От 1 до 100 символов после пробелов по краям.</small>
+        <span class="field-error" id="teamNameError" aria-live="polite"></span>
+      </div>
+      <div class="form-actions">
+        <button class="button ghost" type="button" data-close-dialog>Отмена</button>
+        <button class="button" type="submit">Создать команду</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="unsavedDialog" aria-labelledby="unsavedTitle">
+    <div class="dialog-head">
+      <div><p class="eyebrow">Несохранённый черновик</p><h2 id="unsavedTitle">Сменить пространство?</h2></div>
+      <button class="dialog-close" type="button" data-close-dialog aria-label="Закрыть предупреждение">×</button>
+    </div>
+    <div class="dialog-body">
+      <p>Черновик останется только в этой вкладке прототипа. Переход не сохранит его в другую команду и ничего не отправит автоматически.</p>
+      <div class="form-actions">
+        <button class="button ghost" type="button" data-stay-draft>Остаться</button>
+        <button class="button danger" type="button" data-leave-draft>Уйти без сохранения</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="mobile-input-fallback.js"></script>
+  <script>
+    (() => {
+      const app = document.querySelector('#application');
+      const actorSelect = document.querySelector('#actorSelect');
+      const stateSelect = document.querySelector('#stateSelect');
+      const longToggle = document.querySelector('#longToggle');
+      const workspaceDialog = document.querySelector('#workspaceDialog');
+      const createTeamDialog = document.querySelector('#createTeamDialog');
+      const unsavedDialog = document.querySelector('#unsavedDialog');
+      const workspaceChoices = document.querySelector('#workspaceChoices');
+      const toast = document.querySelector('#toast');
+      let lastDialogTrigger = null;
+      const draftStore = {
+        taskTitle: 'Проверка устойчивого порядка',
+        taskCondition: 'Опишите решение и оцените сложность по времени и памяти.',
+        interviewTitle: '',
+        candidateName: '',
+        interviewDirty: false,
+        taskDirty: false
+      };
+      const initialRoomCode = `function stableOrder(items) {
+  return [...items].sort((a, b) => a.rank - b.rank);
+}
+
+const result = stableOrder(queue);
+// Попробуйте сохранить порядок элементов с одинаковым rank.`;
+      const roomStepMeta = {
+        'step-1': { index: '01', name: 'Разминка' },
+        'step-2': { index: '02', name: 'Устойчивый порядок' },
+        'step-3': { index: '03', name: 'API поиска' }
+      };
+      const roomStore = {
+        sessionId: 'prototype-room-session-int-204', editorInstanceId: 'editor-instance-int-204', mountCount: 0,
+        activePanel: 'condition', sidePanel: 'condition', leftPanel: 'steps', rightPanel: 'chat',
+        manualMode: 'auto', showBoth: false, selectedStep: 'step-2', code: initialRoomCode,
+        editorSelectionStart: 24, editorSelectionEnd: 35, editorScrollTop: 0,
+        notesDraft: 'Уточнить устойчивость сортировки и попросить оценить память.', chatDraft: 'Посмотрим на граничный случай с одинаковым rank…',
+        chatScrollTop: 18, activityScrollTop: 22, unread: 2, readAtBottom: false, pending: false,
+        confirmedMessageIds: new Set(['msg-1', 'msg-2', 'msg-3']), switchCount: 0, inputMode: false
+      };
+      let roomResizeHandler = null;
+      let roomDocumentScrollHandler = null;
+      let roomChromeGestureArmHandler = null;
+      let roomViewportOverride = null;
+      let roomChromeSettleTimer = 0;
+      let roomChromeStabilized = false;
+      let roomChromeGestureCount = 0;
+      let roomChromeGestureArmed = false;
+      let lastRoomTrigger = null;
+
+      const actorLabels = {
+        personal: 'Личное пространство', member: 'Участник', author: 'Автор задачи', admin: 'Администратор',
+        owner: 'Владелец команды', roomOwner: 'Владелец комнаты', interviewer: 'Интервьюер', hiring: 'Нанимающий',
+        candidate: 'Кандидат', guestManager: 'Гостевой менеджер', revokedStaff: 'Доступ отозван',
+        invited: 'Приглашённый аккаунт', anonymous: 'Без входа'
+      };
+      const stateLabels = { success: 'Готово', loading: 'Загрузка', empty: 'Пусто', filterEmpty: 'По фильтру пусто', error: 'Ошибка', pending: 'Ожидает ACK', reconnecting: 'Переподключение', conflict: 'Конфликт 409', frozen: 'Приостановлено', archived: 'Архив', revoked: 'Доступ отозван' };
+      const legacyMap = {
+        '/dashboard': '/personal/interviews',
+        '/dashboard/rooms': '/personal/interviews/new',
+        '/dashboard/manage': '/personal/interviews',
+        '/dashboard/tasks': '/personal/library',
+        '/dashboard/presets': '/personal/library?tab=sets',
+        '/dashboard/hr': '/personal/candidates',
+        '/dashboard/admin': '/service/admin',
+        '/dashboard/agents': '/service/agents'
+      };
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' }[char]));
+      }
+
+      function routeInfo() {
+        const raw = location.hash.slice(1) || '/personal/interviews';
+        const [path, query = ''] = raw.split('?');
+        return { path: path.startsWith('/') ? path : `/${path}`, params: new URLSearchParams(query) };
+      }
+
+      function currentScenario() {
+        const route = routeInfo();
+        return {
+          route,
+          actor: route.params.get('actor') || actorSelect.value || 'personal',
+          state: route.params.get('state') || stateSelect.value || 'success',
+          long: route.params.get('long') === '1' || longToggle.checked
+        };
+      }
+
+      function setScenarioParam(name, value) {
+        const { path, params } = routeInfo();
+        params.set(name, value);
+        location.hash = `${path}?${params.toString()}`;
+      }
+
+      function link(path, scenario = currentScenario(), extra = {}) {
+        const params = new URLSearchParams();
+        params.set('actor', extra.actor || scenario.actor);
+        params.set('state', extra.state || scenario.state);
+        if (extra.long ?? scenario.long) params.set('long', '1');
+        Object.entries(extra).forEach(([key, value]) => {
+          if (!['actor', 'state', 'long'].includes(key) && value !== undefined) params.set(key, value);
+        });
+        return `#${path}?${params.toString()}`;
+      }
+
+      function showToast(message) {
+        toast.textContent = message;
+        toast.dataset.open = 'true';
+        window.setTimeout(() => { toast.dataset.open = 'false'; }, 2800);
+      }
+
+      function displayName(long) {
+        return long
+          ? 'Александра Константинопольская-Рождественская'
+          : 'Анна Крылова';
+      }
+
+      function teamName(long, id = 'atlas') {
+        if (id === 'orbit') return long ? 'Orbit · Исследовательские платформы распределённых вычислений' : 'Orbit';
+        if (id === 'nova') return long ? 'Отдел перспективных интерфейсных платформ и инструментов совместной разработки' : 'Новая команда';
+        return long ? 'Atlas · Команда интерфейсных платформ для международных продуктов' : 'Atlas';
+      }
+
+      function roleClass(actor) {
+        if (actor === 'owner' || actor === 'roomOwner') return 'owner';
+        if (actor === 'admin') return 'manager';
+        return 'member';
+      }
+
+      function navItems(context, actor) {
+        if (context === 'personal') {
+          return [
+            ['/personal/interviews', 'ИН', 'Интервью'],
+            ['/personal/library', 'БЗ', 'Библиотека задач'],
+            ['/personal/candidates', 'КА', 'Кандидаты']
+          ];
+        }
+        const items = [
+          ['/teams/atlas/interviews', 'ИН', 'Интервью']
+        ];
+        if (actor === 'hiring') items.push(['/teams/atlas/candidates', 'КА', 'Кандидаты']);
+        items.push(
+          ['/teams/atlas/library', 'БЗ', 'Библиотека задач'],
+          ['/teams/atlas/tracks', 'ТВ', 'Треки и вакансии'],
+          ['/teams/atlas/members', 'УЧ', 'Участники']
+        );
+        if (actor === 'admin' || actor === 'owner') items.push(['/teams/atlas/settings', 'НК', 'Настройки команды']);
+        return items;
+      }
+
+      function shell(content, scenario, options = {}) {
+        const teamMatch = scenario.route.path.match(/^\/teams\/([^/]+)/);
+        const context = options.context || (teamMatch ? 'team' : 'personal');
+        const selectedName = context === 'team' ? teamName(scenario.long, teamMatch?.[1] || 'atlas') : 'Личное пространство';
+        const actor = scenario.actor;
+        const nav = navItems(context, actor).map(([path, icon, label]) => {
+          const current = scenario.route.path === path || scenario.route.path.startsWith(`${path}/`);
+          return `<li><a class="nav-link" href="${link(path, scenario)}" ${current ? 'aria-current="page"' : ''}><span class="nav-icon" aria-hidden="true">${icon}</span><span>${label}</span></a></li>`;
+        }).join('');
+        const role = context === 'team' ? actorLabels[actor] : 'Личный аккаунт';
+        return `
+          <div class="app-shell" data-surface="workspace-shell">
+            <div class="mobile-top">
+              <button class="mobile-menu-button" type="button" data-mobile-menu aria-label="Открыть рабочую навигацию" aria-expanded="false">☰</button>
+              <div class="mobile-context"><small>${context === 'team' ? 'Команда' : 'Пространство'}</small><strong>${escapeHtml(selectedName)}</strong></div>
+            </div>
+            <button class="scrim" type="button" data-scrim aria-label="Закрыть рабочую навигацию"></button>
+            <aside class="sidebar" id="workspaceNav" aria-label="Рабочая навигация">
+              <div class="brand"><span class="brand-sign" aria-hidden="true">io</span><div><strong>Interview Online</strong><span>Рабочая доска</span></div></div>
+              <button class="workspace-switcher" type="button" data-workspace-switcher aria-haspopup="dialog">
+                <span><small>${context === 'team' ? 'Команда' : 'Пространство'}</small><strong>${escapeHtml(selectedName)}</strong></span><span aria-hidden="true">↕</span>
+              </button>
+              <p class="nav-heading">Работа</p>
+              <nav aria-label="Разделы выбранного пространства"><ul class="nav-list">${nav}</ul></nav>
+              <div class="account-block">
+                <a class="nav-link" href="${link('/prototype/routes', scenario)}"><span class="nav-icon" aria-hidden="true">↗</span><span>Старые входы</span></a>
+                <a class="account-button" href="${link('/profile', scenario, { fromTeam: context === 'team' ? '1' : '0' })}">
+                  <span class="nav-icon" aria-hidden="true">АК</span>
+                  <span class="account-meta"><strong>${escapeHtml(displayName(scenario.long))}</strong><small>Профиль аккаунта</small></span>
+                  <span class="role-chip">${escapeHtml(role)}</span>
+                </a>
+              </div>
+            </aside>
+            <main class="page" id="main" tabindex="-1"><div class="page-inner">${content}<p class="prototype-footnote">Интерактивный прототип 1.6a–1.6f · локальные действия лишь переключают демонстрационные состояния · авторизация, realtime и сохранение сервером не моделируются.</p></div></main>
+          </div>`;
+      }
+
+      function statePanel(state, context, scenario) {
+        if (state === 'loading') {
+          return `<section class="state-panel" aria-busy="true" aria-label="Загрузка ${context}"><div class="skeleton" aria-hidden="true"><span></span><span></span><span></span><span></span></div><span class="sr-only">Загружаем ${context}</span></section>`;
+        }
+        if (state === 'error') {
+          return `<section class="state-panel error" data-state="error"><div><div class="state-symbol" aria-hidden="true">!</div><h2>Не удалось обновить данные</h2><p>Показанные ранее сведения могут быть устаревшими. Это ошибка сети, а не пустой список.</p><button class="button" type="button" data-retry>Повторить</button></div></section>`;
+        }
+        if (state === 'revoked') {
+          return `<section class="state-panel revoked" data-state="revoked"><div><div class="state-symbol" aria-hidden="true">×</div><h2>Доступ к Atlas отозван</h2><p>Защищённые сведения удалены с экрана. Личное пространство и другие команды по-прежнему доступны.</p><a class="button" href="${link('/personal/interviews', scenario, { actor: 'personal', state: 'success' })}">В личное пространство</a></div></section>`;
+        }
+        return '';
+      }
+
+      function interviewRole(actor) {
+        return ({ roomOwner: 'Владелец комнаты', interviewer: 'Интервьюер', hiring: 'Нанимающий' })[actor] || 'Нет назначения';
+      }
+
+      function interviewFilters() {
+        return `<section class="filter-bar" aria-label="Фильтры интервью"><div class="field"><label for="interviewSearch">Поиск</label><input id="interviewSearch" placeholder="Название или кандидат"></div><div class="field"><label for="trackFilter">Трек</label><select id="trackFilter"><option>Все треки</option><option>Frontend</option><option>Без трека</option></select></div><div class="field"><label for="vacancyFilter">Вакансия</label><select id="vacancyFilter"><option>Все вакансии</option><option>Middle React</option><option>Без вакансии</option></select></div><div class="field"><label for="statusFilter">Состояние</label><select id="statusFilter"><option>Активные</option><option>Завершено</option><option>Архив</option></select></div><button class="button ghost" type="button" data-demo-action>Обновить</button></section>`;
+      }
+
+      function interviewRows(scenario, isTeam, archivedOnly = false) {
+        if (archivedOnly) return `<div class="collection"><article class="collection-row archived"><div><div class="context-line"><span class="status-pill gray">В архиве</span><span class="status-pill">Только чтение</span></div><h3>Frontend · стажировка</h3><p>Кандидат: Не указан · Frontend / Без вакансии · Без даты</p><div class="meta-row"><span><strong>Ваша роль:</strong> ${escapeHtml(interviewRole(scenario.actor))}</span><span><strong>Завершено:</strong> 2 сентября 2026</span></div></div><div class="row-actions"><a class="button ghost small" href="${link('/teams/atlas/interviews/int-archive', scenario)}">Посмотреть результат</a></div></article></div>`;
+        const role = isTeam ? interviewRole(scenario.actor) : 'Владелец личной комнаты';
+        return `<div class="collection" aria-label="Доступные интервью">
+          <article class="collection-row"><div><div class="context-line"><span class="status-pill orange">Запланировано</span><span class="status-pill">Frontend / Middle React</span></div><h3>${scenario.long ? 'Системный дизайн многоарендной платформы совместных технических интервью' : 'Frontend · Middle'}</h3><p>Кандидат: Денис Волков · 10 сентября, 15:30 МСК</p><div class="meta-row"><span><strong>Ваша роль:</strong> ${escapeHtml(role)}</span><span><strong>Присутствуют:</strong> 0</span></div></div><div class="row-actions"><a class="button small" href="${link(isTeam ? '/teams/atlas/interviews/int-204' : '/personal/interviews/int-204', scenario)}">Открыть подготовку</a><button class="button ghost small" type="button" data-demo-action>Меню</button></div></article>
+          <article class="collection-row"><div><div class="context-line"><span class="status-pill">Не завершено</span><span class="status-pill gray">Без трека · без вакансии</span></div><h3>Алгоритмы и структуры данных</h3><p>Кандидат: Не указан · Без даты</p><div class="meta-row"><span><strong>Ваша роль:</strong> ${escapeHtml(role)}</span></div></div><div class="row-actions"><button class="button small" type="button" data-demo-action>Войти в комнату</button></div></article>
+          <article class="collection-row"><div><div class="context-line"><span class="status-pill">Завершено</span></div><h3>React · Senior</h3><p>Кандидат: Ирина Смирнова · Frontend / Senior Platform</p><div class="meta-row"><span><strong>Ваша роль:</strong> ${escapeHtml(role)}</span></div></div><div class="row-actions"><button class="button ghost small" type="button" data-demo-action>Посмотреть результат</button></div></article>
+          <article class="collection-row frozen"><div><div class="context-line"><span class="status-pill red">Приостановлено</span></div><h3>Интервью требует нового владельца</h3><p>Live-вход закрыт. Доступна только разрешённая история; время расписания не меняет статус.</p></div><div class="row-actions"><button class="button ghost small" type="button" data-demo-action>Разрешённый просмотр</button></div></article>
+          ${!isTeam ? `<article class="collection-row"><div><span class="status-pill">Личное участие</span><h3>Backend · гостевой кандидат</h3><p>Вы — кандидат. Внутренний состав и manager actions скрыты.</p></div><div class="row-actions"><button class="button ghost small" type="button" data-demo-action>Войти как кандидат</button></div></article>` : ''}
+        </div>`;
+      }
+
+      function interviewsView(scenario, context) {
+        const isTeam = context === 'team';
+        const workspace = isTeam ? teamName(scenario.long) : 'Личное пространство';
+        const path = isTeam ? '/teams/atlas/interviews/new' : '/personal/interviews/new';
+        const hasRoomGrant = !isTeam || ['roomOwner', 'interviewer', 'hiring'].includes(scenario.actor);
+        let body = statePanel(scenario.state, 'списка интервью', scenario);
+        if (scenario.state === 'empty' || (scenario.state === 'success' && !hasRoomGrant)) {
+          body = `${isTeam && scenario.state === 'empty' ? `<section class="onboarding"><div><h2>Atlas готов к работе</h2><p>Сначала пригласите коллег или опишите направление найма — порядок не обязателен.</p></div><button class="button" type="button" data-invite-demo>Пригласить коллег</button><a class="button" href="${link('/teams/atlas/tracks', scenario, { state: 'empty' })}">Создать трек</a></section>` : ''}<section class="state-panel"><div><div class="state-symbol" aria-hidden="true">01</div><h2>${isTeam ? 'У вас нет доступных интервью' : 'Интервью пока нет'}</h2><p>${isTeam ? 'Это не означает, что вся команда не проводит встречи. Список зависит от ваших отдельных назначений.' : 'Создайте первую комнату или вернитесь к личной встрече по прямой ссылке.'}</p><a class="button" href="${link(path, scenario, { state: 'success' })}">+ Создать интервью</a></div></section>`;
+        }
+        if (scenario.state === 'filterEmpty') body = `<section class="state-panel"><div><div class="state-symbol">0</div><h2>По вашим фильтрам ничего не найдено</h2><p>Доступные интервью не изменились. Сбросьте фильтры, чтобы вернуть список.</p><button class="button" type="button" data-set-state="success">Сбросить фильтры</button></div></section>`;
+        if (scenario.state === 'conflict') body = `<div class="notice error" role="alert"><span>↻</span><div><strong>Список изменился в другой вкладке</strong><p>Локальные фильтры сохранены. Обновите данные перед действием со строкой.</p></div></div>${hasRoomGrant ? interviewRows(scenario, isTeam) : ''}`;
+        if (scenario.state === 'archived') body = interviewRows(scenario, isTeam, true);
+        if (scenario.state === 'success' && hasRoomGrant) body = interviewRows(scenario, isTeam);
+        const legacy = scenario.route.params.get('legacy');
+        const legacyNotice = legacy ? `<div class="notice success" role="status"><span aria-hidden="true">↗</span><div><strong>Открыто со старого адреса ${escapeHtml(legacy)}</strong><p>Переход восстановил личный контекст и не создал комнату автоматически.</p></div></div>` : '';
+        const filters = !['loading', 'revoked'].includes(scenario.state) ? interviewFilters() : '';
+        return shell(`${legacyNotice}<header class="page-head"><div><p class="eyebrow">${isTeam ? 'Команда' : 'Аккаунт'} · ${escapeHtml(workspace)}</p><h1>Интервью</h1><p class="lede">Подготовка, проведение и результаты — в одном списке. Архив отделён, а расписание не изображается фактом начала.</p></div><div class="head-actions"><a class="button" href="${link(path, scenario, { state: 'success' })}">+ Создать интервью</a></div></header><div class="context-line"><span class="context-tag ${roleClass(scenario.actor)}">${escapeHtml(isTeam ? actorLabels[scenario.actor] : 'Личное пространство')}</span><span class="context-tag">Состояние: ${escapeHtml(stateLabels[scenario.state])}</span></div>${filters}${body}`, scenario, { context });
+      }
+
+      function createInterviewView(scenario, context) {
+        const isTeam = context === 'team';
+        const legacy = scenario.route.params.get('legacy');
+        if (scenario.state === 'loading' || scenario.state === 'revoked') return shell(`<header class="page-head"><div><p class="eyebrow">${isTeam ? escapeHtml(teamName(scenario.long)) : 'Личное пространство'}</p><h1>Новое интервью</h1></div></header>${statePanel(scenario.state, 'формы интервью', scenario)}`, scenario, { context });
+        const programme = scenario.route.params.get('programme') || (isTeam ? 'published' : 'none');
+        const blocked = programme === 'draft' || programme === 'archived';
+        const conflictNotice = scenario.state === 'conflict' ? `<div class="notice error" role="alert"><span>409</span><div><strong>Данные изменились после открытия формы</strong><p>Локальный черновик сохранён. Участник Вера больше не активен или версия задачи изменилась — загрузите актуальные данные и сравните выбор.</p></div></div>` : '';
+        const errorNotice = scenario.state === 'error' ? `<div class="notice error" role="alert"><span>!</span><div><strong>Ответ не получен</strong><p>Черновик сохранён. Сначала проверьте, было ли интервью создано, затем безопасно повторите.</p></div></div>` : '';
+        const programmeBlock = programme === 'published'
+          ? `<div class="programme-summary"><span class="stamp">v3</span><div><strong>Frontend / Middle React · опубликованная программа</strong><p>Обязательная основа закрепится при создании. Дополнительные задачи остаются отдельными.</p></div></div><ol class="task-stack"><li class="task-row mandatory"><span class="task-index">01</span><div><strong>Архитектура состояния интерфейса</strong><small>Из программы · версия 3 · task v5</small></div><span class="locked">Обязательно</span></li><li class="task-row mandatory"><span class="task-index">02</span><div><strong>Оптимизация длинного списка</strong><small>Из программы · версия 3 · task v2</small></div><span class="locked">Обязательно</span></li><li class="task-row"><span class="task-index">＋</span><div><strong>Проектирование API поиска</strong><small>Дополнительная · task v4</small></div><button class="button ghost small" type="button" data-demo-action>Убрать</button></li></ol>`
+          : programme === 'none'
+            ? `<div class="programme-summary"><span class="stamp">—</span><div><strong>Программа не настроена</strong><p>Свободное интервью: выберите задачи или набор вручную. Это допустимо только для процесса без начатой programme configuration.</p></div></div><div class="card-actions"><button class="button ghost small" type="button" data-demo-action>Выбрать задачи</button><button class="button ghost small" type="button" data-demo-action>Применить набор</button></div>`
+            : `<div class="programme-summary blocked"><span class="stamp">!</span><div><strong>${programme === 'draft' ? 'Есть черновик, но нет опубликованной версии' : 'Программа процесса в архиве'}</strong><p>Создание заблокировано. Пустая свободная программа не подставляется автоматически; редактор процесса должен завершить настройку.</p><a class="inline-link" href="${link('/teams/atlas/tracks/frontend', scenario, { programme })}">К программе процесса</a></div></div>`;
+        return shell(`${legacy ? `<div class="notice success"><span>↗</span><div><strong>Старый вход: ${escapeHtml(legacy)}</strong><p>Форма только открыта. Комната ещё не создана.</p></div></div>` : ''}<header class="page-head"><div><p class="eyebrow">${isTeam ? escapeHtml(teamName(scenario.long)) : 'Личное пространство'} · Интервью</p><h1>Новое интервью</h1><p class="lede">Одна форма, пять последовательных блоков. Выбор до submit ничего не назначает.</p></div></header>${conflictNotice}${errorNotice}<form class="form-stack" data-interview-form>
+          <section class="form-section"><span class="section-number">01</span><h2>Контекст</h2><p class="section-intro">Команда задана маршрутом. Вакансия всегда принадлежит выбранному треку.</p><div class="field-grid"><div class="field"><label for="formWorkspace">Пространство</label><input id="formWorkspace" value="${isTeam ? escapeHtml(teamName(scenario.long)) : 'Личное пространство'}" readonly></div><div class="field"><label for="formTitle">Название интервью</label><input id="formTitle" maxlength="200" value="${escapeHtml(draftStore.interviewTitle)}" placeholder="Frontend · Middle"></div><div class="field"><label for="formTrack">Трек</label><select id="formTrack"><option value="frontend">Frontend</option><option value="backend">Backend</option><option value="none">Без трека</option></select></div><div class="field"><label for="formVacancy">Вакансия</label><select id="formVacancy"><option value="middle">Middle React</option><option value="senior">Senior Platform</option><option value="none">Без вакансии</option></select></div></div><div id="contextChangeMessage" class="field-error" aria-live="polite"></div></section>
+          <section class="form-section"><span class="section-number">02</span><h2>Кандидат и время</h2><p class="section-intro">Имя и время необязательны. Часовой пояс не скрыт.</p><div class="field-grid"><div class="field"><label for="formCandidate">Имя кандидата</label><input id="formCandidate" maxlength="200" value="${escapeHtml(draftStore.candidateName)}" placeholder="Можно оставить пустым"></div><div class="field"><label for="formPosition">Позиция текстом</label><input id="formPosition" maxlength="200" value="Frontend developer"></div><div class="field"><label for="formTime">Дата и время · МСК · Europe/Moscow</label><input id="formTime" type="datetime-local" value="2026-09-10T15:30"></div></div></section>
+          <section class="form-section"><span class="section-number">03</span><h2>Участники</h2><p class="section-intro">Поиск только среди действующего состава Atlas. Непринятые ссылки не изображаются сотрудниками.</p><div class="choice-list"><div class="choice-row"><input id="personOwner" type="checkbox" checked disabled><label for="personOwner"><strong>${escapeHtml(displayName(scenario.long))}</strong><small>Владелец комнаты · всегда один</small></label><span class="status-pill orange">OWNER</span></div><div class="choice-row"><input id="personVera" type="checkbox" checked><label for="personVera"><strong>Вера Ким · vr-021</strong><small>Интервьюер</small></label><span class="status-pill">ACTIVE</span></div><div class="choice-row"><input id="personBoris" type="checkbox"><label for="personBoris"><strong>Борис Лебедев · br-882</strong><small>Нанимающий · isHr не требуется</small></label><span class="status-pill">ACTIVE</span></div></div><div class="notice"><span>↗</span><div><strong>2 приглашения ещё не приняты</strong><p>Они отображаются как ссылки со статусом без предполагаемых имён и недоступны для выбора.</p></div></div></section>
+          <section class="form-section"><span class="section-number">04</span><h2>Программа и задачи</h2><p class="section-intro">Resolver: <strong>${escapeHtml(programme.toUpperCase())}</strong>. Обязательные позиции нельзя удалить, переставить или редактировать.</p>${programmeBlock}<div class="scenario-strip"><a class="button ghost small" href="${link(scenario.route.path, scenario, { programme: 'published', state: 'success' })}">Published v3</a><a class="button ghost small" href="${link(scenario.route.path, scenario, { programme: 'none', state: 'success' })}">None / свободно</a><a class="button ghost small" href="${link(scenario.route.path, scenario, { programme: 'draft', state: 'success' })}">Draft-only</a><a class="button ghost small" href="${link(scenario.route.path, scenario, { programme: 'archived', state: 'success' })}">Archive</a></div></section>
+          <section class="form-section"><span class="section-number">05</span><h2>Итог и доступ</h2><p class="section-intro">Одна запись и одна комната. Team role не заменяет назначения на это интервью.</p><div class="summary-box"><h3>Atlas · Frontend / Middle React</h3><p>Владелец: ${escapeHtml(displayName(scenario.long))} · интервьюер: Вера · нанимающие: пока не выбраны</p><p><span class="status-pill orange">2 обязательные</span><span class="status-pill">1 дополнительная</span></p><small>Ничего не создаётся до подтверждения сервером. Неизвестный результат сначала проверяется по receipt.</small></div><p class="draft-marker" aria-live="polite">Черновик хранится локально в этой вкладке прототипа</p><div class="form-actions"><a class="button ghost" href="${link(isTeam ? '/teams/atlas/interviews' : '/personal/interviews', scenario)}" data-leave-form>Отмена</a><button class="button ghost" type="button" data-simulate-conflict>Смоделировать 409</button><button class="button" type="submit" name="destination" value="prepare" ${blocked ? 'disabled' : ''}>Создать интервью</button><button class="button" type="submit" name="destination" value="room" ${blocked ? 'disabled' : ''}>Создать и открыть комнату</button></div></section>
+        </form>`, scenario, { context });
+      }
+
+      function tracksView(scenario) {
+        const canManage = scenario.actor === 'admin' || scenario.actor === 'owner';
+        const isDetail = scenario.route.path !== '/teams/atlas/tracks';
+        const programmeActor = ['member', 'admin', 'owner'].includes(scenario.actor) ? scenario.actor : 'member';
+        let body = statePanel(scenario.state, 'треков и вакансий', scenario);
+        if (scenario.state === 'empty') body = `<section class="state-panel"><div><div class="state-symbol">TV</div><h2>Активных треков пока нет</h2><p>${canManage ? 'Создайте первый трек; вакансии и программа на старте необязательны.' : 'Управляющий ещё не добавил структуру. Ваши доступные интервью остаются в общем списке.'}</p>${canManage ? '<button class="button" type="button" data-demo-action>Создать трек</button>' : ''}</div></section>`;
+        if (scenario.state === 'filterEmpty') body = `<section class="state-panel"><div><div class="state-symbol">0</div><h2>По фильтру процессов ничего нет</h2><p>Архивные и активные значения не смешиваются.</p><button class="button" type="button" data-set-state="success">Сбросить фильтр</button></div></section>`;
+        if (scenario.state === 'conflict') body = `<div class="notice error" role="alert"><span>409</span><div><strong>Название уже используется в Atlas</strong><p>Регистр и пробелы по краям не создают новый вариант. Введённое описание сохранено.</p></div></div><section class="card"><div class="field"><label for="conflictTrackName">Название трека</label><input id="conflictTrackName" aria-invalid="true" value=" Frontend "></div><div class="field"><label for="conflictTrackDescription">Описание</label><textarea id="conflictTrackDescription">Команда интерфейсной платформы и клиентской архитектуры.</textarea></div><div class="form-actions"><button class="button" type="button" data-set-state="success">Исправить и сохранить</button></div></section>`;
+        if (scenario.state === 'archived') body = `<div class="collection"><article class="collection-row archived"><div><span class="status-pill gray">В архиве</span><h3>Mobile Platform</h3><p>Новые привязки недоступны; сохранённые подписи и история остаются.</p></div><div class="row-actions">${canManage ? '<button class="button ghost small" type="button" data-demo-action>Восстановить</button>' : '<span class="status-pill gray">Только чтение</span>'}</div></article></div>`;
+        if (scenario.state === 'success' && isDetail) {
+          const hasInterviews = ['roomOwner', 'interviewer', 'hiring'].includes(scenario.actor);
+          body = `<div class="grid"><section class="card span-8"><p class="eyebrow">Трек · id tr-frontend</p><h2>Frontend</h2><p>Разработка клиентских приложений и интерфейсной платформы.</p><div class="meta-row"><span><strong>Вакансии:</strong> 2 активные</span><span><strong>Доступные вам интервью:</strong> ${hasInterviews ? '3' : '0'}</span></div>${canManage ? '<div class="card-actions"><button class="button ghost small" type="button" data-demo-action>Редактировать</button><button class="button danger small" type="button" data-demo-action>Архивировать</button></div>' : ''}</section><aside class="card span-4"><p class="eyebrow">Программа интервью</p><h2>Опубликована · v3</h2><p>2 обязательные задачи. Новая версия повлияет только на новые интервью.</p>${canManage ? '<button class="button ghost small" type="button" data-demo-action>Открыть программу</button>' : '<span class="status-pill">Чтение</span>'}</aside><section class="card span-12"><h2>Мои интервью в этом процессе</h2><p>Подраздел не расширяет доступ и не показывает общее число кандидатов команды.</p>${hasInterviews ? interviewRows(scenario, true) : '<div class="state-panel"><div><div class="state-symbol">0</div><h3>У вас нет доступных интервью в этом процессе</h3><p>Это не утверждение о работе всей команды.</p></div></div>'}</section></div>`;
+        }
+        if (scenario.state === 'success' && !isDetail) body = `<div class="track-tree"><article class="card track-card"><div class="track-head"><div><p class="eyebrow">Активный трек · tr-frontend</p><h2>Frontend</h2><p>Доступные вам интервью: ${['roomOwner','interviewer','hiring'].includes(scenario.actor) ? '3' : '0'} · не все кандидаты команды</p></div><div class="row-actions"><a class="button ghost small" href="${link('/teams/atlas/tracks/frontend', scenario)}">Открыть процесс</a>${canManage ? '<button class="button ghost small" type="button" data-demo-action>Изменить</button>' : ''}</div></div><ul class="vacancy-list"><li class="vacancy-row"><a href="${link('/teams/atlas/tracks/frontend/vacancies/middle-react', scenario)}">Middle React</a><span>2 ваших интервью</span></li><li class="vacancy-row"><a href="${link('/teams/atlas/tracks/frontend/vacancies/senior-platform', scenario)}">${scenario.long ? 'Ведущий инженер интерфейсной платформы для международного продукта' : 'Senior Platform'}</a><span>1 ваше интервью</span></li></ul></article><article class="card track-card"><div class="track-head"><div><p class="eyebrow">Активный трек · tr-backend</p><h2>Backend</h2><p>Доступные вам интервью: 0</p></div><a class="button ghost small" href="${link('/teams/atlas/tracks/backend', scenario)}">Открыть процесс</a></div><div class="programme-summary blocked"><span class="stamp">!</span><div><strong>Программа не настроена</strong><p>Это явный NONE, а не скрытая опубликованная версия.</p></div></div></article></div>`;
+        return shell(`<header class="page-head"><div><p class="eyebrow">${escapeHtml(teamName(scenario.long))} · структура найма</p><h1>${isDetail ? 'Frontend' : 'Треки и вакансии'}</h1><p class="lede">Процессы помогают находить свою работу, но не создают новых прав на интервью.</p></div><div class="head-actions"><a class="button ghost" href="programmes.html#/teams/atlas/tracks/frontend/programme?surface=manage&actor=${programmeActor}&state=published">Программа · UX-12</a>${canManage && !isDetail ? '<button class="button" type="button" data-demo-action>Создать трек</button>' : ''}</div></header><div class="context-line"><span class="context-tag ${roleClass(scenario.actor)}">${escapeHtml(actorLabels[scenario.actor])}</span><span class="context-tag">${escapeHtml(stateLabels[scenario.state])}</span></div>${!['loading','revoked'].includes(scenario.state) && !isDetail ? `<section class="filter-bar"><div class="field"><label for="trackSearch">Поиск процесса</label><input id="trackSearch" placeholder="Название трека или вакансии"></div><div class="field"><label for="trackState">История</label><select id="trackState"><option>Действующие</option><option>Архив</option></select></div><button class="button ghost" type="button" data-demo-action>Применить</button></section>` : ''}${body}`, scenario, { context: 'team' });
+      }
+
+      function libraryView(scenario) {
+        const tab = scenario.route.params.get('tab') || 'tasks';
+        const isEdit = scenario.route.path.endsWith('/edit');
+        const isDetail = scenario.route.path.includes('/tasks/') && !isEdit;
+        const canEdit = scenario.actor === 'author' || scenario.actor === 'admin' || scenario.actor === 'owner';
+        let body = statePanel(scenario.state, 'командной библиотеки', scenario);
+        if (scenario.state === 'empty') body = `<section class="state-panel"><div><div class="state-symbol">${tab === 'sets' ? 'НБ' : 'ЗД'}</div><h2>${tab === 'sets' ? 'В команде пока нет наборов' : 'В библиотеке пока нет задач'}</h2><p>Создание происходит явно в Atlas. Личные материалы не публикуются автоматически.</p><button class="button" type="button" data-demo-action>Создать ${tab === 'sets' ? 'набор' : 'задачу'}</button></div></section>`;
+        if (scenario.state === 'filterEmpty') body = `<section class="state-panel"><div><div class="state-symbol">0</div><h2>По вашим фильтрам ничего не найдено</h2><p>В библиотеке могут оставаться другие задачи. Трекового фильтра здесь нет.</p><button class="button" type="button" data-set-state="success">Сбросить фильтры</button></div></section>`;
+        if (scenario.state === 'archived') body = `<div class="collection"><article class="collection-row archived"><div><span class="status-pill gray">В архиве · v6</span><h3>Оптимизация виртуального списка</h3><p>TypeScript · автор Вера Ким. Снимки существующих интервью не изменились.</p></div><div class="row-actions"><button class="button ghost small" type="button" data-demo-action>Просмотреть</button>${canEdit ? '<button class="button small" type="button" data-demo-action>Восстановить новой версией</button>' : ''}</div></article></div>`;
+        if (isEdit || scenario.state === 'conflict') {
+          body = `<div class="notice ${scenario.state === 'conflict' ? 'error' : ''}" ${scenario.state === 'conflict' ? 'role="alert"' : ''}><span>${scenario.state === 'conflict' ? '409' : 'v3'}</span><div><strong>${scenario.state === 'conflict' ? 'В библиотеке уже сохранена версия 4' : 'Редактируется версия 3'}</strong><p>${scenario.state === 'conflict' ? 'Ваш локальный текст сохранён. Откройте актуальную версию для сравнения — она не подменит черновик молча.' : 'Новая запись создаст следующую версию задачи.'}</p></div></div><form class="form-stack" data-task-form><section class="form-section"><span class="section-number">v3</span><h2>Командная задача</h2><p class="section-intro">Область: Atlas · доступно всем действующим сотрудникам. Трека и вакансии у задачи нет.</p><div class="field-grid"><div class="field"><label for="taskTitle">Название</label><input id="taskTitle" value="${escapeHtml(draftStore.taskTitle)}"></div><div class="field"><label for="taskLanguage">Язык</label><select id="taskLanguage"><option>TypeScript</option><option>Kotlin</option><option>Python</option></select></div></div><div class="field"><label for="taskCondition">Условие</label><textarea id="taskCondition">${escapeHtml(draftStore.taskCondition)}</textarea></div><div class="field"><label for="taskStarter">Стартовый код</label><textarea id="taskStarter">export function solve(input: string): string {\n  return input;\n}</textarea></div><p class="draft-marker">Локальный черновик сохранится при переходе и 409</p><div class="form-actions"><a class="button ghost" href="${link('/teams/atlas/tracks', scenario, { state: 'success' })}" data-task-navigate>Перейти к трекам</a>${scenario.state === 'conflict' ? '<button class="button ghost" type="button" data-copy-draft>Скопировать мой черновик</button><button class="button" type="button" data-set-state="success">Открыть актуальную версию</button>' : '<button class="button ghost" type="button" data-simulate-conflict>Смоделировать 409</button><button class="button" type="submit">Сохранить новую версию</button>'}</div></section></form>`;
+        } else if (scenario.state === 'success' && isDetail) {
+          body = `<article class="card"><div class="context-line"><span class="status-pill">TypeScript</span><span class="status-pill orange">Версия 3</span><span class="status-pill">Atlas</span></div><h2>Проверка устойчивого порядка</h2><p>Автор: Анна Крылова · обновлено 9 сентября 2026, 13:40 МСК</p><div class="private-note">У задачи нет трека или вакансии. Происхождение: создана непосредственно в Atlas.</div><h3 style="margin-top:22px">Условие</h3><p>${escapeHtml(draftStore.taskCondition)}</p><div class="card-actions">${canEdit ? `<a class="button" href="${link('/teams/atlas/library/tasks/task-1/edit', scenario)}">Редактировать</a><button class="button danger" type="button" data-demo-action>Архивировать</button>` : ''}<button class="button ghost" type="button" data-demo-action>Создать копию в Atlas</button></div></article>`;
+        } else if (scenario.state === 'success') {
+          body = tab === 'sets' ? `<div class="collection"><article class="collection-row"><div><div class="context-line"><span class="status-pill">Набор · v4</span><span class="status-pill">3 задачи</span></div><h3>Frontend · базовое интервью</h3><p>Автор: Вера Ким · фиксированный порядок · без трека/вакансии</p></div><div class="row-actions"><button class="button ghost small" type="button" data-demo-action>Просмотреть состав</button>${canEdit ? '<button class="button ghost small" type="button" data-demo-action>Редактировать</button>' : ''}</div></article><article class="collection-row"><div><span class="status-pill red">1 задача устарела</span><h3>Архитектурное интервью</h3><p>До нового применения адресно обновите задачу «Проектирование API».</p></div><div class="row-actions"><button class="button ghost small" type="button" data-demo-action>Исправить состав</button></div></article></div>` : `<div class="collection"><article class="collection-row"><div><div class="context-line"><span class="status-pill">TypeScript</span><span class="status-pill orange">v3</span></div><h3>Проверка устойчивого порядка</h3><p>Автор: Анна Крылова · обновлено 9 сентября, 13:40 МСК</p></div><div class="row-actions"><a class="button ghost small" href="${link('/teams/atlas/library/tasks/task-1', scenario)}">Просмотреть</a>${canEdit ? `<a class="button small" href="${link('/teams/atlas/library/tasks/task-1/edit', scenario)}">Редактировать</a>` : '<button class="button ghost small" type="button" data-demo-action>Создать копию</button>'}</div></article><article class="collection-row"><div><div class="context-line"><span class="status-pill">Kotlin</span><span class="status-pill">v5</span></div><h3>${scenario.long ? 'Проектирование отказоустойчивого сервиса синхронизации собеседований' : 'Проектирование API поиска'}</h3><p>Автор: Борис Лебедев · обновлено вчера</p></div><div class="row-actions"><button class="button ghost small" type="button" data-demo-action>Просмотреть</button></div></article></div>`;
+        }
+        const newLabel = tab === 'sets' ? 'Создать набор' : 'Создать задачу';
+        return shell(`<header class="page-head"><div><p class="eyebrow">${escapeHtml(teamName(scenario.long))} · общие материалы</p><h1>Библиотека задач</h1><p class="lede">Задачи и наборы принадлежат Atlas, но не треку или вакансии. Переноса в Orbit или personal здесь нет.</p></div><div class="head-actions"><button class="button" type="button" data-demo-action>${newLabel}</button></div></header><div class="context-line"><span class="context-tag ${roleClass(scenario.actor)}">${escapeHtml(actorLabels[scenario.actor])}</span><span class="context-tag">${escapeHtml(stateLabels[scenario.state])}</span></div><nav class="tabs" aria-label="Разделы библиотеки"><a class="tab" href="${link('/teams/atlas/library', scenario, { tab: 'tasks' })}" ${tab === 'tasks' ? 'aria-current="page"' : ''}>Задачи</a><a class="tab" href="${link('/teams/atlas/library', scenario, { tab: 'sets' })}" ${tab === 'sets' ? 'aria-current="page"' : ''}>Наборы задач</a></nav>${!['loading','revoked'].includes(scenario.state) && !isEdit ? `<section class="filter-bar"><div class="field"><label for="librarySearch">Поиск по названию</label><input id="librarySearch" placeholder="Название задачи или набора"></div>${tab === 'tasks' ? '<div class="field"><label for="languageFilter">Язык</label><select id="languageFilter"><option>Все языки</option><option>TypeScript</option><option>Kotlin</option></select></div>' : ''}<div class="field"><label for="libraryState">Состояние</label><select id="libraryState"><option>Действующие</option><option>Архив</option></select></div><button class="button ghost" type="button" data-demo-action>Применить</button></section>` : ''}${body}`, scenario, { context: 'team' });
+      }
+
+      function personalLibraryView(scenario) {
+        const tab = scenario.route.params.get('tab') || 'tasks';
+        const publish = scenario.route.params.get('publish') === '1';
+        let body = statePanel(scenario.state, 'личной библиотеки', scenario);
+        if (!body && publish) body = `<section class="card"><p class="eyebrow">Проверка публикации копии</p><h2>Проверка устойчивого порядка</h2><p>Личный оригинал и его будущие изменения останутся только в личном пространстве. В выбранной команде появится независимая копия.</p><div class="field"><label for="publishTeam">Команда назначения</label><select id="publishTeam"><option value="">Ничего не выбрано</option><option>Atlas · at-204</option><option>Orbit · or-918</option></select></div><label class="choice-row"><input type="checkbox"><span><strong>Будет доступно всем действующим сотрудникам выбранной команды</strong><small>Копия не содержит личного кода обмена и не публикуется автоматически.</small></span></label><div class="form-actions"><a class="button ghost" href="${link('/personal/library', scenario)}">Отмена</a><button class="button" type="button" data-demo-action>Опубликовать копию</button></div></section>`;
+        if (!body && scenario.state === 'empty') body = `<section class="state-panel"><div><div class="state-symbol">ЗД</div><h2>Личных задач пока нет</h2><p>Создание команды не переносит сюда или из этого пространства материалы автоматически.</p><button class="button" type="button" data-demo-action>Создать личную задачу</button></div></section>`;
+        if (!body && scenario.state === 'filterEmpty') body = `<section class="state-panel"><div><div class="state-symbol">0</div><h2>По фильтрам ничего не найдено</h2><button class="button" type="button" data-set-state="success">Сбросить фильтры</button></div></section>`;
+        if (!body && scenario.state === 'success') body = tab === 'sets' ? `<div class="collection"><article class="collection-row"><div><span class="status-pill">Личный набор · 3 задачи</span><h3>Мой Frontend пресет</h3><p>Существующий personal CRUD и выбор при создании сохраняются.</p></div><button class="button ghost small" type="button" data-demo-action>Открыть</button></article></div>` : `<div class="collection"><article class="collection-row"><div><span class="status-pill">Личная задача · TypeScript</span><h3>Проверка устойчивого порядка</h3><p>Этот оригинал не виден Atlas или Orbit.</p></div><div class="row-actions"><button class="button ghost small" type="button" data-demo-action>Открыть</button><a class="button small" href="${link('/personal/library', scenario, { publish: '1' })}">Опубликовать копию в команду</a></div></article></div>`;
+        return shell(`<header class="page-head"><div><p class="eyebrow">Личное пространство</p><h1>Библиотека задач</h1><p class="lede">Личные задачи и прежние пресеты остаются независимыми от командных библиотек.</p></div></header><nav class="tabs" aria-label="Разделы личной библиотеки"><a class="tab" href="${link('/personal/library', scenario, { tab: 'tasks' })}" ${tab === 'tasks' ? 'aria-current="page"' : ''}>Задачи</a><a class="tab" href="${link('/personal/library', scenario, { tab: 'sets' })}" ${tab === 'sets' ? 'aria-current="page"' : ''}>Наборы задач</a></nav>${body}`, scenario, { context: 'personal' });
+      }
+
+      function preparationView(scenario, context) {
+        const isTeam = context === 'team';
+        const canOwn = scenario.actor === 'roomOwner' || !isTeam;
+        if (scenario.state === 'loading' || scenario.state === 'revoked') return shell(`<header class="page-head"><div><p class="eyebrow">Интервью · подготовка</p><h1>Frontend · Middle</h1></div></header>${statePanel(scenario.state, 'подготовки интервью', scenario)}`, scenario, { context });
+        const conflict = scenario.state === 'conflict' ? `<div class="notice error" role="alert"><span>409</span><div><strong>Карточка уже изменена</strong><p>Ваше название «${escapeHtml(draftStore.interviewTitle || 'Frontend · Middle') }» сохранено локально. Сравните ревизию 12 с актуальной 13.</p></div></div>` : '';
+        return shell(`<header class="page-head"><div><p class="eyebrow">${isTeam ? escapeHtml(teamName(scenario.long)) : 'Личное пространство'} · подготовка</p><h1>${scenario.long ? 'Системный дизайн многоарендной платформы совместных интервью' : 'Frontend · Middle'}</h1><p class="lede">Это та же запись и комната, а не дополнительная сущность.</p></div><div class="head-actions"><button class="button" type="button" data-demo-action>Войти в комнату</button>${canOwn ? '<button class="button ghost" type="button" data-demo-action>Скопировать ссылку кандидата</button>' : ''}</div></header>${conflict}<div class="grid"><section class="card span-8"><p class="eyebrow">Контекст</p><div class="context-line"><span class="status-pill orange">Запланировано</span><span class="status-pill">Frontend / Middle React</span><span class="status-pill">МСК</span></div>${canOwn ? `<div class="field"><label for="prepTitle">Название</label><input id="prepTitle" value="${escapeHtml(draftStore.interviewTitle || 'Frontend · Middle')}"></div><div class="form-actions"><button class="button ghost" type="button" data-simulate-conflict>Смоделировать 409</button><button class="button" type="button" data-demo-action>Сохранить метаданные</button></div>` : '<p class="private-note">Редактирование метаданных недоступно вашей текущей роли. Доступ к комнате остаётся по отдельному назначению.</p>'}</section><aside class="card span-4"><p class="eyebrow">Состав и доступ</p><h2>${escapeHtml(interviewRole(scenario.actor))}</h2><p>Владелец: Анна · интервьюер: Вера · нанимающие: Борис и Максим.</p><p>Удаление владельца заменено отдельной передачей владения.</p></aside><section class="card span-12"><p class="eyebrow">Программа · pin v3</p><h2>2 обязательные + 1 дополнительная</h2><ol class="task-stack"><li class="task-row mandatory"><span class="task-index">01</span><div><strong>Архитектура состояния интерфейса</strong><small>Снимок из программы v3</small></div><span class="locked">Зафиксировано</span></li><li class="task-row mandatory"><span class="task-index">02</span><div><strong>Оптимизация длинного списка</strong><small>Снимок из программы v3</small></div><span class="locked">Зафиксировано</span></li><li class="task-row"><span class="task-index">03</span><div><strong>Проектирование API поиска</strong><small>Дополнительная · task v4</small></div>${canOwn ? '<button class="button ghost small" type="button" data-demo-action>Изменить</button>' : '<span class="status-pill">Чтение</span>'}</li></ol></section></div>`, scenario, { context });
+      }
+
+      function genericSection(scenario, context, title, description) {
+        const hiringActor = ['hiring', 'member', 'admin', 'owner', 'interviewer'].includes(scenario.actor) ? scenario.actor : 'member';
+        const hiringPath = title === 'Участники' ? '/teams/atlas/members' : '/teams/atlas/candidates';
+        const hiringLink = context === 'team' && (title === 'Кандидаты' || title === 'Участники')
+          ? `<a class="button" href="hiring.html#${hiringPath}?actor=${hiringActor}&state=${scenario.state}&isHr=false${scenario.long ? '&long=1' : ''}">Открыть полный прототип ${title.toLowerCase()}</a>`
+          : '';
+        return shell(`<header class="page-head"><div><p class="eyebrow">${context === 'team' ? escapeHtml(teamName(scenario.long)) : 'Личное пространство'}</p><h1>${title}</h1><p class="lede">${description}</p></div></header>${statePanel(scenario.state, title.toLowerCase(), scenario) || `<section class="state-panel"><div><div class="state-symbol">→</div><h2>${hiringLink ? 'Отдельная проверенная поверхность' : 'Поверхность отмечена для следующего задания'}</h2><p>${hiringLink ? 'UX-09/11 открыт отдельным top-level документом, чтобы hash-маршруты, native dialog focus и viewport measurements оставались честными.' : 'В 1.6a–1.6c показано её устойчивое место в навигации. Полное содержимое будет спроектировано в соответствующей следующей части 1.6.'}</p>${hiringLink}</div></section>`}`, scenario, { context });
+      }
+
+      function profileView(scenario) {
+        let content = '';
+        if (scenario.state === 'loading') content = statePanel('loading', 'профиля', scenario);
+        else if (scenario.state === 'error') content = `<div class="notice error" role="alert"><span>!</span><div><strong>Не удалось сохранить профиль</strong><p>Введённое имя осталось в форме. Проверьте соединение и повторите.</p></div></div>${profileForm(scenario)}`;
+        else if (scenario.state === 'revoked') content = `<div class="notice error"><span>!</span><div><strong>Сессия завершена</strong><p>Войдите снова. Командные данные не отображаются.</p></div></div><a class="button" href="${link('/sign-in', scenario, { actor: 'anonymous', state: 'success', return: 'profile' })}">Войти</a>`;
+        else content = profileForm(scenario);
+        const fromTeam = scenario.route.params.get('fromTeam') === '1';
+        return shell(`<header class="page-head"><div><p class="eyebrow">Настройки аккаунта</p><h1>Профиль</h1><p class="lede">Личные данные находятся отдельно от рабочих списков и состава конкретной команды.</p></div><div class="head-actions"><a class="button ghost" href="${link(fromTeam ? '/teams/atlas/interviews' : '/personal/interviews', scenario)}">← Вернуться в ${fromTeam ? 'Atlas' : 'личное пространство'}</a></div></header>${content}`, scenario, { context: fromTeam ? 'team' : 'personal' });
+      }
+
+      function profileForm(scenario) {
+        return `<div class="profile-layout"><form class="card" data-profile-form><p class="eyebrow">Личные настройки</p><div class="field"><label for="profileName">Имя в аккаунте</label><input id="profileName" value="${escapeHtml(displayName(scenario.long))}"></div><div class="setting-row"><div><h3>Я нанимающий</h3><p>Для личных интервью. В команде вас назначают на конкретное интервью.</p></div><label class="switch"><input type="checkbox" aria-label="Я нанимающий" checked><span aria-hidden="true"></span></label></div><div class="form-actions"><button class="button" type="submit">Сохранить изменения</button></div></form>
+          <aside class="card"><p class="eyebrow">Личные приглашения</p><h2>Ваш стабильный ID</h2><p>Используется только для личных приглашений. Это не командная роль.</p><div class="profile-id"><code>usr_7f2a91cc_anna</code></div><div class="card-actions"><button class="button ghost small" type="button" data-copy-id>Копировать ID</button></div><hr style="border:0;border-top:1px solid var(--line);margin:24px 0"><button class="button danger" type="button" data-sign-out>Выйти из аккаунта</button></aside></div>`;
+      }
+
+      function inviteView(scenario) {
+        const requestedState = scenario.route.params.get('invite') || (['loading','error','revoked'].includes(scenario.state) ? scenario.state : 'preview');
+        const actor = scenario.actor;
+        const signedIn = actor !== 'anonymous';
+        let panel = '';
+        if (requestedState === 'loading') panel = `<section class="state-panel" aria-busy="true"><div class="skeleton"><span></span><span></span><span></span></div></section>`;
+        else if (requestedState === 'error') panel = `<div class="notice error" role="alert"><span>!</span><div><strong>Не удалось проверить приглашение</strong><p>Состояние ссылки неизвестно. Мы не называем её истёкшей при сетевой ошибке.</p></div></div><button class="button" type="button" data-invite-retry>Повторить</button>`;
+        else if (requestedState === 'expired' || requestedState === 'revoked') panel = `<section class="state-panel revoked"><div><div class="state-symbol">×</div><h2>Приглашение истекло или отозвано</h2><p>Попросите уполномоченного сотрудника создать новую ссылку. Сведения о составе команды не раскрываются.</p><a class="button" href="${link('/personal/interviews', scenario, { actor: signedIn ? 'personal' : 'anonymous', state: 'success' })}">${signedIn ? 'В свои пространства' : 'На главную'}</a></div></section>`;
+        else if (requestedState === 'success') panel = `<section class="state-panel success"><div><div class="state-symbol">✓</div><h2>Вы вступили в Atlas</h2><p>Роль: участник. Командные интервью появятся только после отдельного назначения.</p><a class="button" href="${link('/teams/atlas/interviews', scenario, { actor: 'member', state: 'empty' })}">Открыть Atlas</a></div></section>`;
+        else if (requestedState === 'already' || actor === 'member' || actor === 'admin' || actor === 'owner') panel = `<div class="notice success"><span>✓</span><div><strong>Вы уже в команде</strong><p>Повторное открытие ссылки не создаёт второе участие.</p></div></div><a class="button" href="${link('/teams/atlas/interviews', scenario, { actor: actor === 'personal' ? 'member' : actor, state: 'success' })}">Открыть Atlas</a>`;
+        else panel = `${signedIn ? `<div class="notice"><span>i</span><div><strong>Вы вошли как ${escapeHtml(displayName(scenario.long))}</strong><p>Можно сменить аккаунт до принятия.</p></div></div>` : `<div class="notice"><span>i</span><div><strong>Сначала войдите или зарегистрируйтесь</strong><p>После входа вы вернётесь к этому приглашению.</p></div></div>`}
+          <div class="invite-facts"><dl class="fact"><dt>Команда</dt><dd>${escapeHtml(teamName(scenario.long))}</dd></dl><dl class="fact"><dt>Роль</dt><dd>Участник</dd></dl><dl class="fact"><dt>Действует до</dt><dd>16 сентября 2026 · 14:20 МСК</dd></dl></div>
+          <p class="private-note">Публичная ссылка не показывает сотрудников, кандидатов, комнаты или автора приглашения.</p>
+          <div class="form-actions">${signedIn ? `<button class="button ghost" type="button" data-switch-account>Сменить аккаунт</button><button class="button" type="button" data-accept-invite>Вступить как участник</button>` : `<a class="button" href="${link('/sign-in', scenario, { actor: 'anonymous', state: 'success', return: 'invite' })}">Войти и продолжить</a>`}</div>`;
+        return `<main id="main" tabindex="-1" class="invite-shell" data-surface="invite"><section class="invite-art" aria-label="О приглашении"><div class="giant" aria-hidden="true">A.</div><h2>Одна команда.<br>Отдельные права.</h2><p>Вступление открывает общую рабочую область, но не даёт доступа к чужим кандидатам.</p></section><section class="invite-content"><div class="invite-card"><p class="eyebrow">Приглашение в команду · прототип</p><h1>Вас приглашают в Atlas</h1>${panel}<div class="scenario-strip" aria-label="Демонстрационные состояния приглашения"><button class="button ghost small" type="button" data-invite-state="preview">Предпросмотр</button><button class="button ghost small" type="button" data-invite-state="expired">Истекло</button><button class="button ghost small" type="button" data-invite-state="revoked">Отозвано</button><button class="button ghost small" type="button" data-invite-state="error">Ошибка сети</button><button class="button ghost small" type="button" data-invite-state="already">Уже принят</button></div><p class="prototype-footnote">Секрет ссылки в прототипе не хранится, не показывается и не добавляется в историю.</p></div></section></main>`;
+      }
+
+      function signInView(scenario) {
+        const returnsToInvite = scenario.route.params.get('return') === 'invite';
+        return `<main class="invite-shell" id="main" tabindex="-1"><section class="invite-art"><div class="giant">io</div><h2>С возвращением</h2><p>${returnsToInvite ? 'После входа вы вернётесь к приглашению Atlas. Вступление всё равно потребует отдельного подтверждения.' : 'Войдите, чтобы открыть свои пространства.'}</p></section><section class="invite-content"><form class="invite-card card" data-signin-form><p class="eyebrow">Демонстрационный вход</p><h1>Войти</h1><div class="field"><label for="email">Почта</label><input id="email" type="email" value="anna@example.test"></div><div class="field"><label for="password">Пароль</label><input id="password" type="password" value="prototype"></div><div class="form-actions"><button class="button" type="submit">Войти${returnsToInvite ? ' и вернуться' : ''}</button></div></form></section></main>`;
+      }
+
+      function routesView(scenario) {
+        const rows = Object.entries(legacyMap).map(([oldPath, newPath]) => `<div class="route-row"><code>${oldPath}</code><span>→ ${newPath}</span><button class="button ghost small" type="button" data-legacy="${oldPath}">Проверить вход</button></div>`).join('');
+        return shell(`<header class="page-head"><div><p class="eyebrow">Prototype-only карта</p><h1>Старые входы</h1><p class="lede">Каждый переход открывает эквивалентный экран. Чтение маршрута не создаёт команду, комнату, публикацию или назначение.</p></div></header><div class="old-routes">${rows}</div>`, scenario, { context: 'personal' });
+      }
+
+      function roomReturn(scenario) {
+        if (scenario.actor === 'candidate') return { href: link('/personal/interviews', scenario, { actor: 'personal', state: 'success' }), label: 'Выйти на главную' };
+        if (scenario.actor === 'guestManager') return { href: link('/personal/interviews', scenario, { actor: 'personal', state: 'success', from: 'room' }), label: 'К интервью · Личное пространство' };
+        return { href: link('/teams/atlas/interviews', scenario, { state: 'success', from: 'room', filter: 'active' }), label: `К интервью · ${teamName(scenario.long)}` };
+      }
+
+      function clearProtectedRoomState() {
+        roomStore.code = initialRoomCode;
+        roomStore.notesDraft = '';
+        roomStore.chatDraft = '';
+        roomStore.pending = false;
+        roomStore.unread = 0;
+        roomStore.readAtBottom = true;
+        roomStore.inputMode = false;
+      }
+
+      function roomStep(id = roomStore.selectedStep) {
+        return roomStepMeta[id] || roomStepMeta['step-2'];
+      }
+
+      function roomTerminalView(scenario, kind) {
+        const candidate = scenario.actor === 'candidate';
+        const back = roomReturn(scenario);
+        if (kind === 'revoked') clearProtectedRoomState();
+        const copy = kind === 'loading'
+          ? `<div class="skeleton" aria-hidden="true"><span></span><span></span><span></span><span></span></div><span class="sr-only">Загружаем комнату и проверяем доступ</span>`
+          : kind === 'frozen'
+            ? `<p class="eyebrow">${candidate ? 'Сессия недоступна' : 'Комната приостановлена'}</p><h1>${candidate ? 'Интервью сейчас недоступно' : 'Работа остановлена'}</h1><p>${candidate ? 'Редактирование не возобновится автоматически. Вернитесь на главную или дождитесь новой подтверждённой ссылки.' : 'Live-сессия завершена. Доступна только отдельная разрешённая карточка для чтения; редактор, чат и заметки закрыты.'}</p>${scenario.actor === 'roomOwner' ? '<button class="button" type="button" data-demo-action>Возобновить после проверки</button>' : ''}<a class="button ghost" href="${back.href}">${back.label}</a>`
+            : kind === 'archived'
+              ? `<p class="eyebrow">Интервью в архиве</p><h1>Live-работа завершена</h1><p>${candidate ? 'Комната больше не принимает изменения.' : 'Редактор и отправка остановлены. Откройте разрешённый результат или вернитесь к списку.'}</p>${candidate ? '' : `<a class="button" href="${link('/teams/atlas/interviews/int-204/result', scenario, { state: 'success' })}">Открыть результат</a>`}<a class="button ghost" href="${back.href}">${back.label}</a>`
+              : `<p class="eyebrow">Доступ изменён</p><h1>${candidate ? 'Комната недоступна' : 'Доступ к интервью отозван'}</h1><p>${candidate ? 'Мы не показываем сведения о команде или причине. Повторное подключение остановлено.' : 'Защищённые данные, черновик, pending-сообщение и состояние менеджера очищены. Поздний ответ их не восстановит.'}</p><a class="button" href="${candidate ? link('/personal/interviews', scenario, { actor: 'personal', state: 'success' }) : link('/personal/interviews', scenario, { actor: 'personal', state: 'success' })}">${candidate ? 'На главную' : 'В личное пространство'}</a>`;
+        return `<main id="main" tabindex="-1" class="room-terminal" data-room-terminal="${kind}" aria-busy="${kind === 'loading'}"><section class="room-terminal-card">${copy}<p class="prototype-footnote">Prototype-only: этот экран показывает UX-контракт, но не доказывает server-side revoke, архив, realtime или persistence.</p></section></main>`;
+      }
+
+      function candidateRoomView(scenario) {
+        const back = roomReturn(scenario);
+        const reconnect = scenario.state === 'reconnecting' || scenario.state === 'error';
+        const statusText = scenario.state === 'reconnecting' ? 'Переподключаемся…' : scenario.state === 'error' ? 'Связь потеряна' : 'Подключено';
+        return `<main id="main" tabindex="-1" class="room-candidate" data-room-candidate>
+          <header class="candidate-head"><a class="room-return" href="${back.href}">← ${back.label}</a><div><h1>${scenario.long ? 'Системный дизайн сервиса совместного редактирования с очень длинным названием' : 'Frontend · Middle'}</h1><span class="prototype-disclaimer">ПРОТОТИП · без внутренних панелей команды</span></div><span class="room-status ${reconnect ? scenario.state : ''}" role="status">${statusText}</span></header>
+          <div class="candidate-surface">
+            <section class="room-panel" aria-labelledby="candidateCondition"><div class="room-panel-head"><h2 id="candidateCondition">Задача 2 из 3</h2><small>Опубликована интервьюером</small></div><div class="room-panel-body room-condition"><h3>Устойчивый порядок</h3><p>Напишите функцию, сохраняющую исходный порядок элементов с одинаковым приоритетом. Поясните сложность.</p><pre>stableOrder(items: Item[]): Item[]</pre>${reconnect ? '<p class="room-inline-error">Изменения останутся локально до восстановления связи.</p>' : ''}</div></section>
+            <section class="room-panel room-editor-panel" aria-labelledby="candidateEditorTitle"><div class="room-panel-head"><h2 id="candidateEditorTitle">Редактор</h2><small>JavaScript · ваш код</small></div><div class="room-editor-meta"><span>Сессия кандидата · prototype</span><span>${statusText}</span></div><textarea class="room-editor-input" aria-label="Код кандидата" spellcheck="false">${escapeHtml(roomStore.code)}</textarea></section>
+          </div>
+        </main>`;
+      }
+
+      function roomStateBanner(scenario) {
+        if (scenario.state === 'reconnecting') return `<div class="room-state-banner" role="status"><span><strong>Переподключаемся.</strong> Черновики и позиция чтения сохранены; доставка не подтверждается до ACK.</span><button class="room-action ghost" type="button" data-room-retry>Повторить сейчас</button></div>`;
+        if (scenario.state === 'error') return `<div class="room-state-banner error" role="alert"><span><strong>Связь не восстановлена.</strong> Ранее показанная история отмечена как неактуальная; код остаётся доступен локально.</span><button class="room-action ghost" type="button" data-room-retry>Повторить</button></div>`;
+        if (scenario.state === 'pending') return `<div class="room-state-banner" role="status"><span><strong>Сообщение ожидает подтверждения.</strong> Оно не показано как отправленное и не будет продублировано при повторе.</span></div>`;
+        return '';
+      }
+
+      function roomPanelMarkup(scenario) {
+        const longCondition = scenario.long ? 'Условие содержит длинное русское пояснение: входные записи могут приходить из нескольких источников, иметь одинаковый приоритет и сохранять взаимный порядок даже после повторной синхронизации. Решение должно оставаться читаемым при масштабировании интерфейса до двухсот процентов.' : 'Реализуйте устойчивую сортировку очереди по полю rank. Элементы с одинаковым rank сохраняют исходный порядок.';
+        const chatEmpty = scenario.state === 'empty';
+        const chatError = scenario.state === 'error';
+        const pending = scenario.state === 'pending' || roomStore.pending;
+        const canPublishStep = scenario.actor === 'roomOwner' || scenario.actor === 'interviewer';
+        const stepPermissionCopy = canPublishStep
+          ? 'Выбранный локально и опубликованный кандидату шаг различаются. Только «Переключить» публикует шаг.'
+          : 'Выбранный локально и опубликованный кандидату шаг различаются. В этой роли публикация шага недоступна.';
+        const publishStepControl = canPublishStep ? '<button class="room-action" type="button" data-room-publish>Переключить кандидату</button>' : '';
+        return `
+          <section class="room-panel room-editor-panel" data-room-panel="editor" aria-labelledby="roomEditorTitle"><div class="room-panel-head"><h2 id="roomEditorTitle">Редактор</h2><small>JavaScript · общий код</small></div><div class="room-editor-meta"><span data-room-session>${roomStore.sessionId}</span><span>Yjs instance: ${roomStore.editorInstanceId}</span><span data-room-editor-step>Локальный шаг: ${roomStep().index}</span></div><textarea id="roomEditor" class="room-editor-input" data-room-editor aria-label="Редактор общего кода" spellcheck="false">${escapeHtml(roomStore.code)}</textarea></section>
+          <section class="room-panel" data-room-panel="steps" aria-labelledby="roomStepsTitle"><div class="room-panel-head"><h2 id="roomStepsTitle">Шаги</h2><button class="room-action ghost" type="button" data-room-close aria-label="Закрыть шаги и вернуться в редактор">×</button></div><div class="room-panel-body"><p class="private-note">${stepPermissionCopy}</p><ol class="room-step-list"><li><button class="room-step" type="button" data-room-step="step-1"><span class="task-index">01</span><span><strong>Разминка</strong><small>Опубликован ранее</small></span></button></li><li><button class="room-step" type="button" data-room-step="step-2" data-published="true" aria-current="step"><span class="task-index">02</span><span><strong>Устойчивый порядок</strong><small>Опубликован кандидату</small></span></button></li><li><button class="room-step" type="button" data-room-step="step-3"><span class="task-index">03</span><span><strong>API поиска</strong><small>Дополнительный</small></span></button></li></ol><div class="room-note-actions"><button class="room-action ghost" type="button" data-room-open="chat">Чат одним действием</button><button class="room-action ghost" type="button" data-room-open="activity">Активность одним действием</button>${publishStepControl}</div></div></section>
+          <section class="room-panel" data-room-panel="condition" aria-labelledby="roomConditionTitle"><div class="room-panel-head"><h2 id="roomConditionTitle">Условие</h2><button class="room-action ghost" type="button" data-room-close aria-label="Закрыть условие и вернуться в редактор">×</button></div><div class="room-panel-body room-condition"><h3>Устойчивый порядок элементов</h3><p>${escapeHtml(longCondition)}</p><pre>stableOrder(items: Item[]): Item[]</pre><table><thead><tr><th>Ограничение</th><th>Значение</th></tr></thead><tbody><tr><td>Элементов</td><td>до 100 000</td></tr><tr><td>rank</td><td>целое число</td></tr></tbody></table><div class="room-note-actions"><button class="room-action ghost" type="button" data-room-open="chat">Открыть чат</button><button class="room-action ghost" type="button" data-room-open="activity">Открыть активность</button></div></div></section>
+          <section class="room-panel" data-room-panel="notes" aria-labelledby="roomNotesTitle"><div class="room-panel-head"><h2 id="roomNotesTitle">Мои заметки</h2><button class="room-action ghost" type="button" data-room-close aria-label="Закрыть мои заметки и вернуться в редактор">×</button></div><div class="room-note-context">Шаг 2 · Устойчивый порядок · видны только вам</div><div class="room-panel-body"><label for="roomNotes"><strong>Личная заметка текущего шага</strong></label><textarea id="roomNotes" class="room-notes-input" data-room-notes>${escapeHtml(roomStore.notesDraft)}</textarea><div class="room-note-actions"><button class="room-action ghost" type="button" data-demo-action>Экспорт моих заметок</button><button class="room-action" type="button" data-room-save-note>Сохранить заметку</button></div></div></section>
+          <section class="room-panel room-chat-panel" data-room-panel="chat" aria-labelledby="roomChatTitle"><div class="room-panel-head"><h2 id="roomChatTitle">Чат интервьюеров <span class="unread-badge" data-room-unread ${roomStore.unread ? '' : 'hidden'}>${roomStore.unread}</span></h2><button class="room-action ghost" type="button" data-room-both aria-pressed="${roomStore.showBoth}">Показать оба</button><button class="room-action ghost" type="button" data-room-close aria-label="Закрыть чат и вернуться в редактор">×</button></div><div class="room-panel-body">${chatError ? '<p class="room-inline-error" role="alert">Не удалось обновить чат. Уже показанные сообщения могут быть неактуальны. <button class="room-action ghost" type="button" data-room-retry>Повторить</button></p>' : ''}<div class="room-chat-history" data-room-chat-scroll tabindex="0" aria-label="История чата интервьюеров">${chatEmpty ? '<p>Сообщений пока нет. Доступный чат можно использовать.</p>' : '<article class="room-message" data-message-id="msg-1"><strong>Вера</strong><time>12:41</time><p>Кандидат уточнил ограничения.</p></article><article class="room-message" data-message-id="msg-2"><strong>Борис</strong><time>12:43</time><p>Оставим вопрос про стабильность без подсказки.</p></article><article class="room-message" data-message-id="msg-3"><strong>Анна</strong><time>12:45</time><p>После решения спросим про память.</p></article>'}<button class="room-new-messages" type="button" data-room-new ${roomStore.unread ? '' : 'hidden'}>Новые сообщения · <span>${roomStore.unread}</span></button></div><form class="room-chat-composer" data-room-chat-form><div class="room-composer-step" data-room-composer-step role="status" aria-live="polite"><span>Текущий</span><strong data-room-current-local>${roomStep().index} · ${roomStep().name}</strong><span class="room-published-step" data-room-current-published>Кандидату · 02</span></div><p class="room-audience">Виден интервьюерам этой комнаты. Кандидат не видит чат.</p>${pending ? '<p class="room-inline-error" role="status">Ожидаем ACK. Текст остаётся черновиком до подтверждения.</p>' : ''}<label class="sr-only" for="roomChat">Сообщение интервьюерам</label><textarea id="roomChat" class="room-chat-input" data-room-chat aria-label="Сообщение интервьюерам" placeholder="Написать коллегам…">${escapeHtml(roomStore.chatDraft)}</textarea><div class="room-chat-actions"><button class="room-action ghost" type="button" data-room-incoming>Получить новое</button><button class="room-action" type="submit" ${pending ? 'disabled' : ''}>${pending ? 'Ожидает ACK…' : chatError ? 'Повторить отправку' : 'Отправить'}</button></div></form></div></section>
+          <section class="room-panel" data-room-panel="activity" aria-labelledby="roomActivityTitle"><div class="room-panel-head"><h2 id="roomActivityTitle">Активность кандидата</h2><button class="room-action ghost" type="button" data-room-both aria-pressed="${roomStore.showBoth}">Показать оба</button><button class="room-action ghost" type="button" data-room-close aria-label="Закрыть активность и вернуться в редактор">×</button></div><div class="room-panel-body" data-room-activity-scroll tabindex="0" aria-label="История активности кандидата">${chatError ? '<p class="room-inline-error" role="alert">Не удалось загрузить новые события. Ранее показанная история сохранена. <button class="room-action ghost" type="button" data-room-retry>Повторить</button></p>' : ''}${chatEmpty ? '<p>Действий пока нет.</p>' : '<ol class="room-event-list"><li><time>12:40:18 · сессия A</time>Открыто условие шага 2</li><li><time>12:42:09 · сессия A</time>Редактор получил фокус</li><li><time>12:44:31 · сессия A</time>Изменено 18 строк кода</li><li><time>12:45:02 · сессия B</time>Восстановлено соединение · события дедуплицированы</li></ol>'}<div class="room-note-actions"><button class="room-action ghost" type="button" data-room-load-more>Загрузить предыдущие</button></div></div></section>`;
+      }
+
+      function roomView(scenario) {
+        if (scenario.actor === 'revokedStaff' || scenario.state === 'revoked') return roomTerminalView(scenario, 'revoked');
+        if (scenario.state === 'loading') return roomTerminalView(scenario, 'loading');
+        if (scenario.state === 'frozen') return roomTerminalView(scenario, 'frozen');
+        if (scenario.state === 'archived') return roomTerminalView(scenario, 'archived');
+        if (scenario.actor === 'candidate') return candidateRoomView(scenario);
+        if (!['roomOwner', 'interviewer', 'hiring', 'guestManager'].includes(scenario.actor)) return roomTerminalView(scenario, 'revoked');
+        const back = roomReturn(scenario);
+        const connectionClass = scenario.state === 'reconnecting' ? 'reconnecting' : scenario.state === 'error' ? 'error' : scenario.state === 'pending' ? 'pending' : '';
+        const connectionText = scenario.state === 'reconnecting' ? 'Переподключение' : scenario.state === 'error' ? 'Нет связи' : scenario.state === 'pending' ? 'Ожидает ACK' : 'Подключено';
+        roomStore.mountCount += 1;
+        return `<main id="main" tabindex="-1" class="room-root" data-room-root data-session-id="${roomStore.sessionId}" data-editor-instance="${roomStore.editorInstanceId}">
+          <header class="room-service"><a class="room-return" href="${back.href}">← <span>${escapeHtml(back.label)}</span></a><div class="room-title"><strong>${scenario.long ? 'Системный дизайн распределённой платформы совместного интервью' : 'Frontend · Middle'}</strong><small>${escapeHtml(actorLabels[scenario.actor])} · кандидат в комнате · session ${roomStore.mountCount}</small></div><div class="room-service-actions"><span class="room-status ${connectionClass}" role="status">${connectionText}</span><span class="room-diagnostic" data-room-geometry>W×H…</span><div class="room-mode-group" aria-label="Режим комнаты"><button class="room-mode-button" type="button" data-room-mode="focus" aria-pressed="false">Фокус</button><button class="room-mode-button" type="button" data-room-mode="work" aria-pressed="false">Рабочий</button><button class="room-mode-button" type="button" data-room-mode="overview" aria-pressed="false">Обзор</button></div><button class="room-menu" type="button" data-demo-action aria-label="Действия комнаты: приглашение, завершение и передача владения">•••</button></div></header>
+          <div class="room-input-context" aria-live="polite"><span data-room-context>Условие</span><span data-room-step-compact>Локально ${roomStep().index} · кандидату 02</span><span data-room-compact-geometry>W×H…</span></div>
+          <nav class="room-area-nav" role="tablist" aria-label="Рабочие области комнаты"><button class="room-area-button" type="button" role="tab" data-room-open="editor" aria-controls="roomEditorTitle"><span class="room-icon" aria-hidden="true">КД</span><span>Редактор</span></button><button class="room-area-button" type="button" role="tab" data-room-open="steps" aria-controls="roomStepsTitle"><span class="room-icon" aria-hidden="true">ШГ</span><span>Шаги</span></button><button class="room-area-button" type="button" role="tab" data-room-open="condition" aria-controls="roomConditionTitle"><span class="room-icon" aria-hidden="true">УС</span><span>Условие</span></button><button class="room-area-button" type="button" role="tab" data-room-open="notes" aria-controls="roomNotesTitle" aria-label="Мои заметки"><span class="room-icon" aria-hidden="true">МЗ</span><span>Мои заметки</span></button><button class="room-area-button" type="button" role="tab" data-room-open="chat" aria-controls="roomChatTitle"><span class="room-icon" aria-hidden="true">ЧТ</span><span>Чат</span><span class="unread-badge" data-room-unread ${roomStore.unread ? '' : 'hidden'}>${roomStore.unread}</span></button><button class="room-area-button" type="button" role="tab" data-room-open="activity" aria-controls="roomActivityTitle"><span class="room-icon" aria-hidden="true">АК</span><span>Активность</span></button></nav>
+          <div class="room-work-area"><div class="room-current-step" data-room-current-step role="status" aria-live="polite" aria-atomic="true"><span>Текущий шаг</span><strong data-room-current-local>${roomStep().index} · ${roomStep().name}</strong><span class="room-published-step" data-room-current-published>Кандидату · 02</span></div>${roomStateBanner(scenario)}<div class="room-stage" data-room-stage>${roomPanelMarkup(scenario)}</div></div>
+        </main>`;
+      }
+
+      function settingsView(scenario) {
+        if (scenario.actor === 'member') return shell(`<header class="page-head"><div><p class="eyebrow">Atlas</p><h1>Настройки команды</h1></div></header>${statePanel('revoked', 'настроек', scenario)}`, scenario, { context: 'team' });
+        const mergeEntry = scenario.actor === 'owner' ? `<section class="card span-12"><p class="eyebrow">UX-13 · отдельный prototype</p><h2>Объединение команд</h2><p>Выберите точное назначение, согласуйте одну revision двумя владельцами и отдельно запустите commit.</p><div class="form-actions"><a class="button" href="merge.html#/merge?actor=sourceOwner&state=success&blocker=none&step=target">Открыть прототип объединения</a></div></section>` : '';
+        return shell(`<header class="page-head"><div><p class="eyebrow">Atlas · управление</p><h1>Настройки команды</h1><p class="lede">Название и роли команды — здесь. Настройки аккаунта остаются в профиле.</p></div></header><div class="grid"><section class="card span-8"><h2>Название команды</h2><div class="field"><label for="settingsTeamName">Название</label><input id="settingsTeamName" value="${escapeHtml(teamName(scenario.long))}"></div><div class="form-actions"><button class="button" type="button" data-demo-action>Сохранить</button></div></section><aside class="card span-4"><p class="eyebrow">Ваша роль</p><h2>${escapeHtml(actorLabels[scenario.actor])}</h2><p>Управление командой не открывает чужие интервью и кандидатов.</p></aside>${mergeEntry}</div>`, scenario, { context: 'team' });
+      }
+
+      function render() {
+        const scenario = currentScenario();
+        if (roomResizeHandler) {
+          window.removeEventListener('resize', roomResizeHandler);
+          window.visualViewport?.removeEventListener('resize', roomResizeHandler);
+          window.visualViewport?.removeEventListener('scroll', roomResizeHandler);
+          roomResizeHandler = null;
+        }
+        if (roomDocumentScrollHandler) {
+          window.removeEventListener('scroll', roomDocumentScrollHandler);
+          roomDocumentScrollHandler = null;
+        }
+        if (roomChromeGestureArmHandler) {
+          window.removeEventListener('wheel', roomChromeGestureArmHandler);
+          window.removeEventListener('touchstart', roomChromeGestureArmHandler);
+          roomChromeGestureArmHandler = null;
+        }
+        window.clearTimeout(roomChromeSettleTimer);
+        roomChromeSettleTimer = 0;
+        roomChromeStabilized = false;
+        roomChromeGestureCount = 0;
+        roomChromeGestureArmed = false;
+        document.body.classList.remove('room-keyboard-active');
+        document.body.classList.remove('room-keyboard-landscape-runway');
+        actorSelect.value = scenario.actor;
+        stateSelect.value = scenario.state;
+        longToggle.checked = scenario.long;
+        document.documentElement.dataset.long = String(scenario.long);
+        const { path } = scenario.route;
+        document.body.classList.toggle('room-prototype-active', path.startsWith('/room/'));
+        let html;
+        if (path.startsWith('/room/')) html = roomView(scenario);
+        else if (path === '/join/team') html = inviteView(scenario);
+        else if (path === '/sign-in') html = signInView(scenario);
+        else if (path === '/profile') html = profileView(scenario);
+        else if (path === '/prototype/routes') html = routesView(scenario);
+        else if (path.endsWith('/interviews/new')) html = createInterviewView(scenario, path.startsWith('/teams/') ? 'team' : 'personal');
+        else if (path.includes('/interviews/')) html = preparationView(scenario, path.startsWith('/teams/') ? 'team' : 'personal');
+        else if (path.endsWith('/interviews')) html = interviewsView(scenario, path.startsWith('/teams/') ? 'team' : 'personal');
+        else if (path.endsWith('/settings')) html = settingsView(scenario);
+        else if (path.startsWith('/teams/') && path.includes('/library')) html = libraryView(scenario);
+        else if (path.startsWith('/personal/') && path.includes('/library')) html = personalLibraryView(scenario);
+        else if (path.includes('/candidates')) html = genericSection(scenario, path.startsWith('/teams/') ? 'team' : 'personal', 'Кандидаты', 'Только интервью, где вы назначены нанимающим.');
+        else if (path.includes('/tracks')) html = tracksView(scenario);
+        else if (path.includes('/members')) html = genericSection(scenario, 'team', 'Участники', 'Минимальный каталог команды без данных кандидатов.');
+        else if (path.includes('/service/')) html = shell(`<header class="page-head"><div><p class="eyebrow">Служебный экран</p><h1>${path.endsWith('admin') ? 'Админка' : 'Агент-операции'}</h1><p class="lede">Старые условия доступа и feature flag сохраняются; этот экран не становится ролью администратора команды.</p></div></header>`, scenario, { context: 'personal' });
+        else html = interviewsView(scenario, 'personal');
+        app.innerHTML = html;
+        bindViewEvents(scenario);
+        document.title = `Прототип 1.6a–1.6f · ${actorLabels[scenario.actor]} · ${stateLabels[scenario.state]}`;
+      }
+
+      function captureRoomState() {
+        const editor = app.querySelector('[data-room-editor]');
+        const notes = app.querySelector('[data-room-notes]');
+        const chat = app.querySelector('[data-room-chat]');
+        const chatScroll = app.querySelector('[data-room-chat-scroll]');
+        const activityScroll = app.querySelector('[data-room-activity-scroll]');
+        const focusedPanel = document.activeElement?.closest?.('[data-room-panel]')?.dataset.roomPanel;
+        if (focusedPanel) roomStore.activePanel = focusedPanel;
+        if (editor) {
+          roomStore.code = editor.value;
+          roomStore.editorSelectionStart = editor.selectionStart;
+          roomStore.editorSelectionEnd = editor.selectionEnd;
+          if (!editor.closest('[data-room-panel]')?.hidden) roomStore.editorScrollTop = editor.scrollTop;
+        }
+        if (notes) roomStore.notesDraft = notes.value;
+        if (chat) roomStore.chatDraft = chat.value;
+        if (chatScroll && !chatScroll.closest('[data-room-panel]')?.hidden) roomStore.chatScrollTop = chatScroll.scrollTop;
+        if (activityScroll && !activityScroll.closest('[data-room-panel]')?.hidden) roomStore.activityScrollTop = activityScroll.scrollTop;
+      }
+
+      function roomMeasurements() {
+        const zoom = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+        const visual = window.visualViewport;
+        const rawVw = roomViewportOverride?.width ?? visual?.width ?? window.innerWidth;
+        const rawVh = roomViewportOverride?.height ?? visual?.height ?? window.innerHeight;
+        const vw = roomViewportOverride ? rawVw : rawVw / zoom;
+        const vh = roomViewportOverride ? rawVh : rawVh / zoom;
+        const protoHeight = document.querySelector('.prototype-bar')?.getBoundingClientRect().height / zoom || 0;
+        const focusedInput = Boolean(document.activeElement?.matches?.('[data-room-chat], [data-room-notes]'));
+        const touchLike = navigator.maxTouchPoints > 0 || vw < 700;
+        const layoutVh = window.innerHeight / zoom;
+        const viewportCompressed = !roomViewportOverride && focusedInput && layoutVh - vh > 72;
+        const shortViewport = vh - protoHeight < 360;
+        const narrowLayout = window.innerWidth <= 599;
+        const keyboard = Boolean(roomViewportOverride?.keyboard) || viewportCompressed || (roomStore.inputMode && touchLike) || (shortViewport && narrowLayout);
+        const bannerHeight = app.querySelector('.room-state-banner')?.getBoundingClientRect().height / zoom || 0;
+        const W = Math.max(0, Math.floor(vw - 24));
+        const H = Math.max(0, Math.floor(vh - (keyboard ? 72 : protoHeight + 146) - bannerHeight - 12));
+        const offsetTop = roomViewportOverride ? Math.max(0, roomViewportOverride.offsetTop || 0) : Math.max(0, (visual?.offsetTop || 0) / zoom);
+        const offsetLeft = roomViewportOverride ? Math.max(0, roomViewportOverride.offsetLeft || 0) : Math.max(0, (visual?.offsetLeft || 0) / zoom);
+        const fixedVisualOrigin = !roomViewportOverride || roomViewportOverride.fixedElementsUseVisualOrigin === true;
+        return {
+          vw: Math.round(vw), vh: Math.round(vh), W, H, keyboard, zoom,
+          offsetTop, offsetLeft, fixedVisualOrigin,
+          fixedTop: fixedVisualOrigin ? 0 : offsetTop,
+          fixedLeft: fixedVisualOrigin ? 0 : offsetLeft,
+          inputFocused: focusedInput, viewportCompressed, shortViewport
+        };
+      }
+
+      function updateRoomStepContext() {
+        const local = roomStep();
+        const published = roomStep('step-2');
+        app.querySelectorAll('[data-room-current-local]').forEach((node) => { node.textContent = `${local.index} · ${local.name}`; });
+        app.querySelectorAll('[data-room-current-published]').forEach((node) => { node.textContent = `Кандидату · ${published.index}`; });
+        app.querySelectorAll('[data-room-step-compact]').forEach((node) => { node.textContent = `Локально ${local.index} · кандидату ${published.index}`; });
+        app.querySelectorAll('[data-room-editor-step]').forEach((node) => { node.textContent = `Локальный шаг: ${local.index}`; });
+        app.querySelectorAll('[data-room-step]').forEach((item) => item.toggleAttribute('aria-current', item.dataset.roomStep === roomStore.selectedStep));
+        const noteContext = app.querySelector('.room-note-context');
+        if (noteContext) noteContext.textContent = `${local.index} · ${local.name} · локальный выбор · видны только вам`;
+      }
+
+      function keepFocusedRoomInputVisible() {
+        const input = document.activeElement;
+        if (!input?.matches?.('[data-room-chat], [data-room-notes]')) return;
+        window.requestAnimationFrame(() => {
+          const flow = input.closest('.room-panel-body');
+          const anchor = input.closest('.room-chat-composer') || input;
+          if (!flow || !anchor) return;
+          const flowRect = flow.getBoundingClientRect();
+          const anchorRect = anchor.getBoundingClientRect();
+          if (anchorRect.bottom > flowRect.bottom) flow.scrollTop += anchorRect.bottom - flowRect.bottom + 8;
+          if (anchorRect.top < flowRect.top) flow.scrollTop -= flowRect.top - anchorRect.top + 8;
+        });
+      }
+
+      function updateRoomBadges() {
+        app.querySelectorAll('[data-room-unread]').forEach((badge) => {
+          badge.textContent = String(roomStore.unread);
+          badge.hidden = roomStore.unread === 0;
+        });
+        const jump = app.querySelector('[data-room-new]');
+        if (jump) { jump.hidden = roomStore.unread === 0; jump.querySelector('span').textContent = String(roomStore.unread); }
+      }
+
+      function updateRoomPanels(mode, measurements) {
+        const stage = app.querySelector('[data-room-stage]');
+        if (!stage) return;
+        const panels = [...stage.querySelectorAll('[data-room-panel]')];
+        panels.forEach((panel) => { panel.hidden = true; panel.removeAttribute('data-slot'); });
+        stage.dataset.mode = mode;
+        const show = (name, slot) => {
+          const panel = stage.querySelector(`[data-room-panel="${name}"]`);
+          if (!panel) return;
+          panel.hidden = false;
+          panel.dataset.slot = slot;
+        };
+        if (mode === 'focus') {
+          show(roomStore.activePanel, 'focus');
+          stage.dataset.both = 'false';
+        } else if (mode === 'work') {
+          const side = roomStore.activePanel === 'editor' ? roomStore.sidePanel : roomStore.activePanel;
+          if (side !== 'editor') roomStore.sidePanel = side;
+          show('editor', 'editor');
+          show(roomStore.sidePanel, 'side');
+          stage.dataset.both = 'false';
+        } else {
+          show('editor', 'editor');
+          show(roomStore.leftPanel, 'left');
+          const both = roomStore.showBoth && measurements.H >= 690;
+          stage.dataset.both = String(both);
+          if (both) { show('activity', 'rightTop'); show('chat', 'rightBottom'); }
+          else show(roomStore.rightPanel, 'right');
+        }
+        app.querySelectorAll('[data-room-open]').forEach((button) => {
+          const selected = button.dataset.roomOpen === roomStore.activePanel;
+          button.setAttribute('aria-selected', String(selected));
+          button.setAttribute('aria-pressed', String(selected));
+        });
+        app.querySelectorAll('[data-room-both]').forEach((button) => {
+          const available = mode === 'overview' && measurements.H >= 690;
+          button.disabled = !available;
+          button.setAttribute('aria-pressed', String(available && roomStore.showBoth));
+          button.title = available ? 'Показать активность над чатом' : 'Для двух блоков нужно больше высоты';
+        });
+        const editor = stage.querySelector('[data-room-editor]');
+        const chatScroll = stage.querySelector('[data-room-chat-scroll]');
+        const activityScroll = stage.querySelector('[data-room-activity-scroll]');
+        if (editor && !editor.closest('[data-room-panel]').hidden) editor.scrollTop = roomStore.editorScrollTop;
+        if (chatScroll && !chatScroll.closest('[data-room-panel]').hidden) chatScroll.scrollTop = roomStore.chatScrollTop;
+        if (activityScroll && !activityScroll.closest('[data-room-panel]').hidden) activityScroll.scrollTop = roomStore.activityScrollTop;
+      }
+
+      function applyRoomLayout() {
+        const root = app.querySelector('[data-room-root]');
+        if (!root) return null;
+        const m = roomMeasurements();
+        const chromeRunway = m.keyboard && m.inputFocused && m.fixedVisualOrigin && m.vw >= 600 && m.vh <= 480;
+        if (!chromeRunway) {
+          roomChromeStabilized = false;
+          roomChromeGestureCount = 0;
+        }
+        const protoHeight = document.querySelector('.prototype-bar')?.getBoundingClientRect().height / m.zoom || 0;
+        const visualPageTop = roomViewportOverride
+          ? window.scrollY + m.offsetTop
+          : Math.max(0, ((window.visualViewport?.pageTop ?? (window.scrollY + m.offsetTop * m.zoom)) / m.zoom));
+        root.style.setProperty('--room-visible-height', `${m.keyboard ? m.vh : Math.max(240, m.vh - protoHeight)}px`);
+        root.style.setProperty('--room-vv-top', `${m.offsetTop}px`);
+        root.style.setProperty('--room-vv-left', `${m.offsetLeft}px`);
+        root.style.setProperty('--room-fixed-top', `${m.fixedTop}px`);
+        root.style.setProperty('--room-fixed-left', `${m.fixedLeft}px`);
+        root.style.setProperty('--room-vv-width', `${m.vw}px`);
+        root.style.setProperty('--room-vv-height', `${m.vh}px`);
+        root.style.setProperty('--room-anchor-page-top', `${visualPageTop}px`);
+        root.dataset.keyboard = String(m.keyboard);
+        root.dataset.shortLandscape = String(m.vh <= 420);
+        root.dataset.inputFocused = String(m.inputFocused);
+        root.dataset.chromeRunway = String(chromeRunway);
+        root.dataset.chromeStabilized = String(!chromeRunway || roomChromeStabilized);
+        root.dataset.chromeGestureCount = String(roomChromeGestureCount);
+        document.body.classList.toggle('room-keyboard-active', m.keyboard);
+        document.body.classList.toggle('room-keyboard-landscape-runway', chromeRunway);
+        const workAvailable = m.W >= 1000 && m.H >= 440;
+        const overviewAvailable = m.W >= 1320 && m.H >= 640;
+        let mode = workAvailable ? 'work' : 'focus';
+        if (roomStore.manualMode === 'focus') mode = 'focus';
+        if (roomStore.manualMode === 'work') mode = workAvailable ? 'work' : 'focus';
+        if (roomStore.manualMode === 'overview') mode = overviewAvailable ? 'overview' : workAvailable ? 'work' : 'focus';
+        root.dataset.mode = mode;
+        root.dataset.availableW = String(m.W);
+        root.dataset.availableH = String(m.H);
+        root.dataset.viewportSource = roomViewportOverride ? 'simulated-visualViewport' : 'visualViewport';
+        const geometry = `${roomViewportOverride ? 'SIM · ' : ''}W ${m.W} × H ${m.H} · ${mode === 'focus' ? 'Фокус' : mode === 'work' ? 'Рабочий' : 'Обзор'}`;
+        app.querySelectorAll('[data-room-geometry], [data-room-compact-geometry]').forEach((node) => { node.textContent = geometry; });
+        const context = app.querySelector('[data-room-context]');
+        if (context) context.textContent = ({ editor: 'Редактор', steps: 'Шаги', condition: 'Условие', notes: 'Мои заметки', chat: 'Чат', activity: 'Активность' })[roomStore.activePanel];
+        updateRoomStepContext();
+        app.querySelectorAll('[data-room-mode]').forEach((button) => {
+          const target = button.dataset.roomMode;
+          const available = target === 'focus' || (target === 'work' && workAvailable) || (target === 'overview' && overviewAvailable);
+          button.disabled = !available;
+          button.setAttribute('aria-pressed', String(target === mode));
+          button.title = available ? `Включить режим «${button.textContent}»` : target === 'overview' ? 'Обзор доступен при W ≥ 1320 и H ≥ 640' : 'Рабочий режим доступен при W ≥ 1000 и H ≥ 440';
+        });
+        updateRoomPanels(mode, m);
+        if (m.inputFocused) keepFocusedRoomInputVisible();
+        return { ...m, mode, sessionId: roomStore.sessionId, editorInstanceId: roomStore.editorInstanceId, mountCount: roomStore.mountCount };
+      }
+
+      function switchRoomPanel(name, trigger, returnFocus = false) {
+        captureRoomState();
+        lastRoomTrigger = trigger || lastRoomTrigger;
+        roomStore.activePanel = name;
+        if (['steps', 'condition', 'notes'].includes(name)) roomStore.leftPanel = name;
+        if (['chat', 'activity'].includes(name)) roomStore.rightPanel = name;
+        if (name !== 'editor') roomStore.sidePanel = name;
+        roomStore.switchCount += 1;
+        const layout = applyRoomLayout();
+        if (returnFocus) app.querySelector(`.room-area-nav [data-room-open="${name}"]`)?.focus();
+        updateRoomBadges();
+        return layout;
+      }
+
+      function bindRoomEvents(scenario) {
+        const root = app.querySelector('[data-room-root]');
+        if (!root) return;
+        root.dataset.actor = scenario.actor;
+        const editor = root.querySelector('[data-room-editor]');
+        const notes = root.querySelector('[data-room-notes]');
+        const chat = root.querySelector('[data-room-chat]');
+        const chatScroll = root.querySelector('[data-room-chat-scroll]');
+        const activityScroll = root.querySelector('[data-room-activity-scroll]');
+        editor.__prototypeInstanceId = roomStore.editorInstanceId;
+        editor.value = roomStore.code;
+        editor.setSelectionRange(roomStore.editorSelectionStart, roomStore.editorSelectionEnd);
+        editor.scrollTop = roomStore.editorScrollTop;
+        if (notes) notes.value = roomStore.notesDraft;
+        if (chat) chat.value = roomStore.chatDraft;
+        if (chatScroll) chatScroll.scrollTop = roomStore.chatScrollTop;
+        if (activityScroll) activityScroll.scrollTop = roomStore.activityScrollTop;
+
+        root.querySelectorAll('[data-room-open]').forEach((button) => button.addEventListener('click', () => switchRoomPanel(button.dataset.roomOpen, button)));
+        root.querySelectorAll('[data-room-close]').forEach((button) => button.addEventListener('click', () => switchRoomPanel('editor', button, true)));
+        root.querySelectorAll('[data-room-mode]').forEach((button) => button.addEventListener('click', () => { captureRoomState(); roomStore.manualMode = button.dataset.roomMode; applyRoomLayout(); }));
+        root.querySelectorAll('[data-room-both]').forEach((button) => button.addEventListener('click', () => {
+          const m = roomMeasurements();
+          if (root.dataset.mode !== 'overview' || m.H < 690) { showToast('Для двух блоков нужно больше высоты'); return; }
+          roomStore.showBoth = !roomStore.showBoth; applyRoomLayout();
+        }));
+        root.querySelectorAll('[data-room-step]').forEach((button) => button.addEventListener('click', () => {
+          roomStore.selectedStep = button.dataset.roomStep;
+          updateRoomStepContext();
+        }));
+        root.querySelector('[data-room-publish]')?.addEventListener('click', () => showToast('Прототип: только это действие публикует выбранный шаг кандидату'));
+        editor.addEventListener('input', () => { roomStore.code = editor.value; roomStore.editorSelectionStart = editor.selectionStart; roomStore.editorSelectionEnd = editor.selectionEnd; });
+        editor.addEventListener('select', () => { roomStore.editorSelectionStart = editor.selectionStart; roomStore.editorSelectionEnd = editor.selectionEnd; });
+        editor.addEventListener('scroll', () => { roomStore.editorScrollTop = editor.scrollTop; });
+        notes?.addEventListener('input', () => { roomStore.notesDraft = notes.value; });
+        chat?.addEventListener('input', () => { roomStore.chatDraft = chat.value; });
+        root.addEventListener('focusin', (event) => {
+          if (!event.target.matches?.('[data-room-chat], [data-room-notes]')) return;
+          if (!roomStore.inputMode) {
+            roomChromeStabilized = false;
+            roomChromeGestureCount = 0;
+            roomChromeGestureArmed = false;
+          }
+          roomStore.inputMode = true;
+          captureRoomState();
+          applyRoomLayout();
+          keepFocusedRoomInputVisible();
+        });
+        root.addEventListener('focusout', (event) => {
+          if (!event.target.matches?.('[data-room-chat], [data-room-notes]')) return;
+          window.setTimeout(() => {
+            if (document.activeElement?.matches?.('[data-room-chat], [data-room-notes]')) return;
+            roomStore.inputMode = false;
+            applyRoomLayout();
+            window.scrollTo(0, 0);
+          }, 160);
+        });
+        activityScroll?.addEventListener('scroll', () => { roomStore.activityScrollTop = activityScroll.scrollTop; });
+        chatScroll?.addEventListener('scroll', () => {
+          roomStore.chatScrollTop = chatScroll.scrollTop;
+          const atBottom = chatScroll.scrollHeight - chatScroll.clientHeight - chatScroll.scrollTop <= 6;
+          roomStore.readAtBottom = atBottom;
+          if (atBottom && roomStore.activePanel === 'chat') { roomStore.unread = 0; updateRoomBadges(); }
+        });
+        root.querySelector('[data-room-new]')?.addEventListener('click', () => {
+          chatScroll.scrollTop = chatScroll.scrollHeight;
+          roomStore.chatScrollTop = chatScroll.scrollTop; roomStore.unread = 0; roomStore.readAtBottom = true; updateRoomBadges();
+        });
+        root.querySelector('[data-room-incoming]')?.addEventListener('click', () => {
+          const wasAtBottom = chatScroll.scrollHeight - chatScroll.clientHeight - chatScroll.scrollTop <= 6;
+          if (!roomStore.confirmedMessageIds.has('msg-4')) {
+            const message = document.createElement('article'); message.className = 'room-message'; message.dataset.messageId = 'msg-4';
+            message.innerHTML = '<strong>Максим</strong><time>12:47</time><p>Добавил вопрос про повторное подключение.</p>';
+            chatScroll.insertBefore(message, root.querySelector('[data-room-new]'));
+            roomStore.confirmedMessageIds.add('msg-4');
+          }
+          if (wasAtBottom && roomStore.activePanel === 'chat') { chatScroll.scrollTop = chatScroll.scrollHeight; roomStore.unread = 0; }
+          else roomStore.unread += 1;
+          updateRoomBadges();
+        });
+        root.querySelector('[data-room-chat-form]')?.addEventListener('submit', (event) => {
+          event.preventDefault();
+          const submit = event.submitter;
+          roomStore.chatDraft = chat.value;
+          roomStore.pending = true; submit.disabled = true; submit.textContent = 'Ожидает ACK…';
+          window.setTimeout(() => {
+            if (!app.contains(submit) || currentScenario().state === 'revoked') return;
+            if (!roomStore.confirmedMessageIds.has('draft-current')) {
+              const message = document.createElement('article'); message.className = 'room-message'; message.dataset.messageId = 'draft-current';
+              message.innerHTML = `<strong>Вы</strong><time>сейчас</time><p>${escapeHtml(roomStore.chatDraft)}</p>`;
+              chatScroll.insertBefore(message, root.querySelector('[data-room-new]'));
+              roomStore.confirmedMessageIds.add('draft-current');
+            }
+            roomStore.pending = false; roomStore.chatDraft = ''; chat.value = ''; submit.disabled = false; submit.textContent = 'Отправить';
+            chatScroll.scrollTop = chatScroll.scrollHeight; roomStore.readAtBottom = true; showToast('ACK получен: одно логическое сообщение подтверждено');
+          }, 450);
+        });
+        root.querySelector('[data-room-save-note]')?.addEventListener('click', () => { roomStore.notesDraft = notes.value; showToast('Заметка подтверждена только в прототипе'); });
+        root.querySelector('[data-room-load-more]')?.addEventListener('click', (event) => {
+          const before = activityScroll.scrollHeight; const list = activityScroll.querySelector('.room-event-list');
+          if (list && !list.dataset.prepended) { list.insertAdjacentHTML('afterbegin', '<li><time>12:35:11 · сессия A</time>Открыта комната</li>'); list.dataset.prepended = 'true'; activityScroll.scrollTop += activityScroll.scrollHeight - before; }
+          event.currentTarget.textContent = 'Предыдущие события загружены'; event.currentTarget.disabled = true;
+        });
+        root.querySelectorAll('[data-room-retry]').forEach((button) => button.addEventListener('click', () => { captureRoomState(); setScenarioParam('state', 'reconnecting'); }));
+        root.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape' && roomStore.activePanel !== 'editor' && !workspaceDialog.open && !createTeamDialog.open && !unsavedDialog.open) {
+            event.preventDefault(); const closed = roomStore.activePanel; switchRoomPanel('editor', event.currentTarget); root.querySelector(`.room-area-nav [data-room-open="${closed}"]`)?.focus();
+          }
+        });
+        let scheduled = 0;
+        roomResizeHandler = () => {
+          window.cancelAnimationFrame(scheduled);
+          scheduled = window.requestAnimationFrame(() => { captureRoomState(); applyRoomLayout(); keepFocusedRoomInputVisible(); });
+        };
+        window.addEventListener('resize', roomResizeHandler);
+        window.visualViewport?.addEventListener('resize', roomResizeHandler);
+        window.visualViewport?.addEventListener('scroll', roomResizeHandler);
+        roomChromeGestureArmHandler = () => {
+          const currentRoot = app.querySelector('[data-room-root]');
+          if (currentRoot?.dataset.chromeRunway === 'true' && !roomChromeStabilized && roomChromeGestureCount === 0) roomChromeGestureArmed = true;
+        };
+        window.addEventListener('wheel', roomChromeGestureArmHandler, { passive: true });
+        window.addEventListener('touchstart', roomChromeGestureArmHandler, { passive: true });
+        roomDocumentScrollHandler = () => {
+          const currentRoot = app.querySelector('[data-room-root]');
+          if (!currentRoot || currentRoot.dataset.chromeRunway !== 'true' || window.scrollY <= 0 || roomChromeStabilized || !roomChromeGestureArmed) return;
+          if (roomChromeGestureCount === 0) roomChromeGestureCount = 1;
+          roomChromeGestureArmed = false;
+          currentRoot.dataset.chromeGestureCount = String(roomChromeGestureCount);
+          window.clearTimeout(roomChromeSettleTimer);
+          roomChromeSettleTimer = window.setTimeout(() => {
+            window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+              const input = document.activeElement;
+              if (!input?.matches?.('[data-room-chat], [data-room-notes]')) return;
+              roomChromeStabilized = true;
+              captureRoomState();
+              applyRoomLayout();
+              input.focus({ preventScroll: true });
+              keepFocusedRoomInputVisible();
+            }));
+          }, 48);
+        };
+        window.addEventListener('scroll', roomDocumentScrollHandler, { passive: true });
+        window.__prototypeSetVisualViewport = (width, height, keyboard = false, offsetTop = 0, offsetLeft = 0, fixedElementsUseVisualOrigin = false) => {
+          roomViewportOverride = { width, height, keyboard, offsetTop, offsetLeft, fixedElementsUseVisualOrigin };
+          captureRoomState();
+          return applyRoomLayout();
+        };
+        window.__prototypeClearVisualViewport = () => { roomViewportOverride = null; captureRoomState(); return applyRoomLayout(); };
+        window.__prototypeRoomSnapshot = () => {
+          captureRoomState();
+          const layout = applyRoomLayout();
+          return { ...layout, activePanel: roomStore.activePanel, selectedStep: roomStore.selectedStep, inputMode: roomStore.inputMode, code: roomStore.code, selectionStart: roomStore.editorSelectionStart, selectionEnd: roomStore.editorSelectionEnd, editorScrollTop: roomStore.editorScrollTop, chatDraft: roomStore.chatDraft, notesDraft: roomStore.notesDraft, chatScrollTop: roomStore.chatScrollTop, activityScrollTop: roomStore.activityScrollTop, unread: roomStore.unread, switchCount: roomStore.switchCount, editorConnected: app.querySelector('[data-room-editor]')?.isConnected, editorExpando: app.querySelector('[data-room-editor]')?.__prototypeInstanceId };
+        };
+        applyRoomLayout();
+        updateRoomBadges();
+      }
+
+      function openDialog(dialog, trigger) {
+        lastDialogTrigger = trigger || document.activeElement;
+        dialog.showModal();
+        const focusTarget = dialog.querySelector('input, button, select, a[href]');
+        window.setTimeout(() => focusTarget?.focus(), 0);
+      }
+
+      function closeDialog(dialog) {
+        dialog.close();
+        lastDialogTrigger?.focus();
+      }
+
+      function renderWorkspaceChoices(scenario) {
+        const teamChoices = scenario.actor === 'personal' ? '' : `
+          <button class="workspace-choice" type="button" data-workspace="atlas" aria-current="${scenario.route.path.startsWith('/teams/atlas')}"><span><strong>${escapeHtml(teamName(scenario.long))}</strong><small>${escapeHtml(actorLabels[scenario.actor])} · id at-204</small></span><span aria-hidden="true">→</span></button>
+          <button class="workspace-choice" type="button" data-workspace="orbit"><span><strong>${escapeHtml(teamName(scenario.long, 'orbit'))}</strong><small>Участник · id or-918</small></span><span aria-hidden="true">→</span></button>`;
+        workspaceChoices.innerHTML = `
+          <button class="workspace-choice" type="button" data-workspace="personal" aria-current="${scenario.route.path.startsWith('/personal')}"><span><strong>Личное пространство</strong><small>Комнаты, задачи и личный HR-флаг</small></span><span aria-hidden="true">→</span></button>
+          ${teamChoices}
+          <button class="workspace-choice" type="button" data-create-team><span><strong>＋ Создать команду</strong><small>В существующую команду вступают по приглашению</small></span><span aria-hidden="true">→</span></button>`;
+      }
+
+      function bindViewEvents(scenario) {
+        bindRoomEvents(scenario);
+        const menuButton = app.querySelector('[data-mobile-menu]');
+        const sidebar = app.querySelector('.sidebar');
+        const scrim = app.querySelector('[data-scrim]');
+        const closeMenu = () => { sidebar?.setAttribute('data-open', 'false'); scrim?.setAttribute('data-open', 'false'); menuButton?.setAttribute('aria-expanded', 'false'); menuButton?.focus(); };
+        menuButton?.addEventListener('click', () => { sidebar?.setAttribute('data-open', 'true'); scrim?.setAttribute('data-open', 'true'); menuButton.setAttribute('aria-expanded', 'true'); sidebar?.querySelector('button, a')?.focus(); });
+        scrim?.addEventListener('click', closeMenu);
+        app.querySelector('[data-workspace-switcher]')?.addEventListener('click', (event) => {
+          if (draftStore.interviewDirty && scenario.route.path.endsWith('/interviews/new')) openDialog(unsavedDialog, event.currentTarget);
+          else { renderWorkspaceChoices(scenario); openDialog(workspaceDialog, event.currentTarget); }
+        });
+        app.querySelector('[data-retry]')?.addEventListener('click', () => setScenarioParam('state', 'loading'));
+        app.querySelectorAll('[data-set-state]').forEach((button) => button.addEventListener('click', () => setScenarioParam('state', button.dataset.setState)));
+        app.querySelectorAll('[data-simulate-conflict]').forEach((button) => button.addEventListener('click', () => setScenarioParam('state', 'conflict')));
+        app.querySelector('[data-invite-demo]')?.addEventListener('click', () => { location.hash = link('/join/team', scenario, { actor: 'invited', state: 'success', invite: 'preview' }); });
+        app.querySelectorAll('[data-demo-action]').forEach((button) => button.addEventListener('click', () => {
+          if (button.textContent.trim() === 'Войти в комнату') {
+            const roomActor = scenario.route.path.startsWith('/personal/') ? 'guestManager' : scenario.actor;
+            location.hash = link('/room/int-204', scenario, { actor: roomActor, state: 'success' });
+          } else showToast('Демонстрационное действие: данные не изменены');
+        }));
+        app.querySelector('[data-copy-draft]')?.addEventListener('click', () => showToast('Локальный черновик скопирован в демонстрационном режиме'));
+        app.querySelector('[data-copy-id]')?.addEventListener('click', () => showToast('Личный ID скопирован в демонстрационном режиме'));
+        app.querySelector('[data-sign-out]')?.addEventListener('click', () => { location.hash = link('/sign-in', scenario, { actor: 'anonymous', state: 'success' }); });
+        app.querySelector('[data-switch-account]')?.addEventListener('click', () => { location.hash = link('/sign-in', scenario, { actor: 'anonymous', state: 'success', return: 'invite' }); });
+        app.querySelector('[data-invite-retry]')?.addEventListener('click', () => { location.hash = link('/join/team', scenario, { invite: 'preview', state: 'success' }); });
+        app.querySelectorAll('[data-invite-state]').forEach((button) => button.addEventListener('click', () => { location.hash = link('/join/team', scenario, { invite: button.dataset.inviteState, state: button.dataset.inviteState === 'error' ? 'error' : 'success' }); }));
+        app.querySelector('[data-accept-invite]')?.addEventListener('click', (event) => {
+          event.currentTarget.disabled = true; event.currentTarget.textContent = 'Вступаем…';
+          window.setTimeout(() => { location.hash = link('/join/team', scenario, { invite: 'success', state: 'success' }); }, 400);
+        });
+        app.querySelectorAll('[data-legacy]').forEach((button) => button.addEventListener('click', () => {
+          const oldPath = button.dataset.legacy; const mapped = legacyMap[oldPath];
+          const [path, query = ''] = mapped.split('?'); const extra = { actor: 'personal', state: 'success', legacy: oldPath };
+          if (query) new URLSearchParams(query).forEach((value, key) => { extra[key] = value; });
+          location.hash = link(path, scenario, extra);
+        }));
+        app.querySelector('#taskTitle')?.addEventListener('input', (event) => { draftStore.taskTitle = event.target.value; draftStore.taskDirty = true; });
+        app.querySelector('#taskCondition')?.addEventListener('input', (event) => { draftStore.taskCondition = event.target.value; draftStore.taskDirty = true; });
+        app.querySelector('#formTitle')?.addEventListener('input', (event) => { draftStore.interviewTitle = event.target.value; draftStore.interviewDirty = true; });
+        app.querySelector('#formCandidate')?.addEventListener('input', (event) => { draftStore.candidateName = event.target.value; draftStore.interviewDirty = true; });
+        app.querySelector('#prepTitle')?.addEventListener('input', (event) => { draftStore.interviewTitle = event.target.value; });
+        app.querySelector('#formTrack')?.addEventListener('change', (event) => {
+          draftStore.interviewDirty = true;
+          const vacancy = app.querySelector('#formVacancy'); const message = app.querySelector('#contextChangeMessage');
+          vacancy.value = 'none'; vacancy.disabled = event.target.value === 'none';
+          message.textContent = event.target.value === 'none' ? 'Вакансия очищена: выбран вариант «Без трека».' : 'Несовместимая вакансия очищена. Подтвердите новый контекст перед пересчётом программы.';
+        });
+        app.querySelector('#formVacancy')?.addEventListener('change', () => { draftStore.interviewDirty = true; });
+        app.querySelector('[data-task-form]')?.addEventListener('submit', (event) => { event.preventDefault(); event.submitter.disabled = true; event.submitter.textContent = 'Сохраняем…'; window.setTimeout(() => { draftStore.taskDirty = false; showToast('Новая версия подтверждена в прототипе'); event.submitter.disabled = false; event.submitter.textContent = 'Сохранить новую версию'; }, 450); });
+        app.querySelector('[data-interview-form]')?.addEventListener('submit', (event) => { event.preventDefault(); const destination = event.submitter.value; event.submitter.disabled = true; event.submitter.textContent = 'Проверяем и создаём…'; window.setTimeout(() => { draftStore.interviewDirty = false; location.hash = link('/teams/atlas/interviews/int-204', scenario, { actor: 'roomOwner', state: 'success', opened: destination === 'room' ? '1' : '0' }); }, 500); });
+        app.querySelector('[data-demo-form]')?.addEventListener('submit', (event) => { event.preventDefault(); showToast('Прототип: интервью не создано'); });
+        app.querySelector('[data-profile-form]')?.addEventListener('submit', (event) => { event.preventDefault(); showToast('Изменения подтверждены в прототипе'); });
+        app.querySelector('[data-signin-form]')?.addEventListener('submit', (event) => {
+          event.preventDefault();
+          const returnsToInvite = scenario.route.params.get('return') === 'invite';
+          location.hash = returnsToInvite ? link('/join/team', scenario, { actor: 'invited', state: 'success', invite: 'preview' }) : link('/personal/interviews', scenario, { actor: 'personal', state: 'success' });
+        });
+      }
+
+      actorSelect.addEventListener('change', () => setScenarioParam('actor', actorSelect.value));
+      stateSelect.addEventListener('change', () => setScenarioParam('state', stateSelect.value));
+      longToggle.addEventListener('change', () => setScenarioParam('long', longToggle.checked ? '1' : '0'));
+      window.addEventListener('hashchange', render);
+
+      document.addEventListener('click', (event) => {
+        const close = event.target.closest('[data-close-dialog]');
+        if (close) closeDialog(close.closest('dialog'));
+      });
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          if (workspaceDialog.open) closeDialog(workspaceDialog);
+          if (createTeamDialog.open) closeDialog(createTeamDialog);
+          if (unsavedDialog.open) closeDialog(unsavedDialog);
+          const sidebar = app.querySelector('.sidebar[data-open="true"]');
+          if (sidebar) app.querySelector('[data-scrim]')?.click();
+        }
+      });
+      workspaceChoices.addEventListener('click', (event) => {
+        const choice = event.target.closest('[data-workspace]');
+        if (choice) {
+          closeDialog(workspaceDialog);
+          const target = choice.dataset.workspace === 'personal' ? '/personal/interviews' : `/teams/${choice.dataset.workspace}/interviews`;
+          location.hash = link(target, currentScenario(), { actor: choice.dataset.workspace === 'personal' ? 'personal' : currentScenario().actor, state: 'success' });
+        }
+        if (event.target.closest('[data-create-team]')) { closeDialog(workspaceDialog); openDialog(createTeamDialog, lastDialogTrigger); }
+      });
+      document.querySelector('[data-stay-draft]').addEventListener('click', () => {
+        closeDialog(unsavedDialog);
+        app.querySelector('.sidebar')?.setAttribute('data-open', 'false');
+        app.querySelector('[data-scrim]')?.setAttribute('data-open', 'false');
+        app.querySelector('[data-mobile-menu]')?.setAttribute('aria-expanded', 'false');
+        app.querySelector('[data-mobile-menu]')?.focus();
+      });
+      document.querySelector('[data-leave-draft]').addEventListener('click', () => {
+        const trigger = lastDialogTrigger;
+        draftStore.interviewDirty = false;
+        closeDialog(unsavedDialog);
+        renderWorkspaceChoices(currentScenario());
+        openDialog(workspaceDialog, trigger);
+      });
+      document.querySelector('#createTeamForm').addEventListener('submit', (event) => {
+        event.preventDefault();
+        const input = document.querySelector('#teamName'); const error = document.querySelector('#teamNameError'); const value = input.value.trim();
+        if (!value || value.length > 100) { input.setAttribute('aria-invalid', 'true'); error.textContent = 'Введите название от 1 до 100 символов.'; input.focus(); return; }
+        input.removeAttribute('aria-invalid'); error.textContent = '';
+        const submit = event.submitter; submit.disabled = true; submit.textContent = 'Создаём…';
+        window.setTimeout(() => { closeDialog(createTeamDialog); submit.disabled = false; submit.textContent = 'Создать команду'; input.value = ''; location.hash = link('/teams/nova/interviews', currentScenario(), { actor: 'owner', state: 'empty', created: '1' }); }, 450);
+      });
+
+      if (!location.hash) location.replace('#/personal/interviews?actor=personal&state=success');
+      else render();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,47 @@
+{
+  "simulated": {
+    "vw": 390,
+    "vh": 360,
+    "W": 366,
+    "H": 276,
+    "keyboard": true,
+    "zoom": 1,
+    "offsetTop": 0,
+    "offsetLeft": 0,
+    "fixedVisualOrigin": false,
+    "fixedTop": 0,
+    "fixedLeft": 0,
+    "inputFocused": false,
+    "viewportCompressed": false,
+    "shortViewport": true,
+    "mode": "focus",
+    "sessionId": "prototype-room-session-int-204",
+    "editorInstanceId": "editor-instance-int-204",
+    "mountCount": 1
+  },
+  "contextRect": {
+    "x": 0,
+    "y": 0,
+    "width": 390,
+    "height": 28
+  },
+  "navRect": {
+    "x": 0,
+    "y": 28,
+    "width": 390,
+    "height": 44
+  },
+  "serviceHeight": 72,
+  "sendRect": {
+    "x": 271.78125,
+    "y": 111,
+    "width": 111.21875,
+    "height": 44
+  },
+  "sendReachable": true,
+  "sixDirectActions": 6,
+  "compactCurrentStepVisible": true,
+  "compactCurrentStepText": "Локально 02 · кандидату 02",
+  "minimumActionWidth": 65,
+  "horizontalOverflow": 0
+}

@@ -7,9 +7,10 @@ type HrProfileSectionProps = {
   user: User;
   isLoading: boolean;
   onSave: (isHr: boolean) => Promise<boolean>;
+  showIdentity?: boolean;
 };
 
-export function HrProfileSection({ user, isLoading, onSave }: HrProfileSectionProps) {
+export function HrProfileSection({ user, isLoading, onSave, showIdentity = true }: HrProfileSectionProps) {
   const [checked, setChecked] = useState(user.isHr);
   const [error, setError] = useState("");
   const [retryValue, setRetryValue] = useState<boolean | null>(null);
@@ -45,7 +46,7 @@ export function HrProfileSection({ user, isLoading, onSave }: HrProfileSectionPr
       <div>
         <Title order={4}>Нанимающий</Title>
         <Text size="sm" c="gray.5" mt={4}>
-          Личный список закреплённых интервью. Права в комнатах выдаются отдельно и не меняются при отключении.
+          Для личных интервью. В команде вас назначают на конкретное интервью
         </Text>
       </div>
       <Checkbox
@@ -54,7 +55,7 @@ export function HrProfileSection({ user, isLoading, onSave }: HrProfileSectionPr
         onChange={(event) => setChecked(event.currentTarget.checked)}
         disabled={isLoading}
       />
-      {user.isHr ? (
+      {user.isHr && showIdentity ? (
         <CopyHrId id={user.id} />
       ) : null}
       <Button

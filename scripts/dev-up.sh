@@ -67,6 +67,11 @@ need() {
 need node
 need npm
 
+if [[ -z "${CHAT_RECEIPT_HMAC_SECRET:-}" ]]; then
+  echo "❌ CHAT_RECEIPT_HMAC_SECRET обязателен (стабильный Base64URL secret из 32 байт; см. README)."
+  exit 1
+fi
+
 JAVA_BIN=""
 if [[ -n "${JAVA_HOME:-}" && -x "$JAVA_HOME/bin/java" ]]; then
   JAVA_BIN="$JAVA_HOME/bin/java"
@@ -135,6 +140,7 @@ echo ">>> Стартую backend (Spring Boot)..."
 export DB_URL="${DB_URL:-jdbc:postgresql://localhost:5432/interview_online}"
 export DB_USER="${DB_USER:-interview}"
 export DB_PASSWORD="${DB_PASSWORD:-interview}"
+export CHAT_RECEIPT_HMAC_SECRET
 
 (
   cd "$ROOT_DIR/backend"

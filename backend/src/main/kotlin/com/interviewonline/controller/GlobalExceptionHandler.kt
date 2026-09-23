@@ -17,22 +17,31 @@ class GlobalExceptionHandler {
     private val jsonUtf8 = MediaType("application", "json", StandardCharsets.UTF_8)
 
     @ExceptionHandler(ApiException::class)
-    fun handleApiException(ex: ApiException): ResponseEntity<Map<String, String>> {
-        return ResponseEntity.status(ex.status).headers(ex.headers).contentType(jsonUtf8).body(mapOf("error" to ex.message))
+    fun handleApiException(ex: ApiException): ResponseEntity<Map<String, Any>> {
+        return ResponseEntity.status(ex.status).headers(ex.headers).secure().contentType(jsonUtf8)
+            .body(buildMap<String, Any> {
+                put("error", ex.message)
+                val preservesErrorOnlyContract = ex.headers.getFirst("Referrer-Policy") == "no-referrer"
+                if (!preservesErrorOnlyContract) {
+                    put("code", ex.code ?: ex.status.name)
+                    ex.currentRevision?.let { put("currentRevision", it) }
+                }
+            })
     }
 
     @ExceptionHandler(DataIntegrityViolationException::class)
     fun handleIntegrityViolation(ex: DataIntegrityViolationException): ResponseEntity<Map<String, String>> {
-        return ResponseEntity.status(HttpStatus.CONFLICT)
+        return ResponseEntity.status(HttpStatus.CONFLICT).secure()
             .contentType(jsonUtf8)
-            .body(mapOf("error" to "Конфликт данных: запись с такими параметрами уже существует"))
+            .body(mapOf("error" to "Конфликт данных", "code" to "DATA_CONFLICT"))
     }
 
     @ExceptionHandler(DataAccessException::class)
     fun handleDataAccess(ex: DataAccessException): ResponseEntity<Map<String, String>> {
-        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).contentType(jsonUtf8).body(
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).secure().contentType(jsonUtf8).body(
             mapOf(
-                "error" to "База данных недоступна. Запустите PostgreSQL (см. README) или backend с профилем local (H2): scripts/start-backend-local.ps1",
+                "error" to "Временная ошибка хранилища",
+                "code" to "DATABASE_UNAVAILABLE",
             ),
         )
     }
@@ -40,11 +49,17 @@ class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException::class)
     fun handleValidation(ex: MethodArgumentNotValidException): ResponseEntity<Map<String, String>> {
         val msg = ex.bindingResult.fieldErrors.firstOrNull()?.defaultMessage ?: "Некорректный запрос"
-        return ResponseEntity.badRequest().contentType(jsonUtf8).body(mapOf("error" to msg))
+        return ResponseEntity.badRequest().secure().contentType(jsonUtf8)
+            .body(mapOf("error" to msg, "code" to "INVALID_REQUEST"))
     }
 
     @ExceptionHandler(HttpMessageNotReadableException::class)
     fun handleUnreadableBody(ex: HttpMessageNotReadableException): ResponseEntity<Map<String, String>> {
-        return ResponseEntity.badRequest().contentType(jsonUtf8).body(mapOf("error" to "Некорректный запрос"))
+        return ResponseEntity.badRequest().secure().contentType(jsonUtf8)
+            .body(mapOf("error" to "Некорректный запрос", "code" to "INVALID_REQUEST"))
+    }
+
+    private fun <T : ResponseEntity.BodyBuilder> T.secure(): T = apply {
+        header("Cache-Control", "private, no-store")
     }
 }

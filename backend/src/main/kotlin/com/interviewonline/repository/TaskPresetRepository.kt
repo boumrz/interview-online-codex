@@ -6,10 +6,18 @@ import org.springframework.data.jpa.repository.Query
 
 interface TaskPresetRepository : JpaRepository<TaskPreset, String> {
     fun findAllByOwnerUserIdOrderByCreatedAtDesc(ownerUserId: String): List<TaskPreset>
+    fun findAllByOwnerUserIdAndStatusOrderByCreatedAtDescIdAsc(ownerUserId: String, status: String): List<TaskPreset>
     fun findByIdAndOwnerUserId(id: String, ownerUserId: String): TaskPreset?
     fun deleteByIdAndOwnerUserId(id: String, ownerUserId: String): Long
     fun existsByOwnerUserIdAndNameIgnoreCase(ownerUserId: String, name: String): Boolean
     fun existsByOwnerUserIdAndNameIgnoreCaseAndIdNot(ownerUserId: String, name: String, id: String): Boolean
+    fun existsByOwnerUserIdAndStatusAndNameIgnoreCase(ownerUserId: String, status: String, name: String): Boolean
+    fun existsByOwnerUserIdAndStatusAndNameIgnoreCaseAndIdNot(
+        ownerUserId: String,
+        status: String,
+        name: String,
+        id: String,
+    ): Boolean
 
     @Query("""
         SELECT DISTINCT p FROM TaskPreset p

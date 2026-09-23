@@ -1,4 +1,4 @@
 interface:
-  display_name: "SDD OpenSpec"
-  short_description: "Run every project task through OpenSpec SDD."
-  default_prompt: "Use $sdd-openspec to plan, validate, and execute this project task."
+  display_name: "Feature specification workflow"
+  short_description: "Use the feature specifications linked by SPEC.md."
+  default_prompt: "Use SPEC.md as the feature index and the relevant specs/features file as the source of truth. Treat OpenSpec as historical context only."

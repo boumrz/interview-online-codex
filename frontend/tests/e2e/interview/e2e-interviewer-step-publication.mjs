@@ -263,6 +263,7 @@ async function expectPublishedEditorCode(page, codeSentinel, label) {
 }
 
 async function expectEditableManagerWorkspace(page, label) {
+  await page.getByRole('tab', { name: 'Условие', exact: true }).click();
   const codeEditor = page.locator('[data-testid="room-code-editor-host"] .cm-editor');
   const briefingEditor = page.locator('[data-testid="briefing-board-interviewer"] [data-testid="room-markdown-editor"] .cm-editor');
   const focusToggle = page.locator('[data-testid="briefing-focus-toggle"]');
@@ -284,6 +285,7 @@ async function expectEditableManagerWorkspace(page, label) {
 }
 
 async function expectWorkspaceFocusMode(page, expectedState, label) {
+  await page.getByRole('tab', { name: 'Условие', exact: true }).click();
   const toggle = page.locator('[data-testid="briefing-focus-toggle"]');
   await toggle.waitFor({ state: "visible", timeout: 10_000 });
   await page.waitForFunction(
@@ -355,6 +357,7 @@ async function replaceSharedEditorCode(page, nextCode, label, expectedMarker = "
 }
 
 async function replaceBriefingMarkdown(page, nextMarkdown, label) {
+  await page.getByRole('tab', { name: 'Условие', exact: true }).click();
   const content = page.locator('[data-testid="room-markdown-editor"] .cm-content');
   await content.waitFor({ state: "visible", timeout: 10_000 });
   await content.click();
@@ -375,6 +378,7 @@ async function replaceBriefingMarkdown(page, nextMarkdown, label) {
 }
 
 async function expectBriefingMarkdown(page, marker, label) {
+  await page.getByRole('tab', { name: 'Условие', exact: true }).click();
   const content = page.locator('[data-testid="room-markdown-editor"] .cm-content');
   await content.waitFor({ state: "visible", timeout: 10_000 });
   await page.waitForFunction(
@@ -434,6 +438,7 @@ async function bootstrapAuthenticatedPage(page, auth, inviteCode) {
   }, { token: auth.token, user: auth.user, displayName, roomInviteCode: inviteCode });
   await page.goto(`${webBaseUrl}/room/${inviteCode}`, { waitUntil: "domcontentloaded" });
   await page.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15_000 });
+  await page.getByRole("tab", { name: "Шаги", exact: true }).click();
 }
 
 async function configureBrowserApiTransport(context) {
@@ -495,6 +500,7 @@ async function waitForRealtimeReady(page, label) {
 }
 
 async function expectGlobalMarker(page, stepIndex, label) {
+  await page.getByRole('tab', { name: 'Шаги', exact: true }).click();
   const marker = page.locator(`[data-testid="room-global-active-step-${stepIndex}"]`);
   await marker.waitFor({ state: "visible", timeout: 10_000 });
   assertCondition((await marker.textContent())?.trim() === "Активен", `${label}_GLOBAL_MARKER_LABEL_MISMATCH`);
@@ -503,6 +509,7 @@ async function expectGlobalMarker(page, stepIndex, label) {
 }
 
 async function expectGlobalMarkerAccessibleName(page, stepIndex, taskTitle, label) {
+  await page.getByRole('tab', { name: 'Шаги', exact: true }).click();
   const marker = page.locator(`[data-testid="room-global-active-step-${stepIndex}"]`);
   await marker.waitFor({ state: "visible", timeout: 10_000 });
   assertCondition(
@@ -512,6 +519,7 @@ async function expectGlobalMarkerAccessibleName(page, stepIndex, taskTitle, labe
 }
 
 async function expectLocalSelection(page, stepIndex, title, label) {
+  await page.getByRole('tab', { name: 'Шаги', exact: true }).click();
   const row = page.locator(`[data-testid="room-step-row-${stepIndex}"]`);
   await row.waitFor({ state: "visible", timeout: 10_000 });
   assertCondition((await row.getAttribute("data-local-selected")) === "true", `${label}_LOCAL_SELECTION_MARKER_MISSING`);
@@ -524,6 +532,11 @@ async function expectLocalSelection(page, stepIndex, title, label) {
     borderTopWidth === "0px",
     `${label}_LOCAL_SELECTION_MUST_NOT_ADD_BORDER actual=${borderTopWidth}`,
   );
+}
+
+async function selectManagerStep(page, stepIndex) {
+  await page.getByRole('tab', { name: 'Шаги', exact: true }).click();
+  await page.locator(`[data-testid="room-step-row-${stepIndex}"]`).click();
 }
 
 async function expectManagerStepChangeNotification(page, taskTitle, label) {
@@ -550,6 +563,7 @@ async function expectCompactManagerControls(page, label) {
 }
 
 async function expectPublishAction(page, taskTitle, label) {
+  await page.getByRole('tab', { name: 'Шаги', exact: true }).click();
   const publishButton = page.locator('[data-testid="room-publish-step"]');
   await publishButton.waitFor({ state: "visible", timeout: 10_000 });
   assertCondition((await publishButton.textContent())?.trim() === "Переключить", `${label}_PUBLISH_LABEL_MISMATCH`);
@@ -632,7 +646,7 @@ try {
   const candidateSnapshot = await fetch(`${apiBaseUrl}/rooms/${room.inviteCode}/tasks/1/workspace`);
   assertCondition(candidateSnapshot.status === 403, `CANDIDATE_WORKSPACE_SNAPSHOT_MUST_BE_FORBIDDEN actual=${candidateSnapshot.status}`);
 
-  await ownerPage.locator('[data-testid="room-step-row-1"]').click();
+  await selectManagerStep(ownerPage, 1);
   await expectLocalSelection(ownerPage, 1, tasks[1].title, "OWNER_AFTER_LOCAL_SELECT");
   await expectManagerWorkspace(ownerPage, 1, "STEP_CONTEXT_1", "OWNER_AFTER_LOCAL_SELECT");
   await expectEditableManagerWorkspace(ownerPage, "OWNER_AFTER_LOCAL_SELECT");
@@ -667,7 +681,7 @@ try {
     "OWNER_MANAGER_WORKSPACE_LANGUAGE",
   );
 
-  await interviewerPage.locator('[data-testid="room-step-row-1"]').click();
+  await selectManagerStep(interviewerPage, 1);
   await expectLocalSelection(interviewerPage, 1, tasks[1].title, "INTERVIEWER_OPENS_SHARED_MANAGER_WORKSPACE");
   await expectEditableManagerWorkspace(interviewerPage, "INTERVIEWER_OPENS_SHARED_MANAGER_WORKSPACE");
   await expectPublishedEditorCode(interviewerPage, "MANAGER_ONLY_CODE", "INTERVIEWER_RECEIVES_MANAGER_CODE");
@@ -689,6 +703,7 @@ try {
   // saved local selection and the current shared task state.
   await interviewerPage.reload({ waitUntil: "domcontentloaded" });
   await waitForRealtimeReady(interviewerPage, "INTERVIEWER_RECONNECT");
+  await interviewerPage.getByRole("tab", { name: "Шаги", exact: true }).click();
   await expectLocalSelection(interviewerPage, 1, tasks[1].title, "INTERVIEWER_RECONNECT");
   await expectPublishedEditorCode(interviewerPage, "MANAGER_ONLY_CODE", "INTERVIEWER_RECONNECTS_TO_MANAGER_CODE");
   await expectBriefingMarkdown(interviewerPage, "MANAGER_ONLY_BRIEFING", "INTERVIEWER_RECONNECTS_TO_MANAGER_BRIEFING");
@@ -724,14 +739,14 @@ try {
 
   // Documents for different inactive steps must not merge, and returning to
   // the first task must recover the manager-shared document.
-  await ownerPage.locator('[data-testid="room-step-row-2"]').click();
+  await selectManagerStep(ownerPage, 2);
   await expectEditableManagerWorkspace(ownerPage, "OWNER_SWITCHES_TO_OTHER_MANAGER_WORKSPACE");
   await expectPublishedEditorCode(ownerPage, "STEP_CONTEXT_2", "OWNER_OTHER_MANAGER_WORKSPACE_ISOLATED");
   assertCondition(
     await ownerPage.getByText("MANAGER_ONLY_CODE", { exact: false }).count() === 0,
     "MANAGER_WORKSPACE_DOCUMENTS_MUST_NOT_MERGE",
   );
-  await ownerPage.locator('[data-testid="room-step-row-1"]').click();
+  await selectManagerStep(ownerPage, 1);
   await expectPublishedEditorCode(ownerPage, "MANAGER_ONLY_CODE", "OWNER_RECOVERS_FIRST_MANAGER_WORKSPACE");
   await expectBriefingMarkdown(ownerPage, "MANAGER_ONLY_BRIEFING", "OWNER_RECOVERS_FIRST_MANAGER_BRIEFING");
 
@@ -819,6 +834,7 @@ try {
     candidateRealtime.close();
   }
 
+  await ownerPage.getByRole('tab', { name: 'Шаги', exact: true }).click();
   const ownerPublishButton = ownerPage.locator('[data-testid="room-publish-step"]');
   await ownerPublishButton.waitFor({ state: "visible", timeout: 10_000 });
   await ownerPublishButton.click();
@@ -884,7 +900,7 @@ try {
   await replaceSharedEditorCode(ownerPage, freshPreviewCode, "OWNER_SHARED_EDIT");
   await waitForRoomCode(owner.token, room.inviteCode, "PREVIEW_FRESHNESS");
 
-  await interviewerPage.locator('[data-testid="room-step-row-2"]').click();
+  await selectManagerStep(interviewerPage, 2);
   await expectLocalSelection(interviewerPage, 2, tasks[2].title, "INTERVIEWER_AFTER_LOCAL_SELECT");
   await expectManagerWorkspace(interviewerPage, 2, "STEP_CONTEXT_2", "INTERVIEWER_AFTER_LOCAL_SELECT");
   await expectEditableManagerWorkspace(interviewerPage, "INTERVIEWER_AFTER_LOCAL_SELECT");
@@ -927,7 +943,7 @@ try {
   // Another interviewer now makes that already selected task 2 active. The
   // old task-3 notification must disappear instead of offering a redirect
   // back to an obsolete room step.
-  await interviewerPage.locator('[data-testid="room-step-row-1"]').click();
+  await selectManagerStep(interviewerPage, 1);
   const interviewerReturnsToOwnerStepButton = interviewerPage.locator('[data-testid="room-publish-step"]');
   await interviewerReturnsToOwnerStepButton.waitFor({ state: "visible", timeout: 10_000 });
   await interviewerReturnsToOwnerStepButton.click();
@@ -941,7 +957,7 @@ try {
 
   // Recreate a notification and verify the complementary case: publication
   // initiated by the notified manager also clears the stale notification.
-  await interviewerPage.locator('[data-testid="room-step-row-2"]').click();
+  await selectManagerStep(interviewerPage, 2);
   const interviewerRepublishesThirdStepButton = interviewerPage.locator('[data-testid="room-publish-step"]');
   await interviewerRepublishesThirdStepButton.waitFor({ state: "visible", timeout: 10_000 });
   await interviewerRepublishesThirdStepButton.click();

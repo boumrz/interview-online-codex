@@ -1,0 +1,103 @@
+.trigger {
+  min-width: 44px;
+  min-height: 44px;
+  max-width: 100%;
+  flex: 0 1 auto;
+  width: fit-content;
+  padding-inline: 12px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 12px;
+  color: #eaf3ff;
+  background: linear-gradient(135deg, #173867, #142947);
+  box-shadow: 0 5px 18px rgba(3, 11, 25, .24);
+}
+
+.trigger:hover {
+  background: linear-gradient(135deg, #24518d, #1a365b);
+}
+
+.trigger:focus-visible,
+.choiceButton:focus-visible {
+  outline: 3px solid #8ab4ff;
+  outline-offset: 2px;
+}
+
+.trigger :global(.mantine-Button-inner) {
+  width: auto;
+  min-width: 0;
+}
+
+.triggerContent {
+  display: flex;
+  min-width: 0;
+  width: auto;
+  align-items: center;
+  gap: 9px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.triggerPrefix,
+.triggerCue {
+  flex: 0 0 auto;
+}
+
+.triggerPrefix {
+  display: none;
+}
+
+.triggerIcon,
+.triggerChevron {
+  flex: 0 0 auto;
+  color: #a8d3ff;
+}
+
+.triggerLabel {
+  flex: 0 1 auto;
+  max-width: 190px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.triggerCue {
+  font-size: 12px;
+  font-weight: 700;
+  color: #b9d6ff;
+}
+
+@media (max-width: 720px) {
+  .triggerCue {
+    display: none;
+  }
+}
+
+.choiceButton {
+  min-height: 52px;
+  border: 0;
+  border-radius: 12px;
+  color: #e3e9f2;
+  background: #1d232c;
+  text-align: left;
+}
+
+.choiceButton:hover {
+  background: #25344a;
+}
+
+.choiceSelected {
+  color: #fff;
+  background: #173b6a;
+}
+
+.choiceSelected:hover {
+  color: #fff;
+  background: #103156;
+}
+
+.createButton {
+  min-height: 48px;
+  border-radius: 12px;
+}

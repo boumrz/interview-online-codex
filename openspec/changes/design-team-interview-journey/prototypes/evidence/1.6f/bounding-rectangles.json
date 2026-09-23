@@ -1,0 +1,862 @@
+{
+  "matrix": [
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "zoom": 1,
+      "hash": "#/merge?actor=sourceOwner&state=success&blocker=none&step=target&exact=1&long=1",
+      "clientWidth": 1440,
+      "scrollWidth": 1440,
+      "horizontalOverflow": 0,
+      "targetCount": 15,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "zoom": 1.25,
+      "hash": "#/merge?actor=destinationOwner&state=success&blocker=none&step=inbox&long=1",
+      "clientWidth": 1440,
+      "scrollWidth": 1440,
+      "horizontalOverflow": 0,
+      "targetCount": 13,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "zoom": 1.5,
+      "hash": "#/merge?actor=sourceOwner&state=success&blocker=none&step=plan&phase=teams&long=1",
+      "clientWidth": 1440,
+      "scrollWidth": 1440,
+      "horizontalOverflow": 0,
+      "targetCount": 14,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "zoom": 2,
+      "hash": "#/merge?actor=destinationOwner&state=success&blocker=membership&step=plan&phase=members&long=1",
+      "clientWidth": 1440,
+      "scrollWidth": 1440,
+      "horizontalOverflow": 0,
+      "targetCount": 14,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "zoom": 1,
+      "hash": "#/merge?actor=sameOwner&state=success&blocker=none&step=plan&phase=names&long=1",
+      "clientWidth": 1366,
+      "scrollWidth": 1366,
+      "horizontalOverflow": 0,
+      "targetCount": 14,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "zoom": 1.25,
+      "hash": "#/merge?actor=destinationOwner&state=success&blocker=none&step=plan&phase=review&long=1",
+      "clientWidth": 1366,
+      "scrollWidth": 1366,
+      "horizontalOverflow": 0,
+      "targetCount": 13,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "zoom": 1.5,
+      "hash": "#/merge?actor=sameOwner&state=success&blocker=live&step=plan&phase=approval&commit=1&long=1",
+      "clientWidth": 1366,
+      "scrollWidth": 1366,
+      "horizontalOverflow": 0,
+      "targetCount": 17,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "zoom": 2,
+      "hash": "#/merge?actor=nonOwner&state=success&blocker=none&step=plan&phase=approval&long=1",
+      "clientWidth": 1366,
+      "scrollWidth": 1366,
+      "horizontalOverflow": 0,
+      "targetCount": 7,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "zoom": 1,
+      "hash": "#/merge?actor=destinationOwner&state=revoked&blocker=none&step=plan&phase=approval&long=1",
+      "clientWidth": 1280,
+      "scrollWidth": 1280,
+      "horizontalOverflow": 0,
+      "targetCount": 7,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "zoom": 1.25,
+      "hash": "#/merge?actor=nonOwner&state=revoked&blocker=none&step=redirect&authorized=0&long=1",
+      "clientWidth": 1280,
+      "scrollWidth": 1280,
+      "horizontalOverflow": 0,
+      "targetCount": 7,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "zoom": 1.5,
+      "hash": "#/merge?actor=sourceOwner&state=success&blocker=none&step=target&exact=1&long=1",
+      "clientWidth": 1280,
+      "scrollWidth": 1280,
+      "horizontalOverflow": 0,
+      "targetCount": 15,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "zoom": 2,
+      "hash": "#/merge?actor=destinationOwner&state=success&blocker=none&step=inbox&long=1",
+      "clientWidth": 1280,
+      "scrollWidth": 1280,
+      "horizontalOverflow": 0,
+      "targetCount": 13,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "zoom": 1,
+      "hash": "#/merge?actor=sourceOwner&state=success&blocker=none&step=plan&phase=teams&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "targetCount": 14,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "zoom": 1.25,
+      "hash": "#/merge?actor=destinationOwner&state=success&blocker=membership&step=plan&phase=members&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "targetCount": 14,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "zoom": 1.5,
+      "hash": "#/merge?actor=sameOwner&state=success&blocker=none&step=plan&phase=names&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "targetCount": 14,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "zoom": 2,
+      "hash": "#/merge?actor=destinationOwner&state=success&blocker=none&step=plan&phase=review&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "targetCount": 13,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 480
+      },
+      "zoom": 1,
+      "hash": "#/merge?actor=sameOwner&state=success&blocker=live&step=plan&phase=approval&commit=1&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "targetCount": 15,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 480
+      },
+      "zoom": 1.25,
+      "hash": "#/merge?actor=nonOwner&state=success&blocker=none&step=plan&phase=approval&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "targetCount": 6,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 480
+      },
+      "zoom": 1.5,
+      "hash": "#/merge?actor=destinationOwner&state=revoked&blocker=none&step=plan&phase=approval&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "targetCount": 6,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 480
+      },
+      "zoom": 2,
+      "hash": "#/merge?actor=nonOwner&state=revoked&blocker=none&step=redirect&authorized=0&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "targetCount": 6,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "zoom": 1,
+      "hash": "#/merge?actor=sourceOwner&state=success&blocker=none&step=target&exact=1&long=1",
+      "clientWidth": 768,
+      "scrollWidth": 768,
+      "horizontalOverflow": 0,
+      "targetCount": 15,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "zoom": 1.25,
+      "hash": "#/merge?actor=destinationOwner&state=success&blocker=none&step=inbox&long=1",
+      "clientWidth": 768,
+      "scrollWidth": 768,
+      "horizontalOverflow": 0,
+      "targetCount": 13,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "zoom": 1.5,
+      "hash": "#/merge?actor=sourceOwner&state=success&blocker=none&step=plan&phase=teams&long=1",
+      "clientWidth": 768,
+      "scrollWidth": 768,
+      "horizontalOverflow": 0,
+      "targetCount": 14,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "zoom": 2,
+      "hash": "#/merge?actor=destinationOwner&state=success&blocker=membership&step=plan&phase=members&long=1",
+      "clientWidth": 768,
+      "scrollWidth": 768,
+      "horizontalOverflow": 0,
+      "targetCount": 14,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "zoom": 1,
+      "hash": "#/merge?actor=sameOwner&state=success&blocker=none&step=plan&phase=names&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "targetCount": 14,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "zoom": 1.25,
+      "hash": "#/merge?actor=destinationOwner&state=success&blocker=none&step=plan&phase=review&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "targetCount": 13,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "zoom": 1.5,
+      "hash": "#/merge?actor=sameOwner&state=success&blocker=live&step=plan&phase=approval&commit=1&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "targetCount": 17,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "zoom": 2,
+      "hash": "#/merge?actor=nonOwner&state=success&blocker=none&step=plan&phase=approval&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "targetCount": 7,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 640
+      },
+      "zoom": 1,
+      "hash": "#/merge?actor=destinationOwner&state=revoked&blocker=none&step=plan&phase=approval&long=1",
+      "clientWidth": 320,
+      "scrollWidth": 320,
+      "horizontalOverflow": 0,
+      "targetCount": 7,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 640
+      },
+      "zoom": 1.25,
+      "hash": "#/merge?actor=nonOwner&state=revoked&blocker=none&step=redirect&authorized=0&long=1",
+      "clientWidth": 320,
+      "scrollWidth": 320,
+      "horizontalOverflow": 0,
+      "targetCount": 7,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 640
+      },
+      "zoom": 1.5,
+      "hash": "#/merge?actor=sourceOwner&state=success&blocker=none&step=target&exact=1&long=1",
+      "clientWidth": 320,
+      "scrollWidth": 320,
+      "horizontalOverflow": 0,
+      "targetCount": 15,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 640
+      },
+      "zoom": 2,
+      "hash": "#/merge?actor=destinationOwner&state=success&blocker=none&step=inbox&long=1",
+      "clientWidth": 320,
+      "scrollWidth": 320,
+      "horizontalOverflow": 0,
+      "targetCount": 13,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 360,
+        "height": 640
+      },
+      "zoom": 1,
+      "hash": "#/merge?actor=sourceOwner&state=success&blocker=none&step=plan&phase=teams&long=1",
+      "clientWidth": 360,
+      "scrollWidth": 360,
+      "horizontalOverflow": 0,
+      "targetCount": 14,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 360,
+        "height": 640
+      },
+      "zoom": 1.25,
+      "hash": "#/merge?actor=destinationOwner&state=success&blocker=membership&step=plan&phase=members&long=1",
+      "clientWidth": 360,
+      "scrollWidth": 360,
+      "horizontalOverflow": 0,
+      "targetCount": 14,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 360,
+        "height": 640
+      },
+      "zoom": 1.5,
+      "hash": "#/merge?actor=sameOwner&state=success&blocker=none&step=plan&phase=names&long=1",
+      "clientWidth": 360,
+      "scrollWidth": 360,
+      "horizontalOverflow": 0,
+      "targetCount": 14,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 360,
+        "height": 640
+      },
+      "zoom": 2,
+      "hash": "#/merge?actor=destinationOwner&state=success&blocker=none&step=plan&phase=review&long=1",
+      "clientWidth": 360,
+      "scrollWidth": 360,
+      "horizontalOverflow": 0,
+      "targetCount": 13,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "zoom": 1,
+      "hash": "#/merge?actor=sameOwner&state=success&blocker=live&step=plan&phase=approval&commit=1&long=1",
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "horizontalOverflow": 0,
+      "targetCount": 17,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "zoom": 1.25,
+      "hash": "#/merge?actor=nonOwner&state=success&blocker=none&step=plan&phase=approval&long=1",
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "horizontalOverflow": 0,
+      "targetCount": 7,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "zoom": 1.5,
+      "hash": "#/merge?actor=destinationOwner&state=revoked&blocker=none&step=plan&phase=approval&long=1",
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "horizontalOverflow": 0,
+      "targetCount": 7,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "zoom": 2,
+      "hash": "#/merge?actor=nonOwner&state=revoked&blocker=none&step=redirect&authorized=0&long=1",
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "horizontalOverflow": 0,
+      "targetCount": 7,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 667,
+        "height": 375
+      },
+      "zoom": 1,
+      "hash": "#/merge?actor=sourceOwner&state=success&blocker=none&step=target&exact=1&long=1",
+      "clientWidth": 667,
+      "scrollWidth": 667,
+      "horizontalOverflow": 0,
+      "targetCount": 14,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 667,
+        "height": 375
+      },
+      "zoom": 1.25,
+      "hash": "#/merge?actor=destinationOwner&state=success&blocker=none&step=inbox&long=1",
+      "clientWidth": 667,
+      "scrollWidth": 667,
+      "horizontalOverflow": 0,
+      "targetCount": 12,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 667,
+        "height": 375
+      },
+      "zoom": 1.5,
+      "hash": "#/merge?actor=sourceOwner&state=success&blocker=none&step=plan&phase=teams&long=1",
+      "clientWidth": 667,
+      "scrollWidth": 667,
+      "horizontalOverflow": 0,
+      "targetCount": 13,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 667,
+        "height": 375
+      },
+      "zoom": 2,
+      "hash": "#/merge?actor=destinationOwner&state=success&blocker=membership&step=plan&phase=members&long=1",
+      "clientWidth": 667,
+      "scrollWidth": 667,
+      "horizontalOverflow": 0,
+      "targetCount": 13,
+      "undersized": [],
+      "unnamed": [],
+      "pass": true
+    }
+  ],
+  "screenshots": [
+    {
+      "name": "exact-target-long",
+      "hash": "#/merge?actor=sourceOwner&state=success&blocker=none&step=target&exact=1&long=1",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "exact-target-long.png",
+      "geometry": {
+        "horizontalOverflow": 0,
+        "targetCount": 15,
+        "undersized": [],
+        "unnamed": []
+      }
+    },
+    {
+      "name": "request-name-hidden",
+      "hash": "#/merge?actor=sourceOwner&state=success&blocker=none&step=request&exact=1",
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "file": "request-name-hidden.png",
+      "geometry": {
+        "horizontalOverflow": 0,
+        "targetCount": 13,
+        "undersized": [],
+        "unnamed": []
+      }
+    },
+    {
+      "name": "destination-inbox",
+      "hash": "#/merge?actor=destinationOwner&state=success&blocker=none&step=inbox&long=1",
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "file": "destination-inbox.png",
+      "geometry": {
+        "horizontalOverflow": 0,
+        "targetCount": 13,
+        "undersized": [],
+        "unnamed": []
+      }
+    },
+    {
+      "name": "members-dedup-conflict",
+      "hash": "#/merge?actor=destinationOwner&state=success&blocker=membership&step=plan&phase=members&long=1",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "members-dedup-conflict.png",
+      "geometry": {
+        "horizontalOverflow": 0,
+        "targetCount": 14,
+        "undersized": [],
+        "unnamed": []
+      }
+    },
+    {
+      "name": "name-collisions",
+      "hash": "#/merge?actor=sameOwner&state=success&blocker=none&step=plan&phase=names&long=1",
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "file": "name-collisions.png",
+      "geometry": {
+        "horizontalOverflow": 0,
+        "targetCount": 14,
+        "undersized": [],
+        "unnamed": []
+      }
+    },
+    {
+      "name": "review-private",
+      "hash": "#/merge?actor=destinationOwner&state=success&blocker=none&step=plan&phase=review&long=1",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "review-private.png",
+      "geometry": {
+        "horizontalOverflow": 0,
+        "targetCount": 13,
+        "undersized": [],
+        "unnamed": []
+      }
+    },
+    {
+      "name": "approval-stale",
+      "hash": "#/merge?actor=sameOwner&state=conflict&blocker=none&step=plan&phase=approval&commit=1",
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "file": "approval-stale.png",
+      "geometry": {
+        "horizontalOverflow": 0,
+        "targetCount": 17,
+        "undersized": [],
+        "unnamed": []
+      }
+    },
+    {
+      "name": "blocker-live",
+      "hash": "#/merge?actor=destinationOwner&state=success&blocker=live&step=plan&phase=approval&commit=1",
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "file": "blocker-live.png",
+      "geometry": {
+        "horizontalOverflow": 0,
+        "targetCount": 17,
+        "undersized": [],
+        "unnamed": []
+      }
+    },
+    {
+      "name": "failure-busy",
+      "hash": "#/merge?actor=destinationOwner&state=error&blocker=busy&step=commit&commit=1",
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "file": "failure-busy.png",
+      "geometry": {
+        "horizontalOverflow": 0,
+        "targetCount": 12,
+        "undersized": [],
+        "unnamed": []
+      }
+    },
+    {
+      "name": "revoked-non-owner",
+      "hash": "#/merge?actor=nonOwner&state=revoked&blocker=none&step=plan&phase=approval",
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "file": "revoked-non-owner.png",
+      "geometry": {
+        "horizontalOverflow": 0,
+        "targetCount": 7,
+        "undersized": [],
+        "unnamed": []
+      }
+    },
+    {
+      "name": "redirect-authorized",
+      "hash": "#/merge?actor=destinationOwner&state=success&blocker=none&step=redirect&authorized=1",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "redirect-authorized.png",
+      "geometry": {
+        "horizontalOverflow": 0,
+        "targetCount": 12,
+        "undersized": [],
+        "unnamed": []
+      }
+    },
+    {
+      "name": "redirect-unauthorized",
+      "hash": "#/merge?actor=nonOwner&state=revoked&blocker=none&step=redirect&authorized=0",
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "file": "redirect-unauthorized.png",
+      "geometry": {
+        "horizontalOverflow": 0,
+        "targetCount": 7,
+        "undersized": [],
+        "unnamed": []
+      }
+    }
+  ],
+  "compactKeyboard": {
+    "visualViewport": {
+      "width": 390,
+      "height": 360
+    },
+    "button": {
+      "top": 146.1875,
+      "bottom": 214.5625,
+      "left": 33,
+      "right": 357,
+      "width": 324,
+      "height": 68.375
+    },
+    "insideViewport": true,
+    "safeAreaDeclared": false
+  }
+}

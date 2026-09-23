@@ -55,6 +55,7 @@ data class RoomTaskPayload(
     val categoryName: String?,
     val score: Int?,
     val sourceTaskTemplateId: String? = null,
+    val mandatory: Boolean = false,
 )
 
 /**
@@ -82,6 +83,14 @@ data class NoteMessagePayload(
     val role: String,
     val text: String,
     val timestampEpochMs: Long,
+)
+
+data class NoteMessageAckPayload(
+    val type: String = "note_message_ack",
+    val status: String = "persisted",
+    val clientMessageId: String,
+    val messageId: String,
+    val persistedAtEpochMs: Long,
 )
 
 data class PersonalNoteEntryPayload(

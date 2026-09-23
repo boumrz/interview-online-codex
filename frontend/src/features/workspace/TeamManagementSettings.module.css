@@ -1,0 +1,109 @@
+.settings {
+  max-width: 760px;
+}
+
+.intro {
+  padding-bottom: 4px;
+}
+
+.kicker,
+.sectionNumber,
+.identityLabel {
+  color: #8ab4ff;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+
+.identityCard,
+.commandCard {
+  border-color: transparent;
+  color: #f8fafc;
+  background:
+    linear-gradient(115deg, rgba(13, 26, 44, .9), rgba(17, 21, 28, .95)),
+    #121822;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .18);
+}
+
+.commandCard {
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .18);
+}
+
+.identityHint {
+  margin-top: 14px;
+}
+
+.roleBadge {
+  min-height: 28px;
+  padding-inline: 11px;
+  font-weight: 800;
+  letter-spacing: .05em;
+}
+
+.field :global(input),
+.field :global(select) {
+  min-height: 44px;
+  color: #f8fafc;
+  border-color: #3a4658;
+  background: #0d131c;
+}
+
+.field :global(input:focus-visible),
+.field :global(select:focus-visible),
+.action:focus-visible,
+.terminalStatus:focus-visible {
+  outline: 3px solid #8ab4ff;
+  outline-offset: 3px;
+}
+
+.action {
+  min-height: 44px !important;
+}
+
+.terminalStatus {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 10px;
+  color: #c7fff3;
+  background: rgba(18, 91, 83, .22);
+  font-weight: 700;
+}
+
+.alert {
+  border-color: #7a5423;
+}
+
+.auditList {
+  border-top: 1px solid #2b3545;
+}
+
+.auditItem {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 2px;
+  border-bottom: 1px solid #252f3e;
+}
+
+.suspendedPanel {
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid #2b3545;
+}
+
+.suspendedItem {
+  padding: 11px 0;
+  border-bottom: 1px solid #252f3e;
+}
+
+@media (max-width: 520px) {
+  .auditItem {
+    display: grid;
+    gap: 4px;
+  }
+}

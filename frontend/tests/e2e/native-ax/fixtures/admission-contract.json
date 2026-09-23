@@ -1,0 +1,10 @@
+{
+  "testId": "teams/invitation-native-ax-lifecycle",
+  "witnessPhrase": "I WITNESS ONLY THE TEMPORARY BROWSER AND SINK",
+  "optIns": {
+    "E2E_TEAM_INVITATIONS_NATIVE_AX": "1",
+    "E2E_NATIVE_AX_LOCAL_ONLY": "1",
+    "E2E_NATIVE_AX_ALLOW_OS_FOCUS": "1",
+    "E2E_NATIVE_AX_TEST_ID": "teams/invitation-native-ax-lifecycle"
+  }
+}

@@ -1,0 +1,46 @@
+.page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  color: #f8fafc;
+  background: #0f1115;
+}
+
+.card {
+  width: min(100%, 540px);
+  border-color: #272b34;
+  color: #f8fafc;
+  background: linear-gradient(160deg, rgba(17, 21, 28, 0.98), rgba(15, 18, 25, 0.96));
+  box-shadow: 0 18px 42px rgba(2, 4, 7, 0.38);
+}
+
+.primaryAction {
+  min-height: 44px;
+  background: #228be6;
+}
+
+.primaryAction:hover {
+  background: #1c7ed6;
+}
+
+.primaryAction:focus-visible,
+.secondaryAction:focus-visible,
+.authLink:focus-visible {
+  outline: 3px solid #8ab4ff;
+  outline-offset: 3px;
+}
+
+.secondaryAction,
+.authLink {
+  min-height: 44px;
+}
+
+.authLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: #8ab4ff;
+  font-weight: 700;
+}

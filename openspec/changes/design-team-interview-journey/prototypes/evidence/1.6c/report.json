@@ -1,0 +1,3469 @@
+{
+  "task": "1.6c",
+  "generatedAt": "2026-09-09T12:44:41.858Z",
+  "pass": true,
+  "note": "Prototype-only DA-03 evidence. It validates layout/state behavior in the repo-hosted prototype, not realtime delivery, persistence, Yjs, or server authorization.",
+  "pageErrors": [],
+  "matrixSummary": {
+    "cases": 44,
+    "passed": 44
+  },
+  "screenshots": [
+    {
+      "name": "room-owner-work",
+      "hash": "#/room/int-204?actor=roomOwner&state=success&long=1",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "room-owner-work.png",
+      "geometry": {
+        "zoom": 1,
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 18,
+        "interactive": [
+          {
+            "name": "К основному содержимому",
+            "tag": "A",
+            "x": 12,
+            "y": -60.4,
+            "width": 242.63,
+            "height": 44,
+            "logicalWidth": 242.63,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Выбрать роль для просмотра прототипа",
+            "tag": "SELECT",
+            "x": 549.19,
+            "y": 4,
+            "width": 401.41,
+            "height": 44,
+            "logicalWidth": 401.41,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Выбрать состояние данных",
+            "tag": "SELECT",
+            "x": 956.59,
+            "y": 4,
+            "width": 401.41,
+            "height": 44,
+            "logicalWidth": 401.41,
+            "logicalHeight": 44
+          },
+          {
+            "name": "← К интервью · Atlas · Команда интерфейсных платформ для международных продуктов",
+            "tag": "A",
+            "x": 14,
+            "y": 59,
+            "width": 298.34,
+            "height": 84,
+            "logicalWidth": 298.34,
+            "logicalHeight": 84
+          },
+          {
+            "name": "Фокус",
+            "tag": "BUTTON",
+            "x": 1069,
+            "y": 79,
+            "width": 74,
+            "height": 44,
+            "logicalWidth": 74,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Рабочий",
+            "tag": "BUTTON",
+            "x": 1146,
+            "y": 79,
+            "width": 74,
+            "height": 44,
+            "logicalWidth": 74,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Обзор",
+            "tag": "BUTTON",
+            "x": 1223,
+            "y": 79,
+            "width": 74,
+            "height": 44,
+            "logicalWidth": 74,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Действия комнаты: приглашение, завершение и передача владения",
+            "tag": "BUTTON",
+            "x": 1308,
+            "y": 79,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "КДРедактор",
+            "tag": "BUTTON",
+            "x": 8,
+            "y": 155,
+            "width": 221.66,
+            "height": 44,
+            "logicalWidth": 221.66,
+            "logicalHeight": 44
+          },
+          {
+            "name": "ШГШаги",
+            "tag": "BUTTON",
+            "x": 233.66,
+            "y": 155,
+            "width": 221.67,
+            "height": 44,
+            "logicalWidth": 221.67,
+            "logicalHeight": 44
+          },
+          {
+            "name": "УСУсловие",
+            "tag": "BUTTON",
+            "x": 459.33,
+            "y": 155,
+            "width": 221.67,
+            "height": 44,
+            "logicalWidth": 221.67,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Мои заметки",
+            "tag": "BUTTON",
+            "x": 685,
+            "y": 155,
+            "width": 221.66,
+            "height": 44,
+            "logicalWidth": 221.66,
+            "logicalHeight": 44
+          },
+          {
+            "name": "ЧТЧат2",
+            "tag": "BUTTON",
+            "x": 910.66,
+            "y": 155,
+            "width": 221.67,
+            "height": 44,
+            "logicalWidth": 221.67,
+            "logicalHeight": 44
+          },
+          {
+            "name": "АКАктивность",
+            "tag": "BUTTON",
+            "x": 1136.33,
+            "y": 155,
+            "width": 221.67,
+            "height": 44,
+            "logicalWidth": 221.67,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Редактор общего кода",
+            "tag": "TEXTAREA",
+            "x": 7,
+            "y": 334,
+            "width": 867.67,
+            "height": 427,
+            "logicalWidth": 867.67,
+            "logicalHeight": 427
+          },
+          {
+            "name": "Закрыть условие и вернуться в редактор",
+            "tag": "BUTTON",
+            "x": 1304,
+            "y": 255,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Открыть чат",
+            "tag": "BUTTON",
+            "x": 1028.88,
+            "y": 687.61,
+            "width": 123.95,
+            "height": 44,
+            "logicalWidth": 123.95,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Открыть активность",
+            "tag": "BUTTON",
+            "x": 1159.83,
+            "y": 687.61,
+            "width": 187.17,
+            "height": 44,
+            "logicalWidth": 187.17,
+            "logicalHeight": 44
+          }
+        ],
+        "undersized": [],
+        "panels": [
+          {
+            "name": "editor",
+            "x": 6,
+            "y": 247,
+            "width": 869.67,
+            "height": 515,
+            "logicalWidth": 869.67,
+            "logicalHeight": 515,
+            "body": {
+              "x": 7,
+              "y": 334,
+              "width": 867.67,
+              "height": 427,
+              "logicalWidth": 867.67,
+              "logicalHeight": 427
+            }
+          },
+          {
+            "name": "condition",
+            "x": 881.67,
+            "y": 247,
+            "width": 478.33,
+            "height": 515,
+            "logicalWidth": 478.33,
+            "logicalHeight": 515,
+            "body": {
+              "x": 882.67,
+              "y": 309,
+              "width": 476.33,
+              "height": 452,
+              "logicalWidth": 476.33,
+              "logicalHeight": 452
+            }
+          }
+        ],
+        "room": {
+          "mode": "work",
+          "W": 1342,
+          "H": 558,
+          "keyboard": false,
+          "viewportSource": "visualViewport"
+        }
+      }
+    },
+    {
+      "name": "room-owner-overview-both",
+      "hash": "#/room/int-204?actor=roomOwner&state=success",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "file": "room-owner-overview-both.png",
+      "geometry": {
+        "zoom": 1,
+        "clientWidth": 1440,
+        "scrollWidth": 1440,
+        "horizontalOverflow": 0,
+        "interactiveCount": 31,
+        "interactive": [
+          {
+            "name": "К основному содержимому",
+            "tag": "A",
+            "x": 12,
+            "y": -60.4,
+            "width": 242.63,
+            "height": 44,
+            "logicalWidth": 242.63,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Выбрать роль для просмотра прототипа",
+            "tag": "SELECT",
+            "x": 578.8,
+            "y": 4,
+            "width": 423.59,
+            "height": 44,
+            "logicalWidth": 423.59,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Выбрать состояние данных",
+            "tag": "SELECT",
+            "x": 1008.39,
+            "y": 4,
+            "width": 423.59,
+            "height": 44,
+            "logicalWidth": 423.59,
+            "logicalHeight": 44
+          },
+          {
+            "name": "← К интервью · Atlas",
+            "tag": "A",
+            "x": 14,
+            "y": 63,
+            "width": 330.38,
+            "height": 44,
+            "logicalWidth": 330.38,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Фокус",
+            "tag": "BUTTON",
+            "x": 1143,
+            "y": 63,
+            "width": 74,
+            "height": 44,
+            "logicalWidth": 74,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Рабочий",
+            "tag": "BUTTON",
+            "x": 1220,
+            "y": 63,
+            "width": 74,
+            "height": 44,
+            "logicalWidth": 74,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Обзор",
+            "tag": "BUTTON",
+            "x": 1297,
+            "y": 63,
+            "width": 74,
+            "height": 44,
+            "logicalWidth": 74,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Действия комнаты: приглашение, завершение и передача владения",
+            "tag": "BUTTON",
+            "x": 1382,
+            "y": 63,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "КДРедактор",
+            "tag": "BUTTON",
+            "x": 8,
+            "y": 123,
+            "width": 234,
+            "height": 44,
+            "logicalWidth": 234,
+            "logicalHeight": 44
+          },
+          {
+            "name": "ШГШаги",
+            "tag": "BUTTON",
+            "x": 246,
+            "y": 123,
+            "width": 234,
+            "height": 44,
+            "logicalWidth": 234,
+            "logicalHeight": 44
+          },
+          {
+            "name": "УСУсловие",
+            "tag": "BUTTON",
+            "x": 484,
+            "y": 123,
+            "width": 234,
+            "height": 44,
+            "logicalWidth": 234,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Мои заметки",
+            "tag": "BUTTON",
+            "x": 722,
+            "y": 123,
+            "width": 234,
+            "height": 44,
+            "logicalWidth": 234,
+            "logicalHeight": 44
+          },
+          {
+            "name": "ЧТЧат2",
+            "tag": "BUTTON",
+            "x": 960,
+            "y": 123,
+            "width": 234,
+            "height": 44,
+            "logicalWidth": 234,
+            "logicalHeight": 44
+          },
+          {
+            "name": "АКАктивность",
+            "tag": "BUTTON",
+            "x": 1198,
+            "y": 123,
+            "width": 234,
+            "height": 44,
+            "logicalWidth": 234,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Редактор общего кода",
+            "tag": "TEXTAREA",
+            "x": 283.81,
+            "y": 302,
+            "width": 771.77,
+            "height": 591,
+            "logicalWidth": 771.77,
+            "logicalHeight": 591
+          },
+          {
+            "name": "Закрыть шаги и вернуться в редактор",
+            "tag": "BUTTON",
+            "x": 220.81,
+            "y": 223,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "01РазминкаОпубликован ранее",
+            "tag": "BUTTON",
+            "x": 19,
+            "y": 412.64,
+            "width": 244.81,
+            "height": 62,
+            "logicalWidth": 244.81,
+            "logicalHeight": 62
+          },
+          {
+            "name": "02Устойчивый порядокОпубликован кандидату",
+            "tag": "BUTTON",
+            "x": 19,
+            "y": 482.64,
+            "width": 244.81,
+            "height": 86,
+            "logicalWidth": 244.81,
+            "logicalHeight": 86
+          },
+          {
+            "name": "03API поискаДополнительный",
+            "tag": "BUTTON",
+            "x": 19,
+            "y": 576.64,
+            "width": 244.81,
+            "height": 62,
+            "logicalWidth": 244.81,
+            "logicalHeight": 62
+          },
+          {
+            "name": "Чат одним действием",
+            "tag": "BUTTON",
+            "x": 66.7,
+            "y": 646.64,
+            "width": 197.11,
+            "height": 44,
+            "logicalWidth": 197.11,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Активность одним действием",
+            "tag": "BUTTON",
+            "x": 19,
+            "y": 697.64,
+            "width": 244.81,
+            "height": 62,
+            "logicalWidth": 244.81,
+            "logicalHeight": 62
+          },
+          {
+            "name": "Переключить кандидату",
+            "tag": "BUTTON",
+            "x": 43.7,
+            "y": 766.64,
+            "width": 220.11,
+            "height": 44,
+            "logicalWidth": 220.11,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Показать оба",
+            "tag": "BUTTON",
+            "x": 1242.52,
+            "y": 531.06,
+            "width": 125.47,
+            "height": 62,
+            "logicalWidth": 125.47,
+            "logicalHeight": 62
+          },
+          {
+            "name": "Закрыть чат и вернуться в редактор",
+            "tag": "BUTTON",
+            "x": 1377.98,
+            "y": 540.05,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Новые сообщения · 2",
+            "tag": "BUTTON",
+            "x": 1075.58,
+            "y": 659.2,
+            "width": 345.41,
+            "height": 44,
+            "logicalWidth": 345.41,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Сообщение интервьюерам",
+            "tag": "TEXTAREA",
+            "x": 1075.58,
+            "y": 754.7,
+            "width": 345.41,
+            "height": 112,
+            "logicalWidth": 345.41,
+            "logicalHeight": 112
+          },
+          {
+            "name": "Получить новое",
+            "tag": "BUTTON",
+            "x": 1150.16,
+            "y": 880.7,
+            "width": 152.61,
+            "height": 44,
+            "logicalWidth": 152.61,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Отправить",
+            "tag": "BUTTON",
+            "x": 1309.77,
+            "y": 880.7,
+            "width": 111.22,
+            "height": 44,
+            "logicalWidth": 111.22,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Показать оба",
+            "tag": "BUTTON",
+            "x": 1244.58,
+            "y": 215.16,
+            "width": 123.41,
+            "height": 62,
+            "logicalWidth": 123.41,
+            "logicalHeight": 62
+          },
+          {
+            "name": "Закрыть активность и вернуться в редактор",
+            "tag": "BUTTON",
+            "x": 1377.98,
+            "y": 224.16,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Загрузить предыдущие",
+            "tag": "BUTTON",
+            "x": 1209.95,
+            "y": 537.31,
+            "width": 211.03,
+            "height": 44,
+            "logicalWidth": 211.03,
+            "logicalHeight": 44
+          }
+        ],
+        "undersized": [],
+        "panels": [
+          {
+            "name": "editor",
+            "x": 282.81,
+            "y": 215,
+            "width": 773.77,
+            "height": 679,
+            "logicalWidth": 773.77,
+            "logicalHeight": 679,
+            "body": {
+              "x": 283.81,
+              "y": 302,
+              "width": 771.77,
+              "height": 591,
+              "logicalWidth": 771.77,
+              "logicalHeight": 591
+            }
+          },
+          {
+            "name": "steps",
+            "x": 6,
+            "y": 215,
+            "width": 270.81,
+            "height": 679,
+            "logicalWidth": 270.81,
+            "logicalHeight": 679,
+            "body": {
+              "x": 7,
+              "y": 277,
+              "width": 268.81,
+              "height": 616,
+              "logicalWidth": 268.81,
+              "logicalHeight": 616
+            }
+          },
+          {
+            "name": "chat",
+            "x": 1062.58,
+            "y": 526.91,
+            "width": 371.41,
+            "height": 367.09,
+            "logicalWidth": 371.41,
+            "logicalHeight": 367.09,
+            "body": {
+              "x": 1063.58,
+              "y": 599.2,
+              "width": 369.41,
+              "height": 293.8,
+              "logicalWidth": 369.41,
+              "logicalHeight": 293.8
+            }
+          },
+          {
+            "name": "activity",
+            "x": 1062.58,
+            "y": 215,
+            "width": 371.41,
+            "height": 305.91,
+            "logicalWidth": 371.41,
+            "logicalHeight": 305.91,
+            "body": {
+              "x": 1063.58,
+              "y": 279.31,
+              "width": 369.41,
+              "height": 240.59,
+              "logicalWidth": 369.41,
+              "logicalHeight": 240.59
+            }
+          }
+        ],
+        "room": {
+          "mode": "overview",
+          "W": 1416,
+          "H": 690,
+          "keyboard": false,
+          "viewportSource": "visualViewport"
+        }
+      }
+    },
+    {
+      "name": "focus-phone-long-ru",
+      "hash": "#/room/int-204?actor=interviewer&state=success&long=1",
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "file": "focus-phone-long-ru.png",
+      "geometry": {
+        "zoom": 1,
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "horizontalOverflow": 0,
+        "interactiveCount": 13,
+        "interactive": [
+          {
+            "name": "К основному содержимому",
+            "tag": "A",
+            "x": 12,
+            "y": -60.4,
+            "width": 242.63,
+            "height": 44,
+            "logicalWidth": 242.63,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Выбрать роль для просмотра прототипа",
+            "tag": "SELECT",
+            "x": 158.8,
+            "y": 4,
+            "width": 108.59,
+            "height": 44,
+            "logicalWidth": 108.59,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Выбрать состояние данных",
+            "tag": "SELECT",
+            "x": 273.39,
+            "y": 4,
+            "width": 108.61,
+            "height": 44,
+            "logicalWidth": 108.61,
+            "logicalHeight": 44
+          },
+          {
+            "name": "← К интервью · Atlas · Команда интерфейсных платформ для международных продуктов",
+            "tag": "A",
+            "x": 14,
+            "y": 59,
+            "width": 253.33,
+            "height": 44,
+            "logicalWidth": 253.33,
+            "logicalHeight": 44
+          },
+          {
+            "name": "КДРедактор",
+            "tag": "BUTTON",
+            "x": 8,
+            "y": 115,
+            "width": 122,
+            "height": 44,
+            "logicalWidth": 122,
+            "logicalHeight": 44
+          },
+          {
+            "name": "ШГШаги",
+            "tag": "BUTTON",
+            "x": 134,
+            "y": 115,
+            "width": 122,
+            "height": 44,
+            "logicalWidth": 122,
+            "logicalHeight": 44
+          },
+          {
+            "name": "УСУсловие",
+            "tag": "BUTTON",
+            "x": 260,
+            "y": 115,
+            "width": 122,
+            "height": 44,
+            "logicalWidth": 122,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Мои заметки",
+            "tag": "BUTTON",
+            "x": 8,
+            "y": 163,
+            "width": 122,
+            "height": 44,
+            "logicalWidth": 122,
+            "logicalHeight": 44
+          },
+          {
+            "name": "ЧТЧат2",
+            "tag": "BUTTON",
+            "x": 134,
+            "y": 163,
+            "width": 122,
+            "height": 44,
+            "logicalWidth": 122,
+            "logicalHeight": 44
+          },
+          {
+            "name": "АКАктивность",
+            "tag": "BUTTON",
+            "x": 260,
+            "y": 163,
+            "width": 122,
+            "height": 44,
+            "logicalWidth": 122,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Закрыть условие и вернуться в редактор",
+            "tag": "BUTTON",
+            "x": 328,
+            "y": 256.5,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Открыть чат",
+            "tag": "BUTTON",
+            "x": 52.88,
+            "y": 731.23,
+            "width": 123.95,
+            "height": 44,
+            "logicalWidth": 123.95,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Открыть активность",
+            "tag": "BUTTON",
+            "x": 183.83,
+            "y": 731.23,
+            "width": 187.17,
+            "height": 44,
+            "logicalWidth": 187.17,
+            "logicalHeight": 44
+          }
+        ],
+        "undersized": [],
+        "panels": [
+          {
+            "name": "condition",
+            "x": 6,
+            "y": 255,
+            "width": 378,
+            "height": 379,
+            "logicalWidth": 378,
+            "logicalHeight": 379,
+            "body": {
+              "x": 7,
+              "y": 304,
+              "width": 376,
+              "height": 329,
+              "logicalWidth": 376,
+              "logicalHeight": 329
+            }
+          }
+        ],
+        "room": {
+          "mode": "focus",
+          "W": 366,
+          "H": 430,
+          "keyboard": false,
+          "viewportSource": "visualViewport"
+        }
+      }
+    },
+    {
+      "name": "reconnecting-work",
+      "hash": "#/room/int-204?actor=hiring&state=reconnecting",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "file": "reconnecting-work.png",
+      "geometry": {
+        "zoom": 1,
+        "clientWidth": 1280,
+        "scrollWidth": 1280,
+        "horizontalOverflow": 0,
+        "interactiveCount": 19,
+        "interactive": [
+          {
+            "name": "К основному содержимому",
+            "tag": "A",
+            "x": 12,
+            "y": -60.4,
+            "width": 242.63,
+            "height": 44,
+            "logicalWidth": 242.63,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Выбрать роль для просмотра прототипа",
+            "tag": "SELECT",
+            "x": 514.8,
+            "y": 4,
+            "width": 375.59,
+            "height": 44,
+            "logicalWidth": 375.59,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Выбрать состояние данных",
+            "tag": "SELECT",
+            "x": 896.39,
+            "y": 4,
+            "width": 375.59,
+            "height": 44,
+            "logicalWidth": 375.59,
+            "logicalHeight": 44
+          },
+          {
+            "name": "← К интервью · Atlas",
+            "tag": "A",
+            "x": 14,
+            "y": 63,
+            "width": 254.73,
+            "height": 44,
+            "logicalWidth": 254.73,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Фокус",
+            "tag": "BUTTON",
+            "x": 983,
+            "y": 63,
+            "width": 74,
+            "height": 44,
+            "logicalWidth": 74,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Рабочий",
+            "tag": "BUTTON",
+            "x": 1060,
+            "y": 63,
+            "width": 74,
+            "height": 44,
+            "logicalWidth": 74,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Обзор",
+            "tag": "BUTTON",
+            "x": 1137,
+            "y": 63,
+            "width": 74,
+            "height": 44,
+            "logicalWidth": 74,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Действия комнаты: приглашение, завершение и передача владения",
+            "tag": "BUTTON",
+            "x": 1222,
+            "y": 63,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "КДРедактор",
+            "tag": "BUTTON",
+            "x": 8,
+            "y": 123,
+            "width": 207.33,
+            "height": 44,
+            "logicalWidth": 207.33,
+            "logicalHeight": 44
+          },
+          {
+            "name": "ШГШаги",
+            "tag": "BUTTON",
+            "x": 219.33,
+            "y": 123,
+            "width": 207.33,
+            "height": 44,
+            "logicalWidth": 207.33,
+            "logicalHeight": 44
+          },
+          {
+            "name": "УСУсловие",
+            "tag": "BUTTON",
+            "x": 430.66,
+            "y": 123,
+            "width": 207.33,
+            "height": 44,
+            "logicalWidth": 207.33,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Мои заметки",
+            "tag": "BUTTON",
+            "x": 641.98,
+            "y": 123,
+            "width": 207.34,
+            "height": 44,
+            "logicalWidth": 207.34,
+            "logicalHeight": 44
+          },
+          {
+            "name": "ЧТЧат2",
+            "tag": "BUTTON",
+            "x": 853.33,
+            "y": 123,
+            "width": 207.33,
+            "height": 44,
+            "logicalWidth": 207.33,
+            "logicalHeight": 44
+          },
+          {
+            "name": "АКАктивность",
+            "tag": "BUTTON",
+            "x": 1064.66,
+            "y": 123,
+            "width": 207.33,
+            "height": 44,
+            "logicalWidth": 207.33,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Повторить сейчас",
+            "tag": "BUTTON",
+            "x": 1099.47,
+            "y": 216,
+            "width": 168.53,
+            "height": 44,
+            "logicalWidth": 168.53,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Редактор общего кода",
+            "tag": "TEXTAREA",
+            "x": 7,
+            "y": 361,
+            "width": 812.19,
+            "height": 352,
+            "logicalWidth": 812.19,
+            "logicalHeight": 352
+          },
+          {
+            "name": "Закрыть условие и вернуться в редактор",
+            "tag": "BUTTON",
+            "x": 1218,
+            "y": 282,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Открыть чат",
+            "tag": "BUTTON",
+            "x": 942.88,
+            "y": 641.67,
+            "width": 123.95,
+            "height": 44,
+            "logicalWidth": 123.95,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Открыть активность",
+            "tag": "BUTTON",
+            "x": 1073.83,
+            "y": 641.67,
+            "width": 187.17,
+            "height": 44,
+            "logicalWidth": 187.17,
+            "logicalHeight": 44
+          }
+        ],
+        "undersized": [],
+        "panels": [
+          {
+            "name": "editor",
+            "x": 6,
+            "y": 274,
+            "width": 814.19,
+            "height": 440,
+            "logicalWidth": 814.19,
+            "logicalHeight": 440,
+            "body": {
+              "x": 7,
+              "y": 361,
+              "width": 812.19,
+              "height": 352,
+              "logicalWidth": 812.19,
+              "logicalHeight": 352
+            }
+          },
+          {
+            "name": "condition",
+            "x": 826.19,
+            "y": 274,
+            "width": 447.81,
+            "height": 440,
+            "logicalWidth": 447.81,
+            "logicalHeight": 440,
+            "body": {
+              "x": 827.19,
+              "y": 336,
+              "width": 445.81,
+              "height": 377,
+              "logicalWidth": 445.81,
+              "logicalHeight": 377
+            }
+          }
+        ],
+        "room": {
+          "mode": "work",
+          "W": 1256,
+          "H": 466,
+          "keyboard": false,
+          "viewportSource": "visualViewport"
+        }
+      }
+    },
+    {
+      "name": "pending-chat",
+      "hash": "#/room/int-204?actor=guestManager&state=pending",
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "file": "pending-chat.png",
+      "geometry": {
+        "zoom": 1,
+        "clientWidth": 1024,
+        "scrollWidth": 1024,
+        "horizontalOverflow": 0,
+        "interactiveCount": 20,
+        "interactive": [
+          {
+            "name": "К основному содержимому",
+            "tag": "A",
+            "x": 12,
+            "y": -60.4,
+            "width": 242.63,
+            "height": 44,
+            "logicalWidth": 242.63,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Выбрать роль для просмотра прототипа",
+            "tag": "SELECT",
+            "x": 412.39,
+            "y": 4,
+            "width": 298.8,
+            "height": 44,
+            "logicalWidth": 298.8,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Выбрать состояние данных",
+            "tag": "SELECT",
+            "x": 717.19,
+            "y": 4,
+            "width": 298.8,
+            "height": 44,
+            "logicalWidth": 298.8,
+            "logicalHeight": 44
+          },
+          {
+            "name": "← К интервью · Личное пространство",
+            "tag": "A",
+            "x": 14,
+            "y": 59,
+            "width": 190,
+            "height": 84,
+            "logicalWidth": 190,
+            "logicalHeight": 84
+          },
+          {
+            "name": "Фокус",
+            "tag": "BUTTON",
+            "x": 727,
+            "y": 79,
+            "width": 74,
+            "height": 44,
+            "logicalWidth": 74,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Рабочий",
+            "tag": "BUTTON",
+            "x": 804,
+            "y": 79,
+            "width": 74,
+            "height": 44,
+            "logicalWidth": 74,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Обзор",
+            "tag": "BUTTON",
+            "x": 881,
+            "y": 79,
+            "width": 74,
+            "height": 44,
+            "logicalWidth": 74,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Действия комнаты: приглашение, завершение и передача владения",
+            "tag": "BUTTON",
+            "x": 966,
+            "y": 79,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "КДРедактор",
+            "tag": "BUTTON",
+            "x": 8,
+            "y": 155,
+            "width": 164.66,
+            "height": 44,
+            "logicalWidth": 164.66,
+            "logicalHeight": 44
+          },
+          {
+            "name": "ШГШаги",
+            "tag": "BUTTON",
+            "x": 176.66,
+            "y": 155,
+            "width": 164.67,
+            "height": 44,
+            "logicalWidth": 164.67,
+            "logicalHeight": 44
+          },
+          {
+            "name": "УСУсловие",
+            "tag": "BUTTON",
+            "x": 345.33,
+            "y": 155,
+            "width": 164.67,
+            "height": 44,
+            "logicalWidth": 164.67,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Мои заметки",
+            "tag": "BUTTON",
+            "x": 514,
+            "y": 155,
+            "width": 164.66,
+            "height": 44,
+            "logicalWidth": 164.66,
+            "logicalHeight": 44
+          },
+          {
+            "name": "ЧТЧат2",
+            "tag": "BUTTON",
+            "x": 682.66,
+            "y": 155,
+            "width": 164.67,
+            "height": 44,
+            "logicalWidth": 164.67,
+            "logicalHeight": 44
+          },
+          {
+            "name": "АКАктивность",
+            "tag": "BUTTON",
+            "x": 851.33,
+            "y": 155,
+            "width": 164.67,
+            "height": 44,
+            "logicalWidth": 164.67,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Показать оба",
+            "tag": "BUTTON",
+            "x": 507.86,
+            "y": 292.5,
+            "width": 131,
+            "height": 44,
+            "logicalWidth": 131,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Закрыть чат и вернуться в редактор",
+            "tag": "BUTTON",
+            "x": 962,
+            "y": 292.5,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Новые сообщения · 2",
+            "tag": "BUTTON",
+            "x": 19,
+            "y": 400,
+            "width": 986,
+            "height": 44,
+            "logicalWidth": 986,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Сообщение интервьюерам",
+            "tag": "TEXTAREA",
+            "x": 19,
+            "y": 538.47,
+            "width": 986,
+            "height": 112,
+            "logicalWidth": 986,
+            "logicalHeight": 112
+          },
+          {
+            "name": "Получить новое",
+            "tag": "BUTTON",
+            "x": 690.84,
+            "y": 664.47,
+            "width": 152.61,
+            "height": 44,
+            "logicalWidth": 152.61,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Ожидает ACK…",
+            "tag": "BUTTON",
+            "x": 850.45,
+            "y": 664.47,
+            "width": 154.55,
+            "height": 44,
+            "logicalWidth": 154.55,
+            "logicalHeight": 44
+          }
+        ],
+        "undersized": [],
+        "panels": [
+          {
+            "name": "chat",
+            "x": 6,
+            "y": 291,
+            "width": 1012,
+            "height": 303,
+            "logicalWidth": 1012,
+            "logicalHeight": 303,
+            "body": {
+              "x": 7,
+              "y": 340,
+              "width": 1010,
+              "height": 253,
+              "logicalWidth": 1010,
+              "logicalHeight": 253
+            }
+          }
+        ],
+        "room": {
+          "mode": "focus",
+          "W": 1000,
+          "H": 346,
+          "keyboard": false,
+          "viewportSource": "visualViewport"
+        }
+      }
+    },
+    {
+      "name": "activity-error",
+      "hash": "#/room/int-204?actor=interviewer&state=error",
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "file": "activity-error.png",
+      "geometry": {
+        "zoom": 1,
+        "clientWidth": 1024,
+        "scrollWidth": 1024,
+        "horizontalOverflow": 0,
+        "interactiveCount": 19,
+        "interactive": [
+          {
+            "name": "К основному содержимому",
+            "tag": "A",
+            "x": 12,
+            "y": -60.4,
+            "width": 242.63,
+            "height": 44,
+            "logicalWidth": 242.63,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Выбрать роль для просмотра прототипа",
+            "tag": "SELECT",
+            "x": 412.39,
+            "y": 4,
+            "width": 298.8,
+            "height": 44,
+            "logicalWidth": 298.8,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Выбрать состояние данных",
+            "tag": "SELECT",
+            "x": 717.19,
+            "y": 4,
+            "width": 298.8,
+            "height": 44,
+            "logicalWidth": 298.8,
+            "logicalHeight": 44
+          },
+          {
+            "name": "← К интервью · Atlas",
+            "tag": "A",
+            "x": 14,
+            "y": 59,
+            "width": 190,
+            "height": 62,
+            "logicalWidth": 190,
+            "logicalHeight": 62
+          },
+          {
+            "name": "Фокус",
+            "tag": "BUTTON",
+            "x": 727,
+            "y": 68,
+            "width": 74,
+            "height": 44,
+            "logicalWidth": 74,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Рабочий",
+            "tag": "BUTTON",
+            "x": 804,
+            "y": 68,
+            "width": 74,
+            "height": 44,
+            "logicalWidth": 74,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Обзор",
+            "tag": "BUTTON",
+            "x": 881,
+            "y": 68,
+            "width": 74,
+            "height": 44,
+            "logicalWidth": 74,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Действия комнаты: приглашение, завершение и передача владения",
+            "tag": "BUTTON",
+            "x": 966,
+            "y": 68,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "КДРедактор",
+            "tag": "BUTTON",
+            "x": 8,
+            "y": 133,
+            "width": 164.66,
+            "height": 44,
+            "logicalWidth": 164.66,
+            "logicalHeight": 44
+          },
+          {
+            "name": "ШГШаги",
+            "tag": "BUTTON",
+            "x": 176.66,
+            "y": 133,
+            "width": 164.67,
+            "height": 44,
+            "logicalWidth": 164.67,
+            "logicalHeight": 44
+          },
+          {
+            "name": "УСУсловие",
+            "tag": "BUTTON",
+            "x": 345.33,
+            "y": 133,
+            "width": 164.67,
+            "height": 44,
+            "logicalWidth": 164.67,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Мои заметки",
+            "tag": "BUTTON",
+            "x": 514,
+            "y": 133,
+            "width": 164.66,
+            "height": 44,
+            "logicalWidth": 164.66,
+            "logicalHeight": 44
+          },
+          {
+            "name": "ЧТЧат2",
+            "tag": "BUTTON",
+            "x": 682.66,
+            "y": 133,
+            "width": 164.67,
+            "height": 44,
+            "logicalWidth": 164.67,
+            "logicalHeight": 44
+          },
+          {
+            "name": "АКАктивность",
+            "tag": "BUTTON",
+            "x": 851.33,
+            "y": 133,
+            "width": 164.67,
+            "height": 44,
+            "logicalWidth": 164.67,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Повторить",
+            "tag": "BUTTON",
+            "x": 901.17,
+            "y": 220.69,
+            "width": 110.83,
+            "height": 44,
+            "logicalWidth": 110.83,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Показать оба",
+            "tag": "BUTTON",
+            "x": 510.75,
+            "y": 275.44,
+            "width": 131,
+            "height": 44,
+            "logicalWidth": 131,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Закрыть активность и вернуться в редактор",
+            "tag": "BUTTON",
+            "x": 962,
+            "y": 275.44,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Повторить",
+            "tag": "BUTTON",
+            "x": 483.3,
+            "y": 343.5,
+            "width": 92.17,
+            "height": 44,
+            "logicalWidth": 92.17,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Загрузить предыдущие",
+            "tag": "BUTTON",
+            "x": 793.97,
+            "y": 627.5,
+            "width": 211.03,
+            "height": 44,
+            "logicalWidth": 211.03,
+            "logicalHeight": 44
+          }
+        ],
+        "undersized": [],
+        "panels": [
+          {
+            "name": "activity",
+            "x": 6,
+            "y": 273.36,
+            "width": 1012,
+            "height": 320.64,
+            "logicalWidth": 1012,
+            "logicalHeight": 320.64,
+            "body": {
+              "x": 7,
+              "y": 323.5,
+              "width": 1010,
+              "height": 269.5,
+              "logicalWidth": 1010,
+              "logicalHeight": 269.5
+            }
+          }
+        ],
+        "room": {
+          "mode": "focus",
+          "W": 1000,
+          "H": 337,
+          "keyboard": false,
+          "viewportSource": "visualViewport"
+        }
+      }
+    },
+    {
+      "name": "frozen-owner",
+      "hash": "#/room/int-204?actor=roomOwner&state=frozen",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "file": "frozen-owner.png",
+      "geometry": {
+        "zoom": 1,
+        "clientWidth": 768,
+        "scrollWidth": 768,
+        "horizontalOverflow": 0,
+        "interactiveCount": 5,
+        "interactive": [
+          {
+            "name": "К основному содержимому",
+            "tag": "A",
+            "x": 12,
+            "y": -60.4,
+            "width": 242.63,
+            "height": 44,
+            "logicalWidth": 242.63,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Выбрать роль для просмотра прототипа",
+            "tag": "SELECT",
+            "x": 310,
+            "y": 4,
+            "width": 222,
+            "height": 44,
+            "logicalWidth": 222,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Выбрать состояние данных",
+            "tag": "SELECT",
+            "x": 538,
+            "y": 4,
+            "width": 222,
+            "height": 44,
+            "logicalWidth": 222,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Возобновить после проверки",
+            "tag": "BUTTON",
+            "x": 101.08,
+            "y": 538.83,
+            "width": 271.08,
+            "height": 46,
+            "logicalWidth": 271.08,
+            "logicalHeight": 46
+          },
+          {
+            "name": "К интервью · Atlas",
+            "tag": "A",
+            "x": 372.16,
+            "y": 538.83,
+            "width": 185.48,
+            "height": 46,
+            "logicalWidth": 185.48,
+            "logicalHeight": 46
+          }
+        ],
+        "undersized": [],
+        "panels": [],
+        "room": null
+      }
+    },
+    {
+      "name": "revoked-staff",
+      "hash": "#/room/int-204?actor=revokedStaff&state=revoked",
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "file": "revoked-staff.png",
+      "geometry": {
+        "zoom": 1,
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "horizontalOverflow": 0,
+        "interactiveCount": 4,
+        "interactive": [
+          {
+            "name": "К основному содержимому",
+            "tag": "A",
+            "x": 12,
+            "y": -60.4,
+            "width": 242.63,
+            "height": 44,
+            "logicalWidth": 242.63,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Выбрать роль для просмотра прототипа",
+            "tag": "SELECT",
+            "x": 158.8,
+            "y": 4,
+            "width": 108.59,
+            "height": 44,
+            "logicalWidth": 108.59,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Выбрать состояние данных",
+            "tag": "SELECT",
+            "x": 273.39,
+            "y": 4,
+            "width": 108.61,
+            "height": 44,
+            "logicalWidth": 108.61,
+            "logicalHeight": 44
+          },
+          {
+            "name": "В личное пространство",
+            "tag": "A",
+            "x": 49,
+            "y": 373.92,
+            "width": 220.38,
+            "height": 46,
+            "logicalWidth": 220.38,
+            "logicalHeight": 46
+          }
+        ],
+        "undersized": [],
+        "panels": [],
+        "room": null
+      }
+    },
+    {
+      "name": "candidate-no-internal-panels",
+      "hash": "#/room/int-204?actor=candidate&state=success&long=1",
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "file": "candidate-no-internal-panels.png",
+      "geometry": {
+        "zoom": 1,
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "horizontalOverflow": 0,
+        "interactiveCount": 5,
+        "interactive": [
+          {
+            "name": "К основному содержимому",
+            "tag": "A",
+            "x": 12,
+            "y": -60.4,
+            "width": 242.63,
+            "height": 44,
+            "logicalWidth": 242.63,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Выбрать роль для просмотра прототипа",
+            "tag": "SELECT",
+            "x": 158.8,
+            "y": 4,
+            "width": 108.59,
+            "height": 44,
+            "logicalWidth": 108.59,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Выбрать состояние данных",
+            "tag": "SELECT",
+            "x": 273.39,
+            "y": 4,
+            "width": 108.61,
+            "height": 44,
+            "logicalWidth": 108.61,
+            "logicalHeight": 44
+          },
+          {
+            "name": "← Выйти на главную",
+            "tag": "A",
+            "x": 14,
+            "y": 59,
+            "width": 186.19,
+            "height": 44,
+            "logicalWidth": 186.19,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Код кандидата",
+            "tag": "TEXTAREA",
+            "x": 7,
+            "y": 634.7,
+            "width": 376,
+            "height": 320,
+            "logicalWidth": 376,
+            "logicalHeight": 320
+          }
+        ],
+        "undersized": [],
+        "panels": [],
+        "room": null
+      }
+    },
+    {
+      "name": "visual-viewport-keyboard-chat",
+      "file": "visual-viewport-keyboard-chat.png",
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "simulatedVisualViewport": {
+        "width": 390,
+        "height": 360,
+        "keyboard": true
+      },
+      "geometry": {
+        "zoom": 1,
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "horizontalOverflow": 0,
+        "interactiveCount": 9,
+        "interactive": [
+          {
+            "name": "К основному содержимому",
+            "tag": "A",
+            "x": 12,
+            "y": -60.4,
+            "width": 242.63,
+            "height": 44,
+            "logicalWidth": 242.63,
+            "logicalHeight": 44
+          },
+          {
+            "name": "КДРедактор",
+            "tag": "BUTTON",
+            "x": 0,
+            "y": 28,
+            "width": 65,
+            "height": 44,
+            "logicalWidth": 65,
+            "logicalHeight": 44
+          },
+          {
+            "name": "ШГШаги",
+            "tag": "BUTTON",
+            "x": 65,
+            "y": 28,
+            "width": 65,
+            "height": 44,
+            "logicalWidth": 65,
+            "logicalHeight": 44
+          },
+          {
+            "name": "УСУсловие",
+            "tag": "BUTTON",
+            "x": 130,
+            "y": 28,
+            "width": 65,
+            "height": 44,
+            "logicalWidth": 65,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Мои заметки",
+            "tag": "BUTTON",
+            "x": 195,
+            "y": 28,
+            "width": 65,
+            "height": 44,
+            "logicalWidth": 65,
+            "logicalHeight": 44
+          },
+          {
+            "name": "ЧТЧат2",
+            "tag": "BUTTON",
+            "x": 260,
+            "y": 28,
+            "width": 65,
+            "height": 44,
+            "logicalWidth": 65,
+            "logicalHeight": 44
+          },
+          {
+            "name": "АКАктивность",
+            "tag": "BUTTON",
+            "x": 325,
+            "y": 28,
+            "width": 65,
+            "height": 44,
+            "logicalWidth": 65,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Сообщение интервьюерам",
+            "tag": "TEXTAREA",
+            "x": 7,
+            "y": 111,
+            "width": 258.78,
+            "height": 44,
+            "logicalWidth": 258.78,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Отправить",
+            "tag": "BUTTON",
+            "x": 271.78,
+            "y": 111,
+            "width": 111.22,
+            "height": 44,
+            "logicalWidth": 111.22,
+            "logicalHeight": 44
+          }
+        ],
+        "undersized": [],
+        "panels": [
+          {
+            "name": "chat",
+            "x": 2,
+            "y": 74,
+            "width": 386,
+            "height": 284,
+            "logicalWidth": 386,
+            "logicalHeight": 284,
+            "body": {
+              "x": 3,
+              "y": 75,
+              "width": 384,
+              "height": 282,
+              "logicalWidth": 384,
+              "logicalHeight": 282
+            }
+          }
+        ],
+        "room": {
+          "mode": "focus",
+          "W": 366,
+          "H": 276,
+          "keyboard": true,
+          "viewportSource": "simulated-visualViewport"
+        }
+      }
+    },
+    {
+      "name": "focus-driven-landscape-chat",
+      "file": "focus-driven-landscape-chat.png",
+      "viewport": {
+        "width": 667,
+        "height": 375
+      },
+      "geometry": {
+        "zoom": 1,
+        "clientWidth": 667,
+        "scrollWidth": 667,
+        "horizontalOverflow": 0,
+        "interactiveCount": 9,
+        "interactive": [
+          {
+            "name": "К основному содержимому",
+            "tag": "A",
+            "x": 12,
+            "y": -60.4,
+            "width": 242.63,
+            "height": 44,
+            "logicalWidth": 242.63,
+            "logicalHeight": 44
+          },
+          {
+            "name": "КДРедактор",
+            "tag": "BUTTON",
+            "x": 0,
+            "y": 0,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "ШГШаги",
+            "tag": "BUTTON",
+            "x": 44,
+            "y": 0,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "УСУсловие",
+            "tag": "BUTTON",
+            "x": 88,
+            "y": 0,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Мои заметки",
+            "tag": "BUTTON",
+            "x": 132,
+            "y": 0,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "ЧТЧат0",
+            "tag": "BUTTON",
+            "x": 176,
+            "y": 0,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "АКАктивность",
+            "tag": "BUTTON",
+            "x": 220,
+            "y": 0,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Сообщение интервьюерам",
+            "tag": "TEXTAREA",
+            "x": 264,
+            "y": 0,
+            "width": 285.78,
+            "height": 44,
+            "logicalWidth": 285.78,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Отправить",
+            "tag": "BUTTON",
+            "x": 555.78,
+            "y": 0,
+            "width": 111.22,
+            "height": 44,
+            "logicalWidth": 111.22,
+            "logicalHeight": 44
+          }
+        ],
+        "undersized": [],
+        "panels": [
+          {
+            "name": "chat",
+            "x": 2,
+            "y": 2,
+            "width": 663,
+            "height": 40,
+            "logicalWidth": 663,
+            "logicalHeight": 40,
+            "body": {
+              "x": 3,
+              "y": 3,
+              "width": 661,
+              "height": 38,
+              "logicalWidth": 661,
+              "logicalHeight": 38
+            }
+          }
+        ],
+        "room": {
+          "mode": "focus",
+          "W": 643,
+          "H": 291,
+          "keyboard": true,
+          "viewportSource": "visualViewport"
+        }
+      }
+    },
+    {
+      "name": "focus-resize-portrait-chat",
+      "file": "focus-resize-portrait-chat.png",
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "simulatedVisualViewport": {
+        "width": 390,
+        "height": 320,
+        "keyboard": true
+      },
+      "geometry": {
+        "zoom": 1,
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "horizontalOverflow": 0,
+        "interactiveCount": 9,
+        "interactive": [
+          {
+            "name": "К основному содержимому",
+            "tag": "A",
+            "x": 12,
+            "y": -60.4,
+            "width": 242.63,
+            "height": 44,
+            "logicalWidth": 242.63,
+            "logicalHeight": 44
+          },
+          {
+            "name": "КДРедактор",
+            "tag": "BUTTON",
+            "x": 0,
+            "y": 28,
+            "width": 65,
+            "height": 44,
+            "logicalWidth": 65,
+            "logicalHeight": 44
+          },
+          {
+            "name": "ШГШаги",
+            "tag": "BUTTON",
+            "x": 65,
+            "y": 28,
+            "width": 65,
+            "height": 44,
+            "logicalWidth": 65,
+            "logicalHeight": 44
+          },
+          {
+            "name": "УСУсловие",
+            "tag": "BUTTON",
+            "x": 130,
+            "y": 28,
+            "width": 65,
+            "height": 44,
+            "logicalWidth": 65,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Мои заметки",
+            "tag": "BUTTON",
+            "x": 195,
+            "y": 28,
+            "width": 65,
+            "height": 44,
+            "logicalWidth": 65,
+            "logicalHeight": 44
+          },
+          {
+            "name": "ЧТЧат2",
+            "tag": "BUTTON",
+            "x": 260,
+            "y": 28,
+            "width": 65,
+            "height": 44,
+            "logicalWidth": 65,
+            "logicalHeight": 44
+          },
+          {
+            "name": "АКАктивность",
+            "tag": "BUTTON",
+            "x": 325,
+            "y": 28,
+            "width": 65,
+            "height": 44,
+            "logicalWidth": 65,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Сообщение интервьюерам",
+            "tag": "TEXTAREA",
+            "x": 7,
+            "y": 111,
+            "width": 258.78,
+            "height": 44,
+            "logicalWidth": 258.78,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Отправить",
+            "tag": "BUTTON",
+            "x": 271.78,
+            "y": 111,
+            "width": 111.22,
+            "height": 44,
+            "logicalWidth": 111.22,
+            "logicalHeight": 44
+          }
+        ],
+        "undersized": [],
+        "panels": [
+          {
+            "name": "chat",
+            "x": 2,
+            "y": 74,
+            "width": 386,
+            "height": 244,
+            "logicalWidth": 386,
+            "logicalHeight": 244,
+            "body": {
+              "x": 3,
+              "y": 75,
+              "width": 384,
+              "height": 242,
+              "logicalWidth": 384,
+              "logicalHeight": 242
+            }
+          }
+        ],
+        "room": {
+          "mode": "focus",
+          "W": 366,
+          "H": 236,
+          "keyboard": true,
+          "viewportSource": "simulated-visualViewport"
+        }
+      }
+    },
+    {
+      "name": "visual-viewport-auto-pan-safe-area",
+      "file": "visual-viewport-auto-pan-safe-area.png",
+      "viewport": {
+        "width": 667,
+        "height": 375
+      },
+      "simulatedVisualViewport": {
+        "width": 667,
+        "height": 260,
+        "keyboard": true,
+        "offsetTop": 92,
+        "offsetLeft": 0
+      },
+      "geometry": {
+        "zoom": 1,
+        "clientWidth": 667,
+        "scrollWidth": 667,
+        "horizontalOverflow": 0,
+        "interactiveCount": 9,
+        "interactive": [
+          {
+            "name": "К основному содержимому",
+            "tag": "A",
+            "x": 59,
+            "y": -60.4,
+            "width": 242.63,
+            "height": 44,
+            "logicalWidth": 242.63,
+            "logicalHeight": 44
+          },
+          {
+            "name": "КДРедактор",
+            "tag": "BUTTON",
+            "x": 47,
+            "y": 92,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "ШГШаги",
+            "tag": "BUTTON",
+            "x": 91,
+            "y": 92,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "УСУсловие",
+            "tag": "BUTTON",
+            "x": 135,
+            "y": 92,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Мои заметки",
+            "tag": "BUTTON",
+            "x": 179,
+            "y": 92,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "ЧТЧат0",
+            "tag": "BUTTON",
+            "x": 223,
+            "y": 92,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "АКАктивность",
+            "tag": "BUTTON",
+            "x": 267,
+            "y": 92,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Сообщение интервьюерам",
+            "tag": "TEXTAREA",
+            "x": 311,
+            "y": 92,
+            "width": 191.78,
+            "height": 44,
+            "logicalWidth": 191.78,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Отправить",
+            "tag": "BUTTON",
+            "x": 508.78,
+            "y": 92,
+            "width": 111.22,
+            "height": 44,
+            "logicalWidth": 111.22,
+            "logicalHeight": 44
+          }
+        ],
+        "undersized": [],
+        "panels": [
+          {
+            "name": "chat",
+            "x": 47,
+            "y": 94,
+            "width": 573,
+            "height": 40,
+            "logicalWidth": 573,
+            "logicalHeight": 40,
+            "body": {
+              "x": 48,
+              "y": 95,
+              "width": 571,
+              "height": 38,
+              "logicalWidth": 571,
+              "logicalHeight": 38
+            }
+          }
+        ],
+        "room": {
+          "mode": "focus",
+          "W": 643,
+          "H": 176,
+          "keyboard": true,
+          "viewportSource": "simulated-visualViewport"
+        }
+      }
+    },
+    {
+      "name": "short-landscape-keyboard-open",
+      "file": "short-landscape-keyboard-open.png",
+      "viewport": {
+        "width": 667,
+        "height": 375
+      },
+      "simulatedVisualViewport": {
+        "width": 667,
+        "height": 60,
+        "unobscuredHeight": 44,
+        "keyboard": true,
+        "reportedOffsetTop": 19,
+        "fixedOrigin": "visual-viewport",
+        "offsetLeft": 0
+      },
+      "geometry": {
+        "zoom": 1,
+        "clientWidth": 667,
+        "scrollWidth": 667,
+        "horizontalOverflow": 0,
+        "interactiveCount": 9,
+        "interactive": [
+          {
+            "name": "К основному содержимому",
+            "tag": "A",
+            "x": 59,
+            "y": -60.4,
+            "width": 242.63,
+            "height": 44,
+            "logicalWidth": 242.63,
+            "logicalHeight": 44
+          },
+          {
+            "name": "КДРедактор",
+            "tag": "BUTTON",
+            "x": 47,
+            "y": 0,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "ШГШаги",
+            "tag": "BUTTON",
+            "x": 91,
+            "y": 0,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "УСУсловие",
+            "tag": "BUTTON",
+            "x": 135,
+            "y": 0,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Мои заметки",
+            "tag": "BUTTON",
+            "x": 179,
+            "y": 0,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "ЧТЧат0",
+            "tag": "BUTTON",
+            "x": 223,
+            "y": 0,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "АКАктивность",
+            "tag": "BUTTON",
+            "x": 267,
+            "y": 0,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Сообщение интервьюерам",
+            "tag": "TEXTAREA",
+            "x": 311,
+            "y": 0,
+            "width": 191.78,
+            "height": 44,
+            "logicalWidth": 191.78,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Отправить",
+            "tag": "BUTTON",
+            "x": 508.78,
+            "y": 0,
+            "width": 111.22,
+            "height": 44,
+            "logicalWidth": 111.22,
+            "logicalHeight": 44
+          }
+        ],
+        "undersized": [],
+        "panels": [
+          {
+            "name": "chat",
+            "x": 47,
+            "y": 2,
+            "width": 573,
+            "height": 40,
+            "logicalWidth": 573,
+            "logicalHeight": 40,
+            "body": {
+              "x": 48,
+              "y": 3,
+              "width": 571,
+              "height": 38,
+              "logicalWidth": 571,
+              "logicalHeight": 38
+            }
+          }
+        ],
+        "room": {
+          "mode": "focus",
+          "W": 643,
+          "H": 0,
+          "keyboard": true,
+          "viewportSource": "simulated-visualViewport"
+        }
+      }
+    },
+    {
+      "name": "current-step-chat",
+      "file": "current-step-chat.png",
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "geometry": {
+        "zoom": 1,
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "horizontalOverflow": 0,
+        "interactiveCount": 16,
+        "interactive": [
+          {
+            "name": "К основному содержимому",
+            "tag": "A",
+            "x": 12,
+            "y": -60.4,
+            "width": 242.63,
+            "height": 44,
+            "logicalWidth": 242.63,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Выбрать роль для просмотра прототипа",
+            "tag": "SELECT",
+            "x": 158.8,
+            "y": 4,
+            "width": 108.59,
+            "height": 44,
+            "logicalWidth": 108.59,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Выбрать состояние данных",
+            "tag": "SELECT",
+            "x": 273.39,
+            "y": 4,
+            "width": 108.61,
+            "height": 44,
+            "logicalWidth": 108.61,
+            "logicalHeight": 44
+          },
+          {
+            "name": "← К интервью · Atlas",
+            "tag": "A",
+            "x": 14,
+            "y": 59,
+            "width": 253.33,
+            "height": 44,
+            "logicalWidth": 253.33,
+            "logicalHeight": 44
+          },
+          {
+            "name": "КДРедактор",
+            "tag": "BUTTON",
+            "x": 8,
+            "y": 115,
+            "width": 122,
+            "height": 44,
+            "logicalWidth": 122,
+            "logicalHeight": 44
+          },
+          {
+            "name": "ШГШаги",
+            "tag": "BUTTON",
+            "x": 134,
+            "y": 115,
+            "width": 122,
+            "height": 44,
+            "logicalWidth": 122,
+            "logicalHeight": 44
+          },
+          {
+            "name": "УСУсловие",
+            "tag": "BUTTON",
+            "x": 260,
+            "y": 115,
+            "width": 122,
+            "height": 44,
+            "logicalWidth": 122,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Мои заметки",
+            "tag": "BUTTON",
+            "x": 8,
+            "y": 163,
+            "width": 122,
+            "height": 44,
+            "logicalWidth": 122,
+            "logicalHeight": 44
+          },
+          {
+            "name": "ЧТЧат2",
+            "tag": "BUTTON",
+            "x": 134,
+            "y": 163,
+            "width": 122,
+            "height": 44,
+            "logicalWidth": 122,
+            "logicalHeight": 44
+          },
+          {
+            "name": "АКАктивность",
+            "tag": "BUTTON",
+            "x": 260,
+            "y": 163,
+            "width": 122,
+            "height": 44,
+            "logicalWidth": 122,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Показать оба",
+            "tag": "BUTTON",
+            "x": 189.98,
+            "y": 249.42,
+            "width": 128.02,
+            "height": 62,
+            "logicalWidth": 128.02,
+            "logicalHeight": 62
+          },
+          {
+            "name": "Закрыть чат и вернуться в редактор",
+            "tag": "BUTTON",
+            "x": 328,
+            "y": 258.42,
+            "width": 44,
+            "height": 44,
+            "logicalWidth": 44,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Новые сообщения · 2",
+            "tag": "BUTTON",
+            "x": 19,
+            "y": 361.08,
+            "width": 352,
+            "height": 44,
+            "logicalWidth": 352,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Сообщение интервьюерам",
+            "tag": "TEXTAREA",
+            "x": 19,
+            "y": 452.58,
+            "width": 352,
+            "height": 112,
+            "logicalWidth": 352,
+            "logicalHeight": 112
+          },
+          {
+            "name": "Получить новое",
+            "tag": "BUTTON",
+            "x": 100.17,
+            "y": 578.58,
+            "width": 152.61,
+            "height": 44,
+            "logicalWidth": 152.61,
+            "logicalHeight": 44
+          },
+          {
+            "name": "Отправить",
+            "tag": "BUTTON",
+            "x": 259.78,
+            "y": 578.58,
+            "width": 111.22,
+            "height": 44,
+            "logicalWidth": 111.22,
+            "logicalHeight": 44
+          }
+        ],
+        "undersized": [],
+        "panels": [
+          {
+            "name": "chat",
+            "x": 6,
+            "y": 255,
+            "width": 378,
+            "height": 379,
+            "logicalWidth": 378,
+            "logicalHeight": 379,
+            "body": {
+              "x": 7,
+              "y": 307.83,
+              "width": 376,
+              "height": 325.17,
+              "logicalWidth": 376,
+              "logicalHeight": 325.17
+            }
+          }
+        ],
+        "room": {
+          "mode": "focus",
+          "W": 366,
+          "H": 430,
+          "keyboard": false,
+          "viewportSource": "visualViewport"
+        }
+      }
+    }
+  ],
+  "overview": {
+    "mode": "overview",
+    "panelCount": 4,
+    "panels": {
+      "editor": {
+        "name": "editor",
+        "x": 282.81,
+        "y": 215,
+        "width": 773.77,
+        "height": 679,
+        "logicalWidth": 773.77,
+        "logicalHeight": 679,
+        "body": {
+          "x": 283.81,
+          "y": 302,
+          "width": 771.77,
+          "height": 591,
+          "logicalWidth": 771.77,
+          "logicalHeight": 591
+        }
+      },
+      "steps": {
+        "name": "steps",
+        "x": 6,
+        "y": 215,
+        "width": 270.81,
+        "height": 679,
+        "logicalWidth": 270.81,
+        "logicalHeight": 679,
+        "body": {
+          "x": 7,
+          "y": 277,
+          "width": 268.81,
+          "height": 616,
+          "logicalWidth": 268.81,
+          "logicalHeight": 616
+        }
+      },
+      "chat": {
+        "name": "chat",
+        "x": 1062.58,
+        "y": 526.91,
+        "width": 371.41,
+        "height": 367.09,
+        "logicalWidth": 371.41,
+        "logicalHeight": 367.09,
+        "body": {
+          "x": 1063.58,
+          "y": 599.2,
+          "width": 369.41,
+          "height": 293.8,
+          "logicalWidth": 369.41,
+          "logicalHeight": 293.8
+        }
+      },
+      "activity": {
+        "name": "activity",
+        "x": 1062.58,
+        "y": 215,
+        "width": 371.41,
+        "height": 305.91,
+        "logicalWidth": 371.41,
+        "logicalHeight": 305.91,
+        "body": {
+          "x": 1063.58,
+          "y": 279.31,
+          "width": 369.41,
+          "height": 240.59,
+          "logicalWidth": 369.41,
+          "logicalHeight": 240.59
+        }
+      }
+    },
+    "chatHistoryRect": {
+      "x": 1063.578125,
+      "y": 599.203125,
+      "width": 369.40625,
+      "height": 120
+    },
+    "composerRect": {
+      "x": 1063.578125,
+      "y": 719.203125,
+      "width": 369.40625,
+      "height": 215.5
+    },
+    "minimaPass": true
+  },
+  "continuity": {
+    "sameEditorNode": true,
+    "sameSession": true,
+    "sameMountCount": true,
+    "codePreserved": true,
+    "selectionPreserved": true,
+    "editorScrollPreserved": true,
+    "notesDraftPreserved": true,
+    "chatDraftPreserved": true,
+    "selectedStepPreserved": true,
+    "switchCountDelta": 20,
+    "before": {
+      "vw": 1440,
+      "vh": 900,
+      "W": 1416,
+      "H": 690,
+      "keyboard": false,
+      "zoom": 1,
+      "offsetTop": 0,
+      "offsetLeft": 0,
+      "fixedVisualOrigin": true,
+      "fixedTop": 0,
+      "fixedLeft": 0,
+      "inputFocused": false,
+      "viewportCompressed": false,
+      "shortViewport": false,
+      "mode": "overview",
+      "sessionId": "prototype-room-session-int-204",
+      "editorInstanceId": "editor-instance-int-204",
+      "mountCount": 1,
+      "activePanel": "chat",
+      "selectedStep": "step-3",
+      "inputMode": true,
+      "code": "const item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nreturn queue;",
+      "selectionStart": 41,
+      "selectionEnd": 77,
+      "editorScrollTop": 260,
+      "chatDraft": "Черновик чата сохраняется и не считается отправленным.",
+      "notesDraft": "Личный черновик заметки сохраняется через двадцать переключений.",
+      "chatScrollTop": 0,
+      "activityScrollTop": 0,
+      "unread": 0,
+      "switchCount": 5,
+      "editorConnected": true,
+      "editorExpando": "editor-instance-int-204"
+    },
+    "after": {
+      "vw": 768,
+      "vh": 1024,
+      "W": 744,
+      "H": 814,
+      "keyboard": false,
+      "zoom": 1,
+      "offsetTop": 0,
+      "offsetLeft": 0,
+      "fixedVisualOrigin": true,
+      "fixedTop": 0,
+      "fixedLeft": 0,
+      "inputFocused": false,
+      "viewportCompressed": false,
+      "shortViewport": false,
+      "mode": "focus",
+      "sessionId": "prototype-room-session-int-204",
+      "editorInstanceId": "editor-instance-int-204",
+      "mountCount": 1,
+      "activePanel": "notes",
+      "selectedStep": "step-3",
+      "inputMode": false,
+      "code": "const item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nconst item = queue.shift(); // длинная строка для внутренней прокрутки\nreturn queue;",
+      "selectionStart": 41,
+      "selectionEnd": 77,
+      "editorScrollTop": 260,
+      "chatDraft": "Черновик чата сохраняется и не считается отправленным.",
+      "notesDraft": "Личный черновик заметки сохраняется через двадцать переключений.",
+      "chatScrollTop": 0,
+      "activityScrollTop": 0,
+      "unread": 0,
+      "switchCount": 25,
+      "editorConnected": true,
+      "editorExpando": "editor-instance-int-204"
+    }
+  },
+  "attention": {
+    "focusStayedInEditor": true,
+    "scrollPositionStable": true,
+    "unreadIncreased": true,
+    "unreadClearedAtBottom": true
+  },
+  "keyboardViewport": {
+    "simulated": {
+      "vw": 390,
+      "vh": 360,
+      "W": 366,
+      "H": 276,
+      "keyboard": true,
+      "zoom": 1,
+      "offsetTop": 0,
+      "offsetLeft": 0,
+      "fixedVisualOrigin": false,
+      "fixedTop": 0,
+      "fixedLeft": 0,
+      "inputFocused": false,
+      "viewportCompressed": false,
+      "shortViewport": true,
+      "mode": "focus",
+      "sessionId": "prototype-room-session-int-204",
+      "editorInstanceId": "editor-instance-int-204",
+      "mountCount": 1
+    },
+    "contextRect": {
+      "x": 0,
+      "y": 0,
+      "width": 390,
+      "height": 28
+    },
+    "navRect": {
+      "x": 0,
+      "y": 28,
+      "width": 390,
+      "height": 44
+    },
+    "serviceHeight": 72,
+    "sendRect": {
+      "x": 271.78125,
+      "y": 111,
+      "width": 111.21875,
+      "height": 44
+    },
+    "sendReachable": true,
+    "sixDirectActions": 6,
+    "compactCurrentStepVisible": true,
+    "compactCurrentStepText": "Локально 02 · кандидату 02",
+    "minimumActionWidth": 65,
+    "horizontalOverflow": 0
+  },
+  "realKeyboardFocus": {
+    "inputModeActivatedByFocus": true,
+    "focusPreserved": true,
+    "historyCollapsedInKeyboardMode": true,
+    "sendReachableAfterOrdinaryScroll": true,
+    "composerReachableAfterOrdinaryScroll": true,
+    "compactCurrentStepVisible": true,
+    "horizontalOverflow": 0,
+    "sameChatNode": true
+  },
+  "portraitFocusResize": {
+    "keyboardMode": true,
+    "focusPreserved": true,
+    "rootFitsVisualViewport": true,
+    "sendVisibleWithoutScriptedScroll": true,
+    "currentStepCompact": true,
+    "horizontalOverflow": 0
+  },
+  "autoPanSimulated": {
+    "vw": 667,
+    "vh": 260,
+    "W": 643,
+    "H": 176,
+    "keyboard": true,
+    "zoom": 1,
+    "offsetTop": 92,
+    "offsetLeft": 0,
+    "fixedVisualOrigin": false,
+    "fixedTop": 92,
+    "fixedLeft": 0,
+    "inputFocused": true,
+    "viewportCompressed": false,
+    "shortViewport": true,
+    "mode": "focus",
+    "sessionId": "prototype-room-session-int-204",
+    "editorInstanceId": "editor-instance-int-204",
+    "mountCount": 1
+  },
+  "autoPanRecovery": {
+    "simulatedOffsetApplied": true,
+    "separateContextRemoved": true,
+    "navInVisualViewport": true,
+    "navInsideHorizontalSafeArea": true,
+    "composerSharesTopRow": true,
+    "contextIntegratedInComposer": true,
+    "focusPreserved": true,
+    "horizontalOverflow": 0
+  },
+  "shortLandscapeClosedSimulated": {
+    "vw": 667,
+    "vh": 375,
+    "W": 643,
+    "H": 165,
+    "keyboard": false,
+    "zoom": 1,
+    "offsetTop": 0,
+    "offsetLeft": 0,
+    "fixedVisualOrigin": true,
+    "fixedTop": 0,
+    "fixedLeft": 0,
+    "inputFocused": false,
+    "viewportCompressed": false,
+    "shortViewport": true,
+    "mode": "focus",
+    "sessionId": "prototype-room-session-int-204",
+    "editorInstanceId": "editor-instance-int-204",
+    "mountCount": 1
+  },
+  "shortLandscapeClosed": {
+    "detectorFlagIrrelevant": true,
+    "keyboardClosed": true,
+    "historyAvailableAndInternallyScrollable": true,
+    "composerAlreadyVisibleWithoutScroll": true,
+    "compactSingleRowInput": true,
+    "sendVisible": true,
+    "currentAndPublishedStepVisible": true,
+    "horizontalOverflow": 0,
+    "allVisibleTargetsAtLeast44": true
+  },
+  "shortLandscapeClosedGeometry": {
+    "zoom": 1,
+    "clientWidth": 667,
+    "scrollWidth": 667,
+    "horizontalOverflow": 0,
+    "interactiveCount": 13,
+    "interactive": [
+      {
+        "name": "К основному содержимому",
+        "tag": "A",
+        "x": 59,
+        "y": -60.4,
+        "width": 242.63,
+        "height": 44,
+        "logicalWidth": 242.63,
+        "logicalHeight": 44
+      },
+      {
+        "name": "Выбрать роль для просмотра прототипа",
+        "tag": "SELECT",
+        "x": 279,
+        "y": 4,
+        "width": 163.5,
+        "height": 44,
+        "logicalWidth": 163.5,
+        "logicalHeight": 44
+      },
+      {
+        "name": "Выбрать состояние данных",
+        "tag": "SELECT",
+        "x": 448.5,
+        "y": 4,
+        "width": 163.5,
+        "height": 44,
+        "logicalWidth": 163.5,
+        "logicalHeight": 44
+      },
+      {
+        "name": "КДРедактор",
+        "tag": "BUTTON",
+        "x": 55,
+        "y": 56,
+        "width": 89.5,
+        "height": 50,
+        "logicalWidth": 89.5,
+        "logicalHeight": 50
+      },
+      {
+        "name": "ШГШаги",
+        "tag": "BUTTON",
+        "x": 148.5,
+        "y": 56,
+        "width": 89.5,
+        "height": 50,
+        "logicalWidth": 89.5,
+        "logicalHeight": 50
+      },
+      {
+        "name": "УСУсловие",
+        "tag": "BUTTON",
+        "x": 242,
+        "y": 56,
+        "width": 89.5,
+        "height": 50,
+        "logicalWidth": 89.5,
+        "logicalHeight": 50
+      },
+      {
+        "name": "Мои заметки",
+        "tag": "BUTTON",
+        "x": 335.5,
+        "y": 56,
+        "width": 89.5,
+        "height": 50,
+        "logicalWidth": 89.5,
+        "logicalHeight": 50
+      },
+      {
+        "name": "ЧТЧат2",
+        "tag": "BUTTON",
+        "x": 429,
+        "y": 56,
+        "width": 89.5,
+        "height": 50,
+        "logicalWidth": 89.5,
+        "logicalHeight": 50
+      },
+      {
+        "name": "АКАктивность",
+        "tag": "BUTTON",
+        "x": 522.5,
+        "y": 56,
+        "width": 89.5,
+        "height": 50,
+        "logicalWidth": 89.5,
+        "logicalHeight": 50
+      },
+      {
+        "name": "Новые сообщения · 2",
+        "tag": "BUTTON",
+        "x": 66,
+        "y": 167,
+        "width": 535,
+        "height": 44,
+        "logicalWidth": 535,
+        "logicalHeight": 44
+      },
+      {
+        "name": "Сообщение интервьюерам",
+        "tag": "TEXTAREA",
+        "x": 101,
+        "y": 255,
+        "width": 188.17,
+        "height": 44,
+        "logicalWidth": 188.17,
+        "logicalHeight": 44
+      },
+      {
+        "name": "Получить новое",
+        "tag": "BUTTON",
+        "x": 295.17,
+        "y": 255,
+        "width": 152.61,
+        "height": 44,
+        "logicalWidth": 152.61,
+        "logicalHeight": 44
+      },
+      {
+        "name": "Отправить",
+        "tag": "BUTTON",
+        "x": 454.78,
+        "y": 255,
+        "width": 111.22,
+        "height": 44,
+        "logicalWidth": 111.22,
+        "logicalHeight": 44
+      }
+    ],
+    "undersized": [],
+    "panels": [
+      {
+        "name": "chat",
+        "x": 53,
+        "y": 154,
+        "width": 561,
+        "height": 149,
+        "logicalWidth": 561,
+        "logicalHeight": 149,
+        "body": {
+          "x": 54,
+          "y": 155,
+          "width": 559,
+          "height": 147,
+          "logicalWidth": 559,
+          "logicalHeight": 147
+        }
+      }
+    ],
+    "room": {
+      "mode": "focus",
+      "W": 643,
+      "H": 165,
+      "keyboard": false,
+      "viewportSource": "visualViewport"
+    }
+  },
+  "shortLandscapeOpenSimulated": {
+    "vw": 667,
+    "vh": 60,
+    "W": 643,
+    "H": 0,
+    "keyboard": true,
+    "zoom": 1,
+    "offsetTop": 19,
+    "offsetLeft": 0,
+    "fixedVisualOrigin": true,
+    "fixedTop": 0,
+    "fixedLeft": 0,
+    "inputFocused": true,
+    "viewportCompressed": false,
+    "shortViewport": true,
+    "mode": "focus",
+    "sessionId": "prototype-room-session-int-204",
+    "editorInstanceId": "editor-instance-int-204",
+    "mountCount": 1
+  },
+  "shortLandscapeOpen": {
+    "detectorFlagIrrelevant": true,
+    "keyboardModeAndFocus": true,
+    "rootFitsVisualViewport": true,
+    "reportedOffsetNotDoubleApplied": true,
+    "noUnusedTopGap": true,
+    "separateContextRowRemoved": true,
+    "currentAndPublishedStepIntegrated": true,
+    "historyCollapsedWhileTyping": true,
+    "audienceCollapsedWhileTyping": true,
+    "incomingCollapsedWhileTyping": true,
+    "composerFullyInsideUnobscuredBand": true,
+    "sixDirectNavActionsInsideUnobscuredBand": true,
+    "sixDirectNavActionsUpperAndLowerHitTestable": true,
+    "navAndComposerShareActionRow": true,
+    "inputAndSendInline": true,
+    "inputUpperAndLowerHitTestableAboveAccessory": true,
+    "sendUpperAndLowerHitTestableAboveAccessory": true,
+    "focusPreserved": true,
+    "navInsideHorizontalSafeArea": true,
+    "composerInsideHorizontalSafeArea": true,
+    "horizontalOverflow": 0,
+    "actualPanelSwitchThroughHitTest": true,
+    "actualReturnToChatThroughHitTest": true,
+    "focusPreservedAfterRoundTrip": true,
+    "allVisibleTargetsAtLeast44": true,
+    "historyRestoredAfterBlur": true,
+    "historyRestoredAsBoundedScroller": true
+  },
+  "shortLandscapeOpenGeometry": {
+    "zoom": 1,
+    "clientWidth": 667,
+    "scrollWidth": 667,
+    "horizontalOverflow": 0,
+    "interactiveCount": 9,
+    "interactive": [
+      {
+        "name": "К основному содержимому",
+        "tag": "A",
+        "x": 59,
+        "y": -60.4,
+        "width": 242.63,
+        "height": 44,
+        "logicalWidth": 242.63,
+        "logicalHeight": 44
+      },
+      {
+        "name": "КДРедактор",
+        "tag": "BUTTON",
+        "x": 47,
+        "y": 0,
+        "width": 44,
+        "height": 44,
+        "logicalWidth": 44,
+        "logicalHeight": 44
+      },
+      {
+        "name": "ШГШаги",
+        "tag": "BUTTON",
+        "x": 91,
+        "y": 0,
+        "width": 44,
+        "height": 44,
+        "logicalWidth": 44,
+        "logicalHeight": 44
+      },
+      {
+        "name": "УСУсловие",
+        "tag": "BUTTON",
+        "x": 135,
+        "y": 0,
+        "width": 44,
+        "height": 44,
+        "logicalWidth": 44,
+        "logicalHeight": 44
+      },
+      {
+        "name": "Мои заметки",
+        "tag": "BUTTON",
+        "x": 179,
+        "y": 0,
+        "width": 44,
+        "height": 44,
+        "logicalWidth": 44,
+        "logicalHeight": 44
+      },
+      {
+        "name": "ЧТЧат0",
+        "tag": "BUTTON",
+        "x": 223,
+        "y": 0,
+        "width": 44,
+        "height": 44,
+        "logicalWidth": 44,
+        "logicalHeight": 44
+      },
+      {
+        "name": "АКАктивность",
+        "tag": "BUTTON",
+        "x": 267,
+        "y": 0,
+        "width": 44,
+        "height": 44,
+        "logicalWidth": 44,
+        "logicalHeight": 44
+      },
+      {
+        "name": "Сообщение интервьюерам",
+        "tag": "TEXTAREA",
+        "x": 311,
+        "y": 0,
+        "width": 191.78,
+        "height": 44,
+        "logicalWidth": 191.78,
+        "logicalHeight": 44
+      },
+      {
+        "name": "Отправить",
+        "tag": "BUTTON",
+        "x": 508.78,
+        "y": 0,
+        "width": 111.22,
+        "height": 44,
+        "logicalWidth": 111.22,
+        "logicalHeight": 44
+      }
+    ],
+    "undersized": [],
+    "panels": [
+      {
+        "name": "chat",
+        "x": 47,
+        "y": 2,
+        "width": 573,
+        "height": 40,
+        "logicalWidth": 573,
+        "logicalHeight": 40,
+        "body": {
+          "x": 48,
+          "y": 3,
+          "width": 571,
+          "height": 38,
+          "logicalWidth": 571,
+          "logicalHeight": 38
+        }
+      }
+    ],
+    "room": {
+      "mode": "focus",
+      "W": 643,
+      "H": 0,
+      "keyboard": true,
+      "viewportSource": "simulated-visualViewport"
+    }
+  },
+  "currentStepContext": {
+    "editor": {
+      "persistentContextVisible": true,
+      "localStepVisible": true,
+      "publishedStepVisible": true
+    },
+    "chat": {
+      "persistentContextVisible": true,
+      "localStepVisible": true,
+      "publishedStepVisible": true
+    },
+    "activity": {
+      "persistentContextVisible": true,
+      "localStepVisible": true,
+      "publishedStepVisible": true
+    },
+    "notes": {
+      "persistentContextVisible": true,
+      "localStepVisible": true,
+      "publishedStepVisible": true
+    },
+    "selectionUpdate": {
+      "persistentContextVisible": true,
+      "localStepVisible": true,
+      "publishedStepVisible": true,
+      "editorNodePreserved": true
+    }
+  },
+  "keyboard": {
+    "trace": [
+      {
+        "name": "← К интервью · Atlas · Команда интерфейсных платформ для международных продуктов",
+        "tag": "A",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "КДРедактор",
+        "tag": "BUTTON",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "ШГШаги",
+        "tag": "BUTTON",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "УСУсловие",
+        "tag": "BUTTON",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "Мои заметки",
+        "tag": "BUTTON",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "ЧТЧат2",
+        "tag": "BUTTON",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "АКАктивность",
+        "tag": "BUTTON",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "Закрыть условие и вернуться в редактор",
+        "tag": "BUTTON",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "Открыть чат",
+        "tag": "BUTTON",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "Открыть активность",
+        "tag": "BUTTON",
+        "outlineWidth": "3px",
+        "visible": true
+      }
+    ],
+    "visibleFocusCount": 10,
+    "namedCount": 10
+  },
+  "roles": {
+    "candidate": {
+      "managerRoom": 0,
+      "candidateRoom": 1,
+      "terminal": 0,
+      "internalChatText": 0,
+      "activityText": 0,
+      "returnText": 1,
+      "publishControl": 0
+    },
+    "guestManager": {
+      "managerRoom": 1,
+      "candidateRoom": 0,
+      "terminal": 0,
+      "internalChatText": 1,
+      "activityText": 1,
+      "returnText": 1,
+      "publishControl": 0
+    },
+    "roomOwner": {
+      "managerRoom": 1,
+      "candidateRoom": 0,
+      "terminal": 0,
+      "internalChatText": 1,
+      "activityText": 1,
+      "returnText": 1,
+      "publishControl": 1
+    },
+    "interviewer": {
+      "managerRoom": 1,
+      "candidateRoom": 0,
+      "terminal": 0,
+      "internalChatText": 1,
+      "activityText": 1,
+      "returnText": 1,
+      "publishControl": 1
+    },
+    "hiring": {
+      "managerRoom": 1,
+      "candidateRoom": 0,
+      "terminal": 0,
+      "internalChatText": 1,
+      "activityText": 1,
+      "returnText": 1,
+      "publishControl": 0
+    },
+    "revokedStaff": {
+      "managerRoom": 0,
+      "candidateRoom": 0,
+      "terminal": 1,
+      "internalChatText": 0,
+      "activityText": 0,
+      "returnText": 1,
+      "publishControl": 0
+    }
+  },
+  "revoke": {
+    "terminalVisible": true,
+    "managerRoomRemoved": true,
+    "protectedDraftAbsent": true,
+    "retryAbsent": true
+  }
+}

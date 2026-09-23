@@ -74,6 +74,9 @@ try {
 
   await page.goto(`${webBaseUrl}/dashboard/rooms`, { waitUntil: "domcontentloaded" });
   await page.locator('[data-testid="create-room-card"]').waitFor({ timeout: 15000 });
+  if (await page.locator('[data-testid="create-room-card"]').count() !== 1) {
+    throw new Error("CREATE_ROOM_SURFACE_MUST_BE_UNIQUE");
+  }
 
   const roomPanelWidthShare = await page.evaluate(() => {
     const panel = document.querySelector('[data-testid="create-room-card"]');

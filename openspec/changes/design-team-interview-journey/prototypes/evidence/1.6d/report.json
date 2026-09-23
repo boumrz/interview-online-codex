@@ -1,0 +1,1332 @@
+{
+  "generatedAt": "2026-09-09T12:45:28.097Z",
+  "prototype": "http://127.0.0.1:4173/hiring.html",
+  "pass": true,
+  "disclaimer": "Prototype-only automated UX evidence. This does not prove backend authorization, response filtering, or XLSX privacy.",
+  "pageErrors": [],
+  "matrix": [
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "zoom": 1,
+      "route": "#/teams/atlas/candidates?actor=hiring&state=success&isHr=false&long=1",
+      "clientWidth": 1440,
+      "scrollWidth": 1440,
+      "horizontalOverflow": 0,
+      "interactiveCount": 24,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "zoom": 1.25,
+      "route": "#/teams/atlas/candidates/room-204?actor=hiring&state=success&isHr=true&long=1",
+      "clientWidth": 1440,
+      "scrollWidth": 1440,
+      "horizontalOverflow": 0,
+      "interactiveCount": 14,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "zoom": 1.5,
+      "route": "#/teams/atlas/members?actor=member&state=success&long=1",
+      "clientWidth": 1440,
+      "scrollWidth": 1440,
+      "horizontalOverflow": 0,
+      "interactiveCount": 20,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "zoom": 2,
+      "route": "#/teams/atlas/members?actor=admin&state=error&long=1",
+      "clientWidth": 1440,
+      "scrollWidth": 1440,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "zoom": 1,
+      "route": "#/teams/atlas/interviews?actor=owner&state=filterEmpty&trackId=frontend&vacancyId=lead-ui&long=1",
+      "clientWidth": 1366,
+      "scrollWidth": 1366,
+      "horizontalOverflow": 0,
+      "interactiveCount": 14,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "zoom": 1.25,
+      "route": "#/teams/atlas/candidates?actor=owner&state=success&long=1",
+      "clientWidth": 1366,
+      "scrollWidth": 1366,
+      "horizontalOverflow": 0,
+      "interactiveCount": 13,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "zoom": 1.5,
+      "route": "#/teams/atlas/candidates?actor=hiring&state=success&isHr=false&long=1",
+      "clientWidth": 1366,
+      "scrollWidth": 1366,
+      "horizontalOverflow": 0,
+      "interactiveCount": 24,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "zoom": 2,
+      "route": "#/teams/atlas/candidates/room-204?actor=hiring&state=success&isHr=true&long=1",
+      "clientWidth": 1366,
+      "scrollWidth": 1366,
+      "horizontalOverflow": 0,
+      "interactiveCount": 14,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "zoom": 1,
+      "route": "#/teams/atlas/members?actor=member&state=success&long=1",
+      "clientWidth": 1280,
+      "scrollWidth": 1280,
+      "horizontalOverflow": 0,
+      "interactiveCount": 20,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "zoom": 1.25,
+      "route": "#/teams/atlas/members?actor=admin&state=error&long=1",
+      "clientWidth": 1280,
+      "scrollWidth": 1280,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "zoom": 1.5,
+      "route": "#/teams/atlas/interviews?actor=owner&state=filterEmpty&trackId=frontend&vacancyId=lead-ui&long=1",
+      "clientWidth": 1280,
+      "scrollWidth": 1280,
+      "horizontalOverflow": 0,
+      "interactiveCount": 14,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "zoom": 2,
+      "route": "#/teams/atlas/candidates?actor=owner&state=success&long=1",
+      "clientWidth": 1280,
+      "scrollWidth": 1280,
+      "horizontalOverflow": 0,
+      "interactiveCount": 13,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "zoom": 1,
+      "route": "#/teams/atlas/candidates?actor=hiring&state=success&isHr=false&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 24,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "zoom": 1.25,
+      "route": "#/teams/atlas/candidates/room-204?actor=hiring&state=success&isHr=true&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 14,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "zoom": 1.5,
+      "route": "#/teams/atlas/members?actor=member&state=success&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 20,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "zoom": 2,
+      "route": "#/teams/atlas/members?actor=admin&state=error&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 480
+      },
+      "zoom": 1,
+      "route": "#/teams/atlas/interviews?actor=owner&state=filterEmpty&trackId=frontend&vacancyId=lead-ui&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 14,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 480
+      },
+      "zoom": 1.25,
+      "route": "#/teams/atlas/candidates?actor=owner&state=success&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 13,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 480
+      },
+      "zoom": 1.5,
+      "route": "#/teams/atlas/candidates?actor=hiring&state=success&isHr=false&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 24,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 480
+      },
+      "zoom": 2,
+      "route": "#/teams/atlas/candidates/room-204?actor=hiring&state=success&isHr=true&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 14,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "zoom": 1,
+      "route": "#/teams/atlas/members?actor=member&state=success&long=1",
+      "clientWidth": 768,
+      "scrollWidth": 768,
+      "horizontalOverflow": 0,
+      "interactiveCount": 17,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "zoom": 1.25,
+      "route": "#/teams/atlas/members?actor=admin&state=error&long=1",
+      "clientWidth": 768,
+      "scrollWidth": 768,
+      "horizontalOverflow": 0,
+      "interactiveCount": 16,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "zoom": 1.5,
+      "route": "#/teams/atlas/interviews?actor=owner&state=filterEmpty&trackId=frontend&vacancyId=lead-ui&long=1",
+      "clientWidth": 768,
+      "scrollWidth": 768,
+      "horizontalOverflow": 0,
+      "interactiveCount": 11,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "zoom": 2,
+      "route": "#/teams/atlas/candidates?actor=owner&state=success&long=1",
+      "clientWidth": 768,
+      "scrollWidth": 768,
+      "horizontalOverflow": 0,
+      "interactiveCount": 10,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "zoom": 1,
+      "route": "#/teams/atlas/candidates?actor=hiring&state=success&isHr=false&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 24,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "zoom": 1.25,
+      "route": "#/teams/atlas/candidates/room-204?actor=hiring&state=success&isHr=true&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 14,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "zoom": 1.5,
+      "route": "#/teams/atlas/members?actor=member&state=success&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 20,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "zoom": 2,
+      "route": "#/teams/atlas/members?actor=admin&state=error&long=1",
+      "clientWidth": 1024,
+      "scrollWidth": 1024,
+      "horizontalOverflow": 0,
+      "interactiveCount": 19,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 640
+      },
+      "zoom": 1,
+      "route": "#/teams/atlas/interviews?actor=owner&state=filterEmpty&trackId=frontend&vacancyId=lead-ui&long=1",
+      "clientWidth": 320,
+      "scrollWidth": 320,
+      "horizontalOverflow": 0,
+      "interactiveCount": 11,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 640
+      },
+      "zoom": 1.25,
+      "route": "#/teams/atlas/candidates?actor=owner&state=success&long=1",
+      "clientWidth": 320,
+      "scrollWidth": 320,
+      "horizontalOverflow": 0,
+      "interactiveCount": 10,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 640
+      },
+      "zoom": 1.5,
+      "route": "#/teams/atlas/candidates?actor=hiring&state=success&isHr=false&long=1",
+      "clientWidth": 320,
+      "scrollWidth": 320,
+      "horizontalOverflow": 0,
+      "interactiveCount": 21,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 640
+      },
+      "zoom": 2,
+      "route": "#/teams/atlas/candidates/room-204?actor=hiring&state=success&isHr=true&long=1",
+      "clientWidth": 320,
+      "scrollWidth": 320,
+      "horizontalOverflow": 0,
+      "interactiveCount": 11,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 360,
+        "height": 640
+      },
+      "zoom": 1,
+      "route": "#/teams/atlas/members?actor=member&state=success&long=1",
+      "clientWidth": 360,
+      "scrollWidth": 360,
+      "horizontalOverflow": 0,
+      "interactiveCount": 17,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 360,
+        "height": 640
+      },
+      "zoom": 1.25,
+      "route": "#/teams/atlas/members?actor=admin&state=error&long=1",
+      "clientWidth": 360,
+      "scrollWidth": 360,
+      "horizontalOverflow": 0,
+      "interactiveCount": 16,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 360,
+        "height": 640
+      },
+      "zoom": 1.5,
+      "route": "#/teams/atlas/interviews?actor=owner&state=filterEmpty&trackId=frontend&vacancyId=lead-ui&long=1",
+      "clientWidth": 360,
+      "scrollWidth": 360,
+      "horizontalOverflow": 0,
+      "interactiveCount": 11,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 360,
+        "height": 640
+      },
+      "zoom": 2,
+      "route": "#/teams/atlas/candidates?actor=owner&state=success&long=1",
+      "clientWidth": 360,
+      "scrollWidth": 360,
+      "horizontalOverflow": 0,
+      "interactiveCount": 10,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "zoom": 1,
+      "route": "#/teams/atlas/candidates?actor=hiring&state=success&isHr=false&long=1",
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "horizontalOverflow": 0,
+      "interactiveCount": 21,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "zoom": 1.25,
+      "route": "#/teams/atlas/candidates/room-204?actor=hiring&state=success&isHr=true&long=1",
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "horizontalOverflow": 0,
+      "interactiveCount": 11,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "zoom": 1.5,
+      "route": "#/teams/atlas/members?actor=member&state=success&long=1",
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "horizontalOverflow": 0,
+      "interactiveCount": 17,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "zoom": 2,
+      "route": "#/teams/atlas/members?actor=admin&state=error&long=1",
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "horizontalOverflow": 0,
+      "interactiveCount": 16,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 667,
+        "height": 375
+      },
+      "zoom": 1,
+      "route": "#/teams/atlas/interviews?actor=owner&state=filterEmpty&trackId=frontend&vacancyId=lead-ui&long=1",
+      "clientWidth": 667,
+      "scrollWidth": 667,
+      "horizontalOverflow": 0,
+      "interactiveCount": 11,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 667,
+        "height": 375
+      },
+      "zoom": 1.25,
+      "route": "#/teams/atlas/candidates?actor=owner&state=success&long=1",
+      "clientWidth": 667,
+      "scrollWidth": 667,
+      "horizontalOverflow": 0,
+      "interactiveCount": 10,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 667,
+        "height": 375
+      },
+      "zoom": 1.5,
+      "route": "#/teams/atlas/candidates?actor=hiring&state=success&isHr=false&long=1",
+      "clientWidth": 667,
+      "scrollWidth": 667,
+      "horizontalOverflow": 0,
+      "interactiveCount": 21,
+      "undersized": [],
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 667,
+        "height": 375
+      },
+      "zoom": 2,
+      "route": "#/teams/atlas/candidates/room-204?actor=hiring&state=success&isHr=true&long=1",
+      "clientWidth": 667,
+      "scrollWidth": 667,
+      "horizontalOverflow": 0,
+      "interactiveCount": 11,
+      "undersized": [],
+      "pass": true
+    }
+  ],
+  "matrixPass": true,
+  "states": [
+    {
+      "name": "candidates-hiring-no-personal-hr",
+      "hash": "#/teams/atlas/candidates?actor=hiring&state=success&isHr=false&long=1",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "candidates-hiring-no-personal-hr.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 24,
+        "undersized": []
+      }
+    },
+    {
+      "name": "candidates-hiring-personal-hr",
+      "hash": "#/teams/atlas/candidates?actor=hiring&state=success&isHr=true",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "candidates-hiring-personal-hr.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 24,
+        "undersized": []
+      }
+    },
+    {
+      "name": "candidates-member-denied",
+      "hash": "#/teams/atlas/candidates?actor=member&state=success&isHr=true",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "candidates-member-denied.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 13,
+        "undersized": []
+      }
+    },
+    {
+      "name": "candidates-admin-denied",
+      "hash": "#/teams/atlas/candidates?actor=admin&state=success&isHr=true",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "candidates-admin-denied.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 13,
+        "undersized": []
+      }
+    },
+    {
+      "name": "candidates-owner-denied",
+      "hash": "#/teams/atlas/candidates?actor=owner&state=success&isHr=true",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "candidates-owner-denied.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 13,
+        "undersized": []
+      }
+    },
+    {
+      "name": "candidates-assigned-denied",
+      "hash": "#/teams/atlas/candidates?actor=assigned&state=success&isHr=true",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "candidates-assigned-denied.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 13,
+        "undersized": []
+      }
+    },
+    {
+      "name": "candidates-loading",
+      "hash": "#/teams/atlas/candidates?actor=hiring&state=loading&isHr=false",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "candidates-loading.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 14,
+        "undersized": []
+      }
+    },
+    {
+      "name": "candidates-empty",
+      "hash": "#/teams/atlas/candidates?actor=hiring&state=empty&isHr=false",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "candidates-empty.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 23,
+        "undersized": []
+      }
+    },
+    {
+      "name": "candidates-filter-empty",
+      "hash": "#/teams/atlas/candidates?actor=hiring&state=filterEmpty&isHr=false",
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "file": "candidates-filter-empty.png",
+      "geometry": {
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "horizontalOverflow": 0,
+        "interactiveCount": 21,
+        "undersized": []
+      }
+    },
+    {
+      "name": "candidates-error",
+      "hash": "#/teams/atlas/candidates?actor=hiring&state=error&isHr=false",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "candidates-error.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 15,
+        "undersized": []
+      }
+    },
+    {
+      "name": "candidates-revoked",
+      "hash": "#/teams/atlas/candidates?actor=hiring&state=revoked&isHr=false",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "candidates-revoked.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 15,
+        "undersized": []
+      }
+    },
+    {
+      "name": "result-hiring",
+      "hash": "#/teams/atlas/candidates/room-204?actor=hiring&state=success&isHr=false",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "result-hiring.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 14,
+        "undersized": []
+      }
+    },
+    {
+      "name": "result-assigned-manager",
+      "hash": "#/teams/atlas/candidates/room-204?actor=assigned&state=success&isHr=false",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "result-assigned-manager.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 13,
+        "undersized": []
+      }
+    },
+    {
+      "name": "result-team-owner-denied",
+      "hash": "#/teams/atlas/candidates/room-204?actor=owner&state=success&isHr=true",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "result-team-owner-denied.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 13,
+        "undersized": []
+      }
+    },
+    {
+      "name": "result-archive-readonly",
+      "hash": "#/teams/atlas/candidates/room-204?actor=hiring&state=success&archived=1",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "result-archive-readonly.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 14,
+        "undersized": []
+      }
+    },
+    {
+      "name": "result-empty",
+      "hash": "#/teams/atlas/candidates/room-204?actor=hiring&state=empty",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "result-empty.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 14,
+        "undersized": []
+      }
+    },
+    {
+      "name": "members-success",
+      "hash": "#/teams/atlas/members?actor=member&state=success",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "members-success.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 20,
+        "undersized": []
+      }
+    },
+    {
+      "name": "members-long-russian",
+      "hash": "#/teams/atlas/members?actor=admin&state=success&long=1",
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "file": "members-long-russian.png",
+      "geometry": {
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "horizontalOverflow": 0,
+        "interactiveCount": 17,
+        "undersized": []
+      }
+    },
+    {
+      "name": "members-process-error",
+      "hash": "#/teams/atlas/members?actor=member&state=error",
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "file": "members-process-error.png",
+      "geometry": {
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "horizontalOverflow": 0,
+        "interactiveCount": 16,
+        "undersized": []
+      }
+    },
+    {
+      "name": "members-empty",
+      "hash": "#/teams/atlas/members?actor=member&state=empty",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "members-empty.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 13,
+        "undersized": []
+      }
+    },
+    {
+      "name": "members-filter-empty",
+      "hash": "#/teams/atlas/members?actor=member&state=filterEmpty",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "members-filter-empty.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 14,
+        "undersized": []
+      }
+    },
+    {
+      "name": "members-revoked",
+      "hash": "#/teams/atlas/members?actor=member&state=revoked",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "members-revoked.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 14,
+        "undersized": []
+      }
+    },
+    {
+      "name": "process-current-caller-empty",
+      "hash": "#/teams/atlas/interviews?actor=member&state=filterEmpty&trackId=frontend&vacancyId=lead-ui",
+      "viewport": {
+        "width": 390,
+        "height": 640
+      },
+      "file": "process-current-caller-empty.png",
+      "geometry": {
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "horizontalOverflow": 0,
+        "interactiveCount": 11,
+        "undersized": []
+      }
+    },
+    {
+      "name": "process-assigned-manager",
+      "hash": "#/teams/atlas/interviews?actor=assigned&state=success&trackId=frontend&vacancyId=lead-ui",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "file": "process-assigned-manager.png",
+      "geometry": {
+        "clientWidth": 1366,
+        "scrollWidth": 1366,
+        "horizontalOverflow": 0,
+        "interactiveCount": 14,
+        "undersized": []
+      }
+    }
+  ],
+  "stateGeometryPass": true,
+  "roleMatrix": {
+    "hiring": {
+      "isHr_false": {
+        "sensitiveRows": 2,
+        "accessDenied": false,
+        "candidatesNavigation": 2
+      },
+      "isHr_true": {
+        "sensitiveRows": 2,
+        "accessDenied": false,
+        "candidatesNavigation": 2
+      }
+    },
+    "assigned": {
+      "isHr_false": {
+        "sensitiveRows": 0,
+        "accessDenied": true,
+        "candidatesNavigation": 0
+      },
+      "isHr_true": {
+        "sensitiveRows": 0,
+        "accessDenied": true,
+        "candidatesNavigation": 0
+      }
+    },
+    "member": {
+      "isHr_false": {
+        "sensitiveRows": 0,
+        "accessDenied": true,
+        "candidatesNavigation": 0
+      },
+      "isHr_true": {
+        "sensitiveRows": 0,
+        "accessDenied": true,
+        "candidatesNavigation": 0
+      }
+    },
+    "admin": {
+      "isHr_false": {
+        "sensitiveRows": 0,
+        "accessDenied": true,
+        "candidatesNavigation": 0
+      },
+      "isHr_true": {
+        "sensitiveRows": 0,
+        "accessDenied": true,
+        "candidatesNavigation": 0
+      }
+    },
+    "owner": {
+      "isHr_false": {
+        "sensitiveRows": 0,
+        "accessDenied": true,
+        "candidatesNavigation": 0
+      },
+      "isHr_true": {
+        "sensitiveRows": 0,
+        "accessDenied": true,
+        "candidatesNavigation": 0
+      }
+    }
+  },
+  "rolePass": true,
+  "resultMatrix": {
+    "hiring": {
+      "sensitiveResult": 1,
+      "denied": false
+    },
+    "assigned": {
+      "sensitiveResult": 1,
+      "denied": false
+    },
+    "member": {
+      "sensitiveResult": 0,
+      "denied": true
+    },
+    "admin": {
+      "sensitiveResult": 0,
+      "denied": true
+    },
+    "owner": {
+      "sensitiveResult": 0,
+      "denied": true
+    }
+  },
+  "resultPass": true,
+  "projectionPrivacy": {
+    "count": 4,
+    "onlyAllowedFields": true,
+    "noCandidateTerms": true,
+    "noTargetIdentityInLinks": true,
+    "callerOnlyLabel": true
+  },
+  "callerOnlyNavigation": {
+    "actorPreserved": true,
+    "noTargetIdentity": true,
+    "foreignRows": 0,
+    "emptyExplanation": true
+  },
+  "filterParity": {
+    "listSignature": "space=atlas|q=Денис|track=frontend|vacancy=lead-ui|state=all|from=2026-09-01|to=2026-09-30|tz=Europe/Moscow",
+    "exportSignature": "space=atlas|q=Денис|track=frontend|vacancy=lead-ui|state=all|from=2026-09-01|to=2026-09-30|tz=Europe/Moscow",
+    "matches": true,
+    "allPagesCopy": true,
+    "selectedRowDoesNotChangeScope": true
+  },
+  "exportLifecycle": {
+    "formingVisible": true,
+    "downloadedVisible": true,
+    "screenshots": [
+      "export-ready.png",
+      "export-forming.png",
+      "export-downloaded.png",
+      "export-empty.png",
+      "export-error.png",
+      "export-tooLarge.png",
+      "export-busy.png",
+      "export-revoked.png"
+    ]
+  },
+  "revokeClearing": {
+    "appSensitiveNodes": 0,
+    "protectedTermsAbsent": true,
+    "exportSignatureCleared": true,
+    "revokedDialogVisible": true
+  },
+  "keyboard": {
+    "trace": [
+      {
+        "name": "К основному содержимому",
+        "tag": "A",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "Актор",
+        "tag": "SELECT",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "Поверхность",
+        "tag": "SELECT",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "Состояние",
+        "tag": "SELECT",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "Личный isHr включён",
+        "tag": "INPUT",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "Длинный русский текст",
+        "tag": "INPUT",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "Интервью",
+        "tag": "A",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "Участники",
+        "tag": "A",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "Библиотека",
+        "tag": "A",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "Обновить",
+        "tag": "BUTTON",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "Мои интервью: Frontend / Lead UI Engineer",
+        "tag": "A",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "Мои интервью: Frontend / Lead UI Engineer",
+        "tag": "A",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "Мои интервью: Backend",
+        "tag": "A",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "Мои интервью: Мобильная платформа с очень длинным названием / Старший инженер клиентских приложений",
+        "tag": "A",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "К основному содержимому ПРОТОТИП · 1.6d · UX-09 / UX-11 Только проверка интерфейса — не доказательство серверных прав Актор HIRING · назначена INTERVIEWER · назначен MEMBER · без назначения ADMIN · без назначения OWNER команды · без назначения Поверхность Кандидаты Результат Участники Мои интервью процесса Состояние Успех Загрузка Пусто Фильтр: пусто Ошибка Доступ отозван Личный isHr включён Длинный русский текст ioInterview Onlineрабочее пространство КомандаAtlas — продуктовая команда с очень длинным названием для проверки переноса⌄ Работа команды ИИнтервью ББиблиотека задач ТТреки и вакансии УУчастники Анна СоколоваУчастникMEMBER Интервью Участники Библиотека Atlas · КаталогУчастникиБезопасный состав команды и производные процессы по действующим назначениям.ОбновитьУчастникСостав: минимальная проекция◌Процесс — не полномочиеКарточка не раскрывает кандидатов, названия или количество интервью, ID комнат, даты и результаты. Ссылка всегда ищет интервью текущего пользователя. Анна Соколова · выID …7A2FУчастникАктивенПроцессыПо неархивированным интервью · вычисляются из текущих назначенийМои интервью: Frontend / Lead UI Engineer••• Вера Константиновна Александрова-СмирноваID …91BCУчастникАктивенПроцессыПо неархивированным интервью · вычисляются из текущих назначенийМои интервью: Frontend / Lead UI EngineerМои интервью: BackendМои интервью: Мобильная платформа с очень длинным названием / Старший инженер клиентских приложений••• Борис КимID …4D10АдминистраторАктивенПроцессыПо неархивированным интервью · вычисляются из текущих назначенийНет процессов по текущим назначениям••• Граница артефакта: это интерактивный UX-прототип. Он показывает ожидаемое скрытие и очистку данных, но не доказывает серверную авторизацию, payload filtering или защищённость XLSX. ↻ Для ввода поверните iPhone вертикальноПросмотр и навигация остаются доступны. Черновик не отправлен. Понятно const ACTORS = { hiring: { label: 'Нанимающий', short: 'HIRING', teamRole: 'Участник', candidateAccess: true, resultAccess: true, canManage: false }, assigned: { label: 'Назначенный интервьюер', short: 'INTERVIEWER', teamRole: 'Участник', candidateAccess: false, resultAccess: true, canManage: false }, member: { label: 'Участник', short: 'MEMBER', teamRole: 'Участник', candidateAccess: false, resultAccess: false, canManage: false }, admin: { label: 'Администратор команды', short: 'ADMIN', teamRole: 'Администратор', candidateAccess: false, resultAccess: false, canManage: true }, owner: { label: 'Владелец команды', short: 'OWNER', teamRole: 'Владелец', candidateAccess: false, resultAccess: false, canManage: true } }; const validStates = new Set(['success','loading','empty','filterEmpty','error','revoked']); const validActors = new Set(Object.keys(ACTORS)); const validSurfaces = new Set(['candidates','result','members','process']); const routeFor = { candidates: '/teams/atlas/candidates', result: '/teams/atlas/candidates/room-204', members: '/teams/atlas/members', process: '/teams/atlas/interviews' }; const protectedTerms = ['Денис Орлов', 'Мария Лебедева', 'room-204', 'INT-204', 'Сильный hire']; const app = document.querySelector('#app'); const exportDialog = document.querySelector('#exportDialog'); let filterModel = { q: '', track: 'frontend', vacancy: 'lead-ui', status: 'all', from: '2026-09-01', to: '2026-09-30' }; let exportState = 'ready'; function routeState() { const raw = location.hash.replace(/^#/, '') || '/teams/atlas/candidates'; const [path, search = ''] = raw.split('?'); const params = new URLSearchParams(search); let surface = 'candidates'; if (path.includes('/members')) surface = 'members'; else if (path.includes('/interviews')) surface = 'process'; else if (/\\/candidates\\/[^/]+/.test(path)) surface = 'result'; if (validSurfaces.has(params.get('surface'))) surface = params.get('surface'); const actor = validActors.has(params.get('actor')) ? params.get('actor') : 'hiring'; const state = validStates.has(params.get('state')) ? params.get('state') : 'success'; return { path, params, surface, actor, state, isHr: params.get('isHr') === 'true', long: params.get('long') === '1', keyboard: params.get('keyboard') === '1' }; } function setRoute(updates) { const current = routeState(); const next = { surface: current.surface, actor: current.actor, state: current.state, isHr: current.isHr, long: current.long, keyboard: current.keyboard, ...updates }; const params = new URLSearchParams(); params.set('actor', next.actor); params.set('state', next.state); params.set('isHr', String(next.isHr)); if (next.long) params.set('long', '1'); if (next.keyboard) params.set('keyboard', '1'); if (next.surface === 'process') { params.set('trackId', 'frontend'); params.set('vacancyId', 'lead-ui'); } location.hash = `${routeFor[next.surface]}?${params}`; } function esc(value) { return String(value).replace(/[&<>\"]/g, (char) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '\"':'&quot;' }[char])); } function roleChip(actor) { const details = ACTORS[actor]; const kind = actor === 'owner' ? 'owner' : ['hiring','assigned'].includes(actor) ? 'manager' : ''; return `<span class=\"chip ${kind}\">${esc(details.label)}</span>`; } function navigation(current) { const candidates = ACTORS[current.actor].candidateAccess ? `<li><a data-nav-candidates=\"true\" href=\"#${routeFor.candidates}?actor=${current.actor}&state=success&isHr=${current.isHr}\" ${current.surface === 'candidates' || current.surface === 'result' ? 'aria-current=\"page\"' : ''}><span class=\"nav-icon\">К</span>Кандидаты</a></li>` : ''; const items = ` <li><a href=\"#${routeFor.process}?actor=${current.actor}&state=success&isHr=${current.isHr}\" ${current.surface === 'process' ? 'aria-current=\"page\"' : ''}><span class=\"nav-icon\">И</span>Интервью</a></li> ${candidates} <li><a href=\"#/teams/atlas/library?actor=${current.actor}&state=success\"><span class=\"nav-icon\">Б</span>Библиотека задач</a></li> <li><a href=\"#/teams/atlas/tracks?actor=${current.actor}&state=success\"><span class=\"nav-icon\">Т</span>Треки и вакансии</a></li> <li><a href=\"#${routeFor.members}?actor=${current.actor}&state=success&isHr=${current.isHr}\" ${current.surface === 'members' ? 'aria-current=\"page\"' : ''}><span class=\"nav-icon\">У</span>Участники</a></li>`; return { candidates, items }; } function shell(current, content) { const actor = ACTORS[current.actor]; const nav = navigation(current); return ` <div class=\"app-shell\"> <aside class=\"sidebar\" aria-label=\"Навигация команды\"> <div class=\"brand\"><span class=\"brand-mark\">io</span><span><strong>Interview Online</strong><span>рабочее пространство</span></span></div> <button class=\"workspace\" type=\"button\" aria-label=\"Сменить рабочее пространство\"><span><small>Команда</small><strong>${current.long ? 'Atlas — продуктовая команда с очень длинным названием для проверки переноса' : 'Atlas'}</strong></span><span aria-hidden=\"true\">⌄</span></button> <p class=\"nav-label\">Работа команды</p> <ul class=\"nav\">${nav.items}</ul> <button class=\"account\" type=\"button\" aria-label=\"Открыть меню Анны Соколовой\"><span><strong>Анна Соколова</strong><small>${esc(actor.label)}</small></span><span class=\"account-role\">${actor.short}</span></button> </aside> <nav class=\"mobile-nav\" aria-label=\"Мобильная навигация\"> <a href=\"#${routeFor.process}?actor=${current.actor}&state=success&isHr=${current.isHr}\" ${current.surface === 'process' ? 'aria-current=\"page\"' : ''}>Интервью</a> ${ACTORS[current.actor].candidateAccess ? `<a data-nav-candidates=\"true\" href=\"#${routeFor.candidates}?actor=${current.actor}&state=success&isHr=${current.isHr}\" ${current.surface === 'candidates' || current.surface === 'result' ? 'aria-current=\"page\"' : ''}>Кандидаты</a>` : ''} <a href=\"#${routeFor.members}?actor=${current.actor}&state=success&isHr=${current.isHr}\" ${current.surface === 'members' ? 'aria-current=\"page\"' : ''}>Участники</a> <a href=\"#/teams/atlas/library?actor=${current.actor}&state=success\">Библиотека</a> </nav> <main class=\"page\" id=\"main\" tabindex=\"-1\"><div class=\"page-inner\">${content}<p class=\"prototype-footnote\"><strong>Граница артефакта:</strong> это интерактивный UX-прототип. Он показывает ожидаемое скрытие и очистку данных, но не доказывает серверную авторизацию, payload filtering или защищённость XLSX.</p></div></main> </div>`; } function pageHead(eyebrow, title, lede, actions = '') { return `<header class=\"page-head\"><div><p class=\"eyebrow\">${eyebrow}</p><h1>${title}</h1><p class=\"lede\">${lede}</p></div><div class=\"head-actions\">${actions}</div></header>`; } function statePanel(kind, title, description, actions = '') { const symbols = { loading:'···', empty:'0', filterEmpty:'⌁', error:'!', revoked:'×', success:'✓' }; if (kind === 'loading') { return `<section class=\"state-panel\" aria-busy=\"true\" aria-label=\"Данные загружаются\"><div class=\"skeleton\"><span></span><span></span><span></span><span></span><p>Загружаем актуальные права и данные выбранного пространства…</p></div></section>`; } return `<section class=\"state-panel ${kind}\" data-state-panel=\"${kind}\"><div><span class=\"state-symbol\" aria-hidden=\"true\">${symbols[kind] || '·'}</span><h2>${title}</h2><p>${description}</p>${actions ? `<div class=\"center-actions\">${actions}</div>` : ''}</div></section>`; } function accessDenied(current, isResult = false) { const actor = ACTORS[current.actor]; const reason = isResult ? `${actor.label} не назначен на эту комнату. Роль в команде не открывает карточку или результат.` : `${actor.label} не имеет действующего назначения HIRING. Личный isHr=${current.isHr ? 'true' : 'false'} не меняет командные права.`; return pageHead('Atlas · защищённый раздел', isResult ? 'Результат недоступен' : 'Кандидаты недоступны', reason) + statePanel('revoked', 'Нет доступа к этой записи', 'Содержимое кандидата не загружено. Владелец или администратор команды без назначения видит ту же безопасную границу.', `<a class=\"button\" href=\"#${routeFor.process}?actor=${current.actor}&state=success&isHr=${current.isHr}\">К доступным интервью</a>`); } function revoked(current, label) { return pageHead('Atlas · доступ изменился', label, 'Последняя проверка прав не подтвердила доступ.') + statePanel('revoked', 'Доступ отозван', 'Защищённое содержимое удалено из страницы и не используется из кеша. Можно открыть доступные интервью или заново проверить права.', `<a class=\"button\" href=\"#${routeFor.process}?actor=${current.actor}&state=success&isHr=${current.isHr}\">К доступным интервью</a><button class=\"button secondary\" type=\"button\" data-action=\"retry\">Проверить снова</button>`); } function filterSignature() { return `space=atlas|q=${filterModel.q.trim()}|track=${filterModel.track}|vacancy=${filterModel.vacancy}|state=${filterModel.status}|from=${filterModel.from}|to=${filterModel.to}|tz=Europe/Moscow`; } function filters() { return `<form class=\"filters\" id=\"candidateFilters\" aria-label=\"Фильтры списка кандидатов\"> <div class=\"field\"><label for=\"q\">Кандидат или интервью</label><input id=\"q\" name=\"q\" value=\"${esc(filterModel.q)}\" placeholder=\"Например, Денис\"></div> <div class=\"field\"><label for=\"track\">Трек</label><select id=\"track\" name=\"track\"><option value=\"frontend\" ${filterModel.track === 'frontend' ? 'selected' : ''}>Frontend</option><option value=\"backend\" ${filterModel.track === 'backend' ? 'selected' : ''}>Backend</option><option value=\"none\" ${filterModel.track === 'none' ? 'selected' : ''}>Без трека</option><option value=\"all\" ${filterModel.track === 'all' ? 'selected' : ''}>Все</option></select></div> <div class=\"field\"><label for=\"vacancy\">Вакансия</label><select id=\"vacancy\" name=\"vacancy\"><option value=\"lead-ui\" ${filterModel.vacancy === 'lead-ui' ? 'selected' : ''}>Lead UI Engineer</option><option value=\"none\" ${filterModel.vacancy === 'none' ? 'selected' : ''}>Без вакансии</option><option value=\"all\" ${filterModel.vacancy === 'all' ? 'selected' : ''}>Все</option></select></div> <div class=\"field\"><label for=\"status\">Состояние</label><select id=\"status\" name=\"status\"><option value=\"all\">Все</option><option value=\"planned\">Запланировано</option><option value=\"finished\">Завершено</option><option value=\"archived\">Архив</option></select></div> <div class=\"date-fields\"><div class=\"field\"><label for=\"from\">Период с</label><input id=\"from\" name=\"from\" type=\"date\" value=\"${filterModel.from}\"></div><div class=\"field\"><label for=\"to\">Период по</label><input id=\"to\" name=\"to\" type=\"date\" value=\"${filterModel.to}\"></div></div> <div class=\"filter-actions\"><button class=\"button secondary\" type=\"reset\">Сбросить</button><button class=\"button\" id=\"applyFilters\" type=\"submit\">Применить фильтры</button></div> <p class=\"filter-note\">Дата — запланированное время, иначе первое завершение, иначе создание. Часовой пояс: МСК.</p> </form>`; } function filterSummary() { const tracks = { frontend: 'Frontend', backend: 'Backend', none: 'Без трека', all: 'Все треки' }; const vacancies = { 'lead-ui': 'Lead UI Engineer', none: 'Без вакансии', all: 'Все вакансии' }; const statuses = { all: 'все', planned: 'запланировано', finished: 'завершено', archived: 'архив' }; return `<div class=\"filter-summary\" data-filter-signature=\"${esc(filterSignature())}\"><strong>Ваши назначения · Atlas · ${esc(tracks[filterModel.track])}</strong><span>Поиск: ${filterModel.q ? esc(filterModel.q) : 'любой'} · Вакансия: ${esc(vacancies[filterModel.vacancy])} · Состояние: ${esc(statuses[filterModel.status])} · ${esc(filterModel.from)} — ${esc(filterModel.to)} · МСК</span></div>`; } function candidates(current) { if (current.state === 'revoked') return revoked(current, 'Кандидаты'); if (!ACTORS[current.actor].candidateAccess) return accessDenied(current, false); const long = current.long ? ' — исследование системного мышления и внимательности к деталям в распределённой продуктовой команде' : ''; const head = pageHead('Atlas · Мои назначения', 'Кандидаты', 'Каждая строка — отдельное интервью, а не объединённый профиль человека.', `<button class=\"button\" type=\"button\" data-action=\"open-export\">Выгрузить Excel</button>`) + `<div class=\"context\">${roleChip(current.actor)}<span class=\"chip\">Командный HIRING: действует</span><span class=\"chip warning\">Личный isHr: ${current.isHr ? 'включён' : 'выключен'}</span></div>` + `<div class=\"privacy-band\"><strong aria-hidden=\"true\">↳</strong><div><strong>Почему список доступен</strong><p>Доступ даёт назначение HIRING в Atlas. Личная настройка нанимающего не расширяет и не отнимает командное назначение.</p></div></div>`; if (current.state === 'loading') return head + statePanel('loading'); if (current.state === 'error') return head + statePanel('error', 'Не удалось загрузить назначения', 'Старые значения не считаются обновлёнными. Повторная попытка сначала заново проверит доступ.', `<button class=\"button\" type=\"button\" data-action=\"retry\">Повторить</button>`); const controls = filters() + filterSummary(); if (current.state === 'empty') return head + controls + statePanel('empty', 'Назначений пока нет', 'У вас нет действующих HIRING-назначений в Atlas. Пустой список не означает отсутствие интервью у команды.', `<a class=\"button secondary\" href=\"#${routeFor.process}?actor=${current.actor}&state=success&isHr=${current.isHr}\">Открыть мои интервью</a>`); if (current.state === 'filterEmpty') return head + controls + statePanel('filterEmpty', 'По этим фильтрам ничего нет', 'Область остаётся «Ваши назначения · Atlas». Экспорт создаст пустой файл с заголовками и указанными фильтрами.', `<button class=\"button secondary\" type=\"button\" data-action=\"clear-filters\">Сбросить фильтры</button><button class=\"button\" type=\"button\" data-action=\"open-export\">Выгрузить пустой Excel</button>`); return head + controls + `<section class=\"collection\" aria-label=\"Список назначенных интервью\" data-sensitive-list=\"true\" data-filter-signature=\"${esc(filterSignature())}\"> <article class=\"record\" data-sensitive=\"candidate-record\"><div><div class=\"context\"><span class=\"status finished\">Завершено</span><span class=\"chip\">Вердикт: нанимаем</span></div><h3>Денис Орлов</h3><p>Frontend pairing${long}</p><div class=\"record-meta\"><span><strong>Интервью:</strong> INT-204</span><span><strong>Процесс:</strong> Frontend / Lead UI Engineer</span><span><strong>Дата:</strong> 14.09.2026, 11:00 · запланировано</span></div></div><div class=\"row-actions\"><a class=\"button\" href=\"#${routeFor.result}?actor=${current.actor}&state=success&isHr=${current.isHr}${current.long ? '&long=1' : ''}\">Открыть результат Дениса Орлова</a></div></article> <article class=\"record archived\" data-sensitive=\"candidate-record\"><div><div class=\"context\"><span class=\"status archived\">Архив</span><span class=\"chip\">Вердикт: нет решения</span></div><h3>Мария Лебедева</h3><p>Frontend pairing${long}</p><div class=\"record-meta\"><span><strong>Интервью:</strong> INT-188</span><span><strong>Процесс:</strong> Frontend / Lead UI Engineer</span><span><strong>Дата:</strong> 08.09.2026, 18:42 · первое завершение</span></div></div><div class=\"row-actions\"><a class=\"button secondary\" href=\"#${routeFor.result}?actor=${current.actor}&state=success&isHr=${current.isHr}&archived=1\">Открыть архивный результат Марии Лебедевой</a></div></article> </section>`; } function result(current) { if (current.state === 'revoked') return revoked(current, 'Результат интервью'); if (!ACTORS[current.actor].resultAccess) return accessDenied(current, true); const archived = current.params.get('archived') === '1'; const backSurface = current.actor === 'hiring' ? 'candidates' : 'process'; const backLabel = current.actor === 'hiring' ? 'Вернуться к кандидатам' : 'Вернуться к моим интервью'; const head = pageHead(`Atlas · ${archived ? 'Архивный результат' : 'Результат'}`, archived ? 'Мария Лебедева' : 'Денис Орлов', 'Результат одной встречи. Одноимённые записи не объединяются.', `<a class=\"button secondary\" href=\"#${routeFor[backSurface]}?actor=${current.actor}&state=success&isHr=${current.isHr}\">${backLabel}</a>`) + `<div class=\"context\">${roleChip(current.actor)}<span class=\"chip manager\">Доступ по назначению комнаты</span>${archived ? '<span class=\"chip\">Только чтение</span>' : ''}</div>`; if (current.state === 'loading') return head + statePanel('loading'); if (current.state === 'empty') return head + statePanel('empty', 'Результат ещё не заполнен', 'Отсутствие оценки не показано как ноль. Карточка встречи остаётся доступна по вашему назначению.'); if (current.state === 'filterEmpty') return head + statePanel('filterEmpty', 'Запись не входит в текущий фильтр', 'Вернитесь к списку: прежние фильтры и позиция будут восстановлены после повторной проверки прав.', `<a class=\"button\" href=\"#${routeFor[backSurface]}?actor=${current.actor}&state=filterEmpty&isHr=${current.isHr}\">${backLabel}</a>`); if (current.state === 'error') return head + statePanel('error', 'Не удалось открыть результат', 'Ошибка не подменяется отсутствием результата. Повторная попытка проверит назначение ещё раз.', `<button class=\"button\" type=\"button\" data-action=\"retry\">Повторить</button>`); return head + `<section class=\"result-grid\" data-sensitive-result=\"true\"> <article class=\"card\" data-sensitive=\"candidate-result\"><h2>Карточка встречи</h2><dl class=\"fact-list\"><div class=\"fact\"><dt>Интервью</dt><dd>${archived ? 'INT-188' : 'INT-204'} · ${archived ? 'Frontend deep dive' : 'Frontend pairing'}</dd></div><div class=\"fact\"><dt>Процесс</dt><dd>Frontend / Lead UI Engineer</dd></div><div class=\"fact\"><dt>Дата</dt><dd>${archived ? '08.09.2026, 18:42 · первое завершение' : '14.09.2026, 11:00 · запланировано'} · МСК</dd></div><div class=\"fact\"><dt>Назначения</dt><dd>Борис · OWNER; Вера · INTERVIEWER; Анна · HIRING</dd></div><div class=\"fact\"><dt>Вердикт</dt><dd>${archived ? 'Нет решения' : 'Нанимаем · Сильный hire'}</dd></div><div class=\"fact\"><dt>Комментарий</dt><dd>${archived ? 'Комментарий не заполнен.' : 'Уверенно объясняет компромиссы, задаёт точные вопросы и проверяет граничные случаи.'}</dd></div></dl>${archived ? '<p class=\"readonly\"><strong>Архив:</strong> результат доступен только для чтения; изменить его или возобновить комнату нельзя.</p>' : ''}</article> <aside class=\"card\"><h2>Оценки задач</h2><div class=\"score\"><span><strong>1. Дедупликация событий</strong><br><small>Есть оценка</small></span><span class=\"status finished\">4 / 5</span></div><div class=\"score\"><span><strong>2. Очередь с приоритетом</strong><br><small>Оценка отсутствует</small></span><span class=\"status\">Не оценено</span></div><p class=\"privacy-band\"><span>Личные заметки других интервьюеров не входят в результат.</span></p></aside> </section>`; } function processPayload(trackId, trackName, vacancyId, vacancyName) { return esc(JSON.stringify({ trackId, trackName, vacancyId, vacancyName })); } function memberCard(current, name, userId, role, processes, own = false) { const processContent = current.state === 'error' ? `<div class=\"process-error\" role=\"status\"><strong>Процессы не загрузились.</strong> Состав команды доступен отдельно. Старые метки не считаются актуальными. <button class=\"button ghost\" type=\"button\" data-action=\"retry\">Повторить</button></div>` : processes.length ? `<div class=\"processes\">${processes.slice(0, current.long ? processes.length : 3).map((item) => `<a class=\"process-link\" data-process-link=\"true\" data-process-payload=\"${processPayload(item.trackId,item.trackName,item.vacancyId,item.vacancyName)}\" href=\"#${routeFor.process}?actor=${current.actor}&state=${['hiring','assigned'].includes(current.actor) ? 'success' : 'filterEmpty'}&isHr=${current.isHr}&trackId=${item.trackId}${item.vacancyId ? `&vacancyId=${item.vacancyId}` : ''}\">Мои интервью: ${esc(item.trackName)}${item.vacancyName ? ` / ${esc(item.vacancyName)}` : ''}</a>`).join('')}</div>` : `<p>Нет процессов по текущим назначениям</p>`; return `<article class=\"member-card\" data-member-projection=\"true\"><div><h3>${esc(name)}${own ? ' · вы' : ''}</h3><span class=\"member-id\">ID …${esc(userId)}</span><div class=\"role-line\"><span class=\"chip\">${esc(role)}</span><span class=\"chip\">Активен</span></div></div><div class=\"process-area\"><h3>Процессы</h3><p>По неархивированным интервью · вычисляются из текущих назначений</p>${processContent}</div><button class=\"member-menu\" type=\"button\" aria-label=\"Действия с участником ${esc(name)}\" ${ACTORS[current.actor].canManage ? '' : 'disabled'}>•••</button></article>`; } function members(current) { if (current.state === 'revoked') return revoked(current, 'Участники'); const head = pageHead('Atlas · Каталог', 'Участники', 'Безопасный состав команды и производные процессы по действующим назначениям.', `<button class=\"button secondary\" type=\"button\" data-action=\"retry\">Обновить</button>`) + `<div class=\"context\">${roleChip(current.actor)}<span class=\"chip\">Состав: минимальная проекция</span></div>` + `<div class=\"privacy-band\"><strong aria-hidden=\"true\">◌</strong><div><strong>Процесс — не полномочие</strong><p>Карточка не раскрывает кандидатов, названия или количество интервью, ID комнат, даты и результаты. Ссылка всегда ищет интервью текущего пользователя.</p></div></div>`; if (current.state === 'loading') return head + statePanel('loading'); if (current.state === 'empty') return head + statePanel('empty', 'В каталоге пока только вы', 'Процессов по текущим назначениям нет. Приглашение коллеги не назначает его на интервью.'); if (current.state === 'filterEmpty') return head + statePanel('filterEmpty', 'Участники не найдены', 'Поиск не нашёл совпадений. Команда и процессы не считаются пустыми.', `<button class=\"button secondary\" type=\"button\" data-action=\"retry\">Сбросить поиск</button>`); const longName = current.long ? 'Вера Константиновна Александрова-Смирнова' : 'Вера Смирнова'; return head + `<section class=\"members\" aria-label=\"Каталог участников\"> ${memberCard(current, 'Анна Соколова', '7A2F', current.actor === 'owner' ? 'Владелец' : ACTORS[current.actor].teamRole, [{ trackId:'frontend', trackName:'Frontend', vacancyId:'lead-ui', vacancyName:'Lead UI Engineer' }], true)} ${memberCard(current, longName, '91BC', 'Участник', [{ trackId:'frontend', trackName:'Frontend', vacancyId:'lead-ui', vacancyName:'Lead UI Engineer' }, { trackId:'backend', trackName:'Backend', vacancyId:null, vacancyName:null }, { trackId:'mobile', trackName:'Мобильная платформа с очень длинным названием', vacancyId:'staff', vacancyName:'Старший инженер клиентских приложений' }])} ${memberCard(current, 'Борис Ким', '4D10', 'Администратор', [])} </section>`; } function processList(current) { if (current.state === 'revoked') return revoked(current, 'Мои интервью в процессе'); const head = pageHead('Atlas · Интервью', 'Мои интервью в этом процессе', 'Показаны только интервью, доступные вам. Метка коллеги не открывает его комнаты.', `<a class=\"button secondary\" href=\"#${routeFor.members}?actor=${current.actor}&state=success&isHr=${current.isHr}\">Вернуться к участникам</a>`) + `<div class=\"context\">${roleChip(current.actor)}<span class=\"chip\">Frontend / Lead UI Engineer</span><span class=\"chip\">Только назначения текущего пользователя</span></div>`; if (current.state === 'loading') return head + statePanel('loading'); if (current.state === 'error') return head + statePanel('error', 'Не удалось загрузить ваши интервью', 'Процесс выбран, но доступные записи не показаны до успешной повторной проверки.', `<button class=\"button\" type=\"button\" data-action=\"retry\">Повторить</button>`); if (current.state === 'empty' || current.state === 'filterEmpty' || !['hiring','assigned'].includes(current.actor)) return head + statePanel(current.state === 'empty' ? 'empty' : 'filterEmpty', 'У вас нет интервью в этом процессе', 'У коллеги может быть эта метка, но его кандидаты и число встреч вам не раскрываются.', `<a class=\"button secondary\" href=\"#${routeFor.members}?actor=${current.actor}&state=success&isHr=${current.isHr}\">К участникам</a>`); return head + `<section class=\"collection\" aria-label=\"Мои доступные интервью\"><article class=\"record\" data-sensitive=\"caller-interview\"><div><div class=\"context\"><span class=\"status finished\">Завершено</span><span class=\"chip\">Моё назначение: ${current.actor === 'hiring' ? 'HIRING' : 'INTERVIEWER'}</span></div><h3>Денис Орлов</h3><p>Frontend pairing</p><div class=\"record-meta\"><span><strong>Процесс:</strong> Frontend / Lead UI Engineer</span><span><strong>Дата:</strong> 14.09.2026, 11:00 · МСК</span></div></div><div class=\"row-actions\"><a class=\"button\" href=\"#${routeFor.result}?actor=${current.actor}&state=success&isHr=${current.isHr}\">Открыть моё интервью</a></div></article></section>`; } function exportMarkup(current) { const signature = filterSignature(); const scope = exportState === 'revoked' ? '<div class=\"privacy-band\"><strong>Данные очищены</strong><p>Фильтры и строки прежней защищённой области больше не находятся в окне выгрузки.</p></div>' : `<div class=\"filter-summary\"><strong>Те же фильтры, что в списке</strong><span>${esc(signature)}</span></div>`; const signatureAttribute = exportState === 'revoked' ? '' : ` data-export-filter-signature=\"${esc(signature)}\"`; const common = `<header class=\"dialog-head\"><div><p class=\"eyebrow\">Atlas · XLSX</p><h2 id=\"exportTitle\">Выгрузка кандидатов</h2></div><button class=\"dialog-close\" type=\"button\" aria-label=\"Закрыть выгрузку\" data-action=\"close-export\">×</button></header><div class=\"dialog-body\"${signatureAttribute}>${scope}`; const states = { ready: `<section class=\"export-state\"><h3>Готово к формированию</h3><p>Файл использует ровно эти фильтры и включает все страницы. Выделенная строка не меняет область.</p><div class=\"dialog-actions\"><button class=\"button\" type=\"button\" data-action=\"generate-export\">Сформировать Excel</button></div></section>`, forming: `<section class=\"export-state\" aria-busy=\"true\"><h3>Формируем файл</h3><p>Скачивание ещё не началось. Права проверяются до выдачи файла.</p><div class=\"progress-track\" aria-label=\"Формирование\"><span></span></div></section>`, downloaded: `<section class=\"export-state\"><h3>Скачивание инициировано</h3><p>В книге указаны Atlas, активные фильтры, часовой пояс МСК и все подходящие строки.</p><div class=\"dialog-actions\"><button class=\"button secondary\" type=\"button\" data-action=\"close-export\">Закрыть</button></div></section>`, empty: `<section class=\"export-state\"><h3>Пустой файл готов</h3><p>Совпадений нет. XLSX всё равно содержит заголовки, пространство и параметры фильтра — данные всей команды не подставляются.</p><div class=\"dialog-actions\"><button class=\"button\" type=\"button\" data-action=\"download-export\">Скачать пустой Excel</button></div></section>`, error: `<section class=\"export-state\"><h3>Не удалось сформировать</h3><p>Данные не скачаны, состояние не показано как успех. Повтор использует те же фильтры.</p><div class=\"dialog-actions\"><button class=\"button\" type=\"button\" data-action=\"generate-export\">Повторить</button></div></section>`, tooLarge: `<section class=\"export-state\"><h3>Слишком много строк</h3><p>Сузьте период или процесс и повторите выгрузку. Текущие фильтры сохранены.</p><div class=\"dialog-actions\"><button class=\"button secondary\" type=\"button\" data-action=\"close-export\">Вернуться к фильтрам</button></div></section>`, busy: `<section class=\"export-state\"><h3>Выгрузка временно занята</h3><p>Повторите через 30 секунд. Скачивание не началось.</p><div class=\"dialog-actions\"><button class=\"button\" type=\"button\" data-action=\"generate-export\">Повторить сейчас</button></div></section>`, revoked: `<section class=\"export-state\"><h3>Право на выгрузку отозвано</h3><p>Защищённые строки очищены, файл не выдан. Откройте доступные интервью.</p><div class=\"dialog-actions\"><button class=\"button\" type=\"button\" data-action=\"close-export\">Закрыть</button></div></section>` }; return common + states[exportState] + `<div class=\"scenario-actions\" aria-label=\"Сценарии выгрузки\"><button type=\"button\" data-export-state=\"ready\">Готово</button><button type=\"button\" data-export-state=\"forming\">Формируется</button><button type=\"button\" data-export-state=\"downloaded\">Скачивание</button><button type=\"button\" data-export-state=\"empty\">Пустой файл</button><button type=\"button\" data-export-state=\"error\">Ошибка</button><button type=\"button\" data-export-state=\"tooLarge\">Превышен объём</button><button type=\"button\" data-export-state=\"busy\">Занято</button><button type=\"button\" data-export-state=\"revoked\">Отзыв</button></div></div>`; } function syncPrototypeControls(current) { document.querySelector('#actorSelect').value = current.actor; document.querySelector('#surfaceSelect').value = current.surface; document.querySelector('#stateSelect').value = current.state; document.querySelector('#hrToggle').checked = current.isHr; document.querySelector('#longToggle').checked = current.long; document.documentElement.style.setProperty('--keyboard-inset', current.keyboard ? '248px' : '0px'); document.body.dataset.prototypeOnly = 'true'; } function render() { const current = routeState(); syncPrototypeControls(current); const surfaces = { candidates, result, members, process: processList }; app.innerHTML = shell(current, surfaces[current.surface](current)); app.dataset.surface = current.surface; app.dataset.state = current.state; app.dataset.actor = current.actor; app.dataset.isHr = String(current.isHr); if (current.state === 'revoked' && exportDialog.open) { exportState = 'revoked'; exportDialog.innerHTML = exportMarkup(current); } } function openExport() { const current = routeState(); if (!ACTORS[current.actor].candidateAccess || current.state === 'revoked') return; exportState = current.state === 'filterEmpty' || current.state === 'empty' ? 'empty' : 'ready'; exportDialog.innerHTML = exportMarkup(current); exportDialog.showModal(); } document.querySelector('#actorSelect').addEventListener('change', (event) => setRoute({ actor: event.target.value })); document.querySelector('#surfaceSelect').addEventListener('change', (event) => setRoute({ surface: event.target.value })); document.querySelector('#stateSelect').addEventListener('change', (event) => setRoute({ state: event.target.value })); document.querySelector('#hrToggle').addEventListener('change', (event) => setRoute({ isHr: event.target.checked })); document.querySelector('#longToggle').addEventListener('change', (event) => setRoute({ long: event.target.checked })); addEventListener('hashchange', render); document.addEventListener('submit', (event) => { if (event.target.id !== 'candidateFilters') return; event.preventDefault(); const data = new FormData(event.target); filterModel = { q: data.get('q') || '', track: data.get('track'), vacancy: data.get('vacancy'), status: data.get('status'), from: data.get('from'), to: data.get('to') }; if (filterModel.q.toLowerCase().includes('несуществ')) setRoute({ state: 'filterEmpty' }); else if (routeState().state !== 'success') setRoute({ state: 'success' }); else render(); }); document.addEventListener('reset', (event) => { if (event.target.id !== 'candidateFilters') return; event.preventDefault(); filterModel = { q: '', track: 'frontend', vacancy: 'lead-ui', status: 'all', from: '2026-09-01', to: '2026-09-30' }; render(); }); document.addEventListener('click', (event) => { const action = event.target.closest('[data-action]')?.dataset.action; if (action === 'open-export') openExport(); if (action === 'close-export') exportDialog.close(); if (action === 'retry') setRoute({ state: 'success' }); if (action === 'clear-filters') { filterModel.q = ''; setRoute({ state: 'success' }); } if (action === 'generate-export') { exportState = 'forming'; exportDialog.innerHTML = exportMarkup(routeState()); setTimeout(() => { if (!exportDialog.open || exportState !== 'forming') return; exportState = routeState().state === 'revoked' ? 'revoked' : 'downloaded'; exportDialog.innerHTML = exportMarkup(routeState()); }, 450); } const selectedExportState = event.target.closest('[data-export-state]')?.dataset.exportState; if (selectedExportState) { exportState = selectedExportState; exportDialog.innerHTML = exportMarkup(routeState()); } }); render();",
+        "tag": "BODY",
+        "outlineWidth": "0px",
+        "visible": false
+      },
+      {
+        "name": "К основному содержимому",
+        "tag": "A",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "Актор",
+        "tag": "SELECT",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "Поверхность",
+        "tag": "SELECT",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "Состояние",
+        "tag": "SELECT",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "Личный isHr включён",
+        "tag": "INPUT",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "Длинный русский текст",
+        "tag": "INPUT",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "Интервью",
+        "tag": "A",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "Участники",
+        "tag": "A",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "Библиотека",
+        "tag": "A",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "Обновить",
+        "tag": "BUTTON",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "Мои интервью: Frontend / Lead UI Engineer",
+        "tag": "A",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "Мои интервью: Frontend / Lead UI Engineer",
+        "tag": "A",
+        "outlineWidth": "3px",
+        "visible": true
+      },
+      {
+        "name": "Мои интервью: Backend",
+        "tag": "A",
+        "outlineWidth": "3px",
+        "visible": true
+      }
+    ],
+    "visibleFocusCount": 27,
+    "namedCount": 28,
+    "processLinkReached": true
+  },
+  "keyboardSimulation": {
+    "visualViewport": {
+      "width": 390,
+      "height": 640
+    },
+    "safeBottom": "0px",
+    "keyboardInset": "248px",
+    "scrollHeight": 3032,
+    "clientHeight": 640,
+    "primaryRect": {
+      "x": 12,
+      "y": 297.109375,
+      "width": 366,
+      "height": 46
+    },
+    "primaryReachable": true,
+    "horizontalOverflow": 0
+  }
+}

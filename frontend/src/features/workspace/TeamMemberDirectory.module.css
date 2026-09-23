@@ -1,0 +1,14 @@
+.search {
+  width: min(100%, 22rem);
+}
+
+.member,
+.empty {
+  border-color: transparent;
+  color: #f8fafc;
+  background: linear-gradient(160deg, rgba(17, 21, 28, 0.94), rgba(15, 18, 25, 0.9));
+}
+
+.retry {
+  min-height: 44px;
+}

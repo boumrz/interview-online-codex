@@ -14,10 +14,10 @@ try {
   await page.getByLabel("Имя для комнаты").fill(nickname);
   await page.getByLabel("Пароль").fill("secret123");
   await page.getByRole("button", { name: "Создать аккаунт" }).click();
-  await page.waitForURL(/\/dashboard\/rooms/, { timeout: 15000 });
-  await page.getByText("Комнаты", { exact: true }).waitFor();
-  await page.getByText("Задачи", { exact: true }).first().click();
-  await page.waitForURL(/\/dashboard\/tasks/, { timeout: 15000 });
+  await page.waitForURL(/\/workspace\/personal\/interviews\/new/, { timeout: 15000 });
+  await page.getByRole("heading", { name: "Создать интервью", exact: true }).waitFor();
+  await page.getByRole("link", { name: /Библиотека/ }).click();
+  await page.waitForURL(/\/workspace\/personal\/library/, { timeout: 15000 });
   await page
     .waitForFunction(
       () => {

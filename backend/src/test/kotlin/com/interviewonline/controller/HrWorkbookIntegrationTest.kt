@@ -21,9 +21,17 @@ import com.interviewonline.repository.RoomHrAssignmentRepository
 import com.interviewonline.repository.RoomRepository
 import com.interviewonline.repository.UserRepository
 import com.interviewonline.service.HrInterviewService
+import org.apache.poi.xssf.streaming.SXSSFWorkbook
 import org.springframework.http.MediaType
 import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource
+import org.mockito.Mockito.any
+import org.mockito.Mockito.doAnswer
+import org.mockito.Mockito.mockConstruction
+import org.mockito.Mockito.withSettings
+import org.mockito.Answers.RETURNS_DEEP_STUBS
+import java.io.OutputStream
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -135,6 +143,36 @@ class HrWorkbookIntegrationTest(
             header("Authorization", "Bearer ${hr.token}")
         }.andReturn().response
         assertEquals(400, invalid.status)
+    }
+
+    @Test
+    fun `export is cancelled if HR access is revoked while workbook is rendering`() {
+        val (owner, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "xlsx-revoke-owner")
+        val (hr, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "xlsx-revoke-hr")
+        val room = HrHttpFixtures.createRoom(mockMvc, objectMapper, owner, title = "Revoked while exporting")
+        require(HrHttpFixtures.inviteHr(mockMvc, owner, room, hr).response.status == 200)
+        val revoked = AtomicBoolean(false)
+
+        mockConstruction(SXSSFWorkbook::class.java, withSettings().defaultAnswer(RETURNS_DEEP_STUBS)) { workbook, _ ->
+            doAnswer {
+                if (revoked.compareAndSet(false, true)) {
+                    mockMvc.post("/api/rooms/${room.inviteCode}/participants/${hr.id}/role") {
+                        header("Authorization", "Bearer ${owner.token}")
+                        contentType = MediaType.APPLICATION_JSON
+                        content = """{"role":"candidate"}"""
+                    }.andExpect { status { isOk() } }
+                }
+                null
+            }.`when`(workbook).write(any(OutputStream::class.java))
+        }.use {
+            val response = mockMvc.get("/api/me/hr/rooms/export") {
+                header("Authorization", "Bearer ${hr.token}")
+            }.andReturn().response
+
+            assertTrue(revoked.get(), "test must revoke access during workbook rendering")
+            assertEquals(409, response.status)
+            assertEquals("HR_EXPORT_ACCESS_CHANGED", objectMapper.readTree(response.contentAsString).path("code").asText())
+        }
     }
 
     @Test
