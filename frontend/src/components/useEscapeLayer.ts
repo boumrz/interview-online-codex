@@ -7,7 +7,7 @@ import { useEffect, useRef } from "react";
  *
  * Реализовано через единый window-listener в фазе capture: он стопает дальнейшее
  * распространение события (stopImmediatePropagation), чтобы не отработали ни
- * другие capture-слушатели, ни bubble-слушатели Mantine Menu/Popover/Modal/etc.
+ * другие capture-слушатели, ни bubble-слушатели Ant Design Menu/Popover/Modal/etc.
  */
 type EscapeLayerEntry = { handlerRef: { current: () => void } };
 
@@ -41,11 +41,11 @@ function installEscapeLayer(): void {
  *
  * Пока `active === true`, при нажатии Escape будет вызван `onEscape` —
  * причём только у самого верхнего слоя; остальные обработчики (включая
- * Mantine Menu/Modal/Popover с дефолтным closeOnEscape) не сработают,
+ * Ant Design Menu/Modal/Popover с дефолтным Escape handling) не сработают,
  * потому что событие останавливается в фазе capture на window.
  *
- * Совет: для Mantine `Modal` выставьте `closeOnEscape={false}` и используйте
- * этот хук — иначе встроенный Mantine-обработчик Escape всё равно может
+ * Совет: для Ant Design `Modal` выставьте `keyboard={false}` и используйте
+ * этот хук — иначе встроенный Ant Design обработчик Escape всё равно может
  * срабатывать на window и закрывать модалку «через слой».
  */
 export function useEscapeLayer(active: boolean, onEscape: () => void): void {

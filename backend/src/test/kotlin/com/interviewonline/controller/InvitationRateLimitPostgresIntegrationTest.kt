@@ -35,6 +35,8 @@ import java.util.concurrent.TimeUnit
 @SpringBootTest(properties = [
     "app.features.team-workspaces-enabled=true",
     "app.http.trusted-proxy-cidrs=127.0.0.1/32",
+    "app.team-invitation-link-encryption.active-key-id=rate-test-v1",
+    "app.team-invitation-link-encryption.keys.rate-test-v1=AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
 ])
 @AutoConfigureMockMvc
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
@@ -144,6 +146,8 @@ class InvitationRateLimitPostgresIntegrationTest(
                     "server.port" to 0,
                     "app.features.team-workspaces-enabled" to "true",
                     "spring.main.banner-mode" to "off",
+                    "app.team-invitation-link-encryption.active-key-id" to "rate-test-v1",
+                    "app.team-invitation-link-encryption.keys.rate-test-v1" to "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
                 )).map { (name, value) -> "--$name=$value" }.toTypedArray())
             val port = replica.environment.getRequiredProperty("local.server.port").toInt()
             repeat(15) { assertEquals(410, httpPreview(port)) }
@@ -164,15 +168,19 @@ class InvitationRateLimitPostgresIntegrationTest(
         }.andReturn()
         assertEquals(201, teamResponse.response.status)
         val teamId = objectMapper.readTree(teamResponse.response.contentAsString).path("team").path("id").asText()
-        val first = create(owner.token, teamId)
-        assertEquals(201, first.response.status)
-        val invitationId = objectMapper.readTree(first.response.contentAsString).path("invitation").path("id").asText()
-        repeat(18) { assertEquals(201, create(owner.token, teamId).response.status) }
+        var latest = create(owner.token, teamId)
+        assertEquals(201, latest.response.status)
+        repeat(18) {
+            latest = create(owner.token, teamId)
+            assertEquals(201, latest.response.status)
+        }
+        val invitation = objectMapper.readTree(latest.response.contentAsString).path("invitation")
+        val invitationId = invitation.path("id").asText()
         val reissued = mockMvc.post("/api/teams/$teamId/invitations/$invitationId/reissue") {
             header("Authorization", "Bearer ${owner.token}")
             header("Idempotency-Key", UUID.randomUUID().toString())
             contentType = MediaType.APPLICATION_JSON
-            content = """{"revision":0}"""
+            content = """{"revision":${invitation.path("revision").asLong()}}"""
         }.andReturn()
         assertEquals(201, reissued.response.status, "reissue is the shared twentieth logical issuance")
         assertEquals(429, create(owner.token, teamId).response.status, "create must observe reissue consumption")

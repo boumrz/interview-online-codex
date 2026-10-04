@@ -3,6 +3,7 @@ import {
   Button,
   Group,
   MultiSelect,
+  Modal,
   Select,
   SimpleGrid,
   Stack,
@@ -11,8 +12,8 @@ import {
   ThemeIcon,
   Title,
   Card,
-} from "@mantine/core";
-import { IconPlus } from "@tabler/icons-react";
+} from "components/antd-compat";
+import { IconPlus } from "components/antd-icons";
 import {
   useListPresetsQuery,
   useLazyGetPresetQuery,
@@ -42,7 +43,7 @@ export type HiringManagerSelection = {
 };
 
 export type HiringManagerPickerFeedback = {
-  kind: "idle" | "checking" | "success" | "error";
+  kind: "idle" | "checking" | "error";
   message: string;
 };
 
@@ -119,42 +120,37 @@ export function CreateRoomSection({
     }
   };
 
+  const [opened, setOpened] = useState(false);
+
   return (
     <SimpleGrid cols={{ base: 1, lg: 1 }} spacing="md">
       <Card
         withBorder
         radius="lg"
         padding="lg"
-        bg="#11151c"
+        bg="var(--app-surface)"
         c="gray.1"
-        style={{ borderColor: "#272b34" }}
+        style={{ borderColor: "var(--app-border)" }}
         data-testid="create-room-card"
       >
-        <form onSubmit={onSubmit}>
-          <Stack>
-            <Group>
-              <ThemeIcon color="gray" variant="light">
-                <IconPlus size={15} />
-              </ThemeIcon>
-              <Title order={4}>Создать комнату</Title>
-            </Group>
-            <Text size="sm" c="gray.4">
-              Выберите нужные шаги. Язык комнаты будет автоматически
-              определяться по активной задаче. Если шаги не выбраны, комната
-              создастся пустой — задачи можно добавить уже внутри.
-            </Text>
-            <TextInput
+        <Button onClick={() => setOpened(true)} leftSection={<IconPlus size={15} />}>Создать комнату</Button>
+        <Modal opened={opened} onClose={() => { if (!isSubmitting) setOpened(false); }} title="Создать комнату" centered size="lg" authoring>
+        <form onSubmit={onSubmit} className="app-authoring-form">
+          <div className="app-authoring-fields">
+            <section className="app-authoring-section">
+            <TextInput placeholder="Введите название"
               label="Название комнаты"
               value={title}
-              onChange={(e) => onTitleChange(e.currentTarget.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => onTitleChange(e.currentTarget.value)}
               styles={darkFieldStyles}
               required
             />
+            </section>
+            <section className="app-authoring-section">
             {presetOptions.length > 0 && (
-              <Stack gap={4}>
                 <Select
-                  label="Загрузить пресет задач"
-                  placeholder="Не выбрано (выбрать задачи вручную)"
+                  label="Набор задач"
+                  placeholder="Выберите набор или добавьте задачи отдельно"
                   data={presetOptions}
                   value={selectedPresetId}
                   clearable
@@ -163,12 +159,10 @@ export function CreateRoomSection({
                   styles={darkSelectStyles}
                   labelProps={{ onClick: (e: React.MouseEvent) => e.preventDefault() }}
                 />
-              </Stack>
             )}
-            <MultiSelect
+            <MultiSelect placeholder="Выберите задачи в порядке интервью"
               data-testid="room-task-select"
               label="Задачи для комнаты"
-              description="Можно выбрать задачи на любых языках"
               data={taskOptions}
               value={selectedTaskIds}
               onChange={onSelectedTaskIdsChange}
@@ -176,16 +170,17 @@ export function CreateRoomSection({
               styles={darkSelectStyles}
               labelProps={{ onClick: (e: React.MouseEvent) => e.preventDefault() }}
             />
-            <Stack gap={6}>
+            </section>
+            <section className="app-authoring-section">
               <Group align="flex-end" gap="sm" wrap="nowrap">
                 <TextInput
                   ref={hiringManagerInputRef}
                   label="ID нанимающего"
-                  description="Введите ID нанимающего и нажмите «Добавить»."
-                  placeholder="UUID нанимающего"
+
+                  placeholder="Вставьте личный ID нанимающего"
                   value={hiringManagerDraftId}
-                  onChange={(event) => onHiringManagerDraftIdChange(event.currentTarget.value)}
-                  onKeyDown={(event) => {
+                  onChange={(event: React.ChangeEvent<HTMLInputElement>) => onHiringManagerDraftIdChange(event.currentTarget.value)}
+                  onKeyDown={(event: React.KeyboardEvent<HTMLElement>) => {
                     if (event.key !== "Enter") return;
                     event.preventDefault();
                     onAddHiringManager();
@@ -239,45 +234,16 @@ export function CreateRoomSection({
                   </Stack>
                 </Stack>
               ) : null}
-            </Stack>
-            {selectedTasks.length > 0 && (
-              <Stack
-                gap={8}
-                className={styles.selectedTaskPreviewList}
-                data-testid="selected-task-preview"
-              >
-                {selectedTasks.map((task) => {
-                  const descriptionHtml = markdownToHtml(task.description);
-                  return (
-                    <div className={styles.selectedTaskPreviewItem} key={task.id}>
-                      <Group justify="space-between" gap="xs" wrap="nowrap">
-                        <Text fw={700} size="sm" c="gray.1">
-                          {task.title}
-                        </Text>
-                        <Text size="xs" c="gray.5">
-                          {task.language}
-                        </Text>
-                      </Group>
-                      {descriptionHtml ? (
-                        <div
-                          className={styles.taskDescriptionMarkdown}
-                          dangerouslySetInnerHTML={{ __html: descriptionHtml }}
-                        />
-                      ) : (
-                        <Text size="xs" c="gray.5">
-                          No description
-                        </Text>
-                      )}
-                    </div>
-                  );
-                })}
-              </Stack>
-            )}
+            </section>
+          </div>
+            <Group className="app-form-actions" justify="flex-end">
+            <Button type="button" variant="subtle" disabled={isSubmitting} onClick={() => setOpened(false)}>Отмена</Button>
             <Button type="submit" loading={isSubmitting} disabled={isSubmitting}>
               Создать и открыть
             </Button>
-          </Stack>
+            </Group>
         </form>
+        </Modal>
       </Card>
     </SimpleGrid>
   );

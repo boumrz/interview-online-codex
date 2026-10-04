@@ -130,7 +130,7 @@ class HrAccountProfileIntegrationTest(
         }.andExpect { status { isForbidden() } }
         mockMvc.get("/api/me/hr/rooms/${room.id}") {
             header("Authorization", "Bearer $refreshedToken")
-        }.andExpect { status { isForbidden() } }
+        }.andExpect { status { isNotFound() } }
         mockMvc.get("/api/me/hr/rooms/export") {
             header("Authorization", "Bearer $refreshedToken")
         }.andExpect { status { isForbidden() } }

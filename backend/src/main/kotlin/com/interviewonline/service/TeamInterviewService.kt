@@ -1,6 +1,8 @@
 package com.interviewonline.service
 
 import com.interviewonline.dto.TeamInterviewCreateRequest
+import com.interviewonline.dto.TeamInterviewDetailsDto
+import com.interviewonline.dto.TeamInterviewDetailsUpdateRequest
 import com.interviewonline.dto.TeamInterviewAssigneeDto
 import com.interviewonline.dto.TeamInterviewDto
 import com.interviewonline.dto.TeamInterviewOwnerOfferCreateRequest
@@ -45,6 +47,7 @@ import com.interviewonline.repository.TeamTrackRepository
 import com.interviewonline.repository.TeamVacancyRepository
 import com.interviewonline.repository.UserRepository
 import com.interviewonline.service.LanguageNormalizer.normalize as normalizeLanguage
+import jakarta.persistence.EntityManager
 import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Service
@@ -55,12 +58,15 @@ import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.text.Normalizer
 import java.time.Instant
+import java.time.OffsetDateTime
+import java.time.format.DateTimeParseException
 import java.time.temporal.ChronoUnit
 import java.util.Locale
 import java.util.UUID
 
 @Service
 class TeamInterviewService(
+    private val entityManager: EntityManager,
     private val teamRepository: TeamRepository,
     private val membershipRepository: TeamMembershipRepository,
     private val taskSetRepository: TeamTaskSetRepository,
@@ -70,6 +76,7 @@ class TeamInterviewService(
     private val programmeRepository: TeamInterviewProgrammeRepository,
     private val roomRepository: RoomRepository,
     private val roomParticipantRepository: RoomParticipantRepository,
+    private val roomHrTrackingService: RoomHrTrackingService,
     private val userRepository: UserRepository,
     private val ownerOfferRepository: TeamInterviewOwnerOfferRepository,
     private val receiptRepository: CommandReceiptRepository,
@@ -81,21 +88,24 @@ class TeamInterviewService(
     private val jdbcTemplate: JdbcTemplate,
 ) {
     @Transactional(readOnly = true)
-    fun list(actor: User, teamId: String, rawQuery: String?, rawOwnership: String?): TeamInterviewListDto {
+    fun list(actor: User, teamId: String, rawQuery: String?, rawOwnership: String?, rawTrackId: String? = null, rawVacancyId: String? = null): TeamInterviewListDto {
         val access = requireActiveMember(actor, teamId)
         val query = listQuery(rawQuery, rawOwnership)
+        val trackId = optionalId(rawTrackId)
+        val vacancyId = optionalId(rawVacancyId)
         if (query.ownership == OWNERSHIP_ORPHANED && !access.isManager) throw interviewQueueForbidden()
         val rooms = roomRepository.findAllByTeamIdAndArchivedAtIsNullOrderByCreatedAtDescIdAsc(access.team.id)
         val tracksById = tracksById(access.team.id, rooms.mapNotNull { it.teamTrackId }.toSet())
         val vacanciesById = vacanciesById(access.team.id, rooms.mapNotNull { it.teamVacancyId }.toSet())
         val assigneesByRoomId = assigneesByRoomId(rooms.mapNotNull { it.id }.toSet())
         val items = rooms
+            .filter { room -> (trackId == null || room.teamTrackId == trackId) && (vacancyId == null || room.teamVacancyId == vacancyId) }
             .map { room -> room to ownershipSnapshot(access.team.id, room) }
             .filter { (room, ownership) ->
                 query.ownership != OWNERSHIP_ORPHANED ||
                     (ownership.state != OWNERSHIP_ACTIVE && !room.isFinishedResult())
             }
-            .filter { (room, _) -> matchesQuery(room, query.normalizedText, tracksById[room.teamTrackId], vacanciesById[room.teamVacancyId]) }
+            .filter { (room, _) -> matchesQuery(room, query.normalizedText, tracksById[room.teamTrackId], vacanciesById[room.teamVacancyId], canReadMetadata = teamRoomLineageService.isCanonical(room)) }
             .map { (room, ownership) ->
                 listItem(room, ownership, tracksById[room.teamTrackId], vacanciesById[room.teamVacancyId], assigneesByRoomId[room.id].orEmpty())
         }
@@ -108,12 +118,9 @@ class TeamInterviewService(
         val trackId = rawTrackId?.trim()?.takeIf { it.isNotEmpty() }
             ?: throw secure(HttpStatus.BAD_REQUEST, "TEAM_PROCESS_REQUIRED", "Выберите процесс")
         val vacancyId = rawVacancyId?.trim()?.takeIf { it.isNotEmpty() }
-        val grantedRoomIds = roomParticipantRepository.findAllByUserId(requireNotNull(actor.id))
-            .mapNotNull { it.room?.id }
-            .toSet()
         val rooms = roomRepository.findAllByTeamIdAndArchivedAtIsNullOrderByCreatedAtDescIdAsc(access.team.id)
             .filter { room ->
-                room.id in grantedRoomIds && room.teamTrackId == trackId && room.teamVacancyId == vacancyId
+                room.teamTrackId == trackId && room.teamVacancyId == vacancyId
             }
         val tracksById = tracksById(access.team.id, setOf(trackId))
         val vacanciesById = vacanciesById(access.team.id, listOfNotNull(vacancyId).toSet())
@@ -166,14 +173,35 @@ class TeamInterviewService(
 
     @Transactional
     fun create(actor: User, teamId: String, request: TeamInterviewCreateRequest, key: UUID): TeamInterviewResponse {
+        teamRepository.lockById(teamId)?.also { entityManager.refresh(it) }?.takeIf { it.state == ACTIVE } ?: throw teamNotFound()
         val access = requireActiveMember(actor, teamId)
         val title = canonicalTitle(request.title)
+        val candidateName = canonicalMetadataText(request.candidateName, "Имя кандидата")
+        val position = canonicalMetadataText(request.position, "Позиция")
+        val scheduledAt = canonicalScheduledAt(request.scheduledAt)
         val taskSetId = optionalId(request.taskSetId)
-        val selectedTaskIds = request.taskIds.map { requiredId(it, "TEAM_TASK_NOT_FOUND") }.distinct()
+        val taskIds = request.taskIds.map { requiredId(it, "TEAM_TASK_NOT_FOUND") }.distinct()
+        val explicitSelectedTaskIds = request.selectedTaskIds?.map { requiredId(it, "TEAM_TASK_NOT_FOUND") }
+        if (explicitSelectedTaskIds != null && explicitSelectedTaskIds.size != explicitSelectedTaskIds.distinct().size) {
+            throw taskNotFound()
+        }
         val trackId = optionalId(request.trackId)
         val vacancyId = optionalId(request.vacancyId)
         val assignmentRequest = canonicalAssignmentRequest(request)
-        val requestHash = requestHash(title, taskSetId, selectedTaskIds, trackId, vacancyId, request.programmeId, request.programmeVersion, assignmentRequest)
+        val requestHash = requestHash(
+            title,
+            taskSetId,
+            taskIds,
+            explicitSelectedTaskIds,
+            trackId,
+            vacancyId,
+            request.programmeId,
+            request.programmeVersion,
+            assignmentRequest,
+            candidateName,
+            position,
+            scheduledAt,
+        )
         val receiptId = CommandReceiptId(
             actorUserId = access.actorId,
             scopeKind = SCOPE_TEAM,
@@ -196,19 +224,21 @@ class TeamInterviewService(
                 ?.takeIf { it.status == ACTIVE }
                 ?: throw taskSetNotFound()
         }
-        val extraTasks = (taskSet?.let(::orderedActiveTasks).orEmpty() + selectedTaskIds.map { id ->
+        val requestedTaskIds = explicitSelectedTaskIds
+            ?: (taskSet?.let(::orderedActiveTasks).orEmpty().map { it.id } + taskIds)
+        val requestedTasks = requestedTaskIds.distinct().map { id ->
             taskRepository.findByIdAndTeamId(id, access.team.id)
                 ?.takeIf { it.status == ACTIVE }
                 ?: throw taskNotFound()
-        }).distinctBy { it.id }
+        }
         val track = resolveTrack(access.team.id, trackId)
         val vacancy = resolveVacancy(access.team.id, track, vacancyId)
         val programme = resolvedCreatableProgramme(access.team.id, track, vacancy)
         if (programme?.id != request.programmeId || programme?.version != request.programmeVersion) {
             throw programmeVersionConflict(programme?.version)
         }
-        val tasks = interviewTasks(programme, extraTasks)
-        val assignments = resolveAssignments(access.team.id, assignmentRequest)
+        val tasks = interviewTasks(programme, requestedTasks, explicitSelectedTaskIds)
+        val assignments = resolveAssignments(access.team.id, assignmentRequest, access.actorId)
         val now = now()
         val room = Room(
             title = title,
@@ -229,6 +259,9 @@ class TeamInterviewService(
             teamInterviewProgrammeVersion = programme?.version,
             language = normalizeLanguage(tasks.firstOrNull()?.template?.language ?: "nodejs"),
             createdAt = now,
+            candidateName = candidateName,
+            position = position,
+            scheduledAt = scheduledAt,
         )
         room.tasks = tasks.mapIndexed { index, task ->
             RoomTask(
@@ -247,6 +280,7 @@ class TeamInterviewService(
         val saved = roomRepository.saveAndFlush(room)
         saveAssignments(saved, assignments, now)
         grantOwnerRoomAccess(saved, actor, now)
+        roomHrTrackingService.assignHiringManagersOnRoomCreation(saved, assignments.filter { it.user.id in assignmentRequest.hiringManagerIds }.map { it.user })
         receiptRepository.saveAndFlush(
             CommandReceipt(
                 id = receiptId,
@@ -264,8 +298,32 @@ class TeamInterviewService(
     }
 
     @Transactional
+    fun details(actor: User, teamId: String, interviewId: String): TeamInterviewDetailsDto =
+        detailsDto(requireDetailsRoom(actor, teamId, interviewId))
+
+    @Transactional
+    fun updateDetails(actor: User, teamId: String, interviewId: String, request: TeamInterviewDetailsUpdateRequest): TeamInterviewDetailsDto {
+        if (request.revision < 0) throw ApiException(HttpStatus.BAD_REQUEST, "Некорректная ревизия метаданных")
+        val room = requireDetailsRoom(actor, teamId, interviewId)
+        if (room.interviewMetadataRevision != request.revision) {
+            throw ApiException(HttpStatus.CONFLICT, "Сведения уже изменены другим менеджером")
+        }
+        val title = canonicalTitle(request.title)
+        val candidateName = canonicalMetadataText(request.candidateName, "Имя кандидата")
+        val position = canonicalMetadataText(request.position, "Позиция")
+        val scheduledAt = canonicalScheduledAt(request.scheduledAt)
+        room.title = title
+        room.candidateName = candidateName
+        room.position = position
+        room.scheduledAt = scheduledAt
+        room.interviewMetadataRevision += 1
+        roomRepository.saveAndFlush(room)
+        return detailsDto(room)
+    }
+
+    @Transactional
     fun rename(actor: User, teamId: String, interviewId: String, request: TeamInterviewRenameRequest): TeamInterviewResponse {
-        val access = requireActiveMember(actor, teamId)
+        val access = requireActiveMemberForMutation(actor, teamId)
         val room = lockTeamRoom(access.team.id, interviewId)
         if (!access.isManager && room.ownerUser?.id != access.actorId) throw interviewRenameForbidden()
         val title = canonicalTitle(request.title)
@@ -285,7 +343,7 @@ class TeamInterviewService(
         request: TeamInterviewOwnerOfferCreateRequest,
         key: UUID,
     ): TeamInterviewOwnerOfferResponse {
-        val access = requireActiveMember(actor, teamId)
+        val access = requireActiveMemberForMutation(actor, teamId)
         if (!access.isManager) throw ownerOfferForbidden()
         val targetUserId = requiredId(request.targetUserId, "TEAM_MEMBER_NOT_FOUND")
         val requestHash = ownerOfferRequestHash(interviewId, targetUserId)
@@ -352,7 +410,7 @@ class TeamInterviewService(
 
     @Transactional
     fun acceptOwnerOffer(actor: User, teamId: String, interviewId: String, offerId: String): TeamInterviewOwnerOfferResponse {
-        val access = requireActiveMember(actor, teamId)
+        val access = requireActiveMemberForMutation(actor, teamId)
         val room = lockTeamRoom(access.team.id, interviewId)
         val offer = ownerOfferRepository.lockById(offerId)
             ?.takeIf { it.teamId == access.team.id && it.roomId == interviewId }
@@ -387,7 +445,7 @@ class TeamInterviewService(
 
     @Transactional
     fun declineOwnerOffer(actor: User, teamId: String, interviewId: String, offerId: String): TeamInterviewOwnerOfferResponse {
-        val access = requireActiveMember(actor, teamId)
+        val access = requireActiveMemberForMutation(actor, teamId)
         lockTeamRoom(access.team.id, interviewId)
         val offer = ownerOfferRepository.lockById(offerId)
             ?.takeIf { it.teamId == access.team.id && it.roomId == interviewId }
@@ -417,7 +475,7 @@ class TeamInterviewService(
 
     @Transactional
     fun archive(actor: User, teamId: String, interviewId: String): TeamInterviewResponse {
-        val access = requireActiveMember(actor, teamId)
+        val access = requireActiveMemberForMutation(actor, teamId)
         if (!access.isManager) throw interviewArchiveForbidden()
         val room = lockTeamRoom(access.team.id, interviewId)
         requireNotFinishedResult(room)
@@ -445,7 +503,7 @@ class TeamInterviewService(
 
     @Transactional
     fun delete(actor: User, teamId: String, interviewId: String) {
-        val access = requireActiveMember(actor, teamId)
+        val access = requireActiveMemberForMutation(actor, teamId)
         if (!access.isManager) throw interviewArchiveForbidden()
         val room = lockTeamRoom(access.team.id, interviewId)
         val inviteCode = room.inviteCode
@@ -463,7 +521,7 @@ class TeamInterviewService(
 
     @Transactional
     fun freeze(actor: User, teamId: String, interviewId: String): TeamInterviewResponse {
-        val access = requireActiveMember(actor, teamId)
+        val access = requireActiveMemberForMutation(actor, teamId)
         if (!access.isManager) throw interviewFreezeForbidden()
         val room = lockTeamRoom(access.team.id, interviewId)
         requireNotFinishedResult(room)
@@ -492,7 +550,7 @@ class TeamInterviewService(
 
     @Transactional
     fun resume(actor: User, teamId: String, interviewId: String): TeamInterviewResponse {
-        val access = requireActiveMember(actor, teamId)
+        val access = requireActiveMemberForMutation(actor, teamId)
         val room = lockTeamRoom(access.team.id, interviewId)
         val ownerId = room.ownerUser?.id
         if (!access.isManager && ownerId != access.actorId) throw interviewResumeForbidden()
@@ -510,7 +568,20 @@ class TeamInterviewService(
             targetUserId = ownerId,
             opaqueEntityId = interviewId,
         )
+        val inviteCode = saved.inviteCode
+        TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+            override fun afterCommit() = collaborationService.closeRoom(inviteCode)
+        })
         return response(saved)
+    }
+
+    private fun requireActiveMemberForMutation(actor: User, teamId: String): TeamAccess {
+        featureGate.requireEnabled()
+        // Membership changes take the team lock before touching room grants.
+        // Holding that same lock keeps authority valid across a room-row wait.
+        teamRepository.lockById(teamId)?.also { entityManager.refresh(it) }?.takeIf { it.state == ACTIVE }
+            ?: throw teamNotFound()
+        return requireActiveMember(actor, teamId)
     }
 
     private fun requireActiveMember(actor: User, teamId: String): TeamAccess {
@@ -529,10 +600,28 @@ class TeamInterviewService(
         )
     }
 
-    private fun lockTeamRoom(teamId: String, interviewId: String): Room =
+    private fun lockTeamRoom(teamId: String, interviewId: String, includeArchived: Boolean = false): Room =
         roomRepository.lockById(interviewId)
-            ?.takeIf { it.teamId == teamId && teamRoomLineageService.isCanonical(it) && it.archivedAt == null }
+            ?.also { entityManager.refresh(it) }
+            ?.takeIf { it.teamId == teamId && teamRoomLineageService.isCanonical(it) && (includeArchived || it.archivedAt == null) }
             ?: throw teamInterviewNotFound()
+
+    private fun requireDetailsRoom(actor: User, teamId: String, interviewId: String): Room {
+        val access = requireActiveMemberForMutation(actor, teamId)
+        val room = lockTeamRoom(access.team.id, interviewId, includeArchived = true)
+        entityManager.refresh(access.membership)
+        if (access.membership.state != ACTIVE) throw teamNotFound()
+        if (room.archivedAt != null) throw ApiException(HttpStatus.GONE, "Комната архивирована")
+        return room
+    }
+
+    private fun detailsDto(room: Room) = TeamInterviewDetailsDto(
+        title = room.title,
+        candidateName = room.candidateName,
+        position = room.position,
+        scheduledAt = room.scheduledAt?.toString(),
+        revision = room.interviewMetadataRevision,
+    )
 
     private fun activeMemberTarget(teamId: String, userId: String): TeamMembership =
         membershipRepository.lockByTeamIdAndUserId(teamId, userId)
@@ -580,7 +669,11 @@ class TeamInterviewService(
         return programme
     }
 
-    private fun interviewTasks(programme: TeamInterviewProgramme?, extras: List<TeamTaskTemplate>): List<InterviewTaskSnapshot> {
+    private fun interviewTasks(
+        programme: TeamInterviewProgramme?,
+        selectedTasks: List<TeamTaskTemplate>,
+        explicitSelection: List<String>?,
+    ): List<InterviewTaskSnapshot> {
         val mandatoryTasks = programme
             ?.items
             ?.sortedBy { it.position }
@@ -591,7 +684,13 @@ class TeamInterviewService(
             }
             .orEmpty()
         val mandatoryTaskIds = mandatoryTasks.map { it.template.id }.toSet()
-        return mandatoryTasks + extras
+        if (explicitSelection != null) {
+            val taskById = (mandatoryTasks.map { it.template } + selectedTasks).associateBy { it.id }
+            return explicitSelection.mapNotNull { taskById[it] }.map { task ->
+                InterviewTaskSnapshot(task, mandatory = task.id in mandatoryTaskIds)
+            }
+        }
+        return mandatoryTasks + selectedTasks
             .filter { task -> task.id !in mandatoryTaskIds }
             .map { task -> InterviewTaskSnapshot(task, mandatory = false) }
     }
@@ -711,13 +810,19 @@ class TeamInterviewService(
     }
 
     private fun canonicalAssignmentRequest(request: TeamInterviewCreateRequest): AssignmentRequest {
+        val hiringManagerIds = canonicalIds(request.hiringManagerIds.map { raw ->
+            val id = raw.trim()
+            val parsed = runCatching { UUID.fromString(id).toString() }.getOrNull()
+            if (parsed == null || !parsed.equals(id, ignoreCase = true)) throw teamMemberNotFound()
+            parsed
+        })
         val interviewerIds = canonicalIds(request.interviewerIds)
         val candidateIds = canonicalIds(request.candidateIds)
-        val intersection = interviewerIds.toSet().intersect(candidateIds.toSet())
+        val intersection = (interviewerIds + hiringManagerIds).toSet().intersect(candidateIds.toSet())
         if (intersection.isNotEmpty()) {
             throw secure(HttpStatus.BAD_REQUEST, "TEAM_ASSIGNEE_ROLE_CONFLICT", "Сотрудник не может быть выбран в двух ролях интервью")
         }
-        return AssignmentRequest(interviewerIds, candidateIds)
+        return AssignmentRequest(interviewerIds, candidateIds, hiringManagerIds)
     }
 
     private fun canonicalIds(values: List<String>): List<String> {
@@ -730,18 +835,25 @@ class TeamInterviewService(
         return seen.toList()
     }
 
-    private fun resolveAssignments(teamId: String, request: AssignmentRequest): List<ResolvedAssignment> {
-        val requestedIds = request.interviewerIds + request.candidateIds
+    private fun resolveAssignments(teamId: String, request: AssignmentRequest, actorId: String): List<ResolvedAssignment> {
+        val employeeIds = request.interviewerIds + request.candidateIds
+        val requestedIds = employeeIds + request.hiringManagerIds
         if (requestedIds.isEmpty()) return emptyList()
         val activeMemberships = membershipRepository.findByTeamIdAndState(teamId, ACTIVE).associateBy { it.userId }
-        requestedIds.forEach { userId ->
+        employeeIds.forEach { userId ->
             if (!activeMemberships.containsKey(userId)) throw teamMemberNotFound()
         }
-        val usersById = userRepository.findAllById(requestedIds).associateBy { requireNotNull(it.id) }
+        val usersById = (requestedIds + actorId).distinct().sorted().mapNotNull { id -> userRepository.lockById(id)?.also { entityManager.refresh(it) } }.associateBy { requireNotNull(it.id) }
         requestedIds.forEach { userId ->
             if (!usersById.containsKey(userId)) throw teamMemberNotFound()
         }
-        return request.interviewerIds.map { userId ->
+        request.hiringManagerIds.forEach { userId ->
+            val membership = membershipRepository.findByTeamIdAndUserId(teamId, userId)
+            if (usersById[userId]?.isHr != true ||
+                (membership != null && membership.state !in setOf(LEFT, REMOVED))
+            ) throw teamMemberNotFound()
+        }
+        return (request.interviewerIds + request.hiringManagerIds).distinct().map { userId ->
             ResolvedAssignment(requireNotNull(usersById[userId]), INTERVIEWER)
         } + request.candidateIds.map { userId ->
             ResolvedAssignment(requireNotNull(usersById[userId]), CANDIDATE)
@@ -843,10 +955,10 @@ class TeamInterviewService(
     private fun vacanciesById(teamId: String, ids: Set<String>): Map<String, TeamVacancy> =
         if (ids.isEmpty()) emptyMap() else vacancyRepository.findByTeamIdAndIdIn(teamId, ids).associateBy { it.id }
 
-    private fun matchesQuery(room: Room, query: String?, track: TeamTrack?, vacancy: TeamVacancy?): Boolean {
+    private fun matchesQuery(room: Room, query: String?, track: TeamTrack?, vacancy: TeamVacancy?, canReadMetadata: Boolean): Boolean {
         if (query == null) return true
         val taskMatches = room.tasks.any { task -> normalized(task.title).contains(query) || normalized(task.language).contains(query) }
-        return normalized(room.title).contains(query) ||
+        return (canReadMetadata && normalized(room.candidateName.orEmpty()).contains(query)) || normalized(room.title).contains(query) ||
             normalized(track?.name.orEmpty()).contains(query) ||
             normalized(vacancy?.title.orEmpty()).contains(query) ||
             taskMatches
@@ -859,6 +971,23 @@ class TeamInterviewService(
             throw secure(HttpStatus.BAD_REQUEST, "INVALID_TEAM_INTERVIEW_TITLE", "Название интервью должно содержать от 1 до $MAX_TITLE_CODE_POINTS символов")
         }
         return value
+    }
+
+    private fun canonicalMetadataText(raw: String?, label: String): String? {
+        val value = raw?.trim()?.ifBlank { null } ?: return null
+        if (value.codePointCount(0, value.length) > 200) {
+            throw ApiException(HttpStatus.BAD_REQUEST, "$label не может быть длиннее 200 символов")
+        }
+        return value
+    }
+
+    private fun canonicalScheduledAt(raw: String?): Instant? {
+        val value = raw?.trim()?.ifBlank { null } ?: return null
+        return try {
+            OffsetDateTime.parse(value).toInstant()
+        } catch (_: DateTimeParseException) {
+            throw ApiException(HttpStatus.BAD_REQUEST, "Запланированное время должно содержать часовой пояс")
+        }
     }
 
     private fun optionalId(raw: String?): String? = raw?.trim()?.takeIf { it.isNotBlank() }
@@ -890,14 +1019,18 @@ class TeamInterviewService(
         title: String,
         taskSetId: String?,
         taskIds: List<String>,
+        explicitSelectedTaskIds: List<String>?,
         trackId: String?,
         vacancyId: String?,
         programmeId: String?,
         programmeVersion: Long?,
         assignments: AssignmentRequest,
+        candidateName: String?,
+        position: String?,
+        scheduledAt: Instant?,
     ): String {
         val canonical = listOf(
-            "team-interview-create:v1",
+            if (explicitSelectedTaskIds == null) "team-interview-create:v1" else "team-interview-create:v2",
             "title=$title",
             "taskSetId=$taskSetId",
             "trackId=${trackId.orEmpty()}",
@@ -906,8 +1039,21 @@ class TeamInterviewService(
             "programmeVersion=${programmeVersion ?: ""}",
             "interviewerIds=${assignments.interviewerIds.sorted().joinToString(",")}",
             "candidateIds=${assignments.candidateIds.sorted().joinToString(",")}",
-        ).let { parts ->
-            if (taskIds.isEmpty()) parts else parts + "taskIds=${taskIds.joinToString(",")}" 
+        ).let { baseParts ->
+            val parts = if (assignments.hiringManagerIds.isEmpty()) baseParts else baseParts + "hiringManagerIds=${assignments.hiringManagerIds.sorted().joinToString(",")}"
+            when {
+                explicitSelectedTaskIds != null -> parts + "taskSelectionMode=explicit" + "selectedTaskIds=${explicitSelectedTaskIds.joinToString(",")}"
+                taskIds.isNotEmpty() -> parts + "taskIds=${taskIds.joinToString(",")}"
+                else -> parts
+            }
+        }.let { parts ->
+            // Omit empty metadata so receipts made by legacy clients remain valid.
+            // Length prefixes prevent user text containing newlines from joining fields.
+            parts + listOfNotNull(
+                candidateName?.let { "candidateName=${it.length}:$it" },
+                position?.let { "position=${it.length}:$it" },
+                scheduledAt?.let { "scheduledAt=$it" },
+            )
         }.joinToString("\n")
         val digest = MessageDigest.getInstance("SHA-256").digest(canonical.toByteArray(StandardCharsets.UTF_8))
         return "v1:" + digest.joinToString("") { "%02x".format(it) }
@@ -976,7 +1122,7 @@ class TeamInterviewService(
         val role: String,
     ) {
         val isManager: Boolean
-            get() = role == OWNER || role == ADMIN
+            get() = membership.state == ACTIVE
     }
 
     private data class TeamInterviewListQuery(
@@ -993,6 +1139,7 @@ class TeamInterviewService(
     private data class AssignmentRequest(
         val interviewerIds: List<String>,
         val candidateIds: List<String>,
+        val hiringManagerIds: List<String>,
     )
 
     private data class ResolvedAssignment(

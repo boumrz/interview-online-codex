@@ -7,13 +7,14 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { Box, Text, Tooltip } from "@mantine/core";
+import { Text, Tooltip } from "components/antd-compat";
+import { Button } from "antd";
 import {
   IconArrowsDiagonal,
   IconArrowsDiagonalMinimize2,
   IconLayoutColumns,
   IconLayoutRows,
-} from "@tabler/icons-react";
+} from "components/antd-icons";
 import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import {
   defaultKeymap,
@@ -29,14 +30,16 @@ import {
 } from "@codemirror/language";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
-import { EditorSelection, EditorState } from "@codemirror/state";
-import { oneDark } from "@codemirror/theme-one-dark";
+import { Compartment, EditorSelection, EditorState } from "@codemirror/state";
+import { useThemeMode } from "../theme/ThemeProvider";
+import { codeMirrorTheme } from "./codeMirrorTheme";
 import {
   drawSelection,
   EditorView,
   highlightActiveLine,
   keymap,
   lineNumbers,
+  placeholder,
 } from "@codemirror/view";
 
 import { markdownToHtml } from "../../components/markdown";
@@ -229,7 +232,7 @@ export function BriefingBoard({
   // переопределить размерности оверлейного режима. Аналогично
   // `data-focus`, который реагирует на synced focus-mode.
   return (
-    <Box
+    <div
       className={roomPageStyles.briefingPanel}
       data-mode={mode}
       data-focus={focusMode ? "on" : "off"}
@@ -239,105 +242,105 @@ export function BriefingBoard({
       {mode === "interviewer" && !readOnly ? (
         <>
           <div className={roomPageStyles.briefingToolbar}>
-            <button
-              type="button"
+            <Button
+              type="text" htmlType="button"
               className={roomPageStyles.briefingToolButton}
               aria-label="Жирный текст"
               title="Жирный текст"
               onClick={() => applyMarkdownTool("bold")}
             >
               B
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              type="text" htmlType="button"
               className={roomPageStyles.briefingToolButton}
               aria-label="Курсив"
               title="Курсив"
               onClick={() => applyMarkdownTool("italic")}
             >
               I
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              type="text" htmlType="button"
               className={roomPageStyles.briefingToolButton}
               aria-label="Вставить код"
               title="Вставить код"
               onClick={() => applyMarkdownTool("code")}
             >
               {"</>"}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              type="text" htmlType="button"
               className={roomPageStyles.briefingToolButton}
               aria-label="Code block"
               title="Code block"
               onClick={() => applyMarkdownTool("codeblock")}
             >
               Code
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              type="text" htmlType="button"
               className={roomPageStyles.briefingToolButton}
               aria-label="Вставить ссылку"
               title="Вставить ссылку"
               onClick={() => applyMarkdownTool("link")}
             >
               Link
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              type="text" htmlType="button"
               className={roomPageStyles.briefingToolButton}
               aria-label="Заголовок H1"
               title="Заголовок H1"
               onClick={() => applyMarkdownTool("h1")}
             >
               H1
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              type="text" htmlType="button"
               className={roomPageStyles.briefingToolButton}
               aria-label="Заголовок H2"
               title="Заголовок H2"
               onClick={() => applyMarkdownTool("h2")}
             >
               H2
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              type="text" htmlType="button"
               className={roomPageStyles.briefingToolButton}
               aria-label="Маркированный список"
               title="Маркированный список"
               onClick={() => applyMarkdownTool("ul")}
             >
               • List
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              type="text" htmlType="button"
               className={roomPageStyles.briefingToolButton}
               aria-label="Нумерованный список"
               title="Нумерованный список"
               onClick={() => applyMarkdownTool("ol")}
             >
               1. List
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              type="text" htmlType="button"
               className={roomPageStyles.briefingToolButton}
               aria-label="Цитата"
               title="Цитата"
               onClick={() => applyMarkdownTool("quote")}
             >
               Quote
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              type="text" htmlType="button"
               className={roomPageStyles.briefingToolButton}
               aria-label="Table"
               title="Table"
               onClick={() => applyMarkdownTool("table")}
             >
               Table
-            </button>
+            </Button>
             {/*
               Отделитель + утилитарные кнопки. focus-mode синхронизирован
               (см. RoomPage → onFocusModeChange), expand — локальный.
@@ -353,8 +356,8 @@ export function BriefingBoard({
                 position="bottom"
                 withArrow
               >
-                <button
-                  type="button"
+                <Button
+                  type="text" htmlType="button"
                   data-testid="briefing-focus-toggle"
                   data-state={focusMode ? "on" : "off"}
                   className={`${roomPageStyles.briefingToolButton} ${
@@ -373,7 +376,7 @@ export function BriefingBoard({
                   ) : (
                     <IconLayoutRows size={14} aria-hidden />
                   )}
-                </button>
+                </Button>
               </Tooltip>
             ) : null}
             <Tooltip
@@ -385,8 +388,8 @@ export function BriefingBoard({
               position="bottom"
               withArrow
             >
-              <button
-                type="button"
+              <Button
+                type="text" htmlType="button"
                 data-testid="briefing-expand-toggle"
                 className={roomPageStyles.briefingToolButton}
                 aria-pressed={isExpanded}
@@ -400,7 +403,7 @@ export function BriefingBoard({
                 ) : (
                   <IconArrowsDiagonal size={14} aria-hidden />
                 )}
-              </button>
+              </Button>
             </Tooltip>
           </div>
           <div className={roomPageStyles.briefingSplit}>
@@ -444,8 +447,8 @@ export function BriefingBoard({
               position="bottom"
               withArrow
             >
-              <button
-                type="button"
+              <Button
+                type="text" htmlType="button"
                 data-testid="briefing-expand-toggle"
                 className={roomPageStyles.briefingToolButton}
                 aria-pressed={isExpanded}
@@ -459,7 +462,7 @@ export function BriefingBoard({
                 ) : (
                   <IconArrowsDiagonal size={14} aria-hidden />
                 )}
-              </button>
+              </Button>
             </Tooltip>
           </div>
           <div
@@ -477,7 +480,7 @@ export function BriefingBoard({
           </div>
         </>
       )}
-    </Box>
+    </div>
   );
 }
 
@@ -493,6 +496,10 @@ const MarkdownCodeMirrorEditor = forwardRef<
   const onChangeRef = useRef(onChange);
   const valueRef = useRef(value);
   const applyingExternalValueRef = useRef(false);
+  const { mode } = useThemeMode();
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+  const themeCompartmentRef = useRef(new Compartment());
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -504,7 +511,8 @@ const MarkdownCodeMirrorEditor = forwardRef<
 
   const extensions = useMemo(
     () => [
-      oneDark,
+      themeCompartmentRef.current.of(codeMirrorTheme(modeRef.current)),
+      placeholder("Опишите условие, примеры и ожидаемый результат. Поддерживается Markdown."),
       lineNumbers(),
       highlightActiveLine(),
       drawSelection(),
@@ -533,7 +541,6 @@ const MarkdownCodeMirrorEditor = forwardRef<
             overflow: "auto",
           },
         },
-        { dark: true },
       ),
       EditorView.updateListener.of((update) => {
         if (!update.docChanged || applyingExternalValueRef.current) return;
@@ -561,6 +568,10 @@ const MarkdownCodeMirrorEditor = forwardRef<
       viewRef.current = null;
     };
   }, [extensions]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: themeCompartmentRef.current.reconfigure(codeMirrorTheme(mode)) });
+  }, [mode]);
 
   useEffect(() => {
     const view = viewRef.current;

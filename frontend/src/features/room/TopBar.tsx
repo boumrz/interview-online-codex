@@ -1,4 +1,5 @@
 import React from "react";
+import { Button as AntButton } from "antd";
 import {
   Box,
   Button,
@@ -6,17 +7,19 @@ import {
   Select,
   ThemeIcon,
   Tooltip,
-} from "@mantine/core";
+} from "components/antd-compat";
 import {
   IconChevronDown,
   IconCode,
   IconHelpCircle,
   IconHome2,
   IconUserCircle,
-} from "@tabler/icons-react";
+} from "components/antd-icons";
 import { Link } from "react-router-dom";
 
 import roomPageStyles from "../../pages/RoomPage.module.css";
+import styles from "./TopBar.module.css";
+import { ThemeToggleButton } from "../theme/ThemeToggleButton";
 import {
   awarenessUserColors,
 } from "./awarenessIdentity";
@@ -73,6 +76,7 @@ export type TopBarProps = {
   participants: Participant[];
   showParticipants: boolean;
   showLanguageControl: boolean;
+  languageDisabled?: boolean;
   currentLanguage: string;
   onLanguageChange: (value: string | null) => void;
   canGrantAccess: boolean;
@@ -100,6 +104,7 @@ export function TopBar({
   showParticipants,
   showLanguageControl,
   currentLanguage,
+  languageDisabled = false,
   onLanguageChange,
   canGrantAccess,
   canAssignHr,
@@ -108,6 +113,7 @@ export function TopBar({
   onRemoveHr,
   onToggleInterviewerRole,
 }: TopBarProps) {
+  const [openParticipantMenus, setOpenParticipantMenus] = React.useState<Record<string, boolean>>({});
   const hasHrControls = canAssignHr && participants.some(
     (participant) => participant.role !== "owner" && isEligibleHrParticipant(participant),
   );
@@ -115,11 +121,9 @@ export function TopBar({
     (participant) => participant.role !== "owner" &&
       (participant.canBeGrantedInterviewerAccess ?? true),
   );
-  const participantHelp = hasHrControls
-    ? `Кликните по участнику, чтобы назначить или снять роль нанимающего${hasOrdinaryControls ? ", изменить роль интервьюера" : ""}`
-    : "Кликните по нику участника, чтобы назначить или снять роль интервьюера";
+  const participantHelp = "Нажмите на участника, чтобы открыть доступные действия";
   return (
-    <Box className={roomPageStyles.topBar}>
+    <header className={roomPageStyles.topBar}>
       <Box className={roomPageStyles.topInner}>
         <Box className={roomPageStyles.brand}>
           <ThemeIcon size={26} variant="light" color="gray">
@@ -155,18 +159,17 @@ export function TopBar({
                 const hrActionLabel = pendingHrAction === "remove" ? "Снимаем роль нанимающего…" :
                   pendingHrAction === "assign" ? "Назначаем нанимающего…" :
                   isInterviewer ? "Снять роль нанимающего" : "Назначить нанимающим";
-                const menuHint = [
-                  ...(showHrAction ? [hrActionLabel] : []),
-                  ...(canChangeInterviewerRole ? [menuActionLabel] : []),
-                ].join(". ");
                 const { color: cursorColor, colorLight: cursorColorLight } =
                   awarenessUserColors(participant.sessionId);
+                const menuOpened = openParticipantMenus[participant.sessionId] === true;
                 const participantCard = (
                   <span className={roomPageStyles.participantNameRow}>
                     <span className={roomPageStyles.participantName}>
                       {participant.displayName}
                     </span>
-                    {isInterviewer && eligibleHr ? (
+                    {participant.role === "owner" ? (
+                      <span className={roomPageStyles.participantHrBadge} aria-label="Владелец">Владелец</span>
+                    ) : isInterviewer && eligibleHr ? (
                       <span
                         className={roomPageStyles.participantHrBadge}
                         aria-label="Нанимающий"
@@ -217,31 +220,31 @@ export function TopBar({
                 return (
                   <Menu
                     key={participant.sessionId}
+                    trigger="click"
+                    opened={menuOpened}
+                    onChange={(opened: boolean) => setOpenParticipantMenus((current) => ({
+                      ...current,
+                      [participant.sessionId]: opened,
+                    }))}
                     withinPortal
                     position="bottom"
                     shadow="md"
+                    className={styles.roleMenu}
                     offset={8}
                   >
                     <Menu.Target>
-                      <Tooltip
-                        label={menuHint}
-                        withArrow
-                        position="bottom"
-                        openDelay={250}
-                        closeDelay={50}
+                      <button
+                        type="button"
+                        className={`${roomPageStyles.participantCard} ${roomPageStyles.participantCardButton} app-header-control`}
+                        data-presence={participant.presenceStatus}
+                        data-testid={`participant-badge-${participant.presenceStatus}`}
+                        style={participantStyle}
+                        aria-label={`${participant.displayName}, ${presenceLabel}. Открыть доступные действия участника`}
+                        aria-haspopup="menu"
+                        aria-expanded={menuOpened}
                       >
-                        <button
-                          type="button"
-                          className={`${roomPageStyles.participantCard} ${roomPageStyles.participantCardButton}`}
-                          data-presence={participant.presenceStatus}
-                          data-testid={`participant-badge-${participant.presenceStatus}`}
-                          style={participantStyle}
-                          aria-label={`${participant.displayName}, ${presenceLabel}. ${menuHint}`}
-                          aria-haspopup="menu"
-                        >
-                          {participantCard}
-                        </button>
-                      </Tooltip>
+                        {participantCard}
+                      </button>
                     </Menu.Target>
                     <Menu.Dropdown>
                       {showHrAction ? (
@@ -266,23 +269,16 @@ export function TopBar({
               })}
 
               {hasOrdinaryControls || hasHrControls ? (
-                <Tooltip
-                  label={participantHelp}
-                  withArrow
-                  multiline
-                  w={260}
-                  position="bottom"
-                  openDelay={150}
+                <Tooltip label={participantHelp} trigger={["hover", "focus"]} position="bottom" withArrow styles={{ root: { pointerEvents: "none" }, container: { pointerEvents: "none" } }}>
+                <button
+                  type="button"
+                  className={`${roomPageStyles.participantsHelpHint} app-header-control`}
+                  style={{ "--header-control-color": "var(--app-muted)", "--header-control-border": "transparent" } as React.CSSProperties}
+                  aria-label="Действия участников"
+                  data-testid="participants-help-hint"
                 >
-                  <span
-                    className={roomPageStyles.participantsHelpHint}
-                    role="note"
-                    aria-label={`Подсказка: ${participantHelp}`}
-                    tabIndex={0}
-                    data-testid="participants-help-hint"
-                  >
-                    <IconHelpCircle size={14} stroke={1.8} aria-hidden="true" />
-                  </span>
+                  <IconHelpCircle size={14} stroke={1.8} aria-hidden="true" />
+                </button>
                 </Tooltip>
               ) : null}
             </div>
@@ -296,6 +292,8 @@ export function TopBar({
             <div className={roomPageStyles.topLanguageControl}>
               <Select
                 id="room-language-select"
+                disabled={languageDisabled}
+                placeholder="Выберите язык"
                 size="xs"
                 data={LANGUAGES.slice() as Array<{ value: string; label: string }>}
                 value={normalizeRoomLanguage(currentLanguage)}
@@ -339,8 +337,11 @@ export function TopBar({
             <Button
               component={Link}
               to={authToken ? interviewListPath : "/login"}
-              size="xs"
-              variant="subtle"
+              className={`app-header-control ${styles.returnAction}`}
+              aria-label="Вернуться к списку интервью"
+              title="Вернуться к списку интервью"
+              size="sm"
+              variant="outline"
               color="gray"
               leftSection={<IconUserCircle size={14} />}
             >
@@ -349,16 +350,18 @@ export function TopBar({
             <Button
               component={Link}
               to="/"
-              size="xs"
-              variant="filled"
-              color="blue"
+              className="app-header-control"
+              size="sm"
+              variant="outline"
+              color="gray"
               leftSection={<IconHome2 size={14} />}
             >
               Главная
             </Button>
+            <ThemeToggleButton />
           </div>
         </div>
       </Box>
-    </Box>
+    </header>
   );
 }

@@ -1,42 +1,11 @@
 ---
-description: Architect Agent rules. Use when designing system architecture, making technology decisions, defining API contracts, or planning realtime collaboration strategy. Model: Sonnet.
+description: Architect role guidance for a concrete architecture, API, data, or realtime decision within the active feature contract.
 ---
 
 # Architect Agent
 
-**MODEL: Sonnet**
+Follow `AGENTS.md` and `specs/README.md`. Role-specific prompt: `agents/roles/architect-agent.md`.
 
-## Role
+Preserve the fixed stack and current SSE + POST/Yjs collaboration. Document only implementation-relevant decisions and contracts; derive permissions from the active feature. Significant sensitive changes need independent security/reliability review.
 
-Design an implementable architecture within the fixed stack.
-Prefer simplicity and delivery speed for MVP. Avoid overengineering.
-
-## Fixed stack (do not override)
-
-- Frontend: React + TypeScript + RTK + RTK Query + CSS Modules + Rspack + Monaco
-- Backend: Kotlin + Spring Boot + PostgreSQL + Redis
-- Realtime: WebSocket (server-authoritative, CRDT-ready boundary)
-- Code execution: isolated sandbox service
-- WebRTC: future optimization only, not MVP
-
-## Required output
-
-- ADRs (one per significant decision, with explicit tradeoffs)
-- Module/service boundaries
-- Data model (entities, relationships)
-- API contracts (REST + WebSocket event schema)
-- Realtime sync strategy (transport, conflict resolution, reconnect)
-- NFR guardrails (latency, consistency, retry behavior)
-
-## Rules
-
-- MVP: simple and operationally controllable > theoretically optimal
-- Realtime: predictability > raw low latency
-- All permission-sensitive actions must be server-side enforced
-- Reconnect and replay scenarios are not optional — design them explicitly
-
-## Handoff after this agent
-
-→ `team-lead-agent` (Sonnet): decomposition
-→ `solution-reviewer-agent` (Sonnet): architecture review
-→ `security-reliability-agent` (Sonnet): security/reliability review
+Select this role only for a concrete need. No mandatory model tier, Linear issue, OpenSpec artifacts, or role handoff chain.

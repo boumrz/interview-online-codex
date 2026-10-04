@@ -39,7 +39,7 @@ class TeamTaskLibraryIntegrationTest(
     @Autowired private val jdbcTemplate: JdbcTemplate,
 ) {
     @Test
-    fun `team task can be deleted by creator but not when referenced by a set`() {
+    fun `team task can be deleted by creator even when referenced by a set`() {
         val owner = account("delete-task-owner")
         val team = team(owner, "Delete task team")
         val first = body(createTeamTask(owner, team.id, "Free", "", "", "kotlin")).path("task").path("id").asText()
@@ -51,7 +51,8 @@ class TeamTaskLibraryIntegrationTest(
             contentType = MediaType.APPLICATION_JSON
             content = objectMapper.writeValueAsString(mapOf("name" to "Set", "taskIds" to listOf(second)))
         }.andReturn(), 201, "referencing set created")
-        assertStatusAndCode(mockMvc.delete("$base/$second") { header("Authorization", "Bearer ${owner.token}") }.andReturn(), 409, "TEAM_TASK_IN_USE")
+        assertStatus(mockMvc.delete("$base/$second") { header("Authorization", "Bearer ${owner.token}") }.andReturn(), 204, "used task deleted")
+        assertEquals(0, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM team_task_set_items WHERE task_template_id=?", Int::class.java, second))
     }
     companion object {
         private val postgres = Postgres16TestSupport.create("team_tasks")
@@ -140,18 +141,10 @@ class TeamTaskLibraryIntegrationTest(
         assertStatusAndCode(stale, 409, "TEAM_TASK_REVISION_CONFLICT")
         assertEquals(1, body(stale).path("currentRevision").asLong())
 
-        val archived = archiveTeamTask(owner, team.id, taskId)
-        assertStatus(archived, 200, "owner archives team task")
-        assertEquals("ARCHIVED", body(archived).path("task").path("status").asText())
-        assertEquals(2, body(archived).path("task").path("revision").asLong())
-        assertEquals(0, body(teamTasks(owner, team.id)).path("items").size(), "archived task leaves active list")
-        assertEquals(1, body(teamTasks(owner, team.id, status = "archived")).path("items").size(), "archive filter exposes archived team tasks")
-
-        val restored = restoreTeamTask(owner, team.id, taskId)
-        assertStatus(restored, 200, "owner restores team task")
-        assertEquals("ACTIVE", body(restored).path("task").path("status").asText())
-        assertEquals(3, body(restored).path("task").path("revision").asLong())
-        assertEquals(1, body(teamTasks(owner, team.id)).path("items").size(), "restored task returns to active list")
+        assertStatus(archiveTeamTask(owner, team.id, taskId), 404, "archive endpoint removed")
+        assertStatus(restoreTeamTask(owner, team.id, taskId), 404, "restore endpoint removed")
+        assertEquals(1, body(teamTasks(owner, team.id)).path("items").size(), "task remains in common list")
+        assertEquals(1, body(teamTasks(owner, team.id, status = "archived")).path("items").size(), "legacy status parameter does not hide library rows")
 
         val peerPersonalImport = importPersonalTask(peer, team.id, personalTaskId)
         assertStatusAndCode(peerPersonalImport, 404, "PERSONAL_TASK_NOT_FOUND")

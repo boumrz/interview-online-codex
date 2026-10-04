@@ -1,0 +1,19 @@
+{
+  "": {
+    "swift-dependencies": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/BrowserLeaseBootstrap.build/master.swiftdeps"
+  },
+  "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Sources/BrowserLeaseBootstrap/Bootstrap.swift": {
+    "dependencies": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/BrowserLeaseBootstrap.build/Bootstrap.d",
+    "object": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/BrowserLeaseBootstrap.build/Bootstrap.swift.o",
+    "swiftmodule": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/BrowserLeaseBootstrap.build/Bootstrap~partial.swiftmodule",
+    "swift-dependencies": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/BrowserLeaseBootstrap.build/Bootstrap.swiftdeps",
+    "diagnostics": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/BrowserLeaseBootstrap.build/Bootstrap.dia"
+  },
+  "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Sources/BrowserLeaseBootstrap/main.swift": {
+    "dependencies": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/BrowserLeaseBootstrap.build/main.d",
+    "object": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/BrowserLeaseBootstrap.build/main.swift.o",
+    "swiftmodule": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/BrowserLeaseBootstrap.build/main~partial.swiftmodule",
+    "swift-dependencies": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/BrowserLeaseBootstrap.build/main.swiftdeps",
+    "diagnostics": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/BrowserLeaseBootstrap.build/main.dia"
+  }
+}

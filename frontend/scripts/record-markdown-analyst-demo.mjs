@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(scriptDirectory, "..", "..");
 const outputDirectory = path.join(repositoryRoot, "output", "playwright", "markdown-analyst-demo");
-const videoPath = path.join(outputDirectory, "interview-online-markdown-analyst-demo.webm");
+const videoPath = path.join(outputDirectory, "interhub-markdown-analyst-demo.webm");
 const storageStatePath = path.join(outputDirectory, "analyst-demo-storage-state.json");
 const baseUrl = process.env.DEMO_BASE_URL ?? "http://localhost:5174";
 const candidateBaseUrl = baseUrl.replace("localhost", "127.0.0.1");

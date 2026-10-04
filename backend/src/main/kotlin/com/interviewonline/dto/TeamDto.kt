@@ -2,6 +2,12 @@ package com.interviewonline.dto
 
 import com.fasterxml.jackson.annotation.JsonAnySetter
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import com.fasterxml.jackson.core.JsonParser
+import com.fasterxml.jackson.core.JsonToken
+import com.fasterxml.jackson.databind.DeserializationContext
+import com.fasterxml.jackson.databind.JsonDeserializer
+import com.fasterxml.jackson.databind.JsonMappingException
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import java.time.Instant
 
 @JsonIgnoreProperties(ignoreUnknown = false)
@@ -346,12 +352,21 @@ data class TeamInterviewCreateRequest(
     val title: String,
     val taskSetId: String? = null,
     val taskIds: List<String> = emptyList(),
+    val selectedTaskIds: List<String>? = null,
     val trackId: String? = null,
     val vacancyId: String? = null,
     val programmeId: String? = null,
     val programmeVersion: Long? = null,
     val interviewerIds: List<String> = emptyList(),
+    @param:com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = HiringManagerIdsDeserializer::class)
+    val hiringManagerIds: List<String> = emptyList(),
     val candidateIds: List<String> = emptyList(),
+    @param:JsonDeserialize(using = TeamInterviewMetadataTextDeserializer::class)
+    val candidateName: String? = null,
+    @param:JsonDeserialize(using = TeamInterviewMetadataTextDeserializer::class)
+    val position: String? = null,
+    @param:JsonDeserialize(using = TeamInterviewMetadataTextDeserializer::class)
+    val scheduledAt: String? = null,
 ) {
     @JsonAnySetter
     @Suppress("UNUSED_PARAMETER")
@@ -359,6 +374,31 @@ data class TeamInterviewCreateRequest(
         throw IllegalArgumentException("Unknown team-interview-create field: $name")
     }
 }
+
+class TeamInterviewMetadataTextDeserializer : JsonDeserializer<String>() {
+    override fun deserialize(parser: JsonParser, context: DeserializationContext): String {
+        if (parser.currentToken != JsonToken.VALUE_STRING) {
+            throw JsonMappingException.from(parser, "Поле метаданных должно быть строкой или null")
+        }
+        return parser.text
+    }
+}
+
+data class TeamInterviewDetailsDto(
+    val title: String,
+    val candidateName: String?,
+    val position: String?,
+    val scheduledAt: String?,
+    val revision: Long,
+)
+
+data class TeamInterviewDetailsUpdateRequest(
+    val title: String,
+    val candidateName: String?,
+    val position: String?,
+    val scheduledAt: String?,
+    val revision: Long,
+)
 
 @JsonIgnoreProperties(ignoreUnknown = false)
 data class TeamInterviewRenameRequest(

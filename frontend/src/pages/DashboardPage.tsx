@@ -1,4 +1,5 @@
 import React, { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { App } from "antd";
 import {
   ActionIcon,
   AppShell,
@@ -18,12 +19,11 @@ import {
   Textarea,
   ThemeIcon,
   Title,
-} from "@mantine/core";
-import { DashboardToast } from "../components/DashboardToast";
-import type { ToastEntry } from "../components/DashboardToast";
+} from "components/antd-compat";
+import { useClipboardNotification } from "../components/useClipboardNotification";
+import { ThemeToggleButton } from "../features/theme/ThemeToggleButton";
 import {
   IconBook2,
-  IconCheck,
   IconCode,
   IconCopy,
   IconEdit,
@@ -32,7 +32,7 @@ import {
   IconPlus,
   IconRocket,
   IconTrash,
-} from "@tabler/icons-react";
+} from "components/antd-icons";
 import {
   Navigate,
   useNavigate,
@@ -125,6 +125,8 @@ export function DashboardPage({
 }: {
   forcedSection?: DashboardSection;
 }) {
+  const { notification } = App.useApp();
+  const copyToClipboard = useClipboardNotification();
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const { section: routeSection } = useParams();
@@ -145,6 +147,8 @@ export function DashboardPage({
   const [taskStarterCode, setTaskStarterCode] = useState("");
   const [taskLanguage, setTaskLanguage] = useState("nodejs");
   const [createTaskModalOpened, setCreateTaskModalOpened] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ kind: "task" | "user" | "room"; id: string; name: string } | null>(null);
+  const [deleteError, setDeleteError] = useState("");
 
   const [roomTitle, setRoomTitle] = useState("Техническое интервью");
   const [roomTaskIds, setRoomTaskIds] = useState<string[]>([]);
@@ -161,9 +165,9 @@ export function DashboardPage({
   const [profileDisplayName, setProfileDisplayName] = useState(
     auth.user?.displayName ?? "",
   );
-  // ── Notification stack ─────────────────────────────────────────────────
-  const [notifications, setNotifications] = useState<ToastEntry[]>([]);
-  const notifTimerRefs = useRef<Record<string, number>>({});
+  const [profileEditOpened, setProfileEditOpened] = useState(false);
+  const [profileEditError, setProfileEditError] = useState("");
+  const notificationOwnerMountedRef = useRef(true);
 
   const [roomTitleDrafts, setRoomTitleDrafts] = useState<
     Record<string, string>
@@ -199,8 +203,6 @@ export function DashboardPage({
     Record<string, string>
   >({});
 
-  const [copiedTaskId, setCopiedTaskId] = useState<string | null>(null);
-  const copiedTaskTimerRef = useRef<Record<string, number>>({});
   const dashboardSections = BASE_DASHBOARD_SECTIONS.filter(
     (dashboardSection) =>
       agentOpsEnabled || dashboardSection.value !== "agents",
@@ -279,33 +281,26 @@ export function DashboardPage({
   }, []);
 
   useEffect(() => {
-    const timers = notifTimerRefs.current;
+    notificationOwnerMountedRef.current = true;
     return () => {
-      Object.values(timers).forEach((id) => window.clearTimeout(id));
+      notificationOwnerMountedRef.current = false;
     };
   }, []);
-
-  useEffect(() => {
-    return () => {
-      Object.values(copiedTaskTimerRef.current).forEach((id) => window.clearTimeout(id));
-    };
-  }, []);
-
-  const dismissNotif = (id: string) => {
-    if (notifTimerRefs.current[id]) {
-      window.clearTimeout(notifTimerRefs.current[id]);
-      delete notifTimerRefs.current[id];
-    }
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
-  };
 
   const pushNotif = (type: "success" | "error", title: string, message: string) => {
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    setNotifications((prev) => [...prev, { id, type, title, message }]);
-    notifTimerRefs.current[id] = window.setTimeout(() => {
-      setNotifications((prev) => prev.filter((n) => n.id !== id));
-      delete notifTimerRefs.current[id];
-    }, 5000);
+    if (
+      !notificationOwnerMountedRef.current ||
+      authIdentityRef.current.token !== auth.token ||
+      authIdentityRef.current.userId !== (auth.user?.id ?? null) ||
+      localStorage.getItem("auth_token") !== auth.token
+    ) return;
+    notification[type]({
+      title,
+      description: message || undefined,
+      placement: "top",
+      role: type === "success" ? "status" : "alert",
+      duration: 5,
+    });
   };
 
   const showError = (message: string) => pushNotif("error", message, "");
@@ -313,7 +308,7 @@ export function DashboardPage({
 
   const profileIsResolving = Boolean(auth.token && !auth.user);
   const hasValidSection =
-    (section === "hr" && profileIsResolving) ||
+    ((section === "hr" || section === "admin") && profileIsResolving) ||
     isDashboardSection(section, agentOpsEnabled, isAdmin, isHr);
   const activeSection: DashboardSection = hasValidSection ? section : "rooms";
   const activeTaskLanguage = normalizeLanguageKey(searchParams.get("lang"));
@@ -571,10 +566,8 @@ export function DashboardPage({
           : [...previous, { normalizedId: responseId, displayName: response.displayName }]
       ));
       setHiringManagerDraftId("");
-      setHiringManagerPickerFeedback({
-        kind: "success",
-        message: `Нанимающий добавлен: ${response.displayName}`,
-      });
+      setHiringManagerPickerFeedback({ kind: "idle", message: "" });
+      showSuccess(`Нанимающий добавлен: ${response.displayName}`, "");
     } catch (error) {
       if (!isCurrentRequest()) return;
       setHiringManagerPickerFeedback({
@@ -674,12 +667,14 @@ export function DashboardPage({
   };
 
   const removeTask = async (taskId: string) => {
-    if (!window.confirm("Удалить задачу из банка?")) return;
     try {
       await deleteTask({ taskId }).unwrap();
+      setDeleteTarget(null);
     } catch (err) {
       const serverMessage = (err as { data?: { error?: string } })?.data?.error;
-      showError(serverMessage ?? "Не удалось удалить задачу");
+      const message = serverMessage ?? "Не удалось удалить задачу";
+      setDeleteError(message);
+      showError(message);
     }
   };
 
@@ -691,13 +686,10 @@ export function DashboardPage({
         starterCode: task.starterCode,
         language: task.language,
       });
-      await navigator.clipboard.writeText(code);
-      setCopiedTaskId(task.id);
-      if (copiedTaskTimerRef.current[task.id]) window.clearTimeout(copiedTaskTimerRef.current[task.id]);
-      copiedTaskTimerRef.current[task.id] = window.setTimeout(() => {
-        setCopiedTaskId((prev) => (prev === task.id ? null : prev));
-        delete copiedTaskTimerRef.current[task.id];
-      }, 2000);
+      await copyToClipboard(code, {
+        success: `Код задачи «${task.title}» готов к вставке.`,
+        failure: "Разрешите доступ к буферу обмена и повторите попытку.",
+      });
     } catch {
       showError("Не удалось скопировать код задачи");
     }
@@ -716,11 +708,12 @@ export function DashboardPage({
     }
   };
 
-  const removeUserByAdmin = async (user: AdminUser) => {
-    if (!window.confirm(`Удалить пользователя @${user.nickname}?`)) return;
+  const removeUserByAdmin = async (userId: string) => {
     try {
-      await deleteAdminUser({ userId: user.id }).unwrap();
+      await deleteAdminUser({ userId }).unwrap();
+      setDeleteTarget(null);
     } catch {
+      setDeleteError("Не удалось удалить пользователя");
       showError("Не удалось удалить пользователя");
     }
   };
@@ -729,6 +722,7 @@ export function DashboardPage({
     roomId: string,
     originalTitle: string,
     titleDraft: string,
+    notifySuccess = false,
   ) => {
     const normalized = titleDraft.trim();
     if (!normalized) {
@@ -745,6 +739,7 @@ export function DashboardPage({
       await updateRoom({ roomId, title: normalized }).unwrap();
       setRoomTitleDrafts((prev) => ({ ...prev, [roomId]: normalized }));
       setRoomSaveStatus((prev) => ({ ...prev, [roomId]: "saved" }));
+      if (notifySuccess) showSuccess("Сохранено", "Название интервью сохранено");
       if (roomStatusTimersRef.current[roomId]) {
         window.clearTimeout(roomStatusTimersRef.current[roomId]);
       }
@@ -783,21 +778,21 @@ export function DashboardPage({
     }, 600);
   };
 
-  const flushRoomAutoSave = (roomId: string, originalTitle: string) => {
+  const flushRoomAutoSave = (roomId: string, originalTitle: string, nextDraft?: string, notifySuccess = false) => {
     if (roomSaveTimersRef.current[roomId]) {
       window.clearTimeout(roomSaveTimersRef.current[roomId]);
       delete roomSaveTimersRef.current[roomId];
     }
-    const draft = roomTitleDrafts[roomId] ?? originalTitle;
+    const draft = nextDraft ?? roomTitleDrafts[roomId] ?? originalTitle;
     const latestOriginal =
       rooms.find((room) => room.id === roomId)?.title ?? originalTitle;
-    void persistRoomTitle(roomId, latestOriginal, draft);
+    void persistRoomTitle(roomId, latestOriginal, draft, notifySuccess);
   };
 
   const removeRoom = async (roomId: string) => {
-    if (!window.confirm("Удалить комнату?")) return;
     try {
       const result = await deleteRoom({ roomId }).unwrap();
+      setDeleteTarget(null);
       showSuccess(
         result.archived ? "Комната перенесена в архив" : "Комната удалена",
         result.archived
@@ -805,6 +800,7 @@ export function DashboardPage({
           : "Комната и связанные данные удалены",
       );
     } catch {
+      setDeleteError("Не удалось удалить комнату");
       showError("Не удалось удалить комнату");
     }
   };
@@ -826,8 +822,11 @@ export function DashboardPage({
       dispatch(updateAuthProfile({ displayName: updated.displayName }));
       localStorage.setItem("display_name", updated.displayName);
       setProfileDisplayName(updated.displayName);
+      setProfileEditOpened(false);
+      setProfileEditError("");
       showSuccess("Имя сохранено", "Имя для комнаты успешно сохранено");
     } catch {
+      setProfileEditError("Не удалось сохранить имя для комнаты. Повторите попытку.");
       showError("Не удалось сохранить имя для комнаты");
     }
   };
@@ -974,12 +973,29 @@ export function DashboardPage({
   if (!hasValidSection) {
     return <Navigate to="/dashboard/rooms" replace />;
   }
-  if (section === "hr" && profileIsResolving) {
-    return <Box p="xl" c="gray.2" bg="#0f1115" mih="100vh">Загрузка профиля...</Box>;
+  if ((section === "hr" || section === "admin") && profileIsResolving) {
+    return <Box p="xl" c="gray.2" bg="var(--app-bg)" mih="100vh">Загрузка профиля...</Box>;
   }
 
+  const deletePending = deleteTaskState.isLoading || deleteAdminUserState.isLoading || deleteRoomState.isLoading;
   return (
     <>
+      <Modal opened={deleteTarget !== null} onClose={() => { if (!deletePending) setDeleteTarget(null); }} title={deleteTarget?.kind === "user" ? "Удалить пользователя?" : deleteTarget?.kind === "room" ? "Удалить комнату?" : "Удалить задачу?"} centered>
+        <Stack>
+          <Text>{deleteTarget?.kind === "room" ? `Комната «${deleteTarget.name}» будет удалена или перенесена в архив, если её история нужна нанимающим.` : deleteTarget?.kind === "user" ? `Пользователь ${deleteTarget.name} будет удалён. Это действие нельзя отменить.` : `Задача «${deleteTarget?.name ?? ""}» будет удалена из банка.`}</Text>
+          {deleteError ? <Text role="alert" c="var(--app-error)">{deleteError}</Text> : null}
+          <Group justify="flex-end">
+            <Button variant="subtle" disabled={deletePending} onClick={() => setDeleteTarget(null)}>Отмена</Button>
+            <Button variant="light" color="red" leftSection={<IconTrash size={16} aria-hidden="true" />} loading={deletePending} disabled={deletePending} onClick={() => {
+              if (!deleteTarget || deletePending) return;
+              setDeleteError("");
+              if (deleteTarget.kind === "task") void removeTask(deleteTarget.id);
+              else if (deleteTarget.kind === "user") void removeUserByAdmin(deleteTarget.id);
+              else void removeRoom(deleteTarget.id);
+            }}>Удалить</Button>
+          </Group>
+        </Stack>
+      </Modal>
       <Modal
         opened={!!editingTask}
         onClose={() => setEditingTask(null)}
@@ -988,10 +1004,10 @@ export function DashboardPage({
         centered
       >
         <Stack>
-          <TextInput
+          <TextInput placeholder="Введите название"
             label="Название"
             value={editTaskTitle}
-            onChange={(e) => setEditTaskTitle(e.currentTarget.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditTaskTitle(e.currentTarget.value)}
             styles={darkFieldStyles}
           />
           <Stack gap={6}>
@@ -999,9 +1015,9 @@ export function DashboardPage({
               Описание (Markdown)
             </Text>
             <div className={styles.markdownEditorGrid}>
-              <Textarea
+              <Textarea placeholder="Опишите условие, примеры и ожидаемый результат"
                 value={editTaskDescription}
-                onChange={(e) => setEditTaskDescription(e.currentTarget.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditTaskDescription(e.currentTarget.value)}
                 minRows={8}
                 styles={markdownInputStyles}
               />
@@ -1021,14 +1037,14 @@ export function DashboardPage({
               </div>
             </div>
           </Stack>
-          <Textarea
+          <Textarea placeholder="Добавьте заготовку решения для кандидата"
             label="Стартовый код"
             value={editTaskStarterCode}
-            onChange={(e) => setEditTaskStarterCode(e.currentTarget.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditTaskStarterCode(e.currentTarget.value)}
             minRows={12}
             styles={codeInputStyles}
           />
-          <Select
+          <Select placeholder="Выберите язык решения"
             label="Язык"
             value={editTaskLanguage}
             onChange={(value) => setEditTaskLanguage(value ?? "nodejs")}
@@ -1051,34 +1067,34 @@ export function DashboardPage({
       >
         <form onSubmit={onCreateTask}>
           <Stack>
-            <TextInput
+            <TextInput placeholder="Введите название"
               id="create-task-title"
               data-testid="create-task-title-input"
               label="Название"
               value={taskTitle}
-              onChange={(e) => setTaskTitle(e.currentTarget.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTaskTitle(e.currentTarget.value)}
               styles={darkFieldStyles}
               required
             />
-            <Textarea
+            <Textarea placeholder="Опишите условие, примеры и ожидаемый результат"
               id="create-task-description"
               data-testid="create-task-description-input"
               label="Описание (Markdown, необязательно)"
               value={taskDescription}
-              onChange={(e) => setTaskDescription(e.currentTarget.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTaskDescription(e.currentTarget.value)}
               minRows={8}
               styles={markdownInputStyles}
             />
-            <Textarea
+            <Textarea placeholder="Добавьте заготовку решения или оставьте поле пустым"
               id="create-task-code"
               data-testid="create-task-code-input"
               label="Стартовый код (необязательно)"
               value={taskStarterCode}
-              onChange={(e) => setTaskStarterCode(e.currentTarget.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTaskStarterCode(e.currentTarget.value)}
               minRows={12}
               styles={codeInputStyles}
             />
-            <Select
+            <Select placeholder="Выберите язык решения"
               data-testid="create-task-language-select"
               label="Язык"
               value={taskLanguage}
@@ -1098,15 +1114,9 @@ export function DashboardPage({
         </form>
       </Modal>
 
-      <DashboardToast notifications={notifications} onDismiss={dismissNotif} />
-
       <h1 className="visually-hidden">Личный кабинет — управление комнатами и задачами</h1>
       <AppShell padding={0} header={{ height: 72 }}>
-        <AppShell.Header
-          bg="#101318"
-          c="white"
-          style={{ borderBottom: "1px solid #272b34" }}
-        >
+        <AppShell.Header className={styles.dashboardHeader}>
           <Container size="xl" h="100%">
             <Group h="100%" justify="space-between" align="center">
               <Group>
@@ -1120,12 +1130,13 @@ export function DashboardPage({
                   </Text>
                 </Box>
               </Group>
-              <Group>
+              <Group className={styles.headerControls} align="center">
                 <Badge color="gray" variant="light">
                   @{auth.user?.nickname}
                 </Badge>
                 <Button
                   leftSection={<IconLogout2 size={16} />}
+                  className="app-header-control"
                   variant="outline"
                   color="gray"
                   onClick={() => {
@@ -1136,6 +1147,7 @@ export function DashboardPage({
                 >
                   Выйти
                 </Button>
+                <ThemeToggleButton />
               </Group>
             </Group>
           </Container>
@@ -1145,16 +1157,15 @@ export function DashboardPage({
           <Box
             style={{
               minHeight: "calc(100vh - 72px)",
-              background:
-                "radial-gradient(1200px 500px at 15% -20%, rgba(255,255,255,0.06), transparent), radial-gradient(900px 420px at 90% -20%, rgba(255,255,255,0.04), transparent), #0f1115",
+              background: "var(--app-bg)",
             }}
           >
             <Container size="xl" py={20}>
               {activeSection !== "hr" ? <Card
                 withBorder
-                bg="#11151c"
+                bg="var(--app-surface)"
                 c="gray.1"
-                style={{ borderColor: "#272b34" }}
+                style={{ borderColor: "var(--app-border)" }}
                 mb="md"
               >
                 <Group
@@ -1177,25 +1188,23 @@ export function DashboardPage({
                   </Box>
                   <Box style={{ flex: "1 1 320px", minWidth: 280 }}>
                     <Stack gap="xs">
-                      <TextInput
-                        value={profileDisplayName}
-                        onChange={(event) =>
-                          setProfileDisplayName(event.currentTarget.value)
-                        }
-                        styles={darkFieldStyles}
-                        label="Имя для отображения"
-                      />
-                      <Group justify="space-between" align="center">
-                        <Text size="xs" c="gray.5">
-                          Ник для входа: @{auth.user?.nickname}
-                        </Text>
-                        <Button
-                          loading={updateProfileState.isLoading}
-                          onClick={saveProfileDisplayName}
-                        >
-                          Сохранить имя
-                        </Button>
+                      <Group gap="xs" align="center" wrap="wrap">
+                        <Text fw={600}>{auth.user?.displayName}</Text>
+                        <ActionIcon variant="subtle" aria-label="Изменить имя" title="Изменить имя" onClick={() => { setProfileDisplayName(auth.user?.displayName ?? ""); setProfileEditError(""); setProfileEditOpened(true); }}><IconEdit size={16} aria-hidden="true" /></ActionIcon>
                       </Group>
+                      <Text size="xs" c="gray.5">Ник для входа: @{auth.user?.nickname}</Text>
+                      <Modal opened={profileEditOpened} onClose={() => { if (!updateProfileState.isLoading) setProfileEditOpened(false); }} title="Изменить имя" centered>
+                        <form onSubmit={(event) => { event.preventDefault(); void saveProfileDisplayName(); }}>
+                          <Stack>
+                            <TextInput label="Имя для отображения" placeholder="Введите имя для отображения" value={profileDisplayName} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setProfileDisplayName(event.currentTarget.value)} required autoFocus disabled={updateProfileState.isLoading} />
+                            {profileEditError ? <Text role="alert" c="red.4">{profileEditError}</Text> : null}
+                            <Group justify="flex-end">
+                              <Button type="button" variant="subtle" disabled={updateProfileState.isLoading} onClick={() => setProfileEditOpened(false)}>Отмена</Button>
+                              <Button type="submit" loading={updateProfileState.isLoading}>Сохранить имя</Button>
+                            </Group>
+                          </Stack>
+                        </form>
+                      </Modal>
                     </Stack>
                   </Box>
                 </Group>
@@ -1211,9 +1220,9 @@ export function DashboardPage({
               {activeSection !== "hr" ? <SimpleGrid cols={{ base: 1, md: 3 }} spacing="md" mb="md">
                 <Card
                   withBorder
-                  bg="#11151c"
+                  bg="var(--app-surface)"
                   c="gray.1"
-                  style={{ borderColor: "#272b34" }}
+                  style={{ borderColor: "var(--app-border)" }}
                 >
                   <Group justify="space-between">
                     <Text c="gray.4">Комнат создано</Text>
@@ -1227,9 +1236,9 @@ export function DashboardPage({
                 </Card>
                 <Card
                   withBorder
-                  bg="#11151c"
+                  bg="var(--app-surface)"
                   c="gray.1"
-                  style={{ borderColor: "#272b34" }}
+                  style={{ borderColor: "var(--app-border)" }}
                 >
                   <Group justify="space-between">
                     <Text c="gray.4">Задач</Text>
@@ -1243,9 +1252,9 @@ export function DashboardPage({
                 </Card>
                 <Card
                   withBorder
-                  bg="#11151c"
+                  bg="var(--app-surface)"
                   c="gray.1"
-                  style={{ borderColor: "#272b34" }}
+                  style={{ borderColor: "var(--app-border)" }}
                 >
                   <Group justify="space-between">
                     <Text c="gray.4">Языков в банке</Text>
@@ -1263,9 +1272,9 @@ export function DashboardPage({
                 withBorder
                 radius="lg"
                 mb="md"
-                bg="#11151c"
+                bg="var(--app-surface)"
                 c="gray.1"
-                style={{ borderColor: "#272b34" }}
+                style={{ borderColor: "var(--app-border)" }}
               >
                 <Group wrap="wrap" gap="xs">
                   {dashboardSections.map((dashboardSection) => (
@@ -1311,9 +1320,9 @@ export function DashboardPage({
                     withBorder
                     radius="lg"
                     padding="lg"
-                    bg="#11151c"
+                    bg="var(--app-surface)"
                     c="gray.1"
-                    style={{ borderColor: "#272b34" }}
+                    style={{ borderColor: "var(--app-border)" }}
                     data-testid="task-bank-panel"
                   >
                     <Stack>
@@ -1363,7 +1372,7 @@ export function DashboardPage({
                           </Button>
                         ))}
                       </Group>
-                      <Divider color="#272b34" />
+                      <Divider color="var(--app-border)" />
                       <PasteTaskCodeField
                         existingTasks={allSelectableRoomTasks}
                         onImportSuccess={(language) => {
@@ -1379,8 +1388,8 @@ export function DashboardPage({
                             withBorder
                             radius="md"
                             padding="sm"
-                            bg="#121720"
-                            style={{ borderColor: "#2a3039" }}
+                            bg="var(--app-surface-soft)"
+                            style={{ borderColor: "var(--app-border)" }}
                           >
                             <Stack gap="xs">
                               <Group justify="space-between">
@@ -1399,12 +1408,11 @@ export function DashboardPage({
                                 <ActionIcon
                                   size="sm"
                                   variant="light"
-                                  color={copiedTaskId === task.id ? "teal" : "gray"}
                                   onClick={() => void handleCopyTaskCode(task)}
                                   title="Скопировать код задачи"
                                   aria-label="Скопировать код задачи"
                                 >
-                                  {copiedTaskId === task.id ? <IconCheck size={14} /> : <IconCopy size={14} />}
+                                  <IconCopy size={14} />
                                 </ActionIcon>
                                 <Button
                                   size="xs"
@@ -1414,15 +1422,17 @@ export function DashboardPage({
                                 >
                                   Редактировать
                                 </Button>
-                                <Button
+                                <ActionIcon
                                   size="xs"
                                   color="red"
                                   variant="light"
-                                  leftSection={<IconTrash size={14} />}
-                                  onClick={() => removeTask(task.id)}
+                                  aria-label={`Удалить задачу ${task.title}`}
+                                  title="Удалить задачу"
+                                  disabled={deletePending}
+                                  onClick={() => { setDeleteError(""); setDeleteTarget({ kind: "task", id: task.id, name: task.title }); }}
                                 >
-                                  Удалить
-                                </Button>
+                                  <IconTrash size={16} aria-hidden="true" />
+                                </ActionIcon>
                               </Group>
                             </Stack>
                           </Card>
@@ -1450,7 +1460,8 @@ export function DashboardPage({
                   roomSaveStatus={roomSaveStatus}
                   onOpenRoom={openRoomFromDashboard}
                   onDeleteRoom={(roomId) => {
-                    void removeRoom(roomId);
+                    setDeleteError("");
+                    setDeleteTarget({ kind: "room", id: roomId, name: rooms.find(room => room.id === roomId)?.title ?? "Комната" });
                   }}
                   onScheduleTitleChange={scheduleRoomAutoSave}
                   onFlushTitleChange={flushRoomAutoSave}
@@ -1470,7 +1481,7 @@ export function DashboardPage({
                     setAdminRoleDrafts((prev) => ({ ...prev, [userId]: role }))
                   }
                   onSaveRole={saveAdminRole}
-                  onDeleteUser={removeUserByAdmin}
+                  onDeleteUser={user => { setDeleteError(""); setDeleteTarget({ kind: "user", id: user.id, name: `@${user.nickname}` }); }}
                   onRefresh={() => refetchAdminUsers()}
                   isUpdatingRole={updateAdminUserRoleState.isLoading}
                   isDeleting={deleteAdminUserState.isLoading}

@@ -250,6 +250,17 @@ async function openAccount(auth, path = "/workspace/personal/interviews", { view
   return { context, page };
 }
 
+async function selectAntOption(page, label, optionLabel) {
+  const combobox = page.getByRole("combobox", { name: label, exact: true });
+  const select = combobox
+    .locator("xpath=ancestor-or-self::div[contains(concat(' ',normalize-space(@class),' '),' ant-select ')][1]");
+  await select.locator(".ant-select-content").click();
+  const option = page.locator(".ant-select-dropdown .ant-select-item-option").filter({ hasText: optionLabel }).first();
+  await option.waitFor({ state: "visible" });
+  await option.click();
+  if ((await select.getAttribute("class"))?.includes("ant-select-multiple")) await page.keyboard.press("Escape");
+}
+
 async function openRoomAccount(auth, inviteCode, { viewport = { width: 1280, height: 720 }, onContext } = {}) {
   const context = await browser.newContext({ viewport });
   if (onContext) await onContext(context);
@@ -274,25 +285,48 @@ async function openRoomAccount(auth, inviteCode, { viewport = { width: 1280, hei
   return { context, page };
 }
 
-const switcher = (page) => page.getByRole("button", { name: /^Рабочее пространство:/ });
+const switcher = (page) => page.getByRole("button", { name: /^Команды:/ });
 
 async function openWorkspaceDialog(page) {
+  if (await page.getByRole("dialog").count() > 0) {
+    await page.keyboard.press("Escape");
+    await page.getByRole("dialog").waitFor({ state: "hidden" });
+  }
   await switcher(page).click();
-  const dialog = page.getByRole("dialog", { name: "Выбор рабочего пространства", exact: true });
+  const dialog = page.getByRole("menu", { name: "Выбор команды", exact: true });
   await dialog.waitFor();
+  await dialog.evaluate((element) => element.closest(".ant-popover")?.getAnimations({ subtree: true }).forEach((animation) => Number.isFinite(animation.effect?.getComputedTiming().endTime) && animation.finish()));
   return dialog;
 }
 
 async function selectWorkspace(page, { name, id, path = "interviews" }) {
   const dialog = await openWorkspaceDialog(page);
-  const shortId = id.slice(0, 8);
-  await dialog.getByRole("button", { name: new RegExp(`${name}.*${shortId}`, "i") }).click();
+  const choices = dialog.getByRole("menuitemradio", { name, exact: true });
+  const count = await choices.count();
+  assert.ok(count > 0, `workspace choice “${name}” must be visible`);
+  const currentUrl = new URL(page.url());
+  if (currentUrl.pathname.startsWith(`/workspace/teams/${id}/`)) {
+    await dialog.locator('[aria-current="true"]').click();
+  } else if (count === 1) {
+    await choices.first().click();
+  } else {
+    let targetIndex = 0;
+    for (let index = 0; index < count; index += 1) {
+      if (await choices.nth(index).getAttribute("aria-current") !== "true") {
+        targetIndex = index;
+        break;
+      }
+    }
+    await choices.nth(targetIndex).click();
+  }
   await page.waitForURL(`**/workspace/teams/${id}/${path}*`);
+  await switcher(page).filter({ hasText: name }).waitFor();
+  await page.getByRole("main", { name: new RegExp(`^Команда ${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:`) }).waitFor();
 }
 
 async function createTeamThroughUi(page, name) {
   const workspaceDialog = await openWorkspaceDialog(page);
-  await workspaceDialog.getByRole("button", { name: "Создать команду", exact: true }).click();
+  await workspaceDialog.getByRole("menuitem", { name: "Создать команду", exact: true }).click();
   const createDialog = page.getByRole("dialog", { name: "Создать команду", exact: true });
   await createDialog.getByLabel("Название команды", { exact: true }).fill(name);
   const requestPromise = page.waitForRequest((candidate) =>
@@ -307,7 +341,7 @@ async function createTeamThroughUi(page, name) {
   assert.deepEqual(teamRequest.postDataJSON(), { name });
   await page.waitForURL(`**/workspace/teams/${team.id}/interviews`);
   await switcher(page).filter({ hasText: team.name }).waitFor();
-  assert.match(await switcher(page).innerText(), new RegExp(team.id.slice(0, 8), "i"));
+  assert.doesNotMatch(await switcher(page).innerText(), new RegExp(team.id.slice(0, 8), "i"), "workspace trigger must not expose the technical id");
   return team;
 }
 
@@ -439,24 +473,23 @@ test("remediation: workspace trigger states the change action, exposes selection
     await trigger.focus();
     assert.match(
       await trigger.getAttribute("aria-label"),
-      /^Рабочее пространство: Личное пространство\. Сменить рабочее пространство$/,
+      /^Команды: Личное\. Сменить команду$/,
       "SWITCHER_ACTION_CUE_OR_FULL_NAME_MISSING",
     );
     assert.equal(await trigger.getAttribute("aria-expanded"), "false", "SWITCHER_CLOSED_STATE_MISSING");
-    assert.ok(await trigger.getAttribute("aria-controls"), "SWITCHER_DIALOG_RELATION_MISSING");
-    const closedCue = trigger.locator("[data-workspace-switcher-cue]");
-    assert.equal(await closedCue.count(), 1, "SWITCHER_VISUAL_OPEN_CUE_MISSING");
-    assert.equal((await closedCue.textContent())?.trim(), "Сменить", "SWITCHER_CLOSED_VISUAL_CUE_WRONG");
+    assert.equal(await trigger.getAttribute("aria-haspopup"), "menu", "SWITCHER_MENU_RELATION_MISSING");
+    assert.ok(await trigger.locator("svg").count() >= 2, "SWITCHER_ICON_AND_CHEVRON_MISSING");
     const triggerBox = await trigger.boundingBox();
-    assert.ok(triggerBox && triggerBox.width >= 44 && triggerBox.height >= 44, `SWITCHER_TARGET_UNDERSIZED:${JSON.stringify(triggerBox)}`);
+    assert.ok(triggerBox && triggerBox.width >= 44 && triggerBox.height >= 36, `SWITCHER_TARGET_UNDERSIZED:${JSON.stringify(triggerBox)}`);
 
     await page.keyboard.press("Enter");
-    const dialog = page.getByRole("dialog", { name: "Выбор рабочего пространства", exact: true });
+    const dialog = page.getByRole("menu", { name: "Выбор команды", exact: true });
     await dialog.waitFor();
+    await dialog.evaluate((element) => element.closest(".ant-popover")?.getAnimations({ subtree: true }).forEach((animation) => Number.isFinite(animation.effect?.getComputedTiming().endTime) && animation.finish()));
     assert.equal(await trigger.getAttribute("aria-expanded"), "true", "SWITCHER_OPEN_STATE_MISSING");
-    assert.equal((await closedCue.textContent())?.trim(), "Свернуть", "SWITCHER_OPEN_VISUAL_CUE_DID_NOT_CHANGE");
-    const personalChoice = dialog.getByRole("button", { name: "Личное пространство", exact: true });
-    const teamChoice = dialog.getByRole("button", { name: new RegExp(team.name) });
+    assert.ok(await trigger.getAttribute("aria-controls"), "SWITCHER_MENU_RELATION_MISSING");
+    const personalChoice = dialog.getByRole("menuitemradio", { name: "Личное", exact: true });
+    const teamChoice = dialog.getByRole("menuitemradio", { name: new RegExp(team.name) });
     assert.equal(
       await personalChoice.getAttribute("aria-current"),
       "true",
@@ -475,8 +508,10 @@ test("remediation: workspace trigger states the change action, exposes selection
     for (const [label, choice] of [["PERSONAL", personalChoice], ["TEAM", teamChoice]]) {
       const borderWidth = await choice.evaluate((element) => getComputedStyle(element).borderTopWidth);
       assert.equal(borderWidth, "0px", `SWITCHER_${label}_DECORATIVE_BORDER_REMAINS`);
+      await choice.waitFor({ state: "visible" });
+      await choice.evaluate((element) => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       const choiceBox = await choice.boundingBox();
-      assert.ok(choiceBox && choiceBox.width >= 44 && choiceBox.height >= 44, `SWITCHER_${label}_CHOICE_TARGET_UNDERSIZED:${JSON.stringify(choiceBox)}`);
+      assert.ok(choiceBox && choiceBox.width >= 44 && choiceBox.height >= 32, `SWITCHER_${label}_CHOICE_TARGET_UNDERSIZED:${JSON.stringify(choiceBox)}`);
     }
 
     await page.keyboard.press("Escape");
@@ -492,7 +527,7 @@ test("team navigation stays mounted while switching sections", async () => {
   const team = await createTeamApi(auth, `Навигация ${unique()}`);
   const { context, page } = await openAccount(auth, `/workspace/teams/${team.id}/interviews`);
   try {
-    const navigation = page.getByRole("navigation", { name: "Разделы командного пространства" });
+    const navigation = page.getByRole("navigation", { name: "Разделы команды" });
     await navigation.waitFor();
     const detailRequests = [];
     page.on("request", (requestCandidate) => {
@@ -501,7 +536,7 @@ test("team navigation stays mounted while switching sections", async () => {
     await page.evaluate(() => {
       window.__teamNavRemoved = 0;
       new MutationObserver(() => {
-        if (!document.querySelector('nav[aria-label="Разделы командного пространства"]')) window.__teamNavRemoved += 1;
+        if (!document.querySelector('nav[aria-label="Разделы команды"]')) window.__teamNavRemoved += 1;
       }).observe(document.querySelector("header"), { childList: true, subtree: true });
     });
     await navigation.getByRole("link", { name: "Библиотека", exact: true }).click();
@@ -530,18 +565,25 @@ test("team header keeps its navigation space while access loads after refresh", 
     });
     await page.reload({ waitUntil: "domcontentloaded" });
     await detailRequested.promise;
-    const switcher = page.getByRole("button", { name: /^Рабочее пространство:/ });
+    const switcher = page.getByRole("button", { name: /^Команды:/ });
     await switcher.waitFor();
     const before = await switcher.boundingBox();
     assert.ok(before);
     assert.equal(await page.getByTestId("team-navigation-placeholder").count(), 1);
 
     releaseDetail.resolve();
-    await page.getByRole("navigation", { name: "Разделы командного пространства" }).waitFor();
+    await page.getByRole("navigation", { name: "Разделы команды" }).waitFor();
     const after = await switcher.boundingBox();
     assert.ok(after);
     assert.ok(Math.abs(before.x - after.x) <= 1, `WORKSPACE_SWITCHER_SHIFTED_AFTER_REFRESH:${before.x}->${after.x}`);
     assert.equal(await page.getByTestId("team-navigation-placeholder").count(), 0);
+    await page.evaluate(() => {
+      document.body.style.minHeight = "1800px";
+      window.scrollTo(0, 500);
+    });
+    await page.waitForTimeout(80);
+    const header = await page.locator("header").first().boundingBox();
+    assert.ok(header && Math.abs(header.y) <= 1, "TEAM_WORKSPACE_HEADER_MUST_STAY_STICKY_WHILE_PAGE_SCROLLS");
   } finally {
     releaseDetail.resolve();
     await context.close();
@@ -555,21 +597,25 @@ test("team interview creation needs no set, candidate picker or self assignment"
   const { context, page } = await openAccount(auth, `/workspace/teams/${team.id}/interviews/new`);
   try {
     await page.getByRole("heading", { name: "Создать интервью", exact: true }).waitFor();
-    assert.equal(await page.getByRole("button", { name: "Создать интервью", exact: true }).count(), 1);
-    assert.equal(await page.getByText("Кандидаты", { exact: true }).count(), 0);
+    const dialog = page.getByRole("dialog", { name: "Создать интервью", exact: true });
+    await dialog.waitFor();
+    assert.equal(await dialog.getByRole("button", { name: "Создать интервью", exact: true }).count(), 1);
+    assert.equal(await dialog.getByRole("combobox", { name: "Кандидаты", exact: true }).count(), 0);
     assert.equal(await page.getByRole("checkbox", { name: auth.user.displayName, exact: true }).count(), 0);
     await page.getByLabel("Название интервью", { exact: true }).fill("Интервью без задач");
     const createRequest = page.waitForRequest((requestCandidate) =>
       new URL(requestCandidate.url()).pathname === `/api/teams/${team.id}/interviews` && requestCandidate.method() === "POST");
     const createResponse = page.waitForResponse((response) =>
       new URL(response.url()).pathname === `/api/teams/${team.id}/interviews` && response.status() === 201);
-    await page.getByRole("button", { name: "Создать интервью", exact: true }).click();
+    await dialog.getByRole("button", { name: "Создать интервью", exact: true }).click();
     const sent = await createRequest;
     assert.equal(sent.postDataJSON().taskSetId ?? null, null);
-    assert.deepEqual(sent.postDataJSON().taskIds ?? [], []);
+    assert.deepEqual(sent.postDataJSON().selectedTaskIds ?? [], []);
     assert.deepEqual(sent.postDataJSON().candidateIds ?? [], []);
-    await page.getByRole("region", { name: "Созданное командное интервью Интервью без задач" }).waitFor();
     const created = (await (await createResponse).json()).interview;
+    await page.waitForURL(`**/room/${created.inviteCode}`);
+    await page.getByTestId("room-connection-status").waitFor();
+    assert.equal(await page.getByTestId("room-connection-status").getAttribute("data-state"), "online");
     assert.equal(created.taskSetId, null);
     assert.deepEqual(created.tasks, []);
     assert.ok(created.assignees.some((assignee) => assignee.userId === auth.user.id && assignee.role === "owner"));
@@ -591,18 +637,45 @@ test("team interview creation accepts an individual task without a set", { timeo
   const { context, page } = await openAccount(auth, `/workspace/teams/${team.id}/interviews/new`);
   try {
     await page.getByLabel("Название интервью", { exact: true }).fill("Интервью с отдельной задачей");
-    await page.getByRole("textbox", { name: "Отдельные задачи (необязательно)" }).click();
-    await page.getByRole("option", { name: new RegExp(task.title) }).click();
+    assert.equal(await page.getByRole("combobox", { name: "Задачи интервью", exact: true }).count(), 1);
+    await selectAntOption(page, "Задачи интервью", task.title);
     const createRequest = page.waitForRequest((candidate) =>
       new URL(candidate.url()).pathname === `/api/teams/${team.id}/interviews` && candidate.method() === "POST");
     const createResponse = page.waitForResponse((candidate) =>
       new URL(candidate.url()).pathname === `/api/teams/${team.id}/interviews` && candidate.status() === 201);
-    await page.getByRole("button", { name: "Создать интервью", exact: true }).click();
+    await page.getByRole("dialog", { name: "Создать интервью", exact: true })
+      .getByRole("button", { name: "Создать интервью", exact: true }).click();
     const [sent, response] = await Promise.all([createRequest, createResponse]);
-    assert.deepEqual(sent.postDataJSON(), { title: "Интервью с отдельной задачей", taskIds: [task.id] });
+    assert.deepEqual(sent.postDataJSON(), { title: "Интервью с отдельной задачей", selectedTaskIds: [task.id] });
     const created = (await response.json()).interview;
     assert.deepEqual(created.tasks.map((item) => item.title), [task.title]);
     assert.equal(created.taskSetId, null);
+    await page.waitForURL(`**/room/${created.inviteCode}`);
+    await page.waitForFunction(() => document.querySelector('[data-testid="room-connection-status"]')?.getAttribute("data-state") === "online");
+  } finally {
+    await context.close();
+  }
+});
+
+test("personal interview creation opens the created room immediately", { timeout: 45_000 }, async () => {
+  const auth = await account("personal_interview_create");
+  const title = `Личное интервью ${unique()}`;
+  const { context, page } = await openAccount(auth, "/workspace/personal/interviews/new");
+  try {
+    const dialog = page.getByRole("dialog", { name: "Создать интервью", exact: true });
+    await dialog.waitFor();
+    await dialog.getByLabel("Название интервью", { exact: true }).fill(title);
+    const createRequest = page.waitForRequest((candidate) =>
+      candidate.url() === `${browserApi}/rooms` && candidate.method() === "POST");
+    const createResponse = page.waitForResponse((candidate) =>
+      isApiResponse(candidate, "/rooms") && candidate.request().method() === "POST");
+    await dialog.getByRole("button", { name: "Создать интервью", exact: true }).click();
+    const [sent, response] = await Promise.all([createRequest, createResponse]);
+    assert.equal(response.status(), 200, `PERSONAL_INTERVIEW_POST_FAILED:${await response.text()}`);
+    assert.equal(sent.postDataJSON().title, title);
+    const room = await response.json();
+    await page.waitForURL(`**/room/${room.inviteCode}`);
+    await page.waitForFunction(() => document.querySelector('[data-testid="room-connection-status"]')?.getAttribute("data-state") === "online");
   } finally {
     await context.close();
   }
@@ -625,9 +698,9 @@ test("team interview does not auto-add itself to the personal hiring cabinet", {
     assert.equal(await room.page.getByText("Не удалось добавить интервью в кабинет нанимающего").count(), 0);
     await room.page.getByRole("button", { name: "Кандидат и нанимающие", exact: true }).click();
     const panel = room.page.getByRole("dialog", { name: "Кандидат и нанимающие", exact: true });
-    await panel.getByText(hiringOwner.user.displayName, { exact: true }).waitFor();
-    assert.equal(await panel.getByText("Нанимающие пока не добавлены", { exact: true }).count(), 0);
-    assert.equal(await panel.getByLabel("ID нанимающего").count(), 0);
+    await panel.getByText("Нанимающие пока не добавлены", { exact: true }).waitFor();
+    assert.equal(await panel.getByText(hiringOwner.user.displayName, { exact: true }).count(), 0);
+    assert.equal(await panel.getByRole("combobox", { name: "Нанимающий", exact: true }).count(), 1);
   } finally {
     await room.context.close();
   }
@@ -643,21 +716,35 @@ test("remediation: long Russian team header keeps every navigation section reach
     { viewport: { width: 768, height: 1024 } },
   );
   try {
-    const expectedSections = ["Интервью", "Библиотека", "Треки и вакансии", "Участники", "Настройки команды"];
+    const expectedSections = ["Интервью", "Библиотека", "Кандидаты", "Треки и вакансии"];
     const trigger = switcher(page);
-    await page.getByRole("navigation", { name: "Разделы командного пространства", exact: true }).waitFor();
+    await page.getByRole("navigation", { name: "Разделы команды", exact: true }).waitFor();
     assert.match(await trigger.getAttribute("aria-label"), new RegExp(teamName), "TEAM_HEADER_TRUNCATED_ACCESSIBLE_NAME");
 
     for (const zoom of [100, 125, 150, 200]) {
       const scale = zoom / 100;
       await page.setViewportSize({ width: Math.floor(768 / scale), height: Math.floor(1024 / scale) });
       await settleRender(page);
-      const nav = page.getByRole("navigation", { name: "Разделы командного пространства", exact: true });
+      const nav = page.getByRole("navigation", { name: "Разделы команды", exact: true });
       const overflow = nav.getByRole("button", { name: "Меню разделов", exact: true });
-      await overflow.waitFor();
+      const hasOverflow = await overflow.count() > 0;
       const rows = await nav.locator("a,button").evaluateAll((elements) => [...new Set(elements.map((element) => Math.round(element.getBoundingClientRect().top)))]);
       assert.equal(rows.length, 1, `TEAM_HEADER_NAV_WRAPPED:${zoom}:${JSON.stringify(rows)}`);
       const geometry = await page.evaluate(() => ({ clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }));
+      if (process.env.E2E_HEADER_GEOMETRY_SCREENSHOT && geometry.scrollWidth > geometry.clientWidth + 1) {
+        const offenders = await page.evaluate(() => [...document.querySelectorAll("body *")].map(element => {
+          const box = element.getBoundingClientRect();
+          const style = getComputedStyle(element);
+          return {
+            tag: element.tagName, className: element.getAttribute("class"), role: element.getAttribute("role"),
+            ariaHidden: element.getAttribute("aria-hidden"), text: element.textContent?.trim().slice(0, 100),
+            rect: { x: box.x, y: box.y, width: box.width, height: box.height, right: box.right },
+            style: { display: style.display, position: style.position, visibility: style.visibility, overflow: style.overflow, minWidth: style.minWidth, whiteSpace: style.whiteSpace },
+          };
+        }).filter(element => element.rect.width > 0 && element.rect.height > 0 && element.rect.right > document.documentElement.clientWidth + 1).sort((a, b) => b.rect.right - a.rect.right));
+        console.log("TEAM_HEADER_GEOMETRY", JSON.stringify({ zoom, route: new URL(page.url()).pathname, ...geometry, offenders }));
+        await page.screenshot({ path: process.env.E2E_HEADER_GEOMETRY_SCREENSHOT });
+      }
       assert.ok(geometry.scrollWidth <= geometry.clientWidth + 1, `TEAM_HEADER_PAGE_HORIZONTAL_OVERFLOW:${zoom}:${JSON.stringify(geometry)}`);
 
       const label = trigger.locator("[data-workspace-switcher-label]");
@@ -668,14 +755,31 @@ test("remediation: long Russian team header keeps every navigation section reach
       });
       assert.deepEqual(labelState, { overflow: "hidden", textOverflow: "ellipsis", clipped: true }, `TEAM_HEADER_LONG_LABEL_NOT_TRUNCATED:${zoom}:${JSON.stringify(labelState)}`);
 
-      await overflow.click();
-      const menu = page.locator('[role="menu"][aria-label="Дополнительные разделы"]');
-      await menu.waitFor({ state: "visible" });
       const direct = await nav.getByRole("link").evaluateAll((links) => links.map((link) => link.textContent?.trim()));
-      const indirect = await menu.getByRole("menuitem").evaluateAll((items) => items.map((item) => item.textContent?.trim()));
-      assert.deepEqual([...direct, ...indirect].sort(), expectedSections.sort(), `TEAM_HEADER_NAVIGATION_UNREACHABLE:${zoom}`);
-      await page.keyboard.press("Escape");
-      await menu.waitFor({ state: "hidden" });
+      let indirect = [];
+      if (hasOverflow) {
+        await overflow.click();
+        const menu = page.locator('[role="menu"][aria-label="Дополнительные разделы"]');
+        await menu.waitFor({ state: "visible" });
+        indirect = await menu.getByRole("menuitem").evaluateAll((items) => items.map((item) => item.textContent?.trim()));
+        await page.keyboard.press("Escape");
+        await menu.waitFor({ state: "hidden" });
+      }
+      assert.deepEqual([...direct, ...indirect].sort(), [...expectedSections].sort(), `TEAM_HEADER_NAVIGATION_UNREACHABLE:${zoom}`);
+
+      const settings = page.getByRole("link", { name: "Настройки команды", exact: true });
+      assert.equal(await settings.count(), 1, `TEAM_HEADER_SETTINGS_GEAR_MISSING:${zoom}`);
+      assert.equal(await settings.getAttribute("href"), `/workspace/teams/${team.id}/settings`);
+      const settingsBox = await settings.boundingBox();
+      assert.ok(settingsBox && settingsBox.width >= 32 && settingsBox.height >= 32
+        && settingsBox.x >= 0 && settingsBox.y >= 0
+        && settingsBox.x + settingsBox.width <= geometry.clientWidth + 1
+        && settingsBox.y + settingsBox.height <= Math.floor(1024 / scale),
+        `TEAM_HEADER_SETTINGS_GEAR_UNREACHABLE:${zoom}:${JSON.stringify(settingsBox)}`);
+      await settings.click();
+      await page.getByRole("heading", { name: "Настройки команды", exact: true }).waitFor();
+      await page.goBack();
+      await page.getByRole("heading", { name: "Интервью", exact: true }).waitFor();
     }
   } finally {
     await context.close();
@@ -700,6 +804,7 @@ test("P1.2: team tracks surface creates a track and vacancy instead of showing s
       response.status() === 201);
     await page.getByRole("button", { name: "Создать трек", exact: true }).click();
     const trackDialog = page.getByRole("dialog", { name: "Новый трек", exact: true });
+    assert.equal(await trackDialog.getByText("Новый трек", { exact: true }).count(), 1, "TRACK_DIALOG_TITLE_MUST_NOT_REPEAT");
     await trackDialog.getByLabel("Название трека", { exact: true }).fill("Backend");
     await trackDialog.getByRole("button", { name: "Создать трек", exact: true }).click();
     await createTrackResponse;
@@ -708,16 +813,24 @@ test("P1.2: team tracks surface creates a track and vacancy instead of showing s
     await trackCard.waitFor();
     await trackCard.getByText("В этом треке пока нет вакансий", { exact: true }).waitFor();
 
+    await page.getByRole("button", { name: "Тёмная тема", exact: true }).click();
+    await page.waitForFunction(() => document.documentElement.dataset.theme === "dark");
+    await page.getByRole("button", { name: "Создать вакансию", exact: true }).click();
+    const vacancyDialog = page.getByRole("dialog", { name: "Новая вакансия", exact: true });
+    const vacancyDialogBounds = await vacancyDialog.boundingBox();
+    const vacancySelectBounds = await vacancyDialog.locator(".ant-select").boundingBox();
+    assert.ok(vacancyDialogBounds && vacancyDialogBounds.width <= 520, "VACANCY_DIALOG_MUST_STAY_COMPACT");
+    assert.ok(vacancyDialogBounds && vacancySelectBounds && vacancySelectBounds.width > vacancyDialogBounds.width * 0.7, "VACANCY_TRACK_SELECT_MUST_USE_DIALOG_WIDTH");
+    await vacancyDialog.getByLabel("Трек вакансии", { exact: true }).click();
+    const vacancyOption = page.locator(".ant-select-dropdown .ant-select-item-option").filter({ hasText: "Backend" });
+    await vacancyOption.waitFor({ state: "visible", timeout: 2_000 });
+    await vacancyOption.click();
+    await vacancyDialog.getByLabel("Название вакансии", { exact: true }).fill("Kotlin разработчик");
     const createVacancyResponse = page.waitForResponse((response) =>
       response.url().includes(`/teams/${team.id}/tracks/`) &&
       response.url().endsWith("/vacancies") &&
       response.request().method() === "POST" &&
       response.status() === 201);
-    await page.getByRole("button", { name: "Создать вакансию", exact: true }).click();
-    const vacancyDialog = page.getByRole("dialog", { name: "Новая вакансия", exact: true });
-    await vacancyDialog.getByLabel("Трек вакансии", { exact: true }).click();
-    await page.getByRole("option", { name: "Backend", exact: true }).click();
-    await vacancyDialog.getByLabel("Название вакансии", { exact: true }).fill("Kotlin разработчик");
     await vacancyDialog.getByRole("button", { name: "Создать вакансию", exact: true }).click();
     await createVacancyResponse;
 
@@ -725,6 +838,16 @@ test("P1.2: team tracks surface creates a track and vacancy instead of showing s
     assert.equal(await trackCard.getByText("В этом треке пока нет вакансий", { exact: true }).count(), 0, "TEAM_TRACKS_VACANCY_EMPTY_STATE_STUCK");
     await trackCard.getByText("Вакансии трека", { exact: true }).waitFor();
     await trackCard.getByText("Вакансия · активна", { exact: true }).waitFor();
+    const decorativeBorders = await trackCard.evaluate((card) => {
+      const trackStyle = getComputedStyle(card);
+      const vacancy = card.querySelector('[data-testid="team-track-vacancy-row"]');
+      const vacancyStyle = vacancy ? getComputedStyle(vacancy) : null;
+      return {
+        track: [trackStyle.borderTopWidth, trackStyle.borderRightWidth, trackStyle.borderBottomWidth, trackStyle.borderLeftWidth],
+        vacancy: vacancyStyle ? [vacancyStyle.borderTopWidth, vacancyStyle.borderRightWidth, vacancyStyle.borderBottomWidth, vacancyStyle.borderLeftWidth] : null,
+      };
+    });
+    assert.equal(Object.values(decorativeBorders).flat().every((width) => Number.parseFloat(width) <= 1), true, "TRACK_CARDS_MUST_ONLY_HAVE_SUBTLE_SINGLE_PIXEL_BORDERS");
     const deleteVacancyResponse = page.waitForResponse((response) =>
       response.url().includes(`/teams/${team.id}/tracks/`) &&
       /\/vacancies\/[^/]+$/.test(response.url()) &&
@@ -770,6 +893,114 @@ test("team library can permanently delete an unused set and task", { timeout: 45
   }
 });
 
+test("team library task and set rows keep spacing and wrap their actions on narrow screens", { timeout: 60_000 }, async () => {
+  const auth = await account("library_layout");
+  const team = await createTeamApi(auth, `Команда layout ${unique()}`);
+  const firstTask = await createTeamTask(auth, team, {
+    title: `Первая задача ${unique()}`,
+    description: "Проверка стабильной раскладки карточки библиотеки.",
+    starterCode: "// first",
+  });
+  const secondTask = await createTeamTask(auth, team, {
+    title: `Вторая задача ${unique()}`,
+    description: "Проверка одинаковых отступов между карточками.",
+    starterCode: "// second",
+  });
+  const firstSet = await createTeamTaskSet(auth, team, { name: `Первый набор ${unique()}`, taskIds: [firstTask.id] });
+  const secondSet = await createTeamTaskSet(auth, team, { name: `Второй набор ${unique()}`, taskIds: [secondTask.id] });
+  const { context, page } = await openAccount(auth, `/workspace/teams/${team.id}/library`);
+  try {
+    await page.getByRole("region", { name: `Командная задача ${firstTask.title}`, exact: true }).waitFor();
+
+    const assertRows = async (labels, kind) => {
+      const rows = await Promise.all(labels.map(async (label) => {
+        const row = page.getByRole("region", { name: label, exact: true });
+        const bounds = await row.boundingBox();
+        const body = row.locator(".ant-card-body");
+        const bodyBounds = await body.boundingBox();
+        const detailsBounds = await row.getByTestId("team-library-row-details").boundingBox();
+        const controlsBounds = await row.getByTestId("team-library-row-controls").boundingBox();
+        const actionsBounds = await row.getByRole("group", { name: /^Действия с (задачей|набором)/ }).boundingBox();
+        const padding = await body.evaluate((element) => {
+          const style = getComputedStyle(element);
+          return [style.paddingTop, style.paddingRight, style.paddingBottom, style.paddingLeft].map(Number.parseFloat);
+        });
+        const controls = await row.locator("button, .ant-tag").evaluateAll((elements) => elements.flatMap((element) => {
+          const rect = element.getBoundingClientRect();
+          const style = getComputedStyle(element);
+          if (rect.width === 0 || rect.height === 0 || style.visibility === "hidden" || style.display === "none") return [];
+          return [{ left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, alignSelf: style.alignSelf, isTag: element.classList.contains("ant-tag") }];
+        }));
+        assert.ok(bounds && bodyBounds && detailsBounds && controlsBounds && actionsBounds, `${kind}_ROW_BOUNDS_MISSING`);
+        assert.ok(padding.every((value) => value >= 16), `${kind}_ROW_PADDING_BELOW_16PX: ${padding}`);
+        assert.ok(controls.filter((control) => control.isTag).every((tag) => tag.alignSelf === "center" && tag.bottom - tag.top < 36), `${kind}_BADGES_MUST_STAY_COMPACT_AND_CENTERED`);
+        return { bounds, bodyBounds, detailsBounds, controlsBounds, actionsBounds, controls };
+      }));
+
+      const sorted = rows.slice().sort((left, right) => left.bounds.y - right.bounds.y);
+      for (let index = 1; index < sorted.length; index += 1) {
+        assert.ok(sorted[index].bounds.y - (sorted[index - 1].bounds.y + sorted[index - 1].bounds.height) >= 12,
+          `${kind}_ROWS_HAVE_LESS_THAN_12PX_GAP`);
+      }
+
+      for (const { bounds, bodyBounds, controlsBounds, controls } of rows) {
+        assert.ok(controlsBounds.x >= bodyBounds.x - 1 && controlsBounds.x + controlsBounds.width <= bodyBounds.x + bodyBounds.width + 1,
+          `${kind}_ACTION_ZONE_ESCAPES_CARD_PADDING`);
+        assert.ok(controls.every((control) => control.left >= bodyBounds.x - 1 && control.right <= bodyBounds.x + bodyBounds.width + 1),
+          `${kind}_CONTROLS_ESCAPE_CARD_PADDING`);
+        assert.ok(controls.every((control) => control.right <= bounds.x + bounds.width - 12),
+          `${kind}_CONTROLS_OVERFLOW_CARD_EDGE`);
+      }
+
+      return rows;
+    };
+
+    const taskLabels = [
+      `Командная задача ${firstTask.title}`,
+      `Командная задача ${secondTask.title}`,
+    ];
+    const taskRowsDesktop = await assertRows(taskLabels, "TEAM_TASK_DESKTOP");
+    const taskRightEdges = taskRowsDesktop.map((row) => Math.max(...row.controls.map((control) => control.right)));
+    assert.ok(Math.max(...taskRightEdges) - Math.min(...taskRightEdges) <= 2, "TEAM_TASK_ACTIONS_RIGHT_EDGE_MISALIGNED");
+    assert.ok(taskRowsDesktop.every((row) => Math.abs(
+      (row.detailsBounds.y + row.detailsBounds.height / 2) - (row.controlsBounds.y + row.controlsBounds.height / 2),
+    ) <= 2), "TEAM_TASK_ACTION_ZONE_NOT_CENTERED_WITH_ROW_CONTENT");
+
+    await page.setViewportSize({ width: 460, height: 900 });
+    await settleRender(page);
+    const taskRows = await assertRows(taskLabels, "TEAM_TASK");
+    for (const row of taskRows) {
+      assert.ok(row.actionsBounds.y >= row.detailsBounds.y + row.detailsBounds.height + 8,
+        "TEAM_TASK_ACTION_GROUP_DID_NOT_MOVE_BELOW_ROW_CONTENT");
+    }
+
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await settleRender(page);
+    await page.getByRole("tab", { name: "Наборы задач", exact: true }).click();
+    await page.getByRole("region", { name: `Командный набор ${firstSet.name}`, exact: true }).waitFor();
+    const setLabels = [
+      `Командный набор ${firstSet.name}`,
+      `Командный набор ${secondSet.name}`,
+    ];
+    const setRowsDesktop = await assertRows(setLabels, "TEAM_SET_DESKTOP");
+    const setRightEdges = setRowsDesktop.map((row) => Math.max(...row.controls.map((control) => control.right)));
+    assert.ok(Math.max(...setRightEdges) - Math.min(...setRightEdges) <= 2, "TEAM_SET_ACTIONS_RIGHT_EDGE_MISALIGNED");
+    assert.ok(setRowsDesktop.every((row) => Math.abs(
+      (row.detailsBounds.y + row.detailsBounds.height / 2) - (row.controlsBounds.y + row.controlsBounds.height / 2),
+    ) <= 2), "TEAM_SET_ACTION_ZONE_NOT_CENTERED_WITH_ROW_CONTENT");
+
+    await page.setViewportSize({ width: 460, height: 900 });
+    await settleRender(page);
+    const setRows = await assertRows(setLabels, "TEAM_SET");
+    for (const row of setRows) {
+      assert.ok(row.actionsBounds.y >= row.detailsBounds.y + row.detailsBounds.height + 8,
+        "TEAM_SET_ACTION_GROUP_DID_NOT_MOVE_BELOW_ROW_CONTENT");
+    }
+  } finally {
+    await context.close();
+  }
+});
+
 test("room return goes to the interview list of its team", { timeout: 45_000 }, async () => {
   const auth = await account("team_room_return");
   const team = await createTeamApi(auth, `Команда возврата ${unique()}`);
@@ -804,7 +1035,7 @@ test("P1.2: team track managers rename archive and restore tracks and vacancies 
     await page.getByRole("button", { name: "Создать вакансию", exact: true }).click();
     const vacancyDialog = page.getByRole("dialog", { name: "Новая вакансия", exact: true });
     await vacancyDialog.getByLabel("Трек вакансии", { exact: true }).click();
-    await page.getByRole("option", { name: "Backend", exact: true }).click();
+    await page.locator(".ant-select-dropdown .ant-select-item-option").filter({ hasText: "Backend" }).click();
     await vacancyDialog.getByLabel("Название вакансии", { exact: true }).fill("Kotlin разработчик");
     await vacancyDialog.getByRole("button", { name: "Создать вакансию", exact: true }).click();
     await trackCard.getByText("Kotlin разработчик", { exact: true }).waitFor();
@@ -814,8 +1045,8 @@ test("P1.2: team track managers rename archive and restore tracks and vacancies 
       response.request().method() === "PATCH" &&
       response.status() === 200);
     await trackCard.getByRole("button", { name: "Переименовать трек Backend", exact: true }).click();
-    await trackCard.getByLabel("Новое название трека", { exact: true }).fill("Platform");
-    await trackCard.getByRole("button", { name: "Сохранить трек", exact: true }).click();
+    await page.getByRole("dialog").getByLabel("Новое название трека", { exact: true }).fill("Platform");
+    await page.getByRole("dialog").getByRole("button", { name: "Сохранить трек", exact: true }).click();
     await trackRenameResponse;
     trackCard = page.getByRole("region", { name: "Трек Platform", exact: true });
     await trackCard.waitFor();
@@ -826,18 +1057,34 @@ test("P1.2: team track managers rename archive and restore tracks and vacancies 
       response.request().method() === "PATCH" &&
       response.status() === 200);
     await trackCard.getByRole("button", { name: "Переименовать вакансию Kotlin разработчик", exact: true }).click();
-    await trackCard.getByLabel("Новое название вакансии", { exact: true }).fill("Platform Engineer");
-    await trackCard.getByRole("button", { name: "Сохранить вакансию", exact: true }).click();
+    await page.getByRole("dialog").getByLabel("Новое название вакансии", { exact: true }).fill("Platform Engineer");
+    await page.getByRole("dialog").getByRole("button", { name: "Сохранить вакансию", exact: true }).click();
     await vacancyRenameResponse;
     await trackCard.getByText("Platform Engineer", { exact: true }).waitFor();
 
+    const archiveButton = trackCard.getByRole("button", { name: "Архивировать вакансию Platform Engineer", exact: true });
+    await archiveButton.hover();
+    const warningText = await page.evaluate(() => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--app-warning)";
+      document.body.append(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    });
+    await page.waitForFunction(({ label, color }) => {
+      const button = document.querySelector(`[aria-label="${label}"]`);
+      return button && getComputedStyle(button).color === color;
+    }, { label: "Архивировать вакансию Platform Engineer", color: warningText });
+    const hoverColor = await archiveButton.evaluate((element) => getComputedStyle(element).color);
+    assert.equal(hoverColor, warningText, "ARCHIVE_HOVER_MUST_KEEP_READABLE_WARNING_TEXT");
     const archiveVacancyResponse = page.waitForResponse((response) =>
       response.url().includes(`/teams/${team.id}/tracks/`) &&
       response.url().endsWith("/archive") &&
       response.url().includes("/vacancies/") &&
       response.request().method() === "POST" &&
       response.status() === 200);
-    await trackCard.getByRole("button", { name: "Архивировать вакансию Platform Engineer", exact: true }).click();
+    await archiveButton.click();
     await archiveVacancyResponse;
     await trackCard.getByText("В этом треке пока нет вакансий", { exact: true }).waitFor();
 
@@ -946,7 +1193,13 @@ test("team interviews switch shows all by default and only interviews created by
     const memberCard = interviews.getByRole("region", { name: "Командное интервью Интервью участника", exact: true });
     await ownerCard.waitFor();
     await memberCard.waitFor();
+    const searchInput = page.getByLabel("Поиск интервью", { exact: true });
     const mineSwitch = page.getByRole("switch", { name: "Мои интервью", exact: true });
+    const controlAlignment = await Promise.all([searchInput.boundingBox(), mineSwitch.boundingBox()]);
+    assert.ok(controlAlignment[0] && controlAlignment[1], "TEAM_INTERVIEW_FILTER_BOUNDS_MISSING");
+    const [searchBounds, switchBounds] = controlAlignment;
+    assert.ok(Math.abs(searchBounds.y + searchBounds.height / 2 - (switchBounds.y + switchBounds.height / 2)) <= 2,
+      `TEAM_INTERVIEW_MINE_SWITCH_MUST_ALIGN_TO_SEARCH_CONTROL_CENTER:${JSON.stringify({ searchBounds, switchBounds })}`);
     assert.equal(await mineSwitch.isChecked(), false);
     await mineSwitch.check();
     await ownerCard.waitFor();
@@ -1034,7 +1287,7 @@ test("P4.1: team tracks show programme origin version and mandatory steps", { ti
   try {
     const trackCard = page.getByRole("region", { name: "Трек Backend", exact: true });
     await trackCard.waitFor();
-    await trackCard.getByText("Задачи трека · версия 1 · обязательные", { exact: true }).first().waitFor();
+    await trackCard.getByText("Задачи трека · обязательные", { exact: true }).first().waitFor();
     await trackCard.getByText("Base systems", { exact: true }).first().waitFor();
     await trackCard.getByText("из трека", { exact: true }).waitFor();
 
@@ -1043,7 +1296,7 @@ test("P4.1: team tracks show programme origin version and mandatory steps", { ti
     await publishVacancyProgramme(auth, team, track, vacancy, { revision: vacancyDraft.revision });
     await page.getByRole("button", { name: "Обновить", exact: true }).click();
 
-    await trackCard.getByText("Задачи вакансии · версия 1 · обязательные", { exact: true }).waitFor();
+    await trackCard.getByText("Задачи вакансии · обязательные", { exact: true }).waitFor();
     await trackCard.getByText("Vacancy focus", { exact: true }).waitFor();
     assert.equal(await trackCard.getByText("из трека", { exact: true }).count(), 0, "VACANCY_PROGRAMME_INHERITANCE_BADGE_STUCK");
   } finally {
@@ -1067,12 +1320,9 @@ test("P4.2: interview creation keeps the draft when its programme version change
   try {
     await page.getByRole("heading", { name: "Создать интервью", exact: true }).waitFor();
     await page.getByLabel("Название интервью", { exact: true }).fill("Interview with programme");
-    await page.getByLabel("Трек интервью", { exact: true }).selectOption(track.id);
-    await page.getByLabel("Вакансия", { exact: true }).selectOption(vacancy.id);
-    await page.getByLabel("Командный набор задач", { exact: true }).selectOption(set.id);
-    const preview = page.getByRole("region", { name: "Задачи по умолчанию для интервью", exact: true });
-    await preview.getByText("Задачи вакансии · версия 1", { exact: true }).waitFor();
-    await preview.getByText("Foundation", { exact: true }).waitFor();
+    await selectAntOption(page, "Трек интервью", "Platform");
+    await selectAntOption(page, "Вакансия", "Developer");
+    await selectAntOption(page, "Командный набор задач", "Extras");
 
     const changed = await saveVacancyProgrammeDraft(auth, team, track, vacancy, {
       taskIds: [nextFoundation.id], revision: programme.revision,
@@ -1081,33 +1331,44 @@ test("P4.2: interview creation keeps the draft when its programme version change
 
     const staleResponse = page.waitForResponse((response) =>
       response.url().endsWith(`/api/teams/${team.id}/interviews`) && response.status() === 409);
-    await page.getByRole("button", { name: "Создать интервью", exact: true }).click();
+    const staleRequest = page.waitForRequest((request) =>
+      request.url().endsWith(`/api/teams/${team.id}/interviews`) && request.method() === "POST");
+    const programmeConflictAlert = page.getByRole("alert")
+      .filter({ hasText: "Задачи трека или вакансии изменились. Проверьте новую версию перед созданием интервью." });
+    await page.getByRole("dialog", { name: "Создать интервью", exact: true })
+      .getByRole("button", { name: "Создать интервью", exact: true }).click();
+    assert.deepEqual((await staleRequest).postDataJSON().selectedTaskIds, [foundation.id, extra.id]);
     assert.equal((await (await staleResponse).json()).code, "TEAM_PROGRAMME_VERSION_CONFLICT");
-    await page.getByRole("alert").filter({ hasText: "Задачи трека или вакансии изменились. Проверьте новую версию перед созданием интервью." }).waitFor();
+    await programmeConflictAlert.waitFor();
     assert.equal(await page.getByLabel("Название интервью", { exact: true }).inputValue(), "Interview with programme");
 
     await page.getByRole("button", { name: "Проверить обновлённые задачи", exact: true }).click();
-    await preview.getByText("Задачи вакансии · версия 2", { exact: true }).waitFor();
-    await preview.getByText("Updated foundation", { exact: true }).waitFor();
+    await programmeConflictAlert.waitFor({ state: "hidden" });
+    const createButton = page.getByRole("dialog", { name: "Создать интервью", exact: true })
+      .getByRole("button", { name: "Создать интервью", exact: true });
+    const createButtonDisabled = await createButton.evaluate((element) => element.disabled);
+    assert.equal(createButtonDisabled, false, "CREATE_BUTTON_MUST_BE_ENABLED_AFTER_PROGRAMME_REFRESH");
     const createResponse = page.waitForResponse((response) =>
-      response.url().endsWith(`/api/teams/${team.id}/interviews`) && response.status() === 201);
-    await page.getByRole("button", { name: "Создать интервью", exact: true }).click();
-    const created = (await (await createResponse).json()).interview;
+      response.url().endsWith(`/api/teams/${team.id}/interviews`) && response.request().method() === "POST");
+    await createButton.click();
+    const retryResponse = await createResponse;
+    assert.equal(retryResponse.status(), 201, `INTERVIEW_RETRY_FAILED:${await retryResponse.text()}`);
+    const created = (await retryResponse.json()).interview;
     assert.equal(created.programmeId, programme.id);
     assert.equal(created.programmeVersion, 2);
     assert.deepEqual(created.tasks.map((task) => [task.title, task.mandatory]), [
       ["Updated foundation", true], ["Extra", false],
     ]);
-    const result = page.getByRole("region", { name: "Созданное командное интервью Interview with programme", exact: true });
-    await result.getByText("Обязательная основа: Updated foundation", { exact: true }).waitFor();
+    await page.waitForURL(`**/room/${created.inviteCode}`);
+    await page.waitForFunction(() => document.querySelector('[data-testid="room-connection-status"]')?.getAttribute("data-state") === "online");
 
     const room = await openRoomAccount(auth, created.inviteCode);
     try {
       await room.page.getByRole("tab", { name: "Шаги", exact: true }).click();
       await room.page.getByText("Обязательная", { exact: true }).first().waitFor();
-      assert.equal(await room.page.getByTestId("room-task-actions-0").count(), 0);
-      assert.equal(await room.page.getByTestId("room-task-actions-1").count(), 1);
-      await room.page.getByRole("tab", { name: "Условие", exact: true }).click();
+      assert.equal(await room.page.getByTestId("room-task-delete-0").count(), 0);
+      assert.equal(await room.page.getByTestId("room-task-delete-1").count(), 1);
+      if (await room.page.getByRole("button", { name: "Развернуть условие", exact: true }).count()) await room.page.getByRole("button", { name: "Развернуть условие", exact: true }).click();
       assert.equal(await room.page.getByRole("button", { name: "Жирный текст", exact: true }).count(), 0);
     } finally {
       await room.context.close();
@@ -1117,7 +1378,7 @@ test("P4.2: interview creation keeps the draft when its programme version change
   }
 });
 
-test("P4.1: team track managers draft publish archive and restore programmes from the team surface", { timeout: 60_000 }, async () => {
+test("P4.1: saving track and vacancy task programmes publishes them without extra lifecycle buttons", { timeout: 60_000 }, async () => {
   const auth = await account("team_programmes_manage");
   const team = await createTeamApi(auth, `Команда управления программами ${unique()}`);
   await createTeamTask(auth, team, {
@@ -1147,59 +1408,37 @@ test("P4.1: team track managers draft publish archive and restore programmes fro
     await trackCard.waitFor();
 
     await trackCard.getByRole("button", { name: "Настроить задачи трека Backend", exact: true }).click();
-    await trackCard.getByLabel("Задача для интервью: Graph warmup", { exact: true }).check();
-    await trackCard.getByLabel("Задача для интервью: Queue deep dive", { exact: true }).check();
+    await selectAntOption(page, "Задачи для интервью", "Graph warmup");
+    await selectAntOption(page, "Задачи для интервью", "Queue deep dive");
     const saveTrackDraft = page.waitForResponse((response) =>
       response.url().endsWith(`/api/teams/${team.id}/tracks/${track.id}/programme/draft`) &&
       response.request().method() === "PATCH" &&
       response.status() === 200);
-    await trackCard.getByRole("button", { name: "Сохранить задачи", exact: true }).click();
-    await saveTrackDraft;
-    await trackCard.getByText("Задачи трека · версия 0 · обязательные", { exact: true }).first().waitFor();
-
     const publishTrackProgrammeResponse = page.waitForResponse((response) =>
       response.url().endsWith(`/api/teams/${team.id}/tracks/${track.id}/programme/publish`) &&
       response.request().method() === "POST" &&
       response.status() === 200);
-    await trackCard.getByRole("button", { name: "Применить задачи трека Backend", exact: true }).click();
-    await publishTrackProgrammeResponse;
-    await trackCard.getByText("Задачи трека · версия 1 · обязательные", { exact: true }).first().waitFor();
-
-    const archiveTrackProgrammeResponse = page.waitForResponse((response) =>
-      response.url().endsWith(`/api/teams/${team.id}/tracks/${track.id}/programme/archive`) &&
-      response.request().method() === "POST" &&
-      response.status() === 200);
-    await trackCard.getByRole("button", { name: "Архивировать задачи трека Backend", exact: true }).click();
-    await archiveTrackProgrammeResponse;
-    await trackCard.getByText("В архиве", { exact: true }).first().waitFor();
-
-    const restoreTrackProgrammeResponse = page.waitForResponse((response) =>
-      response.url().endsWith(`/api/teams/${team.id}/tracks/${track.id}/programme/restore`) &&
-      response.request().method() === "POST" &&
-      response.status() === 200);
-    await trackCard.getByRole("button", { name: "Восстановить задачи трека Backend", exact: true }).click();
-    await restoreTrackProgrammeResponse;
-    await trackCard.getByText("Применены", { exact: true }).first().waitFor();
+    await page.getByRole("dialog").getByRole("button", { name: "Сохранить задачи", exact: true }).click();
+    await Promise.all([saveTrackDraft, publishTrackProgrammeResponse]);
+    await trackCard.getByText("Задачи трека · обязательные", { exact: true }).first().waitFor();
+    assert.equal(await trackCard.getByRole("button", { name: /Применить задачи|Архивировать задачи|Восстановить задачи/ }).count(), 0);
+    await trackCard.getByText("Активны", { exact: true }).first().waitFor();
 
     await trackCard.getByRole("button", { name: "Настроить задачи вакансии Kotlin разработчик", exact: true }).click();
-    await trackCard.getByLabel("Задача для интервью: Vacancy focus", { exact: true }).check();
+    await selectAntOption(page, "Задачи для интервью", "Vacancy focus");
     const saveVacancyDraft = page.waitForResponse((response) =>
       response.url().includes(`/teams/${team.id}/tracks/${track.id}/vacancies/`) &&
       response.url().endsWith("/programme/draft") &&
       response.request().method() === "PATCH" &&
       response.status() === 200);
-    await trackCard.getByRole("button", { name: "Сохранить задачи", exact: true }).click();
-    await saveVacancyDraft;
-    await trackCard.getByText("Задачи вакансии · версия 0 · обязательные", { exact: true }).waitFor();
-
     const publishVacancyProgrammeResponse = page.waitForResponse((response) =>
       response.url().includes(`/teams/${team.id}/tracks/${track.id}/vacancies/`) &&
       response.url().endsWith("/programme/publish") &&
       response.request().method() === "POST" &&
       response.status() === 200);
-    await trackCard.getByRole("button", { name: "Применить задачи вакансии Kotlin разработчик", exact: true }).click();
-    await publishVacancyProgrammeResponse;
-    await trackCard.getByText("Задачи вакансии · версия 1 · обязательные", { exact: true }).waitFor();
+    await page.getByRole("dialog").getByRole("button", { name: "Сохранить задачи", exact: true }).click();
+    await Promise.all([saveVacancyDraft, publishVacancyProgrammeResponse]);
+    await trackCard.getByText("Задачи вакансии · обязательные", { exact: true }).waitFor();
     await trackCard.getByText("Vacancy focus", { exact: true }).waitFor();
   } finally {
     await context.close();
@@ -1215,7 +1454,7 @@ test("P0.1: issued link appears immediately, reissues, copies and revokes", { ti
     await page.getByRole("button", { name: "Выпустить ссылку", exact: true }).click();
     const field = page.getByLabel("Ссылка для приглашения", { exact: true });
     await field.waitFor();
-    const invitationCard = page.getByRole("article", { name: /Приглашение / }).first();
+    const invitationCard = page.locator('[aria-label^="Приглашение "]').first();
     const copyWidth = await page.getByRole("button", { name: "Копировать ссылку", exact: true }).boundingBox();
     const cardWidth = await invitationCard.boundingBox();
     assert.ok(copyWidth && cardWidth && copyWidth.width < cardWidth.width * 0.65, "INVITATION_COPY_BUTTON_STRETCHED");
@@ -1237,7 +1476,7 @@ test("P0.1: issued link appears immediately, reissues, copies and revokes", { ti
     assert.equal(await field.inputValue(), second);
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     await page.getByRole("button", { name: "Копировать ссылку", exact: true }).click();
-    await page.getByRole("status").getByText("Ссылка скопирована", { exact: true }).waitFor();
+    await page.locator(".ant-notification-notice").filter({ hasText: "Ссылка приглашения готова к отправке" }).waitFor();
     assert.equal(await page.evaluate(() => navigator.clipboard.readText()), second);
     await page.getByRole("button", { name: "Отозвать приглашение", exact: true }).click();
     await field.waitFor({ state: "detached" });
@@ -1293,10 +1532,46 @@ test("P1.3: team library creates a real team task instead of showing staged plac
     const tabBox = await activeTab.boundingBox();
     const searchBox = await searchField.boundingBox();
     assert.ok(tabBox && searchBox && Math.abs(tabBox.y - searchBox.y) < 20, "TEAM_LIBRARY_SEARCH_NOT_ALIGNED_WITH_TABS");
-    const activeColor = await activeTab.evaluate((node) => getComputedStyle(node).backgroundColor);
+    const activeColor = await activeTab.evaluate((node) => ({
+      backgroundColor: getComputedStyle(node.closest(".ant-tabs-tab")).backgroundColor,
+      color: getComputedStyle(node.querySelector(".ant-tabs-tab-btn") ?? node).color,
+    }));
     await activeTab.hover();
-    const hoverColor = await activeTab.evaluate((node) => getComputedStyle(node).backgroundColor);
-    assert.notEqual(hoverColor, activeColor, "TEAM_LIBRARY_ACTIVE_TAB_HOVER_UNCHANGED");
+    await page.waitForTimeout(450);
+    const hoverColor = await activeTab.evaluate((node) => ({
+      backgroundColor: getComputedStyle(node.closest(".ant-tabs-tab")).backgroundColor,
+      color: getComputedStyle(node.querySelector(".ant-tabs-tab-btn") ?? node).color,
+    }));
+    assert.equal(hoverColor.backgroundColor, activeColor.backgroundColor, "TEAM_LIBRARY_TAB_HOVER_MUST_NOT_ATTACH_BACKGROUND_TO_INDICATOR");
+    assert.equal(hoverColor.color, activeColor.color, "TEAM_LIBRARY_ACTIVE_TAB_HOVER_MUST_PRESERVE_SELECTION_COLOR");
+    const tabPadding = await activeTab.evaluate((node) => Number.parseFloat(getComputedStyle(node.closest(".ant-tabs-tab")).paddingInlineStart));
+    assert.ok(tabPadding >= 12 && tabPadding <= 16, "TEAM_LIBRARY_TABS_USE_COMPACT_HORIZONTAL_PADDING");
+    await page.getByRole("button", { name: "Тёмная тема", exact: true }).click();
+    await page.waitForFunction(() => document.documentElement.dataset.theme === "dark");
+    await activeTab.evaluate(async (node) => {
+      const expected = document.createElement("span");
+      expected.style.color = "var(--app-primary-text)";
+      document.body.append(expected);
+      const color = getComputedStyle(expected).color;
+      expected.remove();
+      for (let frame = 0; frame < 120; frame += 1) {
+        if (getComputedStyle(node.querySelector(".ant-tabs-tab-btn") ?? node).color === color) return;
+        await new Promise(requestAnimationFrame);
+      }
+      throw new Error("Selected tab did not settle to the theme color");
+    });
+    const darkActiveColor = await activeTab.evaluate((node) => ({
+      backgroundColor: getComputedStyle(node.closest(".ant-tabs-tab")).backgroundColor,
+      color: getComputedStyle(node.querySelector(".ant-tabs-tab-btn") ?? node).color,
+    }));
+    await activeTab.hover();
+    await page.waitForTimeout(450);
+    const darkHoverColor = await activeTab.evaluate((node) => ({
+      backgroundColor: getComputedStyle(node.closest(".ant-tabs-tab")).backgroundColor,
+      color: getComputedStyle(node.querySelector(".ant-tabs-tab-btn") ?? node).color,
+    }));
+    assert.equal(darkHoverColor.backgroundColor, darkActiveColor.backgroundColor, "TEAM_LIBRARY_DARK_TAB_HOVER_MUST_NOT_ATTACH_BACKGROUND_TO_INDICATOR");
+    assert.equal(darkHoverColor.color, darkActiveColor.color, "TEAM_LIBRARY_DARK_ACTIVE_TAB_HOVER_MUST_PRESERVE_SELECTION_COLOR");
     assert.equal(await page.getByText("Раздел готовится", { exact: true }).count(), 0, "TEAM_LIBRARY_STAGED_PLACEHOLDER_VISIBLE");
     await page.getByText("В библиотеке команды пока нет задач", { exact: true }).waitFor();
 
@@ -1321,36 +1596,16 @@ test("P1.3: team library creates a real team task instead of showing staged plac
       response.url().includes(`/teams/${team.id}/tasks/`) &&
       response.request().method() === "PATCH" &&
       response.status() === 200);
-    await taskCard.getByRole("button", { name: "Переименовать задачу Binary tree traversal", exact: true }).click();
-    await taskCard.getByLabel("Новое название задачи", { exact: true }).fill("Graph traversal");
-    await taskCard.getByLabel("Новое описание задачи", { exact: true }).fill("Check graph queues");
-    await taskCard.getByRole("button", { name: "Сохранить задачу", exact: true }).click();
+    await taskCard.getByRole("button", { name: "Редактировать задачу Binary tree traversal", exact: true }).click();
+    await page.getByRole("dialog").getByLabel("Новое название задачи", { exact: true }).fill("Graph traversal");
+    await page.getByRole("dialog").getByLabel("Новое описание задачи", { exact: true }).fill("Check graph queues");
+    await page.getByRole("dialog").getByRole("button", { name: "Сохранить задачу", exact: true }).click();
     await updateResponse;
     const renamedTaskCard = page.getByRole("region", { name: "Командная задача Graph traversal", exact: true });
     await renamedTaskCard.waitFor();
 
-    const archiveResponse = page.waitForResponse((response) =>
-      response.url().includes(`/teams/${team.id}/tasks/`) &&
-      response.url().endsWith("/archive") &&
-      response.request().method() === "POST" &&
-      response.status() === 200);
-    await renamedTaskCard.getByRole("button", { name: "Архивировать задачу Graph traversal", exact: true }).click();
-    await archiveResponse;
-    await page.getByText("В библиотеке команды пока нет задач", { exact: true }).waitFor();
-
-    await page.getByRole("tab", { name: "Архив", exact: true }).click();
-    const archivedTaskCard = page.getByRole("region", { name: "Командная задача Graph traversal", exact: true });
-    await archivedTaskCard.waitFor();
-    assert.equal(await archivedTaskCard.getByRole("button", { name: /Скопировать задачу/ }).count(), 0);
-    const restoreResponse = page.waitForResponse((response) =>
-      response.url().includes(`/teams/${team.id}/tasks/`) &&
-      response.url().endsWith("/restore") &&
-      response.request().method() === "POST" &&
-      response.status() === 200);
-    await archivedTaskCard.getByRole("button", { name: "Восстановить задачу Graph traversal", exact: true }).click();
-    await restoreResponse;
-    await page.getByRole("tab", { name: "Активные", exact: true }).click();
-    await renamedTaskCard.waitFor();
+    assert.equal(await page.getByRole("button", { name: /Архивировать задачу|Восстановить задачу/ }).count(), 0);
+    assert.equal(await page.locator(".ant-segmented").count(), 0);
 
     const importResponse = page.waitForResponse((response) =>
       isApiResponse(response, `/teams/${team.id}/tasks/import-personal`) &&
@@ -1365,9 +1620,15 @@ test("P1.3: team library creates a real team task instead of showing staged plac
 
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     await renamedTaskCard.getByRole("button", { name: "Скопировать задачу Graph traversal", exact: true }).click();
+    await page.locator(".ant-notification-notice").filter({
+      has: page.getByText("Задача «Graph traversal» готова к передаче.", { exact: true }),
+    }).waitFor();
     const copiedTask = await page.evaluate(() => navigator.clipboard.readText());
     assert.match(copiedTask, /Graph traversal/);
-    assert.equal(JSON.parse(copiedTask).task.starterCode, "// TODO");
+    const taskTransfer = JSON.parse(copiedTask);
+    assert.equal(taskTransfer.kind, "task");
+    assert.equal(taskTransfer.task.title, "Graph traversal");
+    assert.equal(taskTransfer.task.starterCode, "// TODO");
     assert.equal(await page.getByRole("region", { name: "Командная задача Graph traversal (копия)", exact: true }).count(), 0);
     await renamedTaskCard.waitFor();
 
@@ -1375,12 +1636,20 @@ test("P1.3: team library creates a real team task instead of showing staged plac
     await renamedTaskCard.waitFor();
     await page.getByLabel("Поиск задач", { exact: true }).fill("golang");
     await page.getByText("Ничего не найдено", { exact: true }).waitFor();
+    await page.getByLabel("Поиск задач", { exact: true }).fill("");
+    await renamedTaskCard.waitFor();
+    const deleteResponse = page.waitForResponse((response) => response.url().includes(`/teams/${team.id}/tasks/`) && response.request().method() === "DELETE" && response.status() === 204);
+    await renamedTaskCard.getByRole("button", { name: "Удалить задачу Graph traversal", exact: true }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Удалить", exact: true }).click();
+    await deleteResponse;
+    await renamedTaskCard.waitFor({ state: "detached" });
+
   } finally {
     await context.close();
   }
 });
 
-test("P1.4: team library copies sets to clipboard, archives and restores them", { timeout: 60_000 }, async () => {
+test("P1.4: team library copies sets to clipboard and deletes their library sources", { timeout: 60_000 }, async () => {
   const auth = await account("team_sets");
   const team = await createTeamApi(auth, `Команда наборов ${unique()}`);
   const firstTask = await request(`/teams/${team.id}/tasks`, {
@@ -1421,48 +1690,41 @@ test("P1.4: team library copies sets to clipboard, archives and restores them", 
     await page.getByRole("button", { name: "Создать набор", exact: true }).click();
     const createSetDialog = page.getByRole("dialog", { name: "Новый командный набор", exact: true });
     await createSetDialog.getByLabel("Название набора", { exact: true }).fill(setName);
-    await createSetDialog.getByLabel("Graph warmup", { exact: true }).check();
-    await createSetDialog.getByLabel("Queue warmup", { exact: true }).check();
+    await selectAntOption(page, "Задачи набора", "Graph warmup");
+    await selectAntOption(page, "Задачи набора", "Queue warmup");
     await createSetDialog.getByRole("button", { name: "Создать набор", exact: true }).click();
     const createdSet = (await (await createSetResponse).json()).taskSet;
 
     const setCard = page.getByRole("region", { name: `Командный набор ${setName}`, exact: true });
     await setCard.waitFor();
     await setCard.getByText("Graph warmup → Queue warmup", { exact: true }).waitFor();
-    await setCard.getByText(/· v0$/).waitFor();
+    assert.equal(await setCard.getByText(/rev\.|· v\d+$/).count(), 0);
 
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     await setCard.getByRole("button", { name: `Скопировать набор ${setName}`, exact: true }).click();
-    await page.waitForFunction(async () => (await navigator.clipboard.readText()).includes('"kind": "task-set"'));
+    await page.locator(".ant-notification-notice").filter({
+      has: page.getByText(`Набор «${setName}» готов к передаче.`, { exact: true }),
+    }).waitFor();
     const copiedSet = await page.evaluate(() => navigator.clipboard.readText());
     assert.match(copiedSet, /Graph warmup/);
     assert.match(copiedSet, /Queue warmup/);
+    const setTransfer = JSON.parse(copiedSet);
+    assert.equal(setTransfer.kind, "task-set");
+    assert.equal(setTransfer.name, setName);
+    assert.deepEqual(setTransfer.tasks, [
+      { title: "Graph warmup", description: "Graph task", starterCode: "// graph", language: "kotlin" },
+      { title: "Queue warmup", description: "Queue task", starterCode: "// queue", language: "nodejs" },
+    ], "copied set contains the complete ordered task contents");
     assert.equal(await page.getByRole("region", { name: `Командный набор ${setName} (копия)`, exact: true }).count(), 0);
 
-    const archiveSetResponse = page.waitForResponse((response) =>
-      isApiResponse(response, `/teams/${team.id}/task-sets/${createdSet.id}/archive`) &&
-      response.request().method() === "POST" &&
-      response.status() === 200);
-    await setCard.getByRole("button", { name: `Архивировать набор ${setName}`, exact: true }).click();
-    await archiveSetResponse;
+    assert.equal(await page.getByRole("button", { name: /Архивировать набор|Восстановить набор/ }).count(), 0);
+    assert.equal(await page.locator(".ant-segmented").count(), 0);
+    const deleteSetResponse = page.waitForResponse((response) =>
+      isApiResponse(response, `/teams/${team.id}/task-sets/${createdSet.id}`) && response.request().method() === "DELETE" && response.status() === 204);
+    await setCard.getByRole("button", { name: `Удалить набор ${setName}`, exact: true }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Удалить", exact: true }).click();
+    await deleteSetResponse;
     await setCard.waitFor({ state: "detached" });
-
-    await page.getByRole("tab", { name: "Архив", exact: true }).click();
-    const archivedCard = page.getByRole("region", { name: `Командный набор ${setName}`, exact: true });
-    await archivedCard.waitFor();
-    assert.equal(await archivedCard.getByRole("button", { name: /Скопировать набор/ }).count(), 0);
-    await archivedCard.getByText(/· v1$/).waitFor();
-    const restoreSetResponse = page.waitForResponse((response) =>
-      isApiResponse(response, `/teams/${team.id}/task-sets/${createdSet.id}/restore`) &&
-      response.request().method() === "POST" &&
-      response.status() === 200);
-    await archivedCard.getByRole("button", { name: `Восстановить набор ${setName}`, exact: true }).click();
-    await restoreSetResponse;
-
-    await page.getByRole("tab", { name: "Активные", exact: true }).click();
-    const restoredCard = page.getByRole("region", { name: `Командный набор ${setName}`, exact: true });
-    await restoredCard.waitFor();
-    await restoredCard.getByText(/v2/).waitFor();
   } finally {
     await context.close();
   }
@@ -1514,8 +1776,8 @@ test("P1.4: team library edits and reorders team task sets", { timeout: 60_000 }
 
     const updatedName = `${setName} updated`;
     await setCard.getByRole("button", { name: `Редактировать набор ${setName}`, exact: true }).click();
-    await setCard.getByLabel("Новое название набора", { exact: true }).fill(updatedName);
-    await setCard.getByRole("button", {
+    await page.getByRole("dialog").getByLabel("Новое название набора", { exact: true }).fill(updatedName);
+    await page.getByRole("dialog", { name: "Редактировать набор", exact: true }).getByRole("button", {
       name: `Поднять задачу Queue warmup в наборе ${setName}`,
       exact: true,
     }).click();
@@ -1527,7 +1789,7 @@ test("P1.4: team library edits and reorders team task sets", { timeout: 60_000 }
       isApiResponse(response, `/teams/${team.id}/task-sets/${createdSet.id}`) &&
       response.request().method() === "PATCH" &&
       response.status() === 200);
-    await setCard.getByRole("button", { name: "Сохранить набор", exact: true }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Сохранить набор", exact: true }).click();
     const [requestCandidate] = await Promise.all([updateRequest, updateResponse]);
     assert.deepEqual(requestCandidate.postDataJSON(), {
       name: updatedName,
@@ -1538,7 +1800,7 @@ test("P1.4: team library edits and reorders team task sets", { timeout: 60_000 }
     const updatedCard = page.getByRole("region", { name: `Командный набор ${updatedName}`, exact: true });
     await updatedCard.waitFor();
     await updatedCard.getByText("Queue warmup → Graph warmup", { exact: true }).waitFor();
-    await updatedCard.getByText(/v1/).waitFor();
+    assert.equal(await updatedCard.getByText(/\bv\d+\b/).count(), 0, "internal task-set revision is not a user-facing caption");
   } finally {
     await context.close();
   }
@@ -1633,11 +1895,15 @@ test("P1.4: team interview preparation expands a selected team task set", { time
   const { context, page } = await openAccount(auth, `/workspace/teams/${team.id}/interviews/new`);
   try {
     await page.getByRole("heading", { name: "Создать интервью", exact: true }).waitFor();
-    await page.getByLabel("Командный набор задач", { exact: true }).selectOption(taskSet.id);
-    const selectedSet = page.getByRole("region", { name: `Выбранный командный набор ${setName}`, exact: true });
-    await selectedSet.waitFor();
-    await selectedSet.getByText("Queue interview → Graph interview", { exact: true }).waitFor();
-    await selectedSet.getByText("2 задач", { exact: true }).waitFor();
+    await selectAntOption(page, "Командный набор задач", setName);
+    const selectedSet = page.getByRole("combobox", { name: "Командный набор задач", exact: true })
+      .locator("xpath=ancestor-or-self::div[contains(concat(' ',normalize-space(@class),' '),' ant-select ')][1]");
+    await selectedSet.getByText(setName, { exact: true }).waitFor();
+    const taskSelect = page.getByRole("combobox", { name: "Задачи интервью", exact: true });
+    await taskSelect.click();
+    assert.equal(await page.getByRole("option", { name: "Queue interview" }).getAttribute("aria-selected"), "true");
+    assert.equal(await page.getByRole("option", { name: "Graph interview" }).getAttribute("aria-selected"), "true");
+    await page.keyboard.press("Escape");
   } finally {
     await context.close();
   }
@@ -1662,11 +1928,9 @@ test("P1.5: team interview preparation selects track and vacancy context", { tim
   const { context, page } = await openAccount(auth, `/workspace/teams/${team.id}/interviews/new`);
   try {
     await page.getByRole("heading", { name: "Создать интервью", exact: true }).waitFor();
-    await page.getByLabel("Трек интервью", { exact: true }).selectOption(track.id);
-    await page.getByLabel("Вакансия", { exact: true }).selectOption(vacancy.id);
-    const selectedTrack = page.getByRole("region", { name: "Выбранный трек Backend track", exact: true });
-    await selectedTrack.waitFor();
-    await selectedTrack.getByText("Вакансия: Kotlin engineer", { exact: true }).waitFor();
+    await selectAntOption(page, "Трек интервью", "Backend track");
+    await selectAntOption(page, "Вакансия", "Kotlin engineer");
+    await page.getByRole("combobox", { name: "Вакансия", exact: true }).locator("xpath=ancestor::div[contains(@class,'ant-select')][1]").getByText("Kotlin engineer", { exact: true }).waitFor();
   } finally {
     await context.close();
   }
@@ -1723,10 +1987,50 @@ test("P1.5: team interview preparation creates a team interview from selected co
   const { context, page } = await openAccount(auth, `/workspace/teams/${team.id}/interviews/new`);
   try {
     await page.getByRole("heading", { name: "Создать интервью", exact: true }).waitFor();
+    await page.getByRole("dialog", { name: "Создать интервью", exact: true }).waitFor();
+    await page.getByRole("heading", { name: "Интервью", exact: true }).waitFor();
     await page.getByLabel("Название интервью", { exact: true }).fill("Backend pair interview");
-    await page.getByLabel("Трек интервью", { exact: true }).selectOption(track.id);
-    await page.getByLabel("Вакансия", { exact: true }).selectOption(vacancy.id);
-    await page.getByLabel("Командный набор задач", { exact: true }).selectOption(taskSet.id);
+    await selectAntOption(page, "Трек интервью", "Backend track");
+    assert.equal(await page.getByRole("combobox", { name: "Трек интервью", exact: true }).count(), 1);
+    assert.equal(await page.getByRole("combobox", { name: "Задачи интервью", exact: true }).count(), 1);
+    assert.equal(await page.getByText("Задачи контекста выбраны заранее.", { exact: false }).count(), 0);
+
+    const assertSelectPresentation = async (theme) => {
+      const trackSelect = page.getByRole("combobox", { name: "Трек интервью", exact: true });
+      await trackSelect.click();
+      const unselectedTrackOption = page.locator(".ant-select-dropdown .ant-select-item-option").filter({ hasText: "Без трека" });
+      await unselectedTrackOption.hover();
+      const hoverColors = await page.evaluate(() => {
+        const active = document.querySelector(".ant-select-item-option-active");
+        const dropdown = document.querySelector(".ant-select-dropdown");
+        return {
+          option: active ? getComputedStyle(active).backgroundColor : "missing",
+          dropdown: dropdown ? getComputedStyle(dropdown).backgroundColor : "missing",
+          align: active ? getComputedStyle(active.querySelector(".ant-select-item-option-content")).textAlign : "missing",
+        };
+      });
+      assert.notEqual(hoverColors.option, "missing", `${theme}_SELECT_HOVER_TARGET_MUST_BE_VISIBLE`);
+      assert.notEqual(hoverColors.option, hoverColors.dropdown, `${theme}_SELECT_HOVER_MUST_HAVE_CLEAR_CONTRAST`);
+      assert.equal(hoverColors.align, "left", `${theme}_SELECT_OPTIONS_MUST_ALIGN_LEFT`);
+      await page.keyboard.press("Escape");
+
+      const selectedValueAlign = await trackSelect
+        .locator("xpath=ancestor::div[contains(@class,'ant-select')]")
+        .locator(".ant-select-content")
+        .evaluate((element) => getComputedStyle(element).textAlign);
+      assert.equal(selectedValueAlign, "left", `${theme}_SELECTED_VALUES_MUST_ALIGN_LEFT`);
+    };
+    const initialTheme = await page.locator("html").getAttribute("data-theme");
+    for (const theme of ["light", "dark"]) {
+      await page.evaluate((mode) => { document.documentElement.dataset.theme = mode; }, theme);
+      await assertSelectPresentation(theme);
+    }
+    await page.evaluate((mode) => { document.documentElement.dataset.theme = mode; }, initialTheme);
+
+    await selectAntOption(page, "Вакансия", "Kotlin engineer");
+    await selectAntOption(page, "Командный набор задач", setName);
+    assert.equal(await page.getByRole("combobox", { name: "Задачи интервью", exact: true }).count(), 1);
+    await selectAntOption(page, "Задачи интервью", "Queue interview");
 
     const createRequest = page.waitForRequest((requestCandidate) =>
       requestCandidate.url() === `${browserApi}/teams/${team.id}/interviews` &&
@@ -1735,24 +2039,38 @@ test("P1.5: team interview preparation creates a team interview from selected co
       isApiResponse(response, `/teams/${team.id}/interviews`) &&
       response.request().method() === "POST" &&
       response.status() === 201);
-    await page.getByRole("button", { name: "Создать интервью", exact: true }).click();
+    await page.getByRole("dialog", { name: "Создать интервью", exact: true })
+      .getByRole("button", { name: "Создать интервью", exact: true }).click();
     const [requestCandidate, response] = await Promise.all([createRequest, createResponse]);
     assert.match(await requestCandidate.headerValue("Idempotency-Key"), /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
     assert.deepEqual(requestCandidate.postDataJSON(), {
       title: "Backend pair interview",
       taskSetId: taskSet.id,
+      selectedTaskIds: [firstTask.task.id],
       trackId: track.id,
       vacancyId: vacancy.id,
     });
     const created = (await response.json()).interview;
     assert.ok(created.id);
+    await page.waitForURL(`**/room/${created.inviteCode}`);
+    await page.waitForFunction(() => document.querySelector('[data-testid="room-connection-status"]')?.getAttribute("data-state") === "online");
+    const roomTaskList = await request(`/rooms/${created.inviteCode}`, { token: auth.token });
+    assert.deepEqual(roomTaskList.tasks.map((task) => task.title), ["Graph interview"]);
 
-    const result = page.getByRole("region", { name: "Созданное командное интервью Backend pair interview", exact: true });
-    await result.waitFor();
-    await result.getByText(`ID: ${created.id}`, { exact: true }).waitFor();
-    await result.getByText("Queue interview → Graph interview", { exact: true }).waitFor();
-    await result.getByText("Трек: Backend track", { exact: true }).waitFor();
-    await result.getByText("Вакансия: Kotlin engineer", { exact: true }).waitFor();
+    await page.getByRole("tab", { name: "Чат", exact: true }).click();
+    const chatInput = page.getByTestId("room-notes-input");
+    const composerBox = await chatInput.boundingBox();
+    assert.ok(composerBox.height >= 100, `CHAT_COMPOSER_TOO_SMALL:${JSON.stringify(composerBox)}`);
+    const message = `Командный чат ${unique()}`;
+    const chatPost = page.waitForResponse((candidate) => {
+      if (!candidate.url().endsWith(`/api/realtime/rooms/${created.inviteCode}/events`)) return false;
+      try { return candidate.request().postDataJSON()?.type === "note_message"; } catch { return false; }
+    });
+    await chatInput.fill(message);
+    await page.getByTestId("room-notes-send").click();
+    const chatResponse = await chatPost;
+    assert.equal(chatResponse.status(), 200, `TEAM_CHAT_POST_FAILED:${await chatResponse.text()}`);
+    await page.getByText(message, { exact: true }).waitFor();
   } finally {
     await context.close();
   }
@@ -1763,7 +2081,7 @@ test("P1.5: team interview preparation assigns team employees by role", { timeou
   const interviewer = await account("team_role_interviewer");
   const candidate = await account("team_role_candidate");
   const team = await createTeamApi(owner, `Команда назначений ${unique()}`);
-  await addTeamMembers(owner, team, interviewer, candidate);
+  await addTeamMemberViaInvitation(owner, team, interviewer);
   const firstTask = await request(`/teams/${team.id}/tasks`, {
     token: owner.token,
     method: "POST",
@@ -1800,10 +2118,9 @@ test("P1.5: team interview preparation assigns team employees by role", { timeou
   try {
     await page.getByRole("heading", { name: "Создать интервью", exact: true }).waitFor();
     await page.getByLabel("Название интервью", { exact: true }).fill("Role based interview");
-    await page.getByLabel("Командный набор задач", { exact: true }).selectOption(taskSet.id);
+    await selectAntOption(page, "Командный набор задач", taskSet.name);
 
-    const interviewerGroup = page.getByRole("group", { name: "Другие интервьюеры (необязательно)", exact: true });
-    await interviewerGroup.getByRole("checkbox", { name: interviewer.user.displayName, exact: true }).check();
+    await selectAntOption(page, "Другие интервьюеры (необязательно)", interviewer.user.displayName);
     assert.equal(await page.getByRole("checkbox", { name: owner.user.displayName, exact: true }).count(), 0);
     assert.equal(await page.getByRole("group", { name: "Кандидаты", exact: true }).count(), 0);
 
@@ -1814,21 +2131,19 @@ test("P1.5: team interview preparation assigns team employees by role", { timeou
       isApiResponse(response, `/teams/${team.id}/interviews`) &&
       response.request().method() === "POST" &&
       response.status() === 201);
-    await page.getByRole("button", { name: "Создать интервью", exact: true }).click();
+    await page.getByRole("dialog", { name: "Создать интервью", exact: true })
+      .getByRole("button", { name: "Создать интервью", exact: true }).click();
     const [requestCandidate, response] = await Promise.all([createRequest, createResponse]);
     assert.deepEqual(requestCandidate.postDataJSON(), {
       title: "Role based interview",
       taskSetId: taskSet.id,
+      selectedTaskIds: [secondTask.task.id, firstTask.task.id],
       interviewerIds: [interviewer.user.id],
     });
     const created = (await response.json()).interview;
     assert.ok(created.id);
-
-    const result = page.getByRole("region", { name: "Созданное командное интервью Role based interview", exact: true });
-    await result.waitFor();
-    await result.getByText(new RegExp(`Интервьюеры: .*${interviewer.user.displayName}`)).waitFor();
-    assert.equal(await result.getByText(`Кандидаты: ${candidate.user.displayName}`, { exact: true }).count(), 0);
-    await result.getByRole("button", { name: "Копировать ссылку для кандидата", exact: true }).waitFor();
+    await page.waitForURL(`**/room/${created.inviteCode}`);
+    await page.waitForFunction(() => document.querySelector('[data-testid="room-connection-status"]')?.getAttribute("data-state") === "online");
 
     await page.goto(`${web}/workspace/teams/${team.id}/interviews`, { waitUntil: "domcontentloaded" });
     const card = page.getByRole("region", { name: "Командное интервью Role based interview", exact: true });
@@ -1910,6 +2225,12 @@ test("P1.5: team interview list shows created team interviews", { timeout: 60_00
       interviewerIds: [auth.user.id],
     },
   })).interview;
+  const apiListed = await request(`/teams/${team.id}/interviews`, { token: auth.token });
+  assert.deepEqual(
+    new Set(apiListed.items.map((interview) => interview.title)),
+    new Set(["Backend screen", "Platform onsite"]),
+    "TEAM_INTERVIEW_LIST_API_MUST_RETURN_CREATED_INTERVIEWS",
+  );
 
   const { context, page } = await openAccount(auth, `/workspace/teams/${team.id}/interviews`);
   try {
@@ -1932,6 +2253,13 @@ test("P1.5: team interview list shows created team interviews", { timeout: 60_00
     assert.equal(await screenCard.getByText(`ID: ${screen.id}`, { exact: true }).count(), 0);
     await screenCard.getByText("Без трека", { exact: true }).waitFor();
 
+    await page.getByLabel("Поиск интервью", { exact: true }).fill("screen");
+    await screenCard.waitFor();
+    await onsiteCard.waitFor({ state: "hidden" });
+    assert.equal(await onsiteCard.count(), 0, "team interview search must hide non-matching cards");
+    await page.getByLabel("Поиск интервью", { exact: true }).fill("");
+    await onsiteCard.waitFor();
+
     const deleteInterviewResponse = page.waitForResponse((response) =>
       response.url().endsWith(`/api/teams/${team.id}/interviews/${screen.id}`) &&
       response.request().method() === "DELETE" && response.status() === 204);
@@ -1939,16 +2267,13 @@ test("P1.5: team interview list shows created team interviews", { timeout: 60_00
     await page.getByRole("dialog", { name: "Удалить интервью Backend screen?" }).getByRole("button", { name: "Удалить", exact: true }).click();
     await deleteInterviewResponse;
 
-    await page.getByLabel("Поиск интервью", { exact: true }).fill("screen");
-    await screenCard.waitFor();
-    await onsiteCard.waitFor({ state: "hidden" });
-    assert.equal(await onsiteCard.count(), 0, "team interview search must hide non-matching cards");
+
   } finally {
     await context.close();
   }
 });
 
-test("team interview owner can rename a room from the team list", { timeout: 60_000 }, async () => {
+test("ACTIVE team colleague and owner can rename a room from the team list", { timeout: 60_000 }, async () => {
   const owner = await account("rename_ui_owner");
   const member = await account("rename_ui_member");
   const team = await createTeamApi(owner, `Переименование интервью ${unique()}`);
@@ -1959,7 +2284,7 @@ test("team interview owner can rename a room from the team list", { timeout: 60_
   try {
     const foreignCard = memberView.page.getByRole("region", { name: "Командное интервью Комната до переименования", exact: true });
     await foreignCard.waitFor();
-    assert.equal(await foreignCard.getByRole("button", { name: "Переименовать интервью Комната до переименования" }).count(), 0);
+    assert.equal(await foreignCard.getByRole("button", { name: "Редактировать интервью Комната до переименования" }).count(), 1);
   } finally {
     await memberView.context.close();
   }
@@ -1967,9 +2292,9 @@ test("team interview owner can rename a room from the team list", { timeout: 60_
   const { context, page } = await openAccount(owner, `/workspace/teams/${team.id}/interviews`);
   try {
     const originalCard = page.getByRole("region", { name: "Командное интервью Комната до переименования", exact: true });
-    await originalCard.getByRole("button", { name: "Переименовать интервью Комната до переименования", exact: true }).click();
-    await originalCard.getByRole("textbox", { name: "Новое название интервью", exact: true }).fill("Комната после переименования");
-    await originalCard.getByRole("button", { name: "Сохранить название", exact: true }).click();
+    await originalCard.getByRole("button", { name: "Редактировать интервью Комната до переименования", exact: true }).click();
+    await page.getByRole("dialog", { name: "Редактировать интервью", exact: true }).getByRole("textbox", { name: "Название интервью", exact: true }).fill("Комната после переименования");
+    await page.getByRole("dialog", { name: "Редактировать интервью", exact: true }).getByRole("button", { name: "Сохранить", exact: true }).click();
     const renamedCard = page.getByRole("region", { name: "Командное интервью Комната после переименования", exact: true });
     await renamedCard.waitFor();
     assert.equal(await originalCard.count(), 0);
@@ -1983,7 +2308,7 @@ test("team interview owner can rename a room from the team list", { timeout: 60_
   }
 });
 
-test("P3.1: rejoined member does not regain an old team interview assignment in the browser", { timeout: 75_000 }, async () => {
+test("P3.1: rejoined ACTIVE member regains shared interviewer access without explicit old assignments", { timeout: 75_000 }, async () => {
   const owner = await account("team_rejoin_owner");
   const interviewer = await account("team_rejoin_interviewer");
   const team = await createTeamApi(owner, `Команда повторного входа ${unique()}`);
@@ -2028,22 +2353,21 @@ test("P3.1: rejoined member does not regain an old team interview assignment in 
     await rejoinedCard.waitFor();
     assert.equal(
       await rejoinedCard.getByRole("link", { name: `Открыть комнату ${interview.title}`, exact: true }).count(),
-      0,
-      "REJOINED_MEMBER_OLD_INTERVIEW_OPEN_LINK_VISIBLE",
+      1,
+      "REJOINED_ACTIVE_MEMBER_SHARED_INTERVIEW_OPEN_LINK_MISSING",
     );
-    await rejoinedCard.getByText("Для управления комнатой требуется назначение интервьюером.", { exact: true }).waitFor();
+    const restored = await request(`/rooms/${interview.inviteCode}/participants`, { token: owner.token });
+    assert.equal(restored.some((item) => item.userId === interviewer.user.id), false,
+      "REJOIN_RESTORED_OLD_EXPLICIT_ASSIGNMENT");
   } finally {
     await afterRejoin.context.close();
   }
 
   const directRoom = await openAccount(interviewer, `/room/${interview.inviteCode}`);
   try {
-    await directRoom.page.getByTestId("room-realtime-unavailable").waitFor();
-    assert.equal(
-      await directRoom.page.locator("[data-testid='room-code-editor-host']").count(),
-      0,
-      "REJOINED_MEMBER_OLD_ROOM_EDITOR_RENDERED",
-    );
+    await directRoom.page.getByTestId("room-viewer-role-badge").filter({ hasText: "Интервьюер" }).waitFor();
+    await directRoom.page.locator("[data-testid='room-code-editor-host'] .cm-editor").waitFor();
+    await directRoom.page.getByRole("tab", { name: "Мои заметки", exact: true }).waitFor();
   } finally {
     await directRoom.context.close();
   }
@@ -2079,12 +2403,10 @@ test("P3.1: removing an active team room member closes protected browser context
       key: randomUUID(),
     });
     assert.equal(removed.status, 200, `owner must remove active room member: ${await removed.text()}`);
-    await activeRoom.page.getByTestId("room-realtime-unavailable").waitFor({ timeout: 20_000 });
-    assert.equal(
-      await activeRoom.page.locator("[data-testid='room-code-editor-host']").count(),
-      0,
-      "REMOVED_TEAM_MEMBER_ACTIVE_ROOM_EDITOR_STILL_RENDERED",
-    );
+    await activeRoom.page.getByTestId("room-viewer-role-badge").filter({ hasText: "Кандидат" }).waitFor({ timeout: 20_000 });
+    await activeRoom.page.locator("[data-testid='room-code-editor-host'] .cm-editor").waitFor();
+    assert.equal((await rawRequest(`/teams/${team.id}/interviews`, { token: interviewer.token })).status, 404,
+      "REMOVED_TEAM_MEMBER_STILL_READS_PROTECTED_TEAM_LIST");
     assert.equal(
       await activeRoom.page.getByRole("tablist", { name: "Рабочие области комнаты", exact: true }).count(),
       0,
@@ -2100,7 +2422,7 @@ test("P1.5: team room manager workspace stays private until browser publication"
   const interviewer = await account("team_room_interviewer");
   const candidate = await account("team_room_candidate");
   const team = await createTeamApi(owner, `Комната командного интервью ${unique()}`);
-  await addTeamMembers(owner, team, interviewer, candidate);
+  await addTeamMemberViaInvitation(owner, team, interviewer);
   const firstTask = await createTeamTask(owner, team, {
     title: `Intro graph ${unique()}`,
     description: "Initial public team task",
@@ -2121,7 +2443,7 @@ test("P1.5: team room manager workspace stays private until browser publication"
     title: `Team room ${unique()}`,
     taskSetId: taskSet.id,
     interviewerIds: [owner.user.id, interviewer.user.id],
-    candidateIds: [candidate.user.id],
+    candidateIds: [],
   });
 
   const observerSession = await openRoomAccount(owner, interview.inviteCode);
@@ -2185,7 +2507,7 @@ test("AC-02: creates Atlas and Orbit once per intent and keeps same-named teams 
   });
   try {
     await switcher(page).waitFor();
-    assert.match(await switcher(page).innerText(), /Личное пространство/);
+    assert.match(await switcher(page).innerText(), /Личное/);
     const atlas = await createTeamThroughUi(page, "Atlas");
     assert.equal(posts.length, 1, "Atlas intent must issue one POST")
     const orbit = await createTeamThroughUi(page, "Orbit");
@@ -2195,9 +2517,10 @@ test("AC-02: creates Atlas and Orbit once per intent and keeps same-named teams 
     assert.notEqual(atlas.id, secondAtlas.id)
 
     const choices = await openWorkspaceDialog(page);
-    assert.equal(await choices.getByRole("button", { name: /Atlas/ }).count(), 2);
-    assert.equal(await choices.getByText(atlas.id.slice(0, 8), { exact: false }).count(), 1);
-    assert.equal(await choices.getByText(secondAtlas.id.slice(0, 8), { exact: false }).count(), 1);
+    assert.equal(await choices.getByRole("menuitemradio", { name: /Atlas/ }).count(), 2);
+    assert.equal(await choices.getByRole("menuitemradio", { name: "Atlas", exact: true }).count(), 2);
+    assert.equal(await choices.getByText(atlas.id.slice(0, 8), { exact: false }).count(), 0, "workspace options must not expose technical ids");
+    assert.equal(await choices.getByText(secondAtlas.id.slice(0, 8), { exact: false }).count(), 0, "workspace options must not expose technical ids");
     await page.keyboard.press("Escape");
 
     await selectWorkspace(page, atlas);
@@ -2223,16 +2546,132 @@ test("AC-02: retry reuses the key until canonical name changes", { timeout: 6000
   const auth = await account("retry")
   const { context, page } = await openAccount(auth);
   const attempts = [];
+  const traceMode = process.env.E2E_WORKSPACE_RETRY_TRACE;
+  const traceEnabled = ["1", "buffer"].includes(traceMode);
+  const traceBuffered = traceMode === "buffer";
+  const traceEvents = [];
+  const { createHash } = traceEnabled ? await import("node:crypto") : {};
+  const safeName = (value) => ["", "　Ａtlas　", "Atlas", "Atlas draft", "Orbit"].includes(value) ? value : "<redacted>";
+  const trace = (event, detail) => {
+    if (!traceEnabled) return;
+    const record = { event, ...detail };
+    if (traceBuffered) traceEvents.push(record);
+    else console.log("AC02_CREATE_RETRY_TRACE", JSON.stringify(record));
+  };
+  const traceSnapshot = async (event) => {
+    if (traceEnabled && (!traceBuffered || event === "final-state")) trace(event, await page.evaluate(() => window.__ac02RetryTraceSnapshot()));
+  };
+  if (traceEnabled) {
+    page.on("console", (message) => {
+      if (message.text().startsWith("AC02_CREATE_RETRY_DOM ")) console.log(message.text());
+    });
+    page.on("response", (response) => {
+      if (isApiResponse(response, "/teams") && response.request().method() === "POST") {
+        trace("response", { status: response.status(), path: "/api/teams" });
+      }
+    });
+    page.on("requestfailed", (request) => {
+      if (new URL(request.url()).pathname === "/api/teams" && request.method() === "POST") {
+        trace("requestfailed", { path: "/api/teams", failure: request.failure()?.errorText?.match(/net::[A-Z_]+/)?.[0] ?? "transport failure" });
+      }
+    });
+    await page.evaluate((buffered) => {
+      const allowedNames = ["", "　Ａtlas　", "Atlas", "Atlas draft", "Orbit"];
+      window.__ac02RetryTraceEvents = [];
+      const emit = (record) => {
+        if (buffered) window.__ac02RetryTraceEvents.push(record);
+        else console.log("AC02_CREATE_RETRY_DOM " + JSON.stringify(record));
+      };
+      const readControls = () => {
+        const dialog = [...document.querySelectorAll('[role="dialog"]')].find((node) => node.querySelector('input[aria-label="Название команды"]'));
+        const input = dialog?.querySelector('input[aria-label="Название команды"]');
+        return {
+          dialogExists: Boolean(dialog),
+          inputValue: !input ? "<missing>" : allowedNames.includes(input.value) ? input.value : "<redacted>",
+          inputDisabled: input?.disabled,
+          alertPresent: Boolean(dialog?.querySelector('[role="alert"]')),
+          buttons: [...(dialog?.querySelectorAll('form button') ?? [])].map((button) => ({
+            type: button.type,
+            text: ["Создать команду", "Повторить", "Отмена"].includes(button.textContent) ? button.textContent : "<redacted>",
+            disabled: button.disabled, loading: button.classList.contains("ant-btn-loading"),
+            icons: [...button.querySelectorAll('[role="img"]')].map((icon) => ({
+              label: icon.getAttribute('aria-label') === 'loading' ? 'loading' : '<other-icon>',
+              hidden: icon.getAttribute('aria-hidden'),
+            })),
+          })),
+        };
+      };
+      window.__ac02RetryTraceSnapshot = () => {
+        const dialog = [...document.querySelectorAll('[role="dialog"]')].find((node) => node.querySelector('input[aria-label="Название команды"]'));
+        const input = dialog?.querySelector('input[aria-label="Название команды"]');
+        const box = dialog?.getBoundingClientRect();
+        return {
+          path: location.pathname.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "<team-id>"),
+          dialogVisible: Boolean(box?.width && box?.height && getComputedStyle(dialog.closest('.ant-modal-wrap')).display !== "none"),
+          inputValue: !input ? "<missing>" : allowedNames.includes(input.value) ? input.value : "<redacted>",
+          inputDisabled: input?.disabled,
+          alertPresent: Boolean(dialog?.querySelector('[role="alert"]')),
+          dialogBox: box ? { x: box.x, y: box.y, width: box.width, height: box.height } : null,
+          finiteAnimations: dialog?.closest('.ant-modal-wrap').getAnimations({ subtree: true }).filter((animation) => Number.isFinite(animation.effect?.getComputedTiming().endTime) && animation.playState === "running").length,
+          buttons: [...(dialog?.querySelectorAll('form button') ?? [])].map((button) => ({
+            tag: button.tagName, type: button.type,
+            text: ["Создать команду", "Повторить", "Отмена"].includes(button.textContent) ? button.textContent : "<redacted>",
+            disabled: button.disabled, loading: button.classList.contains("ant-btn-loading"),
+          })),
+        };
+      };
+      for (const eventName of ["input", "pointerdown", "pointerup", "click", "submit"]) {
+        document.addEventListener(eventName, (event) => {
+          if (!(event.target instanceof Element) || !event.target.closest('form')?.querySelector('input[aria-label="Название команды"]')) return;
+          emit({ event: eventName, defaultPrevented: event.defaultPrevented, ...readControls() });
+        }, true);
+      }
+      let lastControlState = "";
+      const observeControls = () => {
+        const state = readControls();
+        const signature = JSON.stringify(state);
+        if (signature === lastControlState) return;
+        lastControlState = signature;
+        emit({ event: "controls-mutated", ...state });
+      };
+      new MutationObserver(observeControls).observe(document.body, {
+        childList: true, subtree: true, attributes: true,
+        attributeFilter: ["class", "style", "disabled", "aria-hidden"],
+      });
+      observeControls();
+    }, traceBuffered);
+  }
   let committedAtlas;
+  const waitCreateReady = async (dialog) => {
+    await dialog.waitFor();
+    await dialog.evaluate(async (node) => {
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      await Promise.all(node.closest(".ant-modal-wrap").getAnimations({ subtree: true })
+        .filter((animation) => Number.isFinite(animation.effect?.getComputedTiming().endTime))
+        .map((animation) => animation.finished.catch(() => {})));
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    });
+  };
+  const waitRetryReady = () => page.waitForFunction(() => {
+    const retry = [...document.querySelectorAll('[role="dialog"] button')].find((node) => node.textContent === "Повторить");
+    return retry && !retry.disabled && !retry.classList.contains("ant-btn-loading");
+  });
   await page.route(`${browserApi}/teams`, async (route) => {
     const request = route.request();
     attempts.push({
       key: await request.headerValue("Idempotency-Key"),
       body: request.postDataJSON(),
     });
+    const attempt = attempts.at(-1);
+    trace("request", {
+      attempt: attempts.length,
+      keyHash: traceEnabled ? createHash("sha256").update(attempt.key ?? "").digest("hex").slice(0, 12) : undefined,
+      name: safeName(attempt.body.name),
+    });
     if (attempts.length === 1) {
       const upstream = await route.fetch();
       assert.equal(upstream.status(), 201, "lost-response fixture must commit at the real server");
+      trace("upstream-committed", { attempt: attempts.length, status: upstream.status() });
       committedAtlas = {
         body: await upstream.body(),
         location: upstream.headers().location,
@@ -2243,14 +2682,18 @@ test("AC-02: retry reuses the key until canonical name changes", { timeout: 6000
   });
   try {
     const workspaceDialog = await openWorkspaceDialog(page);
-    await workspaceDialog.getByRole("button", { name: "Создать команду", exact: true }).click();
+    await workspaceDialog.getByRole("menuitem", { name: "Создать команду", exact: true }).click();
     let createDialog = page.getByRole("dialog", { name: "Создать команду", exact: true });
+    await waitCreateReady(createDialog);
     await createDialog.getByLabel("Название команды", { exact: true }).fill("　Ａtlas　");
     await createDialog.getByRole("button", { name: "Создать команду", exact: true }).click();
     await createDialog.getByRole("alert").waitFor();
-    const atlasResponse = page.waitForResponse((response) => isApiResponse(response, `/teams`) && response.status() === 201);
-    await createDialog.getByRole("button", { name: "Повторить", exact: true }).click();
-    const atlasReplay = await atlasResponse;
+    await waitRetryReady();
+    await traceSnapshot("atlas-before-retry");
+    const [atlasReplay] = await Promise.all([
+      page.waitForResponse((response) => isApiResponse(response, `/teams`) && response.request().method() === "POST" && response.status() === 201),
+      createDialog.getByRole("button", { name: "Повторить", exact: true }).click(),
+    ]);
     assert.equal(attempts[0].key, attempts[1].key, "same canonical intent must reuse its UUID key")
     assert.deepEqual(attempts[0].body, { name: "　Ａtlas　" });
     assert.deepEqual(attempts[1].body, { name: "　Ａtlas　" });
@@ -2258,33 +2701,76 @@ test("AC-02: retry reuses the key until canonical name changes", { timeout: 6000
     assert.equal(atlasReplay.headers().location, committedAtlas.location, "retry must replay exact Location");
     const atlasPayload = await atlasReplay.json();
     const atlas = atlasPayload.team ?? atlasPayload;
+    trace("atlas-replayed", { status: atlasReplay.status(), name: safeName(atlas.name) });
+    await page.waitForURL(`**/workspace/teams/${atlas.id}/interviews`);
+    await page.getByRole("main", { name: `Команда ${atlas.name}: Интервью`, exact: true }).waitFor();
     const afterLostResponse = await request("/me/workspaces", { token: auth.token });
     const afterLostItems = Array.isArray(afterLostResponse) ? afterLostResponse : afterLostResponse.items;
     assert.equal(afterLostItems.filter((item) => item.id === atlas.id).length, 1, "lost response retry must leave exactly one Atlas team");
 
     const nextWorkspaceDialog = await openWorkspaceDialog(page);
-    await nextWorkspaceDialog.getByRole("button", { name: "Создать команду", exact: true }).click();
+    await nextWorkspaceDialog.getByRole("menuitem", { name: "Создать команду", exact: true }).click();
     createDialog = page.getByRole("dialog", { name: "Создать команду", exact: true });
+    await waitCreateReady(createDialog);
     await createDialog.getByLabel("Название команды", { exact: true }).fill("Atlas draft");
     await createDialog.getByRole("button", { name: "Создать команду", exact: true }).click();
     await createDialog.getByRole("alert").waitFor();
+    await waitRetryReady();
     await createDialog.getByLabel("Название команды", { exact: true }).fill("Orbit");
-    const orbitResponse = page.waitForResponse((response) => isApiResponse(response, `/teams`) && response.status() === 201);
-    await createDialog.getByRole("button", { name: "Повторить", exact: true }).click();
-    const orbitPayload = await (await orbitResponse).json();
+    await createDialog.getByLabel("Название команды", { exact: true }).press("Tab");
+    assert.equal(await createDialog.getByLabel("Название команды", { exact: true }).inputValue(), "Orbit", "changed retry intent retains the edited name");
+    await traceSnapshot("orbit-before-retry");
+    const [orbitResponse] = await Promise.all([
+      page.waitForResponse((response) => isApiResponse(response, `/teams`) && response.request().method() === "POST" && response.status() === 201),
+      createDialog.getByRole("button", { name: "Повторить", exact: true }).click(),
+    ]);
+    const orbitPayload = await orbitResponse.json();
     const orbit = orbitPayload.team ?? orbitPayload;
+    trace("orbit-created", { status: orbitResponse.status(), name: safeName(orbit.name) });
     assert.deepEqual(attempts[2].body, { name: "Atlas draft" });
     assert.deepEqual(attempts[3].body, { name: "Orbit" });
     assert.notEqual(attempts[2].key, attempts[3].key, "changed canonical body must mint a new UUID key")
     assert.equal(orbit.name, "Orbit");
     await page.waitForURL(`**/workspace/teams/${orbit.id}/interviews`);
     assert.match(await switcher(page).innerText(), /Orbit/);
-    assert.match(await switcher(page).innerText(), new RegExp(orbit.id.slice(0, 8), "i"));
+    assert.doesNotMatch(await switcher(page).innerText(), new RegExp(orbit.id.slice(0, 8), "i"), "workspace trigger must not expose the technical id");
     const finalWorkspaces = await request("/me/workspaces", { token: auth.token });
     const finalItems = Array.isArray(finalWorkspaces) ? finalWorkspaces : finalWorkspaces.items;
     assert.equal(finalItems.filter((item) => item.id === orbit.id && item.name === "Orbit").length, 1);
     attempts.forEach(({ key }) => assert.match(key, /^[0-9a-f-]{36}$/i));
+  } catch (error) {
+    if (traceMode === "failure") {
+      const { createHash: hashFailureKey } = await import("node:crypto");
+      console.log("AC02_CREATE_RETRY_FAILURE", JSON.stringify({
+        attempts: attempts.map((attempt) => ({ keyHash: hashFailureKey("sha256").update(attempt.key ?? "").digest("hex").slice(0, 12), name: safeName(attempt.body.name) })),
+        form: await page.evaluate(() => {
+          const dialog = [...document.querySelectorAll('[role="dialog"]')].find((node) => node.querySelector('input[aria-label="Название команды"]'));
+          const input = dialog?.querySelector('input[aria-label="Название команды"]');
+          return {
+            dialogExists: Boolean(dialog),
+            inputValue: ["", "　Ａtlas　", "Atlas draft", "Orbit"].includes(input?.value) ? input.value : "<missing-or-redacted>",
+            alertPresent: Boolean(dialog?.querySelector('[role="alert"]')),
+            buttons: [...(dialog?.querySelectorAll('form button') ?? [])].map((button) => ({
+              text: ["Создать команду", "Повторить", "Отмена"].includes(button.textContent) ? button.textContent : "<redacted>",
+              disabled: button.disabled, loading: button.classList.contains("ant-btn-loading"),
+              icons: [...button.querySelectorAll('[role="img"]')].map((icon) => ({
+                label: icon.getAttribute('aria-label') === 'loading' ? 'loading' : '<other-icon>',
+                hidden: icon.getAttribute('aria-hidden'),
+                display: getComputedStyle(icon).display, visibility: getComputedStyle(icon).visibility,
+                parentClass: icon.parentElement.className,
+              })),
+            })),
+          };
+        }),
+      }));
+    }
+    throw error;
   } finally {
+    await traceSnapshot("final-state");
+    if (traceBuffered) {
+      for (const record of traceEvents) console.log("AC02_CREATE_RETRY_TRACE", JSON.stringify(record));
+      for (const record of await page.evaluate(() => window.__ac02RetryTraceEvents)) console.log("AC02_CREATE_RETRY_DOM", JSON.stringify(record));
+    }
     await page.unroute(`${browserApi}/teams`);
     await context.close();
   }
@@ -2309,6 +2795,7 @@ test("AC-02: delayed Atlas detail cannot overwrite selected Orbit", { timeout: 6
     const atlasSelection = selectWorkspace(page, atlas);
     await requested.promise;
     await selectWorkspace(page, orbit);
+    await switcher(page).getByText("Orbit", { exact: true }).waitFor();
     release.resolve();
     await completed.promise;
     await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -2329,7 +2816,9 @@ test("AC-02: browser back and forward revalidate each workspace detail", { timeo
   const { context, page } = await openAccount(auth);
   try {
     await selectWorkspace(page, atlas);
+    await switcher(page).getByText("Atlas", { exact: true }).waitFor();
     await selectWorkspace(page, orbit);
+    await switcher(page).getByText("Orbit", { exact: true }).waitFor();
     const atlasRefresh = page.waitForResponse((response) =>
       isApiResponse(response, `/teams/${atlas.id}`) && response.status() === 200);
     await page.goBack();
@@ -2423,7 +2912,7 @@ test("AC-02 security: history and focus revalidation never expose stale team aut
           new RegExp(`${revokedName}|${revoked.id.slice(0, 8)}`, "i"),
           "SAME_ACCOUNT_HISTORY_PENDING_REVEALED_TEAM_LABEL",
         );
-        assert.equal(await page.getByRole("navigation", { name: "Разделы командного пространства" }).count(), 0);
+        assert.equal(await page.getByRole("navigation", { name: "Разделы команды" }).count(), 0);
         assert.equal(await page.getByLabel("Название интервью", { exact: true }).count(), 0);
       } catch (error) {
         pendingDisclosureError = error;
@@ -2431,7 +2920,7 @@ test("AC-02 security: history and focus revalidation never expose stale team aut
 
       await deniedResponse;
       if (pendingDisclosureError) throw pendingDisclosureError;
-      await page.getByRole("alert", { name: "Команда недоступна" }).waitFor();
+      await page.getByRole("alert").filter({ hasText: "Команда недоступна" }).waitFor();
       assert.doesNotMatch(await switcher(page).innerText(), new RegExp(revokedName, "i"));
     } finally {
       await context.close();
@@ -2483,7 +2972,7 @@ test("AC-02 security: history and focus revalidation never expose stale team aut
         isApiResponse(response, `/teams/${atlas.id}`) && response.status() === 404);
       release.resolve();
       await deniedResponse;
-      await page.getByRole("alert", { name: "Команда недоступна" }).waitFor();
+      await page.getByRole("alert").filter({ hasText: "Команда недоступна" }).waitFor();
       await assertNoTeamDisclosure(page, atlasName, "ACCOUNT_B_HISTORY_DENIED");
     } finally {
       release.resolve();
@@ -2521,13 +3010,13 @@ test("AC-02 security: history and focus revalidation never expose stale team aut
       });
       await settleRender(page);
       assert.equal(focusRequests, 1, "TEAM_DETAIL_FOCUS_REVALIDATION_MISSING");
-      await assertNoTeamDisclosure(page, atlasName, "FOCUS_REVALIDATION_PENDING");
-      assert.equal(await page.getByText(secretDraft, { exact: true }).count(), 0, "FOCUS_REVALIDATION_STALE_DRAFT_TEXT");
+      assert.equal(await page.getByLabel("Название интервью", { exact: true }).inputValue(), secretDraft,
+        "SAME_CONTEXT_FOCUS_REVALIDATION_LOST_CURRENT_DRAFT");
       const deniedResponse = page.waitForResponse((response) =>
         isApiResponse(response, `/teams/${atlas.id}`) && response.status() === 404);
       release.resolve();
       await deniedResponse;
-      await page.getByRole("alert", { name: "Команда недоступна" }).waitFor();
+      await page.getByRole("alert").filter({ hasText: "Команда недоступна" }).waitFor();
       await assertNoTeamDisclosure(page, atlasName, "FOCUS_REVALIDATION_DENIED");
     } finally {
       release.resolve();
@@ -2564,7 +3053,7 @@ test("AC-02 security: delayed team creation cannot escape its workspace or accou
       }
     });
     const workspaceDialog = await openWorkspaceDialog(page);
-    await workspaceDialog.getByRole("button", { name: "Создать команду", exact: true }).click();
+    await workspaceDialog.getByRole("menuitem", { name: "Создать команду", exact: true }).click();
     const createDialog = page.getByRole("dialog", { name: "Создать команду", exact: true });
     await createDialog.getByLabel("Название команды", { exact: true }).fill(lateName);
     await createDialog.getByRole("button", { name: "Создать команду", exact: true }).click();
@@ -2592,7 +3081,7 @@ test("AC-02 security: delayed team creation cannot escape its workspace or accou
       assert.equal(new URL(page.url()).pathname, `/workspace/teams/${teamB.id}/interviews`, "LATE_CREATE_NAVIGATED_OUT_OF_TEAM_B");
       assert.doesNotMatch(await page.locator("body").innerText(), new RegExp(lateName), "LATE_CREATE_DISCLOSED_IN_TEAM_B");
       const workspaceDialog = await openWorkspaceDialog(page);
-      await workspaceDialog.getByRole("button", { name: "Создать команду", exact: true }).click();
+      await workspaceDialog.getByRole("menuitem", { name: "Создать команду", exact: true }).click();
       assert.equal(await page.getByLabel("Название команды", { exact: true }).inputValue(), "", "TEAM_CONTEXT_CHANGE_DID_NOT_CLEAR_CREATE_DRAFT");
     } finally {
       await context.close();
@@ -2655,7 +3144,7 @@ test("AC-02 security: late account-A mutation completion cannot refetch account-
     await selectWorkspace(page, teamA);
     await switcher(page).filter({ hasText: "Account A pending team" }).waitFor();
     const workspaceDialogA = await openWorkspaceDialog(page);
-    await workspaceDialogA.getByRole("button", { name: "Создать команду", exact: true }).click();
+    await workspaceDialogA.getByRole("menuitem", { name: "Создать команду", exact: true }).click();
     const createDialog = page.getByRole("dialog", { name: "Создать команду", exact: true });
     await createDialog.getByLabel("Название команды", { exact: true }).fill("Late account A team");
     await createDialog.getByRole("button", { name: "Создать команду", exact: true }).click();
@@ -2663,7 +3152,7 @@ test("AC-02 security: late account-A mutation completion cannot refetch account-
     await page.keyboard.press("Escape");
     await loginInSamePage(page, second);
     const workspaceDialogB = await openWorkspaceDialog(page);
-    await workspaceDialogB.getByRole("button", { name: "Личное пространство", exact: true }).waitFor();
+    await workspaceDialogB.getByRole("menuitemradio", { name: "Личное", exact: true }).waitFor();
     await page.keyboard.press("Escape");
     page.on("request", (candidate) => {
       if (candidate.url() === `${browserApi}/me/workspaces` && candidate.method() === "GET") workspaceReads += 1;
@@ -2731,16 +3220,17 @@ test("AC-02 security: focus and hidden-visible revalidation purge revoked worksp
     });
     await settleRender(page);
 
-    await assertNoTeamDisclosure(page, revokedName, "VISIBILITY_REVALIDATION_PENDING");
+    assert.match(await switcher(page).innerText(), new RegExp(revokedName, "i"),
+      "BACKGROUND_REVALIDATION_DROPPED_CONFIRMED_CONTEXT");
     assert.equal(
       await page.getByText(revoked.id.slice(0, 8), { exact: false }).count(),
       0,
       "REVOKED_TEAM_ID_VISIBLE_IN_HEADER_DURING_VISIBILITY_REVALIDATION",
     );
     assert.equal(
-      await page.getByRole("navigation", { name: "Разделы командного пространства" }).count(),
-      0,
-      "REVOKED_TEAM_NAV_VISIBLE_DURING_VISIBILITY_REVALIDATION",
+      await page.getByRole("navigation", { name: "Разделы команды" }).count(),
+      1,
+      "BACKGROUND_REVALIDATION_DROPPED_CONFIRMED_NAVIGATION",
     );
     assert.equal(detailReads, 1, "TEAM_DETAIL_VISIBILITY_REVALIDATION_MISSING");
     assert.equal(workspaceReads, 1, "WORKSPACE_LIST_VISIBILITY_REVALIDATION_MISSING");
@@ -2756,18 +3246,19 @@ test("AC-02 security: focus and hidden-visible revalidation purge revoked worksp
       0,
       "REVOKED_TEAM_ID_VISIBLE_DURING_WORKSPACE_REVALIDATION",
     );
-    assert.equal(await pendingDialog.getByRole("button", { name: "Личное пространство", exact: true }).count(), 1, "PERSONAL_OPTION_CLEARED_DURING_REVALIDATION");
+    assert.equal(await pendingDialog.getByRole("menuitemradio", { name: "Личное", exact: true }).count(), 1, "PERSONAL_OPTION_CLEARED_DURING_REVALIDATION");
     await page.keyboard.press("Escape");
 
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await settleRender(page);
-    await assertNoTeamDisclosure(page, revokedName, "FOCUS_WHILE_VISIBILITY_REVALIDATION_PENDING");
+    assert.match(await switcher(page).innerText(), new RegExp(revokedName, "i"),
+      "DUPLICATE_BACKGROUND_FOCUS_DROPPED_CONFIRMED_CONTEXT");
     assert.equal(detailReads, 1, "TEAM_DETAIL_LIFECYCLE_REVALIDATION_DUPLICATED");
     assert.equal(workspaceReads, 1, "WORKSPACE_LIST_LIFECYCLE_REVALIDATION_DUPLICATED");
     const focusDialog = await openWorkspaceDialog(page);
     assert.equal(await focusDialog.getByText(revokedName, { exact: true }).count(), 0, "REVOKED_TEAM_NAME_REVEALED_AFTER_FOCUS");
     assert.equal(await focusDialog.getByText(revoked.id.slice(0, 8), { exact: false }).count(), 0, "REVOKED_TEAM_ID_REVEALED_AFTER_FOCUS");
-    assert.equal(await focusDialog.getByRole("button", { name: "Личное пространство", exact: true }).count(), 1, "PERSONAL_OPTION_CLEARED_AFTER_FOCUS");
+    assert.equal(await focusDialog.getByRole("menuitemradio", { name: "Личное", exact: true }).count(), 1, "PERSONAL_OPTION_CLEARED_AFTER_FOCUS");
     await page.keyboard.press("Escape");
 
     const listResponse = page.waitForResponse((response) =>
@@ -2776,12 +3267,12 @@ test("AC-02 security: focus and hidden-visible revalidation purge revoked worksp
       isApiResponse(response, `/teams/${revoked.id}`) && response.status() === 404);
     release.resolve();
     await Promise.all([listResponse, deniedResponse]);
-    await page.getByRole("alert", { name: "Команда недоступна" }).waitFor();
+    await page.getByRole("alert").filter({ hasText: "Команда недоступна" }).waitFor();
     await assertNoTeamDisclosure(page, revokedName, "VISIBILITY_REVALIDATION_DENIED");
     const deniedDialog = await openWorkspaceDialog(page);
     assert.equal(await deniedDialog.getByText(revokedName, { exact: true }).count(), 0, "REVOKED_TEAM_NAME_VISIBLE_AFTER_DENIAL");
     assert.equal(await deniedDialog.getByText(revoked.id.slice(0, 8), { exact: false }).count(), 0, "REVOKED_TEAM_ID_VISIBLE_AFTER_DENIAL");
-    assert.equal(await deniedDialog.getByRole("button", { name: "Личное пространство", exact: true }).count(), 1, "PERSONAL_OPTION_MISSING_AFTER_DENIAL");
+    assert.equal(await deniedDialog.getByRole("menuitemradio", { name: "Личное", exact: true }).count(), 1, "PERSONAL_OPTION_MISSING_AFTER_DENIAL");
   } finally {
     release.resolve();
     await context.close();

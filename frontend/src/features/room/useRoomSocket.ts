@@ -5,7 +5,9 @@ import { activityRetryDelay, ACTIVITY_REQUEST_TIMEOUT_MS } from "./activityRetry
 import { base64ToBytes, bytesToBase64 } from "./yjsCodec";
 import type { RoomTask } from "../../types";
 import { trackEvent } from "../../services/analytics";
+import { isRoomReadOnly } from "./roomEditPolicy";
 import { createRoomEventSource, roomRealtimeFetch } from "./roomRealtimeTransport";
+import { createMarkdownDraft, receiveMarkdownSnapshot, type MarkdownDraft } from "./markdownDraftRecovery";
 
 /** Same opt-out as RoomPage: localStorage room_sync_log = "0" or ?syncLog=0 */
 function isRoomSyncTransportLogEnabled(): boolean {
@@ -116,6 +118,8 @@ type RealtimeState = {
    */
   personalNotes?: PersonalNoteEntryPayload[];
   briefingMarkdown?: string;
+  roomEditorMode?: "code" | "markdown";
+  roomEditorModeRevision?: number;
   tasks?: RoomTask[];
   taskScores: Record<string, number | null>;
   participants: Participant[];
@@ -142,6 +146,7 @@ type WsMessage = {
 };
 
 export type ManagerWorkspaceRealtimeState = {
+  taskId?: string | null;
   stepIndex: number;
   title: string;
   language: string;
@@ -186,6 +191,7 @@ type Options = {
   }) => void;
   onNoteMessageAck?: (payload: NoteMessageAckPayload) => void;
   onNoteMessageFailure?: (payload: NoteMessageFailurePayload) => void;
+  onPrivateNoteFailure?: (payload: { privateNoteId: string }) => void;
 };
 
 type NoteMessageAckPayload = {
@@ -202,6 +208,49 @@ type NoteMessageFailurePayload = {
   code?: string | null;
 };
 
+async function readActivityFailure(response: Response): Promise<{ code?: string; error?: string }> {
+  const reader = response.body?.getReader();
+  if (!reader) return {};
+  const timeout = window.setTimeout(() => { void reader.cancel().catch(() => {}); }, 1000);
+  try {
+    const decoder = new TextDecoder();
+    let text = "";
+    for (;;) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      text += decoder.decode(chunk.value, { stream: true });
+      if (text.length > 4096) return {};
+    }
+    text += decoder.decode();
+    const failure: unknown = JSON.parse(text);
+    return failure && typeof failure === "object" ? failure as { code?: string; error?: string } : {};
+  } catch {
+    return {};
+  } finally {
+    window.clearTimeout(timeout);
+    void reader.cancel().catch(() => {});
+  }
+}
+
+// Stop writes for finished viewers and for everyone while frozen.
+// Presence, recovery and local history navigation remain available.
+const liveMutationTypes = new Set([
+  "code_update", "yjs_update", "language_update", "set_step", "task_rating_update",
+  "notes_update", "note_message", "private_note_entry", "briefing_markdown_update",
+  "grant_interviewer_access", "revoke_interviewer_access", "manager_workspace_open",
+  "manager_workspace_yjs_update", "manager_workspace_briefing_update",
+  "manager_workspace_language_update", "manager_workspace_focus_mode_update",
+  "manager_workspace_awareness_update",
+]);
+const managerOnlyMutationTypes = new Set([
+  "briefing_markdown_update", "language_update", "set_step", "task_rating_update",
+  "notes_update", "note_message", "private_note_entry", "grant_interviewer_access",
+  "revoke_interviewer_access", "manager_workspace_open", "manager_workspace_close",
+  "manager_workspace_yjs_update", "manager_workspace_briefing_update",
+  "manager_workspace_language_update", "manager_workspace_focus_mode_update",
+  "manager_workspace_awareness_update",
+]);
+
 type ClientMessage =
   | { type: "code_update"; code: string; codeSequence: number; syncKey?: string | null }
   | { type: "language_update"; language: string }
@@ -217,7 +266,7 @@ type ClientMessage =
       privateNoteBlockStepIndex?: number | null;
       privateNoteTimestampEpochMs: number;
     }
-  | { type: "briefing_markdown_update"; briefingMarkdown: string }
+  | { type: "briefing_markdown_update"; briefingMarkdown: string; syncKey?: string | null; taskId?: string | null }
   | { type: "grant_interviewer_access"; targetSessionId?: string; targetUserId?: string }
   | { type: "revoke_interviewer_access"; targetSessionId?: string; targetUserId?: string }
   | { type: "presence_update"; presenceStatus: "active" | "away" }
@@ -258,18 +307,21 @@ type ClientMessage =
       stepIndex: number;
       briefingMarkdown: string;
       revision: number;
+      taskId?: string | null;
     }
   | {
       type: "manager_workspace_language_update";
       stepIndex: number;
       language: string;
       revision: number;
+      taskId?: string | null;
     }
   | {
       type: "manager_workspace_focus_mode_update";
       stepIndex: number;
       focusMode: boolean;
       revision: number;
+      taskId?: string | null;
     }
   | {
       type: "manager_workspace_awareness_update";
@@ -303,6 +355,8 @@ type QueuedClientMessage = {
   clientEventSequence: number | null;
   /** Once attempted, the entire delivery envelope is immutable for retries. */
   attempted?: boolean;
+  /** A CAS rejection and its SSE snapshot may arrive in either order. */
+  awaitingManagerSnapshot?: boolean;
 };
 
 type ActivityClientMessage = Extract<ClientMessage, { type: "key_press" }> & {
@@ -320,6 +374,7 @@ type QueuedActivityMessage = {
 
 const MAX_YJS_BATCH_INPUT_CHARS = 64 * 1024;
 const STREAM_STATUS_PROBE_TIMEOUT_MS = 1_500;
+const MUTATION_REQUEST_TIMEOUT_MS = 10_000;
 const ACTIVITY_RECORDING_DELAYED_ERROR =
   "Запись активности задерживается. Повторяем отправку автоматически.";
 
@@ -437,14 +492,26 @@ export function useRoomSocket({
   onManagerWorkspaceAwarenessUpdate,
   onNoteMessageAck,
   onNoteMessageFailure,
+  onPrivateNoteFailure,
 }: Options) {
   const sseRef = useRef<EventSource | null>(null);
   const pendingMessagesRef = useRef<QueuedClientMessage[]>([]);
+  const publicSyncKeyRef = useRef<string | null>(null);
+  const publicTaskIdRef = useRef<string | null>(null);
+  const roomTaskIdsRef = useRef(new Map<number, string>());
+  const managerCanonicalRef = useRef(new Map<number, ManagerWorkspaceRealtimeState>());
+  const managerBriefingDraftRef = useRef(new Map<number, MarkdownDraft>());
+  const managerMetadataDraftRef = useRef(new Map<number, { language?: string; focusMode?: boolean }>());
+  const managerDraftTaskIdsRef = useRef(new Map<number, string>());
+  const managerSubscriptionsRef = useRef(new Set<number>());
   const cursorSequenceRef = useRef(0);
   const codeSequenceRef = useRef(0);
   const yjsSequenceRef = useRef(0);
   const eventSequenceRef = useRef(0);
   const eventTokenRef = useRef<string | null>(null);
+  const roomReadOnlyRef = useRef(false);
+  const roomCanManageRef = useRef(false);
+  const roomAuthorityConfirmedRef = useRef(false);
   const lastPresenceRef = useRef<"active" | "away" | null>(null);
   const queueDrainInProgressRef = useRef(false);
   const inFlightControllerRef = useRef<AbortController | null>(null);
@@ -481,13 +548,22 @@ export function useRoomSocket({
     payload: ClientMessage,
     options: { dedupeSameType?: boolean; clientEventSequence?: number | null } = {},
   ): QueuedClientMessage | null => {
-    if (terminalAccessFailureRef.current || terminalRoomUnavailableRef.current) return null;
+    if (terminalAccessFailureRef.current || terminalRoomUnavailableRef.current ||
+        (roomAuthorityConfirmedRef.current && !roomCanManageRef.current && managerOnlyMutationTypes.has(payload.type)) ||
+        (roomReadOnlyRef.current && liveMutationTypes.has(payload.type))) return null;
     if (options.dedupeSameType) {
       pendingMessagesRef.current = pendingMessagesRef.current.filter((queued) => {
         // A token-free recovery request can be in flight away from index zero.
         // Keep the actual request until it settles; never cancel it to coalesce.
         if (queued === inFlightMessageRef.current) return true;
+        if (queued.attempted) return true;
         if (queued.payload.type !== payload.type) return true;
+        if (payload.type === "briefing_markdown_update" && queued.payload.type === "briefing_markdown_update") {
+          return payload.taskId !== queued.payload.taskId || payload.syncKey !== queued.payload.syncKey;
+        }
+        if ("stepIndex" in payload && "stepIndex" in queued.payload) {
+          return payload.stepIndex !== queued.payload.stepIndex;
+        }
         if (payload.type === "yjs_update" && queued.payload.type === "yjs_update") {
           // Only empty-delta heartbeats are replaceable. Later Yjs deltas can
           // depend on every earlier delta, even when a full snapshot is attached.
@@ -517,6 +593,7 @@ export function useRoomSocket({
   ) => number | null>((payload: ClientMessage, options = {}) => {
     return queuePayload(payload, options)?.clientEventSequence ?? null;
   });
+  const roomModeControllerRef = useRef<AbortController | null>(null);
   const [connected, setConnected] = useState(false);
   const [accessDenied, setAccessDenied] = useState(false);
   const [roomUnavailable, setRoomUnavailable] = useState(false);
@@ -525,6 +602,9 @@ export function useRoomSocket({
 
   useEffect(() => {
     cursorSequenceRef.current = getInitialCursorSequence(inviteCode);
+    roomCanManageRef.current = false;
+    roomAuthorityConfirmedRef.current = false;
+    roomReadOnlyRef.current = false;
     codeSequenceRef.current = getInitialCodeSequence(inviteCode);
     yjsSequenceRef.current = getInitialYjsSequence(inviteCode);
     eventSequenceRef.current = getInitialEventSequence(inviteCode);
@@ -644,6 +724,14 @@ export function useRoomSocket({
 
     const dropPendingQueue = () => {
       pendingMessagesRef.current = [];
+      managerCanonicalRef.current.clear();
+      managerBriefingDraftRef.current.clear();
+      managerMetadataDraftRef.current.clear();
+      managerDraftTaskIdsRef.current.clear();
+      managerSubscriptionsRef.current.clear();
+      publicSyncKeyRef.current = null;
+      publicTaskIdRef.current = null;
+      roomTaskIdsRef.current.clear();
     };
 
     const dropPendingActivity = () => {
@@ -654,6 +742,15 @@ export function useRoomSocket({
       if (activityRetryTimerRef.current != null) {
         window.clearTimeout(activityRetryTimerRef.current);
         activityRetryTimerRef.current = null;
+      }
+    };
+
+    const stopReadOnlyActivity = () => {
+      dropPendingActivity();
+      clearActivityRetryTimer();
+      if (activityDeliveryDelayedRef.current) {
+        activityDeliveryDelayedRef.current = false;
+        onError("");
       }
     };
 
@@ -810,6 +907,7 @@ export function useRoomSocket({
       const before = pendingMessagesRef.current.length;
       pendingMessagesRef.current = pendingMessagesRef.current.filter(({ payload }) => {
         if (payload.type === "code_update") return false;
+        if (payload.type === "briefing_markdown_update") return Boolean(payload.taskId) || payload.syncKey === activeSyncKey;
         if (payload.type !== "yjs_update") return true;
         // Merge the recovery snapshot locally and retry original deltas only
         // within their original task. Never rebind old edits to the new task.
@@ -823,6 +921,23 @@ export function useRoomSocket({
 
     const prepareQueuedMessage = (index: number): QueuedClientMessage => {
       const head = pendingMessagesRef.current[index];
+      if (!head.attempted && (
+        head.payload.type === "manager_workspace_briefing_update" ||
+        head.payload.type === "manager_workspace_language_update" ||
+        head.payload.type === "manager_workspace_focus_mode_update"
+      )) {
+        const canonical = managerCanonicalRef.current.get(head.payload.stepIndex);
+        if (canonical) {
+          head.payload = { ...head.payload, revision: canonical.revision };
+          if (head.payload.type === "manager_workspace_briefing_update") {
+            const draft = managerBriefingDraftRef.current.get(head.payload.stepIndex);
+            if (draft) head.payload = { ...head.payload, briefingMarkdown: draft.value };
+          }
+        }
+        if (head.payload.type === "manager_workspace_briefing_update") {
+          managerBriefingDraftRef.current.get(head.payload.stepIndex)?.sentValues.add(head.payload.briefingMarkdown);
+        }
+      }
       if (head.attempted || head.payload.type !== "yjs_update" ||
         !head.payload.yjsUpdate || !head.payload.syncKey) return head;
 
@@ -874,11 +989,30 @@ export function useRoomSocket({
             const nextIndex = findNextProcessableQueueIndex();
             if (nextIndex < 0) break;
             const head = prepareQueuedMessage(nextIndex);
+            if (head.awaitingManagerSnapshot) break;
+            if (roomReadOnlyRef.current && liveMutationTypes.has(head.payload.type)) {
+              pendingMessagesRef.current.splice(nextIndex, 1);
+              if (head.payload.type === "note_message") {
+                onNoteMessageFailure?.({
+                  clientMessageId: head.payload.clientMessageId,
+                  httpStatus: 409,
+                  code: "ROOM_READ_ONLY",
+                });
+              } else if (head.payload.type === "private_note_entry") {
+                onPrivateNoteFailure?.({ privateNoteId: head.payload.privateNoteId });
+              }
+              continue;
+            }
             head.attempted = true;
             const lease = streamLease;
             const token = eventTokenRef.current;
 
             const controller = new AbortController();
+            let timedOut = false;
+            const deadline = window.setTimeout(() => {
+              timedOut = true;
+              controller.abort();
+            }, MUTATION_REQUEST_TIMEOUT_MS);
             inFlightControllerRef.current = controller;
             inFlightMessageRef.current = head;
             const removeSettledMessage = () => {
@@ -902,9 +1036,10 @@ export function useRoomSocket({
                 })
               });
             } catch {
+              window.clearTimeout(deadline);
               inFlightControllerRef.current = null;
               if (inFlightMessageRef.current === head) inFlightMessageRef.current = null;
-              if (isTerminal() || controller.signal.aborted || lease !== streamLease) break;
+              if (isTerminal() || (controller.signal.aborted && !timedOut) || lease !== streamLease) break;
               if (head.payload.type === "note_message") {
                 removeSettledMessage();
                 onNoteMessageFailure?.({
@@ -924,6 +1059,7 @@ export function useRoomSocket({
               onError("Не удалось отправить действие в комнату");
               break;
             }
+            window.clearTimeout(deadline);
             inFlightControllerRef.current = null;
             if (inFlightMessageRef.current === head) inFlightMessageRef.current = null;
 
@@ -950,7 +1086,22 @@ export function useRoomSocket({
               break;
             }
 
-            const data = (await response.json().catch(() => ({}))) as { error?: string };
+            const data = await readActivityFailure(response);
+            if (response.status === 403 && data.code === "ROOM_READ_ONLY") {
+              roomReadOnlyRef.current = true;
+              removeSettledMessage();
+              if (head.payload.type === "note_message") {
+                onNoteMessageFailure?.({ clientMessageId: head.payload.clientMessageId, httpStatus: 403, code: data.code });
+              } else if (head.payload.type === "private_note_entry") {
+                onPrivateNoteFailure?.({ privateNoteId: head.payload.privateNoteId });
+              }
+              requestStateSync({ expectHydration: true });
+              continue;
+            }
+            if (response.status === 409 && data.error === "Комната недоступна для изменений") {
+              roomReadOnlyRef.current = true;
+              requestStateSync({ expectHydration: true });
+            }
             if (head.payload.type === "note_message") {
               onNoteMessageFailure?.({
                 clientMessageId: head.payload.clientMessageId,
@@ -963,6 +1114,12 @@ export function useRoomSocket({
                 terminateForAccessFailure();
                 break;
               }
+              continue;
+            }
+            if (head.payload.type === "private_note_entry" && response.status >= 400 && response.status < 500 && response.status !== 403) {
+              onPrivateNoteFailure?.({ privateNoteId: head.payload.privateNoteId });
+              removeSettledMessage();
+              onError(data.error || "Заметка не сохранена. Текст остался в этом окне.");
               continue;
             }
             if (response.status === 403) {
@@ -981,7 +1138,41 @@ export function useRoomSocket({
               break;
             }
             if (response.status === 409) {
-              // Out-of-order or stale client sequence; safe to drop.
+              if (data.code === "WORKSPACE_TASK_CHANGED" || data.code === "MARKDOWN_TASK_CHANGED") {
+                removeSettledMessage();
+                onError(data.error || "Исходная задача изменилась. Черновик не перенесён в другой шаг.");
+                continue;
+              }
+              if (
+                head.payload.type === "manager_workspace_briefing_update" ||
+                head.payload.type === "manager_workspace_language_update" ||
+                head.payload.type === "manager_workspace_focus_mode_update"
+              ) {
+                const canonical = managerCanonicalRef.current.get(head.payload.stepIndex);
+                // A rejected CAS has consumed its client sequence. Rebase the
+                // still-pending intent onto the received canonical revision;
+                // a confirmed identical value needs no second mutation.
+                if (canonical && canonical.revision !== head.payload.revision) {
+                  const pending = head.payload.type === "manager_workspace_briefing_update"
+                    ? managerBriefingDraftRef.current.has(head.payload.stepIndex)
+                    : Boolean(managerMetadataDraftRef.current.get(head.payload.stepIndex));
+                  removeSettledMessage();
+                  if (pending) queuePayload({ ...head.payload, revision: canonical.revision }, { dedupeSameType: true });
+                  continue;
+                }
+                // HTTP can finish before the separate SSE channel delivers
+                // its canonical state. Hold the intent until that snapshot,
+                // rather than treating a revision conflict as an ACK.
+                head.awaitingManagerSnapshot = true;
+                pendingMessagesRef.current.unshift({
+                  payload: { type: "manager_workspace_open", stepIndex: head.payload.stepIndex },
+                  queuedAtEpochMs: Date.now(), clientEventSequence: null,
+                });
+                continue;
+              }
+              // A lifecycle conflict needs a canonical status refresh. Retrying
+              // document snapshots against a paused room only creates a loop.
+              // Other conflicts are handled by their existing server sync path.
               emitMetric(
                 "prod_realtime_post_rejected",
                 { status_code: 409, payload_type: head.payload.type },
@@ -1012,7 +1203,7 @@ export function useRoomSocket({
         } finally {
           queueDrainInProgressRef.current = false;
           const next = pendingMessagesRef.current[0];
-          if (!isTerminal() && next && !(requiresEventToken(next.payload) && !eventTokenRef.current)) {
+          if (!isTerminal() && next && !next.awaitingManagerSnapshot && !(requiresEventToken(next.payload) && !eventTokenRef.current)) {
             queueMicrotask(() => {
               tryDrainQueueRef.current?.();
             });
@@ -1029,6 +1220,10 @@ export function useRoomSocket({
      * the relay acknowledges it. A reconnect retries the same head UUID.
      */
     const tryDrainActivityQueue = () => {
+      if (roomReadOnlyRef.current) {
+        stopReadOnlyActivity();
+        return;
+      }
       if (
         activityDrainInProgressRef.current ||
         isTerminal() ||
@@ -1044,6 +1239,10 @@ export function useRoomSocket({
       void (async () => {
         try {
           while (!isTerminal()) {
+            if (roomReadOnlyRef.current) {
+              stopReadOnlyActivity();
+              break;
+            }
             const head = pendingActivityRef.current[0];
             const token = eventTokenRef.current;
             const lease = streamLease;
@@ -1072,6 +1271,10 @@ export function useRoomSocket({
             } catch {
               if (activityInFlightControllerRef.current === controller) activityInFlightControllerRef.current = null;
               if (isTerminal() || (controller.signal.aborted && !timedOut) || lease !== streamLease) break;
+              if (roomReadOnlyRef.current) {
+                stopReadOnlyActivity();
+                break;
+              }
               emitMetric(
                 "prod_realtime_activity_post_failed",
                 { reason: timedOut ? "timeout" : "network_error" },
@@ -1107,6 +1310,22 @@ export function useRoomSocket({
             if (response.status === 410) {
               terminateForRoomUnavailable();
               break;
+            }
+
+            if (response.status === 403 || response.status === 409) {
+              if (roomReadOnlyRef.current) {
+                void response.body?.cancel().catch(() => {});
+                stopReadOnlyActivity();
+                requestStateSync({ expectHydration: true });
+                break;
+              }
+              const failure = await readActivityFailure(response);
+              if (failure.code === "ROOM_READ_ONLY" || failure.error === "Комната недоступна для изменений") {
+                roomReadOnlyRef.current = true;
+                stopReadOnlyActivity();
+                requestStateSync({ expectHydration: true });
+                break;
+              }
             }
 
             if (response.status === 401 || response.status === 403) {
@@ -1175,7 +1394,8 @@ export function useRoomSocket({
     queueActivityRef.current = (payload) => {
       if (
         terminalAccessFailureRef.current ||
-        terminalRoomUnavailableRef.current
+        terminalRoomUnavailableRef.current ||
+        roomReadOnlyRef.current
       ) {
         return;
       }
@@ -1360,6 +1580,42 @@ export function useRoomSocket({
         const message = JSON.parse(raw) as WsMessage;
         if (message.type === "state_sync") {
           const payload = message.payload as RealtimeState;
+          publicSyncKeyRef.current = `${payload.inviteCode}:${payload.currentStep}:${payload.language}`;
+          publicTaskIdRef.current = payload.tasks?.find(task => task.stepIndex === payload.currentStep)?.id ?? null;
+          roomTaskIdsRef.current = new Map((payload.tasks ?? []).flatMap(task => task.id ? [[task.stepIndex, task.id] as const] : []));
+          const lostManagerAccess = roomCanManageRef.current && !payload.canManageRoom;
+          const becameReadOnly = !roomReadOnlyRef.current && isRoomReadOnly(payload);
+          roomCanManageRef.current = Boolean(payload.canManageRoom);
+          roomAuthorityConfirmedRef.current = true;
+          if (lostManagerAccess || becameReadOnly) {
+            // Confirmed demotion is an authority boundary, even though an
+            // active candidate may continue writing shared Yjs/activity.
+            if (inFlightMessageRef.current && managerOnlyMutationTypes.has(inFlightMessageRef.current.payload.type)) abortInFlightRequest();
+            if (becameReadOnly && roomCanManageRef.current && !lostManagerAccess) {
+              // Frozen managers retain access to their own unsent text. Surface
+              // cancellation before removing the protected queue; otherwise the
+              // drain never reaches its existing composer failure callbacks.
+              for (const queued of pendingMessagesRef.current) {
+                if (queued.payload.type === "note_message") {
+                  onNoteMessageFailure?.({
+                    clientMessageId: queued.payload.clientMessageId,
+                    httpStatus: 409,
+                    code: "ROOM_READ_ONLY",
+                  });
+                } else if (queued.payload.type === "private_note_entry") {
+                  onPrivateNoteFailure?.({ privateNoteId: queued.payload.privateNoteId });
+                }
+              }
+            }
+            pendingMessagesRef.current = pendingMessagesRef.current.filter(queued => !managerOnlyMutationTypes.has(queued.payload.type));
+            managerCanonicalRef.current.clear();
+            managerBriefingDraftRef.current.clear();
+            managerMetadataDraftRef.current.clear();
+            managerDraftTaskIdsRef.current.clear();
+            managerSubscriptionsRef.current.clear();
+          }
+          roomReadOnlyRef.current = isRoomReadOnly(payload);
+          if (roomReadOnlyRef.current) stopReadOnlyActivity();
           eventTokenRef.current = payload.eventToken?.trim() || null;
           activityCaptureConfirmedRef.current =
             Boolean(eventTokenRef.current);
@@ -1381,6 +1637,16 @@ export function useRoomSocket({
           onState(payload);
           if (shouldHydrateFromState) {
             discardObsoleteRecoveryMutations(payload);
+            // Reconnect creates a new server connection without its private
+            // workspace subscriptions. Restore them before retrying old edits,
+            // without consuming the sequence ahead of those pending edits.
+            for (const stepIndex of managerSubscriptionsRef.current) {
+              if (stepIndex === payload.currentStep || !payload.canManageRoom || roomReadOnlyRef.current) continue;
+              pendingMessagesRef.current.unshift({
+                payload: { type: "manager_workspace_open", stepIndex },
+                queuedAtEpochMs: Date.now(), clientEventSequence: null,
+              });
+            }
           }
           if (eventTokenRef.current) {
             tryDrainQueueRef.current?.();
@@ -1399,6 +1665,7 @@ export function useRoomSocket({
           return;
         }
         if (message.type === "manager_workspace_sync") {
+          if (!roomCanManageRef.current) return;
           const payload = message.payload as Partial<ManagerWorkspaceRealtimeState>;
           if (
             typeof payload?.stepIndex === "number" &&
@@ -1406,7 +1673,8 @@ export function useRoomSocket({
             typeof payload.code === "string" &&
             typeof payload.briefingMarkdown === "string"
           ) {
-            onManagerWorkspaceSync?.({
+            const canonical: ManagerWorkspaceRealtimeState = {
+              taskId: typeof payload.taskId === "string" ? payload.taskId : null,
               stepIndex: payload.stepIndex,
               title: typeof payload.title === "string" ? payload.title : "",
               language: payload.language,
@@ -1426,7 +1694,46 @@ export function useRoomSocket({
                   : 0,
               recovery: payload.recovery === true,
               focusMode: payload.focusMode === true,
+            };
+            const previous = managerCanonicalRef.current.get(canonical.stepIndex);
+            const previousTaskId = managerDraftTaskIdsRef.current.get(canonical.stepIndex) ?? previous?.taskId;
+            if (previousTaskId && canonical.taskId && previousTaskId !== canonical.taskId) {
+              managerBriefingDraftRef.current.delete(canonical.stepIndex);
+              managerMetadataDraftRef.current.delete(canonical.stepIndex);
+              pendingMessagesRef.current = pendingMessagesRef.current.filter(queued =>
+                !("taskId" in queued.payload && queued.payload.taskId === previousTaskId));
+            }
+            if (canonical.taskId) managerDraftTaskIdsRef.current.set(canonical.stepIndex, canonical.taskId);
+            if (previous && previous.taskId === canonical.taskId && canonical.revision < previous.revision) return;
+            managerCanonicalRef.current.set(canonical.stepIndex, canonical);
+            const draft = managerBriefingDraftRef.current.get(canonical.stepIndex);
+            if (draft) {
+              const next = receiveMarkdownSnapshot(draft, canonical.briefingMarkdown);
+              if (next) managerBriefingDraftRef.current.set(canonical.stepIndex, next);
+              else managerBriefingDraftRef.current.delete(canonical.stepIndex);
+            }
+            const metadata = managerMetadataDraftRef.current.get(canonical.stepIndex);
+            if (metadata && metadata.language === canonical.language) delete metadata.language;
+            if (metadata && metadata.focusMode === canonical.focusMode) delete metadata.focusMode;
+            if (metadata && metadata.language == null && metadata.focusMode == null) managerMetadataDraftRef.current.delete(canonical.stepIndex);
+            onManagerWorkspaceSync?.({
+              ...canonical,
+              ...managerMetadataDraftRef.current.get(canonical.stepIndex),
+              briefingMarkdown: managerBriefingDraftRef.current.get(canonical.stepIndex)?.value ?? canonical.briefingMarkdown,
             });
+            const rejected = pendingMessagesRef.current.filter(queued => queued.awaitingManagerSnapshot &&
+              "stepIndex" in queued.payload && queued.payload.stepIndex === canonical.stepIndex);
+            pendingMessagesRef.current = pendingMessagesRef.current.filter(queued => !rejected.includes(queued));
+            for (const queued of rejected) {
+              // The retry gets a fresh sequence after all retained actions.
+              // Replacing the old FIFO head with a larger sequence would make
+              // the server reject every already-queued action behind it.
+              const pending = queued.payload.type === "manager_workspace_briefing_update"
+                ? managerBriefingDraftRef.current.has(canonical.stepIndex)
+                : Boolean(managerMetadataDraftRef.current.get(canonical.stepIndex));
+              if (pending) queuePayload(queued.payload, { dedupeSameType: true });
+            }
+            tryDrainQueueRef.current?.();
           }
           return;
         }
@@ -1518,6 +1825,8 @@ export function useRoomSocket({
           return;
         }
         if (message.type === "verdict_set") {
+          roomReadOnlyRef.current = !roomCanManageRef.current;
+          if (roomReadOnlyRef.current) stopReadOnlyActivity();
           // Fetch the updated room state immediately so the verdict/status UI
           // reflects the committed DB row before the user sees the screen.
           // expectHydration:true forces a full re-hydration of the room state.
@@ -1567,7 +1876,9 @@ export function useRoomSocket({
     };
 
     sendRef.current = (payload: ClientMessage, options = {}) => {
-      const queued = queuePayload(payload, options);
+      const coalesce = payload.type === "briefing_markdown_update" || payload.type === "manager_workspace_briefing_update" ||
+        payload.type === "manager_workspace_language_update" || payload.type === "manager_workspace_focus_mode_update";
+      const queued = queuePayload(payload, { ...options, dedupeSameType: coalesce });
       tryDrainQueueRef.current?.();
       return queued?.clientEventSequence ?? null;
     };
@@ -1591,6 +1902,7 @@ export function useRoomSocket({
       window.removeEventListener("pagehide", handlePageHide);
       window.removeEventListener("beforeunload", handleBeforeUnload);
 
+      roomModeControllerRef.current?.abort();
       disposed = true;
       if (initialConnectTimerId != null) window.clearTimeout(initialConnectTimerId);
       abortStatusProbe();
@@ -1640,6 +1952,7 @@ export function useRoomSocket({
     onManagerWorkspaceYjsUpdate,
     onNoteMessageAck,
     onNoteMessageFailure,
+    onPrivateNoteFailure,
     onState,
     onYjsUpdate,
     ownerToken,
@@ -1660,6 +1973,36 @@ export function useRoomSocket({
     persistCodeSequence(inviteCode, codeSequence);
     queuePayload({ type: "code_update", code, codeSequence, syncKey: syncKey ?? null }, { dedupeSameType: true });
     tryDrainQueueRef.current?.();
+  };
+
+  // A confirmed room command is sent once. It must never become a deferred
+  // document draft that changes everyone's editor after a later reconnect.
+  const sendRoomEditorModeUpdate = async (roomEditorMode: "code" | "markdown", expectedRoomEditorModeRevision: number) => {
+    if (!connected || !roomCanManageRef.current || roomReadOnlyRef.current || !eventTokenRef.current || roomModeControllerRef.current) {
+      throw new Error("Дождитесь подключения и проверьте доступ к комнате.");
+    }
+    const controller = new AbortController();
+    roomModeControllerRef.current = controller;
+    const deadline = window.setTimeout(() => controller.abort(), MUTATION_REQUEST_TIMEOUT_MS);
+    try {
+      const response = await roomRealtimeFetch(`${API_BASE_URL}/realtime/rooms/${inviteCode}/events`, {
+        method: "POST", signal: controller.signal,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, eventToken: eventTokenRef.current, type: "room_editor_mode_update", roomEditorMode, expectedRoomEditorModeRevision }),
+      });
+      if (!response.ok) {
+        const failure = await readActivityFailure(response);
+        if (!controller.signal.aborted) send({ type: "request_state_sync" });
+        throw new Error(failure.error || "Не удалось изменить режим комнаты. Проверьте текущий режим и повторите.");
+      }
+      if (!controller.signal.aborted) send({ type: "request_state_sync" });
+    } catch (error) {
+      if (error instanceof Error && error.name !== "AbortError" && !(error instanceof TypeError)) throw error;
+      throw new Error("Не удалось подтвердить смену режима. Проверьте текущий режим после восстановления связи.");
+    } finally {
+      window.clearTimeout(deadline);
+      if (roomModeControllerRef.current === controller) roomModeControllerRef.current = null;
+    }
   };
 
   const sendLanguageUpdate = (language: string) => {
@@ -1699,7 +2042,7 @@ export function useRoomSocket({
     privateNoteBlockName?: string | null,
     privateNoteBlockStepIndex?: number | null
   ) => {
-    send({
+    return send({
       type: "private_note_entry",
       privateNoteId,
       privateNoteText,
@@ -1709,10 +2052,12 @@ export function useRoomSocket({
     });
   };
 
-  const sendBriefingUpdate = (briefingMarkdown: string) => {
+  const sendBriefingUpdate = (briefingMarkdown: string, context?: { syncKey: string | null; taskId: string | null }) => {
     send({
       type: "briefing_markdown_update",
-      briefingMarkdown
+      briefingMarkdown,
+      syncKey: context ? context.syncKey : publicSyncKeyRef.current,
+      taskId: context ? context.taskId : publicTaskIdRef.current,
     });
   };
 
@@ -1821,10 +2166,12 @@ export function useRoomSocket({
   };
 
   const openManagerWorkspace = (stepIndex: number) => {
+    managerSubscriptionsRef.current.add(stepIndex);
     send({ type: "manager_workspace_open", stepIndex });
   };
 
   const closeManagerWorkspace = (stepIndex: number) => {
+    managerSubscriptionsRef.current.delete(stepIndex);
     send({ type: "manager_workspace_close", stepIndex });
   };
 
@@ -1853,8 +2200,18 @@ export function useRoomSocket({
     stepIndex: number,
     briefingMarkdown: string,
     revision: number,
+    baseMarkdown?: string,
   ) => {
-    send({ type: "manager_workspace_briefing_update", stepIndex, briefingMarkdown, revision });
+    if (roomAuthorityConfirmedRef.current && (!roomCanManageRef.current || roomReadOnlyRef.current)) return;
+    const current = managerBriefingDraftRef.current.get(stepIndex);
+    if (current) current.value = briefingMarkdown;
+    else managerBriefingDraftRef.current.set(stepIndex, createMarkdownDraft(
+      managerCanonicalRef.current.get(stepIndex)?.briefingMarkdown ?? baseMarkdown ?? "", briefingMarkdown,
+    ));
+    const taskId = managerCanonicalRef.current.get(stepIndex)?.taskId ?? roomTaskIdsRef.current.get(stepIndex);
+    if (taskId) managerDraftTaskIdsRef.current.set(stepIndex, taskId);
+    send({ type: "manager_workspace_briefing_update", stepIndex, briefingMarkdown, revision,
+      taskId });
   };
 
   const sendManagerWorkspaceLanguageUpdate = (
@@ -1862,7 +2219,12 @@ export function useRoomSocket({
     language: string,
     revision: number,
   ) => {
-    send({ type: "manager_workspace_language_update", stepIndex, language, revision });
+    if (roomAuthorityConfirmedRef.current && (!roomCanManageRef.current || roomReadOnlyRef.current)) return;
+    managerMetadataDraftRef.current.set(stepIndex, { ...managerMetadataDraftRef.current.get(stepIndex), language });
+    const taskId = managerCanonicalRef.current.get(stepIndex)?.taskId ?? roomTaskIdsRef.current.get(stepIndex);
+    if (taskId) managerDraftTaskIdsRef.current.set(stepIndex, taskId);
+    send({ type: "manager_workspace_language_update", stepIndex, language, revision,
+      taskId });
   };
 
   const sendManagerWorkspaceFocusModeUpdate = (
@@ -1870,11 +2232,16 @@ export function useRoomSocket({
     focusMode: boolean,
     revision: number,
   ) => {
-    send({ type: "manager_workspace_focus_mode_update", stepIndex, focusMode, revision });
+    if (roomAuthorityConfirmedRef.current && (!roomCanManageRef.current || roomReadOnlyRef.current)) return;
+    managerMetadataDraftRef.current.set(stepIndex, { ...managerMetadataDraftRef.current.get(stepIndex), focusMode });
+    const taskId = managerCanonicalRef.current.get(stepIndex)?.taskId ?? roomTaskIdsRef.current.get(stepIndex);
+    if (taskId) managerDraftTaskIdsRef.current.set(stepIndex, taskId);
+    send({ type: "manager_workspace_focus_mode_update", stepIndex, focusMode, revision,
+      taskId });
   };
 
   const sendManagerWorkspaceAwarenessUpdate = (stepIndex: number, awarenessUpdate: string) => {
-    if (terminalAccessFailureRef.current || terminalRoomUnavailableRef.current) return;
+    if (terminalAccessFailureRef.current || terminalRoomUnavailableRef.current || roomReadOnlyRef.current) return;
     const trimmed = awarenessUpdate.trim();
     if (!trimmed) return;
     const token = eventTokenRef.current;
@@ -1914,7 +2281,8 @@ export function useRoomSocket({
   }) => {
     if (
       terminalAccessFailureRef.current ||
-      terminalRoomUnavailableRef.current
+      terminalRoomUnavailableRef.current ||
+      roomReadOnlyRef.current
     ) {
       return;
     }
@@ -1946,6 +2314,7 @@ export function useRoomSocket({
     participantId,
     sessionId,
     sendCodeUpdate,
+    sendRoomEditorModeUpdate,
     sendLanguageUpdate,
     sendSetStep,
     sendTaskRatingUpdate,

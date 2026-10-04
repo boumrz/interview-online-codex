@@ -734,6 +734,36 @@ class RealtimeChatIdempotencyIntegrationTest(
     }
 
     @Test
+    fun expiredConnectedGuestStopsReceivingPrivateHistoryAndManagerWorkspace() {
+        val issuedAt = Instant.parse("2032-04-02T00:00:00Z")
+        testClock.set(issuedAt)
+        val owner = HrHttpFixtures.register(mockMvc, objectMapper, false, "exp-read-own").first
+        val room = HrHttpFixtures.createRoom(mockMvc, objectMapper, owner, "Expired read authority")
+        assertEquals(200, mockMvc.post("/api/rooms/${room.inviteCode}/tasks") {
+            header("Authorization", "Bearer ${owner.token}")
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"customTasks":[{"title":"Public","description":"Brief","starterCode":"// public"},{"title":"Private workspace","description":"Brief","starterCode":"// draft"}]}"""
+        }.andReturn().response.status)
+        val ownerStream = join(mockMvc, room, authToken = owner.token)
+        val guest = join(mockMvc, room)
+        assertEquals(204, postEvent(mockMvc, room, ownerStream, mapOf("type" to "grant_interviewer_access", "targetSessionId" to guest.sessionId)).response.status)
+        assertEquals(204, postEvent(mockMvc, room, guest, mapOf("type" to "private_note_entry", "privateNoteId" to UUID.randomUUID().toString(), "privateNoteText" to "Guest private history")).response.status)
+        for (tab in listOf(ownerStream, guest)) {
+            assertEquals(204, postEvent(mockMvc, room, tab, mapOf("type" to "manager_workspace_open", "stepIndex" to 1)).response.status)
+        }
+        val guestWorkspaceCount = sseMessages(guest.response).count { it.path("type").asText() == "manager_workspace_sync" }
+        testClock.set(issuedAt.plus(Duration.ofHours(12)))
+        assertEquals(204, postEvent(mockMvc, room, ownerStream, mapOf("type" to "language_update", "language" to "python")).response.status)
+        val state = sseMessages(guest.response).last { it.path("type").asText() == "state_sync" }.path("payload")
+        assertEquals("candidate", state.path("role").asText(), "broadcast must refresh an expired connected guest before exposing manager permissions")
+        assertFalse(state.path("canManageRoom").asBoolean())
+        assertTrue(state.path("personalNotes").isEmpty, "expired guest cannot receive old private history")
+        assertEquals(204, postEvent(mockMvc, room, ownerStream, mapOf("type" to "manager_workspace_briefing_update", "stepIndex" to 1, "revision" to 0, "value" to "New hidden brief after expiry")).response.status)
+        assertEquals(guestWorkspaceCount, sseMessages(guest.response).count { it.path("type").asText() == "manager_workspace_sync" }, "expired subscription cannot receive manager workspace broadcasts")
+        assertFalse(guest.response.response.contentAsString.contains("New hidden brief after expiry"))
+    }
+
+    @Test
     fun `capability expires exactly after twelve hours and reconnects only as candidate`() {
         val issuedAt = Instant.parse("2032-04-01T00:00:00Z")
         testClock.set(issuedAt)
@@ -753,6 +783,19 @@ class RealtimeChatIdempotencyIntegrationTest(
         )
 
         testClock.set(issuedAt.plus(Duration.ofHours(12)))
+        // The existing connection must lose the grant too, without waiting for
+        // reconnect. A valid owner-link keeps its separate existing authority.
+        assertEquals(200, mockMvc.post("/api/rooms/${room.inviteCode}/verdict") {
+            header("Authorization", "Bearer ${owner.token}")
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"verdict":"HIRE"}"""
+        }.andReturn().response.status)
+        assertError(postEvent(mockMvc, room, guest, mapOf("type" to "code_update", "code" to "Expired connected grant")), 403, "ROOM_READ_ONLY")
+        assertEquals(204, postEvent(mockMvc, room, guest, mapOf("type" to "request_state_sync")).response.status)
+        val expiredConnectedState = sseMessages(guest.response).last { it.path("type").asText() == "state_sync" }.path("payload")
+        assertEquals("candidate", expiredConnectedState.path("role").asText())
+        assertFalse(expiredConnectedState.path("canManageRoom").asBoolean())
+        assertFalse(expiredConnectedState.path("code").asText().contains("Expired connected grant"))
         val expired = join(mockMvc, room, reconnectCapability = capability)
         val replacement = requireReconnectCapability(expired, room)
         assertTrue(replacement != capability, "an exactly expired capability must be replaced")
@@ -1039,7 +1082,7 @@ class RealtimeChatIdempotencyIntegrationTest(
     }
 
     @Test
-    fun `authorized finished sender receives 409 without mutating idempotent or legacy chat`() {
+    fun `authorized finished sender continues idempotent and legacy chat`() {
         val owner = HrHttpFixtures.register(mockMvc, objectMapper, false, "chat-finished-owner").first
         val room = HrHttpFixtures.createRoom(mockMvc, objectMapper, owner, "Finished chat is read-only")
         val ownerStream = join(mockMvc, room, authToken = owner.token)
@@ -1062,7 +1105,7 @@ class RealtimeChatIdempotencyIntegrationTest(
             "Late finished idempotent chat",
             726,
         )
-        assertEquals(409, idempotent.response.status, idempotent.response.contentAsString)
+        assertEquals(200, idempotent.response.status, idempotent.response.contentAsString)
 
         val legacy = postChat(
             mockMvc,
@@ -1072,8 +1115,12 @@ class RealtimeChatIdempotencyIntegrationTest(
             text = "Late finished legacy chat",
             clientEventSequence = 727,
         )
-        assertEquals(409, legacy.response.status, legacy.response.contentAsString)
-        assertEquals(beforeLateWrites, storedChatJson(room), "finished chat requests must not mutate messages or receipts")
+        assertEquals(204, legacy.response.status, legacy.response.contentAsString)
+        val afterLateWrites = storedChatJson(room)
+        assertTrue(afterLateWrites.contains("Late finished idempotent chat"))
+        assertTrue(afterLateWrites.contains("Late finished legacy chat"))
+        assertTrue(afterLateWrites.contains("Before finish"))
+        assertFalse(beforeLateWrites == afterLateWrites, "finished manager chat must persist")
     }
 
     @Test

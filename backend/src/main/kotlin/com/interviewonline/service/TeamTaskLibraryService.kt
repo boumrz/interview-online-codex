@@ -19,6 +19,8 @@ import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionSynchronizationManager
+import jakarta.persistence.EntityManager
 import java.text.Normalizer
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -33,17 +35,17 @@ class TeamTaskLibraryService(
     private val personalTaskRepository: UserTaskTemplateRepository,
     private val featureGate: TeamWorkspaceFeatureGate,
     private val jdbcTemplate: JdbcTemplate,
+    private val entityManager: EntityManager,
 ) {
     @Transactional(readOnly = true)
-    fun list(actor: User, teamId: String, rawStatus: String?, rawLanguage: String?, rawQuery: String?): TeamTaskLibraryDto {
+    fun list(actor: User, teamId: String, rawLanguage: String?, rawQuery: String?): TeamTaskLibraryDto {
         val access = requireActiveMember(actor, teamId)
-        val status = parseStatus(rawStatus)
         val language = rawLanguage?.takeIf { it.isNotBlank() }?.let(::normalizeLanguage)
         val query = normalizedQuery(rawQuery)
         val allTasks = if (language == null) {
-            taskRepository.findByTeamIdAndStatusOrderByCreatedAtDescIdAsc(access.team.id, status)
+            taskRepository.findByTeamIdOrderByCreatedAtDescIdAsc(access.team.id)
         } else {
-            taskRepository.findByTeamIdAndStatusAndLanguageOrderByCreatedAtDescIdAsc(access.team.id, status, language)
+            taskRepository.findByTeamIdAndLanguageOrderByCreatedAtDescIdAsc(access.team.id, language)
         }
         val filtered = filterTasks(allTasks, query)
         return TeamTaskLibraryDto(
@@ -119,49 +121,40 @@ class TeamTaskLibraryService(
     }
 
     @Transactional
-    fun archive(actor: User, teamId: String, taskId: String): TeamTaskTemplateResponse {
-        val access = requireActiveMember(actor, teamId)
-        val task = requireTask(access.team.id, taskId)
-        requireTaskManager(access, task)
-        if (task.status != ARCHIVED) {
-            task.status = ARCHIVED
-            bump(task)
-        }
-        return TeamTaskTemplateResponse(taskDto(task))
-    }
-
-    @Transactional
-    fun restore(actor: User, teamId: String, taskId: String): TeamTaskTemplateResponse {
-        val access = requireActiveMember(actor, teamId)
-        val task = requireTask(access.team.id, taskId)
-        requireTaskManager(access, task)
-        if (task.status != ACTIVE) {
-            task.status = ACTIVE
-            bump(task)
-        }
-        return TeamTaskTemplateResponse(taskDto(task))
-    }
-
-    @Transactional
     fun delete(actor: User, teamId: String, taskId: String) {
         val access = requireActiveMember(actor, teamId)
         val task = requireTask(access.team.id, taskId)
         requireTaskManager(access, task)
-        val referenced = jdbcTemplate.queryForObject(
-            """SELECT (SELECT COUNT(*) FROM team_task_set_items WHERE task_template_id = ?) +
-                      (SELECT COUNT(*) FROM team_interview_programme_items WHERE task_template_id = ?)""",
-            Long::class.java, task.id, task.id,
-        )!! > 0
-        if (referenced) throw secure(HttpStatus.CONFLICT, "TEAM_TASK_IN_USE", "Задача используется в наборе или задачах интервью")
+        val setIds = jdbcTemplate.queryForList("SELECT DISTINCT task_set_id FROM team_task_set_items WHERE task_template_id = ?", String::class.java, task.id)
+        val programmeIds = jdbcTemplate.queryForList("SELECT DISTINCT programme_id FROM team_interview_programme_items WHERE task_template_id = ?", String::class.java, task.id)
+        setIds.forEach { id -> jdbcTemplate.update("UPDATE team_task_sets SET revision = revision + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?", id) }
+        programmeIds.forEach { id -> jdbcTemplate.update("UPDATE team_interview_programmes SET revision = revision + 1, version = version + CASE WHEN status = 'PUBLISHED' THEN 1 ELSE 0 END, updated_at = CURRENT_TIMESTAMP WHERE id = ?", id) }
         taskRepository.delete(task)
         taskRepository.flush()
+        compactItems("team_task_set_items", "task_set_id", setIds)
+        compactItems("team_interview_programme_items", "programme_id", programmeIds)
+        programmeIds.forEach { id ->
+            jdbcTemplate.update("UPDATE team_interview_programmes SET status = 'DRAFT' WHERE id = ? AND status = 'PUBLISHED' AND NOT EXISTS (SELECT 1 FROM team_interview_programme_items WHERE programme_id = ?)", id, id)
+        }
+    }
+
+    private fun compactItems(table: String, parentColumn: String, parentIds: List<String>) {
+        parentIds.forEach { id ->
+            // Two phases avoid transient collisions of the unique parent/position key.
+            jdbcTemplate.update("UPDATE $table SET position = -position - 1 WHERE $parentColumn = ?", id)
+            jdbcTemplate.update("WITH ordered AS (SELECT id, row_number() OVER (ORDER BY position DESC) - 1 AS new_position FROM $table WHERE $parentColumn = ?) UPDATE $table item SET position = ordered.new_position FROM ordered WHERE item.id = ordered.id", id)
+        }
     }
 
     private fun requireActiveMember(actor: User, teamId: String): TeamAccess {
         featureGate.requireEnabled()
         val actorId = requireNotNull(actor.id)
-        val team = teamRepository.findById(teamId).orElse(null)?.takeIf { it.state == ACTIVE }
-            ?: throw teamNotFound()
+        val team = if (TransactionSynchronizationManager.isCurrentTransactionReadOnly()) {
+            teamRepository.findById(teamId).orElse(null)
+        } else {
+            teamRepository.lockById(teamId)?.also(entityManager::refresh)
+        }
+        if (team == null || team.state != ACTIVE) throw teamNotFound()
         val membership = membershipRepository.findByTeamIdAndUserId(team.id, actorId)
             ?.takeIf { it.state == ACTIVE }
             ?: throw teamNotFound()
@@ -185,12 +178,6 @@ class TeamTaskLibraryService(
     private fun normalized(value: String): String = Normalizer.normalize(value, Normalizer.Form.NFKC)
         .trim { it.isWhitespace() }
         .lowercase(Locale.ROOT)
-
-    private fun parseStatus(rawStatus: String?): String = when (rawStatus?.trim()?.lowercase(Locale.ROOT)) {
-        null, "", "active" -> ACTIVE
-        "archived" -> ARCHIVED
-        else -> throw secure(HttpStatus.BAD_REQUEST, "INVALID_TEAM_TASK_FILTER", "Фильтр задач должен быть active или archived")
-    }
 
     private fun normalizedQuery(value: String?): String? = value
         ?.let { Normalizer.normalize(it, Normalizer.Form.NFKC).trim { character -> character.isWhitespace() } }
@@ -247,8 +234,8 @@ class TeamTaskLibraryService(
     }
 
     private fun counts(teamId: String): TeamTaskLibraryCountsDto = TeamTaskLibraryCountsDto(
-        activeTasks = taskRepository.countByTeamIdAndStatus(teamId, ACTIVE),
-        archivedTasks = taskRepository.countByTeamIdAndStatus(teamId, ARCHIVED),
+        activeTasks = taskRepository.countByTeamId(teamId),
+        archivedTasks = 0,
     )
 
     private fun requireTask(teamId: String, taskId: String): TeamTaskTemplate =
@@ -295,7 +282,6 @@ class TeamTaskLibraryService(
 
     private companion object {
         const val ACTIVE = "ACTIVE"
-        const val ARCHIVED = "ARCHIVED"
         const val MAX_TITLE_CODE_POINTS = 180
     }
 }

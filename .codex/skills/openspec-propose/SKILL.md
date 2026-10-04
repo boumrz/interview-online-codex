@@ -1,6 +1,6 @@
 ---
 name: openspec-propose
-description: Propose a new change with all artifacts generated in one step. Use when the user wants to quickly describe what they want to build and get a complete proposal with design, specs, and tasks ready for implementation.
+description: Historical OpenSpec propose workflow. Use only for an explicit OpenSpec request; ordinary InterHub work follows SPEC.md and specs/features.
 license: MIT
 compatibility: Requires openspec CLI.
 metadata:
@@ -8,6 +8,12 @@ metadata:
   version: "1.0"
   generatedBy: "1.4.1"
 ---
+
+> InterHub uses editable Markdown contracts in `specs/features/`, indexed by
+> `SPEC.md`. Follow `AGENTS.md` and `specs/README.md` for ordinary work.
+> The workflow below applies only when the user explicitly requests OpenSpec;
+> do not select it merely because a feature needs a specification.
+
 
 Propose a new change - create the change and generate all artifacts in one step.
 

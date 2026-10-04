@@ -1,0 +1,15 @@
+.filters {
+  width: 100%;
+}
+
+.select {
+  flex: 1 1 220px;
+  max-width: 360px;
+  min-width: 0;
+}
+
+@media (max-width: 719px) {
+  .select {
+    max-width: none;
+  }
+}

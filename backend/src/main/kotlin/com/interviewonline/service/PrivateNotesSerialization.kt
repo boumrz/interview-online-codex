@@ -316,6 +316,7 @@ internal object PrivateNotesSerialization {
                 ?.ifBlank { null },
             blockStepIndex = entry.blockStepIndex?.takeIf { it >= 0 },
             timestampEpochMs = entry.timestampEpochMs.coerceAtLeast(0L),
+            writtenByHost = entry.writtenByHost,
         )
     }
 

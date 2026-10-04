@@ -7,6 +7,8 @@ server:
     mime-types: application/json,application/xml,text/html,text/plain,text/css,application/javascript
 
 spring:
+  application:
+    name: InterHub
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/interview_online}
     username: ${DB_USER:interview}

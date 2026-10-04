@@ -1,6 +1,6 @@
 ---
 name: openspec-archive-change
-description: Archive a completed change in the experimental workflow. Use when the user wants to finalize and archive a change after implementation is complete.
+description: Historical OpenSpec archive-change workflow. Use only for an explicit OpenSpec request; ordinary InterHub work follows SPEC.md and specs/features.
 license: MIT
 compatibility: Requires openspec CLI.
 metadata:
@@ -8,6 +8,12 @@ metadata:
   version: "1.0"
   generatedBy: "1.4.1"
 ---
+
+> InterHub uses editable Markdown contracts in `specs/features/`, indexed by
+> `SPEC.md`. Follow `AGENTS.md` and `specs/README.md` for ordinary work.
+> The workflow below applies only when the user explicitly requests OpenSpec;
+> do not select it merely because a feature needs a specification.
+
 
 Archive a completed change in the experimental workflow.
 

@@ -305,7 +305,7 @@ class RoomService(
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
         val realtimeRole = collaborationService.resolveRoleByEventToken(inviteCode, eventToken)
         val access = roomAccessService.requireManager(room, user, ownerToken, interviewerToken, realtimeRole)
-
+        requireLiveMutableRoom(room)
         val requestedTaskIds = request.taskIds
             .map { it.trim() }
             .filter { it.isNotBlank() }
@@ -449,6 +449,7 @@ class RoomService(
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
         val realtimeRole = collaborationService.resolveRoleByEventToken(inviteCode, eventToken)
         val access = roomAccessService.requireManager(room, user, ownerToken, interviewerToken, realtimeRole)
+        requireLiveMutableRoom(room)
         val task = room.tasks.firstOrNull { it.stepIndex == stepIndex }
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Задача не найдена")
         requireEditableRoomTask(task)
@@ -485,6 +486,7 @@ class RoomService(
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
         val realtimeRole = collaborationService.resolveRoleByEventToken(inviteCode, eventToken)
         val access = roomAccessService.requireManager(room, user, ownerToken, interviewerToken, realtimeRole)
+        requireLiveMutableRoom(room)
         val target = room.tasks.firstOrNull { it.stepIndex == stepIndex }
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Задача не найдена")
         requireEditableRoomTask(target)
@@ -645,6 +647,7 @@ class RoomService(
         val verdictValue = VerdictValue.fromWire(request.verdict)
             ?: throw ApiException(HttpStatus.BAD_REQUEST, "Неизвестное значение вердикта: ${request.verdict}")
 
+        collaborationService.snapshotAcceptedPublishedEditorState(room)
         room.verdict = verdictValue.wireValue
         room.verdictComment = request.verdictComment?.take(2000)
         room.status = "finished"
@@ -835,7 +838,7 @@ class RoomService(
             currentStep = room.currentStep,
             code = activeCode,
             notes = activeNotes,
-            notesMessages = notesMessages.map { note ->
+            notesMessages = if (access.canManageRoom) notesMessages.map { note ->
                 RoomNoteMessageDto(
                     id = note.id,
                     sessionId = note.sessionId,
@@ -844,8 +847,10 @@ class RoomService(
                     text = note.text,
                     timestampEpochMs = note.timestampEpochMs,
                 )
-            },
+            } else emptyList(),
             briefingMarkdown = activeTask?.briefingMarkdown?.takeIf { it.isNotBlank() } ?: activeTask?.description.orEmpty(),
+            roomEditorMode = room.roomEditorMode,
+            roomEditorModeRevision = room.roomEditorModeRevision,
             ownerToken = if (includeOwnerToken) room.ownerSessionToken else null,
             interviewerToken = if (includeInterviewerToken) room.interviewerSessionToken else null,
             role = access.role.wireValue,
@@ -923,7 +928,8 @@ class RoomService(
         task.workspaceFocusMode ?: task.briefingMarkdown.orEmpty().trimStart().startsWith(BRIEFING_FOCUS_ON_MARKER)
 
     private fun requireLiveMutableRoom(room: Room) {
-        if (room.status == RoomStatus.FINISHED.wireValue || room.status == RoomStatus.FROZEN.wireValue) {
+        if (room.archivedAt != null) throw ApiException(HttpStatus.GONE, "Комната архивирована")
+        if (room.status == RoomStatus.FROZEN.wireValue) {
             throw ApiException(HttpStatus.CONFLICT, "Комната недоступна для изменений")
         }
     }

@@ -6,6 +6,8 @@ data class RealtimeEventRequest(
     val clientEventSequence: Long? = null,
     val operationId: String? = null,
     val type: String,
+    val roomEditorMode: String? = null,
+    val expectedRoomEditorModeRevision: Long? = null,
     val code: String? = null,
     val codeSequence: Long? = null,
     val language: String? = null,
@@ -23,6 +25,8 @@ data class RealtimeEventRequest(
     val privateNoteTimestampEpochMs: Long? = null,
     val presentationMarkdown: String? = null,
     val briefingMarkdown: String? = null,
+    /** Stable room-task identity captured when the Markdown draft was edited. */
+    val taskId: String? = null,
     val presenceStatus: String? = null,
     val lineNumber: Int? = null,
     val column: Int? = null,

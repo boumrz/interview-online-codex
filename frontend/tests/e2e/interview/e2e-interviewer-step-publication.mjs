@@ -263,15 +263,18 @@ async function expectPublishedEditorCode(page, codeSentinel, label) {
 }
 
 async function expectEditableManagerWorkspace(page, label) {
-  await page.getByRole('tab', { name: 'Условие', exact: true }).click();
+  if (await page.locator('#room-condition-toggle').getAttribute('aria-expanded') === 'false') await page.locator('#room-condition-toggle').click();
   const codeEditor = page.locator('[data-testid="room-code-editor-host"] .cm-editor');
-  const briefingEditor = page.locator('[data-testid="briefing-board-interviewer"] [data-testid="room-markdown-editor"] .cm-editor');
-  const focusToggle = page.locator('[data-testid="briefing-focus-toggle"]');
+  const briefingEditor = page.locator('#room-context-region-condition [data-testid="room-markdown-editor"] .cm-editor');
+  const focusToggle = page.locator('[data-testid="room-editor-mode-switch"]');
 
   await Promise.all([
     codeEditor.waitFor({ state: "visible", timeout: 10_000 }),
     briefingEditor.waitFor({ state: "visible", timeout: 10_000 }),
     focusToggle.waitFor({ state: "visible", timeout: 10_000 }),
+    // A mounted preview remains read-only while its fresh snapshot is loading.
+    codeEditor.locator('.cm-content[contenteditable="true"]').waitFor({ state: "visible", timeout: 10_000 }),
+    briefingEditor.locator('.cm-content[contenteditable="true"]').waitFor({ state: "visible", timeout: 10_000 }),
   ]);
 
   assertCondition(
@@ -284,20 +287,24 @@ async function expectEditableManagerWorkspace(page, label) {
   );
 }
 
-async function expectWorkspaceFocusMode(page, expectedState, label) {
-  await page.getByRole('tab', { name: 'Условие', exact: true }).click();
-  const toggle = page.locator('[data-testid="briefing-focus-toggle"]');
-  await toggle.waitFor({ state: "visible", timeout: 10_000 });
-  await page.waitForFunction(
-    ({ expectedState }) =>
-      document.querySelector('[data-testid="briefing-focus-toggle"]')?.getAttribute("data-state") === expectedState,
-    { expectedState },
-    { timeout: 10_000 },
-  );
-  assertCondition(
-    (await toggle.getAttribute("data-state")) === expectedState,
-    `${label}_FOCUS_MODE_MISMATCH`,
-  );
+async function expectRoomEditorMode(page, mode, label) {
+  const candidate = page.getByTestId("briefing-board-candidate");
+  const isCandidate = await candidate.count() > 0;
+  const board = isCandidate ? candidate : page.locator('#room-context-region-editor [data-testid="briefing-board-interviewer"]');
+  const selector = page.getByTestId("room-editor-mode-switch");
+  if (await selector.count()) await page.waitForFunction(expected => document.querySelector('[data-testid="room-editor-mode-switch"]')?.textContent.includes(expected), mode === "markdown" ? "Markdown" : "Code");
+  else await page.getByText(`Режим комнаты — ${mode === "markdown" ? "Markdown" : "Code"}`, { exact: true }).waitFor();
+  if (isCandidate) assertCondition(await candidate.getAttribute("data-focus") === (mode === "markdown" ? "on" : "off"), `${label}_CANDIDATE_MODE_MISMATCH`);
+  else await board.waitFor({ state: mode === "markdown" ? "visible" : "hidden" });
+  assertCondition(await page.getByTestId("room-code-editor-host").isVisible() === (mode === "code"), `${label}_ROOM_MODE_MISMATCH`);
+}
+
+async function changeRoomMode(page, mode) {
+  await page.getByRole('combobox', { name: 'Режим комнаты', exact: true }).click();
+  await page.locator('.ant-select-item-option').filter({ hasText: mode === 'markdown' ? 'Markdown' : 'Code' }).click();
+  const confirmation = page.getByRole('dialog', { name: 'Изменить режим комнаты?', exact: true });
+  await confirmation.getByRole('button', { name: 'Изменить режим', exact: true }).click();
+  await confirmation.waitFor({ state: 'hidden' });
 }
 
 async function waitForRoomStep(ownerToken, inviteCode, expectedStep) {
@@ -357,8 +364,8 @@ async function replaceSharedEditorCode(page, nextCode, label, expectedMarker = "
 }
 
 async function replaceBriefingMarkdown(page, nextMarkdown, label) {
-  await page.getByRole('tab', { name: 'Условие', exact: true }).click();
-  const content = page.locator('[data-testid="room-markdown-editor"] .cm-content');
+  if (await page.locator('#room-condition-toggle').getAttribute('aria-expanded') === 'false') await page.locator('#room-condition-toggle').click();
+  const content = page.locator('#room-context-region-condition [data-testid="room-markdown-editor"] .cm-content');
   await content.waitFor({ state: "visible", timeout: 10_000 });
   await content.click();
   await page.keyboard.press("Control+A");
@@ -366,7 +373,7 @@ async function replaceBriefingMarkdown(page, nextMarkdown, label) {
   await page.waitForFunction(
     ({ nextMarkdown }) =>
       document
-        .querySelector('[data-testid="room-markdown-editor"] .cm-content')
+        .querySelector('#room-context-region-condition [data-testid="room-markdown-editor"] .cm-content')
         ?.textContent?.includes(nextMarkdown),
     { nextMarkdown },
     { timeout: 10_000 },
@@ -378,13 +385,13 @@ async function replaceBriefingMarkdown(page, nextMarkdown, label) {
 }
 
 async function expectBriefingMarkdown(page, marker, label) {
-  await page.getByRole('tab', { name: 'Условие', exact: true }).click();
-  const content = page.locator('[data-testid="room-markdown-editor"] .cm-content');
+  if (await page.locator('#room-condition-toggle').getAttribute('aria-expanded') === 'false') await page.locator('#room-condition-toggle').click();
+  const content = page.locator('#room-context-region-condition [data-testid="room-markdown-editor"] .cm-content');
   await content.waitFor({ state: "visible", timeout: 10_000 });
   await page.waitForFunction(
     ({ marker }) =>
       document
-        .querySelector('[data-testid="room-markdown-editor"] .cm-content')
+        .querySelector('#room-context-region-condition [data-testid="room-markdown-editor"] .cm-content')
         ?.textContent?.includes(marker),
     { marker },
     { timeout: 10_000 },
@@ -399,15 +406,15 @@ async function selectWorkspaceLanguage(page, optionLabel, expectedValue, label) 
   const input = page.locator('#room-language-select');
   await input.waitFor({ state: "visible", timeout: 10_000 });
   await input.click();
-  await page.getByRole('option', { name: optionLabel, exact: true }).click();
+  await page.locator('.ant-select-item-option').filter({ hasText: optionLabel }).click();
   await page.waitForFunction(
     ({ expectedValue }) =>
-      document.querySelector('#room-language-select')?.value === expectedValue,
+      document.querySelector('#room-language-select')?.closest('.ant-select')?.innerText?.trim() === expectedValue,
     { expectedValue },
     { timeout: 10_000 },
   );
   assertCondition(
-    (await input.inputValue()) === expectedValue,
+    (await input.evaluate(el => el.closest('.ant-select').innerText.trim())) === expectedValue,
     `${label}_WORKSPACE_LANGUAGE_MISMATCH`,
   );
 }
@@ -417,12 +424,12 @@ async function expectWorkspaceLanguage(page, expectedValue, label) {
   await input.waitFor({ state: "visible", timeout: 10_000 });
   await page.waitForFunction(
     ({ expectedValue }) =>
-      document.querySelector('#room-language-select')?.value === expectedValue,
+      document.querySelector('#room-language-select')?.closest('.ant-select')?.innerText?.trim() === expectedValue,
     { expectedValue },
     { timeout: 10_000 },
   );
   assertCondition(
-    (await input.inputValue()) === expectedValue,
+    (await input.evaluate(el => el.closest('.ant-select').innerText.trim())) === expectedValue,
     `${label}_WORKSPACE_LANGUAGE_MISMATCH`,
   );
 }
@@ -571,23 +578,34 @@ async function expectPublishAction(page, taskTitle, label) {
     (await publishButton.getAttribute("aria-label"))?.includes(taskTitle),
     `${label}_PUBLISH_TARGET_TITLE_MISSING`,
   );
+  await page.mouse.move(0, 0);
+  await publishButton.evaluate(async (element) => {
+    const row = element.closest("[data-local-selected]");
+    for (const animation of row.getAnimations({ subtree: true })) if (Number.isFinite(animation.effect?.getComputedTiming().endTime)) animation.finish();
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
   const style = await publishButton.evaluate((element) => {
     const computed = getComputedStyle(element);
+    const themed = (property) => {
+      const probe = document.createElement("span");
+      probe.style.color = `var(${property})`;
+      element.append(probe);
+      const value = getComputedStyle(probe).color;
+      probe.remove();
+      return value;
+    };
     return {
       backgroundColor: computed.backgroundColor,
+      rowBackground: getComputedStyle(element.closest("[data-global-active], [data-local-selected]") ?? element.parentElement).backgroundColor,
       borderRadius: computed.borderRadius,
       color: computed.color,
+      expectedBackground: themed("--app-selected-bg"),
+      expectedColor: themed("--app-primary-text"),
     };
   });
-  const rgbaMatch = style.backgroundColor.match(/^rgba?\(([^)]+)\)$/);
-  const rgbaParts = rgbaMatch?.[1].split(",").map((part) => Number(part.trim())) ?? [];
-  const alpha = rgbaParts.length === 4 ? rgbaParts[3] : 1;
-  assertCondition(style.borderRadius === "999px", `${label}_PUBLISH_TAG_RADIUS_MISMATCH actual=${style.borderRadius}`);
-  assertCondition(alpha <= 0.3, `${label}_PUBLISH_TAG_MUST_BE_TRANSPARENT actual=${style.backgroundColor}`);
-  assertCondition(
-    rgbaParts[2] > rgbaParts[0] && rgbaParts[2] > rgbaParts[1],
-    `${label}_PUBLISH_TAG_MUST_BE_BLUE actual=${style.backgroundColor}`,
-  );
+  assertCondition(style.borderRadius === "8px", `${label}_PUBLISH_CONTROL_RADIUS_MISMATCH actual=${style.borderRadius}`);
+  assertCondition(["rgba(0, 0, 0, 0)", style.expectedBackground].includes(style.backgroundColor) && style.rowBackground === style.expectedBackground, `${label}_PUBLISH_CONTROL_THEME_BACKGROUND_MISMATCH ${JSON.stringify(style)}`);
+  assertCondition(style.color === style.expectedColor, `${label}_PUBLISH_CONTROL_THEME_TEXT_MISMATCH actual=${style.color}`);
 }
 
 const browser = await chromium.launch({ headless: true });
@@ -688,16 +706,15 @@ try {
   await expectBriefingMarkdown(interviewerPage, "MANAGER_ONLY_BRIEFING", "INTERVIEWER_RECEIVES_MANAGER_BRIEFING");
   await expectWorkspaceLanguage(interviewerPage, "Python", "INTERVIEWER_RECEIVES_MANAGER_LANGUAGE");
 
-  await ownerPage.locator('[data-testid="briefing-focus-toggle"]').click();
-  await expectWorkspaceFocusMode(ownerPage, "on", "OWNER_ENABLES_MANAGER_FOCUS_MODE");
-  await expectWorkspaceFocusMode(interviewerPage, "on", "INTERVIEWER_RECEIVES_MANAGER_FOCUS_MODE");
-  assertCondition(
-    (await candidatePage.locator('[data-testid="briefing-board-candidate"]').getAttribute("data-focus")) === "off",
-    "CANDIDATE_MUST_NOT_RECEIVE_UNPUBLISHED_MANAGER_FOCUS_MODE",
-  );
-  await ownerPage.locator('[data-testid="briefing-focus-toggle"]').click();
-  await expectWorkspaceFocusMode(ownerPage, "off", "OWNER_DISABLES_MANAGER_FOCUS_MODE");
-  await expectWorkspaceFocusMode(interviewerPage, "off", "INTERVIEWER_RECEIVES_MANAGER_FOCUS_MODE_RESET");
+  await changeRoomMode(ownerPage, "markdown");
+  await expectRoomEditorMode(ownerPage, "markdown", "OWNER_ENABLES_GLOBAL_MARKDOWN");
+  await expectRoomEditorMode(interviewerPage, "markdown", "INTERVIEWER_RECEIVES_GLOBAL_MARKDOWN");
+  await expectRoomEditorMode(candidatePage, "markdown", "CANDIDATE_RECEIVES_GLOBAL_ROOM_MODE");
+  assertCondition((await getRoom(owner.token, room.inviteCode)).currentStep === 0, "ROOM_MODE_CHANGED_PUBLISHED_STEP");
+  await changeRoomMode(ownerPage, "code");
+  await expectRoomEditorMode(ownerPage, "code", "OWNER_RESTORES_GLOBAL_CODE");
+  await expectRoomEditorMode(interviewerPage, "code", "INTERVIEWER_RECEIVES_GLOBAL_CODE");
+  await expectRoomEditorMode(candidatePage, "code", "CANDIDATE_RECEIVES_GLOBAL_ROOM_MODE_RESET");
 
   // The scoped workspace must recover after a manager reloads, including the
   // saved local selection and the current shared task state.

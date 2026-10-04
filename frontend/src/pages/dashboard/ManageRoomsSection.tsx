@@ -1,15 +1,17 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActionIcon,
   Badge,
+  Button,
+  Modal,
   Card,
   Group,
   Stack,
   Text,
   TextInput,
   Title,
-} from "@mantine/core";
-import { IconChevronRight, IconTrash } from "@tabler/icons-react";
+} from "components/antd-compat";
+import { IconChevronRight, IconTrash, IconPencil } from "components/antd-icons";
 import type { RoomSummary } from "../../types";
 import { VerdictBadge } from "../../features/room/VerdictBadge";
 import styles from "../DashboardPage.module.css";
@@ -34,7 +36,7 @@ interface ManageRoomsSectionProps {
     originalTitle: string,
     nextTitle: string,
   ) => void;
-  onFlushTitleChange: (roomId: string, originalTitle: string) => void;
+  onFlushTitleChange: (roomId: string, originalTitle: string, draft?: string, notifySuccess?: boolean) => void;
 }
 
 /**
@@ -52,14 +54,21 @@ export function ManageRoomsSection({
   onScheduleTitleChange,
   onFlushTitleChange,
 }: ManageRoomsSectionProps) {
+  const [editingRoom, setEditingRoom] = useState<RoomSummary | null>(null);
+  const [titleDraft, setTitleDraft] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const saveStatus = editingRoom ? roomSaveStatus[editingRoom.id] : undefined;
+  useEffect(() => {
+    if (submitted && saveStatus === "saved") { setEditingRoom(null); setSubmitted(false); }
+  }, [saveStatus, submitted]);
   return (
     <Card
       withBorder
       radius="lg"
       padding="lg"
-      bg="#11151c"
+      bg="var(--app-surface)"
       c="gray.1"
-      style={{ borderColor: "#272b34" }}
+      style={{ borderColor: "var(--app-border)" }}
     >
       <Stack>
         <Title order={4}>Управление комнатами</Title>
@@ -71,14 +80,14 @@ export function ManageRoomsSection({
               withBorder
               radius="md"
               padding="sm"
-              bg="#121720"
-              style={{ borderColor: "#2a3039", cursor: "pointer" }}
+              bg="var(--app-surface-soft)"
+              style={{ borderColor: "var(--app-border)", cursor: "pointer" }}
               role="button"
               tabIndex={0}
               aria-label={`Открыть комнату ${room.title}`}
               className={styles.manageRoomCardInteractive}
               onClick={() => onOpenRoom(room)}
-              onKeyDown={(event) => {
+              onKeyDown={(event: React.KeyboardEvent<HTMLElement>) => {
                 if (event.target !== event.currentTarget) return;
                 if (event.key !== "Enter" && event.key !== " ") return;
                 event.preventDefault();
@@ -117,7 +126,7 @@ export function ManageRoomsSection({
                       disabled={!isOwner}
                       aria-label={`Удалить комнату ${room.title}`}
                       title="Удалить комнату"
-                      onClick={(event) => {
+                      onClick={(event: React.MouseEvent<HTMLElement>) => {
                         event.stopPropagation();
                         if (!isOwner) return;
                         onDeleteRoom(room.id);
@@ -128,27 +137,10 @@ export function ManageRoomsSection({
                   </Group>
                 </Group>
 
-                <TextInput
-                  label="Название комнаты"
-                  value={roomTitleDrafts[room.id] ?? room.title}
-                  disabled={!isOwner}
-                  onClick={(event) => event.stopPropagation()}
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onKeyDown={(event) => event.stopPropagation()}
-                  onChange={(event) => {
-                    if (!isOwner) return;
-                    onScheduleTitleChange(
-                      room.id,
-                      room.title,
-                      event.currentTarget.value,
-                    );
-                  }}
-                  onBlur={() => {
-                    if (!isOwner) return;
-                    onFlushTitleChange(room.id, room.title);
-                  }}
-                  styles={darkFieldStyles}
-                />
+                <Group gap="xs" align="center" wrap="wrap">
+                  <Text fw={600}>{room.title}</Text>
+                  {isOwner ? <ActionIcon aria-label={`Переименовать интервью ${room.title}`} title="Переименовать интервью" variant="subtle" onClick={(event: React.MouseEvent<HTMLElement>) => { event.stopPropagation(); setEditingRoom(room); setTitleDraft(room.title); setSubmitted(false); }}><IconPencil size={16} aria-hidden="true" /></ActionIcon> : null}
+                </Group>
 
                 <Group justify="space-between">
                   <Text size="xs" c="gray.4">
@@ -165,6 +157,24 @@ export function ManageRoomsSection({
         })}
         {rooms.length === 0 && <Text c="gray.4">Комнат пока нет</Text>}
       </Stack>
+      <Modal opened={Boolean(editingRoom)} onClose={() => { if (saveStatus !== "saving") setEditingRoom(null); }} title="Переименовать интервью" centered>
+        <form onSubmit={(event) => {
+          event.preventDefault();
+          if (!editingRoom || !titleDraft.trim() || saveStatus === "saving") return;
+          setSubmitted(true);
+          onScheduleTitleChange(editingRoom.id, editingRoom.title, titleDraft.trim());
+          onFlushTitleChange(editingRoom.id, editingRoom.title, titleDraft.trim(), true);
+        }}>
+          <Stack>
+            <TextInput aria-label="Название интервью" placeholder="Введите название" value={titleDraft} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setTitleDraft(event.currentTarget.value)} autoFocus disabled={saveStatus === "saving"} required />
+            {submitted && saveStatus === "error" ? <Text role="alert" c="red.4">Не удалось сохранить название. Повторите попытку.</Text> : null}
+            <Group justify="flex-end">
+              <Button type="button" variant="subtle" disabled={saveStatus === "saving"} onClick={() => setEditingRoom(null)}>Отмена</Button>
+              <Button type="submit" loading={saveStatus === "saving"} disabled={titleDraft.trim() === editingRoom?.title.trim()}>Сохранить</Button>
+            </Group>
+          </Stack>
+        </form>
+      </Modal>
     </Card>
   );
 }

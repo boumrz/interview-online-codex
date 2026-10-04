@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState, type FormEvent } from "react";
-import { IconMenu2, IconPlus, IconRefresh, IconUserCircle } from "@tabler/icons-react";
+import { App, Button as AntButton, Table as AntTable, Tabs, type TableColumnsType } from "antd";
+import { IconMenu2, IconPencil, IconPlus, IconRefresh, IconUserCircle, IconTrash, IconCopy } from "components/antd-icons";
 import {
   Alert,
   Badge,
@@ -14,46 +15,49 @@ import {
   MultiSelect,
   Select,
   Stack,
-  Table,
   Text,
   TextInput,
   Textarea,
   Title,
-} from "@mantine/core";
+} from "components/antd-compat";
 import { Navigate, NavLink, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
+import { useClipboardNotification } from "../../components/useClipboardNotification";
 import { clearAuth, updateProfile as updateAuthProfile } from "../../features/auth/authSlice";
 import { WorkspaceSwitcher } from "../../features/workspace/WorkspaceSwitcher";
+import { ThemeToggleButton } from "../../features/theme/ThemeToggleButton";
 import { parseLibraryTransfer, serializeTask } from "../../features/workspace/libraryTransfer";
 import {
   api,
   useCreateRoomMutation,
   useCreateTaskTemplateMutation,
+  useUpdateTaskTemplateMutation,
+  useDeleteTaskTemplateMutation,
   useDeleteRoomMutation,
   useGetHrInterviewsQuery,
+  useGetInterviewMetadataQuery,
   useLazyGetInterviewMetadataQuery,
   useMyRoomsQuery,
   useTasksGroupedQuery,
   useListPresetsQuery,
-  usePreviewHiringManagerMutation,
   useUpdateInterviewMetadataMutation,
   useUpdateProfileMutation,
   useUpdateRoomMutation,
 } from "../../services/api";
-import type { HiringManagerPreviewResponse, Room, RoomSummary, TaskTemplate } from "../../types";
+import type { HiringManagerPreviewResponse, InterviewMetadata, Room, RoomSummary, TaskTemplate } from "../../types";
 import { PresetsSection } from "../dashboard/PresetsSection";
 import { HrCabinetSection } from "../dashboard/HrCabinetSection";
+import { HiringManagerPicker } from "../../features/hr/HiringManagerPicker";
 import { HrProfileSection } from "../dashboard/HrProfileSection";
+import { InterviewListDetailsAction } from "../../features/room/InterviewListDetailsAction";
 import { LANGUAGE_OPTIONS } from "../dashboard/dashboardConstants";
 import { darkSelectStyles } from "../dashboard/dashboardFieldStyles";
 import { labelForLanguage, normalizeLanguageKey } from "../dashboard/dashboardHelpers";
 import styles from "./PersonalWorkspacePage.module.css";
 
 type WorkspaceSection = "interviews" | "create" | "library" | "candidates" | "profile";
-type CreateIntent = "list" | "room";
 type PendingMetadata = {
   room: Room;
-  intent: CreateIntent;
   metadata: {
     candidateName: string | null;
     position: string | null;
@@ -64,9 +68,7 @@ type PendingMetadata = {
 
 type RequestIdentity = { token: string; userId: string; generation: number };
 type HiringManagerSelection = HiringManagerPreviewResponse;
-type PickerFeedback = { kind: "idle" | "checking" | "success" | "error"; message: string };
 
-const CANONICAL_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function apiErrorMessage(error: unknown): string | null {
   if (!error || typeof error !== "object" || !("data" in error)) return null;
@@ -103,7 +105,7 @@ function WorkspaceNavigation({ isHr }: { isHr: boolean }) {
   ], [isHr]);
   const navRef = useRef<HTMLElement | null>(null);
   const linkRefs = useRef(new Map<string, HTMLSpanElement>());
-  const [visibleCount, setVisibleCount] = useState(0);
+  const [visibleCount, setVisibleCount] = useState<number | null>(null);
   const [overflowOpened, setOverflowOpened] = useState(false);
 
   React.useLayoutEffect(() => {
@@ -139,10 +141,11 @@ function WorkspaceNavigation({ isHr }: { isHr: boolean }) {
     };
   }, [items]);
 
-  const directItems = items.slice(0, visibleCount);
-  const overflowItems = items.slice(visibleCount);
+  const directItems = items.slice(0, visibleCount ?? 0);
+  const overflowItems = items.slice(visibleCount ?? 0);
+  const activeOverflow = visibleCount === null ? undefined : overflowItems.find(item => location.pathname === item.to);
   return (
-    <nav ref={navRef} className={styles.nav} aria-label="Разделы личного пространства">
+    <nav ref={navRef} className={styles.nav} aria-label="Разделы личного раздела">
       <span className={styles.navMeasure} aria-hidden="true">
         {items.map((item) => (
           <span key={item.to} className={styles.navMeasureItem} ref={(node) => {
@@ -155,7 +158,7 @@ function WorkspaceNavigation({ isHr }: { isHr: boolean }) {
         <NavLink
           key={item.to}
           to={item.to}
-          className={({ isActive }) => isActive ? styles.navActive : styles.navLink}
+          className={({ isActive }) => `${isActive ? styles.navActive : styles.navLink} app-header-control`}
         >
           {item.label}
         </NavLink>
@@ -163,12 +166,15 @@ function WorkspaceNavigation({ isHr }: { isHr: boolean }) {
       {overflowItems.length > 0 ? (
         <Menu position="bottom-end" shadow="md" withinPortal opened={overflowOpened} onChange={setOverflowOpened}>
           <Menu.Target>
-            <button
-              type="button"
-              className={styles.navButton}
-              aria-label="Меню разделов"
+            <AntButton
+              htmlType="button"
+              type="text"
+              className={`${styles.navButton} app-header-control`}
+              aria-label={activeOverflow ? `Меню разделов: ${activeOverflow.label}` : "Меню разделов"}
+              data-active-section={activeOverflow ? "true" : undefined}
               aria-haspopup="menu"
-              onKeyDown={(event) => {
+              aria-expanded={overflowOpened}
+              onKeyDown={(event: React.KeyboardEvent<HTMLButtonElement>) => {
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
                   setOverflowOpened(true);
@@ -176,7 +182,7 @@ function WorkspaceNavigation({ isHr }: { isHr: boolean }) {
               }}
             >
               <IconMenu2 size={20} stroke={2} aria-hidden="true" />
-            </button>
+            </AntButton>
           </Menu.Target>
           <Menu.Dropdown aria-label="Дополнительные разделы">
             {overflowItems.map((item) => (
@@ -197,10 +203,56 @@ function WorkspaceNavigation({ isHr }: { isHr: boolean }) {
   );
 }
 
-function InterviewRow({ room, initialMetadata }: { room: RoomSummary; initialMetadata?: PendingMetadata["metadata"] }) {
+type InterviewRowContextValue = {
+  room: RoomSummary;
+  originalTitle: string;
+  candidate: string;
+  dateLabel: string;
+  statusLabel: string;
+  displayTitle: string;
+  editing: boolean;
+  titleDraft: string;
+  setTitleDraft: (value: string) => void;
+  setEditing: (value: boolean) => void;
+  saveTitle: () => Promise<void>;
+  updatePending: boolean;
+  actionError: string;
+  deletePending: boolean;
+  setDeleteOpened: (value: boolean) => void;
+  deleteOpened: boolean;
+  remove: () => Promise<void>;
+  navigate: ReturnType<typeof useNavigate>;
+};
+
+const InterviewRowContext = React.createContext<InterviewRowContextValue | null>(null);
+const InterviewTableContext = React.createContext<ReadonlyMap<string, RoomSummary>>(new Map());
+const InterviewMetadataContext = React.createContext<Record<string, InterviewMetadata>>({});
+
+function InterviewMetadataLoader({ room, onResult }: { room: RoomSummary; onResult: (id: string, data: InterviewMetadata | undefined, failed: boolean) => void }) {
+  const query = useGetInterviewMetadataQuery({ inviteCode: room.inviteCode,
+    ownerToken: room.ownerToken ?? undefined, interviewerToken: room.interviewerToken ?? undefined }, { skip: room.accessRole === "candidate" });
+  React.useEffect(() => {
+    if (query.data || query.isError) onResult(room.id, query.data, query.isError);
+  }, [onResult, room.id, query.data, query.isError]);
+  return null;
+}
+
+function InterviewTableRow(rowProps: Record<string, any>) {
+  const rooms = React.useContext(InterviewTableContext);
+  const room = rooms.get(String(rowProps["data-row-key"] ?? ""));
+  return room ? <InterviewRow room={room} rowProps={rowProps} /> : <tr {...rowProps}>{rowProps.children}</tr>;
+}
+
+function useInterviewRowContext() {
+  const value = React.useContext(InterviewRowContext);
+  if (!value) throw new Error("Interview row content must render inside its Ant Table row");
+  return value;
+}
+
+function InterviewRow({ room, rowProps }: { room: RoomSummary; rowProps: Record<string, any> }) {
   const navigate = useNavigate();
   const originalTitle = useRef(room.title);
-  const [loadMetadata, metadataState] = useLazyGetInterviewMetadataQuery();
+  const metadata = React.useContext(InterviewMetadataContext)[room.id];
   const [updateRoom, updateState] = useUpdateRoomMutation();
   const [deleteRoom, deleteState] = useDeleteRoomMutation();
   const [editing, setEditing] = useState(false);
@@ -209,25 +261,15 @@ function InterviewRow({ room, initialMetadata }: { room: RoomSummary; initialMet
   const [actionError, setActionError] = useState("");
   const [deleteOpened, setDeleteOpened] = useState(false);
 
-  React.useEffect(() => {
-    void loadMetadata({
-      inviteCode: room.inviteCode,
-      ownerToken: room.ownerToken ?? undefined,
-      interviewerToken: room.interviewerToken ?? undefined,
-    }, true);
-  }, [loadMetadata, room.interviewerToken, room.inviteCode, room.ownerToken]);
-
   const saveTitle = async () => {
     const nextTitle = titleDraft.trim();
     if (!nextTitle || updateState.isLoading) return;
     setActionError("");
-    const previousTitle = displayTitle;
-    setDisplayTitle(nextTitle);
-    setEditing(false);
     try {
       await updateRoom({ roomId: room.id, title: nextTitle }).unwrap();
+      setDisplayTitle(nextTitle);
+      setEditing(false);
     } catch {
-      setDisplayTitle(previousTitle);
       setActionError("Не удалось переименовать интервью");
     }
   };
@@ -243,68 +285,105 @@ function InterviewRow({ room, initialMetadata }: { room: RoomSummary; initialMet
     }
   };
 
-  const candidate = metadataState.data?.candidateName?.trim() || initialMetadata?.candidateName?.trim() || "Не указан";
-  const scheduledAt = metadataState.data?.scheduledAt ?? initialMetadata?.scheduledAt;
+  const candidate = (room.accessRole !== "candidate" ? metadata?.candidateName?.trim() : null) || "Не указан";
+  const scheduledAt = room.accessRole !== "candidate" ? metadata?.scheduledAt : null;
   const dateLabel = scheduledAt
     ? new Date(scheduledAt).toLocaleDateString("ru-RU")
     : "Без даты";
   const statusLabel = room.status === "finished" ? "Завершено" : "Активно";
 
+  const contextValue: InterviewRowContextValue = {
+    room,
+    originalTitle: originalTitle.current,
+    candidate,
+    dateLabel,
+    statusLabel,
+    displayTitle,
+    editing,
+    titleDraft,
+    setTitleDraft,
+    setEditing,
+    saveTitle,
+    updatePending: updateState.isLoading,
+    actionError,
+    deletePending: deleteState.isLoading,
+    setDeleteOpened,
+    deleteOpened,
+    remove,
+    navigate,
+  };
+  const { children, ...domRowProps } = rowProps;
+
   return (
     <>
-    <Table.Tr aria-label={originalTitle.current}>
-      <Table.Td>
-        {editing ? (
-          <Group gap="xs" wrap="nowrap">
-            <TextInput
-              label="Название интервью"
-              value={titleDraft}
-              onChange={(event) => setTitleDraft(event.currentTarget.value)}
-            />
-            <Button type="button" size="compact-sm" loading={updateState.isLoading} onClick={() => void saveTitle()}>
-              Сохранить название
-            </Button>
+      <tr {...domRowProps} aria-label={originalTitle.current}>
+        <InterviewRowContext.Provider value={contextValue}>{children}</InterviewRowContext.Provider>
+      </tr>
+      <Modal opened={editing} onClose={() => { if (!updateState.isLoading) { setEditing(false); setActionError(""); } }} title="Переименовать интервью" centered closeOnClickOutside={!updateState.isLoading} closeOnEscape={!updateState.isLoading}>
+        <form onSubmit={(event) => { event.preventDefault(); void saveTitle(); }}>
+          <Stack gap="md">
+            <TextInput aria-label="Название интервью" placeholder="Введите название" value={titleDraft} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setTitleDraft(event.currentTarget.value)} disabled={updateState.isLoading} autoFocus required />
+            {actionError ? <Text role="alert" c="red.4">{actionError}</Text> : null}
+            <Group justify="flex-end">
+              <Button type="button" variant="subtle" disabled={updateState.isLoading} onClick={() => { setEditing(false); setActionError(""); }}>Отмена</Button>
+              <Button type="submit" loading={updateState.isLoading} disabled={!titleDraft.trim()}>Сохранить</Button>
+            </Group>
+          </Stack>
+        </form>
+      </Modal>
+      <Modal opened={deleteOpened} onClose={() => setDeleteOpened(false)} title="Удалить интервью" centered>
+        <Stack>
+          <Text>Интервью «{displayTitle}» будет удалено без возможности восстановления.</Text>
+          <Group justify="flex-end">
+            <Button type="button" variant="subtle" disabled={deleteState.isLoading} onClick={() => setDeleteOpened(false)}>Отмена</Button>
+            <Button type="button" variant="light" color="red" loading={deleteState.isLoading} onClick={() => void remove()}>Удалить</Button>
           </Group>
-        ) : <Text fw={700}>{displayTitle}</Text>}
-        {actionError ? <Text role="alert" size="xs" c="red.4">{actionError}</Text> : null}
-      </Table.Td>
-      <Table.Td>{candidate}</Table.Td>
-      <Table.Td>Без трека и вакансии</Table.Td>
-      <Table.Td>{dateLabel}</Table.Td>
-      <Table.Td>{statusLabel}</Table.Td>
-      <Table.Td>
-        <Badge tt="none" color={room.accessRole === "owner" ? "teal" : room.accessRole === "interviewer" ? "cyan" : "blue"} variant="light">
-          {roomAccessLabel(room)}
-        </Badge>
-      </Table.Td>
-      <Table.Td>
-        <Group gap="xs" wrap="nowrap">
-          {room.accessRole === "owner" ? (
-            <>
-              <Button type="button" size="compact-sm" variant="subtle" aria-label={`Переименовать ${room.title}`} onClick={() => setEditing(true)}>
-                Переименовать
-              </Button>
-              <Button type="button" size="compact-sm" variant="subtle" color="red" loading={deleteState.isLoading} aria-label={`Удалить ${room.title}`} onClick={() => setDeleteOpened(true)}>
-                Удалить
-              </Button>
-            </>
-          ) : null}
-          <Button type="button" size="compact-sm" variant="light" onClick={() => navigate(`/room/${room.inviteCode}`)}>
-            Открыть интервью
-          </Button>
-        </Group>
-      </Table.Td>
-    </Table.Tr>
-    <Modal opened={deleteOpened} onClose={() => setDeleteOpened(false)} title="Удалить интервью" centered>
-      <Stack>
-        <Text>Интервью «{displayTitle}» будет удалено без возможности восстановления.</Text>
-        <Group justify="flex-end">
-          <Button type="button" variant="subtle" disabled={deleteState.isLoading} onClick={() => setDeleteOpened(false)}>Отмена</Button>
-          <Button type="button" color="red" loading={deleteState.isLoading} onClick={() => void remove()}>Удалить</Button>
-        </Group>
-      </Stack>
-    </Modal>
+        </Stack>
+      </Modal>
     </>
+  );
+}
+
+function InterviewTitleCell() {
+  const row = useInterviewRowContext();
+  return (
+    <>
+        <div className={styles.interviewTitle}>
+          <Text className={styles.interviewTitleText} fw={700}>{row.displayTitle}</Text>
+          {row.room.accessRole === "owner" ? (
+            <AntButton
+              type="text"
+              className={styles.titleEditButton}
+              icon={<IconPencil size={16} aria-hidden="true" />}
+              aria-label={`Переименовать интервью ${row.room.title}`}
+              title="Переименовать интервью"
+              onClick={() => { row.setTitleDraft(row.displayTitle); row.setEditing(true); }}
+            />
+          ) : null}
+        </div>
+      {!row.editing && row.actionError ? <Text role="alert" size="xs" c="red.4">{row.actionError}</Text> : null}
+    </>
+  );
+}
+
+function InterviewCandidateCell() { return <>{useInterviewRowContext().candidate}</>; }
+function InterviewContextCell() { return <>Без трека и вакансии</>; }
+function InterviewDateCell() { return <>{useInterviewRowContext().dateLabel}</>; }
+function InterviewStatusCell() { return <>{useInterviewRowContext().statusLabel}</>; }
+
+function InterviewAccessCell() {
+  const { room } = useInterviewRowContext();
+  return <Badge tt="none" color={room.accessRole === "owner" ? "teal" : room.accessRole === "interviewer" ? "cyan" : "blue"} variant="light">{roomAccessLabel(room)}</Badge>;
+}
+
+function InterviewActionsCell() {
+  const row = useInterviewRowContext();
+  return (
+    <Group className={styles.actionButtons} gap="xs" justify="flex-end" wrap="nowrap">
+      {row.room.accessRole !== "candidate" ? <InterviewListDetailsAction inviteCode={row.room.inviteCode} title={row.room.title} canManage ownerToken={row.room.ownerToken ?? undefined} interviewerToken={row.room.interviewerToken ?? undefined} /> : null}
+      <Button type="button" size="compact-sm" variant="light" onClick={() => row.navigate(`/room/${row.room.inviteCode}`)}>Открыть интервью</Button>
+      {row.room.accessRole === "owner" ? <Button type="button" size="compact-sm" variant="light" color="red" loading={row.deletePending} aria-label={`Удалить ${row.room.title}`} title="Удалить интервью" onClick={() => row.setDeleteOpened(true)}><IconTrash size={16} aria-hidden="true" /></Button> : null}
+    </Group>
   );
 }
 
@@ -321,12 +400,40 @@ function InterviewList({
   error: unknown;
   onRefresh: () => void;
 }) {
+  const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
-  const filteredRooms = rooms.filter((room) => room.title.toLocaleLowerCase("ru-RU").includes(search.trim().toLocaleLowerCase("ru-RU")));
+  const [metadata, setMetadata] = useState<Record<string, InterviewMetadata>>({});
+  const [metadataErrors, setMetadataErrors] = useState<Record<string, boolean>>({});
+  const onMetadata = React.useCallback((id: string, data: InterviewMetadata | undefined, failed: boolean) => {
+    if (data) setMetadata(current => current[id] === data ? current : { ...current, [id]: data });
+    setMetadataErrors(current => current[id] === failed ? current : { ...current, [id]: failed });
+  }, []);
+  const candidateLoading = rooms.some(room => room.accessRole !== "candidate" && !metadata[room.id] && !metadataErrors[room.id]);
+  const candidateFailed = rooms.some(room => room.accessRole !== "candidate" && metadataErrors[room.id]);
+  const query = search.trim().toLocaleLowerCase("ru-RU");
+  const filteredRooms = rooms.filter(room => [room.title, room.accessRole !== "candidate" ? metadata[room.id]?.candidateName ?? "" : ""].some(value => value.toLocaleLowerCase("ru-RU").includes(query)));
+  const roomById = useMemo(() => new Map(filteredRooms.map((room) => [room.id, room])), [filteredRooms]);
+  const interviewColumns: TableColumnsType<RoomSummary> = [
+    { title: "Интервью", key: "title", render: () => <InterviewTitleCell /> },
+    { title: "Кандидат", key: "candidate", render: () => <InterviewCandidateCell /> },
+    { title: "Контекст", key: "context", render: () => <InterviewContextCell /> },
+    { title: "Дата", key: "date", render: () => <InterviewDateCell /> },
+    { title: "Статус", key: "status", render: () => <InterviewStatusCell /> },
+    { title: "Роль", key: "role", render: () => <InterviewAccessCell /> },
+    {
+      title: <span className="visually-hidden">Действие</span>,
+      key: "actions",
+      width: 400,
+      align: "right",
+      className: styles.actionCell,
+      render: () => <InterviewActionsCell />,
+    },
+  ];
 
   return (
     <Stack gap="lg">
+      {rooms.map(room => <InterviewMetadataLoader key={room.id} room={room} onResult={onMetadata} />)}
       <Group justify="space-between" align="flex-end" gap="md" wrap="wrap">
         <div>
           <Text className={styles.eyebrow}>Рабочая лента</Text>
@@ -352,8 +459,8 @@ function InterviewList({
       ) : null}
       {!isLoading && rooms.length > 0 ? (
         <Group justify="space-between" align="flex-end">
-          <TextInput className={styles.interviewSearch} label="Поиск интервью" value={search} onChange={(event) => setSearch(event.currentTarget.value)} />
-          <Button type="button" variant="light" leftSection={<IconRefresh size={16} />} onClick={onRefresh} loading={isFetching && !error}>Обновить интервью</Button>
+          <TextInput placeholder="Найдите интервью по названию или кандидату" className={styles.interviewSearch} label="Поиск интервью" value={search} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setSearch(event.currentTarget.value)} />
+          <Button type="button" variant="light" leftSection={<IconRefresh size={16} />} onClick={() => { onRefresh(); dispatch(api.util.invalidateTags(["InterviewMetadata"])); }} loading={isFetching && !error}>Обновить интервью</Button>
         </Group>
       ) : null}
       {!isLoading && !error && rooms.length === 0 ? (
@@ -362,7 +469,9 @@ function InterviewList({
           <Text c="gray.5" size="sm">Создайте первое интервью — оно появится в этом списке.</Text>
         </Card>
       ) : null}
-      {!isLoading && rooms.length > 0 && filteredRooms.length === 0 ? (
+      {search && candidateLoading ? <Text role="status" size="sm">Загружаем данные кандидатов…</Text> : null}
+      {search && candidateFailed ? <Text role="alert" size="sm" c="red.4">Не все данные кандидатов загрузились. Повторите обновление списка.</Text> : null}
+      {!isLoading && !candidateLoading && !candidateFailed && rooms.length > 0 && filteredRooms.length === 0 ? (
         <Card className={styles.emptyState} withBorder>
           <Text fw={700}>По вашему запросу интервью не найдены</Text>
           <Button type="button" variant="subtle" onClick={() => setSearch("")}>Сбросить поиск</Button>
@@ -371,27 +480,20 @@ function InterviewList({
       {!isLoading && filteredRooms.length > 0 ? (
         <Card className={styles.panel} withBorder padding={0}>
           <div className={styles.tableScroll}>
-            <Table verticalSpacing="md" horizontalSpacing="lg">
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Интервью</Table.Th>
-                  <Table.Th>Кандидат</Table.Th>
-                  <Table.Th>Контекст</Table.Th>
-                  <Table.Th>Дата</Table.Th>
-                  <Table.Th>Статус</Table.Th>
-                  <Table.Th>Роль</Table.Th>
-                  <Table.Th><span className="visually-hidden">Действие</span></Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {filteredRooms.map((room) => (
-                  <InterviewRow
-                    key={room.id}
-                    room={room}
-                  />
-                ))}
-              </Table.Tbody>
-            </Table>
+            <InterviewTableContext.Provider value={roomById}>
+            <InterviewMetadataContext.Provider value={metadata}>
+            <AntTable<RoomSummary>
+              rowKey="id"
+              size="middle"
+              columns={interviewColumns}
+              dataSource={filteredRooms}
+              pagination={false}
+              components={{ body: { row: InterviewTableRow } }}
+              tableLayout="fixed"
+              scroll={{ x: "max-content" }}
+            />
+            </InterviewMetadataContext.Provider>
+            </InterviewTableContext.Provider>
           </div>
         </Card>
       ) : null}
@@ -410,20 +512,16 @@ function CreateInterview({ tasks }: { tasks: TaskTemplate[] }) {
   const auth = useAppSelector((state) => state.auth);
   const [createRoom, createState] = useCreateRoomMutation();
   const [updateMetadata] = useUpdateInterviewMetadataMutation();
-  const [previewHiringManager] = usePreviewHiringManagerMutation();
   const [title, setTitle] = useState("");
   const [candidateName, setCandidateName] = useState("");
   const [position, setPosition] = useState("");
   const [taskIds, setTaskIds] = useState<string[]>([]);
-  const [hiringManagerDraftId, setHiringManagerDraftId] = useState("");
   const [hiringManagerSelections, setHiringManagerSelections] = useState<HiringManagerSelection[]>([]);
-  const [pickerFeedback, setPickerFeedback] = useState<PickerFeedback>({ kind: "idle", message: "" });
+  const [pickerBusy, setPickerBusy] = useState(false);
   const [error, setError] = useState("");
   const [pendingMetadata, setPendingMetadata] = useState<PendingMetadata | null>(null);
   const [retryingMetadata, setRetryingMetadata] = useState(false);
-  const intentRef = useRef<CreateIntent>("list");
   const generationRef = useRef(0);
-  const pickerGenerationRef = useRef(0);
   const pendingOwnerInviteRef = useRef<string | null>(null);
   const identityKey = `${auth.token ?? ""}:${auth.user?.id ?? ""}`;
   const previousIdentityKeyRef = useRef(identityKey);
@@ -456,7 +554,6 @@ function CreateInterview({ tasks }: { tasks: TaskTemplate[] }) {
       userId: auth.user?.id ?? "",
       generation: generationRef.current,
     };
-    pickerGenerationRef.current += 1;
     if (pendingOwnerInviteRef.current) {
       localStorage.removeItem(`owner_token_${pendingOwnerInviteRef.current}`);
       localStorage.removeItem(`guest_display_name_${pendingOwnerInviteRef.current}`);
@@ -466,9 +563,7 @@ function CreateInterview({ tasks }: { tasks: TaskTemplate[] }) {
     setCandidateName("");
     setPosition("");
     setTaskIds([]);
-    setHiringManagerDraftId("");
     setHiringManagerSelections([]);
-    setPickerFeedback({ kind: "idle", message: "" });
     setPendingMetadata(null);
     setRetryingMetadata(false);
     setError("");
@@ -476,7 +571,6 @@ function CreateInterview({ tasks }: { tasks: TaskTemplate[] }) {
 
   React.useEffect(() => () => {
     generationRef.current += 1;
-    pickerGenerationRef.current += 1;
     if (pendingOwnerInviteRef.current) {
       localStorage.removeItem(`owner_token_${pendingOwnerInviteRef.current}`);
       localStorage.removeItem(`guest_display_name_${pendingOwnerInviteRef.current}`);
@@ -487,19 +581,10 @@ function CreateInterview({ tasks }: { tasks: TaskTemplate[] }) {
     value: task.id,
     label: `${task.title} · ${labelForLanguage(task.language)}`,
   }));
-  const selectedTasks = useMemo(() => {
-    const selectedIds = new Set(taskIds);
-    return tasks.filter((task) => selectedIds.has(task.id));
-  }, [taskIds, tasks]);
-
-  const completeCreation = (room: Room, intent: CreateIntent, identity: RequestIdentity) => {
+  const completeCreation = (room: Room, identity: RequestIdentity) => {
     if (!isCurrentIdentity(identity)) return;
     pendingOwnerInviteRef.current = null;
-    if (intent === "room") {
-      navigate(`/room/${room.inviteCode}`);
-      return;
-    }
-    navigate("/workspace/personal/interviews");
+    navigate(`/room/${room.inviteCode}`);
   };
 
   const saveMetadata = async (pending: PendingMetadata) => {
@@ -520,7 +605,7 @@ function CreateInterview({ tasks }: { tasks: TaskTemplate[] }) {
       await saveMetadata(completed);
       if (!isCurrentIdentity(identity)) return;
       setPendingMetadata(null);
-      completeCreation(completed.room, completed.intent, identity);
+      completeCreation(completed.room, identity);
     } catch {
       if (!isCurrentIdentity(identity)) return;
       setError("Интервью создано, но данные кандидата не сохранены");
@@ -529,53 +614,9 @@ function CreateInterview({ tasks }: { tasks: TaskTemplate[] }) {
     }
   };
 
-  const addHiringManager = async () => {
-    if (createState.isLoading || pickerFeedback.kind === "checking") return;
-    const normalizedId = hiringManagerDraftId.trim().toLowerCase();
-    if (!normalizedId) {
-      setPickerFeedback({ kind: "error", message: "Введите ID нанимающего" });
-      return;
-    }
-    if (!CANONICAL_UUID_PATTERN.test(normalizedId)) {
-      setPickerFeedback({ kind: "error", message: "Введите полный UUID нанимающего" });
-      return;
-    }
-    if (hiringManagerSelections.some((selection) => selection.normalizedId.toLowerCase() === normalizedId)) {
-      setPickerFeedback({ kind: "error", message: "Этот нанимающий уже добавлен" });
-      return;
-    }
-
-    const identity = captureIdentity();
-    const pickerGeneration = pickerGenerationRef.current + 1;
-    pickerGenerationRef.current = pickerGeneration;
-    setPickerFeedback({ kind: "checking", message: "Проверяем нанимающего…" });
-    const isCurrent = () => isCurrentIdentity(identity) && pickerGenerationRef.current === pickerGeneration;
-    try {
-      const response = await previewHiringManager({ invitationId: normalizedId }).unwrap();
-      if (!isCurrent()) return;
-      const responseId = response.normalizedId.toLowerCase();
-      if (responseId !== normalizedId) {
-        setPickerFeedback({ kind: "error", message: "Не удалось проверить нанимающего. Повторите попытку." });
-        return;
-      }
-      setHiringManagerSelections((previous) => previous.some((selection) => selection.normalizedId.toLowerCase() === responseId)
-        ? previous
-        : [...previous, { normalizedId: responseId, displayName: response.displayName }]);
-      setHiringManagerDraftId("");
-      setPickerFeedback({ kind: "success", message: `Нанимающий добавлен: ${response.displayName}` });
-    } catch (previewError) {
-      if (!isCurrent()) return;
-      setPickerFeedback({
-        kind: "error",
-        message: isNotFound(previewError)
-          ? "Нанимающий не найден или недоступен"
-          : "Не удалось проверить нанимающего. Повторите попытку.",
-      });
-    }
-  };
-
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (pickerBusy || createState.isLoading) return;
     const normalizedTitle = title.trim();
     if (!normalizedTitle) {
       setError("Название интервью обязательно");
@@ -583,7 +624,6 @@ function CreateInterview({ tasks }: { tasks: TaskTemplate[] }) {
     }
     if (createState.isLoading || pendingMetadata) return;
     const identity = captureIdentity();
-    const intent = intentRef.current;
     const metadataDraft: PendingMetadata["metadata"] = {
       candidateName: candidateName.trim() || null,
       position: position.trim() || null,
@@ -604,7 +644,6 @@ function CreateInterview({ tasks }: { tasks: TaskTemplate[] }) {
       if (metadataDraft.candidateName || metadataDraft.position) {
         const pending: PendingMetadata = {
           room,
-          intent,
           metadata: metadataDraft,
         };
         try {
@@ -625,7 +664,7 @@ function CreateInterview({ tasks }: { tasks: TaskTemplate[] }) {
           return;
         }
       }
-      completeCreation(room, intent, identity);
+      completeCreation(room, identity);
     } catch (createError) {
       if (!isCurrentIdentity(identity)) return;
       setError(apiErrorMessage(createError) ?? "Не удалось создать интервью. Повторите попытку.");
@@ -633,79 +672,52 @@ function CreateInterview({ tasks }: { tasks: TaskTemplate[] }) {
   };
 
   return (
-    <Stack gap="lg">
-      <div>
-        <Text className={styles.eyebrow}>Новая встреча</Text>
-        <Title order={1}>Создать интервью</Title>
-        <Text c="gray.5" mt={6}>Сначала зафиксируйте контекст, затем добавьте задачи из личной библиотеки.</Text>
-      </div>
-      <Card className={styles.panel} withBorder data-testid="create-room-card">
-        <form onSubmit={submit} noValidate>
-          <Stack gap="lg">
-            <MultiSelect
-              data-testid="room-task-select"
-              label="Задачи для интервью"
-              description="Можно выбрать задачи на разных языках"
-              data={taskOptions}
-              value={taskIds}
-              onChange={setTaskIds}
-              searchable
-              styles={darkSelectStyles}
-            />
-            <div className={styles.formGrid}>
-              <TextInput
+    <Modal
+      opened
+      onClose={() => { if (!createState.isLoading && !pendingMetadata) navigate("/workspace/personal/interviews"); }}
+      title={<Title order={3} style={{ margin: 0 }}>Создать интервью</Title>}
+      centered
+      size="xl"
+      authoring
+      closeOnClickOutside={!createState.isLoading && !pendingMetadata}
+      closeOnEscape={!createState.isLoading && !pendingMetadata}
+      withCloseButton={!createState.isLoading && !pendingMetadata}
+    >
+        <form onSubmit={submit} noValidate className="app-authoring-form" data-testid="create-room-card">
+          <div className="app-authoring-fields">
+            <section className="app-authoring-section" aria-label="Информация об интервью">
+              <TextInput placeholder="Введите название интервью"
                 label="Название интервью"
                 value={title}
-                onChange={(event) => setTitle(event.currentTarget.value)}
+                onChange={(event: React.ChangeEvent<HTMLInputElement>) => setTitle(event.currentTarget.value)}
               />
-              <TextInput
+              <div className="app-authoring-grid">
+              <TextInput placeholder="Введите имя кандидата"
                 label="Имя кандидата"
                 value={candidateName}
-                onChange={(event) => setCandidateName(event.currentTarget.value)}
+                onChange={(event: React.ChangeEvent<HTMLInputElement>) => setCandidateName(event.currentTarget.value)}
               />
-              <TextInput
+              <TextInput placeholder="Введите название должности"
                 label="Позиция"
                 value={position}
-                onChange={(event) => setPosition(event.currentTarget.value)}
+                onChange={(event: React.ChangeEvent<HTMLInputElement>) => setPosition(event.currentTarget.value)}
               />
-            </div>
-            <Stack gap={6}>
-              <Group align="flex-end" gap="sm" wrap="nowrap">
-                <TextInput
-                  label="ID нанимающего"
-                  description="Введите ID нанимающего и нажмите «Добавить»."
-                  placeholder="UUID нанимающего"
-                  value={hiringManagerDraftId}
-                  onChange={(event) => {
-                    setHiringManagerDraftId(event.currentTarget.value);
-                    if (pickerFeedback.kind !== "checking") setPickerFeedback({ kind: "idle", message: "" });
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key !== "Enter") return;
-                    event.preventDefault();
-                    void addHiringManager();
-                  }}
-                  disabled={createState.isLoading || pickerFeedback.kind === "checking"}
-                  style={{ flex: 1 }}
-                />
-                <Button
-                  type="button"
-                  loading={pickerFeedback.kind === "checking"}
-                  disabled={createState.isLoading || pickerFeedback.kind === "checking"}
-                  onClick={() => void addHiringManager()}
-                >
-                  Добавить
-                </Button>
-              </Group>
-              {pickerFeedback.kind !== "idle" ? (
-                <Text
-                  size="sm"
-                  c={pickerFeedback.kind === "error" ? "red.4" : "gray.3"}
-                  role={pickerFeedback.kind === "error" ? "alert" : "status"}
-                >
-                  {pickerFeedback.message}
-                </Text>
-              ) : null}
+              </div>
+            </section>
+            <section className="app-authoring-section" aria-label="Задачи интервью">
+              <MultiSelect placeholder="Выберите задачи в порядке интервью"
+                data-testid="room-task-select"
+                label="Задачи для интервью"
+                data={taskOptions}
+                value={taskIds}
+                onChange={setTaskIds}
+                searchable
+                styles={darkSelectStyles}
+              />
+            </section>
+            <section className="app-authoring-section" aria-label="Нанимающие">
+              <HiringManagerPicker showSuccess={false} selectedIds={hiringManagerSelections.map(person => person.normalizedId)} disabled={createState.isLoading} onPendingChange={setPickerBusy}
+                onSelect={person => setHiringManagerSelections(current => current.some(item => item.normalizedId === person.normalizedId) ? current : [...current, person])} />
               {hiringManagerSelections.length > 0 ? (
                 <Stack gap={6} data-testid="hiring-manager-selection-list">
                   <Title order={5}>Добавленные нанимающие</Title>
@@ -715,34 +727,21 @@ function CreateInterview({ tasks }: { tasks: TaskTemplate[] }) {
                         <Text size="sm">{selection.displayName}</Text>
                         <Button
                           type="button"
-                          variant="subtle"
+                          variant="light"
                           color="red"
                           size="xs"
                           aria-label={`Удалить нанимающего ${selection.displayName}`}
                           disabled={createState.isLoading}
                           onClick={() => setHiringManagerSelections((previous) => previous.filter((item) => item.normalizedId !== selection.normalizedId))}
                         >
-                          Удалить
+                          <IconTrash size={16} aria-hidden="true" />
                         </Button>
                       </Group>
                     ))}
                   </Stack>
                 </Stack>
               ) : null}
-            </Stack>
-            {selectedTasks.length > 0 ? (
-              <Stack gap="xs" data-testid="selected-task-preview">
-                {selectedTasks.map((task) => (
-                  <Card key={task.id} className={styles.taskPreview} withBorder>
-                    <Group justify="space-between" gap="sm">
-                      <Text fw={700}>{task.title}</Text>
-                      <Badge variant="light">{labelForLanguage(task.language)}</Badge>
-                    </Group>
-                    <Text size="sm" c="gray.5">{task.description}</Text>
-                  </Card>
-                ))}
-              </Stack>
-            ) : null}
+            </section>
             {error ? <Text role="alert" c="red.4">{error}</Text> : null}
             {createState.isLoading && !error ? (
               <Text role="alert" c="gray.4">Создаём интервью. Повторная отправка временно недоступна.</Text>
@@ -752,11 +751,7 @@ function CreateInterview({ tasks }: { tasks: TaskTemplate[] }) {
                 <Stack gap="xs">
                   <Text fw={700}>Созданная комната</Text>
                   <Text className={styles.identityValue}>{pendingMetadata.room.inviteCode}</Text>
-                  <Text size="sm">
-                    {pendingMetadata.intent === "list"
-                      ? "После сохранения откроется список интервью"
-                      : "После сохранения откроется созданное интервью"}
-                  </Text>
+                  <Text size="sm">После сохранения данных откроется созданная комната.</Text>
                   <Group gap="sm">
                     <Button
                       component="a"
@@ -772,32 +767,22 @@ function CreateInterview({ tasks }: { tasks: TaskTemplate[] }) {
                 </Stack>
               </Card>
             ) : null}
-            <Group className={styles.formActions} justify="flex-end" wrap="wrap">
-              <Button type="button" variant="subtle" onClick={() => navigate("/workspace/personal/interviews")}>Отмена</Button>
-              <Button
-                type="submit"
-                variant="light"
-                color="blue"
-                disabled={createState.isLoading || Boolean(pendingMetadata)}
-                onClick={() => { intentRef.current = "room"; }}
-              >
-                Создать и открыть комнату
-              </Button>
+          </div>
+            <Group className="app-form-actions" justify="flex-end" wrap="wrap">
+              <Button type="button" variant="subtle" disabled={createState.isLoading || Boolean(pendingMetadata)} onClick={() => navigate("/workspace/personal/interviews")}>Отмена</Button>
               <Button
                 type="submit"
                 className={styles.primaryAction}
+                style={{ minHeight: 44 }}
                 color="blue"
-                loading={createState.isLoading && intentRef.current === "list"}
-                disabled={createState.isLoading || Boolean(pendingMetadata)}
-                onClick={() => { intentRef.current = "list"; }}
+                loading={createState.isLoading}
+                disabled={createState.isLoading || pickerBusy || Boolean(pendingMetadata)}
               >
                 Создать интервью
               </Button>
             </Group>
-          </Stack>
         </form>
-      </Card>
-    </Stack>
+    </Modal>
   );
 }
 
@@ -812,6 +797,15 @@ function TaskLibrary({
   error: unknown;
   onRetry: () => void;
 }) {
+  const { notification } = App.useApp();
+  const auth = useAppSelector((state) => state.auth);
+  const identityRef = useRef({ token: auth.token, userId: auth.user?.id });
+  identityRef.current = { token: auth.token, userId: auth.user?.id };
+  const mountedRef = useRef(true);
+  React.useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
   const [searchParams, setSearchParams] = useSearchParams();
   useListPresetsQuery(undefined);
   const [createTask, createTaskState] = useCreateTaskTemplateMutation();
@@ -819,7 +813,7 @@ function TaskLibrary({
   const [importOpened, setImportOpened] = useState(false);
   const [importData, setImportData] = useState("");
   const [importError, setImportError] = useState("");
-  const [copyNotice, setCopyNotice] = useState("");
+  const copyToClipboard = useClipboardNotification();
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDescription, setTaskDescription] = useState("");
   const [taskCode, setTaskCode] = useState("");
@@ -873,43 +867,50 @@ function TaskLibrary({
       return;
     }
     if (transfer.kind !== "task") return;
+    const identity = { ...identityRef.current };
     try {
       await createTask(transfer.task).unwrap();
+      if (!mountedRef.current || identityRef.current.token !== identity.token
+        || identityRef.current.userId !== identity.userId || localStorage.getItem("auth_token") !== identity.token) return;
       setImportOpened(false);
       setImportData("");
+      notification.success({ title: "Задача импортирована", placement: "top", role: "status" });
     } catch {
       setImportError("Не удалось импортировать задачу. Проверьте данные и доступ к библиотеке.");
     }
   };
 
   const copyTask = async (task: TaskTemplate) => {
-    try {
-      await navigator.clipboard.writeText(serializeTask(task));
-      setCopyNotice(`Задача «${task.title}» готова к передаче. Вставьте данные через «Импортировать».`);
-    } catch {
-      setCopyNotice("Не удалось скопировать задачу.");
-    }
+    await copyToClipboard(serializeTask(task), {
+      success: `Задача «${task.title}» готова к передаче.`,
+      failure: "Разрешите доступ к буферу обмена и повторите попытку.",
+    });
   };
 
   return (
     <Stack gap="lg">
-      <Modal opened={createOpened} onClose={() => setCreateOpened(false)} title="Создать задачу" centered>
-        <form onSubmit={submitTask}>
-          <Stack>
-            <TextInput id="create-task-title" data-testid="create-task-title-input" label="Название" value={taskTitle} onChange={(event) => setTaskTitle(event.currentTarget.value)} required />
-            <Textarea id="create-task-description" data-testid="create-task-description-input" label="Описание (Markdown, необязательно)" value={taskDescription} onChange={(event) => setTaskDescription(event.currentTarget.value)} />
-            <Textarea id="create-task-code" data-testid="create-task-code-input" label="Стартовый код (необязательно)" value={taskCode} onChange={(event) => setTaskCode(event.currentTarget.value)} />
-            <Select label="Язык" value={taskLanguage} onChange={(value) => setTaskLanguage(value ?? "nodejs")} data={LANGUAGE_OPTIONS} />
-            <Button data-testid="create-task-submit-button" type="submit" color="blue" loading={createTaskState.isLoading}>Сохранить задачу</Button>
-          </Stack>
+      <Modal opened={createOpened} onClose={() => { if (!createTaskState.isLoading) setCreateOpened(false); }} title="Создать задачу" centered size="xl" authoring closeOnClickOutside={!createTaskState.isLoading} closeOnEscape={!createTaskState.isLoading}>
+        <form onSubmit={submitTask} className="app-authoring-form app-task-authoring">
+          <div className="app-authoring-fields">
+            <section className="app-task-metadata-grid">
+            <TextInput placeholder="Введите название" id="create-task-title" data-testid="create-task-title-input" label="Название" value={taskTitle} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setTaskTitle(event.currentTarget.value)} required />
+            <Select placeholder="Выберите язык решения" label="Язык" value={taskLanguage} onChange={(value) => setTaskLanguage(value ?? "nodejs")} data={LANGUAGE_OPTIONS} />
+            </section>
+            <section className="app-task-content-grid">
+            <Textarea placeholder="Опишите условие, примеры и ожидаемый результат" id="create-task-description" data-testid="create-task-description-input" label="Описание (Markdown, необязательно)" minRows={6} value={taskDescription} onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setTaskDescription(event.currentTarget.value)} />
+            <Textarea placeholder="Добавьте заготовку решения или оставьте поле пустым" id="create-task-code" data-testid="create-task-code-input" label="Стартовый код (необязательно)" minRows={6} value={taskCode} onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setTaskCode(event.currentTarget.value)} />
+            </section>
+            {createTaskState.error ? <Text role="alert" c="var(--app-error)">Не удалось сохранить задачу. Проверьте подключение и повторите попытку.</Text> : null}
+          </div>
+            <Group className="app-form-actions" justify="flex-end"><Button type="button" variant="subtle" color="gray" disabled={createTaskState.isLoading} onClick={() => setCreateOpened(false)}>Отмена</Button><Button data-testid="create-task-submit-button" type="submit" color="blue" loading={createTaskState.isLoading}>Сохранить задачу</Button></Group>
         </form>
       </Modal>
-      <Modal opened={importOpened} onClose={() => setImportOpened(false)} title="Импортировать задачу" centered size="lg">
+      <Modal opened={importOpened} onClose={() => { if (!createTaskState.isLoading) setImportOpened(false); }} title="Импортировать задачу" centered size="lg" closeOnClickOutside={!createTaskState.isLoading} closeOnEscape={!createTaskState.isLoading}>
         <form onSubmit={(event) => void importTask(event)}>
           <Stack>
             <Text size="sm" c="gray.5">Вставьте данные, полученные кнопкой «Копировать» в другой библиотеке.</Text>
-            <Textarea label="Данные задачи" value={importData} onChange={(event) => setImportData(event.currentTarget.value)} minRows={6} error={importError || undefined} />
-            <Button type="submit" loading={createTaskState.isLoading} disabled={!importData.trim()}>Импортировать задачу</Button>
+            <Textarea placeholder="Вставьте данные из кнопки «Копировать» у задачи" label="Данные задачи" value={importData} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setImportData(event.currentTarget.value)} minRows={6} error={importError || undefined} />
+            <Group justify="flex-end"><Button type="button" variant="subtle" color="gray" disabled={createTaskState.isLoading} onClick={() => setImportOpened(false)}>Отмена</Button><Button type="submit" loading={createTaskState.isLoading} disabled={!importData.trim()}>Импортировать задачу</Button></Group>
           </Stack>
         </form>
       </Modal>
@@ -919,42 +920,44 @@ function TaskLibrary({
         <Text c="gray.5" mt={6}>Задачи и готовые наборы для ваших интервью.</Text>
       </div>
       <div className={styles.libraryToolbar}>
-        <div className={styles.tabs} role="tablist" aria-label="Разделы библиотеки">
-          <button type="button" role="tab" aria-selected={activeTab === "tasks"} className={activeTab === "tasks" ? styles.tabActive : styles.tab} onClick={() => selectTab("tasks")}>Задачи</button>
-          <button type="button" role="tab" aria-selected={activeTab === "sets"} className={activeTab === "sets" ? styles.tabActive : styles.tab} onClick={() => selectTab("sets")}>Наборы задач</button>
-        </div>
+        <Tabs
+          className={styles.libraryTabs}
+          activeKey={activeTab}
+          onChange={(key) => selectTab(key === "sets" ? "sets" : "tasks")}
+          items={[
+            { key: "tasks", label: "Задачи" },
+            { key: "sets", label: "Наборы задач" },
+          ]}
+          aria-label="Разделы библиотеки"
+        />
         {activeTab === "tasks" ? (
           <Group gap="xs">
-            <Button data-testid="open-create-task-modal" type="button" color="blue" leftSection={<IconPlus size={17} />} onClick={() => { setTaskLanguage(selectedLanguage || "nodejs"); setCreateOpened(true); }}>
+            <Button data-testid="open-create-task-modal" type="button" color="blue" leftSection={<IconPlus size={17} />} onClick={() => { createTaskState.reset(); setTaskLanguage(selectedLanguage || "nodejs"); setCreateOpened(true); }}>
               Создать задачу
             </Button>
             <Button type="button" variant="light" onClick={() => setImportOpened(true)}>Импортировать</Button>
           </Group>
         ) : null}
       </div>
-      {copyNotice ? <Text role="status" c="blue.3" size="sm">{copyNotice}</Text> : null}
       {activeTab === "tasks" ? (
-        <Card className={styles.libraryListSurface} data-testid="task-bank-panel">
+        <Card className={styles.libraryListSurface} withBorder={false} data-testid="task-bank-panel">
           <Stack gap="sm">
             <Group justify="space-between" align="flex-end">
               <label className={styles.languageControl}>
                 <span>Язык задач</span>
-                <select
+                <Select
                   aria-label="Язык задач"
-                  value={selectedLanguage}
-                  onChange={(event) => {
+                  value={selectedLanguage || undefined}
+                  placeholder="Все языки"
+                  options={LANGUAGE_OPTIONS}
+                  onChange={(value) => {
                     const next = new URLSearchParams(searchParams);
                     next.delete("lang");
-                    if (event.currentTarget.value) next.set("language", event.currentTarget.value);
+                    if (value) next.set("language", value);
                     else next.delete("language");
                     setSearchParams(next, { replace: true });
                   }}
-                >
-                  <option value="">Все языки</option>
-                  {LANGUAGE_OPTIONS.map((language) => (
-                    <option key={language.value} value={language.value}>{language.label}</option>
-                  ))}
-                </select>
+                />
               </label>
             </Group>
             {isLoading ? <Text>Загружаем библиотеку</Text> : null}
@@ -981,20 +984,7 @@ function TaskLibrary({
                 </Button>
               </Card>
             ) : null}
-            {filteredTasks.map((task) => (
-              <Card key={task.id} className={styles.taskPreview} withBorder>
-                <Group justify="space-between" align="flex-start" gap="md">
-                  <div>
-                    <Text fw={700}>{task.title}</Text>
-                    <Text c="gray.5" size="sm" mt={4}>{task.description}</Text>
-                  </div>
-                  <Group gap="xs">
-                    <Badge variant="light">{labelForLanguage(task.language)}</Badge>
-                    <Button type="button" size="xs" variant="light" onClick={() => void copyTask(task)}>Копировать</Button>
-                  </Group>
-                </Group>
-              </Card>
-            ))}
+            {filteredTasks.map((task) => <PersonalTaskCard key={task.id} task={task} onCopy={() => void copyTask(task)} />)}
           </Stack>
         </Card>
       ) : <PresetsSection taskOptions={taskOptions} />}
@@ -1002,13 +992,85 @@ function TaskLibrary({
   );
 }
 
+function PersonalTaskCard({ task, onCopy }: { readonly task: TaskTemplate; readonly onCopy: () => void }) {
+  const [updateTask, updateState] = useUpdateTaskTemplateMutation();
+  const [deleteTask, deleteState] = useDeleteTaskTemplateMutation();
+  const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [draft, setDraft] = useState({ title: task.title, description: task.description ?? "", starterCode: task.starterCode ?? "", language: task.language });
+  const [error, setError] = useState("");
+  const beginEdit = () => {
+    setDraft({ title: task.title, description: task.description ?? "", starterCode: task.starterCode ?? "", language: task.language });
+    setError("");
+    setEditing(true);
+  };
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!draft.title.trim() || updateState.isLoading) return;
+    setError("");
+    try {
+      await updateTask({ taskId: task.id, ...draft, title: draft.title.trim() }).unwrap();
+      setEditing(false);
+    } catch { setError("Не удалось сохранить задачу. Повторите попытку."); }
+  };
+  return (
+    <Card className={styles.taskPreview} withBorder role="region" aria-label={`Личная задача ${task.title}`}>
+      <Group className={styles.taskRow} justify="space-between" align="center" gap="md" wrap="wrap">
+        <div className={styles.taskDetails}>
+          <Group gap="xs" align="center">
+            <Text fw={700}>{task.title}</Text>
+          </Group>
+          {task.description ? <Text c="gray.5" size="sm">{task.description}</Text> : null}
+          <Group gap="xs" align="center" wrap="wrap">
+            <Badge variant="light">{labelForLanguage(task.language)}</Badge>
+          </Group>
+        </div>
+        <Group className={styles.taskActions} gap="xs" align="center" wrap="wrap">
+          <Button type="button" size="xs" variant="light" aria-label="Копировать" title="Копировать задачу" leftSection={<IconCopy size={16} aria-hidden="true" />} onClick={onCopy}><span className={styles.taskActionText}>Копировать</span></Button>
+          <Button type="button" size="xs" variant="light" aria-label={`Редактировать задачу ${task.title}`} title="Редактировать задачу" leftSection={<IconPencil size={16} aria-hidden="true" />} onClick={beginEdit}><span className={styles.taskActionText}>Редактировать</span></Button>
+          <Button type="button" size="xs" color="red" variant="light" aria-label={`Удалить задачу ${task.title}`} title="Удалить задачу" onClick={() => { setError(""); setDeleting(true); }}><IconTrash size={16} aria-hidden="true" /></Button>
+        </Group>
+      </Group>
+      <Modal opened={editing} title="Редактировать задачу" centered size="xl" authoring onClose={() => { if (!updateState.isLoading) setEditing(false); }} closeOnEscape={!updateState.isLoading} closeOnClickOutside={!updateState.isLoading}>
+        <form onSubmit={(event) => void save(event)} className="app-authoring-form app-task-authoring">
+          <div className="app-authoring-fields">
+            <section className="app-task-metadata-grid">
+            <TextInput autoFocus label="Название задачи" placeholder="Введите название задачи" required value={draft.title} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setDraft({ ...draft, title: event.currentTarget.value })} />
+            <Select label="Язык задачи" placeholder="Выберите язык стартового кода" data={LANGUAGE_OPTIONS} value={draft.language} onChange={(language) => setDraft({ ...draft, language: language ?? "nodejs" })} />
+            </section>
+            <section className="app-task-content-grid">
+            <Textarea label="Описание задачи" placeholder="Опишите условие, входные данные и ожидаемый результат" minRows={6} value={draft.description} onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setDraft({ ...draft, description: event.currentTarget.value })} />
+            <Textarea label="Стартовый код" placeholder="Введите стартовый код для кандидата" minRows={6} value={draft.starterCode} onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setDraft({ ...draft, starterCode: event.currentTarget.value })} />
+            </section>
+            {error ? <Text c="red.4" role="alert">{error}</Text> : null}
+          </div>
+            <Group className="app-form-actions" justify="flex-end"><Button variant="subtle" disabled={updateState.isLoading} onClick={() => setEditing(false)}>Отмена</Button><Button type="submit" loading={updateState.isLoading} disabled={!draft.title.trim()}>Сохранить задачу</Button></Group>
+        </form>
+      </Modal>
+      <Modal opened={deleting} title="Удалить задачу?" centered onClose={() => { if (!deleteState.isLoading) setDeleting(false); }} closeOnEscape={!deleteState.isLoading} closeOnClickOutside={!deleteState.isLoading}>
+        <Stack gap="md">
+          <Text>Задача исчезнет из библиотеки. В уже созданных интервью она сохранится.</Text>
+          {error ? <Text c="red.4" role="alert">{error}</Text> : null}
+          <Group justify="flex-end"><Button variant="subtle" disabled={deleteState.isLoading} onClick={() => setDeleting(false)}>Отмена</Button><Button color="red" variant="light" leftSection={<IconTrash size={16} aria-hidden="true" />} loading={deleteState.isLoading} onClick={async () => {
+            setError("");
+            try { await deleteTask({ taskId: task.id }).unwrap(); setDeleting(false); }
+            catch { setError("Не удалось удалить задачу. Повторите попытку."); }
+          }}>Удалить</Button></Group>
+        </Stack>
+      </Modal>
+    </Card>
+  );
+}
+
 export function ProfilePage() {
+  const { notification } = App.useApp();
+  const copyToClipboard = useClipboardNotification();
   const dispatch = useAppDispatch();
   const auth = useAppSelector((state) => state.auth);
   const [updateProfile, updateState] = useUpdateProfileMutation();
   const [displayName, setDisplayName] = useState(auth.user?.displayName ?? "");
   const [nameError, setNameError] = useState("");
-  const [nameSuccess, setNameSuccess] = useState("");
+  const [nameEditOpened, setNameEditOpened] = useState(false);
   const generationRef = useRef(0);
   const identityKey = `${auth.token ?? ""}:${auth.user?.id ?? ""}`;
   const previousIdentityKeyRef = useRef(identityKey);
@@ -1022,6 +1084,7 @@ export function ProfilePage() {
     && identityRef.current.token === identity.token
     && identityRef.current.userId === identity.userId
     && identityRef.current.generation === identity.generation
+    && generationRef.current === identity.generation
   );
 
   React.useEffect(() => {
@@ -1030,7 +1093,6 @@ export function ProfilePage() {
       generationRef.current += 1;
       identityRef.current = { token: auth.token ?? "", userId: auth.user?.id ?? "", generation: generationRef.current };
       setNameError("");
-      setNameSuccess("");
     }
     if (auth.user) setDisplayName(auth.user.displayName);
   }, [auth.token, auth.user?.id, auth.user?.displayName, identityKey]);
@@ -1041,13 +1103,13 @@ export function ProfilePage() {
     if (!auth.user || !displayName.trim()) return;
     const identity = captureIdentity();
     setNameError("");
-    setNameSuccess("");
     try {
       const updated = await updateProfile({ displayName: displayName.trim(), isHr: auth.user.isHr }).unwrap();
       if (!isCurrentIdentity(identity)) return;
       dispatch(updateAuthProfile({ displayName: updated.displayName, isHr: updated.isHr }));
       localStorage.setItem("display_name", updated.displayName);
-      setNameSuccess("Имя сохранено");
+      setNameEditOpened(false);
+      notification.success({ title: "Имя сохранено", placement: "top", role: "status" });
     } catch {
       if (!isCurrentIdentity(identity)) return;
       setNameError("Не удалось сохранить имя. Повторите попытку.");
@@ -1061,6 +1123,7 @@ export function ProfilePage() {
     if (!isCurrentIdentity(identity)) return false;
     dispatch(updateAuthProfile({ displayName: updated.displayName, isHr: updated.isHr }));
     if (!updated.isHr) dispatch(api.util.invalidateTags(["HrInterviews", "HrManagers"]));
+    notification.success({ title: "Сохранено", placement: "top", role: "status" });
     return true;
   };
 
@@ -1069,28 +1132,37 @@ export function ProfilePage() {
       <div>
         <Text className={styles.eyebrow}>Настройки аккаунта</Text>
         <Title order={1}>Профиль</Title>
-        <Text c="gray.5" mt={6}>Управляйте личными возможностями отдельно от рабочих списков.</Text>
+        <Text c="gray.5" mt={6}>Имя, личный ID и доступ к кандидатам.</Text>
       </div>
-      <Card className={styles.panel} withBorder>
+      <Card className={`${styles.panel} ${styles.profilePanel}`} withBorder>
         {auth.user ? (
           <Stack gap="md">
-            <TextInput label="Имя для отображения" value={displayName} onChange={(event) => setDisplayName(event.currentTarget.value)} />
-            <Group justify="space-between" align="center" wrap="wrap">
-              <div>
-                <Text size="xs" c="gray.5">Личный ID</Text>
+            <Stack gap={4}><Text size="xs" c="gray.5">Имя для отображения</Text><Group gap="xs" align="center"><Text fw={600}>{auth.user.displayName}</Text><AntButton type="text" htmlType="button" disabled={updateState.isLoading} icon={<IconPencil size={16} aria-hidden="true" />} aria-label="Изменить имя" title="Изменить имя" onClick={() => { setDisplayName(auth.user!.displayName); setNameError(""); setNameEditOpened(true); }} /></Group></Stack>
+            <Modal opened={nameEditOpened} onClose={() => { if (!updateState.isLoading) setNameEditOpened(false); }} title="Изменить имя" centered>
+              <form onSubmit={(event) => { event.preventDefault(); void saveDisplayName(); }}>
+                <Stack gap="md">
+                  <TextInput placeholder="Введите имя для отображения" label="Имя для отображения" value={displayName} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setDisplayName(event.currentTarget.value)} autoFocus disabled={updateState.isLoading} required />
+                  {nameError ? <Text role="alert" c="red.4">{nameError}</Text> : null}
+                  <Group justify="flex-end">
+                    <Button type="button" variant="subtle" disabled={updateState.isLoading} onClick={() => setNameEditOpened(false)}>Отмена</Button>
+                    <Button type="submit" loading={updateState.isLoading} disabled={!displayName.trim()}>Сохранить имя</Button>
+                  </Group>
+                </Stack>
+              </form>
+            </Modal>
+            <Stack gap={4}>
+              <Text size="xs" c="gray.5">Личный ID</Text>
+              <Group gap="xs" align="center" wrap="wrap">
                 <Text className={styles.identityValue}>{auth.user.id}</Text>
-              </div>
-              <Button type="button" variant="subtle" onClick={() => void navigator.clipboard.writeText(auth.user!.id)}>
-                Скопировать личный ID
+              <Button type="button" variant="subtle" aria-label="Скопировать личный ID" title="Скопировать личный ID" disabled={updateState.isLoading} onClick={() => void copyToClipboard(auth.user!.id, {
+                success: "Личный ID скопирован.",
+                failure: "Разрешите доступ к буферу обмена и повторите попытку.",
+              })}>
+                <IconCopy size={16} aria-hidden="true" />
               </Button>
-            </Group>
-            <Group>
-              <Button type="button" loading={updateState.isLoading} onClick={() => void saveDisplayName()}>Сохранить имя</Button>
-              {nameError ? <Button type="button" variant="light" onClick={() => void saveDisplayName()}>Повторить сохранение</Button> : null}
-            </Group>
-            {nameError ? <Text role="alert" c="red.4">{nameError}</Text> : null}
-            <Text aria-live="polite" c="teal.4">{nameSuccess}</Text>
-            <HrProfileSection user={auth.user} isLoading={updateState.isLoading} onSave={saveHiringCapability} showIdentity={false} />
+              </Group>
+            </Stack>
+            <HrProfileSection user={auth.user} isLoading={updateState.isLoading || nameEditOpened} onSave={saveHiringCapability} showIdentity={false} />
           </Stack>
         ) : <Loader />}
       </Card>
@@ -1137,23 +1209,24 @@ export function PersonalWorkspacePage() {
       <header className={styles.header}>
         <Container size="xl" className={styles.headerInner}>
           <div className={styles.brand}>
-            <span className={styles.brandMark} aria-hidden="true">IO</span>
+            <span className={styles.brandMark} aria-hidden="true">IH</span>
             <div className={styles.brandText}>
-              <Text className={styles.brandLabel} fw={800}>Личное пространство</Text>
-              <Text size="xs" c="gray.5">Interview workspace</Text>
+              <Text className={styles.brandLabel} fw={800}>InterHub</Text>
+              <Text size="xs" c="gray.5">Личный раздел</Text>
             </div>
           </div>
           <div className={styles.workspaceChoice}>
             <WorkspaceSwitcher />
           </div>
           <WorkspaceNavigation isHr={auth.user?.isHr === true} />
-          <Group className={styles.userControls} gap="sm" wrap="nowrap">
-            <NavLink to="/profile" className={styles.userName} aria-label={`Открыть профиль @${auth.user?.nickname}`}>
+          <Group className={styles.userControls} gap="sm" align="center" wrap="nowrap">
+            <NavLink to="/profile" className={`${styles.userName} app-header-control`} aria-label={`Открыть профиль @${auth.user?.nickname}`}>
               <IconUserCircle size={16} aria-hidden="true" />
-              @{auth.user?.nickname}
+              <span className={styles.userNameText}>@{auth.user?.nickname}</span>
             </NavLink>
             <Button
               variant="subtle"
+              className="app-header-control"
               onClick={() => {
                 dispatch(clearAuth());
                 dispatch(api.util.resetApiState());
@@ -1162,10 +1235,11 @@ export function PersonalWorkspacePage() {
             >
               Выйти
             </Button>
+            <ThemeToggleButton />
           </Group>
         </Container>
       </header>
-      <main aria-label={`Личное пространство: ${sectionTitle}`}>
+      <main aria-label={`Личный раздел: ${sectionTitle}`}>
         <Container size="xl" className={styles.content}>
           {section === "interviews" ? (
             <InterviewList
@@ -1176,7 +1250,18 @@ export function PersonalWorkspacePage() {
               onRefresh={() => { void roomsQuery.refetch(); }}
             />
           ) : null}
-          {section === "create" ? <CreateInterview tasks={tasks} /> : null}
+          {section === "create" ? (
+            <React.Fragment>
+              <InterviewList
+                rooms={rooms}
+                isLoading={roomsQuery.isLoading}
+                isFetching={roomsQuery.isFetching}
+                error={roomsQuery.error}
+                onRefresh={() => { void roomsQuery.refetch(); }}
+              />
+              <CreateInterview tasks={tasks} />
+            </React.Fragment>
+          ) : null}
           {section === "library" ? (
             <TaskLibrary
               tasks={tasks}

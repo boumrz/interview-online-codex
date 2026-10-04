@@ -1,5 +1,6 @@
-import React, { useRef, useState } from "react";
-import { Text, Textarea } from "@mantine/core";
+import React, { useEffect, useRef, useState } from "react";
+import { App, Input, Typography } from "antd";
+import { useAppSelector } from "../../app/hooks";
 import { decodeTaskShareCode } from "../../features/tasks/taskShareCode";
 import { useCreateTaskTemplateMutation } from "../../services/api";
 import { normalizeLanguageKey } from "./dashboardHelpers";
@@ -16,9 +17,17 @@ export interface PasteTaskCodeFieldProps {
 const VALID_LANGUAGE_VALUES = new Set(LANGUAGE_OPTIONS.map((o) => o.value));
 
 export function PasteTaskCodeField({ existingTasks, onImportSuccess }: PasteTaskCodeFieldProps) {
+  const { notification } = App.useApp();
+  const token = useAppSelector((state) => state.auth.token);
+  const tokenRef = useRef(token);
+  tokenRef.current = token;
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
   const [value, setValue] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [warningMsg, setWarningMsg] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
 
@@ -34,7 +43,6 @@ export function PasteTaskCodeField({ existingTasks, onImportSuccess }: PasteTask
     setValue(inputValue);
 
     setErrorMsg(null);
-    setSuccessMsg(null);
     setWarningMsg(null);
 
     const result = decodeTaskShareCode(inputValue.trim());
@@ -97,6 +105,7 @@ export function PasteTaskCodeField({ existingTasks, onImportSuccess }: PasteTask
     // Mark import in progress synchronously before any await
     isImportingRef.current = true;
     setIsImporting(true);
+    const requestToken = token;
 
     try {
       await createTask({
@@ -106,11 +115,15 @@ export function PasteTaskCodeField({ existingTasks, onImportSuccess }: PasteTask
         language: normLang,
       }).unwrap();
 
+      if (!mountedRef.current || tokenRef.current !== requestToken || localStorage.getItem("auth_token") !== requestToken) return;
+
       setValue("");
       setWarningMsg(null);
-      setSuccessMsg(
-        truncated ? "Задача импортирована (название обрезано)" : "Задача импортирована",
-      );
+      notification.success({
+        title: truncated ? "Задача импортирована (название обрезано)" : "Задача импортирована",
+        placement: "top",
+        role: "status",
+      });
       onImportSuccess(normLang);
     } catch {
       setWarningMsg(null);
@@ -123,27 +136,23 @@ export function PasteTaskCodeField({ existingTasks, onImportSuccess }: PasteTask
 
   return (
     <div>
-      <Textarea
+      <Input.TextArea
+        aria-label="Код задачи для импорта"
         value={value}
         onChange={(e) => { void handleChange(e); }}
         placeholder="Вставьте код задачи (ITASK1:...)"
-        minRows={2}
+        autoSize={{ minRows: 2 }}
         disabled={isImporting}
       />
       {errorMsg && (
-        <Text size="xs" c="red.4" role="alert">
+        <Typography.Text type="danger" role="alert" style={{ display: "block", fontSize: 12 }}>
           {errorMsg}
-        </Text>
-      )}
-      {successMsg && (
-        <Text size="xs" c="teal.4" aria-live="polite">
-          {successMsg}
-        </Text>
+        </Typography.Text>
       )}
       {warningMsg && (
-        <Text size="xs" c="yellow.4" aria-live="polite">
+        <Typography.Text aria-live="polite" style={{ display: "block", color: "var(--app-warning)", fontSize: 12 }}>
           {warningMsg}
-        </Text>
+        </Typography.Text>
       )}
     </div>
   );

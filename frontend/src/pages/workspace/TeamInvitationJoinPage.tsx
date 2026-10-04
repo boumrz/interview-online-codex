@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { Alert, Box, Button, Card, Group, Loader, Stack, Text, Title } from "@mantine/core";
+import { Alert, Box, Button, Card, Group, Loader, Stack, Text, Title } from "components/antd-compat";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { clearAuth } from "../../features/auth/authSlice";
@@ -20,6 +20,7 @@ import {
   preserveTeamInvitationForLogin,
 } from "../../features/workspace/teamInvitationToken";
 import { TEAM_WORKSPACES_ENABLED } from "../../config/runtime";
+import { ThemeToggleButton } from "../../features/theme/ThemeToggleButton";
 import styles from "./TeamInvitationJoinPage.module.css";
 
 type Phase = "loading" | "ready" | "auth" | "accepting" | "accept-error" | "preview-error" | "unavailable";
@@ -164,6 +165,7 @@ export function TeamInvitationJoinPage() {
 
   return (
     <Box className={styles.page}>
+      <div className={styles.themeControl}><ThemeToggleButton /></div>
       <Card className={styles.card} withBorder radius="lg" padding="xl">
         <Stack gap="lg">
           <div>

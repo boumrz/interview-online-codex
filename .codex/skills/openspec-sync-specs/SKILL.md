@@ -1,6 +1,6 @@
 ---
 name: openspec-sync-specs
-description: Sync delta specs from a change to main specs. Use when the user wants to update main specs with changes from a delta spec, without archiving the change.
+description: Historical OpenSpec sync-specs workflow. Use only for an explicit OpenSpec request; ordinary InterHub work follows SPEC.md and specs/features.
 license: MIT
 compatibility: Requires openspec CLI.
 metadata:
@@ -8,6 +8,12 @@ metadata:
   version: "1.0"
   generatedBy: "1.4.1"
 ---
+
+> InterHub uses editable Markdown contracts in `specs/features/`, indexed by
+> `SPEC.md`. Follow `AGENTS.md` and `specs/README.md` for ordinary work.
+> The workflow below applies only when the user explicitly requests OpenSpec;
+> do not select it merely because a feature needs a specification.
+
 
 Sync delta specs from a change to main specs.
 

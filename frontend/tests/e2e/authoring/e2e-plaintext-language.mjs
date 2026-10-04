@@ -57,17 +57,21 @@ try {
 
   // (1) В селекте лендинга появился пункт Plain text. Открываем его и
   //     проверяем, что значение доступно для выбора.
-  const langSelect = interviewerPage.getByLabel("Язык", { exact: false }).first();
+  await interviewerPage.getByRole("button", { name: "Создать комнату", exact: true }).click();
+  const createDialog = interviewerPage.getByRole("dialog", { name: "Создать комнату", exact: true });
+  await createDialog.getByRole("textbox", { name: "Ваше имя", exact: true }).fill("Owner Plain");
+  await createDialog.getByRole("textbox", { name: "Название комнаты", exact: true }).fill(`Plain text ${Date.now()}`);
+  const langSelect = createDialog.getByRole("combobox", { name: "Язык", exact: true });
   await langSelect.click();
   await interviewerPage
-    .getByRole("option", { name: "Plain text" })
+    .locator('.ant-select-item-option[title="Plain text"]')
     .waitFor({ state: "visible", timeout: 5000 });
   await interviewerPage
-    .getByRole("option", { name: "Plain text" })
+    .locator('.ant-select-item-option[title="Plain text"]')
     .click();
 
   await interviewerPage
-    .getByRole("button", { name: "Создать комнату" })
+    .getByRole("dialog", { name: "Создать комнату" }).getByRole("button", { name: "Создать комнату", exact: true })
     .click();
   await interviewerPage.waitForURL(/\/room\//, { timeout: 15000 });
   await interviewerPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
@@ -78,13 +82,15 @@ try {
   //     CodeMirror принимает ввод без падения по синтаксису.
   const cm = interviewerPage.locator('[data-testid="room-code-editor-host"] .cm-content');
   await cm.click();
+  await cm.press("ControlOrMeta+a");
   await interviewerPage.keyboard.type(
     "Hello, plain text! Не язык — просто заметки.",
   );
 
   // (3) Селект языка в шапке комнаты тоже показывает Plain text.
-  const headerSelect = interviewerPage.locator("#room-language-select");
-  const headerSelectValue = await headerSelect.inputValue().catch(() => "");
+  const headerSelect = interviewerPage.getByRole("combobox", { name: "Язык комнаты", exact: true })
+    .locator('xpath=ancestor::*[contains(concat(" ",normalize-space(@class)," ")," ant-select ")][1]');
+  const headerSelectValue = await headerSelect.innerText();
   if (!/plain text/i.test(headerSelectValue)) {
     throw new Error(
       `PLAINTEXT_HEADER_SELECT_VALUE_MISMATCH got="${headerSelectValue}"`,
@@ -98,9 +104,7 @@ try {
   await gotoWithRetry(candidatePage, `${webBaseUrl}/room/${inviteCode}`);
   await enterNameIfPrompted(candidatePage, "Candidate Plain");
   await candidatePage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
-  await candidatePage.getByText("plain text", { exact: false }).waitFor({
-    timeout: 12000,
-  });
+  await candidatePage.waitForFunction(() => document.querySelector('[data-testid="room-code-editor-host"] .cm-content')?.textContent?.includes("Hello, plain text! Не язык — просто заметки."), null, { timeout: 12000 });
 
   console.log("PLAINTEXT_LANGUAGE_OK", inviteCode);
 

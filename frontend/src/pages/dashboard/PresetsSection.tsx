@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import {
+  ActionIcon,
   Badge,
   Box,
   Button,
@@ -15,16 +16,15 @@ import {
   Textarea,
   ThemeIcon,
   Title,
-} from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
-import { IconArchive, IconArchiveOff, IconBookmark, IconCopy, IconEdit, IconPlus } from "@tabler/icons-react";
+} from "components/antd-compat";
+import { useDisclosure } from "components/antd-hooks";
+import { IconBookmark, IconCopy, IconEdit, IconPlus, IconTrash } from "components/antd-icons";
 import { useAppSelector } from "../../app/hooks";
+import { useClipboardNotification } from "../../components/useClipboardNotification";
 import {
   useListPresetsQuery,
   useCreatePresetMutation,
   useUpdatePresetMutation,
-  useArchivePresetMutation,
-  useRestorePresetMutation,
   useDeletePresetMutation,
   useLazyGetPresetQuery,
   useTasksGroupedQuery,
@@ -34,6 +34,7 @@ import { parseLibraryTransfer, serializeTaskSet } from "../../features/workspace
 import { darkFieldStyles, darkSelectStyles } from "./dashboardFieldStyles";
 import { LANGUAGE_OPTIONS } from "./dashboardConstants";
 import { normalizeLanguageKey } from "./dashboardHelpers";
+import workspaceStyles from "../workspace/PersonalWorkspacePage.module.css";
 
 interface PresetsSectionProps {
   taskOptions: Array<{ value: string; label: string; language: string }>;
@@ -81,17 +82,15 @@ function languageSummary(counts: Record<string, number>) {
  */
 export function PresetsSection({ taskOptions, onError }: PresetsSectionProps) {
   const { token } = useAppSelector((state) => state.auth);
-  const [mode, setMode] = useState<"active" | "archived">("active");
+  const [formError, setFormError] = useState("");
 
-  const { data: presets = [], isLoading, isError } = useListPresetsQuery({ status: mode }, {
+  const { data: presets = [], isLoading, isError } = useListPresetsQuery(undefined, {
     skip: !token,
   });
   const { data: taskGroups = [] } = useTasksGroupedQuery(undefined, { skip: !token });
 
   const [createPreset, createPresetState] = useCreatePresetMutation();
   const [updatePreset, updatePresetState] = useUpdatePresetMutation();
-  const [archivePreset, archivePresetState] = useArchivePresetMutation();
-  const [restorePreset, restorePresetState] = useRestorePresetMutation();
   const [deletePreset, deletePresetState] = useDeletePresetMutation();
   const [presetToDelete, setPresetToDelete] = useState<{ id: string; name: string } | null>(null);
   const [triggerGetPreset] = useLazyGetPresetQuery();
@@ -100,7 +99,7 @@ export function PresetsSection({ taskOptions, onError }: PresetsSectionProps) {
   const [importData, setImportData] = useState("");
   const [importError, setImportError] = useState("");
   const [importing, setImporting] = useState(false);
-  const [copyNotice, setCopyNotice] = useState("");
+  const copyToClipboard = useClipboardNotification();
 
   // Create modal state
   const [createOpened, { open: openCreate, close: closeCreate }] = useDisclosure(false);
@@ -123,6 +122,7 @@ export function PresetsSection({ taskOptions, onError }: PresetsSectionProps) {
   );
 
   const handleOpenCreate = () => {
+    setFormError("");
     setCreateName("");
     setCreateTaskIds([]);
     openCreate();
@@ -135,11 +135,14 @@ export function PresetsSection({ taskOptions, onError }: PresetsSectionProps) {
   };
 
   const handleCreate = async () => {
+    setFormError("");
     if (!createName.trim()) {
+      setFormError("Введите название набора");
       onError?.("Введите название набора");
       return;
     }
     if (createTaskIds.length === 0) {
+      setFormError("Выберите хотя бы одну задачу");
       onError?.("Выберите хотя бы одну задачу");
       return;
     }
@@ -147,11 +150,13 @@ export function PresetsSection({ taskOptions, onError }: PresetsSectionProps) {
       await createPreset({ name: createName.trim(), taskTemplateIds: createTaskIds }).unwrap();
       handleCloseCreate();
     } catch {
+      setFormError("Не удалось создать набор");
       onError?.("Не удалось создать набор");
     }
   };
 
   const handleOpenEdit = async (presetId: string) => {
+    setFormError("");
     setEditPresetId(presetId);
     setEditName("");
     setEditTaskIds([]);
@@ -163,6 +168,7 @@ export function PresetsSection({ taskOptions, onError }: PresetsSectionProps) {
       setEditTaskIds(detail.items.map((item) => item.taskTemplateId));
       setEditRevision(detail.revision);
     } catch {
+      setFormError("Не удалось загрузить набор");
       onError?.("Не удалось загрузить набор");
     } finally {
       setEditLoading(false);
@@ -179,12 +185,15 @@ export function PresetsSection({ taskOptions, onError }: PresetsSectionProps) {
   };
 
   const handleEdit = async () => {
+    setFormError("");
     if (!editPresetId) return;
     if (!editName.trim()) {
+      setFormError("Введите название набора");
       onError?.("Введите название набора");
       return;
     }
     if (editTaskIds.length === 0) {
+      setFormError("Выберите хотя бы одну задачу");
       onError?.("Выберите хотя бы одну задачу");
       return;
     }
@@ -197,6 +206,7 @@ export function PresetsSection({ taskOptions, onError }: PresetsSectionProps) {
       }).unwrap();
       handleCloseEdit();
     } catch {
+      setFormError("Не удалось сохранить набор");
       onError?.("Не удалось сохранить набор");
     }
   };
@@ -204,15 +214,16 @@ export function PresetsSection({ taskOptions, onError }: PresetsSectionProps) {
   const handleCopy = async (presetId: string) => {
     try {
       const preset = await triggerGetPreset({ presetId }).unwrap();
-      if (preset.status !== "ACTIVE") return;
       const catalog = new Map(taskGroups.flatMap((group) => group.tasks).map((task) => [task.id, task]));
       const tasks = preset.items.map((item) => catalog.get(item.taskTemplateId));
       if (tasks.some((task) => !task)) {
         onError?.("Не удалось найти задачи набора. Обновите библиотеку и повторите попытку.");
         return;
       }
-      await navigator.clipboard.writeText(serializeTaskSet(preset.name, tasks as NonNullable<typeof tasks[number]>[]));
-      setCopyNotice(`Набор «${preset.name}» готов к передаче. Вставьте данные через «Импортировать набор».`);
+      await copyToClipboard(serializeTaskSet(preset.name, tasks as NonNullable<typeof tasks[number]>[]), {
+        success: `Набор «${preset.name}» готов к передаче.`,
+        failure: "Разрешите доступ к буферу обмена и повторите попытку.",
+      });
     } catch {
       onError?.("Не удалось скопировать набор. Попробуйте ещё раз.");
     }
@@ -245,37 +256,24 @@ export function PresetsSection({ taskOptions, onError }: PresetsSectionProps) {
     }
   };
 
-  const handleArchive = async (presetId: string) => {
-    try {
-      await archivePreset({ presetId }).unwrap();
-    } catch {
-      onError?.("Не удалось архивировать набор. Попробуйте ещё раз.");
-    }
-  };
-
-  const handleRestore = async (presetId: string) => {
-    try {
-      await restorePreset({ presetId }).unwrap();
-    } catch {
-      onError?.("Не удалось восстановить набор. Попробуйте ещё раз.");
-    }
-  };
-
-  const actionLoading = archivePresetState.isLoading || restorePresetState.isLoading;
+  const actionLoading = updatePresetState.isLoading || deletePresetState.isLoading;
 
   return (
     <>
-      <Modal opened={presetToDelete !== null} onClose={() => setPresetToDelete(null)} title="Удалить набор?" centered>
+      <Modal opened={presetToDelete !== null} onClose={() => { if (!deletePresetState.isLoading) setPresetToDelete(null); }} title="Удалить набор?" centered>
         <Stack gap="md">
-          <Text size="sm">Набор «{presetToDelete?.name}» будет удалён без возможности восстановления.</Text>
+          <Text size="sm">Набор «{presetToDelete?.name}» исчезнет из библиотеки. В уже созданных интервью его задачи сохранятся.</Text>
+          {formError ? <Text role="alert" c="var(--app-error)">{formError}</Text> : null}
           <Group justify="flex-end">
-            <Button variant="subtle" onClick={() => setPresetToDelete(null)}>Отмена</Button>
-            <Button color="red" loading={deletePresetState.isLoading} onClick={async () => {
+            <Button variant="subtle" disabled={deletePresetState.isLoading} onClick={() => setPresetToDelete(null)}>Отмена</Button>
+            <Button variant="light" color="red" leftSection={<IconTrash size={16} aria-hidden="true" />} loading={deletePresetState.isLoading} disabled={deletePresetState.isLoading} onClick={async () => {
               if (!presetToDelete) return;
+              setFormError("");
               try {
                 await deletePreset({ presetId: presetToDelete.id }).unwrap();
                 setPresetToDelete(null);
               } catch {
+                setFormError("Не удалось удалить набор. Попробуйте ещё раз.");
                 onError?.("Не удалось удалить набор. Попробуйте ещё раз.");
               }
             }}>Удалить</Button>
@@ -284,15 +282,20 @@ export function PresetsSection({ taskOptions, onError }: PresetsSectionProps) {
       </Modal>
       <Modal
         opened={createOpened}
-        onClose={handleCloseCreate}
+        onClose={() => { if (!createPresetState.isLoading) handleCloseCreate(); }}
+        closeOnClickOutside={!createPresetState.isLoading}
+        closeOnEscape={!createPresetState.isLoading}
         title="Создать набор"
         centered
+        authoring
       >
-        <Stack>
-          <TextInput
+        <div className="app-authoring-form">
+          <div className="app-authoring-fields">
+            <section className="app-authoring-section">
+          <TextInput placeholder="Введите название"
             label="Название набора"
             value={createName}
-            onChange={(e) => setCreateName(e.currentTarget.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCreateName(e.currentTarget.value)}
             styles={darkFieldStyles}
             required
           />
@@ -307,33 +310,40 @@ export function PresetsSection({ taskOptions, onError }: PresetsSectionProps) {
             required
             labelProps={{ onClick: (e: React.MouseEvent) => e.preventDefault() }}
           />
-          <Button
+            </section>
+          {formError ? <Text role="alert" c="var(--app-error)">{formError}</Text> : null}
+          </div>
+          <Group className="app-form-actions" justify="flex-end"><Button variant="subtle" color="gray" disabled={createPresetState.isLoading} onClick={handleCloseCreate}>Отмена</Button><Button
             onClick={handleCreate}
             loading={createPresetState.isLoading}
             disabled={createPresetState.isLoading}
           >
             Создать
-          </Button>
-        </Stack>
+          </Button></Group>
+        </div>
       </Modal>
 
       <Modal
         opened={editOpened}
-        onClose={handleCloseEdit}
+        onClose={() => { if (!updatePresetState.isLoading) handleCloseEdit(); }}
+        closeOnClickOutside={!updatePresetState.isLoading}
+        closeOnEscape={!updatePresetState.isLoading}
         title="Редактировать набор"
         centered
+        authoring
       >
-        <Stack>
+        <div className="app-authoring-form">
+          <div className="app-authoring-fields">
           {editLoading ? (
             <Center>
               <Loader size="sm" />
             </Center>
           ) : (
-            <>
-              <TextInput
+            <section className="app-authoring-section">
+              <TextInput placeholder="Введите название"
                 label="Название набора"
                 value={editName}
-                onChange={(e) => setEditName(e.currentTarget.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditName(e.currentTarget.value)}
                 styles={darkFieldStyles}
                 required
               />
@@ -348,67 +358,43 @@ export function PresetsSection({ taskOptions, onError }: PresetsSectionProps) {
                 required
                 labelProps={{ onClick: (e: React.MouseEvent) => e.preventDefault() }}
               />
-            </>
+            </section>
           )}
-          <Button
+          {formError ? <Text role="alert" c="var(--app-error)">{formError}</Text> : null}
+          </div>
+          <Group className="app-form-actions" justify="flex-end"><Button variant="subtle" color="gray" disabled={updatePresetState.isLoading} onClick={handleCloseEdit}>Отмена</Button><Button
             onClick={handleEdit}
             loading={updatePresetState.isLoading}
             disabled={updatePresetState.isLoading || editLoading}
           >
             Сохранить
-          </Button>
-        </Stack>
+          </Button></Group>
+        </div>
       </Modal>
 
-      <Modal opened={importOpened} onClose={closeImport} title="Импортировать набор" centered size="lg">
+      <Modal opened={importOpened} onClose={() => { if (!importing && !createTaskState.isLoading) closeImport(); }} title="Импортировать набор" centered size="lg" closeOnClickOutside={!importing && !createTaskState.isLoading} closeOnEscape={!importing && !createTaskState.isLoading}>
         <Stack>
           <Text size="sm" c="gray.5">Вставьте данные, полученные кнопкой «Копировать» в другой библиотеке.</Text>
-          <Textarea label="Данные набора" value={importData} onChange={(event) => setImportData(event.currentTarget.value)} minRows={6} error={importError || undefined} />
-          <Button onClick={() => void handleImport()} loading={importing || createTaskState.isLoading} disabled={!importData.trim()}>Импортировать набор</Button>
+          <Textarea placeholder="Вставьте данные из кнопки «Копировать» у набора" label="Данные набора" value={importData} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setImportData(event.currentTarget.value)} minRows={6} error={importError || undefined} />
+          <Group justify="flex-end"><Button variant="subtle" color="gray" disabled={importing || createTaskState.isLoading} onClick={closeImport}>Отмена</Button><Button onClick={() => void handleImport()} loading={importing || createTaskState.isLoading} disabled={!importData.trim()}>Импортировать набор</Button></Group>
         </Stack>
       </Modal>
 
       <Box c="gray.1">
         <Stack>
-          <Group>
-            <ThemeIcon color="gray" variant="light">
-              <IconBookmark size={15} />
-            </ThemeIcon>
-            <Title order={4}>Наборы задач</Title>
-          </Group>
-
-          <Group justify="space-between" align="center" gap="xs" wrap="wrap">
-            <Group role="tablist" aria-label="Фильтр наборов" gap="xs">
-              <Button
-                type="button"
-                role="tab"
-                aria-selected={mode === "active"}
-                size="xs"
-                variant={mode === "active" ? "filled" : "light"}
-                onClick={() => setMode("active")}
-              >
-                Активные
-              </Button>
-              <Button
-                type="button"
-                role="tab"
-                aria-selected={mode === "archived"}
-                size="xs"
-                variant={mode === "archived" ? "filled" : "light"}
-                onClick={() => setMode("archived")}
-              >
-                Архив
-              </Button>
+          <Group justify="space-between" align="center" gap="md" wrap="wrap">
+            <Group align="center" gap="sm">
+              <ThemeIcon color="gray" variant="light">
+                <IconBookmark size={15} />
+              </ThemeIcon>
+              <Title order={4} m={0}>Наборы задач</Title>
             </Group>
-            {mode === "active" ? (
-              <Group gap="xs">
-                <Button color="blue" leftSection={<IconPlus size={16} />} onClick={handleOpenCreate}>Создать набор</Button>
-                <Button variant="light" onClick={openImport}>Импортировать</Button>
-              </Group>
-            ) : null}
-          </Group>
 
-          {copyNotice ? <Text role="status" c="blue.3" size="sm">{copyNotice}</Text> : null}
+            <Group gap="xs" align="center" wrap="wrap">
+              <Button color="blue" leftSection={<IconPlus size={16} />} onClick={handleOpenCreate}>Создать набор</Button>
+              <Button variant="light" onClick={openImport}>Импортировать</Button>
+            </Group>
+          </Group>
 
           {isLoading && (
             <Center>
@@ -426,9 +412,7 @@ export function PresetsSection({ taskOptions, onError }: PresetsSectionProps) {
             <Stack gap="sm">
               {presets.length === 0 ? (
                 <Text size="sm" c="gray.4">
-                  {mode === "active"
-                    ? "Наборов пока нет. Создайте первый набор для быстрой загрузки задач в комнату."
-                    : "Архив наборов пуст."}
+                  Наборов пока нет. Создайте первый набор для быстрой загрузки задач в комнату.
                 </Text>
               ) : (
                 presets.map((preset) => (
@@ -437,10 +421,11 @@ export function PresetsSection({ taskOptions, onError }: PresetsSectionProps) {
                     data-testid={`preset-card-${preset.id}`}
                     radius="md"
                     padding="sm"
-                    bg="#121720"
+                    bg="var(--app-surface-soft)"
                   >
-                    <Group justify="space-between" align="center">
-                      <Group gap="xs">
+                    <Group className={workspaceStyles.taskRow} justify="space-between" align="center" gap="md" wrap="wrap">
+                      <div className={workspaceStyles.taskDetails}>
+                      <Group gap="xs" align="center" wrap="wrap">
                         <Text fw={700}>{preset.name}</Text>
                         {preset.itemCount === 0 ? (
                           <Badge color="orange" variant="light">
@@ -451,68 +436,19 @@ export function PresetsSection({ taskOptions, onError }: PresetsSectionProps) {
                             {taskCountLabel(preset.itemCount)}
                           </Badge>
                         )}
-                        <Badge color={preset.status === "ACTIVE" ? "teal" : "gray"} variant="light">
-                          {preset.status === "ACTIVE" ? "Активный" : "Архив"}
-                        </Badge>
-                        <Badge color="dark" variant="light">
-                          v{preset.revision}
-                        </Badge>
                       </Group>
-                      <Group gap="xs">
-                        {mode === "active" ? (
-                          <Button
-                            size="xs"
-                            variant="subtle"
-                            leftSection={<IconEdit size={14} />}
-                            onClick={() => handleOpenEdit(preset.id)}
-                          >
-                            Изменить
-                          </Button>
-                        ) : null}
-                        {mode === "active" ? (
-                          <Button
-                            size="xs"
-                            variant="subtle"
-                            leftSection={<IconCopy size={14} />}
-                            disabled={actionLoading}
-                            onClick={() => handleCopy(preset.id)}
-                          >
-                            Копировать
-                          </Button>
-                        ) : null}
-                        {mode === "active" ? (
-                          <Button
-                            size="xs"
-                            variant="subtle"
-                            color="orange"
-                            leftSection={<IconArchive size={14} />}
-                            loading={archivePresetState.isLoading}
-                            disabled={actionLoading}
-                            onClick={() => handleArchive(preset.id)}
-                          >
-                            В архив
-                          </Button>
-                        ) : (
-                          <Button
-                            size="xs"
-                            variant="subtle"
-                            color="green"
-                            leftSection={<IconArchiveOff size={14} />}
-                            loading={restorePresetState.isLoading}
-                            disabled={actionLoading}
-                            onClick={() => handleRestore(preset.id)}
-                          >
-                            Восстановить
-                          </Button>
-                        )}
-                        <Button size="xs" variant="subtle" color="red" aria-label={`Удалить набор ${preset.name}`} disabled={actionLoading} onClick={() => setPresetToDelete({ id: preset.id, name: preset.name })}>Удалить</Button>
+                      {preset.itemCount > 0 ? (
+                        <Text size="sm" c="gray.4">
+                          {languageSummary(preset.languageCounts ?? {})}
+                        </Text>
+                      ) : null}
+                      </div>
+                      <Group className={workspaceStyles.taskActions} gap="xs" align="center" wrap="wrap">
+                        <Button size="xs" variant="light" leftSection={<IconCopy size={14} />} disabled={actionLoading} onClick={() => void handleCopy(preset.id)}>Копировать</Button>
+                        <Button size="xs" variant="light" leftSection={<IconEdit size={16} aria-hidden="true" />} aria-label={`Редактировать набор ${preset.name}`} title="Редактировать набор" disabled={actionLoading} onClick={() => void handleOpenEdit(preset.id)}>Редактировать</Button>
+                        <ActionIcon size="sm" variant="light" color="red" aria-label={`Удалить набор ${preset.name}`} title="Удалить набор" disabled={actionLoading || deletePresetState.isLoading} onClick={() => { setFormError(""); setPresetToDelete({ id: preset.id, name: preset.name }); }}><IconTrash size={16} aria-hidden="true" /></ActionIcon>
                       </Group>
                     </Group>
-                    {preset.itemCount > 0 ? (
-                      <Text size="sm" c="gray.4" mt="xs">
-                        {languageSummary(preset.languageCounts ?? {})}
-                      </Text>
-                    ) : null}
                   </Card>
                 ))
               )}

@@ -48,8 +48,7 @@ async function open(browser, auth, room) {
   return { context, page };
 }
 async function openLogs(page) {
-  await page.getByTestId('room-rail-tools').click();
-  await page.getByRole('tab', { name: 'Логи', exact: true }).click();
+  await page.getByRole('tab', { name: 'Активность', exact: true }).click();
 }
 async function seed(page, candidate, room, count) {
   const credentials = await page.evaluate(id => ({ sessionId: window.__activityState.participants.find(p => p.userId === id).sessionId, eventToken: window.__activityState.eventToken }), candidate.user.id);
@@ -99,7 +98,7 @@ test('whole activity history survives the 50-event tail, empty snapshots, missed
     await manager.page.getByTestId('activity-history-error').waitFor({ state: 'hidden' });
     await loadAll(manager.page); await waitIds(manager.page, ids);
     await manager.page.getByRole('tab', { name: 'Чат', exact: true }).click();
-    await manager.page.getByRole('tab', { name: 'Логи', exact: true }).click();
+    await openLogs(manager.page);
     await waitIds(manager.page, ids);
     await manager.page.evaluate(() => {
       window.__dropActivity = true;
@@ -148,8 +147,38 @@ for (const failure of ['three-server-errors', 'hung-request', 'rate-limit']) {
       const attempts = []; const delivered = [];
       let arrived;
       const first = new Promise(resolve => { arrived = resolve; });
-      const held = new Promise(resolve => { release = resolve; });
-      await target.page.route(`**/api/realtime/rooms/${room.inviteCode}/events`, async route => {
+      if (failure === 'hung-request') {
+        // A held Playwright route can stay unresolved after fetch aborts.
+        // This seam honours the production fetch signal; retries use real HTTP.
+        await target.page.exposeFunction('__recordHungActivityAttempt', attempt => { attempts.push(attempt); arrived(); });
+        await target.page.exposeFunction('__recordHungActivityDelivery', id => { delivered.push(id); });
+        await target.page.evaluate(inviteCode => {
+          const nativeFetch = window.fetch.bind(window);
+          let heldFirst = false;
+          window.__hungActivityAbortCount = 0;
+          window.fetch = async (input, init) => {
+            const url = typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
+            let body;
+            try { body = typeof init?.body === 'string' ? JSON.parse(init.body) : null; } catch {}
+            if (!url.endsWith(`/realtime/rooms/${inviteCode}/events`) || body?.type !== 'key_press' || !['a', 'b'].includes(body.key)) return nativeFetch(input, init);
+            await window.__recordHungActivityAttempt({ id: body.sourceEventId, key: body.key, at: Date.now() });
+            if (body.key === 'a' && !heldFirst) {
+              heldFirst = true;
+              window.__hungActivityHasSignal = init.signal instanceof AbortSignal;
+              return new Promise((_, reject) => {
+                const abort = () => {
+                  window.__hungActivityAbortCount += 1;
+                  reject(new DOMException('Activity request aborted', 'AbortError'));
+                };
+                if (init.signal?.aborted) abort();
+                else init.signal?.addEventListener('abort', abort, { once: true });
+              });
+            }
+            await window.__recordHungActivityDelivery(body.sourceEventId);
+            return nativeFetch(input, init);
+          };
+        }, room.inviteCode);
+      } else await target.page.route(`**/api/realtime/rooms/${room.inviteCode}/events`, async route => {
         const body = route.request().postDataJSON();
         if (body.type !== 'key_press' || !['a', 'b'].includes(body.key)) return route.continue();
         attempts.push({ id: body.sourceEventId, key: body.key, at: Date.now() }); arrived();
@@ -157,7 +186,6 @@ for (const failure of ['three-server-errors', 'hung-request', 'rate-limit']) {
           const count = attempts.filter(a => a.key === 'a').length;
           if (failure === 'three-server-errors' && count <= 3) return route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"raw-server-secret"}' });
           if (failure === 'rate-limit' && count === 1) return route.fulfill({ status: 429, body: '{}' });
-          if (failure === 'hung-request' && count === 1) { await held; try { await route.abort(); } catch {} return; }
         }
         delivered.push(body.sourceEventId); await route.continue();
       });
@@ -185,6 +213,10 @@ for (const failure of ['three-server-errors', 'hung-request', 'rate-limit']) {
       assert.equal(b.length, 1);
       assert.deepEqual(delivered, [a[0].id, b[0].id]);
       assert.ok(a[1].at - a[0].at >= (failure === 'hung-request' ? 10000 : 900));
+      if (failure === 'hung-request') {
+        assert.equal(await target.page.evaluate(() => window.__hungActivityHasSignal), true, 'the request receives a real AbortSignal');
+        assert.equal(await target.page.evaluate(() => window.__hungActivityAbortCount), 1, 'the production deadline aborts the stalled request exactly once');
+      }
       if (failure === 'three-server-errors') {
         assert.ok(a[2].at - a[1].at >= 1900);
         assert.ok(a[3].at - a[2].at >= 3900);
@@ -228,33 +260,56 @@ test('activity history read failure preserves existing rows and revocation disca
   } finally { release(); await browser.close(); }
 });
 
-test('a rejected activity with an unfinished error body does not block later actions', { timeout: 30000 }, async () => {
+for (const rejectedStatus of [400, 403, 409]) test(`a rejected activity HTTP${rejectedStatus} with an unfinished error body does not block later actions`, { timeout: 30000 }, async () => {
   const browser = await chromium.launch();
   try {
     const { owner, candidate, room } = await fixture();
     const target = await open(browser, candidate, room);
-    await target.page.evaluate(() => {
+    await target.page.evaluate(rejectedStatus => {
       const original = window.fetch.bind(window);
+      let injected = false;
+      window.__unfinishedActivityAttempts = [];
+      window.__unfinishedActivityBodyCancelled = 0;
       window.fetch = (input, init) => {
         const body = typeof init?.body === 'string' ? JSON.parse(init.body) : null;
-        if (String(input).includes('/realtime/rooms/') && body?.type === 'key_press' && body.key === 'a') {
-          return Promise.resolve(new Response(new ReadableStream({ start(controller) {
-            controller.enqueue(new TextEncoder().encode('{"error":"raw-server-secret"'));
-          } }), { status: 400, headers: { 'Content-Type': 'application/json' } }));
+        if (String(input).includes('/realtime/rooms/') && body?.type === 'key_press' && ['a', 'b'].includes(body.key)) {
+          const attempt = { key: body.key, id: body.sourceEventId, status: null };
+          window.__unfinishedActivityAttempts.push(attempt);
+          // A single synthetic403 must retain the existing auth recovery and
+          // retry the original source UUID. Validation errors drop only a.
+          if (body.key === 'a' && (rejectedStatus !== 403 || !injected)) {
+            injected = true;
+            attempt.status = rejectedStatus;
+            return Promise.resolve(new Response(new ReadableStream({
+              start(controller) { controller.enqueue(new TextEncoder().encode('{"error":"raw-server-secret"')); },
+              cancel() { window.__unfinishedActivityBodyCancelled += 1; },
+            }), { status: rejectedStatus, headers: { 'Content-Type': 'application/json' } }));
+          }
+          return original(input, init).then(response => { attempt.status = response.status; return response; });
         }
         return original(input, init);
       };
-    });
+    }, rejectedStatus);
     await target.page.locator('[data-testid="room-code-editor-host"] .cm-content').click();
+    const startedAt = Date.now();
     await target.page.keyboard.type('ab');
-    const deadline = Date.now() + 3000;
-    let laterActionRecorded = false;
+    const deadline = startedAt + 5000;
+    let persisted = [], laterActionRecorded = false;
     while (Date.now() < deadline) {
-      const events = await request(`/rooms/${room.inviteCode}/keystroke-events`, { token: owner.token });
-      if (events.some(e => e.keyValue === 'b')) { laterActionRecorded = true; break; }
+      persisted = await request(`/rooms/${room.inviteCode}/keystroke-events`, { token: owner.token });
+      if (persisted.some(e => e.keyValue === 'b')) { laterActionRecorded = true; break; }
       await new Promise(resolve => setTimeout(resolve, 100));
     }
-    assert.equal(laterActionRecorded, true, 'An unfinished HTTP error body must not block the next source action');
+    assert.equal(laterActionRecorded, true, `An unfinished HTTP${rejectedStatus} body must not block the next source action beyond5s`);
+    const attempts = await target.page.evaluate(() => window.__unfinishedActivityAttempts);
+    const first = attempts.filter(attempt => attempt.key === 'a');
+    const next = attempts.filter(attempt => attempt.key === 'b');
+    assert.equal(first.length, rejectedStatus === 403 ? 2 : 1);
+    assert.equal(new Set(first.map(attempt => attempt.id)).size, 1, 'Auth recovery retries a using the same source UUID');
+    assert.equal(next.length, 1, 'The next source action is delivered once');
+    assert.equal(persisted.filter(event => event.sourceEventId === next[0].id).length, 1);
+    assert.equal(persisted.filter(event => event.sourceEventId === first[0].id).length, rejectedStatus === 403 ? 1 : 0);
+    assert.ok(await target.page.evaluate(() => window.__unfinishedActivityBodyCancelled) >= 1, 'The unfinished stream must be released');
     assert.equal(await target.page.getByText('raw-server-secret', { exact: false }).count(), 0);
   } finally { await browser.close(); }
 });

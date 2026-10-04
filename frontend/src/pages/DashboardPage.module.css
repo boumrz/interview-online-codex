@@ -1,77 +1,77 @@
 .dashboardHeader {
-  border-bottom: 1px solid #272b34;
-  background: linear-gradient(120deg, rgba(16, 19, 24, 0.98), rgba(15, 17, 21, 0.98));
+  position: sticky;
+  z-index: 20;
+  top: 0;
+  border-bottom: 1px solid var(--app-border);
+  background: var(--app-surface);
   backdrop-filter: blur(8px);
 }
 
 .dashboardSurface {
   min-height: calc(100vh - 72px);
-  background:
-    radial-gradient(900px 420px at 12% -18%, rgba(59, 130, 246, 0.16), transparent 60%),
-    radial-gradient(780px 360px at 92% -20%, rgba(148, 163, 184, 0.12), transparent 62%),
-    linear-gradient(180deg, #0f1115 0%, #0e1014 100%);
+  background: var(--app-bg);
 }
 
 .metricCard {
-  border-color: #272b34 !important;
-  background: linear-gradient(160deg, rgba(17, 21, 28, 0.96), rgba(16, 19, 25, 0.96));
-  box-shadow: 0 10px 26px rgba(2, 4, 7, 0.32);
+  border-color: var(--app-border) !important;
+  background: var(--app-surface);
+  box-shadow: 0 2px 8px rgba(17, 20, 24, 0.06);
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
 }
 
 .metricCard:hover {
   transform: translateY(-2px);
-  border-color: #334155 !important;
-  box-shadow: 0 16px 36px rgba(2, 4, 7, 0.4);
+  border-color: var(--app-primary) !important;
+  box-shadow: 0 8px 24px rgba(17, 20, 24, 0.12);
 }
 
 .panelCard {
-  border-color: #272b34 !important;
-  background: linear-gradient(160deg, rgba(17, 21, 28, 0.94), rgba(15, 18, 25, 0.9));
-  box-shadow: 0 12px 28px rgba(2, 4, 7, 0.3);
+  border-color: var(--app-border) !important;
+  background: var(--app-surface);
+  box-shadow: 0 2px 8px rgba(17, 20, 24, 0.06);
 }
 
 .navCard {
-  border-color: #2a3039 !important;
-  background: rgba(16, 20, 28, 0.88);
+  border-color: var(--app-border) !important;
+  background: var(--app-surface);
 }
 
 .manageRoomCard {
-  border-color: #2a3039 !important;
-  background: linear-gradient(160deg, rgba(18, 23, 32, 0.95), rgba(16, 20, 27, 0.95));
+  border-color: var(--app-border) !important;
+  background: var(--app-surface);
   transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .manageRoomCard:hover {
   transform: translateY(-1px);
-  border-color: #3a4452 !important;
-  box-shadow: 0 12px 28px rgba(3, 6, 12, 0.36);
+  border-color: var(--app-primary) !important;
+  box-shadow: 0 8px 24px rgba(17, 20, 24, 0.12);
 }
 
 .manageRoomCardInteractive:focus-visible {
   outline: none;
-  border-color: #5a7cae !important;
-  box-shadow: 0 0 0 2px rgba(90, 124, 174, 0.3), 0 12px 28px rgba(3, 6, 12, 0.36);
+  border-color: var(--app-focus) !important;
+  box-shadow: 0 0 0 2px var(--app-focus-ring), 0 8px 24px rgba(17, 20, 24, 0.12);
 }
 
 .previewTaskCard {
-  border-color: #2a3039 !important;
-  background: rgba(18, 23, 32, 0.9);
+  border-color: var(--app-border) !important;
+  background: var(--app-surface-soft);
 }
 
 .selectedTaskPreviewList {
-  border: 1px solid #273242;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #0e1520;
+  background: var(--app-surface-soft);
   padding: 10px;
 }
 
 .selectedTaskPreviewItem {
   display: grid;
   gap: 6px;
-  border: 1px solid #263448;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #111a27;
+  background: var(--app-surface);
   padding: 9px 10px;
 }
 
@@ -82,9 +82,9 @@
 }
 
 .markdownPreview {
-  border: 1px solid #27456f;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #0b1529;
+  background: var(--app-surface-soft);
   min-height: 180px;
   max-height: 420px;
   overflow: auto;
@@ -92,7 +92,7 @@
 }
 
 .markdownPreviewContent {
-  color: #cbd5e1;
+  color: var(--app-text);
   font-size: 13px;
   line-height: 1.52;
 }
@@ -104,13 +104,13 @@
 .markdownPreviewContent h5,
 .markdownPreviewContent h6 {
   margin: 0 0 8px;
-  color: #f8fafc;
+  color: var(--app-text-heading);
   line-height: 1.22;
 }
 
 .markdownPreviewContent h1 {
   font-size: 20px;
-  border-bottom: 1px solid #243b5f;
+  border-bottom: 1px solid var(--app-border);
   padding-bottom: 7px;
 }
 
@@ -153,7 +153,7 @@
 
 .markdownPreviewContent a,
 .taskDescriptionMarkdown a {
-  color: #8ab4ff;
+  color: var(--app-primary-text);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -162,10 +162,10 @@
 .taskDescriptionMarkdown blockquote {
   margin: 0 0 10px;
   padding: 8px 12px;
-  border-left: 3px solid #4f6f9e;
-  background: rgba(45, 67, 99, 0.22);
-  color: #bec9d8;
-  border-radius: 0 8px 8px 0;
+  border-left: 3px solid var(--app-border);
+  background: var(--app-surface-soft);
+  color: var(--app-muted);
+  border-radius: 8px 8px 8px 8px;
 }
 
 .markdownPreviewContent blockquote > :last-child,
@@ -176,25 +176,26 @@
 .markdownPreviewContent hr,
 .taskDescriptionMarkdown hr {
   border: 0;
-  border-top: 1px solid #2d3b4f;
+  border-top: 1px solid var(--app-border);
   margin: 14px 0;
 }
 
 .markdownPreviewContent code,
 .taskDescriptionMarkdown code {
-  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  background: rgba(38, 68, 108, 0.45);
-  border-radius: 6px;
+  font-family: var(--font-code);
+  background: var(--app-editor-bg);
+  color: var(--app-editor-text);
+  border-radius: 8px;
   padding: 1px 4px;
 }
 
 .markdownPreviewContent pre,
 .taskDescriptionMarkdown pre {
   margin: 0 0 10px;
-  border: 1px solid #2d3b4f;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
   overflow: auto;
-  background: #0b1017;
+  background: var(--app-editor-bg);
 }
 
 .markdownPreviewContent pre code,
@@ -203,8 +204,8 @@
   min-width: 100%;
   padding: 11px 12px;
   background: transparent;
-  border-radius: 0;
-  color: #d6deeb;
+  border-radius: 8px;
+  color: var(--app-editor-text);
   line-height: 1.5;
   white-space: pre;
 }
@@ -220,25 +221,25 @@
 .markdownPreviewContent td,
 .taskDescriptionMarkdown th,
 .taskDescriptionMarkdown td {
-  border: 1px solid #2d3b4f;
+  border: 1px solid var(--app-border);
   padding: 6px 8px;
   vertical-align: top;
 }
 
 .markdownPreviewContent th,
 .taskDescriptionMarkdown th {
-  background: #10213a;
-  color: #f8fafc;
+  background: var(--app-surface-soft);
+  color: var(--app-text-heading);
   font-weight: 600;
 }
 
 .markdownPreviewContent tbody tr:nth-child(even) td,
 .taskDescriptionMarkdown tbody tr:nth-child(even) td {
-  background: rgba(22, 37, 60, 0.35);
+  background: var(--app-neutral-hover);
 }
 
 .taskDescriptionMarkdown {
-  color: #9aa5b5;
+  color: var(--app-muted);
   font-size: 13px;
   line-height: 1.46;
 }
@@ -258,3 +259,7 @@
     min-height: 140px;
   }
 }
+
+.headerControls { align-items: center; }
+.headerControls > button { height: 36px; min-height: 36px; display: inline-flex; align-items: center; justify-content: center; }
+.headerControls > button > span { line-height: 22px; }

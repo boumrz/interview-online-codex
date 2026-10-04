@@ -51,12 +51,147 @@ const pendingInspections = new Set();
 let closing = false;
 async function open(auth, room, label, candidate = false) {
   const context = await (label === 'candidate-1' ? tabBrowser : browser).newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true });
-  const view = { context, label, auth, candidate, actions: new Map(), expectedFault: false, offline: false, documentGeneration: 0 };
+  const view = { context, label, auth, candidate, actions: new Map(), expectedFault: false, offline: false, documentGeneration: 0, startup: true };
   views.push(view);
-  await context.addInitScript(({ token, name, candidate }) => {
+  let lifecycleObservationOrder = 0;
+  const observedCloses = new Map();
+  const rejectedActivity = [], resourceConsoles = [], httpFailures = [];
+  await context.exposeBinding('__multiExplicitClose', ({ page, frame }, value) => {
+    if (page !== view.page || frame !== page.mainFrame() || !value ||
+        typeof value.documentId !== 'string' || typeof value.sourceId !== 'string' ||
+        !/^app-source-\d+$/.test(value.sourceId)) return;
+    const key = `${value.documentId}/${value.sourceId}`;
+    if (!observedCloses.has(key)) observedCloses.set(key, {
+      documentId: value.documentId, sourceId: value.sourceId, order: ++lifecycleObservationOrder,
+    });
+  });
+  await context.addInitScript(({ token, name, candidate, userId, observeInjectedDuplicate }) => {
     localStorage.setItem('auth_token', token); localStorage.setItem('display_name', name);
     const native = window.EventSource;
+    // Full URLs stay inside this document's memory. The inspector returns only
+    // source IDs, paths and lifecycle timestamps, never auth/capability values.
+    const sourceAudits = [], auditBySource = new WeakMap(), documentId = crypto.randomUUID();
+    const rejectedAttempts = [];
+    const relayObservations = { keyPressRequestsAfterInjection: 0, matchingRelayRequests: 0,
+      matchingSessionRequests: 0, matchingOldTokenRequests: 0,
+      matchingHydratedRetryRequests: 0, matchingRejectedResponses: 0 };
+    let duplicateAdmission = null;
     window.__multi = { connections: 0, state: null, errors: [], privateLeaks: [], candidateKeys: 0, longTasks: [], tabEvents: [] };
+    window.__multi.inspectExplicitStartupClose = (requestUrl, failedAt, observedCloses = [], failedOrder = null) => {
+      const matches = sourceAudits.filter(audit => audit.url === requestUrl);
+      if (matches.length !== 1) return { proven: false, matchingSources: matches.length };
+      const source = matches[0];
+      const replacement = sourceAudits.find(audit => audit !== source &&
+        source.closedAt !== null && audit.createdAt >= source.closedAt &&
+        audit.identityUrl === source.identityUrl);
+      const observedClose = observedCloses.find(observation => observation.documentId === documentId &&
+        observation.sourceId === source.id && Number.isSafeInteger(observation.order) && observation.order > 0);
+      const observedBeforeFailure = Number.isSafeInteger(failedOrder) &&
+        observedClose?.order < failedOrder;
+      return {
+        proven: source.closedAt !== null && (source.closedAt < failedAt ||
+          (source.closedAt === failedAt && observedBeforeFailure)) &&
+          source.readyStateAtClose === 0 && source.openedAt === null && source.errorAt === null &&
+          replacement?.openedAt !== null && replacement?.openedAt !== undefined &&
+          replacement.stateSyncAt !== null && replacement.errorAt === null,
+        documentId, sourceId: source.id, path: source.path, createdAt: source.createdAt,
+        explicitCloseAt: source.closedAt, readyStateAtClose: source.readyStateAtClose,
+        openedAt: source.openedAt, errorAt: source.errorAt,
+        closeObservationOrder: observedClose?.order ?? null, failureObservationOrder: failedOrder,
+        replacement: replacement ? { sourceId: replacement.id, createdAt: replacement.createdAt,
+          openedAt: replacement.openedAt, stateSyncAt: replacement.stateSyncAt, errorAt: replacement.errorAt } : null,
+      };
+    };
+    window.__multi.inspectInjectedTokenRejection = query => {
+      const matches = rejectedAttempts.filter(attempt => attempt.url === query.requestUrl &&
+        attempt.sessionId === query.sessionId && attempt.token === query.eventToken &&
+        attempt.sourceEventId === query.sourceEventId);
+      const attempt = matches.length === 1 ? matches[0] : null;
+      const admission = attempt?.admission ?? duplicateAdmission;
+      const current = auditBySource.get(window.__multi.source);
+      const elapsed = (later, earlier) => later !== null && later !== undefined &&
+        earlier !== null && earlier !== undefined ? later - earlier : null;
+      const diagnostic = {
+        matchingAttempts: matches.length, observedRejectedAttempts: rejectedAttempts.length,
+        duplicateObserved: admission !== null, relayObservations: { ...relayObservations },
+        gates: {
+          uniqueRejectedAttempt: matches.length === 1,
+          sameParticipant: admission?.sameParticipant === true,
+          duplicateOpened: admission?.openedAt !== null && admission?.openedAt !== undefined,
+          duplicateErrored: admission?.errorAt !== null && admission?.errorAt !== undefined,
+          duplicateStateObserved: admission?.admittedAt !== null && admission?.admittedAt !== undefined,
+          duplicateRotatedToken: typeof admission?.newToken === 'string' && admission.newToken !== admission.oldToken,
+          responseBodyRead: attempt?.bodyInspectionCompleted === true && attempt?.bodyUnreadable === false,
+          exactStaleReason: attempt?.exactStaleReason === true,
+          retryAccepted: attempt?.retryAcceptedAt !== null && attempt?.retryAcceptedAt !== undefined,
+          retryRotatedToken: typeof attempt?.retryToken === 'string' && attempt.retryToken !== admission?.oldToken,
+          retryTokenIsCurrent: typeof attempt?.retryToken === 'string' && window.__multi.state?.eventToken === attempt.retryToken,
+          currentSourceOpened: current?.openedAt !== null && current?.openedAt !== undefined,
+          currentSourceHydrated: current?.stateSyncAt !== null && current?.stateSyncAt !== undefined,
+        },
+        relativeTiming: {
+          duplicateOpenAfterInjectionMs: elapsed(admission?.openedAt, admission?.injectedAt),
+          duplicateErrorAfterInjectionMs: elapsed(admission?.errorAt, admission?.injectedAt),
+          duplicateStateAfterInjectionMs: elapsed(admission?.admittedAt, admission?.injectedAt),
+          rejectionAfterInjectionMs: elapsed(attempt?.rejectedAt, admission?.injectedAt),
+          retryAfterRejectionMs: elapsed(attempt?.retryAcceptedAt, attempt?.rejectedAt),
+        },
+      };
+      if (matches.length !== 1) return { proven: false, matchingAttempts: matches.length, diagnostic };
+      return {
+        proven: admission.sameParticipant && admission.admittedAt !== null &&
+          admission.newToken !== admission.oldToken && attempt.exactStaleReason &&
+          attempt.retryAcceptedAt !== null && attempt.retryToken !== admission.oldToken &&
+          window.__multi.state?.eventToken === attempt.retryToken &&
+          current?.openedAt !== null && current?.openedAt !== undefined && current.stateSyncAt !== null,
+        documentId, auditId: attempt.id, duplicateAuditId: admission.id,
+        injectedAt: admission.injectedAt, admittedAt: admission.admittedAt,
+        rejectedAt: attempt.rejectedAt, exactStaleReason: attempt.exactStaleReason,
+        retryAcceptedAt: attempt.retryAcceptedAt, hydratedSourceId: current?.id ?? null,
+        diagnostic,
+      };
+    };
+    const nativeFetch = window.fetch.bind(window);
+    if (observeInjectedDuplicate) window.fetch = (input, init) => {
+      let body = null;
+      try { if (typeof init?.body === 'string') body = JSON.parse(init.body); } catch {}
+      const url = typeof input === 'string' ? new URL(input, location.href).href : input?.url;
+      const admission = duplicateAdmission;
+      const oldAttempt = admission && body?.type === 'key_press' && url === admission.relayUrl &&
+        body.sessionId === admission.sessionId && body.eventToken === admission.oldToken;
+      const hydratedRetry = admission && body?.type === 'key_press' && url === admission.relayUrl &&
+        body.sessionId === admission.sessionId && body.eventToken !== admission.oldToken &&
+        body.eventToken === window.__multi.state?.eventToken;
+      if (admission && body?.type === 'key_press') {
+        relayObservations.keyPressRequestsAfterInjection++;
+        if (url === admission.relayUrl) relayObservations.matchingRelayRequests++;
+        if (body.sessionId === admission.sessionId) relayObservations.matchingSessionRequests++;
+        if (oldAttempt) relayObservations.matchingOldTokenRequests++;
+        if (hydratedRetry) relayObservations.matchingHydratedRetryRequests++;
+      }
+      return nativeFetch(input, init).then(response => {
+        if (oldAttempt && response.status === 403) {
+          relayObservations.matchingRejectedResponses++;
+          const attempt = { id: `injected-relay-${rejectedAttempts.length + 1}`, admission, url,
+            sessionId: body.sessionId, token: body.eventToken, sourceEventId: body.sourceEventId,
+            rejectedAt: Date.now(), exactStaleReason: false, bodyInspectionCompleted: false,
+            bodyUnreadable: false, retryAcceptedAt: null, retryToken: null };
+          rejectedAttempts.push(attempt);
+          // Observe a clone only; the application receives the original response
+          // immediately and unreadable/other error bodies cannot prove this case.
+          void response.clone().json().then(data => {
+            attempt.bodyInspectionCompleted = true;
+            attempt.exactStaleReason = data?.error === 'Недействительный eventToken для этой сессии';
+          }).catch(() => { attempt.bodyInspectionCompleted = true; attempt.bodyUnreadable = true; });
+        } else if (hydratedRetry && response.ok) {
+          for (const attempt of rejectedAttempts.filter(attempt => attempt.admission === admission &&
+            attempt.sourceEventId === body.sourceEventId)) {
+            attempt.retryAcceptedAt = Date.now(); attempt.retryToken = body.eventToken;
+          }
+        }
+        return response;
+      });
+    };
     for (const name of ['focus', 'blur', 'visibilitychange']) window.addEventListener(name, () => window.__multi.tabEvents.push({ name, visibility: document.visibilityState, at: Date.now() }), true);
     try { new PerformanceObserver(list => { for (const entry of list.getEntries()) window.__multi.longTasks.push(entry.duration); }).observe({ type: 'longtask', buffered: true }); } catch {}
     const forbidden = new Set(['candidateKeyHistory', 'lastCandidateKey', 'sourceEventId', 'acceptedSequence', 'pastePreview']);
@@ -69,7 +204,29 @@ async function open(auth, room, label, candidate = false) {
       }
     };
     window.EventSource = class extends native {
-      constructor(...args) { super(...args); window.__multi.source = this; window.__multi.connections++; }
+      constructor(...args) {
+        super(...args); window.__multi.source = this; window.__multi.connections++;
+        const identity = new URL(this.url); identity.searchParams.delete('displayNameEncoded');
+        const audit = { id: `app-source-${window.__multi.connections}`, url: this.url,
+          identityUrl: identity.href, path: identity.pathname, createdAt: Date.now(),
+          closedAt: null, readyStateAtClose: null, openedAt: null, errorAt: null, stateSyncAt: null };
+        sourceAudits.push(audit); auditBySource.set(this, audit);
+        this.addEventListener('open', () => { audit.openedAt ??= Date.now(); });
+        this.addEventListener('error', () => { audit.errorAt ??= Date.now(); });
+        this.addEventListener('message', event => {
+          try { if (JSON.parse(event.data).type === 'state_sync') audit.stateSyncAt ??= Date.now(); } catch {}
+        });
+      }
+      close() {
+        const audit = auditBySource.get(this);
+        if (audit && audit.closedAt === null) {
+          audit.closedAt = Date.now(); audit.readyStateAtClose = this.readyState;
+          // Record an independent order without awaiting or delaying native close.
+          // Only the exact document/source IDs cross the browser binding.
+          try { window.__multiExplicitClose?.({ documentId, sourceId: audit.id })?.catch(() => {}); } catch {}
+        }
+        super.close();
+      }
       set onmessage(handler) { super.onmessage = event => {
         try {
           const message = JSON.parse(event.data);
@@ -83,26 +240,73 @@ async function open(auth, room, label, candidate = false) {
     // A real second connection for the same session causes the server to close
     // the first transport; the app then reconnects using its normal handlers.
     window.__multi.reconnect = () => {
-      const replacement = new native(window.__multi.source.url);
+      const url = new URL(window.__multi.source.url), sessionId = url.searchParams.get('sessionId');
+      const participant = window.__multi.state?.participants?.find(participant => participant.sessionId === sessionId);
+      const admission = { id: 'injected-duplicate-1', sessionId, oldToken: window.__multi.state?.eventToken,
+        userId, sameParticipant: participant?.userId === userId, injectedAt: Date.now(),
+        openedAt: null, errorAt: null, admittedAt: null, newToken: null,
+        relayUrl: `${url.origin}${url.pathname.replace(/\/stream$/, '/events')}` };
+      duplicateAdmission = admission;
+      const replacement = new native(url.href);
+      replacement.addEventListener('open', () => { admission.openedAt ??= Date.now(); });
+      replacement.addEventListener('error', () => { admission.errorAt ??= Date.now(); });
+      replacement.addEventListener('message', event => {
+        try {
+          const message = JSON.parse(event.data), payload = message.payload;
+          if (message.type !== 'state_sync' || !payload?.eventToken) return;
+          const participant = payload.participants?.find(participant => participant.sessionId === admission.sessionId);
+          if (participant?.userId !== admission.userId) { admission.sameParticipant = false; return; }
+          admission.admittedAt ??= Date.now(); admission.newToken ??= payload.eventToken;
+        } catch {}
+      });
       replacement.onerror = () => replacement.close();
     };
-  }, { token: auth.token, name: auth.user.displayName, candidate });
+  }, { token: auth.token, name: auth.user.displayName, candidate, userId: auth.user.id, observeInjectedDuplicate: label === 'candidate-1' });
   const page = await context.newPage(); view.page = page; page.setDefaultTimeout(15000);
   const responseStatuses = new WeakMap();
   const requestGenerations = new WeakMap();
-  const runtime = (kind, detail, eventType = null, responseStatus = null) => {
+  const startupRequests = new WeakSet();
+  const runtime = (kind, detail, eventType = null, responseStatus = null, sourceLifecycle = null, at = Date.now(), injectedFault = closing || view.expectedFault || view.offline) => {
     const networkFailure = /ERR_(INTERNET_DISCONNECTED|ABORTED|NETWORK_CHANGED|FAILED)|Failed to fetch/.test(detail);
     const supersededMutation = kind === 'requestfailed' && /ERR_ABORTED/.test(detail) && ['yjs_update', 'code_update'].includes(eventType);
     const acceptedResponseCancellation = kind === 'requestfailed' && /ERR_ABORTED/.test(detail) && responseStatus >= 200 && responseStatus < 300;
     const discardedDocumentInspection = kind === 'history-body-unavailable-after-navigation';
-    const expected = discardedDocumentInspection || acceptedResponseCancellation || supersededMutation || ((closing || view.expectedFault || view.offline) && ['requestfailed', 'console'].includes(kind) && networkFailure);
-    report.runtime.push({ label, kind, detail, eventType, responseStatus, expected, classification: discardedDocumentInspection ? 'discarded-document-inspection' : acceptedResponseCancellation ? 'body-cancel-after-success-headers' : supersededMutation ? 'superseded-mutation-request' : expected ? 'injected-network-or-cleanup' : 'unexpected', at: Date.now() });
+    const explicitStartupClose = sourceLifecycle?.proven === true;
+    const expected = discardedDocumentInspection || acceptedResponseCancellation || supersededMutation || explicitStartupClose || (injectedFault && ['requestfailed', 'console'].includes(kind) && networkFailure);
+    const entry = { label, kind, detail, eventType, responseStatus, expected, observationOrder: ++lifecycleObservationOrder, classification: discardedDocumentInspection ? 'discarded-document-inspection' : acceptedResponseCancellation ? 'body-cancel-after-success-headers' : supersededMutation ? 'superseded-mutation-request' : explicitStartupClose ? 'explicit-startup-stream-close' : expected ? 'injected-network-or-cleanup' : 'unexpected', ...(sourceLifecycle ? { sourceLifecycle } : {}), at };
+    report.runtime.push(entry); return entry;
   };
   page.on('pageerror', error => runtime('pageerror', error.message));
-  page.on('console', msg => { if (msg.type() === 'error') runtime('console', msg.text()); });
-  page.on('requestfailed', req => runtime('requestfailed', `${new URL(req.url()).pathname}: ${req.failure()?.errorText}`, req.method() === 'POST' && req.url().includes('/events') ? req.postDataJSON()?.type : null, responseStatuses.get(req) ?? null));
+  page.on('console', msg => { if (msg.type() === 'error') resourceConsoles.push({
+    entry: runtime('console', msg.text()), url: msg.location().url, generation: view.documentGeneration,
+  }); });
+  page.on('requestfailed', req => {
+    const path = new URL(req.url()).pathname, failure = req.failure()?.errorText;
+    const detail = `${path}: ${failure}`, status = responseStatuses.get(req) ?? null, failedAt = Date.now();
+    const failedOrder = ++lifecycleObservationOrder;
+    const injectedFaultAtFailure = closing || view.expectedFault || view.offline;
+    const eventType = req.method() === 'POST' && path.endsWith('/events') ? req.postDataJSON()?.type : null;
+    if (startupRequests.has(req) && view.documentGeneration === 0 && requestGenerations.get(req) === 0 &&
+        req.method() === 'GET' && path === `/api/realtime/rooms/${room.inviteCode}/stream` &&
+        failure === 'net::ERR_ABORTED' && status === null) {
+      const task = (async () => {
+        const query = { requestUrl: req.url(), failedAt, observedCloses: [...observedCloses.values()], failedOrder };
+        // Correlate this exact request with an explicit close before its failure.
+        // A replacement must actually open and hydrate; errors, unclosed sources,
+        // ambiguous same-URL instances and arbitrary aborts remain unexpected.
+        await page.waitForFunction(({ requestUrl, failedAt, observedCloses, failedOrder }) =>
+          window.__multi?.inspectExplicitStartupClose(requestUrl, failedAt, observedCloses, failedOrder)?.proven === true,
+        query, { timeout: 1500 }).catch(() => {});
+        const lifecycle = await page.evaluate(({ requestUrl, failedAt, observedCloses, failedOrder }) =>
+          window.__multi?.inspectExplicitStartupClose(requestUrl, failedAt, observedCloses, failedOrder) ?? null, query).catch(() => null);
+        runtime('requestfailed', detail, eventType, status, lifecycle, failedAt, injectedFaultAtFailure);
+      })();
+      pendingInspections.add(task); task.finally(() => pendingInspections.delete(task));
+    } else runtime('requestfailed', detail, eventType, status, null, failedAt);
+  });
   page.on('request', req => {
     requestGenerations.set(req, view.documentGeneration);
+    if (view.startup) startupRequests.add(req);
     if (req.method() !== 'POST' || !req.url().includes(`/realtime/rooms/${room.inviteCode}/events`)) return;
     const body = req.postDataJSON();
     if (body?.type !== 'key_press') return;
@@ -118,7 +322,16 @@ async function open(auth, room, label, candidate = false) {
         const action = view.actions.get(body.sourceEventId); if (action) action.acknowledged = true;
       }
     }
-    if (response.status() >= 400) runtime('http', `${response.status()} ${path}`);
+    if (response.status() >= 400) {
+      const entry = runtime('http', `${response.status()} ${path}`);
+      httpFailures.push({ entry, url: req.url(), generation: requestGenerations.get(req) });
+      const body = req.method() === 'POST' && path.endsWith('/events') ? req.postDataJSON() : null;
+      if (label === 'candidate-1' && response.status() === 403 && body?.type === 'key_press') {
+        rejectedActivity.push({ entry, generation: requestGenerations.get(req), query: {
+          requestUrl: req.url(), sessionId: body.sessionId, eventToken: body.eventToken, sourceEventId: body.sourceEventId,
+        } });
+      }
+    }
     if (req.method() === 'GET' && path.endsWith('/activity-history') && response.ok()) {
       const task = response.json().then(body => {
         assert.ok(body.events.length <= 200, 'History page must remain bounded');
@@ -143,16 +356,45 @@ async function open(auth, room, label, candidate = false) {
   await page.goto(`${web}/room/${room.inviteCode}`, { waitUntil: 'domcontentloaded' });
   await page.locator('[data-testid="room-code-editor-host"] .cm-content').waitFor();
   await page.waitForFunction(() => Boolean(window.__multi.state?.eventToken));
+  view.startup = false;
+  view.confirmInjectedTokenRejections = async durableSourceIds => {
+    for (const rejected of rejectedActivity) {
+      const action = view.actions.get(rejected.query.sourceEventId);
+      const nodeGates = {
+        originalDocument: rejected.generation === 0 && view.documentGeneration === 0,
+        sameSourceDurable: durableSourceIds.has(rejected.query.sourceEventId),
+        sameSourceAcknowledged: action?.acknowledged === true,
+        sameSourceRetried: action?.attempts >= 2,
+      };
+      rejected.entry.injectedRelayDiagnostic = { nodeGates, sourceAttemptCount: action?.attempts ?? 0 };
+      if (rejected.generation !== 0 || view.documentGeneration !== 0 ||
+          !durableSourceIds.has(rejected.query.sourceEventId)) continue;
+      if (!action?.acknowledged || action.attempts < 2) continue;
+      const proof = await page.evaluate(query => window.__multi.inspectInjectedTokenRejection(query), rejected.query);
+      rejected.entry.injectedRelayDiagnostic.browser = proof?.diagnostic ?? null;
+      if (!proof?.proven) continue;
+      rejected.entry.expected = true; rejected.entry.classification = 'injected-stale-event-token';
+      rejected.entry.injectedRelayProof = { ...proof, sameSourceDurable: true };
+      const consoles = resourceConsoles.filter(console => console.generation === rejected.generation &&
+        console.url === rejected.query.requestUrl &&
+        console.entry.detail === 'Failed to load resource: the server responded with a status of 403 (Forbidden)' &&
+        console.entry.observationOrder > rejected.entry.observationOrder &&
+        console.entry.at >= rejected.entry.at && console.entry.at - rejected.entry.at <= 500);
+      if (consoles.length !== 1) continue;
+      const console = consoles[0];
+      const preceding = httpFailures.filter(failure => failure.generation === console.generation && failure.url === console.url &&
+        failure.entry.observationOrder < console.entry.observationOrder &&
+        console.entry.at >= failure.entry.at && console.entry.at - failure.entry.at <= 500);
+      if (preceding.length !== 1 || preceding[0].entry !== rejected.entry) continue;
+      console.entry.expected = true; console.entry.classification = 'injected-stale-event-token';
+      console.entry.injectedRelayProof = { documentId: proof.documentId, auditId: proof.auditId, pairedResponseOrder: rejected.entry.observationOrder };
+    }
+  };
   return view;
 }
 async function logs(view) {
   const page = view.page;
-  if (await page.getByRole('tab', { name: 'Team', exact: true }).count()) await page.getByRole('tab', { name: 'Team', exact: true }).click();
-  else {
-    const rail = page.getByTestId('room-rail-tools');
-    if (await rail.getAttribute('aria-pressed') !== 'true') await rail.click();
-  }
-  await page.getByRole('tab', { name: 'Логи', exact: true }).click();
+  await page.getByRole('tab', { name: 'Активность', exact: true }).click();
   await page.getByTestId('activity-history-status').waitFor();
 }
 async function hasIds(view, ids) {
@@ -188,7 +430,7 @@ async function layout(view, name) {
   assert.ok(metrics.scrollWidth <= metrics.width + 2, `${name}: horizontal page overflow`);
   for (const control of metrics.controls) assert.ok(control.width > 0 && control.height > 0 && control.x >= 0 && control.right <= metrics.width + 2 && control.y >= 0 && control.bottom <= metrics.height, `${name}: clipped control ${JSON.stringify(control)}`);
   for (const format of ['JSON', 'CSV']) {
-    const button = view.page.getByRole('button', { name: format, exact: true });
+    const button = view.page.getByRole('button', { name: `Скачать логи в ${format}`, exact: true });
     assert.equal(await button.isVisible(), true); assert.equal(await button.isEnabled(), true);
   }
   const strip = view.page.getByLabel('Участники комнаты', { exact: true });
@@ -206,9 +448,46 @@ try {
   await request(`/rooms/${room.inviteCode}/tasks`, { token: ownerAuth.token, method: 'POST', body: { customTasks: [{ title: 'Совместный ввод', description: 'Семь кандидатов печатают одновременно', starterCode: '// activity\n', language: 'nodejs' }] } });
   await request(`/rooms/${room.inviteCode}/participants/${interviewerAuth.user.id}/role`, { token: ownerAuth.token, method: 'POST', body: { role: 'interviewer' } });
   const owner = await open(ownerAuth, room, 'owner'), interviewer = await open(interviewerAuth, room, 'interviewer'), hr = await open(hrAuth, room, 'hr');
-  await owner.page.locator('[data-testid^="participant-badge-"]').filter({ hasText: 'HR специалист' }).click();
-  await owner.page.getByRole('menuitem', { name: 'Назначить HR', exact: true }).click();
-  await hr.page.getByRole('button', { name: 'Кандидат и HR', exact: true }).waitFor();
+  const hrParticipant = owner.page.locator('[data-testid^="participant-badge-"]').filter({ hasText: 'HR специалист' });
+  const participantHelp = owner.page.getByTestId('participants-help-hint');
+  assert.equal(await participantHelp.isVisible(), true, 'participant action informer is visible');
+  await participantHelp.hover();
+  const guidance = owner.page.getByRole('tooltip').filter({ hasText: /нажмите на участника.*открыть доступные действия/i });
+  await guidance.waitFor({ state: 'visible' });
+  assert.match(await guidance.innerText(), /нажмите на участника.*открыть доступные действия/i);
+  await participantHelp.focus();
+  await owner.page.keyboard.press('Shift+Tab');
+  await owner.page.mouse.move(0, 0);
+  await guidance.waitFor({ state: 'hidden' });
+  await owner.page.keyboard.press('Tab');
+  assert.equal(await participantHelp.evaluate(element => document.activeElement === element), true, 'Tab focuses the participant action informer');
+  await guidance.waitFor({ state: 'visible', timeout: 6000 });
+  assert.equal(await guidance.isVisible(), true, 'guidance is also available from keyboard focus');
+  await participantHelp.blur();
+  await owner.page.mouse.move(0, 0);
+  await guidance.waitFor({ state: 'hidden' });
+  assert.equal(await hrParticipant.getAttribute('aria-haspopup'), 'menu');
+  assert.equal(await hrParticipant.getAttribute('aria-expanded'), 'false');
+  await hrParticipant.hover();
+  await owner.page.waitForTimeout(350);
+  assert.equal(await owner.page.getByRole('tooltip').count(), 0, 'hovering a participant does not reveal role commands');
+  assert.equal(await hrParticipant.getAttribute('aria-expanded'), 'false', 'hover does not open participant actions');
+  await hrParticipant.click();
+  assert.equal(await hrParticipant.getAttribute('aria-expanded'), 'true', 'click opens participant actions');
+  const assignHrAction = owner.page.getByRole('menuitem', { name: 'Назначить нанимающим', exact: true });
+  await assignHrAction.waitFor({ state: 'visible' });
+  await assignHrAction.hover();
+  assert.equal(await assignHrAction.isVisible(), true, 'menu remains open while moving from trigger to an action');
+  await owner.page.keyboard.press('Escape');
+  await owner.page.waitForFunction(button => button.getAttribute('aria-expanded') === 'false', await hrParticipant.elementHandle());
+  await hrParticipant.focus();
+  await owner.page.keyboard.press('Enter');
+  assert.equal(await hrParticipant.getAttribute('aria-expanded'), 'true', 'Enter opens participant actions');
+  await owner.page.keyboard.press('Escape');
+  await owner.page.waitForFunction(button => button.getAttribute('aria-expanded') === 'false', await hrParticipant.elementHandle());
+  await hrParticipant.click();
+  await owner.page.getByRole('menuitem', { name: 'Назначить нанимающим', exact: true }).click();
+  await hr.page.getByRole('button', { name: 'Кандидат и нанимающие', exact: true }).waitFor();
   assert.equal((await request(`/rooms/${room.inviteCode}`, { token: hrAuth.token })).role, 'interviewer');
   const candidates = [];
   for (let i = 0; i < 7; i++) candidates.push(await open(candidateAuth[i], room, `candidate-${i + 1}`, true));
@@ -243,7 +522,7 @@ try {
     }));
     if (round !== 2) await measure(`round-${round}-chat-logs`, async () => {
       await owner.page.getByRole('tab', { name: 'Чат', exact: true }).click();
-      await owner.page.getByRole('tab', { name: 'Логи', exact: true }).click();
+      await owner.page.getByRole('tab', { name: 'Активность', exact: true }).click();
       await owner.page.getByTestId('activity-history-status').waitFor();
     });
     const intervals = await typing;
@@ -279,6 +558,7 @@ try {
   await settle();
   const sourceRows = await raw(), sourceIds = sourceRows.map(row => row.sourceEventId);
   equalIds(sourceIds, expectedIds(), 'durable raw versus observed actions');
+  await Promise.all(views.map(view => view.confirmInjectedTokenRejections(new Set(sourceIds))));
   assert.equal(new Set(sourceRows.map(row => row.acceptedSequence)).size, sourceRows.length);
   report.sources = views.map(view => ({ participant: view.label, all: view.actions.size, keyboard: [...view.actions.values()].filter(a => a.kind === 'keydown').length, retries: [...view.actions.values()].reduce((sum, a) => sum + a.attempts - 1, 0) }));
   for (let i = 0; i < candidates.length; i++) assert.equal([...candidates[i].actions.values()].filter(a => a.kind === 'keydown' && a.key === String(i + 1)).length, rounds * keysPerRound);
@@ -300,7 +580,7 @@ try {
     const state = await candidate.page.evaluate(() => ({ errors: window.__multi.errors, leaks: window.__multi.privateLeaks, connections: window.__multi.connections, tabEvents: window.__multi.tabEvents }));
     assert.deepEqual(state.errors, []); assert.deepEqual(state.leaks, []);
     assert.equal(await candidate.page.getByTestId('activity-timeline-entry').count(), 0);
-    assert.equal(await candidate.page.getByRole('button', { name: 'JSON', exact: true }).count(), 0);
+    assert.equal(await candidate.page.getByRole('button', { name: 'Скачать логи в JSON', exact: true }).count(), 0);
     report[`${candidate.label}-state`] = state;
     for (const path of ['activity-history', 'keystroke-events?format=json', 'keystroke-events?format=csv']) {
       const response = await fetch(`${api}/rooms/${room.inviteCode}/${path}`, { headers: { Authorization: `Bearer ${candidate.auth.token}` } });
@@ -314,9 +594,8 @@ try {
   await owner.page.getByRole('button', { name: 'Показать более ранние события', exact: true }).waitFor(); owner.expectedFault = false;
   await verifyReloadedEditor(owner);
   for (const format of ['JSON', 'CSV']) {
-    const downloadPromise = owner.page.waitForEvent('download');
-    await owner.page.getByRole('button', { name: format, exact: true }).click();
-    const download = await downloadPromise, path = `${out}/activity.${format.toLowerCase()}`; await download.saveAs(path);
+    const [download] = await Promise.all([owner.page.waitForEvent('download'), owner.page.getByRole('button', { name: `Скачать логи в ${format}`, exact: true }).click()]);
+    const path = `${out}/activity.${format.toLowerCase()}`; await download.saveAs(path);
     const text = await readFile(path, 'utf8'), rows = format === 'JSON' ? JSON.parse(text) : csvRows(text);
     equalIds(rows.map(row => row.sourceEventId ?? row.source_event_id), sourceIds, `${format} complete export from partial history`);
     const sequenceById = new Map(sourceRows.map(row => [row.sourceEventId, row.acceptedSequence]));
@@ -344,8 +623,8 @@ try {
   await measure('narrow-hr-open-logs', () => logs(hr));
   await hr.page.getByRole('button', { name: 'Показать более ранние события', exact: true }).waitFor(); hr.expectedFault = false;
   await verifyReloadedEditor(hr);
-  const narrowDownloadPending = hr.page.waitForEvent('download'); await hr.page.getByRole('button', { name: 'JSON', exact: true }).click();
-  const narrowDownload = await narrowDownloadPending; await narrowDownload.saveAs(`${out}/hr-narrow-activity.json`);
+  const [narrowDownload] = await Promise.all([hr.page.waitForEvent('download'), hr.page.getByRole('button', { name: 'Скачать логи в JSON', exact: true }).click()]);
+  await narrowDownload.saveAs(`${out}/hr-narrow-activity.json`);
   equalIds(JSON.parse(await readFile(`${out}/hr-narrow-activity.json`, 'utf8')).map(row => row.sourceEventId), sourceIds, 'narrow HR complete export');
   await loadAll(hr); await layout(hr, 'hr-narrow-complete');
   await hasIds(hr, sourceIds); await screenshot(candidates[0], 'candidate-no-private-logs');

@@ -6,8 +6,8 @@
  * на блок с этим маркдауном; если интервьюер это делает, у кандидата
  * тоже меняется блок с кодом"):
  *
- * 1. У интервьюера в тулбаре доступна кнопка focus-mode (replace
- *    code → markdown). Клик переключает состояние, и блок с
+ * 1. У интервьюера в тулбаре доступен выбор «Код / Текст».
+ *    Выбор текста переключает состояние, и блок с
  *    редактором кода исчезает у самого интервьюера.
  * 2. Кандидат подключен в ту же комнату — у него тоже исчезает
  *    блок с CodeMirror-редактором (синхронизация через `briefingMarkdown`).
@@ -67,6 +67,7 @@ try {
   await interviewerPage
     .getByRole("button", { name: "Создать комнату" })
     .click();
+  await interviewerPage.getByRole("dialog", { name: "Создать комнату" }).getByRole("button", { name: "Создать комнату", exact: true }).click();
   await interviewerPage.waitForURL(/\/room\//, { timeout: 15000 });
   await interviewerPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
   const inviteCode = parseInviteCode(interviewerPage.url());
@@ -90,20 +91,22 @@ try {
 
   // (1) Включаем focus mode у интервьюера.
   const focusToggle = interviewerPage.locator(
-    '[data-testid="room-markdown-scenario-toggle"]',
+    '[data-testid="room-editor-mode-switch"]',
   );
   await focusToggle.waitFor({ state: "visible", timeout: 8000 });
   await focusToggle.click();
+  await interviewerPage.locator(".ant-select-dropdown:visible").getByText("Markdown",{exact:true}).click();
+  await interviewerPage.getByRole("dialog",{name:"Изменить режим комнаты?"}).getByRole("button",{name:"Изменить режим",exact:true}).click();
 
   // У интервьюера блок с кодом должен скрыться.
   await interviewerPage
     .locator('[data-testid="room-code-editor-host"] .cm-editor')
-    .waitFor({ state: "detached", timeout: 8000 });
+    .waitFor({ state: "hidden", timeout: 8000 });
 
   // (2) У кандидата блок с кодом тоже должен скрыться (synced).
   await candidatePage
     .locator('[data-testid="room-code-editor-host"] .cm-editor')
-    .waitFor({ state: "detached", timeout: 8000 });
+    .waitFor({ state: "hidden", timeout: 8000 });
 
   // briefing-board должен быть в focus state у кандидата.
   const candidateBriefing = candidatePage.locator(
@@ -119,13 +122,14 @@ try {
 
   // Markdown-сценарий должен сохраняться и после нового подключения владельца.
   await interviewerPage.reload();
-  await interviewerPage.locator('[data-testid="room-markdown-scenario-toggle"][aria-pressed="true"]')
-    .waitFor({ state: "visible", timeout: 8000 });
+  await interviewerPage.waitForFunction(() => document.querySelector('[data-testid="room-editor-mode-switch"]')?.textContent.includes("Markdown"), null, { timeout: 8000 });
   await interviewerPage.locator('[data-testid="room-code-editor-host"] .cm-editor')
-    .waitFor({ state: "detached", timeout: 8000 });
+    .waitFor({ state: "hidden", timeout: 8000 });
 
   // (3) Выключаем focus mode и убеждаемся, что код вернулся обоим.
   await focusToggle.click();
+  await interviewerPage.locator(".ant-select-dropdown:visible").getByText("Code",{exact:true}).click();
+  await interviewerPage.getByRole("dialog",{name:"Изменить режим комнаты?"}).getByRole("button",{name:"Изменить режим",exact:true}).click();
   await interviewerPage
     .locator('[data-testid="room-code-editor-host"] .cm-editor')
     .waitFor({ state: "visible", timeout: 8000 });
@@ -135,11 +139,11 @@ try {
 
   // (4) Локальный fullscreen у интервьюера.
   const expandToggle = interviewerPage.locator(
-    '[data-testid="briefing-expand-toggle"]',
+    '[data-room-context-surface="condition"] [data-testid="briefing-expand-toggle"]',
   );
   await expandToggle.click();
   const ownerBriefing = interviewerPage.locator(
-    '[data-testid="briefing-board-interviewer"]',
+    '[data-room-context-surface="condition"] [data-testid="briefing-board-interviewer"]',
   );
   const expandedAttr = await ownerBriefing.getAttribute("data-expanded");
   if (expandedAttr !== "on") {

@@ -10,11 +10,11 @@ interface TeamTaskSetRepository : JpaRepository<TeamTaskSet, String> {
         SELECT DISTINCT s FROM TeamTaskSet s
         LEFT JOIN FETCH s.items i
         LEFT JOIN FETCH i.taskTemplate
-        WHERE s.teamId = :teamId AND s.status = :status
+        WHERE s.teamId = :teamId
         ORDER BY s.createdAt DESC, s.id ASC
         """,
     )
-    fun findAllByTeamIdAndStatusWithItems(teamId: String, status: String): List<TeamTaskSet>
+    fun findAllByTeamIdWithItems(teamId: String): List<TeamTaskSet>
 
     @Query(
         """
@@ -26,6 +26,7 @@ interface TeamTaskSetRepository : JpaRepository<TeamTaskSet, String> {
     )
     fun findByIdAndTeamIdWithItems(id: String, teamId: String): TeamTaskSet?
 
+    fun countByTeamId(teamId: String): Long
     fun countByTeamIdAndStatus(teamId: String, status: String): Long
     fun existsByTeamIdAndStatusAndNormalizedName(teamId: String, status: String, normalizedName: String): Boolean
     fun existsByTeamIdAndStatusAndNormalizedNameAndIdNot(

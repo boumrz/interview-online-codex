@@ -1,9 +1,9 @@
 package com.interviewonline.service
 
 import com.interviewonline.model.Room
-import com.interviewonline.model.RoomStatus
 import com.interviewonline.model.User
 import com.interviewonline.repository.RoomParticipantRepository
+import com.interviewonline.repository.RoomHrAssignmentRepository
 import com.interviewonline.repository.TeamMembershipRepository
 import com.interviewonline.repository.TeamRepository
 import org.springframework.http.HttpStatus
@@ -15,6 +15,7 @@ class RoomAccessService(
     private val teamMembershipRepository: TeamMembershipRepository,
     private val teamRepository: TeamRepository,
     private val teamRoomLineageService: TeamRoomLineageService,
+    private val hrAssignmentRepository: RoomHrAssignmentRepository,
 ) {
     enum class RoomRole(val wireValue: String) {
         OWNER("owner"),
@@ -55,7 +56,6 @@ class RoomAccessService(
         realtimeRoleOverride: RoomRole? = null,
     ): RoomAccess {
         if (room.teamId != null) {
-            if (!ownerToken.isNullOrBlank() || !interviewerToken.isNullOrBlank()) throw roomNotFound()
             return resolveTeamAccess(room, user)
         }
         if (room.archivedAt != null) {
@@ -127,23 +127,29 @@ class RoomAccessService(
 
     private fun resolveTeamAccess(room: Room, user: User?): RoomAccess {
         val teamId = room.teamId ?: throw roomNotFound()
-        if (!teamRoomLineageService.isCanonical(room)) {
-            throw roomNotFound()
-        }
         if (room.archivedAt != null) throw roomNotFound()
-        teamRepository.findById(teamId).orElse(null)?.takeIf { it.state == ACTIVE }
-            ?: throw roomNotFound()
+        // The shared link always admits a candidate. Team lineage and current
+        // membership determine management authority, never public admission.
+        if (!teamRoomLineageService.isCanonical(room) ||
+            teamRepository.findById(teamId).orElse(null)?.state != ACTIVE
+        ) return RoomAccess(RoomRole.CANDIDATE)
         val roomId = room.id ?: throw roomNotFound()
         val userId = user?.id
         val membership = userId?.let { teamMembershipRepository.findByTeamIdAndUserId(teamId, it) }
-        val participant = userId?.let { roomParticipantRepository.findByRoomIdAndUserId(roomId, it) }
-        if (membership != null && (membership.state != ACTIVE || participant == null)) throw roomNotFound()
-        if (participant != null && membership == null) throw roomNotFound()
-        val role = participant?.let { normalizeRole(it.role) } ?: RoomRole.CANDIDATE
-        if (room.status == RoomStatus.FROZEN.wireValue && role == RoomRole.CANDIDATE) {
-            throw roomNotFound()
+        if (membership?.state == ACTIVE) {
+            return RoomAccess(if (room.ownerUser?.id == userId) RoomRole.OWNER else RoomRole.INTERVIEWER)
         }
-        return RoomAccess(role)
+        // An old assignment must not restore privileges after membership ends.
+        if (membership != null) {
+            val assignment = userId?.let { hrAssignmentRepository.findByRoomIdAndUserId(roomId, it) }
+            if (membership.state !in setOf("LEFT", "REMOVED") || user?.isHr != true ||
+                assignment == null || assignment.createdAt <= membership.updatedAt
+            ) return RoomAccess(RoomRole.CANDIDATE)
+        }
+        val participant = userId?.let { roomParticipantRepository.findByRoomIdAndUserId(roomId, it) }
+        return RoomAccess(
+            if (participant?.role == RoomRole.INTERVIEWER.wireValue) RoomRole.INTERVIEWER else RoomRole.CANDIDATE,
+        )
     }
 
     private fun roomNotFound() = ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")

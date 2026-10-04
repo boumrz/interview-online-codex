@@ -18,11 +18,17 @@ interface RoomRepository : JpaRepository<Room, String> {
     fun findByIdAndOwnerUserId(id: String, ownerUserId: String): Room?
     fun deleteByIdAndOwnerUserId(id: String, ownerUserId: String): Long
 
+    @Query(value = "SELECT team_id FROM rooms WHERE id = :roomId", nativeQuery = true)
+    fun findStoredTeamId(@Param("roomId") roomId: String): String?
+
     @Query(value = "SELECT id FROM rooms WHERE id = :roomId FOR UPDATE", nativeQuery = true)
     fun lockIdById(@Param("roomId") roomId: String): String?
 
     @Query(value = "SELECT id FROM rooms WHERE invite_code = :inviteCode FOR UPDATE", nativeQuery = true)
     fun lockIdByInviteCode(@Param("inviteCode") inviteCode: String): String?
+
+    @Query(value = "SELECT id FROM rooms WHERE invite_code = :inviteCode FOR UPDATE SKIP LOCKED", nativeQuery = true)
+    fun tryLockIdByInviteCode(@Param("inviteCode") inviteCode: String): String?
 
 }
 

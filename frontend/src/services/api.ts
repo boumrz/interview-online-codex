@@ -28,6 +28,7 @@ import type {
   TeamInterviewOwnerOfferResponse,
   TeamInterviewProgrammeResponse,
   TeamInterviewResponse,
+  TeamInterviewDetails,
   TeamMemberDirectoryPage,
   TeamMemberDirectoryQuery,
   TeamProcessListResponse,
@@ -52,9 +53,9 @@ import { API_BASE_URL } from "../config/runtime";
 const API_URL = API_BASE_URL;
 type TeamManagementScope = Pick<WorkspaceCacheScope, "accountId" | "kind" | "teamId" | "query">;
 type TeamTrackListScope = TeamManagementScope & { status?: "active" | "archived"; q?: string };
-type TeamTaskLibraryScope = TeamManagementScope & { status?: "active" | "archived"; language?: string; q?: string };
-type TeamTaskSetLibraryScope = TeamManagementScope & { status?: "active" | "archived" };
-type TeamInterviewListScope = TeamManagementScope & { q?: string; ownership?: "all" | "orphaned" };
+type TeamTaskLibraryScope = TeamManagementScope & { language?: string; q?: string };
+type TeamTaskSetLibraryScope = TeamManagementScope;
+type TeamInterviewListScope = TeamManagementScope & { q?: string; ownership?: "all" | "orphaned"; trackId?: string; vacancyId?: string };
 type TeamProcessInterviewScope = Pick<WorkspaceCacheScope, "accountId" | "teamId"> & {
   trackId: string;
   vacancyId?: string | null;
@@ -156,17 +157,19 @@ export const api = createApi({
       keepUnusedDataFor: 0,
     }),
     getTeamInterviews: builder.query<TeamInterviewListResponse, TeamInterviewListScope>({
-      query: ({ teamId, q, ownership }) => ({
+      query: ({ teamId, q, ownership, trackId, vacancyId }) => ({
         url: `/teams/${teamId}/interviews`,
         params: {
           ...(q ? { q } : {}),
           ...(ownership ? { ownership } : {}),
+          ...(trackId ? { trackId } : {}),
+          ...(vacancyId ? { vacancyId } : {}),
         },
         cache: "no-store",
       }),
       providesTags: (_result, _error, scope) => [
         { type: "TeamInterviews", id: `${scope.accountId}:${scope.teamId}` },
-        { type: "TeamInterviews", id: `${scope.accountId}:${scope.teamId}:${scope.q ?? ""}:${scope.ownership ?? "all"}` },
+        { type: "TeamInterviews", id: `${scope.accountId}:${scope.teamId}:${scope.q ?? ""}:${scope.ownership ?? "all"}:${scope.trackId ?? ""}:${scope.vacancyId ?? ""}` },
       ],
       keepUnusedDataFor: 0,
     }),
@@ -292,10 +295,9 @@ export const api = createApi({
       ],
     }),
     getTeamTaskLibrary: builder.query<TeamTaskLibraryResponse, TeamTaskLibraryScope>({
-      query: ({ teamId, status, language, q }) => ({
+      query: ({ teamId, language, q }) => ({
         url: `/teams/${teamId}/tasks`,
         params: {
-          ...(status ? { status } : {}),
           ...(language ? { language } : {}),
           ...(q ? { q } : {}),
         },
@@ -303,7 +305,7 @@ export const api = createApi({
       }),
       providesTags: (_result, _error, scope) => [
         { type: "TeamTaskLibrary", id: `${scope.accountId}:${scope.teamId}` },
-        { type: "TeamTaskLibrary", id: `${scope.accountId}:${scope.teamId}:${scope.status ?? "active"}:${scope.language ?? ""}:${scope.q ?? ""}` },
+        { type: "TeamTaskLibrary", id: `${scope.accountId}:${scope.teamId}:${scope.language ?? ""}:${scope.q ?? ""}` },
       ],
       keepUnusedDataFor: 0,
     }),
@@ -373,49 +375,23 @@ export const api = createApi({
         id: `${scope.accountId}:${scope.teamId}`,
       }],
     }),
-    archiveTeamTask: builder.mutation<
-      TeamTaskTemplateResponse,
-      TeamManagementScope & { taskId: string }
-    >({
-      query: ({ teamId, taskId }) => ({
-        url: `/teams/${teamId}/tasks/${taskId}/archive`,
-        method: "POST",
-        cache: "no-store",
-      }),
-      invalidatesTags: (_result, _error, scope) => [{
-        type: "TeamTaskLibrary",
-        id: `${scope.accountId}:${scope.teamId}`,
-      }],
-    }),
-    restoreTeamTask: builder.mutation<
-      TeamTaskTemplateResponse,
-      TeamManagementScope & { taskId: string }
-    >({
-      query: ({ teamId, taskId }) => ({
-        url: `/teams/${teamId}/tasks/${taskId}/restore`,
-        method: "POST",
-        cache: "no-store",
-      }),
-      invalidatesTags: (_result, _error, scope) => [{
-        type: "TeamTaskLibrary",
-        id: `${scope.accountId}:${scope.teamId}`,
-      }],
-    }),
+
+
     deleteTeamTask: builder.mutation<void, TeamManagementScope & { taskId: string }>({
       query: ({ teamId, taskId }) => ({ url: `/teams/${teamId}/tasks/${taskId}`, method: "DELETE" }),
-      invalidatesTags: (_result, _error, scope) => [{ type: "TeamTaskLibrary", id: `${scope.accountId}:${scope.teamId}` }],
+      invalidatesTags: (_result, _error, scope) => [
+        { type: "TeamTaskLibrary", id: `${scope.accountId}:${scope.teamId}` },
+        { type: "TeamTaskSets", id: `${scope.accountId}:${scope.teamId}` },
+        ...teamTrackTags(scope),
+      ],
     }),
     getTeamTaskSets: builder.query<TeamTaskSetLibraryResponse, TeamTaskSetLibraryScope>({
-      query: ({ teamId, status }) => ({
+      query: ({ teamId }) => ({
         url: `/teams/${teamId}/task-sets`,
-        params: {
-          ...(status ? { status } : {}),
-        },
         cache: "no-store",
       }),
       providesTags: (_result, _error, scope) => [
         { type: "TeamTaskSets", id: `${scope.accountId}:${scope.teamId}` },
-        { type: "TeamTaskSets", id: `${scope.accountId}:${scope.teamId}:${scope.status ?? "active"}` },
       ],
       keepUnusedDataFor: 0,
     }),
@@ -484,34 +460,8 @@ export const api = createApi({
         id: `${scope.accountId}:${scope.teamId}`,
       }],
     }),
-    archiveTeamTaskSet: builder.mutation<
-      TeamTaskSetResponse,
-      TeamManagementScope & { setId: string }
-    >({
-      query: ({ teamId, setId }) => ({
-        url: `/teams/${teamId}/task-sets/${setId}/archive`,
-        method: "POST",
-        cache: "no-store",
-      }),
-      invalidatesTags: (_result, _error, scope) => [{
-        type: "TeamTaskSets",
-        id: `${scope.accountId}:${scope.teamId}`,
-      }],
-    }),
-    restoreTeamTaskSet: builder.mutation<
-      TeamTaskSetResponse,
-      TeamManagementScope & { setId: string }
-    >({
-      query: ({ teamId, setId }) => ({
-        url: `/teams/${teamId}/task-sets/${setId}/restore`,
-        method: "POST",
-        cache: "no-store",
-      }),
-      invalidatesTags: (_result, _error, scope) => [{
-        type: "TeamTaskSets",
-        id: `${scope.accountId}:${scope.teamId}`,
-      }],
-    }),
+
+
     deleteTeamTaskSet: builder.mutation<void, TeamManagementScope & { setId: string }>({
       query: ({ teamId, setId }) => ({ url: `/teams/${teamId}/task-sets/${setId}`, method: "DELETE" }),
       invalidatesTags: (_result, _error, scope) => [{ type: "TeamTaskSets", id: `${scope.accountId}:${scope.teamId}` }],
@@ -825,27 +775,37 @@ export const api = createApi({
       TeamManagementScope & {
         title: string;
         taskSetId?: string;
+        candidateName?: string | null;
+        position?: string | null;
+        scheduledAt?: string | null;
         taskIds?: readonly string[];
+        selectedTaskIds?: readonly string[];
         trackId?: string;
         vacancyId?: string;
         programmeId?: string;
         programmeVersion?: number;
         interviewerIds?: readonly string[];
+        hiringManagerIds?: readonly string[];
         candidateIds?: readonly string[];
         idempotencyKey: string;
       }
     >({
-      query: ({ teamId, title, taskSetId, taskIds, trackId, vacancyId, programmeId, programmeVersion, interviewerIds, candidateIds, idempotencyKey }) => ({
+      query: ({ teamId, title, candidateName, position, scheduledAt, taskSetId, taskIds, selectedTaskIds, trackId, vacancyId, programmeId, programmeVersion, interviewerIds, candidateIds, hiringManagerIds, idempotencyKey }) => ({
         url: `/teams/${teamId}/interviews`,
         method: "POST",
         body: {
           title,
+          ...(candidateName ? { candidateName } : {}),
+          ...(position ? { position } : {}),
+          ...(scheduledAt ? { scheduledAt } : {}),
           ...(taskSetId ? { taskSetId } : {}),
           ...(taskIds && taskIds.length > 0 ? { taskIds } : {}),
+          ...(selectedTaskIds ? { selectedTaskIds } : {}),
           ...(trackId ? { trackId } : {}),
           ...(vacancyId ? { vacancyId } : {}),
           ...(programmeId ? { programmeId, programmeVersion } : {}),
           ...(interviewerIds && interviewerIds.length > 0 ? { interviewerIds } : {}),
+          ...(hiringManagerIds && hiringManagerIds.length > 0 ? { hiringManagerIds } : {}),
           ...(candidateIds && candidateIds.length > 0 ? { candidateIds } : {}),
         },
         cache: "no-store",
@@ -855,6 +815,17 @@ export const api = createApi({
         type: "TeamInterviews",
         id: `${scope.accountId}:${scope.teamId}`,
       }],
+    }),
+    getTeamInterviewDetails: builder.query<TeamInterviewDetails, TeamManagementScope & { interviewId: string; requestGeneration?: number }>({
+      query: ({ teamId, interviewId }) => ({ url: `/teams/${teamId}/interviews/${interviewId}/details`, cache: "no-store" }),
+    }),
+    updateTeamInterviewDetails: builder.mutation<TeamInterviewDetails, TeamManagementScope & { interviewId: string; details: TeamInterviewDetails }>({
+      query: ({ teamId, interviewId, details }) => ({ url: `/teams/${teamId}/interviews/${interviewId}/details`, method: "PATCH", body: details, cache: "no-store" }),
+      invalidatesTags: (_result, _error, scope) => [
+        { type: "TeamInterviews", id: `${scope.accountId}:${scope.teamId}` },
+        { type: "TeamInterviewOwnerOffers", id: `${scope.accountId}:${scope.teamId}:pending` },
+        "InterviewMetadata", "HrInterviews", "Room",
+      ],
     }),
     renameTeamInterview: builder.mutation<
       TeamInterviewResponse,
@@ -898,9 +869,14 @@ export const api = createApi({
       query: (body) => ({ url: "/rooms", method: "POST", body }),
       invalidatesTags: ["MyRooms"],
     }),
+    getHiringManagerOptions: builder.query<HiringManagerPreviewResponse[], { accountId: string; teamId?: string }>({
+      query: ({ teamId }) => ({ url: "/me/hiring-manager-options", params: teamId ? { teamId } : undefined, cache: "no-store" }),
+      providesTags: ["Profile", "TeamMembers"],
+      keepUnusedDataFor: 0,
+    }),
     previewHiringManager: builder.mutation<
       HiringManagerPreviewResponse,
-      { invitationId: string }
+      { invitationId: string; teamId?: string }
     >({
       query: (body) => ({
         url: "/me/hiring-manager-preview",
@@ -1183,12 +1159,12 @@ export const api = createApi({
     }),
     getHrInterviews: builder.query<
       HrInterviewPage,
-      { page: number; size: number; from?: string; to?: string }
+      { page: number; size: number; from?: string; to?: string; teamId?: string; trackId?: string; vacancyId?: string }
     >({
-      query: ({ page, size, from, to }) => ({
+      query: ({ page, size, from, to, teamId, trackId, vacancyId }) => ({
         url: "/me/hr/rooms",
         cache: "no-store",
-        params: { page, size, ...(from && to ? { from, to } : {}) },
+        params: { page, size, ...(from && to ? { from, to } : {}), ...(teamId ? { teamId } : {}), ...(trackId ? { trackId } : {}), ...(vacancyId ? { vacancyId } : {}) },
       }),
       providesTags: ["HrInterviews"],
     }),
@@ -1240,7 +1216,7 @@ export const api = createApi({
         url: `/me/tasks/${taskId}`,
         method: "DELETE",
       }),
-      invalidatesTags: ["Tasks"],
+      invalidatesTags: ["Tasks", "Presets"],
     }),
     adminUsers: builder.query<AdminUser[], void>({
       query: () => "/admin/users",
@@ -1344,11 +1320,8 @@ export const api = createApi({
     getEnvironmentDoctorReport: builder.query<EnvironmentDoctorReport, void>({
       query: () => "/agent/environment/doctor",
     }),
-    listPresets: builder.query<PresetSummary[], { status?: "active" | "archived" } | void>({
-      query: (params) => ({
-        url: "/me/presets",
-        params: params?.status ? { status: params.status } : undefined,
-      }),
+    listPresets: builder.query<PresetSummary[], void>({
+      query: () => "/me/presets",
       providesTags: ["Presets"],
     }),
     getPreset: builder.query<PresetDetail, { presetId: string }>({
@@ -1367,14 +1340,8 @@ export const api = createApi({
       query: ({ presetId }) => ({ url: `/me/presets/${presetId}/copy`, method: "POST" }),
       invalidatesTags: ["Presets"],
     }),
-    archivePreset: builder.mutation<PresetDetail, { presetId: string }>({
-      query: ({ presetId }) => ({ url: `/me/presets/${presetId}/archive`, method: "POST" }),
-      invalidatesTags: ["Presets"],
-    }),
-    restorePreset: builder.mutation<PresetDetail, { presetId: string }>({
-      query: ({ presetId }) => ({ url: `/me/presets/${presetId}/restore`, method: "POST" }),
-      invalidatesTags: ["Presets"],
-    }),
+
+
     deletePreset: builder.mutation<{ status: string }, { presetId: string }>({
       query: ({ presetId }) => ({ url: `/me/presets/${presetId}`, method: "DELETE" }),
       invalidatesTags: ["Presets"],
@@ -1431,16 +1398,12 @@ export const {
   useImportPersonalTaskToTeamMutation,
   useCopyTeamTaskMutation,
   useUpdateTeamTaskMutation,
-  useArchiveTeamTaskMutation,
-  useRestoreTeamTaskMutation,
   useDeleteTeamTaskMutation,
   useGetTeamTaskSetsQuery,
   useCreateTeamTaskSetMutation,
   useUpdateTeamTaskSetMutation,
   useImportPersonalPresetToTeamMutation,
   useCopyTeamTaskSetMutation,
-  useArchiveTeamTaskSetMutation,
-  useRestoreTeamTaskSetMutation,
   useDeleteTeamTaskSetMutation,
   useGetTeamTracksQuery,
   useCreateTeamTrackMutation,
@@ -1467,10 +1430,13 @@ export const {
   useRemoveTeamMemberMutation,
   useTransferTeamOwnershipMutation,
   useCreateTeamInterviewMutation,
+  useLazyGetTeamInterviewDetailsQuery,
+  useUpdateTeamInterviewDetailsMutation,
   useRenameTeamInterviewMutation,
   useCreateTeamMutation,
   useCreateGuestRoomMutation,
   useCreateRoomMutation,
+  useGetHiringManagerOptionsQuery,
   usePreviewHiringManagerMutation,
   useGetRoomQuery,
   useGetRoomTaskWorkspaceQuery,
@@ -1483,6 +1449,7 @@ export const {
   useDeleteRoomMutation,
   useUpdateProfileMutation,
   useLazyGetInterviewMetadataQuery,
+  useGetInterviewMetadataQuery,
   useUpdateInterviewMetadataMutation,
   useLazyGetHrManagersQuery,
   useAddHrManagerMutation,
@@ -1511,8 +1478,6 @@ export const {
   useCreatePresetMutation,
   useUpdatePresetMutation,
   useCopyPresetMutation,
-  useArchivePresetMutation,
-  useRestorePresetMutation,
   useDeletePresetMutation,
   useSetVerdictMutation,
 } = api;

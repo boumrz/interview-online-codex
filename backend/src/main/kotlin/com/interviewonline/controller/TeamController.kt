@@ -1,11 +1,14 @@
 package com.interviewonline.controller
 
+import com.fasterxml.jackson.databind.JsonNode
 import com.interviewonline.dto.CreateTeamRequest
 import com.interviewonline.dto.CreateTeamTaskSetRequest
 import com.interviewonline.dto.CreateTaskTemplateRequest
 import com.interviewonline.dto.ImportPersonalPresetRequest
 import com.interviewonline.dto.ImportPersonalTaskRequest
 import com.interviewonline.dto.TeamInterviewCreateRequest
+import com.interviewonline.dto.TeamInterviewDetailsDto
+import com.interviewonline.dto.TeamInterviewDetailsUpdateRequest
 import com.interviewonline.dto.TeamInterviewRenameRequest
 import com.interviewonline.dto.TeamInterviewListDto
 import com.interviewonline.dto.TeamProcessListDto
@@ -123,10 +126,12 @@ class TeamController(
         @PathVariable teamId: String,
         @RequestParam("q", required = false) query: String?,
         @RequestParam("ownership", required = false) ownership: String?,
+        @RequestParam(required = false) trackId: String?,
+        @RequestParam(required = false) vacancyId: String?,
     ): ResponseEntity<TeamInterviewListDto> = ResponseEntity.ok()
         .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
         .contentType(jsonUtf8)
-        .body(teamInterviewService.list(requireUser(authorization), teamId, query, ownership))
+        .body(teamInterviewService.list(requireUser(authorization), teamId, query, ownership, trackId, vacancyId))
 
     @GetMapping("/{teamId}/processes")
     fun processes(
@@ -191,6 +196,53 @@ class TeamController(
         .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
         .contentType(jsonUtf8)
         .body(teamInterviewService.rename(requireUser(authorization), teamId, interviewId, request))
+
+    @GetMapping("/{teamId}/interviews/{interviewId}/details")
+    fun interviewDetails(
+        @RequestHeader("Authorization", required = false) authorization: String?,
+        @PathVariable teamId: String,
+        @PathVariable interviewId: String,
+    ): ResponseEntity<TeamInterviewDetailsDto> = ResponseEntity.ok()
+        .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
+        .contentType(jsonUtf8)
+        .body(teamInterviewService.details(requireUser(authorization), teamId, interviewId))
+
+    @PatchMapping("/{teamId}/interviews/{interviewId}/details")
+    fun updateInterviewDetails(
+        @RequestHeader("Authorization", required = false) authorization: String?,
+        @PathVariable teamId: String,
+        @PathVariable interviewId: String,
+        @RequestBody body: JsonNode,
+    ): ResponseEntity<TeamInterviewDetailsDto> {
+        val actor = requireUser(authorization)
+        val keys = setOf("title", "candidateName", "position", "scheduledAt", "revision")
+        if (!body.isObject || body.fieldNames().asSequence().toSet() != keys) {
+            throw ApiException(HttpStatus.BAD_REQUEST, "Нужно передать название, все поля метаданных и ревизию")
+        }
+        val title = body.path("title")
+        val revision = body.path("revision")
+        if (!title.isTextual) throw ApiException(HttpStatus.BAD_REQUEST, "Название должно быть строкой")
+        if (!revision.isIntegralNumber || !revision.canConvertToLong()) {
+            throw ApiException(HttpStatus.BAD_REQUEST, "Некорректная ревизия метаданных")
+        }
+        fun nullableText(key: String): String? {
+            val node = body.path(key)
+            if (node.isNull) return null
+            if (!node.isTextual) throw ApiException(HttpStatus.BAD_REQUEST, "Поле $key должно быть строкой или null")
+            return node.textValue()
+        }
+        val request = TeamInterviewDetailsUpdateRequest(
+            title = title.textValue(),
+            candidateName = nullableText("candidateName"),
+            position = nullableText("position"),
+            scheduledAt = nullableText("scheduledAt"),
+            revision = revision.longValue(),
+        )
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
+            .contentType(jsonUtf8)
+            .body(teamInterviewService.updateDetails(actor, teamId, interviewId, request))
+    }
 
     @PostMapping("/{teamId}/interviews/{interviewId}/owner-offers")
     fun createInterviewOwnerOffer(
@@ -292,13 +344,12 @@ class TeamController(
     fun teamTasks(
         @RequestHeader("Authorization", required = false) authorization: String?,
         @PathVariable teamId: String,
-        @RequestParam("status", required = false) status: String?,
         @RequestParam("language", required = false) language: String?,
         @RequestParam("q", required = false) query: String?,
     ): ResponseEntity<TeamTaskLibraryDto> = ResponseEntity.ok()
         .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
         .contentType(jsonUtf8)
-        .body(teamTaskLibraryService.list(requireUser(authorization), teamId, status, language, query))
+        .body(teamTaskLibraryService.list(requireUser(authorization), teamId, language, query))
 
     @PostMapping("/{teamId}/tasks")
     fun createTeamTask(
@@ -350,26 +401,6 @@ class TeamController(
         .contentType(jsonUtf8)
         .body(teamTaskLibraryService.update(requireUser(authorization), teamId, taskId, request))
 
-    @PostMapping("/{teamId}/tasks/{taskId}/archive")
-    fun archiveTeamTask(
-        @RequestHeader("Authorization", required = false) authorization: String?,
-        @PathVariable teamId: String,
-        @PathVariable taskId: String,
-    ): ResponseEntity<TeamTaskTemplateResponse> = ResponseEntity.ok()
-        .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
-        .contentType(jsonUtf8)
-        .body(teamTaskLibraryService.archive(requireUser(authorization), teamId, taskId))
-
-    @PostMapping("/{teamId}/tasks/{taskId}/restore")
-    fun restoreTeamTask(
-        @RequestHeader("Authorization", required = false) authorization: String?,
-        @PathVariable teamId: String,
-        @PathVariable taskId: String,
-    ): ResponseEntity<TeamTaskTemplateResponse> = ResponseEntity.ok()
-        .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
-        .contentType(jsonUtf8)
-        .body(teamTaskLibraryService.restore(requireUser(authorization), teamId, taskId))
-
     @DeleteMapping("/{teamId}/tasks/{taskId}")
     fun deleteTeamTask(
         @RequestHeader("Authorization", required = false) authorization: String?,
@@ -384,11 +415,10 @@ class TeamController(
     fun teamTaskSets(
         @RequestHeader("Authorization", required = false) authorization: String?,
         @PathVariable teamId: String,
-        @RequestParam("status", required = false) status: String?,
     ): ResponseEntity<TeamTaskSetLibraryDto> = ResponseEntity.ok()
         .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
         .contentType(jsonUtf8)
-        .body(teamTaskSetService.list(requireUser(authorization), teamId, status))
+        .body(teamTaskSetService.list(requireUser(authorization), teamId))
 
     @PostMapping("/{teamId}/task-sets")
     fun createTeamTaskSet(
@@ -439,26 +469,6 @@ class TeamController(
             .contentType(jsonUtf8)
             .body(body)
     }
-
-    @PostMapping("/{teamId}/task-sets/{setId}/archive")
-    fun archiveTeamTaskSet(
-        @RequestHeader("Authorization", required = false) authorization: String?,
-        @PathVariable teamId: String,
-        @PathVariable setId: String,
-    ): ResponseEntity<TeamTaskSetResponse> = ResponseEntity.ok()
-        .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
-        .contentType(jsonUtf8)
-        .body(teamTaskSetService.archive(requireUser(authorization), teamId, setId))
-
-    @PostMapping("/{teamId}/task-sets/{setId}/restore")
-    fun restoreTeamTaskSet(
-        @RequestHeader("Authorization", required = false) authorization: String?,
-        @PathVariable teamId: String,
-        @PathVariable setId: String,
-    ): ResponseEntity<TeamTaskSetResponse> = ResponseEntity.ok()
-        .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
-        .contentType(jsonUtf8)
-        .body(teamTaskSetService.restore(requireUser(authorization), teamId, setId))
 
     @DeleteMapping("/{teamId}/task-sets/{setId}")
     fun deleteTeamTaskSet(

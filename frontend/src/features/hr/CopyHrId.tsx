@@ -1,6 +1,7 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Button, Group, Text } from "@mantine/core";
-import { IconCheck, IconCopy } from "@tabler/icons-react";
+import React, { useRef } from "react";
+import { Button, Flex, Typography } from "antd";
+import { CopyOutlined } from "@ant-design/icons";
+import { useClipboardNotification } from "../../components/useClipboardNotification";
 
 type CopyHrIdProps = {
   id: string;
@@ -9,15 +10,7 @@ type CopyHrIdProps = {
 
 export function CopyHrId({ id, compact = false }: CopyHrIdProps) {
   const valueRef = useRef<HTMLSpanElement | null>(null);
-  const timerRef = useRef<number | null>(null);
-  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
-
-  useEffect(
-    () => () => {
-      if (timerRef.current != null) window.clearTimeout(timerRef.current);
-    },
-    [],
-  );
+  const copyToClipboard = useClipboardNotification();
 
   const selectValue = () => {
     const selection = window.getSelection();
@@ -29,53 +22,31 @@ export function CopyHrId({ id, compact = false }: CopyHrIdProps) {
   };
 
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(id);
-      setState("copied");
-      if (timerRef.current != null) window.clearTimeout(timerRef.current);
-      timerRef.current = window.setTimeout(() => setState("idle"), 2000);
-    } catch {
-      selectValue();
-      setState("failed");
-    }
+    const copied = await copyToClipboard(id, {
+      success: "ID нанимающего готов к вставке.",
+      failure: "ID выделен — скопируйте его вручную.",
+    });
+    if (!copied) selectValue();
   };
 
   return (
     <div>
-      <Group gap="xs" wrap="wrap">
-        <Text
-          component="span"
+      <Flex gap={8} wrap="wrap" align="center">
+        <Typography.Text
           ref={valueRef}
-          ff="monospace"
-          size={compact ? "xs" : "sm"}
-          style={{ overflowWrap: "anywhere", userSelect: "text" }}
+          style={{ overflowWrap: "anywhere", userSelect: "text", fontFamily: "var(--font-code)", fontSize: compact ? 12 : 14 }}
         >
           {id}
-        </Text>
+        </Typography.Text>
         <Button
-          type="button"
-          size={compact ? "compact-xs" : "xs"}
-          variant="light"
-          color={state === "copied" ? "teal" : "blue"}
-          leftSection={state === "copied" ? <IconCheck size={14} /> : <IconCopy size={14} />}
+          htmlType="button"
+          size="small"
+          icon={<CopyOutlined />}
           onClick={() => void copy()}
         >
-          {state === "copied" ? "Скопировано" : "Скопировать ID нанимающего"}
+          Скопировать ID нанимающего
         </Button>
-      </Group>
-      <Text
-        size="xs"
-        c={state === "failed" ? "red.4" : "dimmed"}
-        mt={4}
-        aria-live="polite"
-        style={{ minHeight: 18 }}
-      >
-        {state === "copied"
-          ? "ID нанимающего скопирован"
-          : state === "failed"
-            ? "Не удалось скопировать. ID выделен — скопируйте вручную."
-            : ""}
-      </Text>
+      </Flex>
     </div>
   );
 }

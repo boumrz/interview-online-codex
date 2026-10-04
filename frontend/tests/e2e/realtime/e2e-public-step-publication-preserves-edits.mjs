@@ -259,6 +259,7 @@ async function runPublicationPreservationRegression(browser, publicationMethod) 
     await waitForEditorMarker(ownerPage, candidateMarker, "OWNER_RECEIVES_CANDIDATE");
 
     if (publicationMethod === "realtime") {
+      await publisherPage.getByRole('tab', { name: 'Шаги', exact: true }).click();
       await publisherPage.locator("[data-testid='room-step-row-1']").click();
       await waitForEditorMarker(publisherPage, "PREPARED_TARGET_", "PUBLISHER_PREPARES_TARGET");
       const publish = publisherPage.locator("[data-testid='room-publish-step']");

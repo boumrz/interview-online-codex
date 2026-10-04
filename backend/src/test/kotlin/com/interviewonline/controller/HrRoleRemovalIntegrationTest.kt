@@ -186,37 +186,57 @@ class HrRoleRemovalIntegrationTest(
     }
 
     @Test
-    fun `finished room rejects late access grants and revokes without changing memberships`() {
+    fun `finished room owner can grant and revoke existing room roles`() {
         val (owner, hr, room) = assignedRoom()
         val candidate = account(false)
+        val unassignedHr = account(true)
         try {
             val ownerTab = join(room, owner)
             val guestTab = join(room, null)
-            val participantRowsBeforeFinish = participantRows(room)
-
+            val hrTab = join(room, hr)
+            val unassignedHrTab = join(room, unassignedHr)
             val verdict = mockMvc.post("/api/rooms/${room.inviteCode}/verdict") {
                 header("Authorization", "Bearer ${owner.token}")
                 contentType = MediaType.APPLICATION_JSON
                 content = objectMapper.writeValueAsString(mapOf("verdict" to "HIRE"))
             }.andReturn()
             assertEquals(200, verdict.response.status)
+            val finishedAt = roomRepository.findById(room.id).orElseThrow().finishedAt
+            assertEquals(204, event(room, hrTab, "language_update", mapOf("language" to "python")).response.status, "assigned personal HR keeps manager rights after finishing")
+            assertEquals(204, event(room, hrTab, "private_note_entry", mapOf("privateNoteId" to UUID.randomUUID().toString(), "privateNoteText" to "Finished assigned HR private")).response.status)
+            assertTrue(payload(hrTab).path("personalNotes").any { it.path("text").asText() == "Finished assigned HR private" })
+            for (viewer in listOf(guestTab, unassignedHrTab)) {
+                val denied = event(room, viewer, "code_update", mapOf("code" to "viewer cannot write", "codeSequence" to 10))
+                assertEquals(403, denied.response.status)
+                assertEquals("ROOM_READ_ONLY", objectMapper.readTree(denied.response.contentAsString).path("code").asText())
+                assertTrue(payload(viewer).path("personalNotes").isEmpty, "finished viewers cannot read another author's private notes")
+            }
+            val formerlyDeniedOperation = mapOf<String, Any>("operationId" to UUID.randomUUID().toString(), "clientEventSequence" to 777,
+                "yjsUpdate" to "AQID", "yjsDocumentBase64" to "AQID", "baseServerYjsSequence" to 0, "code" to "Granted guest's finished code")
+            assertEquals(403, event(room, guestTab, "yjs_update", formerlyDeniedOperation).response.status)
+            assertEquals(403, event(room, hrTab, "grant_interviewer_access", mapOf("targetUserId" to candidate.id)).response.status, "assigned HR remains unable to grant owner-only room roles")
+            assertEquals(finishedAt, roomRepository.findById(room.id).orElseThrow().finishedAt)
+            assertEquals("finished", roomRepository.findById(room.id).orElseThrow().status)
 
             val lateRestGrant = mockMvc.post("/api/rooms/${room.inviteCode}/participants/${candidate.id}/role") {
                 header("Authorization", "Bearer ${owner.token}")
                 contentType = MediaType.APPLICATION_JSON
                 content = objectMapper.writeValueAsString(mapOf("role" to "interviewer"))
             }.andReturn()
-            assertEquals(409, lateRestGrant.response.status)
+            assertEquals(200, lateRestGrant.response.status)
 
             val lateRestRevoke = mockMvc.post("/api/rooms/${room.inviteCode}/participants/${hr.id}/role") {
                 header("Authorization", "Bearer ${owner.token}")
                 contentType = MediaType.APPLICATION_JSON
                 content = objectMapper.writeValueAsString(mapOf("role" to "candidate"))
             }.andReturn()
-            assertEquals(409, lateRestRevoke.response.status)
+            assertEquals(200, lateRestRevoke.response.status)
+            val afterRevocation = event(room, hrTab, "yjs_update", mapOf("operationId" to UUID.randomUUID().toString(), "yjsUpdate" to "AQID", "code" to "revoked HR cannot write", "yjsDocumentBase64" to "AQID", "baseServerYjsSequence" to 999))
+            assertEquals(403, afterRevocation.response.status, "revoked HR's existing SSE token cannot mutate finished editor")
+            assertEquals("ROOM_READ_ONLY", objectMapper.readTree(afterRevocation.response.contentAsString).path("code").asText())
 
             assertEquals(
-                409,
+                204,
                 event(
                     room,
                     ownerTab,
@@ -225,7 +245,7 @@ class HrRoleRemovalIntegrationTest(
                 ).response.status,
             )
             assertEquals(
-                409,
+                204,
                 event(
                     room,
                     ownerTab,
@@ -234,7 +254,7 @@ class HrRoleRemovalIntegrationTest(
                 ).response.status,
             )
             assertEquals(
-                409,
+                204,
                 event(
                     room,
                     ownerTab,
@@ -243,12 +263,18 @@ class HrRoleRemovalIntegrationTest(
                 ).response.status,
             )
             assertEquals(204, event(room, guestTab, "request_state_sync").response.status)
-            assertEquals("candidate", payload(guestTab).path("role").asText())
-            assertEquals(
-                participantRowsBeforeFinish,
-                participantRows(room),
-                "finished access mutations must not alter durable room memberships",
-            )
+            assertEquals("interviewer", payload(guestTab).path("role").asText())
+            assertEquals(204, event(room, guestTab, "yjs_update", formerlyDeniedOperation).response.status, "readonly rejection must not consume the operation ID or client sequence before an authorized grant")
+            val deadline = System.nanoTime() + 3_000_000_000L
+            while (roomRepository.findById(room.id).orElseThrow().code != "Granted guest's finished code" && System.nanoTime() < deadline) Thread.sleep(25)
+            assertEquals("Granted guest's finished code", roomRepository.findById(room.id).orElseThrow().code)
+            assertEquals("interviewer", participantRepository.findByRoomIdAndUserId(room.id, candidate.id)!!.role)
+            assertEquals("candidate", participantRepository.findByRoomIdAndUserId(room.id, hr.id)!!.role)
+            assertEquals(403, mockMvc.post("/api/rooms/${room.inviteCode}/participants/${candidate.id}/role") {
+                header("Authorization", "Bearer ${hr.token}")
+                contentType = MediaType.APPLICATION_JSON
+                content = objectMapper.writeValueAsString(mapOf("role" to "candidate"))
+            }.andReturn().response.status, "revoked HR cannot manage room roles")
         } finally {
             collaborationService.closeRoom(room.inviteCode)
         }
@@ -312,8 +338,15 @@ class HrRoleRemovalIntegrationTest(
                 assertEquals(if (first == "remove") 204 else 200, operation(first))
                 val future = executor.submit<Int> { started.countDown(); operation(second) }
                 assertTrue(started.await(5, TimeUnit.SECONDS))
-                assertThrows(TimeoutException::class.java, { future.get(200, TimeUnit.MILLISECONDS) },
-                    "a competing permission operation must wait until the current room transaction commits")
+                if (first == "entry") {
+                    // Admission deliberately suspends this outer transaction:
+                    // its short room transaction commits before the SSE send.
+                    assertEquals(204, future.get(5, TimeUnit.SECONDS),
+                        "removal must proceed after admission returns, even while the caller transaction stays open")
+                } else {
+                    assertThrows(TimeoutException::class.java, { future.get(200, TimeUnit.MILLISECONDS) },
+                        "a competing permission operation must wait until the current room transaction commits")
+                }
                 future
             }!!
             val expectedStatus = when {

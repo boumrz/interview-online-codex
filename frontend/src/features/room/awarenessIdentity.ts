@@ -200,7 +200,7 @@ export function dedupeRemoteAwarenessEntries(awareness: Awareness): void {
  */
 export const remoteCursorDarkTheme = EditorView.baseTheme({
   ".cm-ySelectionCaret": {
-    borderLeft: "2px solid rgba(255,255,255,0.88)",
+    borderLeft: "2px solid var(--app-editor-text)",
     borderRight: "none",
   },
   ".cm-ySelectionCaret::after": {

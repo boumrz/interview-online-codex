@@ -30,19 +30,11 @@ async function loginViaForm(page, nickname, password) {
   await page.locator("form input[type='password']").first().waitFor({ timeout: 30000 });
   await page.locator("form input[type='password']").first().fill(password);
   await page.locator("form button[type='submit']").first().click();
-  await page.waitForURL(/\/dashboard\//, { timeout: 20000 });
+  await page.waitForURL(/\/workspace\/personal\//, { timeout: 20000 });
 }
 
 async function openTasksDashboard(page) {
-  if (!/\/dashboard\//.test(page.url())) {
-    await page.waitForURL(/\/dashboard\//, { timeout: 20000 });
-  }
-  if (!/\/dashboard\/tasks/.test(page.url())) {
-    const tasksButton = page.getByRole("button", { name: "Задачи", exact: true }).first();
-    await tasksButton.waitFor({ timeout: 15000 });
-    await tasksButton.click();
-    await page.waitForURL(/\/dashboard\/tasks/, { timeout: 20000 });
-  }
+  await page.goto(`${webBaseUrl}/workspace/personal/library`);
   await page.locator('[data-testid="task-bank-panel"]').waitFor({ timeout: 30000 });
 }
 
@@ -58,6 +50,9 @@ async function logoutFromDashboard(page) {
 }
 
 const browser = await chromium.launch({ headless: true });
+let diagnosticPage;
+let phase = "register";
+const networkDiagnostics = [];
 
 try {
   const accountA = await registerAccount("switch_a");
@@ -66,9 +61,22 @@ try {
 
   const context = await browser.newContext();
   const page = await context.newPage();
+  diagnosticPage = page;
+  page.on("response", response => {
+    const path = new URL(response.url()).pathname;
+    if (path.startsWith("/api/me/") || path.startsWith("/api/auth/")) {
+      networkDiagnostics.push({ path, status: response.status() });
+    }
+  });
+  page.on("requestfailed", request => {
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith("/api/")) networkDiagnostics.push({ path, error: request.failure()?.errorText });
+  });
 
   // Login as account A and create a unique task.
+  phase = "login-account-A";
   await loginViaForm(page, accountA.nickname, accountA.password);
+  phase = "library-account-A";
   await openTasksDashboard(page);
   await page.locator('[data-testid="open-create-task-modal"]').click();
   await page.locator("#create-task-title").fill(uniqueTaskTitle);
@@ -79,7 +87,9 @@ try {
 
   // Switch to account B in the same browser session.
   await logoutFromDashboard(page);
+  phase = "login-account-B";
   await loginViaForm(page, accountB.nickname, accountB.password);
+  phase = "library-account-B";
   await openTasksDashboard(page);
 
   // Unique task from account A must not leak into account B.
@@ -91,6 +101,13 @@ try {
   console.log("ACCOUNT_SWITCH_FRESH_DATA_OK");
   await context.close();
 } catch (error) {
+  const state = await diagnosticPage?.evaluate(() => ({
+    pathname: location.pathname,
+    headings: Array.from(document.querySelectorAll("h1,h2,[role=alert]")).map(element => element.textContent?.trim()),
+    bodyTail: document.body.innerText.slice(-1400),
+    taskPanels: document.querySelectorAll('[data-testid="task-bank-panel"]').length,
+  })).catch(() => ({ unavailable: true }));
+  console.error("ACCOUNT_SWITCH_DIAGNOSTICS", JSON.stringify({ phase, state, network: networkDiagnostics.slice(-25) }));
   console.error("ACCOUNT_SWITCH_FRESH_DATA_FAIL", error);
   process.exitCode = 1;
 } finally {

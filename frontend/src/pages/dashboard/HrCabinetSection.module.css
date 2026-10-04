@@ -1,6 +1,22 @@
 .cabinet {
-  border-color: #272b34 !important;
+  border-color: var(--app-border) !important;
   overflow: visible;
+}
+
+.toolbar {
+  gap: 12px;
+}
+
+.periodDate {
+  width: 160px;
+  flex: 0 0 auto;
+}
+
+.periodHint {
+  width: 24px;
+  height: 24px;
+  min-height: 24px !important;
+  padding: 0 !important;
 }
 
 .detailGrid {

@@ -1,1 +1,1 @@
-rootProject.name = "interview-online-backend"
+rootProject.name = "interhub-backend"

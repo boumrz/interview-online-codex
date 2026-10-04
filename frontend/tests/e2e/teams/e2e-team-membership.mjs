@@ -43,7 +43,7 @@ async function account(prefix) {
   const { response, body } = await json("/auth/register", {
     method: "POST",
     body: {
-      nickname: `${prefix}_${suffix}`.slice(0, 32),
+      nickname: `${prefix.slice(0, 31 - suffix.length)}_${suffix}`,
       displayName: `${prefix} ${suffix}`,
       password,
       isHr: false,
@@ -280,11 +280,11 @@ test("AC-03: fragment is cleared before login and explicit accept adds one team 
     assert.equal(await page.getByText(/кандидат|интервью|библиотек/i).count(), 0, "preview must not disclose protected team surfaces");
     await page.getByRole("button", { name: "Принять приглашение", exact: true }).click();
     await page.waitForURL(`**/workspace/teams/${invitedTeam.id}/interviews`);
-    const switcher = page.getByRole("button", { name: /^Рабочее пространство:/ });
+    const switcher = page.getByRole("button", { name: /^Команды:/ });
     await switcher.click();
-    const dialog = page.getByRole("dialog", { name: "Выбор рабочего пространства", exact: true });
-    await dialog.getByRole("button", { name: new RegExp(oldTeam.id.slice(0, 8), "i") }).waitFor();
-    await dialog.getByRole("button", { name: new RegExp(invitedTeam.id.slice(0, 8), "i") }).waitFor();
+    const dialog = page.getByRole("menu", { name: "Выбор команды", exact: true });
+    await dialog.getByRole("menuitemradio", { name: oldTeam.name, exact: true }).waitFor();
+    await dialog.getByRole("menuitemradio", { name: invitedTeam.name, exact: true }).waitFor();
     await assertSecretClearedWithoutDiagnostics(page, token, "AC03_ACCEPT_LEFT_INVITATION_SECRET_RESIDUE");
   } finally {
     await context.close();

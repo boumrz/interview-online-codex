@@ -1,14 +1,17 @@
-.search {
-  width: min(100%, 22rem);
-}
-
-.member,
 .empty {
-  border-color: transparent;
-  color: #f8fafc;
-  background: linear-gradient(160deg, rgba(17, 21, 28, 0.94), rgba(15, 18, 25, 0.9));
+  border-color: var(--app-border);
+  color: var(--app-text);
+  background: var(--app-surface);
 }
 
 .retry {
   min-height: 44px;
 }
+
+.tableScroll { width: 100%; overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; color: var(--app-text); font-size: 14px; }
+.table th, .table td { padding: 12px 16px; text-align: left; vertical-align: middle; border-bottom: 1px solid var(--app-border); }
+.table thead th { color: var(--app-muted); font-size: 12px; font-weight: 600; background: var(--app-surface); }
+.table tbody th { min-width: 180px; font-weight: 600; }
+.table td:last-child { min-width: 180px; }
+@media (max-width: 768px) { .table th, .table td { padding: 10px 12px; } }

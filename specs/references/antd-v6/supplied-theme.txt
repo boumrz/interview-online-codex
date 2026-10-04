@@ -1,0 +1,777 @@
+/**
+ * Ant Design v6 Theme Configuration
+ * Generated from design tokens (CSS + JSON)
+ * Uses CSS Custom Properties for runtime theme switching
+ */
+
+import type { ThemeConfig } from 'antd';
+
+// ========================================
+// CSS VARIABLE HELPERS
+// ========================================
+
+const cssVar = (name: string) => `var(${name})`;
+
+const getCssVariable = (name: string): string =>
+    getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+const getCssNumber = (name: string): number => {
+    const value = getCssVariable(name);
+    console.log({ [name]: value });
+    return Number.parseInt(value);
+};
+
+// ========================================
+// COLOR CSS VARIABLES
+// ========================================
+
+const colors = {
+    // Base Color Palettes
+    blue: {
+        1: cssVar('--Colors-Base-Blue-1'),
+        2: cssVar('--Colors-Base-Blue-2'),
+        3: cssVar('--Colors-Base-Blue-3'),
+        4: cssVar('--Colors-Base-Blue-4'),
+        5: cssVar('--Colors-Base-Blue-5'),
+        6: cssVar('--Colors-Base-Blue-6'),
+        7: cssVar('--Colors-Base-Blue-7'),
+        8: cssVar('--Colors-Base-Blue-8'),
+        9: cssVar('--Colors-Base-Blue-9'),
+        10: cssVar('--Colors-Base-Blue-10'),
+    },
+    cyan: {
+        1: cssVar('--Colors-Base-Cyan-1'),
+        2: cssVar('--Colors-Base-Cyan-2'),
+        3: cssVar('--Colors-Base-Cyan-3'),
+        4: cssVar('--Colors-Base-Cyan-4'),
+        5: cssVar('--Colors-Base-Cyan-5'),
+        6: cssVar('--Colors-Base-Cyan-6'),
+        7: cssVar('--Colors-Base-Cyan-7'),
+        8: cssVar('--Colors-Base-Cyan-8'),
+        9: cssVar('--Colors-Base-Cyan-9'),
+        10: cssVar('--Colors-Base-Cyan-10'),
+    },
+    geekblue: {
+        1: cssVar('--Colors-Base-Geekblue-1'),
+        2: cssVar('--Colors-Base-Geekblue-2'),
+        3: cssVar('--Colors-Base-Geekblue-3'),
+        4: cssVar('--Colors-Base-Geekblue-4'),
+        5: cssVar('--Colors-Base-Geekblue-5'),
+        6: cssVar('--Colors-Base-Geekblue-6'),
+        7: cssVar('--Colors-Base-Geekblue-7'),
+        8: cssVar('--Colors-Base-Geekblue-8'),
+        9: cssVar('--Colors-Base-Geekblue-9'),
+        10: cssVar('--Colors-Base-Geekblue-10'),
+    },
+    gold: {
+        1: cssVar('--Colors-Base-Gold-1'),
+        2: cssVar('--Colors-Base-Gold-2'),
+        3: cssVar('--Colors-Base-Gold-3'),
+        4: cssVar('--Colors-Base-Gold-4'),
+        5: cssVar('--Colors-Base-Gold-5'),
+        6: cssVar('--Colors-Base-Gold-6'),
+        7: cssVar('--Colors-Base-Gold-7'),
+        8: cssVar('--Colors-Base-Gold-8'),
+        9: cssVar('--Colors-Base-Gold-9'),
+        10: cssVar('--Colors-Base-Gold-10'),
+    },
+    green: {
+        1: cssVar('--Colors-Base-Green-1'),
+        2: cssVar('--Colors-Base-Green-2'),
+        3: cssVar('--Colors-Base-Green-3'),
+        4: cssVar('--Colors-Base-Green-4'),
+        5: cssVar('--Colors-Base-Green-5'),
+        6: cssVar('--Colors-Base-Green-6'),
+        7: cssVar('--Colors-Base-Green-7'),
+        8: cssVar('--Colors-Base-Green-8'),
+        9: cssVar('--Colors-Base-Green-9'),
+        10: cssVar('--Colors-Base-Green-10'),
+    },
+    lime: {
+        1: cssVar('--Colors-Base-Lime-1'),
+        2: cssVar('--Colors-Base-Lime-2'),
+        3: cssVar('--Colors-Base-Lime-3'),
+        4: cssVar('--Colors-Base-Lime-4'),
+        5: cssVar('--Colors-Base-Lime-5'),
+        6: cssVar('--Colors-Base-Lime-6'),
+        7: cssVar('--Colors-Base-Lime-7'),
+        8: cssVar('--Colors-Base-Lime-8'),
+        9: cssVar('--Colors-Base-Lime-9'),
+        10: cssVar('--Colors-Base-Lime-10'),
+    },
+    magenta: {
+        1: cssVar('--Colors-Base-Magenta-1'),
+        2: cssVar('--Colors-Base-Magenta-2'),
+        3: cssVar('--Colors-Base-Magenta-3'),
+        4: cssVar('--Colors-Base-Magenta-4'),
+        5: cssVar('--Colors-Base-Magenta-5'),
+        6: cssVar('--Colors-Base-Magenta-6'),
+        7: cssVar('--Colors-Base-Magenta-7'),
+        8: cssVar('--Colors-Base-Magenta-8'),
+        9: cssVar('--Colors-Base-Magenta-9'),
+        10: cssVar('--Colors-Base-Magenta-10'),
+    },
+    orange: {
+        1: cssVar('--Colors-Base-Orange-1'),
+        2: cssVar('--Colors-Base-Orange-2'),
+        3: cssVar('--Colors-Base-Orange-3'),
+        4: cssVar('--Colors-Base-Orange-4'),
+        5: cssVar('--Colors-Base-Orange-5'),
+        6: cssVar('--Colors-Base-Orange-6'),
+        7: cssVar('--Colors-Base-Orange-7'),
+        8: cssVar('--Colors-Base-Orange-8'),
+        9: cssVar('--Colors-Base-Orange-9'),
+        10: cssVar('--Colors-Base-Orange-10'),
+    },
+    pink: {
+        1: cssVar('--Colors-Base-Pink-1'),
+        2: cssVar('--Colors-Base-Pink-2'),
+        3: cssVar('--Colors-Base-Pink-3'),
+        4: cssVar('--Colors-Base-Pink-4'),
+        5: cssVar('--Colors-Base-Pink-5'),
+        6: cssVar('--Colors-Base-Pink-6'),
+        7: cssVar('--Colors-Base-Pink-7'),
+        8: cssVar('--Colors-Base-Pink-8'),
+        9: cssVar('--Colors-Base-Pink-9'),
+        10: cssVar('--Colors-Base-Pink-10'),
+    },
+    purple: {
+        1: cssVar('--Colors-Base-Purple-1'),
+        2: cssVar('--Colors-Base-Purple-2'),
+        3: cssVar('--Colors-Base-Purple-3'),
+        4: cssVar('--Colors-Base-Purple-4'),
+        5: cssVar('--Colors-Base-Purple-5'),
+        6: cssVar('--Colors-Base-Purple-6'),
+        7: cssVar('--Colors-Base-Purple-7'),
+        8: cssVar('--Colors-Base-Purple-8'),
+        9: cssVar('--Colors-Base-Purple-9'),
+        10: cssVar('--Colors-Base-Purple-10'),
+    },
+    red: {
+        1: cssVar('--Colors-Base-Red-1'),
+        2: cssVar('--Colors-Base-Red-2'),
+        3: cssVar('--Colors-Base-Red-3'),
+        4: cssVar('--Colors-Base-Red-4'),
+        5: cssVar('--Colors-Base-Red-5'),
+        6: cssVar('--Colors-Base-Red-6'),
+        7: cssVar('--Colors-Base-Red-7'),
+        8: cssVar('--Colors-Base-Red-8'),
+        9: cssVar('--Colors-Base-Red-9'),
+        10: cssVar('--Colors-Base-Red-10'),
+    },
+    volcano: {
+        1: cssVar('--Colors-Base-Volcano-1'),
+        2: cssVar('--Colors-Base-Volcano-2'),
+        3: cssVar('--Colors-Base-Volcano-3'),
+        4: cssVar('--Colors-Base-Volcano-4'),
+        5: cssVar('--Colors-Base-Volcano-5'),
+        6: cssVar('--Colors-Base-Volcano-6'),
+        7: cssVar('--Colors-Base-Volcano-7'),
+        8: cssVar('--Colors-Base-Volcano-8'),
+        9: cssVar('--Colors-Base-Volcano-9'),
+        10: cssVar('--Colors-Base-Volcano-10'),
+    },
+    yellow: {
+        1: cssVar('--Colors-Base-Yellow-1'),
+        2: cssVar('--Colors-Base-Yellow-2'),
+        3: cssVar('--Colors-Base-Yellow-3'),
+        4: cssVar('--Colors-Base-Yellow-4'),
+        5: cssVar('--Colors-Base-Yellow-5'),
+        6: cssVar('--Colors-Base-Yellow-6'),
+        7: cssVar('--Colors-Base-Yellow-7'),
+        8: cssVar('--Colors-Base-Yellow-8'),
+        9: cssVar('--Colors-Base-Yellow-9'),
+        10: cssVar('--Colors-Base-Yellow-10'),
+    },
+    // Neutral Colors
+    neutral: {
+        colorWhite: cssVar('--Colors-Neutral-colorWhite'),
+        colorBgBase: cssVar('--Colors-Neutral-colorBgBase'),
+        colorTextBase: cssVar('--Colors-Neutral-colorTextBase'),
+        transparent: cssVar('--Colors-Neutral-transparent'),
+        // Text
+        text: {
+            colorText: cssVar('--neutral-color-text'),
+            colorTextSecondary: cssVar('--Colors-Neutral-Text-colorTextSecondary'),
+            colorTextTertiary: cssVar('--Colors-Neutral-Text-colorTextTertiary'),
+            colorTextQuaternary: cssVar('--Colors-Neutral-Text-colorTextQuaternary'),
+            colorTextLightSolid: cssVar('--Colors-Neutral-Text-colorTextLightSolid'),
+            colorTextHeading: cssVar('--Colors-Neutral-Text-colorTextHeading'),
+            colorTextLabel: cssVar('--Colors-Neutral-Text-colorTextLabel'),
+            colorTextDescription: cssVar('--Colors-Neutral-Text-colorTextDescription'),
+            colorTextDisabled: cssVar('--Colors-Neutral-Text-colorTextDisabled'),
+            colorTextPlaceholder: cssVar('--Colors-Neutral-Text-colorTextPlaceholder'),
+            solidTextColor: cssVar('--Colors-Neutral-Text-solidTextColor'),
+        },
+        // Icon
+        icon: {
+            colorIcon: cssVar('--Colors-Neutral-Icon-colorIcon'),
+            colorIconHover: cssVar('--Colors-Neutral-Icon-colorIconHover'),
+        },
+        // Background
+        bg: {
+            colorBgContainer: cssVar('--Colors-Neutral-Bg-colorBgContainer'),
+            colorBgElevated: cssVar('--Colors-Neutral-Bg-colorBgElevated'),
+            colorBgLayout: cssVar('--Colors-Neutral-Bg-colorBgLayout'),
+            colorBgMask: cssVar('--Colors-Neutral-Bg-colorBgMask'),
+            colorBgSpotlight: cssVar('--Colors-Neutral-Bg-colorBgSpotlight'),
+            colorBgContainerDisabled: cssVar('--Colors-Neutral-Bg-colorBgContainerDisabled'),
+            colorBgTextActive: cssVar('--Colors-Neutral-Bg-colorBgTextActive'),
+            colorBgTextHover: cssVar('--Colors-Neutral-Bg-colorBgTextHover'),
+            colorBorderBg: cssVar('--Colors-Neutral-Bg-colorBorderBg'),
+            colorBgSolid: cssVar('--Colors-Neutral-Bg-colorBgSolid'),
+            colorBgSolidActive: cssVar('--Colors-Neutral-Bg-colorBgSolidActive'),
+            colorBgSolidHover: cssVar('--Colors-Neutral-Bg-colorBgSolidHover'),
+            defaultBg: cssVar('--Colors-Neutral-Bg-defaultBg'),
+        },
+        // Border
+        border: {
+            colorBorder: cssVar('--Colors-Neutral-Border-colorBorder'),
+            colorBorderDisabled: cssVar('--Colors-Neutral-Border-colorBorder'),
+            colorBorderSecondary: cssVar('--Colors-Neutral-Border-colorBorderSecondary'),
+            colorSplit: cssVar('--Colors-Neutral-Border-colorSplit'),
+        },
+        // Fill
+        fill: {
+            colorFill: cssVar('--Colors-Neutral-Fill-colorFill'),
+            colorFillSecondary: cssVar('--Colors-Neutral-Fill-colorFillSecondary'),
+            colorFillTertiary: cssVar('--Colors-Neutral-Fill-colorFillTertiary'),
+            colorFillQuaternary: cssVar('--Colors-Neutral-Fill-colorFillQuaternary'),
+            colorFillContent: cssVar('--Colors-Neutral-Fill-colorFillContent'),
+            colorFillContentHover: cssVar('--Colors-Neutral-Fill-colorFillContentHover'),
+            colorFillAlter: cssVar('--Colors-Neutral-Fill-colorFillAlter'),
+            colorFillAlterSolid: cssVar('--Colors-Neutral-Fill-colorFillAlterSolid'),
+            colorFilledHandleBg: cssVar('--Colors-Neutral-Fill-colorFilledHandleBg'),
+        },
+    },
+    // Brand Colors
+    brand: {
+        primary: {
+            colorPrimary: '#642eff', // We set here value, not refer to variable. Because antd fails on reading it from css and set default #000 color.
+            colorPrimaryHover: cssVar('--Colors-Brand-Primary-colorPrimaryHover'),
+            colorPrimaryActive: cssVar('--Colors-Brand-Primary-colorPrimaryActive'),
+            colorPrimaryBg: cssVar('--Colors-Brand-Primary-colorPrimaryBg'),
+            colorPrimaryBgHover: cssVar('--Colors-Brand-Primary-colorPrimaryBgHover'),
+            colorPrimaryBorder: cssVar('--Colors-Brand-Primary-colorPrimaryBorder'),
+            colorPrimaryBorderHover: cssVar('--Colors-Brand-Primary-colorPrimaryBorderHover'),
+            colorPrimaryTextHover: cssVar('--Colors-Brand-Primary-colorPrimaryTextHover'),
+            colorPrimaryText: cssVar('--Colors-Brand-Primary-colorPrimaryText'),
+            colorPrimaryTextActive: cssVar('--Colors-Brand-Primary-colorPrimaryTextActive'),
+        },
+        success: {
+            colorSuccess: '#52c41a', // We set here value, not refer to variable. Because antd fails on reading it from css and set default #000 color.
+            colorSuccessHover: cssVar('--Colors-Brand-Success-colorSuccessHover'),
+            colorSuccessActive: cssVar('--Colors-Brand-Success-colorSuccessActive'),
+            colorSuccessBg: cssVar('--Colors-Brand-Success-colorSuccessBg'),
+            colorSuccessBgHover: cssVar('--Colors-Brand-Success-colorSuccessBgHover'),
+            colorSuccessBorder: cssVar('--Colors-Brand-Success-colorSuccessBorder'),
+            colorSuccessBorderHover: cssVar('--Colors-Brand-Success-colorSuccessBorderHover'),
+            colorSuccessTextHover: cssVar('--Colors-Brand-Success-colorSuccessTextHover'),
+            colorSuccessText: cssVar('--Colors-Brand-Success-colorSuccessText'),
+            colorSuccessTextActive: cssVar('--Colors-Brand-Success-colorSuccessTextActive'),
+        },
+        warning: {
+            colorWarning: '#faad14', // We set here value, not refer to variable. Because antd fails on reading it from css and set default #000 color.
+            colorWarningHover: cssVar('--Colors-Brand-Warning-colorWarningHover'),
+            colorWarningActive: cssVar('--Colors-Brand-Warning-colorWarningActive'),
+            colorWarningBg: cssVar('--Colors-Brand-Warning-colorWarningBg'),
+            colorWarningBgHover: cssVar('--Colors-Brand-Warning-colorWarningBgHover'),
+            colorWarningBorder: cssVar('--Colors-Brand-Warning-colorWarningBorder'),
+            colorWarningBorderHover: cssVar('--Colors-Brand-Warning-colorWarningBorderHover'),
+            colorWarningTextHover: cssVar('--Colors-Brand-Warning-colorWarningTextHover'),
+            colorWarningText: cssVar('--Colors-Brand-Warning-colorWarningText'),
+            colorWarningTextActive: cssVar('--Colors-Brand-Warning-colorWarningTextActive'),
+            colorWarningOutline: cssVar('--Colors-Brand-Warning-colorWarningOutline'),
+        },
+        info: {
+            colorInfo: '#1677ff', // We set here value, not refer to variable. Because antd fails on reading it from css and set default #000 color.
+            colorInfoHover: cssVar('--Colors-Brand-Info-colorInfoHover'),
+            colorInfoActive: cssVar('--Colors-Brand-Info-colorInfoActive'),
+            colorInfoBg: cssVar('--Colors-Brand-Info-colorInfoBg'),
+            colorInfoBgHover: cssVar('--Colors-Brand-Info-colorInfoBgHover'),
+            colorInfoBorder: cssVar('--Colors-Brand-Info-colorInfoBorder'),
+            colorInfoBorderHover: cssVar('--Colors-Brand-Info-colorInfoBorderHover'),
+            colorInfoTextHover: cssVar('--Colors-Brand-Info-colorInfoTextHover'),
+            colorInfoText: cssVar('--Colors-Brand-Info-colorInfoText'),
+            colorInfoTextActive: cssVar('--Colors-Brand-Info-colorInfoTextActive'),
+        },
+        error: {
+            colorError: '#ff4d4f', // We set here value, not refer to variable. Because antd fails on reading it from css and set default #000 color.
+            colorErrorHover: cssVar('--Colors-Brand-Error-colorErrorHover'),
+            colorErrorActive: cssVar('--Colors-Brand-Error-colorErrorActive'),
+            colorErrorBg: cssVar('--Colors-Brand-Error-colorErrorBg'),
+            colorErrorBgHover: cssVar('--Colors-Brand-Error-colorErrorBgHover'),
+            colorErrorBorder: cssVar('--Colors-Brand-Error-colorErrorBorder'),
+            colorErrorBorderHover: cssVar('--Colors-Brand-Error-colorErrorBorderHover'),
+            colorErrorTextHover: cssVar('--Colors-Brand-Error-colorErrorTextHover'),
+            colorErrorText: cssVar('--Colors-Brand-Error-colorErrorText'),
+            colorErrorTextActive: cssVar('--Colors-Brand-Error-colorErrorTextActive'),
+            colorErrorOutline: cssVar('--Colors-Brand-Error-colorErrorOutline'),
+        },
+        link: {
+            colorLink: '#1677ff', // We set here value, not refer to variable. Because antd fails on reading it from css and set default #000 color.
+            colorLinkHover: cssVar('--Colors-Brand-Link-colorLinkHover'),
+            colorLinkActive: cssVar('--Colors-Brand-Link-colorLinkActive'),
+        },
+        control: {
+            controlItemBgActive: cssVar('--Colors-Brand-Control-controlItemBgActive'),
+            controlItemBgActiveDisabled: cssVar('--Colors-Brand-Control-controlItemBgActiveDisabled'),
+            controlItemBgActiveHover: cssVar('--Colors-Brand-Control-controlItemBgActiveHover'),
+            controlItemBgHover: cssVar('--Colors-Brand-Control-controlItemBgHover'),
+            controlOutline: cssVar('--Colors-Brand-Control-controlOutline'),
+            controlTmpOutline: cssVar('--Colors-Brand-Control-controlTmpOutline'),
+        },
+    },
+};
+
+// ========================================
+// DIMENSION CSS VARIABLES
+// ========================================
+
+// const size: ThemeConfig['token'] = {
+const size = {
+    sizeStep: cssVar('--Size-sizeStep'),
+    sizeUnit: cssVar('--Size-sizeUnit'),
+    controlInteractiveSize: getCssNumber('--Size-controlInteractiveSize'),
+    sizePopupArrow: cssVar('--Size-sizePopupArrow'),
+    // Base Sizes
+    sizeXXS: getCssNumber('--size-xxs'),
+    sizeXS: getCssNumber('--size-xs'),
+    sizeSM: getCssNumber('--size-sm'),
+    size: getCssNumber('--size-default'),
+    sizeMS: getCssNumber('--size-ms'),
+    sizeMD: getCssNumber('--size-md'),
+    sizeLG: getCssNumber('--size-lg'),
+    sizeXL: getCssNumber('--size-xl'),
+    sizeXXL: getCssNumber('--size-xxl'),
+    // Heights
+    controlHeight: getCssNumber('--control-height-default'),
+    controlHeightLG: getCssNumber('--control-height-lg'),
+    controlHeightSM: getCssNumber('--control-height-sm'),
+    controlHeightXS: getCssNumber('--control-height-xs'),
+    // Line Widths
+    lineWidth: getCssNumber('--Size-Line-Width-lineWidth'),
+    lineWidthBold: getCssNumber('--Size-Line-Width-lineWidthBold'),
+    lineWidthFocus: getCssNumber('--Size-Line-Width-lineWidthFocus'),
+    controlOutlineWidth: getCssNumber('--Size-Line-Width-controlOutlineWidth'),
+    // Screen Sizes
+    screenXS: getCssNumber('--screen-size-xs'),
+    screenSM: getCssNumber('--screen-size-sm'),
+    screenMD: getCssNumber('--screen-size-md'),
+    screenLG: getCssNumber('--screen-size-lg'),
+    screenXL: getCssNumber('--screen-size-xl'),
+    screenXXL: getCssNumber('--screen-size-xxl'),
+};
+
+const space = {
+    // Margins
+    margin: getCssNumber('--margin-default'),
+    marginSM: getCssNumber('--margin-sm'),
+    marginMD: getCssNumber('--margin-md'),
+    marginLG: getCssNumber('--margin-lg'),
+    marginXL: getCssNumber('--margin-xl'),
+    marginXS: getCssNumber('--margin-xs'),
+    marginXXL: getCssNumber('--margin-xxl'),
+    marginXXS: getCssNumber('--margin-xxs'),
+
+    // Paddings
+    paddingXXS: getCssNumber('--padding-xxs'),
+    paddingXS: getCssNumber('--padding-xs'),
+    paddingSM: getCssNumber('--padding-sm'),
+    padding: getCssNumber('--padding-default'),
+    paddingMD: getCssNumber('--padding-md'),
+    paddingLG: getCssNumber('--padding-lg'),
+    paddingXL: getCssNumber('--padding-xl'),
+
+    paddingContentHorizontal: getCssNumber('--padding-content-horizontal-default'),
+    paddingContentHorizontalSM: getCssNumber('--padding-content-horizontal-sM'),
+    paddingContentHorizontalLG: getCssNumber('--padding-content-horizontal-lG'),
+    paddingContentVertical: getCssNumber('--padding-content-vertical-default'),
+    paddingContentVerticalSM: getCssNumber('--padding-content-vertical-sm'),
+    paddingContentVerticalLG: getCssNumber('--padding-content-vertical-lg'),
+    controlPaddingHorizontal: getCssNumber('--control-padding-horizontal-default'),
+    controlPaddingHorizontalSM: getCssNumber('--control-padding-horizontal-sm'),
+};
+
+const borderRadius = {
+    borderRadius: getCssNumber('--Border-Radius-borderRadius'),
+    borderRadiusLG: getCssNumber('--Border-Radius-borderRadiusLG'),
+    borderRadiusSM: getCssNumber('--Border-Radius-borderRadiusSM'),
+    borderRadiusXS: getCssNumber('--Border-Radius-borderRadiusXS'),
+};
+
+// ========================================
+// TYPOGRAPHY CSS VARIABLES
+// ========================================
+
+const typography = {
+    fontFamily: cssVar('--font-base'),
+    fontFamilyCode: cssVar('--font-base'),
+
+    fontSize: getCssNumber('--font-size'),
+    fontSizeSM: getCssNumber('--font-size-sm'),
+    fontSizeLG: getCssNumber('--font-size-lg'),
+    fontSizeXL: getCssNumber('--font-size-xl'),
+
+    fontSizeIcon: cssVar('--font-size-icon'),
+
+    lineHeight: cssVar('--font-line-height'),
+    lineHeightSM: cssVar('--font-line-height-sm'),
+    lineHeightLG: cssVar('--font-line-height-lg'),
+    lineHeightXL: cssVar('--font-line-height-xl'),
+
+    fontWeightNormal: cssVar('--font-weight-normal'),
+    fontWeightStrong: getCssNumber('--font-weight-strong'),
+};
+
+const typographyHeadings = {
+    fontSizeHeading1: cssVar('--font-size-heading-1'),
+    lineHeightHeading1: cssVar('--line-height-heading-1'),
+
+    fontSizeHeading2: cssVar('--font-size-heading-2'),
+    lineHeightHeading2: cssVar('--line-height-heading-2'),
+
+    fontSizeHeading3: cssVar('--font-size-heading-3'),
+    lineHeightHeading3: cssVar('--line-height-heading-3'),
+
+    fontSizeHeading4: cssVar('--font-size-heading-4'),
+    lineHeightHeading4: cssVar('--line-height-heading-4'),
+
+    fontSizeHeading5: cssVar('--font-size-heading-5'),
+    lineHeightHeading5: cssVar('--line-height-heading-5'),
+};
+
+// ========================================
+// THEME CONFIGURATION
+// ========================================
+
+/**
+ * Base Theme Configuration using CSS Variables
+ * Works with data-theme="light" | "dark"
+ */
+export const cssVarTheme: ThemeConfig = {
+    token: {
+        // Primary
+        colorPrimary: colors.brand.primary.colorPrimary,
+        colorPrimaryHover: colors.brand.primary.colorPrimaryHover,
+        colorPrimaryActive: colors.brand.primary.colorPrimaryActive,
+        colorPrimaryBg: colors.brand.primary.colorPrimaryBg,
+        colorPrimaryBgHover: colors.brand.primary.colorPrimaryBgHover,
+        colorPrimaryBorder: colors.brand.primary.colorPrimaryBorder,
+        colorPrimaryBorderHover: colors.brand.primary.colorPrimaryBorderHover,
+        colorPrimaryTextHover: colors.brand.primary.colorPrimaryTextHover,
+        colorPrimaryText: colors.brand.primary.colorPrimaryText,
+        colorPrimaryTextActive: colors.brand.primary.colorPrimaryTextActive,
+
+        // Success
+        colorSuccess: colors.brand.success.colorSuccess,
+        colorSuccessHover: colors.brand.success.colorSuccessHover,
+        colorSuccessActive: colors.brand.success.colorSuccessActive,
+        colorSuccessBg: colors.brand.success.colorSuccessBg,
+        colorSuccessBgHover: colors.brand.success.colorSuccessBgHover,
+        colorSuccessBorder: colors.brand.success.colorSuccessBorder,
+        colorSuccessBorderHover: colors.brand.success.colorSuccessBorderHover,
+        colorSuccessTextHover: colors.brand.success.colorSuccessTextHover,
+        colorSuccessText: colors.brand.success.colorSuccessText,
+        colorSuccessTextActive: colors.brand.success.colorSuccessTextActive,
+
+        // Warning
+        colorWarning: colors.brand.warning.colorWarning,
+        colorWarningHover: colors.brand.warning.colorWarningHover,
+        colorWarningActive: colors.brand.warning.colorWarningActive,
+        colorWarningBg: colors.brand.warning.colorWarningBg,
+        colorWarningBgHover: colors.brand.warning.colorWarningBgHover,
+        colorWarningBorder: colors.brand.warning.colorWarningBorder,
+        colorWarningBorderHover: colors.brand.warning.colorWarningBorderHover,
+        colorWarningTextHover: colors.brand.warning.colorWarningTextHover,
+        colorWarningText: colors.brand.warning.colorWarningText,
+        colorWarningTextActive: colors.brand.warning.colorWarningTextActive,
+        colorWarningOutline: colors.brand.warning.colorWarningOutline,
+
+        // Info
+        colorInfo: colors.brand.info.colorInfo,
+        colorInfoHover: colors.brand.info.colorInfoHover,
+        colorInfoActive: colors.brand.info.colorInfoActive,
+        colorInfoBg: colors.brand.info.colorInfoBg,
+        colorInfoBgHover: colors.brand.info.colorInfoBgHover,
+        colorInfoBorder: colors.brand.info.colorInfoBorder,
+        colorInfoBorderHover: colors.brand.info.colorInfoBorderHover,
+        colorInfoTextHover: colors.brand.info.colorInfoTextHover,
+        colorInfoText: colors.brand.info.colorInfoText,
+        colorInfoTextActive: colors.brand.info.colorInfoTextActive,
+
+        // Error
+        colorError: colors.brand.error.colorError,
+        colorErrorHover: colors.brand.error.colorErrorHover,
+        colorErrorActive: colors.brand.error.colorErrorActive,
+        colorErrorBg: colors.brand.error.colorErrorBg,
+        colorErrorBgHover: colors.brand.error.colorErrorBgHover,
+        colorErrorBorder: colors.brand.error.colorErrorBorder,
+        colorErrorBorderHover: colors.brand.error.colorErrorBorderHover,
+        colorErrorTextHover: colors.brand.error.colorErrorTextHover,
+        colorErrorText: colors.brand.error.colorErrorText,
+        colorErrorTextActive: colors.brand.error.colorErrorTextActive,
+        colorErrorOutline: colors.brand.error.colorErrorOutline,
+
+        // Link Colors
+        colorLink: colors.brand.primary.colorPrimary,
+        colorLinkHover: colors.brand.primary.colorPrimaryBorderHover,
+        colorLinkActive: colors.brand.primary.colorPrimaryActive,
+
+        // Control Colors
+        controlItemBgActive: colors.brand.control.controlItemBgActive,
+        controlItemBgActiveDisabled: colors.brand.control.controlItemBgActiveDisabled,
+        controlItemBgActiveHover: colors.brand.control.controlItemBgActiveHover,
+        controlItemBgHover: colors.brand.control.controlItemBgHover,
+        controlOutline: colors.brand.control.controlOutline,
+        controlTmpOutline: colors.brand.control.controlTmpOutline,
+
+        // Neutral Colors
+        colorBgBase: colors.neutral.colorBgBase,
+        colorTextBase: colors.neutral.colorTextBase,
+        colorBgContainer: colors.neutral.bg.colorBgContainer,
+        colorBgElevated: colors.neutral.bg.colorBgElevated,
+        colorBgLayout: colors.neutral.bg.colorBgLayout,
+        colorBgMask: colors.neutral.bg.colorBgMask,
+        colorBgSpotlight: colors.neutral.bg.colorBgSpotlight,
+        colorBgTextHover: colors.neutral.bg.colorBgTextHover,
+        colorBgTextActive: colors.neutral.bg.colorBgTextActive,
+        colorText: colors.neutral.text.colorText,
+        colorTextSecondary: colors.neutral.text.colorTextSecondary,
+        colorTextTertiary: colors.neutral.text.colorTextTertiary,
+        colorTextQuaternary: colors.neutral.text.colorTextQuaternary,
+        colorFill: colors.neutral.fill.colorFill,
+        colorFillSecondary: colors.neutral.fill.colorFillSecondary,
+        colorFillTertiary: colors.neutral.fill.colorFillTertiary,
+        colorFillQuaternary: colors.neutral.fill.colorFillQuaternary,
+        colorBorder: colors.neutral.border.colorBorder,
+        colorBorderDisabled: colors.neutral.border.colorBorderDisabled,
+        colorBorderSecondary: colors.neutral.border.colorBorderSecondary,
+        colorSplit: colors.neutral.border.colorSplit,
+        colorBgSolid: colors.neutral.bg.colorBgSolid,
+
+        // Typography
+        ...typographyHeadings,
+        fontFamily: typography.fontFamily,
+        fontFamilyCode: typography.fontFamilyCode,
+        fontSize: typography.fontSize,
+        fontSizeSM: typography.fontSizeSM,
+        fontSizeLG: typography.fontSizeLG,
+        fontSizeXL: typography.fontSizeXL,
+        fontWeightStrong: typography.fontWeightStrong,
+        //@ts-expect-error: If we want to use numbers, lh should depends on font-size
+        lineHeight: typography.lineHeight,
+        //@ts-expect-error: If we want to use numbers, lh should depends on font-size
+        lineHeightSM: typography.lineHeightSM,
+        //@ts-expect-error: If we want to use numbers, lh should depends on font-size
+        lineHeightLG: typography.lineHeightLG,
+
+        // Sizes
+        controlHeight: size.controlHeight,
+        controlHeightSM: size.controlHeightSM,
+        controlHeightLG: size.controlHeightLG,
+        controlHeightXS: size.controlHeightXS,
+        controlInteractiveSize: size.controlInteractiveSize,
+
+        // Border Radius
+        borderRadius: borderRadius.borderRadius,
+        borderRadiusSM: borderRadius.borderRadiusSM,
+        borderRadiusLG: borderRadius.borderRadiusLG,
+        borderRadiusXS: borderRadius.borderRadiusXS,
+
+        // Line Width
+        lineWidth: size.lineWidth,
+        lineWidthBold: size.lineWidthBold,
+        lineWidthFocus: size.lineWidthFocus,
+        controlOutlineWidth: size.controlOutlineWidth,
+
+        // Padding
+        paddingContentHorizontal: space.paddingContentHorizontal,
+        paddingContentHorizontalSM: space.paddingContentHorizontalSM,
+        paddingContentHorizontalLG: space.paddingContentHorizontalLG,
+        paddingContentVertical: space.paddingContentVertical,
+        paddingContentVerticalSM: space.paddingContentVerticalSM,
+        paddingContentVerticalLG: space.paddingContentVerticalLG,
+        controlPaddingHorizontal: space.controlPaddingHorizontal,
+        controlPaddingHorizontalSM: space.controlPaddingHorizontalSM,
+
+        paddingXXS: space.paddingXXS,
+        paddingXS: space.paddingXS,
+        paddingSM: space.paddingSM,
+        padding: space.padding,
+        paddingMD: space.paddingMD,
+        paddingLG: space.paddingLG,
+        paddingXL: space.paddingXL,
+
+        // Margin
+        marginXS: space.marginXS,
+        marginSM: space.marginSM,
+        margin: space.margin,
+        marginMD: space.marginMD,
+        marginLG: space.marginLG,
+        marginXL: space.marginXL,
+        marginXXL: space.marginXXL,
+        marginXXS: space.marginXXS,
+
+        // Screen Sizes
+        screenXS: size.screenXS,
+        screenSM: size.screenSM,
+        screenMD: size.screenMD,
+        screenLG: size.screenLG,
+        screenXL: size.screenXL,
+        screenXXL: size.screenXXL,
+    },
+    components: {
+        // Button: {
+        //     onlyIconSize: size.sizeLG,
+        //     onlyIconSizeSM: 14,
+        //     onlyIconSizeLG: 18,
+        //     paddingInline: 15,
+        //     paddingInlineSM: 7,
+        //     paddingInlineLG: 15,
+        //     contentFontSize: typography.fontSize,
+        //     contentFontSizeSM: typography.fontSizeSM,
+        //     contentFontSizeLG: typography.fontSizeLG,
+        //     fontWeight: 400,
+        // },
+        // Avatar: {
+        //     containerSize: size.controlHeight,
+        //     containerSizeSM: size.controlHeightSM,
+        //     containerSizeLG: size.controlHeightLG,
+        //     textFontSize: 18,
+        //     textFontSizeSM: typography.fontSize,
+        //     // @ts-ignore FIX ME
+        //     textFontSizeLG: typography.fontSizeHeading3,
+        //     iconFontSize: 18,
+        //     iconFontSizeSM: typography.fontSize,
+        //     // @ts-ignore FIX ME
+        //     iconFontSizeLG: typography.fontSizeHeading3,
+        //     groupOverlapping: -8,
+        // },
+        // Badge: {
+        //     indicatorHeight: 20,
+        //     // @ts-ignore FIX ME
+        //     indicatorHeightSM: typography.fontSize,
+        //     dotSize: 6,
+        //     statusSize: 6,
+        //     // @ts-ignore FIX ME
+        //     textFontSize: typography.fontSizeSM,
+        // },
+        // Breadcrumb: {
+        //     // @ts-ignore FIX ME
+        //     separatorMargin: space.marginXS,
+        //     // @ts-ignore FIX ME
+        //     iconFontSize: typography.fontSize,
+        // },
+        // Calendar: {
+        //     yearControlWidth: 80,
+        //     monthControlWidth: 70,
+        //     miniContentHeight: 256,
+        // },
+        // Anchor: {
+        //     // @ts-ignore FIX ME
+        //     linkPaddingBlock: space.paddingXXS,
+        //     // @ts-ignore FIX ME
+        //     linkPaddingInlineStart: space.padding,
+        // },
+        // Alert: {
+        //     // @ts-ignore FIX ME
+        //     withDescriptionIconSize: typography.fontSizeHeading3,
+        // },
+        Select: {
+            optionPadding: '5px 12px', // Vertical padding is calculated as ${(controlHeight - fontSize * lineHeight) / 2}px. Cause some of the props are string, not number, this option need to set here
+        },
+        Typography: {
+            titleMarginTop: 0,
+            titleMarginBottom: 0,
+        },
+        Tag: {
+            colorBgSolid: '#ff0',
+            defaultBg: colors.neutral.bg.defaultBg,
+        },
+        Badge: {
+            indicatorHeight: 20,
+            indicatorHeightSM: typography.fontSize,
+        },
+        Card: {
+            headerHeight: 56,
+            headerHeightSM: 38,
+        },
+        DatePicker: {
+            paddingBlockSM: 0,
+            paddingInlineSM: 7,
+            paddingBlock: 4,
+            paddingInline: 11,
+            paddingBlockLG: 7,
+            paddingInlineLG: 11,
+        },
+        Dropdown: {
+            paddingBlock: 5,
+        },
+        Input: {
+            paddingBlockSM: 0,
+            paddingBlock: 4,
+            paddingBlockLG: 7,
+        },
+        InputNumber: {
+            paddingBlockSM: 0,
+            paddingBlock: 4,
+            paddingBlockLG: 7,
+        },
+        Switch: {
+            handleSize: 18,
+            innerMinMargin: 9,
+            innerMaxMargin: 24,
+            trackHeight: 22,
+            trackMinWidth: 44,
+
+            handleSizeSM: 12,
+            innerMinMarginSM: 6,
+            innerMaxMarginSM: 18,
+            trackHeightSM: 16,
+            trackMinWidthSM: 28,
+        },
+        Message: {
+            contentPadding: '9px 12px',
+        },
+        Pagination: {
+            // @ts-expect-error: It doesnt exists in interface, but code use this
+            paddingBlockSM: 0,
+            paddingBlock: 4,
+            paddingBlockLG: 7,
+        },
+    },
+    hashed: false,
+};
+
+export default cssVarTheme;
+
+// ========================================
+// RE-EXPORTS FOR CONVENIENCE
+// ========================================
+
+export { colors, size, space, typography, borderRadius };
+
+/**
+ * Get theme for specific density
+ */
+export const getThemeByDensity = (density: 'default' | 'compact'): ThemeConfig => {
+    if (density === 'compact') {
+        return {
+            ...cssVarTheme,
+            token: {
+                ...cssVarTheme.token,
+                // @ts-ignore FIX ME
+                controlHeight: cssVar('--control-height-default'), // 28 in compact
+                // @ts-ignore FIX ME
+                controlHeightSM: cssVar('--control-height-sm'), // 21 in compact
+                // @ts-ignore FIX ME
+                controlHeightLG: cssVar('--control-height-lg'), // 35 in compact
+                // @ts-ignore FIX ME
+                controlHeightXS: cssVar('--control-height-xs'), // 14 in compact
+                controlInteractiveSize: 14,
+            },
+        };
+    }
+    return cssVarTheme;
+};

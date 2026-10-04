@@ -26,6 +26,7 @@ export type RoomChatIntent = {
   originalClientEventSequence: number;
   timestampEpochMs: number;
   contextGeneration: number;
+  submittedDraftRevision: number;
   messageId: string | null;
   errorCode: string | null;
   retryAllowed: boolean;
@@ -35,6 +36,7 @@ export type RoomChatDeliveryState = RoomChatDeliveryContext & {
   contextGeneration: number;
   status: "idle" | "pending" | "retryable_error" | "persisted";
   draft: string;
+  draftRevision: number;
   intent: RoomChatIntent | null;
   messages: RoomChatMessage[];
 };
@@ -83,6 +85,7 @@ export function createRoomChatDeliveryState(
     contextGeneration: 0,
     status: "idle",
     draft: "",
+    draftRevision: 0,
     intent: null,
     messages: [],
   };
@@ -93,7 +96,7 @@ export function updateRoomChatDraft(
   draft: string,
 ): RoomChatDeliveryState {
   if (state.draft === draft) return state;
-  return { ...state, draft };
+  return { ...state, draft, draftRevision: state.draftRevision + 1 };
 }
 
 export function beginRoomChatIntent(
@@ -116,6 +119,7 @@ export function beginRoomChatIntent(
       originalClientEventSequence: options.clientEventSequence,
       timestampEpochMs: options.timestampEpochMs,
       contextGeneration: state.contextGeneration,
+      submittedDraftRevision: state.draftRevision,
       messageId: null,
       errorCode: null,
       retryAllowed: true,
@@ -161,7 +165,7 @@ export function applyRoomChatAck(
   return {
     ...state,
     status: "persisted",
-    draft: "",
+    draft: state.draftRevision === activeIntent.submittedDraftRevision ? "" : state.draft,
     intent,
     messages: dedupeMessages(
       state.messages.map((message) =>
@@ -187,7 +191,7 @@ export function applyRoomChatSseMessage(
     return {
       ...state,
       status: "persisted",
-      draft: "",
+      draft: state.draftRevision === state.intent.submittedDraftRevision ? "" : state.draft,
       messages: nextMessages,
     };
   }
@@ -240,6 +244,7 @@ export function resetRoomChatDeliveryContext(
     contextGeneration: state.contextGeneration + 1,
     status: "idle",
     draft: "",
+    draftRevision: 0,
     intent: null,
     messages: [],
   };

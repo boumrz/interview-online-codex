@@ -1,0 +1,12 @@
+{
+  "": {
+    "swift-dependencies": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXFocusSink.build/master.swiftdeps"
+  },
+  "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Sources/NativeAXFocusSink/main.swift": {
+    "dependencies": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXFocusSink.build/main.d",
+    "object": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXFocusSink.build/main.swift.o",
+    "swiftmodule": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXFocusSink.build/main~partial.swiftmodule",
+    "swift-dependencies": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXFocusSink.build/main.swiftdeps",
+    "diagnostics": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXFocusSink.build/main.dia"
+  }
+}

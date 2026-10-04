@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
-import { Box, Button, Group, ScrollArea, Stack, Text } from "@mantine/core";
-import { IconDownload } from "@tabler/icons-react";
+import { Button, Flex, Typography } from "antd";
+import { DownloadOutlined } from "@ant-design/icons";
 import {
   formatActivityTimelineSummary,
   formatActivityTimelineParticipant,
@@ -13,112 +13,86 @@ type ActivityTimelineProps = {
   canManageRoom: boolean;
 };
 
-export function ActivityTimeline({
-  history,
-  canManageRoom,
-}: ActivityTimelineProps) {
+export function ActivityTimeline({ history, canManageRoom }: ActivityTimelineProps) {
   const groups = useMemo(() => projectActivityTimeline(history.events), [history.events]);
   if (!canManageRoom) return null;
 
-  const formatTime = (timestampEpochMs: number) =>
-    new Date(timestampEpochMs).toLocaleTimeString("ru-RU", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
+  const formatTime = (timestampEpochMs: number) => new Date(timestampEpochMs).toLocaleTimeString("ru-RU", {
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  });
   const formatTimeRange = (start: number, end: number) =>
     start === end ? formatTime(start) : `${formatTime(start)}–${formatTime(end)}`;
 
   return (
-    <Stack gap="xs" style={{ flex: 1, minHeight: 0 }}>
-      <Group justify="space-between" align="center" style={{ flexShrink: 0 }}>
-        <Text size="xs" c="#8b919b" tt="uppercase" fw={700} lts={1}>
+    <Flex vertical gap={8} style={{ flex: 1, minHeight: 0 }}>
+      <Flex justify="space-between" align="center" style={{ flexShrink: 0 }}>
+        <Typography.Text style={{ color: "var(--app-muted)", fontSize: 12, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase" }}>
           Логи кандидата
-        </Text>
-        <Group gap="xs">
-          <Button
-            size="xs"
-            variant="subtle"
-            color="gray"
-            leftSection={<IconDownload size={12} />}
-            onClick={() => history.download("json")}
-            disabled={!history.canExport}
-          >
-            JSON
-          </Button>
-          <Button
-            size="xs"
-            variant="subtle"
-            color="gray"
-            leftSection={<IconDownload size={12} />}
-            onClick={() => history.download("csv")}
-            disabled={!history.canExport}
-          >
-            CSV
-          </Button>
-        </Group>
-      </Group>
+        </Typography.Text>
+        <Flex gap={4}>
+          <Button aria-label="Скачать логи в JSON" htmlType="button" icon={<DownloadOutlined />} onClick={() => history.download("json")} disabled={!history.canExport} size="small" type="text">JSON</Button>
+          <Button aria-label="Скачать логи в CSV" htmlType="button" icon={<DownloadOutlined />} onClick={() => history.download("csv")} disabled={!history.canExport} size="small" type="text">CSV</Button>
+        </Flex>
+      </Flex>
       {history.error && (
-        <Stack gap={4} data-testid="activity-history-error" role="alert">
-          <Text size="xs" c="red">{history.error}</Text>
+        <Flex vertical gap={4} data-testid="activity-history-error" role="alert">
+          <Typography.Text type="danger" style={{ fontSize: 12 }}>{history.error}</Typography.Text>
           {history.terminal == null && (
-            <Button size="xs" variant="subtle" onClick={history.retry} disabled={history.loading != null}>
+            <Button htmlType="button" size="small" type="text" onClick={history.retry} disabled={history.loading != null}>
               Повторить загрузку
             </Button>
           )}
-        </Stack>
+        </Flex>
       )}
       {history.terminal == null && (
-        <Text size="xs" c="#8b919b" data-testid="activity-history-status" role="status">
+        <Typography.Text style={{ color: "var(--app-muted)", fontSize: 12 }} data-testid="activity-history-status" role="status">
           {history.loading === "latest" ? "Загрузка истории…"
             : history.loading === "older" ? "Загрузка более ранних событий…"
             : history.error ? `Загружено событий: ${history.events.length} · История загружена не полностью`
             : history.loading === "catchup" ? `Загружено событий: ${history.events.length} · Обновление истории…`
             : history.initialized ? `Загружено событий: ${history.events.length}${history.hasMore ? " · Есть более ранние события" : " · Вся история загружена"}`
             : "Загрузка истории…"}
-        </Text>
+        </Typography.Text>
       )}
-      <ScrollArea style={{ flex: 1, minHeight: 0 }} type="auto">
+      <div className="activityTimelineScroll" style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
         {groups.length === 0 && history.initialized && !history.error ? (
-          <Text size="xs" c="#5a6070" ta="center" py="md">
+          <Typography.Text style={{ display: "block", padding: 16, color: "var(--app-muted)", fontSize: 12, textAlign: "center" }}>
             Активность не зафиксирована
-          </Text>
+          </Typography.Text>
         ) : (
-          <Stack gap="xs">
+          <Flex vertical gap={8}>
             {groups.map((group) => (
-              <Box
+              <div
                 key={group.sourceEventIds[0] ?? `${group.sessionId}:${group.startTimestampEpochMs}`}
-                px="xs"
-                py={6}
                 data-testid="activity-timeline-entry"
-                style={{ borderRadius: 6, background: "rgba(255,255,255,0.02)" }}
+                style={{ padding: "8px 10px", borderRadius: 8, background: "var(--app-surface-soft)" }}
               >
-                <Group gap="xs" justify="space-between" wrap="nowrap" mb={2}>
-                  <Text size="xs" c="#8b919b" fw={600} truncate>
+                <Flex gap={8} justify="space-between" wrap="nowrap" style={{ marginBottom: 2 }}>
+                  <Typography.Text ellipsis style={{ color: "var(--app-muted)", fontSize: 12, fontWeight: 600 }}>
                     {formatActivityTimelineParticipant(group, groups)}
-                  </Text>
-                  <Text size="xs" c="#5a6070" ff="monospace" style={{ flexShrink: 0 }}>
+                  </Typography.Text>
+                  <Typography.Text style={{ flexShrink: 0, color: "var(--app-tertiary)", fontFamily: "var(--font-code)", fontSize: 12 }}>
                     {formatTimeRange(group.startTimestampEpochMs, group.endTimestampEpochMs)}
-                  </Text>
-                </Group>
-                <Text size="xs" c="#c9d0db" data-testid="activity-timeline-summary">
+                  </Typography.Text>
+                </Flex>
+                <Typography.Text data-testid="activity-timeline-summary" style={{ color: "var(--app-text)", fontSize: 12 }}>
                   {formatActivityTimelineSummary(group)}
-                </Text>
+                </Typography.Text>
                 {group.sourceEventIds.map((sourceEventId) => (
                   <span key={sourceEventId} data-testid="activity-timeline-source-id" style={{ display: "none" }}>
                     {sourceEventId}
                   </span>
                 ))}
-              </Box>
+              </div>
             ))}
-          </Stack>
+          </Flex>
         )}
-      </ScrollArea>
+      </div>
       {history.hasMore && (
-        <Button size="xs" variant="subtle" onClick={history.loadOlder} disabled={history.loading != null}>
+        <Button htmlType="button" size="small" type="text" onClick={history.loadOlder} disabled={history.loading != null}>
           Показать более ранние события
         </Button>
       )}
-    </Stack>
+    </Flex>
   );
 }

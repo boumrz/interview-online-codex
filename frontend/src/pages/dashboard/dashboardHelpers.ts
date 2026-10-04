@@ -46,14 +46,12 @@ export function isDashboardSection(
 
 export function statusColor(status: RoomSaveStatus | undefined) {
   if (status === "saving") return "yellow";
-  if (status === "saved") return "teal";
   if (status === "error") return "red";
   return "gray";
 }
 
 export function statusLabel(status: RoomSaveStatus | undefined) {
   if (status === "saving") return "Сохранение...";
-  if (status === "saved") return "Сохранено";
   if (status === "error") return "Ошибка";
   return "Без изменений";
 }

@@ -1,4 +1,5 @@
 import { chromium } from "playwright";
+import assert from "node:assert/strict";
 
 const webBaseUrl = process.env.E2E_BASE_URL || "http://localhost:5173";
 
@@ -9,6 +10,7 @@ try {
   const ownerPage = await ownerContext.newPage();
   await ownerPage.goto(webBaseUrl, { waitUntil: "domcontentloaded" });
   await ownerPage.getByRole("button", { name: "Создать комнату" }).click();
+  await ownerPage.getByRole("dialog", { name: "Создать комнату" }).getByRole("button", { name: "Создать комнату", exact: true }).click();
   await ownerPage.waitForURL(/\/room\//, { timeout: 15000 });
   const roomUrl = ownerPage.url();
 
@@ -16,6 +18,10 @@ try {
   const candidatePage = await candidateContext.newPage();
   await candidatePage.goto(roomUrl, { waitUntil: "domcontentloaded" });
   await candidatePage.getByText("Представьтесь перед входом в комнату", { exact: true }).waitFor({ timeout: 15000 });
+  const entryDialog = candidatePage.getByRole("dialog", { name: "Представьтесь перед входом в комнату", exact: true });
+  const entryBounds = await entryDialog.boundingBox();
+  assert.ok(entryBounds.width <= 480, `entry width ${entryBounds.width}`);
+  assert.ok(entryBounds.height <= 340, `entry height ${entryBounds.height}`);
   await candidatePage.getByLabel("Ваше имя").fill("Кандидат");
   await candidatePage.getByRole("button", { name: "Войти в комнату" }).click();
   await candidatePage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });

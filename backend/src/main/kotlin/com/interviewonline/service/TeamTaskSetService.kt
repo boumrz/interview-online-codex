@@ -21,9 +21,10 @@ import com.interviewonline.repository.TeamTaskSetRepository
 import com.interviewonline.repository.TeamTaskTemplateRepository
 import com.interviewonline.service.LanguageNormalizer.normalize as normalizeLanguage
 import org.springframework.http.HttpStatus
-import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionSynchronizationManager
+import jakarta.persistence.EntityManager
 import java.text.Normalizer
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -38,14 +39,13 @@ class TeamTaskSetService(
     private val taskSetRepository: TeamTaskSetRepository,
     private val personalPresetRepository: TaskPresetRepository,
     private val featureGate: TeamWorkspaceFeatureGate,
-    private val jdbcTemplate: JdbcTemplate,
+    private val entityManager: EntityManager,
 ) {
     @Transactional(readOnly = true)
-    fun list(actor: User, teamId: String, rawStatus: String?): TeamTaskSetLibraryDto {
+    fun list(actor: User, teamId: String): TeamTaskSetLibraryDto {
         val access = requireActiveMember(actor, teamId)
-        val status = parseStatus(rawStatus)
         return TeamTaskSetLibraryDto(
-            items = taskSetRepository.findAllByTeamIdAndStatusWithItems(access.team.id, status).map(::taskSetDto),
+            items = taskSetRepository.findAllByTeamIdWithItems(access.team.id).map(::taskSetDto),
             counts = counts(access.team.id),
         )
     }
@@ -108,43 +108,10 @@ class TeamTaskSetService(
     }
 
     @Transactional
-    fun archive(actor: User, teamId: String, setId: String): TeamTaskSetResponse {
-        val access = requireActiveMember(actor, teamId)
-        val taskSet = requireTaskSet(access.team.id, setId)
-        requireTaskSetManager(access, taskSet)
-        if (taskSet.status != ARCHIVED) {
-            taskSet.status = ARCHIVED
-            bump(taskSet)
-            taskSetRepository.saveAndFlush(taskSet)
-        }
-        return TeamTaskSetResponse(taskSetDto(taskSet))
-    }
-
-    @Transactional
-    fun restore(actor: User, teamId: String, setId: String): TeamTaskSetResponse {
-        val access = requireActiveMember(actor, teamId)
-        val taskSet = requireTaskSet(access.team.id, setId)
-        requireTaskSetManager(access, taskSet)
-        if (taskSet.status != ACTIVE) {
-            val candidate = uniqueActiveName(access.team.id, taskSet.name)
-            taskSet.name = candidate
-            taskSet.normalizedName = normalized(candidate)
-            taskSet.status = ACTIVE
-            bump(taskSet)
-            taskSetRepository.saveAndFlush(taskSet)
-        }
-        return TeamTaskSetResponse(taskSetDto(taskSet))
-    }
-
-    @Transactional
     fun delete(actor: User, teamId: String, setId: String) {
         val access = requireActiveMember(actor, teamId)
         val taskSet = requireTaskSet(access.team.id, setId)
         requireTaskSetManager(access, taskSet)
-        val used = jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM rooms WHERE team_task_set_id = ?", Long::class.java, taskSet.id,
-        )!! > 0
-        if (used) throw secure(HttpStatus.CONFLICT, "TEAM_TASK_SET_IN_USE", "Набор используется в интервью")
         taskSetRepository.delete(taskSet)
         taskSetRepository.flush()
     }
@@ -224,8 +191,12 @@ class TeamTaskSetService(
     private fun requireActiveMember(actor: User, teamId: String): TeamAccess {
         featureGate.requireEnabled()
         val actorId = requireNotNull(actor.id)
-        val team = teamRepository.findById(teamId).orElse(null)?.takeIf { it.state == ACTIVE }
-            ?: throw teamNotFound()
+        val team = if (TransactionSynchronizationManager.isCurrentTransactionReadOnly()) {
+            teamRepository.findById(teamId).orElse(null)
+        } else {
+            teamRepository.lockById(teamId)?.also(entityManager::refresh)
+        }
+        if (team == null || team.state != ACTIVE) throw teamNotFound()
         val membership = membershipRepository.findByTeamIdAndUserId(team.id, actorId)
             ?.takeIf { it.state == ACTIVE }
             ?: throw teamNotFound()
@@ -246,8 +217,8 @@ class TeamTaskSetService(
     }
 
     private fun counts(teamId: String): TeamTaskSetCountsDto = TeamTaskSetCountsDto(
-        activeSets = taskSetRepository.countByTeamIdAndStatus(teamId, ACTIVE),
-        archivedSets = taskSetRepository.countByTeamIdAndStatus(teamId, ARCHIVED),
+        activeSets = taskSetRepository.countByTeamId(teamId),
+        archivedSets = 0,
     )
 
     private fun taskSetDto(taskSet: TeamTaskSet): TeamTaskSetDto = TeamTaskSetDto(
@@ -288,12 +259,6 @@ class TeamTaskSetService(
     private fun normalized(value: String): String = Normalizer.normalize(value, Normalizer.Form.NFKC)
         .trim { it.isWhitespace() }
         .lowercase(Locale.ROOT)
-
-    private fun parseStatus(rawStatus: String?): String = when (rawStatus?.trim()?.lowercase(Locale.ROOT)) {
-        null, "", "active" -> ACTIVE
-        "archived" -> ARCHIVED
-        else -> throw secure(HttpStatus.BAD_REQUEST, "INVALID_TEAM_TASK_SET_FILTER", "Фильтр наборов должен быть active или archived")
-    }
 
     private fun copyName(teamId: String, sourceName: String): String = uniqueActiveName(teamId, "$sourceName (копия)")
 
@@ -342,7 +307,6 @@ class TeamTaskSetService(
 
     private companion object {
         const val ACTIVE = "ACTIVE"
-        const val ARCHIVED = "ARCHIVED"
         const val OWNER = "OWNER"
         const val ADMIN = "ADMIN"
         const val MAX_NAME_CODE_POINTS = 180

@@ -115,7 +115,7 @@ class HiringManagerPreviewIntegrationTest(
         val request = ResolveHiringManagerPreviewRequest(target.id)
         doThrow(DataAccessResourceFailureException("connection details must not escape"))
             .`when`(hiringManagerPreviewService)
-            .resolve(request)
+            .resolve(org.mockito.ArgumentMatchers.eq(request) ?: request, org.mockito.ArgumentMatchers.any(com.interviewonline.model.User::class.java) ?: com.interviewonline.model.User())
 
         val result = postPreview(creator.token, mapOf("invitationId" to target.id))
 
@@ -135,7 +135,7 @@ class HiringManagerPreviewIntegrationTest(
         val request = ResolveHiringManagerPreviewRequest(target.id)
         doThrow(IllegalStateException("internal target detail must not escape"))
             .`when`(hiringManagerPreviewService)
-            .resolve(request)
+            .resolve(org.mockito.ArgumentMatchers.eq(request) ?: request, org.mockito.ArgumentMatchers.any(com.interviewonline.model.User::class.java) ?: com.interviewonline.model.User())
 
         val result = postPreview(creator.token, mapOf("invitationId" to target.id))
 

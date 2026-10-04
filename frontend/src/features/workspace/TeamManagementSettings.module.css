@@ -1,5 +1,5 @@
 .settings {
-  max-width: 760px;
+  width: 100%;
 }
 
 .intro {
@@ -7,27 +7,19 @@
 }
 
 .kicker,
-.sectionNumber,
 .identityLabel {
-  color: #8ab4ff;
+  color: var(--app-primary-text);
   font-size: 11px;
   font-weight: 900;
   letter-spacing: .13em;
   text-transform: uppercase;
 }
 
-.identityCard,
-.commandCard {
-  border-color: transparent;
-  color: #f8fafc;
-  background:
-    linear-gradient(115deg, rgba(13, 26, 44, .9), rgba(17, 21, 28, .95)),
-    #121822;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, .18);
-}
-
-.commandCard {
-  box-shadow: 0 12px 30px rgba(0, 0, 0, .18);
+.identityCard {
+  border-color: var(--app-border);
+  color: var(--app-text);
+  background: var(--app-surface);
+  box-shadow: 0 2px 8px rgba(17, 20, 24, .06);
 }
 
 .identityHint {
@@ -43,17 +35,17 @@
 
 .field :global(input),
 .field :global(select) {
-  min-height: 44px;
-  color: #f8fafc;
-  border-color: #3a4658;
-  background: #0d131c;
+  min-height: 32px;
+  color: var(--app-text);
+  border-color: var(--app-control-border);
+  background: var(--app-surface);
 }
 
 .field :global(input:focus-visible),
 .field :global(select:focus-visible),
 .action:focus-visible,
 .terminalStatus:focus-visible {
-  outline: 3px solid #8ab4ff;
+  outline: 2px solid var(--app-focus);
   outline-offset: 3px;
 }
 
@@ -68,17 +60,17 @@
   padding: 10px 14px;
   border: 0;
   border-radius: 10px;
-  color: #c7fff3;
-  background: rgba(18, 91, 83, .22);
+  color: var(--app-success);
+  background: var(--app-success-bg);
   font-weight: 700;
 }
 
 .alert {
-  border-color: #7a5423;
+  border-color: var(--app-warning-accent);
 }
 
 .auditList {
-  border-top: 1px solid #2b3545;
+  border-top: 1px solid var(--app-border);
 }
 
 .auditItem {
@@ -87,18 +79,18 @@
   justify-content: space-between;
   gap: 16px;
   padding: 11px 2px;
-  border-bottom: 1px solid #252f3e;
+  border-bottom: 1px solid var(--app-border);
 }
 
 .suspendedPanel {
   margin-top: 4px;
   padding-top: 14px;
-  border-top: 1px solid #2b3545;
+  border-top: 1px solid var(--app-border);
 }
 
 .suspendedItem {
   padding: 11px 0;
-  border-bottom: 1px solid #252f3e;
+  border-bottom: 1px solid var(--app-border);
 }
 
 @media (max-width: 520px) {
@@ -107,3 +99,6 @@
     gap: 4px;
   }
 }
+
+.rowAction { min-height: 36px !important; }
+.rowAction:focus-visible { outline: 2px solid var(--app-focus); outline-offset: 3px; }

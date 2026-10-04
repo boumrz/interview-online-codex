@@ -36,12 +36,18 @@ export async function downloadHrWorkbook({
   token,
   from,
   to,
+  teamId,
+  trackId,
+  vacancyId,
   signal,
   isSessionCurrent,
 }: {
   token: string;
   from?: string;
   to?: string;
+  teamId?: string;
+  trackId?: string;
+  vacancyId?: string;
   signal?: AbortSignal;
   isSessionCurrent?: () => boolean;
 }): Promise<number> {
@@ -51,6 +57,9 @@ export async function downloadHrWorkbook({
     }
   };
   const params = new URLSearchParams();
+  if (teamId) params.set("teamId", teamId);
+  if (trackId) params.set("trackId", trackId);
+  if (vacancyId) params.set("vacancyId", vacancyId);
   if (from && to) {
     params.set("from", from);
     params.set("to", to);

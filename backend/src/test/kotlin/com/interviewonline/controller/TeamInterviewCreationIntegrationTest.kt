@@ -5,11 +5,15 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.interviewonline.service.CollaborationService
 import com.interviewonline.service.AuthService
 import com.interviewonline.service.TeamManagementService
+import com.interviewonline.service.KeystrokePersistenceService
+import com.interviewonline.service.ApiException
+import com.interviewonline.ws.CandidateKeyPayload
 import com.interviewonline.support.Postgres16TestSupport
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
@@ -50,13 +54,770 @@ import java.util.UUID
 @Import(TeamSuspensionFixtureController::class)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class TeamInterviewCreationIntegrationTest(
+    @Autowired private val dataSource: javax.sql.DataSource,
     @Autowired private val mockMvc: MockMvc,
     @Autowired private val objectMapper: ObjectMapper,
     @Autowired private val jdbcTemplate: JdbcTemplate,
     @Autowired private val collaborationService: CollaborationService,
+    @Autowired private val keystrokePersistenceService: KeystrokePersistenceService,
 ) {
     @Test
-    fun `hiring team room owner appears in manager panel without personal tracking`() {
+    fun teamCreationMetadataIsAtomicNormalizedPrivateAndIdempotent() {
+        val owner = account("cm-owner")
+        val team = team(owner, "Creation metadata")
+        val key = UUID.randomUUID().toString()
+        fun create(metadata: Map<String, Any?>, commandKey: String = key) = mockMvc.post("/api/teams/${team.id}/interviews") {
+            authorize(owner); header("Idempotency-Key", commandKey); contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(mapOf("title" to "Metadata interview") + metadata)
+        }.andReturn()
+        val first = create(mapOf("candidateName" to "  Анна  ", "position" to " Kotlin developer ", "scheduledAt" to "2026-09-05T09:30:00+03:00"))
+        assertStatus(first, 201, "metadata and interview created in one command")
+        val room = body(first).path("interview")
+        val roomId = room.path("id").asText()
+        val invite = room.path("inviteCode").asText()
+        assertBodyDoesNotContain(first, "candidateName", "scheduledAt", "Kotlin developer", "Анна")
+        val metadata = mockMvc.get("/api/rooms/$invite/interview-metadata") { authorize(owner) }.andReturn()
+        assertEquals("Анна", body(metadata).path("candidateName").asText())
+        assertEquals("Kotlin developer", body(metadata).path("position").asText())
+        assertEquals("2026-09-05T06:30:00Z", body(metadata).path("scheduledAt").asText())
+        assertEquals(0L, body(metadata).path("revision").asLong())
+        val replay = create(mapOf("candidateName" to "Анна", "position" to "Kotlin developer", "scheduledAt" to "2026-09-05T06:30:00Z"))
+        assertStatus(replay, 201, "normalized equivalent command replays")
+        assertEquals(roomId, body(replay).path("interview").path("id").asText())
+        assertStatus(create(mapOf("candidateName" to "Мария", "position" to "Kotlin developer", "scheduledAt" to "2026-09-05T06:30:00Z")), 409, "changed private metadata cannot reuse key")
+        assertStatus(create(mapOf("candidateName" to "Анна", "position" to "Java developer", "scheduledAt" to "2026-09-05T06:30:00Z")), 409, "position participates in command identity")
+        assertStatus(create(mapOf("candidateName" to "Анна", "position" to "Kotlin developer", "scheduledAt" to "2026-09-06T06:30:00Z")), 409, "schedule participates in command identity")
+        assertEquals(1L, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM rooms WHERE team_id = ?", Long::class.java, team.id))
+        assertBodyDoesNotContain(mockMvc.get("/api/rooms/$invite") { authorize(owner) }.andReturn(), "candidateName", "scheduledAt", "Анна", "Kotlin developer")
+
+        val legacyKey = UUID.randomUUID().toString()
+        val legacy = create(emptyMap(), legacyKey)
+        assertStatus(legacy, 201, "legacy metadata-free command")
+        jdbcTemplate.update(
+            "UPDATE command_receipts SET request_hash = ? WHERE scope_id = ? AND idempotency_key = ?",
+            "v1:f2ce0bb05072b5aab94ca8a973275a8510d264f20a1916ce6d3a4e2d4d71d576", team.id, legacyKey,
+        )
+        val emptyReplay = create(mapOf("candidateName" to "  ", "position" to null, "scheduledAt" to ""), legacyKey)
+        assertStatus(emptyReplay, 201, "normalized empty metadata preserves legacy receipt")
+        assertEquals(body(legacy).path("interview").path("id"), body(emptyReplay).path("interview").path("id"))
+        val before = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM rooms WHERE team_id = ?", Long::class.java, team.id)
+        listOf(
+            mapOf("candidateName" to "😀".repeat(201)),
+            mapOf("position" to "😀".repeat(201)),
+            mapOf("scheduledAt" to "2026-09-05T09:30:00"),
+            mapOf("candidateName" to 42),
+            mapOf("position" to false),
+            mapOf("scheduledAt" to 123),
+        ).forEach { invalid -> assertStatus(create(invalid, UUID.randomUUID().toString()), 400, "invalid creation metadata rejected") }
+        assertEquals(before, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM rooms WHERE team_id = ?", Long::class.java, team.id), "invalid metadata leaves no partial room")
+        val boundary = create(mapOf("candidateName" to "😀".repeat(200), "position" to "😀".repeat(200)), UUID.randomUUID().toString())
+        assertStatus(boundary, 201, "200 Unicode code points accepted")
+    }
+
+    @Test
+    fun teamInterviewDetailsSaveTitleAndMetadataAtomicallyWithOneRevision() {
+        val owner = account("det-owner")
+        val colleague = account("det-colleague")
+        val team = team(owner, "Details editing")
+        seedMembership(team.id, colleague.id, "MEMBER")
+        val room = body(createTeamInterview(owner, team.id, UUID.randomUUID().toString(), "Original title", null, null, null)).path("interview")
+        val roomId = room.path("id").asText()
+        val path = "/api/teams/${team.id}/interviews/$roomId/details"
+        val initial = mockMvc.get(path) { authorize(colleague) }.andReturn()
+        assertStatus(initial, 200, "every active colleague reads one current editor snapshot")
+        assertEquals("private, no-store", initial.response.getHeader("Cache-Control"))
+        assertEquals("Original title", body(initial).path("title").asText())
+        assertTrue(body(initial).path("candidateName").isNull)
+        assertEquals(0L, body(initial).path("revision").asLong())
+        val saved = mockMvc.patch(path) {
+            authorize(colleague); contentType = MediaType.APPLICATION_JSON
+            content = """{"title":"  Revised title  ","candidateName":"  Анна  ","position":" Kotlin developer ","scheduledAt":"2026-09-05T09:30:00+03:00","revision":0}"""
+        }.andReturn()
+        assertStatus(saved, 200, "one command saves title and private metadata")
+        assertEquals("private, no-store", saved.response.getHeader("Cache-Control"))
+        assertEquals("Revised title", body(saved).path("title").asText())
+        assertEquals("Анна", body(saved).path("candidateName").asText())
+        assertEquals("Kotlin developer", body(saved).path("position").asText())
+        assertEquals("2026-09-05T06:30:00Z", body(saved).path("scheduledAt").asText())
+        assertEquals(1L, body(saved).path("revision").asLong())
+        val stale = mockMvc.patch(path) {
+            authorize(owner); contentType = MediaType.APPLICATION_JSON
+            content = """{"title":"Stale title","candidateName":"Lost candidate","position":null,"scheduledAt":null,"revision":0}"""
+        }.andReturn()
+        assertStatus(stale, 409, "stale complete editor cannot partially overwrite either field")
+        assertEquals(body(saved), body(mockMvc.get(path) { authorize(owner) }.andReturn()), "saved complete snapshot remains durable")
+        val cleared = mockMvc.patch(path) {
+            authorize(owner); contentType = MediaType.APPLICATION_JSON
+            content = """{"title":"Revised title","candidateName":"  ","position":null,"scheduledAt":"","revision":1}"""
+        }.andReturn()
+        assertStatus(cleared, 200, "explicit blank values clear metadata")
+        assertTrue(body(cleared).path("candidateName").isNull)
+        assertTrue(body(cleared).path("position").isNull)
+        assertTrue(body(cleared).path("scheduledAt").isNull)
+        assertEquals(2L, body(cleared).path("revision").asLong())
+    }
+
+    @Test
+    fun teamInterviewDetailsValidateCompleteTypedBodiesWithoutPartialSave() {
+        val owner = account("dv-owner")
+        val team = team(owner, "Details validation")
+        val roomId = body(createTeamInterview(owner, team.id, UUID.randomUUID().toString(), "Retained title", null, null, null)).path("interview").path("id").asText()
+        val path = "/api/teams/${team.id}/interviews/$roomId/details"
+        val valid = mapOf("title" to "Changed title", "candidateName" to "Анна", "position" to null, "scheduledAt" to null, "revision" to 0)
+        val original = body(mockMvc.get(path) { authorize(owner) }.andReturn())
+        listOf(
+            valid - "position", valid + ("unknown" to "value"), valid + ("title" to 42), valid + ("title" to null),
+            valid + ("title" to "  "), valid + ("candidateName" to 42), valid + ("position" to false),
+            valid + ("candidateName" to "😀".repeat(201)), valid + ("position" to "😀".repeat(201)),
+            valid + ("scheduledAt" to "2026-09-05T09:30:00"), valid + ("scheduledAt" to true),
+            valid + ("revision" to -1), valid + ("revision" to 0.5), valid + ("revision" to "0"), valid + ("revision" to null),
+        ).forEach { invalid ->
+            assertStatus(mockMvc.patch(path) { authorize(owner); contentType = MediaType.APPLICATION_JSON; content = objectMapper.writeValueAsString(invalid) }.andReturn(), 400, "invalid complete editor command")
+            assertEquals(original, body(mockMvc.get(path) { authorize(owner) }.andReturn()), "invalid editor command is atomic")
+        }
+        assertStatus(mockMvc.patch(path) {
+            authorize(owner); contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(valid + ("candidateName" to "😀".repeat(200)) + ("position" to "😀".repeat(200)))
+        }.andReturn(), 200, "details accept Unicode boundary")
+    }
+
+    @Test
+    fun teamInterviewDetailsRejectUnauthorizedArchivedAndNoncanonicalRooms() {
+        val owner = account("da-owner")
+        val member = account("da-member")
+        val external = account("da-external")
+        val team = team(owner, "Details access")
+        seedMembership(team.id, member.id, "MEMBER")
+        jdbcTemplate.update("UPDATE users SET is_hr = true WHERE id = ?", external.id)
+        val room = body(createTeamInterview(owner, team.id, UUID.randomUUID().toString(), "Private details", null, null, null)).path("interview")
+        val roomId = room.path("id").asText()
+        val path = "/api/teams/${team.id}/interviews/$roomId/details"
+        assertStatus(mockMvc.put("/api/rooms/${room.path("inviteCode").asText()}/hr-managers/${external.id}") { authorize(owner) }.andReturn(), 200, "external hiring access fixture")
+        val command = """{"title":"Unauthorized","candidateName":"Secret","position":null,"scheduledAt":null,"revision":0}"""
+        fun denied(actor: HrTestAccount, expected: Int) {
+            assertStatus(mockMvc.get(path) { authorize(actor) }.andReturn(), expected, "details GET enforces TEAM authority")
+            assertStatus(mockMvc.patch(path) { authorize(actor); contentType = MediaType.APPLICATION_JSON; content = command }.andReturn(), expected, "details PATCH enforces TEAM authority")
+        }
+        denied(external, 404)
+        jdbcTemplate.update("UPDATE team_memberships SET state = 'SUSPENDED' WHERE team_id = ? AND user_id = ?", team.id, member.id)
+        denied(member, 404)
+        jdbcTemplate.update("UPDATE rooms SET archived_at = CURRENT_TIMESTAMP WHERE id = ?", roomId)
+        denied(owner, 410)
+        jdbcTemplate.update("UPDATE rooms SET archived_at = NULL, team_interview_created = false WHERE id = ?", roomId)
+        denied(owner, 404)
+        assertEquals("Private details", jdbcTemplate.queryForObject("SELECT title FROM rooms WHERE id = ?", String::class.java, roomId))
+    }
+
+    @Test
+    fun teamInterviewDetailsRefreshRoomAfterWaitingForLock() {
+        val owner = account("dr-owner")
+        val team = team(owner, "Details revision race")
+        val roomId = body(createTeamInterview(owner, team.id, UUID.randomUUID().toString(), "Original title", null, null, null)).path("interview").path("id").asText()
+        val executor = java.util.concurrent.Executors.newSingleThreadExecutor()
+        try {
+            dataSource.connection.use { connection ->
+                connection.autoCommit = false
+                connection.prepareStatement("SELECT id FROM rooms WHERE id = ? FOR UPDATE").use { statement -> statement.setString(1, roomId); statement.executeQuery().close() }
+                val request = executor.submit<MvcResult> {
+                    mockMvc.patch("/api/teams/${team.id}/interviews/$roomId/details") {
+                        authorize(owner); contentType = MediaType.APPLICATION_JSON
+                        content = """{"title":"Stale title","candidateName":"Stale candidate","position":null,"scheduledAt":null,"revision":0}"""
+                    }.andReturn()
+                }
+                waitForHiringLock("rooms")
+                connection.prepareStatement("UPDATE rooms SET title = 'Committed title', candidate_name = 'Committed candidate', interview_metadata_revision = 1 WHERE id = ?").use { statement -> statement.setString(1, roomId); statement.executeUpdate() }
+                connection.commit()
+                assertStatus(request.get(5, java.util.concurrent.TimeUnit.SECONDS), 409, "editor observes the committed revision after lock wait")
+            }
+            val saved = mockMvc.get("/api/teams/${team.id}/interviews/$roomId/details") { authorize(owner) }.andReturn()
+            assertEquals("Committed title", body(saved).path("title").asText())
+            assertEquals("Committed candidate", body(saved).path("candidateName").asText())
+            assertEquals(1L, body(saved).path("revision").asLong())
+        } finally { executor.shutdownNow() }
+    }
+
+    @Test
+    fun teamInterviewDetailsRecheckMembershipAfterTeamLockWait() {
+        val owner = account("dma-owner")
+        val member = account("dma-member")
+        val team = team(owner, "Details authority race")
+        seedMembership(team.id, member.id, "MEMBER")
+        val roomId = body(createTeamInterview(owner, team.id, UUID.randomUUID().toString(), "Original title", null, null, null)).path("interview").path("id").asText()
+        val executor = java.util.concurrent.Executors.newSingleThreadExecutor()
+        try {
+            dataSource.connection.use { connection ->
+                connection.autoCommit = false
+                connection.prepareStatement("SELECT id FROM teams WHERE id = ? FOR UPDATE").use { statement -> statement.setString(1, team.id); statement.executeQuery().close() }
+                val request = executor.submit<MvcResult> {
+                    mockMvc.patch("/api/teams/${team.id}/interviews/$roomId/details") {
+                        authorize(member); contentType = MediaType.APPLICATION_JSON
+                        content = """{"title":"Lost authority","candidateName":"Secret","position":null,"scheduledAt":null,"revision":0}"""
+                    }.andReturn()
+                }
+                waitForHiringLock("teams")
+                connection.prepareStatement("UPDATE team_memberships SET state = 'SUSPENDED' WHERE team_id = ? AND user_id = ?").use { statement -> statement.setString(1, team.id); statement.setString(2, member.id); statement.executeUpdate() }
+                connection.commit()
+                assertStatus(request.get(5, java.util.concurrent.TimeUnit.SECONDS), 404, "editor checks membership after team wait")
+            }
+            assertEquals("Original title", jdbcTemplate.queryForObject("SELECT title FROM rooms WHERE id = ?", String::class.java, roomId))
+            assertEquals(0L, jdbcTemplate.queryForObject("SELECT interview_metadata_revision FROM rooms WHERE id = ?", Long::class.java, roomId))
+        } finally { executor.shutdownNow() }
+    }
+
+    @Test
+    fun teamInterviewDetailsRecheckMembershipAfterRoomLockWait() {
+        val owner = account("dmar-owner")
+        val member = account("dmar-member")
+        val team = team(owner, "Details room authority race")
+        seedMembership(team.id, member.id, "MEMBER")
+        val roomId = body(createTeamInterview(owner, team.id, UUID.randomUUID().toString(), "Original title", null, null, null)).path("interview").path("id").asText()
+        val executor = java.util.concurrent.Executors.newSingleThreadExecutor()
+        try {
+            dataSource.connection.use { connection ->
+                connection.autoCommit = false
+                connection.prepareStatement("SELECT id FROM rooms WHERE id = ? FOR UPDATE").use { statement -> statement.setString(1, roomId); statement.executeQuery().close() }
+                val request = executor.submit<MvcResult> {
+                    mockMvc.patch("/api/teams/${team.id}/interviews/$roomId/details") {
+                        authorize(member); contentType = MediaType.APPLICATION_JSON
+                        content = """{"title":"Lost authority","candidateName":"Secret","position":null,"scheduledAt":null,"revision":0}"""
+                    }.andReturn()
+                }
+                waitForHiringLock("rooms")
+                connection.prepareStatement("UPDATE team_memberships SET state = 'SUSPENDED' WHERE team_id = ? AND user_id = ?").use { statement -> statement.setString(1, team.id); statement.setString(2, member.id); statement.executeUpdate() }
+                connection.commit()
+                assertStatus(request.get(5, java.util.concurrent.TimeUnit.SECONDS), 404, "editor checks fresh membership after room wait")
+            }
+            assertEquals("Original title", jdbcTemplate.queryForObject("SELECT title FROM rooms WHERE id = ?", String::class.java, roomId))
+            assertEquals(0L, jdbcTemplate.queryForObject("SELECT interview_metadata_revision FROM rooms WHERE id = ?", Long::class.java, roomId))
+        } finally { executor.shutdownNow() }
+    }
+
+    @Test
+    fun concurrentTeamInterviewDetailsSavesAcceptExactlyOneCompleteSnapshot() {
+        val owner = account("dc-owner")
+        val team = team(owner, "Concurrent details")
+        val roomId = body(createTeamInterview(owner, team.id, UUID.randomUUID().toString(), "Original title", null, null, null)).path("interview").path("id").asText()
+        val path = "/api/teams/${team.id}/interviews/$roomId/details"
+        val ready = java.util.concurrent.CountDownLatch(2)
+        val start = java.util.concurrent.CountDownLatch(1)
+        val executor = java.util.concurrent.Executors.newFixedThreadPool(2)
+        try {
+            val responses = (1..2).map { index ->
+                executor.submit<MvcResult> {
+                    ready.countDown(); start.await(5, java.util.concurrent.TimeUnit.SECONDS)
+                    mockMvc.patch(path) {
+                        authorize(owner); contentType = MediaType.APPLICATION_JSON
+                        content = """{"title":"Title $index","candidateName":"Candidate $index","position":"Position $index","scheduledAt":null,"revision":0}"""
+                    }.andReturn()
+                }
+            }
+            assertTrue(ready.await(5, java.util.concurrent.TimeUnit.SECONDS))
+            start.countDown()
+            val results = responses.map { it.get(10, java.util.concurrent.TimeUnit.SECONDS) }
+            assertEquals(1, results.count { it.response.status == 200 })
+            assertEquals(1, results.count { it.response.status == 409 })
+            val saved = body(mockMvc.get(path) { authorize(owner) }.andReturn())
+            assertEquals(body(results.single { it.response.status == 200 }), saved)
+            assertEquals(1L, saved.path("revision").asLong())
+        } finally { executor.shutdownNow() }
+    }
+
+    @Test
+    fun legacyRenamePreservesCommittedMetadataAndRevisionAfterRoomLockWait() {
+        val owner = account("drr-owner")
+        val team = team(owner, "Legacy rename race")
+        val roomId = body(createTeamInterview(owner, team.id, UUID.randomUUID().toString(), "Original title", null, null, null)).path("interview").path("id").asText()
+        val executor = java.util.concurrent.Executors.newSingleThreadExecutor()
+        try {
+            dataSource.connection.use { connection ->
+                connection.autoCommit = false
+                connection.prepareStatement("SELECT id FROM rooms WHERE id = ? FOR UPDATE").use { statement -> statement.setString(1, roomId); statement.executeQuery().close() }
+                val request = executor.submit<MvcResult> {
+                    mockMvc.patch("/api/teams/${team.id}/interviews/$roomId") { authorize(owner); contentType = MediaType.APPLICATION_JSON; content = """{"title":"Legacy renamed"}""" }.andReturn()
+                }
+                waitForHiringLock("rooms")
+                connection.prepareStatement("UPDATE rooms SET candidate_name = 'Committed candidate', interview_metadata_revision = 1 WHERE id = ?").use { statement -> statement.setString(1, roomId); statement.executeUpdate() }
+                connection.commit()
+                assertStatus(request.get(5, java.util.concurrent.TimeUnit.SECONDS), 200, "legacy rename waits safely")
+            }
+            assertEquals("Committed candidate", jdbcTemplate.queryForObject("SELECT candidate_name FROM rooms WHERE id = ?", String::class.java, roomId))
+            assertEquals(2L, jdbcTemplate.queryForObject("SELECT interview_metadata_revision FROM rooms WHERE id = ?", Long::class.java, roomId))
+        } finally { executor.shutdownNow() }
+    }
+
+    @Test
+    fun hiringManagerTeamAssignmentsCatalogAndCandidateSearchRespectScope() {
+        val owner = account("hr-team-owner")
+        val hr = account("hr-team-target")
+        val ordinary = account("hr-ordinary")
+        val outsider = account("hr-outsider")
+        val admin = account("hr-team-admin")
+        val team = team(owner, "Hiring managers")
+        listOf(hr, ordinary).forEach { seedMembership(team.id, it.id, "MEMBER") }
+        seedMembership(team.id, admin.id, "ADMIN")
+        listOf(hr, outsider).forEach { jdbcTemplate.update("UPDATE users SET is_hr = true WHERE id = ?", it.id) }
+        val created = body(createTeamInterview(owner, team.id, UUID.randomUUID().toString(), "Scope room", null, null, null)).path("interview")
+        val invite = created.path("inviteCode").asText()
+        fun inviteBy(actor: HrTestAccount, target: HrTestAccount) = mockMvc.put("/api/rooms/$invite/hr-managers/${target.id}") { authorize(actor) }.andReturn()
+        assertStatus(inviteBy(owner, hr), 404, "team member needs no separate hiring assignment")
+        assertStatus(inviteBy(owner, ordinary), 404, "ordinary active member needs no hiring assignment")
+        assertStatus(inviteBy(owner, outsider), 200, "external HR can be explicitly invited")
+        assertStatus(inviteBy(admin, outsider), 200, "all active team members manage external assignments")
+        assertEquals(1L, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM room_participants WHERE room_id = ? AND user_id = ?", Long::class.java, created.path("id").asText(), outsider.id))
+        assertStatus(mockMvc.put("/api/rooms/$invite/hr-managers/${hr.id}") { header("X-Room-Owner-Token", "owner_legacy") }.andReturn(), 403, "legacy credentials confer no team authority")
+        val options = mockMvc.get("/api/me/hiring-manager-options") { authorize(owner); param("teamId", team.id) }.andReturn()
+        assertStatus(options, 200, "team-scoped HR selector")
+        assertEquals("no-store", options.response.getHeader("Cache-Control"))
+        assertEquals(0, body(options).size(), "external managers are invited by UUID without a team member picker")
+        assertBodyDoesNotContain(options, outsider.id, ordinary.id)
+        assertStatus(mockMvc.get("/api/me/hiring-manager-options") { authorize(outsider); param("teamId", team.id) }.andReturn(), 404, "foreign catalog private")
+        assertEquals(0, body(mockMvc.get("/api/me/hiring-manager-options") { authorize(owner) }.andReturn()).size())
+        assertStatus(mockMvc.put("/api/rooms/$invite/interview-metadata") {
+            authorize(hr); contentType = MediaType.APPLICATION_JSON
+            content = """{"candidateName":"Кандидат 234","position":null,"scheduledAt":null,"revision":0}"""
+        }.andReturn(), 200, "assigned HR edits TEAM metadata")
+        val found = mockMvc.get("/api/teams/${team.id}/interviews") { authorize(owner); param("q", "  КАНДИДАТ 234  ") }.andReturn()
+        assertStatus(found, 200, "candidate search")
+        assertEquals(1, body(found).path("items").size())
+        jdbcTemplate.update("DELETE FROM room_participants WHERE room_id = ? AND user_id = ?", created.path("id").asText(), owner.id)
+        assertStatus(mockMvc.get("/api/rooms/$invite/interview-metadata") { authorize(owner) }.andReturn(), 200, "active membership retains metadata without an explicit room row")
+        assertEquals(1, body(mockMvc.get("/api/teams/${team.id}/interviews") { authorize(owner); param("q", "234") }.andReturn()).path("items").size(), "team candidate search follows active membership")
+        jdbcTemplate.update("INSERT INTO room_participants (id, room_id, user_id, role, created_at) VALUES (?, ?, ?, 'owner', CURRENT_TIMESTAMP)", UUID.randomUUID().toString(), created.path("id").asText(), owner.id)
+
+        assertEquals(1, body(mockMvc.get("/api/teams/${team.id}/interviews") { authorize(ordinary); param("q", "234") }.andReturn()).path("items").size(), "all active members can search candidates")
+        assertStatus(mockMvc.delete("/api/rooms/$invite/hr-managers/${outsider.id}") { authorize(owner) }.andReturn(), 204, "remove external HR")
+        assertStatus(mockMvc.get("/api/rooms/$invite/interview-metadata") { authorize(outsider) }.andReturn(), 403, "removed external HR loses private access")
+        jdbcTemplate.update("UPDATE team_memberships SET state = 'SUSPENDED' WHERE team_id = ? AND user_id = ?", team.id, hr.id)
+        assertStatus(mockMvc.get("/api/rooms/$invite/interview-metadata") { authorize(hr) }.andReturn(), 403, "inactive membership loses team management")
+        val personal = body(mockMvc.post("/api/rooms") { authorize(owner); contentType = MediaType.APPLICATION_JSON; content = """{"title":"Personal scope","taskIds":[]}""" }.andReturn())
+        assertStatus(mockMvc.put("/api/rooms/${personal.path("inviteCode").asText()}/hr-managers/${outsider.id}") { authorize(owner) }.andReturn(), 200, "personal external UUID remains supported")
+    }
+
+    @Test
+    fun hiringManagerSelectionOnTeamCreationIsAtomicAndIdempotent() {
+        val owner = account("create-hr-owner")
+        val hr = account("create-hr-target")
+        val nonHr = account("create-non-hr")
+        val external = account("create-ext-hr")
+        val team = team(owner, "Creation HR")
+        listOf(hr, nonHr).forEach { seedMembership(team.id, it.id, "MEMBER") }
+        listOf(hr, external).forEach { jdbcTemplate.update("UPDATE users SET is_hr = true WHERE id = ?", it.id) }
+        val key = UUID.randomUUID().toString()
+        fun create(ids: List<String>, commandKey: String = key) = mockMvc.post("/api/teams/${team.id}/interviews") {
+            authorize(owner); header("Idempotency-Key", commandKey); contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(mapOf("title" to "Create HR", "hiringManagerIds" to ids))
+        }.andReturn()
+        val first = create(listOf(external.id))
+        assertStatus(first, 201, "hiring managers created atomically")
+        val invite = body(first).path("interview").path("inviteCode").asText()
+        val replay = create(listOf(external.id))
+        assertStatus(replay, 201, "same command returns original room")
+        assertEquals(body(first).path("interview").path("id"), body(replay).path("interview").path("id"))
+        assertEquals(external.id, body(mockMvc.get("/api/rooms/$invite/hr-managers") { authorize(owner) }.andReturn()).first().path("userId").asText())
+        assertStatus(create(emptyList()), 409, "same key cannot silently remove hiring managers")
+        val before = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM rooms WHERE team_id = ?", Long::class.java, team.id)
+        assertStatus(create(listOf(nonHr.id), UUID.randomUUID().toString()), 404, "non HR rejected")
+        assertStatus(create(listOf(hr.id), UUID.randomUUID().toString()), 404, "same-team HR cannot receive redundant assignment")
+        assertEquals(before, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM rooms WHERE team_id = ?", Long::class.java, team.id), "no partial interview")
+    }
+
+    @Test
+    fun hiringManagerMutationRechecksFreshRoomAfterWaitingForLock() {
+        val owner = account("hr-stale-owner")
+        val team = team(owner, "Fresh room")
+        val room = body(createTeamInterview(owner, team.id, UUID.randomUUID().toString(), "Stale metadata", null, null, null)).path("interview")
+        val invite = room.path("inviteCode").asText()
+        val executor = java.util.concurrent.Executors.newSingleThreadExecutor()
+        try {
+            dataSource.connection.use { connection ->
+                connection.autoCommit = false
+                connection.prepareStatement("SELECT id FROM rooms WHERE id = ? FOR UPDATE").use { statement ->
+                    statement.setString(1, room.path("id").asText()); statement.executeQuery().close()
+                }
+                val request = executor.submit<MvcResult> {
+                    mockMvc.put("/api/rooms/$invite/interview-metadata") {
+                        authorize(owner); contentType = MediaType.APPLICATION_JSON
+                        content = """{"candidateName":"stale overwrite","position":null,"scheduledAt":null,"revision":0}"""
+                    }.andReturn()
+                }
+                waitForHiringLock("rooms")
+                connection.prepareStatement("UPDATE rooms SET candidate_name = 'committed value', interview_metadata_revision = 1 WHERE id = ?").use { statement ->
+                    statement.setString(1, room.path("id").asText()); statement.executeUpdate()
+                }
+                connection.commit()
+                assertStatus(request.get(5, java.util.concurrent.TimeUnit.SECONDS), 409, "fresh revision wins after room lock")
+                assertEquals("committed value", jdbcTemplate.queryForObject("SELECT candidate_name FROM rooms WHERE id = ?", String::class.java, room.path("id").asText()))
+            }
+        } finally { executor.shutdownNow() }
+    }
+
+    @Test
+    fun hiringManagerAssignmentRejectsTargetJoiningTheTeamWhileWaiting() {
+        val owner = account("hr-remove-owner")
+        val hr = account("hr-remove-target")
+        val team = team(owner, "Membership race")
+        jdbcTemplate.update("UPDATE users SET is_hr = true WHERE id = ?", hr.id)
+        val room = body(createTeamInterview(owner, team.id, UUID.randomUUID().toString(), "Assignment race", null, null, null)).path("interview")
+        val invite = room.path("inviteCode").asText()
+        val executor = java.util.concurrent.Executors.newSingleThreadExecutor()
+        try {
+            dataSource.connection.use { connection ->
+                connection.autoCommit = false
+                connection.prepareStatement("SELECT id FROM teams WHERE id = ? FOR UPDATE").use { statement -> statement.setString(1, team.id); statement.executeQuery().close() }
+                val request = executor.submit<MvcResult> { mockMvc.put("/api/rooms/$invite/hr-managers/${hr.id}") { authorize(owner) }.andReturn() }
+                waitForHiringLock("teams")
+                connection.prepareStatement("INSERT INTO team_memberships (id, team_id, user_id, role, state, epoch, revision, created_at, updated_at) VALUES (?, ?, ?, 'MEMBER', 'ACTIVE', 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)").use { statement -> statement.setString(1, UUID.randomUUID().toString()); statement.setString(2, team.id); statement.setString(3, hr.id); statement.executeUpdate() }
+                connection.commit()
+                assertStatus(request.get(5, java.util.concurrent.TimeUnit.SECONDS), 404, "fresh active membership prevents a redundant external hiring grant")
+            }
+            assertEquals(0L, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM room_participants WHERE room_id = ? AND user_id = ?", Long::class.java, room.path("id").asText(), hr.id), "rejected hiring assignment leaves no partial room grant")
+            assertStatus(mockMvc.delete("/api/teams/${team.id}/members/${hr.id}") { authorize(owner); header("Idempotency-Key", UUID.randomUUID().toString()) }.andReturn(), 200, "fixture removes the member")
+            assertStatus(mockMvc.put("/api/rooms/$invite/hr-managers/${hr.id}") { authorize(owner) }.andReturn(), 200, "former member can be explicitly invited as an external hiring manager")
+        } finally { executor.shutdownNow() }
+    }
+
+    @Test
+    fun hiringManagerCreationRechecksProfileAndRejectsMalformedIds() {
+        val owner = account("hr-profile-owner")
+        val hr = account("hr-profile-target")
+        val team = team(owner, "Profile race")
+        jdbcTemplate.update("UPDATE users SET is_hr = true WHERE id = ?", hr.id)
+        fun create(ids: Any?) = mockMvc.post("/api/teams/${team.id}/interviews") {
+            authorize(owner); header("Idempotency-Key", UUID.randomUUID().toString()); contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(mapOf("title" to "Profile race", "hiringManagerIds" to ids))
+        }.andReturn()
+        listOf(listOf("bad"), listOf("1-1-1-1-1"), listOf(123), null, hr.id).forEach { malformed ->
+            assertTrue(create(malformed).response.status in 400..499, "malformed hiring IDs give client errors")
+        }
+        val executor = java.util.concurrent.Executors.newSingleThreadExecutor()
+        try {
+            dataSource.connection.use { connection ->
+                connection.autoCommit = false
+                connection.prepareStatement("SELECT id FROM users WHERE id = ? FOR UPDATE").use { statement -> statement.setString(1, hr.id); statement.executeQuery().close() }
+                val request = executor.submit<MvcResult> { create(listOf(hr.id)) }
+                waitForHiringLock("users")
+                connection.prepareStatement("UPDATE users SET is_hr = false WHERE id = ?").use { statement -> statement.setString(1, hr.id); statement.executeUpdate() }
+                connection.commit()
+                assertStatus(request.get(5, java.util.concurrent.TimeUnit.SECONDS), 404, "disabled HR profile cannot pass a stale creation check")
+            }
+            assertEquals(0L, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM rooms WHERE team_id = ?", Long::class.java, team.id), "invalid or raced assignment creates no room")
+        } finally { executor.shutdownNow() }
+    }
+
+    @Test
+    fun hiringManagerReciprocalOwnersAcrossTeamsCannotDeadlock() {
+        val first = account("hr-cross-one")
+        val second = account("hr-cross-two")
+        val teamOne = team(first, "Cross team one")
+        val teamTwo = team(second, "Cross team two")
+        listOf(first, second).forEach { jdbcTemplate.update("UPDATE users SET is_hr = true WHERE id = ?", it.id) }
+        val lower = listOf(first.id, second.id).minOrNull()!!
+        val higher = listOf(first.id, second.id).maxOrNull()!!
+        val executor = java.util.concurrent.Executors.newFixedThreadPool(2)
+        fun request(owner: HrTestAccount, teamId: String, hr: HrTestAccount) = executor.submit<MvcResult> {
+            mockMvc.post("/api/teams/$teamId/interviews") {
+                authorize(owner); header("Idempotency-Key", UUID.randomUUID().toString()); contentType = MediaType.APPLICATION_JSON
+                content = objectMapper.writeValueAsString(mapOf("title" to "Reciprocal owners", "hiringManagerIds" to listOf(hr.id)))
+            }.andReturn()
+        }
+        try {
+            dataSource.connection.use { lowerLock -> dataSource.connection.use { higherLock ->
+                listOf(lowerLock to lower, higherLock to higher).forEach { (connection, id) ->
+                    connection.autoCommit = false
+                    connection.prepareStatement("SELECT id FROM users WHERE id = ? FOR UPDATE").use { statement -> statement.setString(1, id); statement.executeQuery().close() }
+                }
+                val one = request(first, teamOne.id, second)
+                val two = request(second, teamTwo.id, first)
+                val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5)
+                while ((jdbcTemplate.queryForObject("SELECT COUNT(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND lower(query) LIKE '%from users%for update%'", Long::class.java) ?: 0) < 2) {
+                    assertTrue(System.nanoTime() < deadline, "both requests reach external user locks")
+                    Thread.sleep(10)
+                }
+                lowerLock.commit()
+                // Both requests are now serialized on the same sorted user chain.
+                // The previous target-only order instead reaches an owner FK insert.
+                val advancedDeadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5)
+                while ((jdbcTemplate.queryForObject("SELECT COUNT(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND lower(query) LIKE '%insert into rooms%'", Long::class.java) ?: 0) == 0L &&
+                    (jdbcTemplate.queryForObject("SELECT COUNT(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND lower(query) LIKE '%from users%for update%'", Long::class.java) ?: 0) < 2) {
+                    assertTrue(System.nanoTime() < advancedDeadline, "request advances after lower lock release")
+                    Thread.sleep(10)
+                }
+                higherLock.commit()
+                assertStatus(one.get(10, java.util.concurrent.TimeUnit.SECONDS), 201, "first reciprocal creation succeeds")
+                assertStatus(two.get(10, java.util.concurrent.TimeUnit.SECONDS), 201, "second reciprocal creation succeeds without deadlock")
+            } }
+        } finally { executor.shutdownNow() }
+    }
+
+    private fun waitForHiringLock(table: String) {
+        val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5)
+        while (System.nanoTime() < deadline) {
+            val waiting = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND lower(query) LIKE ?", Long::class.java, "%from $table%for update%") ?: 0
+            if (waiting > 0) return
+            Thread.sleep(10)
+        }
+        throw AssertionError("Hiring request must reach the $table lock before fixture transaction changes authority")
+    }
+
+    @Test
+    fun candidateActivityPersistenceRechecksLifecycleInsideItsOwnTransaction() {
+        val owner = account("key-lock")
+        val team = team(owner, "Activity lifecycle")
+        val roomId = body(createTeamInterview(owner, team.id, UUID.randomUUID().toString(), "Activity room", null, null, null)).path("interview").path("id").asText()
+        val payload = CandidateKeyPayload("candidate-session", "Candidate", "a", "KeyA", false, false, false, false, 1,
+            sourceEventId = UUID.randomUUID().toString())
+        assertTrue(keystrokePersistenceService.accept(roomId, payload).created, "active candidate activity remains durable")
+        jdbcTemplate.update("UPDATE rooms SET status = 'finished' WHERE id = ?", roomId)
+        val finished = assertThrows(ApiException::class.java) {
+            keystrokePersistenceService.accept(roomId, payload.copy(sourceEventId = UUID.randomUUID().toString()))
+        }
+        assertEquals(403, finished.status.value())
+        assertEquals("ROOM_READ_ONLY", finished.code)
+        assertEquals(403, assertThrows(ApiException::class.java) { keystrokePersistenceService.accept(roomId, payload) }.status.value(), "old source IDs cannot bypass the locked lifecycle guard")
+        jdbcTemplate.update("UPDATE rooms SET status = 'frozen' WHERE id = ?", roomId)
+        assertEquals(409, assertThrows(ApiException::class.java) {
+            keystrokePersistenceService.accept(roomId, payload.copy(sourceEventId = UUID.randomUUID().toString()))
+        }.status.value())
+        assertEquals(1L, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM room_keystroke_events WHERE room_id = ?", Long::class.java, roomId))
+    }
+
+    @Test
+    fun tasklessPendingSnapshotCannotBecomeTheFirstAddedTaskDocument() {
+        val owner = account("empty-bound")
+        val team = team(owner, "Taskless context boundary")
+        val created = body(createTeamInterview(owner, team.id, UUID.randomUUID().toString(), "Empty boundary", null, null, null)).path("interview")
+        val inviteCode = created.path("inviteCode").asText()
+        val roomId = created.path("id").asText()
+        val session = UUID.randomUUID().toString()
+        val stream = mockMvc.get("/api/realtime/rooms/$inviteCode/stream") {
+            authorize(owner); param("sessionId", session); param("displayName", "Owner")
+        }.andReturn()
+        val token = realtimePayload(stream).path("eventToken").asText()
+        assertStatus(mockMvc.post("/api/realtime/rooms/$inviteCode/events") {
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(mapOf("sessionId" to session, "eventToken" to token, "type" to "yjs_update",
+                "operationId" to UUID.randomUUID().toString(), "yjsUpdate" to "AQID", "yjsDocumentBase64" to "AQID",
+                "baseServerYjsSequence" to 0, "code" to "// old taskless code"))
+        }.andReturn(), 204, "taskless snapshot is acknowledged before delayed persistence")
+        assertStatus(mockMvc.post("/api/rooms/$inviteCode/tasks") {
+            authorize(owner); contentType = MediaType.APPLICATION_JSON
+            content = """{"customTasks":[{"title":"First added task","description":"Brief","starterCode":"// new task","language":"nodejs"}]}"""
+        }.andReturn(), 200, "adding the first task creates a new published context")
+        val published = realtimePayload(stream)
+        assertEquals("// new task", published.path("code").asText())
+        assertEquals(0L, published.path("lastYjsSequence").asLong(), "new task cannot inherit the taskless transport sequence")
+        assertTrue(published.path("yjsDocumentBase64").isNull, "new task cannot inherit a taskless CRDT document")
+        Thread.sleep(1000)
+        assertEquals("// new task", jdbcTemplate.queryForObject("SELECT code FROM rooms WHERE id = ?", String::class.java, roomId), "delayed taskless save cannot overwrite a newly added task")
+    }
+
+    @Test
+    fun tasklessFinishedPublicEditorPersistsCodeYjsAndLanguage() = verifyTasklessFinishedEditor(false)
+
+    @Test
+    fun tasklessFinishedTeamEditorPersistsCodeYjsAndLanguage() = verifyTasklessFinishedEditor(true)
+
+    private fun verifyTasklessFinishedEditor(teamScope: Boolean) {
+        val owner = account("fin-empty")
+        val rooms = if (teamScope) {
+            val team = team(owner, "Taskless editor")
+            val teamRoom = createTeamInterview(owner, team.id, UUID.randomUUID().toString(), "Taskless TEAM", null, null, null)
+            assertStatus(teamRoom, 201, "taskless TEAM room fixture")
+            listOf(body(teamRoom).path("interview"))
+        } else {
+            val personal = mockMvc.post("/api/rooms") {
+                authorize(owner); contentType = MediaType.APPLICATION_JSON
+                content = """{"title":"Taskless personal public channel","taskIds":[]}"""
+            }.andReturn()
+            assertStatus(personal, 200, "taskless PUBLIC room fixture")
+            listOf(body(personal))
+        }
+        for (room in rooms) {
+            val inviteCode = room.path("inviteCode").asText()
+            val roomId = room.path("id").asText()
+            assertEquals(0L, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM room_tasks WHERE room_id = ?", Long::class.java, roomId))
+            fun connect(session: String): MvcResult = mockMvc.get("/api/realtime/rooms/$inviteCode/stream") {
+                authorize(owner); param("sessionId", session); param("displayName", "Taskless owner")
+            }.andReturn().also { assertStatus(it, 200, "taskless editor connects") }
+            var session = UUID.randomUUID().toString()
+            var stream = connect(session)
+            var token = realtimePayload(stream).path("eventToken").asText()
+            fun event(type: String, fields: Map<String, Any?>): MvcResult = mockMvc.post("/api/realtime/rooms/$inviteCode/events") {
+                contentType = MediaType.APPLICATION_JSON
+                content = objectMapper.writeValueAsString(mapOf("sessionId" to session, "eventToken" to token, "type" to type) + fields)
+            }.andReturn()
+            fun waitPersisted(code: String) {
+                val deadline = System.nanoTime() + 3_000_000_000L
+                while (jdbcTemplate.queryForObject("SELECT code FROM rooms WHERE id = ?", String::class.java, roomId) != code && System.nanoTime() < deadline) Thread.sleep(25)
+                assertEquals(code, jdbcTemplate.queryForObject("SELECT code FROM rooms WHERE id = ?", String::class.java, roomId), "taskless accepted code survives debounce")
+            }
+            assertStatus(event("yjs_update", mapOf("operationId" to UUID.randomUUID().toString(), "yjsUpdate" to "AQID", "yjsDocumentBase64" to "AQID",
+                "baseServerYjsSequence" to 0, "code" to "// accepted before finish")), 204, "taskless pre-finish snapshot accepted")
+            assertStatus(mockMvc.post("/api/rooms/$inviteCode/verdict") {
+                authorize(owner); contentType = MediaType.APPLICATION_JSON; content = """{"verdict":"HIRE"}"""
+            }.andReturn(), 200, "taskless interview finishes before debounce")
+            assertEquals("// accepted before finish", jdbcTemplate.queryForObject("SELECT code FROM rooms WHERE id = ?", String::class.java, roomId), "first finish snapshots already acknowledged taskless code")
+            val finishedAt = jdbcTemplate.queryForMap("SELECT finished_at FROM rooms WHERE id = ?", roomId)["finished_at"]
+            assertStatus(event("code_update", mapOf("code" to "// finished direct code")), 204, "finished taskless code_update accepted")
+            assertEquals("// finished direct code", body(mockMvc.get("/api/rooms/$inviteCode") { authorize(owner) }.andReturn()).path("code").asText(), "taskless code_update persists immediately")
+            for (language in listOf("python", "nodejs")) {
+                assertStatus(event("language_update", mapOf("language" to language)), 204, "finished taskless language changes")
+                assertEquals(language, body(mockMvc.get("/api/rooms/$inviteCode") { authorize(owner) }.andReturn()).path("language").asText())
+            }
+            assertStatus(event("yjs_update", mapOf("operationId" to UUID.randomUUID().toString(), "yjsUpdate" to "AQIDBA==", "yjsDocumentBase64" to "AQIDBA==",
+                "baseServerYjsSequence" to realtimePayload(stream).path("lastYjsSequence").asLong(), "code" to "// finished Yjs code")), 204, "finished taskless Yjs accepted")
+            waitPersisted("// finished Yjs code")
+            collaborationService.closeRoom(inviteCode)
+            session = UUID.randomUUID().toString()
+            stream = connect(session)
+            token = realtimePayload(stream).path("eventToken").asText()
+            assertEquals("// finished Yjs code", realtimePayload(stream).path("code").asText(), "fresh taskless realtime hydration uses durable code")
+            assertStatus(event("yjs_update", mapOf("operationId" to UUID.randomUUID().toString(), "yjsUpdate" to "", "yjsDocumentBase64" to "AQIDBAU=",
+                "baseServerYjsSequence" to 0, "code" to "// finished snapshot-only code")), 204, "taskless bootstrap full snapshot accepted")
+            waitPersisted("// finished snapshot-only code")
+            val stored = jdbcTemplate.queryForMap("SELECT status, finished_at FROM rooms WHERE id = ?", roomId)
+            assertEquals("finished", stored["status"])
+            assertEquals(finishedAt, stored["finished_at"], "editing does not restart or re-finish the interview")
+        }
+    }
+
+    @Test
+    fun finishedRoomManagersKeepEditingWhileCandidateAndUnassignedHrCannotWrite() {
+        val owner = account("fin-own")
+        val interviewer = account("fin-int")
+        val hr = HrHttpFixtures.register(mockMvc, objectMapper, true, "fin-hr").first
+        val unassignedHr = HrHttpFixtures.register(mockMvc, objectMapper, true, "fin-otherhr").first
+        val candidate = account("fin-cand")
+        val team = team(owner, "Finished editing matrix")
+        seedMembership(team.id, interviewer.id, "MEMBER")
+        val first = body(createTeamTask(owner, team.id, "First", "Brief", "// starter", "nodejs")).path("task").path("id").asText()
+        val second = body(createTeamTask(owner, team.id, "Second", "Brief", "// draft", "nodejs")).path("task").path("id").asText()
+        val created = body(createTeamInterview(owner, team.id, UUID.randomUUID().toString(), "Finished editing", null, null, null,
+            taskIds = listOf(first, second), interviewerIds = listOf(interviewer.id))).path("interview")
+        val roomId = created.path("id").asText()
+        val inviteCode = created.path("inviteCode").asText()
+        assertStatus(mockMvc.put("/api/rooms/$inviteCode/hr-managers/${hr.id}") { authorize(owner) }.andReturn(), 200, "external hiring manager is assigned to this interview")
+        data class Tab(val session: String, val token: String, val stream: MvcResult)
+        fun connect(actor: HrTestAccount): Tab {
+            val session = UUID.randomUUID().toString()
+            val stream = mockMvc.get("/api/realtime/rooms/$inviteCode/stream") {
+                authorize(actor)
+                param("sessionId", session)
+                param("displayName", "Matrix participant")
+            }.andReturn()
+            assertStatus(stream, 200, "assigned participant connects")
+            return Tab(session, realtimePayload(stream).path("eventToken").asText(), stream)
+        }
+        fun event(tab: Tab, type: String, fields: Map<String, Any?> = emptyMap()): MvcResult =
+            mockMvc.post("/api/realtime/rooms/$inviteCode/events") {
+                contentType = MediaType.APPLICATION_JSON
+                content = objectMapper.writeValueAsString(mapOf("sessionId" to tab.session, "eventToken" to tab.token, "type" to type) + fields)
+            }.andReturn()
+        val managers = listOf(owner, interviewer, hr).map { it to connect(it) }
+        val candidateTab = connect(candidate)
+        val verdict = mockMvc.post("/api/rooms/$inviteCode/verdict") {
+            authorize(owner)
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"verdict":"HIRE"}"""
+        }.andReturn()
+        assertStatus(verdict, 200, "owner finishes interview")
+        val finishedAt = jdbcTemplate.queryForMap("SELECT finished_at FROM rooms WHERE id = ?", roomId)["finished_at"]
+        for ((actor, tab) in managers) {
+            val marker = actor.id.take(8)
+            assertStatus(event(tab, "language_update", mapOf("language" to "python")), 204, "finished manager changes language")
+            assertStatus(event(tab, "briefing_markdown_update", mapOf("briefingMarkdown" to "Brief $marker")), 204, "finished manager changes briefing")
+            assertStatus(event(tab, "notes_update", mapOf("notes" to "Notes $marker")), 204, "finished manager changes notes")
+            assertStatus(event(tab, "task_rating_update", mapOf("stepIndex" to 0, "rating" to 3)), 204, "finished manager rates task")
+            assertStatus(event(tab, "private_note_entry", mapOf("privateNoteId" to UUID.randomUUID().toString(), "privateNoteText" to "Private $marker")), 204, "finished manager adds private note")
+            assertStatus(event(tab, "note_message", mapOf("clientMessageId" to UUID.randomUUID().toString(), "noteText" to "Chat $marker")), 200, "finished manager sends acknowledged chat")
+            assertStatus(event(tab, "set_step", mapOf("stepIndex" to 1)), 204, "finished manager publishes step")
+            assertStatus(event(tab, "manager_workspace_open", mapOf("stepIndex" to 0)), 204, "finished manager opens inactive workspace")
+            val workspaceSave = mockMvc.put("/api/rooms/$inviteCode/tasks/0/workspace") {
+                authorize(actor)
+                contentType = MediaType.APPLICATION_JSON
+                content = objectMapper.writeValueAsString(mapOf("code" to "// prepared $marker", "briefingMarkdown" to "Prepared $marker"))
+            }.andReturn()
+            assertStatus(workspaceSave, 200, "finished manager saves REST workspace")
+            assertStatus(event(tab, "set_step", mapOf("stepIndex" to 0)), 204, "finished manager republishes step")
+            assertStatus(event(tab, "code_update", mapOf("code" to "// direct $marker")), 204, "finished manager updates code")
+            val currentSequence = realtimePayload(tab.stream).path("lastYjsSequence").asLong()
+            assertStatus(event(tab, "yjs_update", mapOf("operationId" to UUID.randomUUID().toString(), "syncKey" to "$inviteCode:0:python",
+                "yjsUpdate" to "AQID", "yjsDocumentBase64" to "AQID", "baseServerYjsSequence" to currentSequence,
+                "code" to "// acknowledged $marker")), 204, "finished manager submits Yjs snapshot")
+            val deadline = System.nanoTime() + 3_000_000_000L
+            while (jdbcTemplate.queryForObject("SELECT code FROM rooms WHERE id = ?", String::class.java, roomId) != "// acknowledged $marker" && System.nanoTime() < deadline) Thread.sleep(25)
+            assertEquals("// acknowledged $marker", jdbcTemplate.queryForObject("SELECT code FROM rooms WHERE id = ?", String::class.java, roomId), "finished acknowledged Yjs debounce persists")
+            val reload = body(mockMvc.get("/api/rooms/$inviteCode") { authorize(actor) }.andReturn())
+            assertEquals("finished", reload.path("status").asText())
+            assertEquals("// acknowledged $marker", reload.path("code").asText())
+            assertEquals(finishedAt, jdbcTemplate.queryForMap("SELECT finished_at FROM rooms WHERE id = ?", roomId)["finished_at"])
+            assertStatus(mockMvc.patch("/api/rooms/$inviteCode/tasks/0") {
+                authorize(actor); contentType = MediaType.APPLICATION_JSON
+                content = objectMapper.writeValueAsString(mapOf("title" to "Corrected $marker"))
+            }.andReturn(), 200, "finished manager renames task")
+            assertStatus(mockMvc.post("/api/rooms/$inviteCode/tasks") {
+                authorize(actor); contentType = MediaType.APPLICATION_JSON
+                content = objectMapper.writeValueAsString(mapOf("customTasks" to listOf(mapOf("title" to "Added $marker", "description" to "Brief", "starterCode" to "// added", "language" to "python"))))
+            }.andReturn(), 200, "finished manager adds task")
+            assertStatus(mockMvc.delete("/api/rooms/$inviteCode/tasks/2") { authorize(actor) }.andReturn(), 200, "finished manager removes optional task")
+        }
+        // Current team membership determines management even with a stored room row.
+        jdbcTemplate.update("UPDATE team_memberships SET state = 'REMOVED' WHERE team_id = ? AND user_id = ?", team.id, interviewer.id)
+        val deniedRevoked = event(managers[1].second, "code_update", mapOf("code" to "revoked manager must not write"))
+        assertStatus(deniedRevoked, 403, "revoked manager's already connected token cannot edit finished code")
+        assertEquals("ROOM_READ_ONLY", body(deniedRevoked).path("code").asText())
+        val beforeDenied = jdbcTemplate.queryForMap("SELECT code, language, briefing_markdown, private_notes_json, interviewer_chat FROM rooms WHERE id = ?", roomId)
+        val activityCountBeforeDenied = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM room_keystroke_events WHERE room_id = ?", Long::class.java, roomId)
+        val deniedEvents = listOf(
+            "code_update" to mapOf("code" to "forged candidate code"),
+            "yjs_update" to mapOf("operationId" to UUID.randomUUID().toString(), "yjsUpdate" to "AQID", "yjsDocumentBase64" to "AQID", "code" to "forged candidate Yjs", "baseServerYjsSequence" to 999),
+            "language_update" to mapOf("language" to "java"),
+            "briefing_markdown_update" to mapOf("briefingMarkdown" to "forged brief"),
+            "private_note_entry" to mapOf("privateNoteId" to UUID.randomUUID().toString(), "privateNoteText" to "forged private"),
+            "note_message" to mapOf("clientMessageId" to UUID.randomUUID().toString(), "noteText" to "forged chat"),
+            "set_step" to mapOf("stepIndex" to 1),
+            "task_rating_update" to mapOf("stepIndex" to 0, "rating" to 1),
+            "manager_workspace_open" to mapOf("stepIndex" to 1),
+            "key_press" to mapOf("key" to "a", "keyCode" to "KeyA", "sourceEventId" to UUID.randomUUID().toString()),
+        )
+        deniedEvents.forEach { (type, fields) -> assertStatus(event(candidateTab, type, fields), 403, "finished candidate cannot send $type") }
+        assertEquals(activityCountBeforeDenied, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM room_keystroke_events WHERE room_id = ?", Long::class.java, roomId), "readonly candidate cannot append durable typing activity")
+        assertStatus(mockMvc.put("/api/rooms/$inviteCode/tasks/1/workspace") {
+            authorize(candidate); contentType = MediaType.APPLICATION_JSON; content = """{"code":"forged REST"}"""
+        }.andReturn(), 403, "candidate cannot use REST workspace")
+        assertStatus(mockMvc.patch("/api/rooms/$inviteCode/tasks/0") {
+            authorize(candidate); contentType = MediaType.APPLICATION_JSON; content = """{"title":"forged title"}"""
+        }.andReturn(), 403, "candidate cannot rename task through REST")
+        assertStatus(mockMvc.post("/api/rooms/$inviteCode/tasks") {
+            authorize(candidate); contentType = MediaType.APPLICATION_JSON; content = """{"customTasks":[{"title":"forged task","description":"Brief","starterCode":""}]}"""
+        }.andReturn(), 403, "candidate cannot add task through REST")
+        assertStatus(mockMvc.delete("/api/rooms/$inviteCode/tasks/1") { authorize(candidate) }.andReturn(), 403, "candidate cannot remove task through REST")
+        assertStatus(mockMvc.get("/api/realtime/rooms/$inviteCode/stream") {
+            authorize(unassignedHr); param("sessionId", UUID.randomUUID().toString()); param("displayName", "Unassigned HR")
+        }.andReturn(), 200, "unassigned external HR can connect only as a candidate")
+        assertStatus(mockMvc.put("/api/rooms/$inviteCode/tasks/1/workspace") {
+            authorize(unassignedHr); contentType = MediaType.APPLICATION_JSON; content = """{"code":"forged HR"}"""
+        }.andReturn(), 403, "global HR profile alone cannot mutate REST workspace")
+        assertEquals(beforeDenied, jdbcTemplate.queryForMap("SELECT code, language, briefing_markdown, private_notes_json, interviewer_chat FROM rooms WHERE id = ?", roomId))
+        jdbcTemplate.update("UPDATE rooms SET status = 'frozen' WHERE id = ?", roomId)
+        assertStatus(mockMvc.post("/api/rooms/$inviteCode/next-step") { authorize(owner) }.andReturn(), 409, "frozen REST published step remains blocked")
+        assertStatus(mockMvc.patch("/api/rooms/$inviteCode/tasks/0") {
+            authorize(owner); contentType = MediaType.APPLICATION_JSON; content = """{"title":"frozen title"}"""
+        }.andReturn(), 409, "frozen REST rename remains blocked")
+        assertStatus(mockMvc.post("/api/rooms/$inviteCode/tasks") {
+            authorize(owner); contentType = MediaType.APPLICATION_JSON; content = """{"customTasks":[{"title":"frozen task","description":"Brief","starterCode":""}]}"""
+        }.andReturn(), 409, "frozen REST add remains blocked")
+        assertStatus(mockMvc.delete("/api/rooms/$inviteCode/tasks/1") { authorize(owner) }.andReturn(), 409, "frozen REST delete remains blocked")
+        assertStatus(event(managers.first().second, "language_update", mapOf("language" to "java")), 409, "frozen manager remains blocked")
+        assertStatus(mockMvc.put("/api/rooms/$inviteCode/tasks/1/workspace") {
+            authorize(owner); contentType = MediaType.APPLICATION_JSON; content = """{"code":"frozen REST"}"""
+        }.andReturn(), 409, "frozen REST manager remains blocked")
+        jdbcTemplate.update("UPDATE rooms SET archived_at = CURRENT_TIMESTAMP WHERE id = ?", roomId)
+        assertStatus(event(managers.first().second, "code_update", mapOf("code" to "archived write")), 410, "archived editor writes remain gone")
+    }
+
+    @Test
+    fun `team members stay out of the external hiring manager panel regardless of profile flag`() {
         val owner = HrHttpFixtures.register(mockMvc, objectMapper, true, "team-hr-owner").first
         val interviewer = HrHttpFixtures.register(mockMvc, objectMapper, true, "team-hr-interviewer").first
         val ordinary = account("team-ordinary")
@@ -72,9 +833,7 @@ class TeamInterviewCreationIntegrationTest(
         val response = mockMvc.get("/api/rooms/$inviteCode/hr-managers") { authorize(owner) }.andReturn()
         assertStatus(response, 200, "team owner reads the hiring managers in the room")
         val managers = body(response)
-        assertEquals(setOf(owner.id, interviewer.id), managers.map { it.path("userId").asText() }.toSet())
-        assertEquals(true, managers.single { it.path("userId").asText() == owner.id }.path("isOwner").asBoolean())
-        assertEquals(false, managers.any { it.path("userId").asText() == ordinary.id })
+        assertEquals(0, managers.size(), "team members are not listed as separately assigned external hiring managers")
 
         val roleEnabled = mockMvc.patch("/api/me/profile") {
             authorize(ordinary)
@@ -83,11 +842,11 @@ class TeamInterviewCreationIntegrationTest(
         }.andReturn()
         assertStatus(roleEnabled, 200, "interviewer enables the hiring role after room creation")
         val afterRoleChange = body(mockMvc.get("/api/rooms/$inviteCode/hr-managers") { authorize(owner) }.andReturn())
-        assertEquals(setOf(owner.id, interviewer.id, ordinary.id), afterRoleChange.map { it.path("userId").asText() }.toSet())
+        assertEquals(0, afterRoleChange.size(), "changing the profile flag does not create an external hiring assignment")
 
         assertStatus(suspendMember(owner, team.id, interviewer.id, UUID.randomUUID().toString()), 200, "fixture revokes interviewer membership")
         val afterRevoke = body(mockMvc.get("/api/rooms/$inviteCode/hr-managers") { authorize(owner) }.andReturn())
-        assertEquals(setOf(owner.id, ordinary.id), afterRevoke.map { it.path("userId").asText() }.toSet())
+        assertEquals(0, afterRevoke.size())
     }
 
     @Test
@@ -107,7 +866,7 @@ class TeamInterviewCreationIntegrationTest(
             contentType = MediaType.APPLICATION_JSON
             content = """{"title":"Unwanted title"}"""
         }.andReturn()
-        assertStatusAndCode(forbidden, 403, "TEAM_INTERVIEW_RENAME_FORBIDDEN")
+        assertStatus(forbidden, 200, "all active team members may rename an interview")
 
         val concealed = mockMvc.patch("/api/teams/${team.id}/interviews/$interviewId") {
             authorize(outside)
@@ -149,17 +908,18 @@ class TeamInterviewCreationIntegrationTest(
     fun `team manager can permanently delete an interview after confirmation on the client`() {
         val owner = account("del-int")
         val member = account("del-member")
+        val outsider = account("del-outsider")
         val team = team(owner, "Delete interview")
         seedMembership(team.id, member.id, "MEMBER")
         val created = body(createTeamInterview(owner, team.id, UUID.randomUUID().toString(), "Disposable interview", null, null, null)).path("interview")
         val interviewId = created.path("id").asText()
         assertStatusAndCode(mockMvc.delete("/api/teams/${team.id}/interviews/$interviewId") {
-            header("Authorization", "Bearer ${member.token}")
-        }.andReturn(), 403, "TEAM_INTERVIEW_ARCHIVE_FORBIDDEN")
+            header("Authorization", "Bearer ${outsider.token}")
+        }.andReturn(), 404, "TEAM_NOT_FOUND")
         val result = mockMvc.delete("/api/teams/${team.id}/interviews/$interviewId") {
-            header("Authorization", "Bearer ${owner.token}")
+            header("Authorization", "Bearer ${member.token}")
         }.andReturn()
-        assertStatus(result, 204, "manager deletes interview")
+        assertStatus(result, 204, "any active member deletes an interview")
         assertEquals(0, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM rooms WHERE id = ?", Int::class.java, interviewId))
     }
     companion object {
@@ -172,6 +932,113 @@ class TeamInterviewCreationIntegrationTest(
         @JvmStatic
         @AfterAll
         fun cleanupPostgres() = postgres.close()
+    }
+
+    @Test
+    fun acknowledgedPublishedSnapshotIsDurableWhenVerdictPrecedesDebounce() {
+        val owner = account("final-ack-owner")
+        val peer = account("final-ack-peer")
+        val team = team(owner, "Accepted snapshot finalization")
+        val task = body(createTeamTask(owner, team.id, "Accepted code", "Brief", "// starter", "nodejs")).path("task")
+        val interview = body(createTeamInterview(
+            owner, team.id, UUID.randomUUID().toString(), "Finalize accepted snapshot", null, null, null,
+            taskIds = listOf(task.path("id").asText()),
+            candidateIds = emptyList(),
+        )).path("interview")
+        val inviteCode = interview.path("inviteCode").asText()
+        val roomId = interview.path("id").asText()
+        val sessionId = "finalize-${UUID.randomUUID()}"
+        val stream = mockMvc.get("/api/realtime/rooms/$inviteCode/stream") {
+            param("sessionId", sessionId)
+            param("displayName", "Finalizing owner")
+            authorize(owner)
+        }.andReturn()
+        assertStatus(stream, 200, "owner connects before finalization")
+        val peerSessionId = "finalize-peer-${UUID.randomUUID()}"
+        val peerStream = mockMvc.get("/api/realtime/rooms/$inviteCode/stream") {
+            param("sessionId", peerSessionId)
+            param("displayName", "Concurrent candidate")
+            authorize(peer)
+        }.andReturn()
+        assertStatus(peerStream, 200, "peer connects before the accepted snapshot")
+        val peerEventToken = realtimePayload(peerStream).path("eventToken").asText()
+        val eventToken = realtimePayload(stream).path("eventToken").asText()
+        val acceptedCode = "const acknowledged = 42;"
+        assertStatus(mockMvc.post("/api/realtime/rooms/$inviteCode/events") {
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(mapOf(
+                "sessionId" to sessionId, "eventToken" to eventToken,
+                "clientEventSequence" to 1, "operationId" to UUID.randomUUID().toString(),
+                "type" to "yjs_update", "syncKey" to "$inviteCode:0:nodejs",
+                "yjsUpdate" to "AQID", "yjsDocumentBase64" to "AQID",
+                "yjsClientSequence" to 1, "baseServerYjsSequence" to 0,
+                "code" to acceptedCode,
+            ))
+        }.andReturn(), 204, "published code and snapshot are acknowledged")
+        assertEquals("// starter", jdbcTemplate.queryForObject("SELECT code FROM rooms WHERE id = ?", String::class.java, roomId), "fixture finishes inside the pending debounce window")
+        assertStatus(mockMvc.post("/api/realtime/rooms/$inviteCode/events") {
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(mapOf(
+                "sessionId" to peerSessionId, "eventToken" to peerEventToken,
+                "clientEventSequence" to 1, "operationId" to UUID.randomUUID().toString(),
+                "type" to "yjs_update", "syncKey" to "$inviteCode:0:nodejs",
+                "yjsUpdate" to "AQIDBA==", "yjsDocumentBase64" to "AQIDBA==",
+                "yjsClientSequence" to 1, "baseServerYjsSequence" to 0,
+                "code" to "stale peer snapshot must not replace accepted code",
+            ))
+        }.andReturn(), 204, "peer delta is relayed while its stale full snapshot is rejected")
+        fun verdict(value: String) = mockMvc.post("/api/rooms/$inviteCode/verdict") {
+            authorize(owner)
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(mapOf("verdict" to value, "verdictComment" to "Finalized accepted code"))
+        }.andReturn()
+        assertStatus(verdict("HIRE"), 200, "verdict commits before debounce")
+        assertEquals(acceptedCode, jdbcTemplate.queryForObject("SELECT code FROM rooms WHERE id = ?", String::class.java, roomId), "ACKed code survives immediate finalization")
+        val storedTask = jdbcTemplate.queryForMap("SELECT solution_code, workspace_yjs_document_base64, workspace_yjs_sequence FROM room_tasks WHERE room_id = ? AND step_index = 0", roomId)
+        assertEquals(acceptedCode, storedTask["solution_code"])
+        assertEquals("AQID", storedTask["workspace_yjs_document_base64"])
+        assertEquals(1L, storedTask["workspace_yjs_sequence"])
+        assertStatus(verdict("NO_HIRE"), 200, "finished verdict can still be corrected")
+        assertEquals(storedTask, jdbcTemplate.queryForMap("SELECT solution_code, workspace_yjs_document_base64, workspace_yjs_sequence FROM room_tasks WHERE room_id = ? AND step_index = 0", roomId), "verdict correction does not change the historical editor snapshot")
+    }
+
+    @Test
+    fun emptyRoomLanguagePersistsWithoutTasks() {
+        val owner = account("ui2lang-o")
+        val candidate = account("ui2lang-c")
+        val team = team(owner, "Empty language team")
+        val created = createTeamInterview(
+            owner, team.id, UUID.randomUUID().toString(), "Empty language room", null, null, null,
+            interviewerIds = listOf(owner.id), candidateIds = emptyList(),
+        )
+        assertStatus(created, 201, "empty room fixture")
+        val interview = body(created).path("interview")
+        val inviteCode = interview.path("inviteCode").asText()
+        val roomId = interview.path("id").asText()
+        fun event(actor: HrTestAccount, value: String): MvcResult {
+            val sessionId = "empty-language-${UUID.randomUUID()}"
+            val stream = mockMvc.get("/api/realtime/rooms/$inviteCode/stream") {
+                param("sessionId", sessionId)
+                param("displayName", "Language check")
+                authorize(actor)
+            }.andReturn()
+            assertStatus(stream, 200, "language stream")
+            val token = realtimePayload(stream).path("eventToken").asText()
+            return mockMvc.post("/api/realtime/rooms/$inviteCode/events") {
+                contentType = MediaType.APPLICATION_JSON
+                content = objectMapper.writeValueAsString(mapOf(
+                    "sessionId" to sessionId, "eventToken" to token,
+                    "type" to "language_update", "language" to value,
+                ))
+            }.andReturn()
+        }
+        for (language in listOf("python", "java", "plaintext", "nodejs")) {
+            assertStatus(event(owner, language), 204, "owner changes empty room language")
+            assertEquals(language, body(mockMvc.get("/api/rooms/$inviteCode") { authorize(owner) }.andReturn()).path("language").asText())
+            assertEquals(language, jdbcTemplate.queryForObject("SELECT language FROM rooms WHERE id = ?", String::class.java, roomId))
+        }
+        assertStatus(event(candidate, "python"), 403, "candidate cannot change language")
+        assertEquals("nodejs", body(mockMvc.get("/api/rooms/$inviteCode") { authorize(owner) }.andReturn()).path("language").asText())
     }
 
     @Test
@@ -395,6 +1262,25 @@ class TeamInterviewCreationIntegrationTest(
             "create response must mark programme foundation separately from extra task-set tasks",
         )
 
+        val customized = createTeamInterview(
+            actor = creator,
+            teamId = team.id,
+            key = UUID.randomUUID().toString(),
+            title = "Interview with a custom task selection",
+            taskSetId = taskSet.path("id").asText(),
+            trackId = trackId,
+            vacancyId = vacancyId,
+            expectedProgrammeId = programme.path("id").asText(),
+            expectedProgrammeVersion = 1,
+            selectedTaskIds = listOf(extraTask.path("id").asText()),
+        )
+        assertStatus(customized, 201, "explicit task selection can omit context defaults for one interview")
+        val customizedInterview = body(customized).path("interview")
+        assertEquals(taskSet.path("id").asText(), customizedInterview.path("taskSetId").asText())
+        assertEquals(programme.path("id").asText(), customizedInterview.path("programmeId").asText())
+        assertEquals(listOf("Extra architecture"), customizedInterview.path("tasks").map { it.path("title").asText() })
+        assertEquals(listOf(false), customizedInterview.path("tasks").map { it.path("mandatory").asBoolean() })
+
         val roomRow = jdbcTemplate.queryForMap(
             "SELECT team_interview_programme_id, team_interview_programme_origin, team_interview_programme_version FROM rooms WHERE id = ?",
             roomId,
@@ -429,6 +1315,7 @@ class TeamInterviewCreationIntegrationTest(
             "programme can change after interview creation",
         )
         assertStatus(publishVacancyProgramme(owner, team.id, trackId, vacancyId, revision = 2), 200, "programme v2 fixture publishes")
+        val roomCountBeforeStaleCreate = countRoomsForTeam(team.id)
         val stale = createTeamInterview(
             actor = creator,
             teamId = team.id,
@@ -441,7 +1328,7 @@ class TeamInterviewCreationIntegrationTest(
             expectedProgrammeVersion = 1,
         )
         assertStatusAndCode(stale, 409, "TEAM_PROGRAMME_VERSION_CONFLICT")
-        assertEquals(1L, countRoomsForTeam(team.id), "stale programme preview must not create a partial room")
+        assertEquals(roomCountBeforeStaleCreate, countRoomsForTeam(team.id), "stale programme preview must not create a partial room")
         val replay = createTeamInterview(
             actor = creator,
             teamId = team.id,
@@ -476,7 +1363,6 @@ class TeamInterviewCreationIntegrationTest(
         val team = team(owner, "Mandatory programme room")
         seedMembership(team.id, creator.id, role = "MEMBER")
         seedMembership(team.id, interviewer.id, role = "MEMBER")
-        seedMembership(team.id, candidate.id, role = "MEMBER")
 
         val foundationTask = body(createTeamTask(owner, team.id, "Foundation systems", "Foundation brief", "// foundation", "kotlin")).path("task")
         val guardrailTask = body(createTeamTask(owner, team.id, "Guardrail review", "Guardrail brief", "// guardrail", "nodejs")).path("task")
@@ -511,7 +1397,7 @@ class TeamInterviewCreationIntegrationTest(
             trackId = trackId,
             vacancyId = vacancyId,
             interviewerIds = listOf(interviewer.id),
-            candidateIds = listOf(candidate.id),
+            candidateIds = emptyList(),
             expectedProgrammeId = body(published).path("programme").path("id").asText(),
             expectedProgrammeVersion = 1,
         )
@@ -739,11 +1625,11 @@ class TeamInterviewCreationIntegrationTest(
             title = "My process interview", taskSetId = taskSet.path("id").asText(),
             trackId = trackId, vacancyId = vacancyId, interviewerIds = listOf(assigned.id),
         )).path("interview")
-        createTeamInterview(
+        val secondInterview = body(createTeamInterview(
             actor = owner, teamId = team.id, key = UUID.randomUUID().toString(),
             title = "Private process interview", taskSetId = taskSet.path("id").asText(),
             trackId = trackId, vacancyId = vacancyId, interviewerIds = listOf(unassigned.id),
-        )
+        )).path("interview")
 
         val ownProcesses = mockMvc.get("/api/teams/${team.id}/processes") { authorize(assigned) }.andReturn()
         assertStatus(ownProcesses, 200, "assigned member sees one process")
@@ -759,8 +1645,7 @@ class TeamInterviewCreationIntegrationTest(
             param("vacancyId", vacancyId)
         }.andReturn()
         assertStatus(ownInterviews, 200, "assigned member opens own process interviews")
-        assertEquals(listOf(visible.path("id").asText()), body(ownInterviews).path("items").map { it.path("id").asText() })
-        assertFalse(ownInterviews.response.contentAsString.contains("Private process interview"))
+        assertEquals(setOf(visible.path("id").asText(), secondInterview.path("id").asText()), body(ownInterviews).path("items").map { it.path("id").asText() }.toSet())
 
         val directory = mockMvc.get("/api/teams/${team.id}/members") { authorize(owner) }.andReturn()
         assertStatus(directory, 200, "colleague process labels are available in the directory")
@@ -819,10 +1704,10 @@ class TeamInterviewCreationIntegrationTest(
         assertEquals("1", export.response.getHeader("Interview-Count"))
 
         val otherList = mockMvc.get("/api/me/hr/rooms") { authorize(otherHr) }.andReturn()
-        assertStatus(otherList, 200, "unassigned HR team member reads an empty hiring list")
-        assertEquals(0, body(otherList).path("totalElements").asInt())
+        assertStatus(otherList, 200, "unassigned HR team member reads the shared hiring list")
+        assertEquals(1, body(otherList).path("totalElements").asInt())
         val otherDetail = mockMvc.get("/api/me/hr/rooms/$interviewId") { authorize(otherHr) }.andReturn()
-        assertStatus(otherDetail, 404, "unassigned HR team member cannot open team hiring detail")
+        assertStatus(otherDetail, 200, "all active team members can open team hiring detail")
 
         assertStatus(suspendMember(owner, team.id, interviewer.id, UUID.randomUUID().toString()), 200, "fixture revokes team access")
         val afterSuspend = mockMvc.get("/api/me/hr/rooms") { authorize(interviewer) }.andReturn()
@@ -880,8 +1765,8 @@ class TeamInterviewCreationIntegrationTest(
         }
 
         val memberDenied = listTeamInterviews(activeMember, team.id, ownership = "orphaned")
-        assertStatusAndCode(memberDenied, 403, "TEAM_INTERVIEW_QUEUE_FORBIDDEN")
-        assertFalse(body(memberDenied).has("items"), "non-manager denial must not leak the orphaned queue")
+        assertStatus(memberDenied, 200, "all active members can read the interview recovery queue")
+        assertEquals(1, body(memberDenied).path("items").size())
 
         assertStatus(resumeMember(owner, team.id, creator.id, UUID.randomUUID().toString()), 200, "fixture resumes the room owner")
         val afterResume = listTeamInterviews(owner, team.id, ownership = "orphaned")
@@ -899,7 +1784,6 @@ class TeamInterviewCreationIntegrationTest(
         val team = team(owner, "Finished result lifecycle")
         seedMembership(team.id, creator.id, role = "MEMBER")
         seedMembership(team.id, interviewer.id, role = "MEMBER")
-        seedMembership(team.id, candidate.id, role = "MEMBER")
         seedMembership(team.id, successor.id, role = "MEMBER")
         val task = body(createTeamTask(owner, team.id, "Finished task", "Brief", "// finished", "nodejs")).path("task")
         val taskSet = body(createTaskSet(owner, team.id, "Finished set", listOf(task.path("id").asText()))).path("taskSet")
@@ -912,7 +1796,7 @@ class TeamInterviewCreationIntegrationTest(
             trackId = null,
             vacancyId = null,
             interviewerIds = listOf(interviewer.id),
-            candidateIds = listOf(candidate.id),
+            candidateIds = emptyList(),
         )).path("interview")
         val interviewId = interview.path("id").asText()
         val inviteCode = interview.path("inviteCode").asText()
@@ -1148,7 +2032,6 @@ class TeamInterviewCreationIntegrationTest(
         val team = team(owner, "Archive orphaned interview")
         seedMembership(team.id, creator.id, role = "ADMIN")
         seedMembership(team.id, successor.id, role = "MEMBER")
-        seedMembership(team.id, otherMember.id, role = "MEMBER")
         val task = body(createTeamTask(owner, team.id, "Archive orphan task", "Brief", "// archive", "nodejs")).path("task")
         val taskSet = body(createTaskSet(owner, team.id, "Archive orphan set", listOf(task.path("id").asText()))).path("taskSet")
         val interview = body(createTeamInterview(
@@ -1177,7 +2060,7 @@ class TeamInterviewCreationIntegrationTest(
         val offerId = body(createOffer).path("offer").path("id").asText()
 
         val memberDenied = archiveTeamInterview(otherMember, team.id, interviewId)
-        assertStatusAndCode(memberDenied, 403, "TEAM_INTERVIEW_ARCHIVE_FORBIDDEN")
+        assertStatusAndCode(memberDenied, 404, "TEAM_NOT_FOUND")
 
         val activeOwnerDenied = archiveTeamInterview(owner, team.id, healthyInterview.path("id").asText())
         assertStatusAndCode(activeOwnerDenied, 409, "TEAM_INTERVIEW_OWNER_ACTIVE")
@@ -1219,8 +2102,6 @@ class TeamInterviewCreationIntegrationTest(
         val team = team(owner, "Freeze orphaned interview")
         seedMembership(team.id, creator.id, role = "ADMIN")
         seedMembership(team.id, successor.id, role = "MEMBER")
-        seedMembership(team.id, candidate.id, role = "MEMBER")
-        seedMembership(team.id, otherMember.id, role = "MEMBER")
         val task = body(createTeamTask(owner, team.id, "Freeze orphan task", "Brief", "// freeze", "nodejs")).path("task")
         val taskSet = body(createTaskSet(owner, team.id, "Freeze orphan set", listOf(task.path("id").asText()))).path("taskSet")
         val interview = body(createTeamInterview(
@@ -1232,7 +2113,7 @@ class TeamInterviewCreationIntegrationTest(
             trackId = null,
             vacancyId = null,
             interviewerIds = emptyList(),
-            candidateIds = listOf(candidate.id),
+            candidateIds = emptyList(),
         )).path("interview")
         val interviewId = interview.path("id").asText()
         val inviteCode = interview.path("inviteCode").asText()
@@ -1245,7 +2126,7 @@ class TeamInterviewCreationIntegrationTest(
         assertStatus(suspendMember(owner, team.id, creator.id, UUID.randomUUID().toString()), 200, "fixture makes interview orphaned")
 
         val nonManagerFreeze = freezeTeamInterview(otherMember, team.id, interviewId)
-        assertStatusAndCode(nonManagerFreeze, 403, "TEAM_INTERVIEW_FREEZE_FORBIDDEN")
+        assertStatusAndCode(nonManagerFreeze, 404, "TEAM_NOT_FOUND")
 
         val frozen = freezeTeamInterview(owner, team.id, interviewId)
         assertStatus(frozen, 200, "manager freezes orphaned interview")
@@ -1260,14 +2141,15 @@ class TeamInterviewCreationIntegrationTest(
         val candidateFrozenRoom = mockMvc.get("/api/rooms/$inviteCode") {
             authorize(candidate)
         }.andReturn()
-        assertStatus(candidateFrozenRoom, 404, "candidate cannot open a frozen team room")
-        assertBodyDoesNotContain(candidateFrozenRoom, interviewId, inviteCode, candidate.id)
+        assertStatus(candidateFrozenRoom, 200, "candidate can view a frozen team room")
+        assertEquals("candidate", body(candidateFrozenRoom).path("role").asText())
+        assertEquals(false, body(candidateFrozenRoom).path("canManageRoom").asBoolean())
         assertStatus(
             mockMvc.get("/api/realtime/rooms/$inviteCode/stream-status") {
                 authorize(candidate)
             }.andReturn(),
-            404,
-            "candidate cannot open realtime for a frozen team room",
+            204,
+            "candidate can open realtime to view a frozen team room",
         )
 
         val createOffer = createOwnerOffer(owner, team.id, interviewId, successor.id, UUID.randomUUID().toString())
@@ -1288,13 +2170,57 @@ class TeamInterviewCreationIntegrationTest(
         assertEquals("owner", body(successorFrozenRoom).path("role").asText())
         assertEquals("frozen", body(successorFrozenRoom).path("status").asText())
 
+        val successorSessionId = "freeze-resume-${UUID.randomUUID()}"
+        val successorStream = mockMvc.get("/api/realtime/rooms/$inviteCode/stream") {
+            param("sessionId", successorSessionId)
+            param("displayName", "Accepted owner")
+            authorize(successor)
+        }.andReturn()
+        assertStatus(successorStream, 200, "accepted owner connects while frozen")
+        val successorEventToken = realtimePayload(successorStream).path("eventToken").asText()
+        assertEquals("frozen", realtimePayload(successorStream).path("status").asText())
+        assertStatus(mockMvc.post("/api/realtime/rooms/$inviteCode/events") {
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(mapOf(
+                "sessionId" to successorSessionId, "eventToken" to successorEventToken,
+                "type" to "request_state_sync",
+            ))
+        }.andReturn(), 204, "frozen owner can request read-only state")
+        assertEquals("frozen", realtimePayload(successorStream).path("status").asText())
+
         val otherResume = resumeTeamInterview(otherMember, team.id, interviewId)
-        assertStatusAndCode(otherResume, 403, "TEAM_INTERVIEW_RESUME_FORBIDDEN")
+        assertStatusAndCode(otherResume, 404, "TEAM_NOT_FOUND")
 
         val resumed = resumeTeamInterview(successor, team.id, interviewId)
         assertStatus(resumed, 200, "accepted owner explicitly resumes the frozen interview")
         assertProtectedNoStore(resumed)
         assertEquals("active", body(resumed).path("interview").path("status").asText())
+        assertStatus(mockMvc.post("/api/realtime/rooms/$inviteCode/events") {
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(mapOf(
+                "sessionId" to successorSessionId, "eventToken" to successorEventToken,
+                "type" to "request_state_sync",
+            ))
+        }.andReturn(), 403, "resume invalidates the connection that cached frozen state")
+        assertEquals(null, successorStream.getAsyncResult(1000), "resume closes the old SSE transport")
+        val successorResumedStream = mockMvc.get("/api/realtime/rooms/$inviteCode/stream") {
+            param("sessionId", successorSessionId)
+            param("displayName", "Accepted owner")
+            authorize(successor)
+        }.andReturn()
+        assertStatus(successorResumedStream, 200, "the same browser session reconnects after resume")
+        val resumedEventToken = realtimePayload(successorResumedStream).path("eventToken").asText()
+        assertTrue(resumedEventToken != successorEventToken, "reconnecting must rotate the event token")
+        assertEquals("active", realtimePayload(successorResumedStream).path("status").asText(), "reconnecting cannot reuse cached frozen state")
+        assertStatus(mockMvc.post("/api/realtime/rooms/$inviteCode/events") {
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(mapOf(
+                "sessionId" to successorSessionId, "eventToken" to resumedEventToken,
+                "type" to "language_update", "language" to "python",
+            ))
+        }.andReturn(), 204, "the reconnected owner session can edit again")
+        assertEquals("python", realtimePayload(successorResumedStream).path("language").asText())
+        assertEquals("python", body(mockMvc.get("/api/rooms/$inviteCode") { authorize(successor) }.andReturn()).path("language").asText())
         assertEquals(
             "active",
             jdbcTemplate.queryForObject("select status from rooms where id = ?", String::class.java, interviewId),
@@ -1524,7 +2450,7 @@ class TeamInterviewCreationIntegrationTest(
     }
 
     @Test
-    fun `assigned active employees can open team room while legacy tokens and stale memberships cannot`() {
+    fun `active team staff manage rooms while external and former members enter as candidates`() {
         postgres.verifyPostgres16()
         val owner = account("ti-room-owner")
         val creator = account("ti-room-creator")
@@ -1535,7 +2461,6 @@ class TeamInterviewCreationIntegrationTest(
         val team = team(owner, "Interview room admission")
         seedMembership(team.id, creator.id, role = "MEMBER")
         seedMembership(team.id, interviewer.id, role = "MEMBER")
-        seedMembership(team.id, candidate.id, role = "MEMBER")
         seedMembership(team.id, unassigned.id, role = "MEMBER")
 
         val task = body(createTeamTask(owner, team.id, "Admission task", "Brief", "// admission", "nodejs")).path("task")
@@ -1549,7 +2474,7 @@ class TeamInterviewCreationIntegrationTest(
             trackId = null,
             vacancyId = null,
             interviewerIds = listOf(interviewer.id),
-            candidateIds = listOf(candidate.id),
+            candidateIds = emptyList(),
         )
         assertStatus(created, 201, "team interview fixture must be created")
         val interview = body(created).path("interview")
@@ -1641,9 +2566,9 @@ class TeamInterviewCreationIntegrationTest(
                 header("X-Room-Interviewer-Token", tokens.getValue("interviewer_session_token").toString())
             }.andReturn(),
         )
-        denials.forEach { denial ->
-            assertStatus(denial, 404, "unassigned team member and legacy-token access must stay hidden")
-            assertBodyDoesNotContain(denial, roomId, inviteCode, interviewer.id, candidate.id)
+        denials.forEachIndexed { index, admission ->
+            assertStatus(admission, 200, "team member and legacy-token link holder can enter the room")
+            assertEquals(if (index == 0) "interviewer" else "candidate", body(admission).path("role").asText())
         }
         val realtimeDenials = listOf(
             mockMvc.get("/api/realtime/rooms/$inviteCode/stream-status") {
@@ -1653,9 +2578,8 @@ class TeamInterviewCreationIntegrationTest(
                 param("ownerToken", tokens.getValue("owner_session_token").toString())
             }.andReturn(),
         )
-        realtimeDenials.forEach { denial ->
-            assertStatus(denial, 404, "team realtime admission must hide unassigned staff and legacy-token callers")
-            assertBodyDoesNotContain(denial, roomId, inviteCode, interviewer.id, candidate.id)
+        realtimeDenials.forEach { admission ->
+            assertStatus(admission, 204, "team realtime admission follows the public link contract")
         }
         assertStatus(mockMvc.get("/api/realtime/rooms/$inviteCode/stream-status") {
             authorize(outsider)
@@ -1664,33 +2588,34 @@ class TeamInterviewCreationIntegrationTest(
         jdbcTemplate.update(
             "UPDATE team_memberships SET state = 'REMOVED', epoch = epoch + 1, revision = revision + 1 WHERE team_id = ? AND user_id = ?",
             team.id,
-            candidate.id,
+            interviewer.id,
         )
         val removedCandidateRest = mockMvc.get("/api/rooms/$inviteCode") {
-            authorize(candidate)
+            authorize(interviewer)
         }.andReturn()
         val removedCandidateStream = mockMvc.get("/api/realtime/rooms/$inviteCode/stream-status") {
-            authorize(candidate)
+            authorize(interviewer)
         }.andReturn()
         val removedCandidateRelay = mockMvc.post("/api/realtime/rooms/$inviteCode/events") {
             contentType = MediaType.APPLICATION_JSON
             content = objectMapper.writeValueAsString(
                 mapOf(
-                    "sessionId" to candidateSessionId,
-                    "eventToken" to candidateRealtime.path("eventToken").asText(),
-                    "type" to "presence_update",
-                    "presenceStatus" to "active",
+                    "sessionId" to interviewerSessionId,
+                    "eventToken" to interviewerRealtime.path("eventToken").asText(),
+                    "type" to "notes_update",
+                    "notes" to "revoked manager must not save notes",
                 ),
             )
         }.andReturn()
-        listOf(removedCandidateRest, removedCandidateStream, removedCandidateRelay).forEach { denial ->
-            assertStatus(denial, 404, "stored room participant must not bypass team membership revocation")
-            assertBodyDoesNotContain(denial, roomId, inviteCode, candidate.id)
-        }
+        assertStatus(removedCandidateRest, 200, "former interviewer retains candidate admission")
+        assertEquals("candidate", body(removedCandidateRest).path("role").asText())
+        assertEquals(false, body(removedCandidateRest).path("canManageRoom").asBoolean())
+        assertStatus(removedCandidateStream, 204, "former interviewer can reconnect as a candidate")
+        assertStatus(removedCandidateRelay, 403, "old room row cannot restore revoked private authority")
     }
 
     @Test
-    fun `removed assignee rejoin does not restore old team room assignment`() {
+    fun `removed assignee rejoin receives shared team access without restoring old assignment rows`() {
         postgres.verifyPostgres16()
         val owner = account("ti-rejoin-owner")
         val creator = account("ti-rejoin-creator")
@@ -1728,8 +2653,8 @@ class TeamInterviewCreationIntegrationTest(
         )
         assertStatus(
             mockMvc.get("/api/rooms/$inviteCode") { authorize(interviewer) }.andReturn(),
-            404,
-            "removed interviewer cannot open old team room",
+            200,
+            "removed interviewer enters old team room as candidate",
         )
 
         val token = invitationToken(createInvitation(owner, team.id), owner, team.id)
@@ -1740,14 +2665,14 @@ class TeamInterviewCreationIntegrationTest(
         val oldRoomAfterRejoin = mockMvc.get("/api/rooms/$inviteCode") {
             authorize(interviewer)
         }.andReturn()
-        assertStatus(oldRoomAfterRejoin, 404, "rejoin must not restore the old team room assignment")
-        assertBodyDoesNotContain(oldRoomAfterRejoin, inviteCode, interviewer.id)
+        assertStatus(oldRoomAfterRejoin, 200, "active membership restores shared team room management")
+        assertEquals("interviewer", body(oldRoomAfterRejoin).path("role").asText())
         assertStatus(
             mockMvc.get("/api/realtime/rooms/$inviteCode/stream-status") {
                 authorize(interviewer)
             }.andReturn(),
-            404,
-            "rejoin must not restore old realtime admission",
+            204,
+            "rejoin restores shared realtime admission",
         )
     }
 
@@ -1808,13 +2733,13 @@ class TeamInterviewCreationIntegrationTest(
         val roomAfterLeave = mockMvc.get("/api/rooms/$inviteCode") {
             authorize(creator)
         }.andReturn()
-        assertStatus(roomAfterLeave, 404, "historical owner_user_id must not grant team-room access after leave")
-        assertBodyDoesNotContain(roomAfterLeave, roomId, inviteCode, creator.id)
+        assertStatus(roomAfterLeave, 200, "former creator retains candidate link admission")
+        assertEquals("candidate", body(roomAfterLeave).path("role").asText())
+        assertEquals(false, body(roomAfterLeave).path("canManageRoom").asBoolean())
         val realtimeAfterLeave = mockMvc.get("/api/realtime/rooms/$inviteCode/stream-status") {
             authorize(creator)
         }.andReturn()
-        assertStatus(realtimeAfterLeave, 404, "historical owner_user_id must not grant team realtime admission after leave")
-        assertBodyDoesNotContain(realtimeAfterLeave, roomId, inviteCode, creator.id)
+        assertStatus(realtimeAfterLeave, 204, "historical owner can join realtime only as candidate after leave")
     }
 
     @Test
@@ -1918,13 +2843,12 @@ class TeamInterviewCreationIntegrationTest(
         val roomAfterSuspend = mockMvc.get("/api/rooms/$inviteCode") {
             authorize(interviewer)
         }.andReturn()
-        assertStatus(roomAfterSuspend, 404, "suspended assignee cannot open old team room")
-        assertBodyDoesNotContain(roomAfterSuspend, roomId, inviteCode, interviewer.id)
+        assertStatus(roomAfterSuspend, 200, "suspended assignee retains public candidate admission")
+        assertEquals("candidate", body(roomAfterSuspend).path("role").asText())
         val realtimeAfterSuspend = mockMvc.get("/api/realtime/rooms/$inviteCode/stream-status") {
             authorize(interviewer)
         }.andReturn()
-        assertStatus(realtimeAfterSuspend, 404, "suspended assignee cannot open team realtime stream")
-        assertBodyDoesNotContain(realtimeAfterSuspend, roomId, inviteCode, interviewer.id)
+        assertStatus(realtimeAfterSuspend, 204, "suspended assignee can view the candidate realtime stream")
     }
 
     @Test
@@ -1956,7 +2880,7 @@ class TeamInterviewCreationIntegrationTest(
         val inviteCode = interview.path("inviteCode").asText()
 
         assertStatus(suspendMember(owner, team.id, interviewer.id, UUID.randomUUID().toString()), 200, "fixture suspends assignee")
-        assertStatus(mockMvc.get("/api/rooms/$inviteCode") { authorize(interviewer) }.andReturn(), 404, "suspended member loses old room")
+        assertEquals("candidate", body(mockMvc.get("/api/rooms/$inviteCode") { authorize(interviewer) }.andReturn()).path("role").asText(), "suspended member loses management authority")
 
         val resumeKey = UUID.randomUUID().toString()
         val resumed = resumeMember(owner, team.id, interviewer.id, resumeKey)
@@ -1997,8 +2921,8 @@ class TeamInterviewCreationIntegrationTest(
         )
         assertStatus(
             mockMvc.get("/api/rooms/$inviteCode") { authorize(interviewer) }.andReturn(),
-            404,
-            "resume must not restore the old team room assignment",
+            200,
+            "resumed active membership gives shared room access without old assignment rows",
         )
 
         val replay = resumeMember(owner, team.id, interviewer.id, resumeKey)
@@ -2051,7 +2975,7 @@ class TeamInterviewCreationIntegrationTest(
         }.andReturn()
         assertStatus(candidateStream, 200, "assigned candidate opens stream before revocation")
         val candidateEventToken = realtimePayload(candidateStream).path("eventToken").asText()
-        assertEquals("candidate", collaborationService.resolveRoleByEventToken(inviteCode, candidateEventToken)?.wireValue)
+        assertEquals("interviewer", collaborationService.resolveRoleByEventToken(inviteCode, candidateEventToken)?.wireValue)
 
         jdbcTemplate.update(
             "UPDATE team_memberships SET state = 'REMOVED', epoch = epoch + 1, revision = revision + 1 WHERE team_id = ? AND user_id = ?",
@@ -2064,7 +2988,7 @@ class TeamInterviewCreationIntegrationTest(
         val removedCandidateStream = mockMvc.get("/api/realtime/rooms/$inviteCode/stream-status") {
             authorize(candidate)
         }.andReturn()
-        assertStatus(removedCandidateStream, 404, "revoked member cannot reopen the team realtime stream")
+        assertStatus(removedCandidateStream, 204, "revoked member can reopen a candidate realtime stream")
         val staleRelay = mockMvc.post("/api/realtime/rooms/$inviteCode/events") {
             contentType = MediaType.APPLICATION_JSON
             content = objectMapper.writeValueAsString(
@@ -2092,7 +3016,6 @@ class TeamInterviewCreationIntegrationTest(
         val candidate = account("ti-snapshot-cand")
         val team = team(owner, "Team room editor snapshot")
         seedMembership(team.id, creator.id, role = "MEMBER")
-        seedMembership(team.id, candidate.id, role = "MEMBER")
 
         val task = body(createTeamTask(owner, team.id, "Snapshot task", "Brief", "// starter", "nodejs")).path("task")
         val taskSet = body(createTaskSet(owner, team.id, "Snapshot set", listOf(task.path("id").asText()))).path("taskSet")
@@ -2105,7 +3028,7 @@ class TeamInterviewCreationIntegrationTest(
             trackId = null,
             vacancyId = null,
             interviewerIds = emptyList(),
-            candidateIds = listOf(candidate.id),
+            candidateIds = emptyList(),
         )
         assertStatus(created, 201, "team interview fixture must be created")
         val interview = body(created).path("interview")
@@ -2159,6 +3082,90 @@ class TeamInterviewCreationIntegrationTest(
     }
 
     @Test
+    fun `assigned team interviewer can send idempotent chat messages while candidate cannot`() {
+        postgres.verifyPostgres16()
+        val owner = account("ti-chat-owner")
+        val creator = account("ti-chat-creator")
+        val interviewer = account("ti-chat-int")
+        val candidate = account("ti-chat-cand")
+        val team = team(owner, "Team room chat")
+        seedMembership(team.id, creator.id, role = "MEMBER")
+        seedMembership(team.id, interviewer.id, role = "MEMBER")
+
+        val created = createTeamInterview(
+            actor = creator,
+            teamId = team.id,
+            key = UUID.randomUUID().toString(),
+            title = "Team chat interview",
+            taskSetId = null,
+            trackId = null,
+            vacancyId = null,
+            interviewerIds = listOf(interviewer.id),
+            candidateIds = emptyList(),
+        )
+        assertStatus(created, 201, "team interview must be created before room chat")
+        val inviteCode = body(created).path("interview").path("inviteCode").asText()
+
+        fun connect(actor: HrTestAccount, displayName: String): Pair<String, String> {
+            val sessionId = "team-chat-${UUID.randomUUID()}"
+            val stream = mockMvc.get("/api/realtime/rooms/$inviteCode/stream") {
+                param("sessionId", sessionId)
+                param("displayName", displayName)
+                authorize(actor)
+            }.andReturn()
+            assertStatus(stream, 200, "$displayName must connect to the assigned team room")
+            return sessionId to realtimePayload(stream).path("eventToken").asText()
+        }
+
+        val (interviewerSessionId, interviewerEventToken) = connect(interviewer, "Assigned interviewer")
+        val (candidateSessionId, candidateEventToken) = connect(candidate, "Assigned candidate")
+        val clientMessageId = UUID.randomUUID().toString()
+        val message = mapOf(
+            "sessionId" to interviewerSessionId,
+            "eventToken" to interviewerEventToken,
+            "clientEventSequence" to 1,
+            "clientMessageId" to clientMessageId,
+            "type" to "note_message",
+            "noteText" to "Team chat message",
+            "noteTimestampEpochMs" to System.currentTimeMillis(),
+        )
+
+        val sent = mockMvc.post("/api/realtime/rooms/$inviteCode/events") {
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(message)
+        }.andReturn()
+        assertStatus(sent, 200, "assigned team interviewer can send an idempotent chat message")
+        val ack = body(sent)
+        assertEquals(clientMessageId, ack.path("clientMessageId").asText())
+        assertTrue(ack.path("messageId").asText().isNotBlank())
+
+        val replay = mockMvc.post("/api/realtime/rooms/$inviteCode/events") {
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(message)
+        }.andReturn()
+        assertStatus(replay, 200, "retry of an acknowledged team chat message is idempotent")
+        assertEquals(ack.path("messageId").asText(), body(replay).path("messageId").asText())
+
+        val candidateMessage = mockMvc.post("/api/realtime/rooms/$inviteCode/events") {
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(
+                message + mapOf(
+                    "sessionId" to candidateSessionId,
+                    "eventToken" to candidateEventToken,
+                    "clientMessageId" to UUID.randomUUID().toString(),
+                    "noteText" to "Candidate cannot access interviewer chat",
+                ),
+            )
+        }.andReturn()
+        assertStatusAndCode(candidateMessage, 403, "ROOM_ACCESS_DENIED")
+        assertEquals("Team chat message", jdbcTemplate.queryForObject(
+            "SELECT interviewer_chat::text FROM rooms WHERE invite_code = ?",
+            String::class.java,
+            inviteCode,
+        )?.let { objectMapper.readTree(it).path("messages").last().path("text").asText() })
+    }
+
+    @Test
     fun `assigned interviewer can manage team room steps notes ratings and verdict`() {
         postgres.verifyPostgres16()
         val owner = account("ti-command-owner")
@@ -2168,7 +3175,6 @@ class TeamInterviewCreationIntegrationTest(
         val team = team(owner, "Team room commands")
         seedMembership(team.id, creator.id, role = "MEMBER")
         seedMembership(team.id, interviewer.id, role = "MEMBER")
-        seedMembership(team.id, candidate.id, role = "MEMBER")
 
         val firstTask = body(createTeamTask(owner, team.id, "Commands one", "First", "// one", "nodejs")).path("task")
         val secondTask = body(createTeamTask(owner, team.id, "Commands two", "Second", "// two", "kotlin")).path("task")
@@ -2189,7 +3195,7 @@ class TeamInterviewCreationIntegrationTest(
             trackId = null,
             vacancyId = null,
             interviewerIds = listOf(interviewer.id),
-            candidateIds = listOf(candidate.id),
+            candidateIds = emptyList(),
         )
         assertStatus(created, 201, "team interview fixture must be created")
         val interview = body(created).path("interview")
@@ -2323,7 +3329,7 @@ class TeamInterviewCreationIntegrationTest(
                 ),
             )
         }.andReturn()
-        assertStatus(lateNotes, 409, "finished team room must reject late notes updates")
+        assertStatus(lateNotes, 204, "finished manager can update notes")
 
         val lateRating = mockMvc.post("/api/realtime/rooms/$inviteCode/events") {
             contentType = MediaType.APPLICATION_JSON
@@ -2337,7 +3343,7 @@ class TeamInterviewCreationIntegrationTest(
                 ),
             )
         }.andReturn()
-        assertStatus(lateRating, 409, "finished team room must reject late score updates")
+        assertStatus(lateRating, 204, "finished manager can update scores")
 
         val lateStep = mockMvc.post("/api/realtime/rooms/$inviteCode/events") {
             contentType = MediaType.APPLICATION_JSON
@@ -2350,7 +3356,7 @@ class TeamInterviewCreationIntegrationTest(
                 ),
             )
         }.andReturn()
-        assertStatus(lateStep, 409, "finished team room must reject late step changes")
+        assertStatus(lateStep, 204, "finished manager can change published step")
 
         val lateCode = mockMvc.post("/api/realtime/rooms/$inviteCode/events") {
             contentType = MediaType.APPLICATION_JSON
@@ -2364,7 +3370,8 @@ class TeamInterviewCreationIntegrationTest(
                 ),
             )
         }.andReturn()
-        assertStatus(lateCode, 409, "finished team room must reject late code updates")
+        assertStatus(lateCode, 403, "finished candidate cannot update code")
+        assertEquals("ROOM_READ_ONLY", body(lateCode).path("code").asText())
 
         val lateLanguage = mockMvc.post("/api/realtime/rooms/$inviteCode/events") {
             contentType = MediaType.APPLICATION_JSON
@@ -2377,7 +3384,7 @@ class TeamInterviewCreationIntegrationTest(
                 ),
             )
         }.andReturn()
-        assertStatus(lateLanguage, 409, "finished team room must reject late language updates")
+        assertStatus(lateLanguage, 204, "finished manager can update language")
 
         val lateBriefing = mockMvc.post("/api/realtime/rooms/$inviteCode/events") {
             contentType = MediaType.APPLICATION_JSON
@@ -2390,7 +3397,7 @@ class TeamInterviewCreationIntegrationTest(
                 ),
             )
         }.andReturn()
-        assertStatus(lateBriefing, 409, "finished team room must reject late briefing updates")
+        assertStatus(lateBriefing, 204, "finished manager can update briefing")
 
         val lateYjs = mockMvc.post("/api/realtime/rooms/$inviteCode/events") {
             contentType = MediaType.APPLICATION_JSON
@@ -2407,7 +3414,8 @@ class TeamInterviewCreationIntegrationTest(
                 ),
             )
         }.andReturn()
-        assertStatus(lateYjs, 409, "finished team room must reject late yjs updates")
+        assertStatus(lateYjs, 403, "finished candidate cannot submit Yjs updates")
+        assertEquals("ROOM_READ_ONLY", body(lateYjs).path("code").asText())
 
         val latePrivateNote = mockMvc.post("/api/realtime/rooms/$inviteCode/events") {
             contentType = MediaType.APPLICATION_JSON
@@ -2422,7 +3430,7 @@ class TeamInterviewCreationIntegrationTest(
                 ),
             )
         }.andReturn()
-        assertStatus(latePrivateNote, 409, "finished team room must reject late private notes")
+        assertStatus(latePrivateNote, 204, "finished manager can add private notes")
 
         val afterLateMutations = jdbcTemplate.queryForMap(
             """
@@ -2432,20 +3440,20 @@ class TeamInterviewCreationIntegrationTest(
             """.trimIndent(),
             roomId,
         )
-        assertEquals(1, afterLateMutations["current_step"])
-        assertEquals(storedRoom["code"], afterLateMutations["code"])
-        assertEquals(storedRoom["language"], afterLateMutations["language"])
-        assertEquals(storedRoom["briefing_markdown"], afterLateMutations["briefing_markdown"])
-        assertEquals(notes, afterLateMutations["notes"])
-        assertEquals(storedRoom["private_notes_json"], afterLateMutations["private_notes_json"])
+        assertEquals(0, afterLateMutations["current_step"])
+        assertEquals("// one", afterLateMutations["code"], "denied candidate cannot replace manager's published code")
+        assertEquals("python", afterLateMutations["language"])
+        assertEquals("late briefing must not overwrite result history", afterLateMutations["briefing_markdown"])
+        assertEquals("late notes must not overwrite result history", afterLateMutations["notes"])
+        assertTrue(afterLateMutations["private_notes_json"].toString().contains("late private note must not overwrite result history"))
         assertEquals(
-            4,
+            1,
             jdbcTemplate.queryForObject(
                 "SELECT score FROM room_tasks WHERE room_id = ? AND step_index = 0",
                 Int::class.java,
                 roomId,
             ),
-            "finished result history must keep the original score",
+            "finished result keeps the manager's corrected score",
         )
     }
 
@@ -2459,7 +3467,6 @@ class TeamInterviewCreationIntegrationTest(
         val team = team(owner, "Team realtime manager workspace")
         seedMembership(team.id, creator.id, role = "MEMBER")
         seedMembership(team.id, interviewer.id, role = "MEMBER")
-        seedMembership(team.id, candidate.id, role = "MEMBER")
 
         val firstTask = body(createTeamTask(owner, team.id, "Public task", "Public", "// public", "nodejs")).path("task")
         val secondTask = body(createTeamTask(owner, team.id, "Prepared realtime task", "Private", "// draft", "kotlin")).path("task")
@@ -2480,7 +3487,7 @@ class TeamInterviewCreationIntegrationTest(
             trackId = null,
             vacancyId = null,
             interviewerIds = listOf(interviewer.id),
-            candidateIds = listOf(candidate.id),
+            candidateIds = emptyList(),
         )
         assertStatus(created, 201, "team interview fixture must be created")
         val interview = body(created).path("interview")
@@ -2625,26 +3632,26 @@ class TeamInterviewCreationIntegrationTest(
                 mapOf("value" to "late manager workspace brief", "revision" to inactiveWorkspaceBeforeFinish["workspace_revision"]),
                 stepIndex = 0,
             ),
-            409,
-            "finished team room must reject realtime manager workspace briefing updates",
+            204,
+            "finished manager can update workspace briefing",
         )
         assertStatus(
             managerEvent(
                 "manager_workspace_language_update",
-                mapOf("value" to "java", "revision" to inactiveWorkspaceBeforeFinish["workspace_revision"]),
+                mapOf("value" to "java", "revision" to (inactiveWorkspaceBeforeFinish["workspace_revision"] as Number).toLong() + 1),
                 stepIndex = 0,
             ),
-            409,
-            "finished team room must reject realtime manager workspace language updates",
+            204,
+            "finished manager can update workspace language",
         )
         assertStatus(
             managerEvent(
                 "manager_workspace_focus_mode_update",
-                mapOf("focusMode" to false, "revision" to inactiveWorkspaceBeforeFinish["workspace_revision"]),
+                mapOf("focusMode" to false, "revision" to (inactiveWorkspaceBeforeFinish["workspace_revision"] as Number).toLong() + 2),
                 stepIndex = 0,
             ),
-            409,
-            "finished team room must reject realtime manager workspace focus updates",
+            204,
+            "finished manager can update workspace focus",
         )
         assertStatus(
             managerEvent(
@@ -2658,8 +3665,8 @@ class TeamInterviewCreationIntegrationTest(
                 ),
                 stepIndex = 0,
             ),
-            409,
-            "finished team room must reject realtime manager workspace CRDT updates",
+            204,
+            "finished manager can update workspace CRDT",
         )
         val lateRestWorkspace = mockMvc.put("/api/rooms/$inviteCode/tasks/0/workspace") {
             authorize(interviewer)
@@ -2670,13 +3677,13 @@ class TeamInterviewCreationIntegrationTest(
                     "language" to "java",
                     "briefingMarkdown" to "late REST workspace brief",
                     "focusMode" to false,
-                    "revision" to inactiveWorkspaceBeforeFinish["workspace_revision"],
+                    "revision" to (inactiveWorkspaceBeforeFinish["workspace_revision"] as Number).toLong() + 3,
                     "yjsDocumentBase64" to "AQID",
                     "yjsSequence" to 99,
                 ),
             )
         }.andReturn()
-        assertStatus(lateRestWorkspace, 409, "finished team room must reject REST manager workspace saves")
+        assertStatus(lateRestWorkspace, 200, "finished manager can save REST workspace")
         val inactiveWorkspaceAfterLateWrites = jdbcTemplate.queryForMap(
             """
             SELECT solution_code, solution_language, briefing_markdown, workspace_focus_mode,
@@ -2686,7 +3693,12 @@ class TeamInterviewCreationIntegrationTest(
             """.trimIndent(),
             roomId,
         )
-        assertEquals(inactiveWorkspaceBeforeFinish, inactiveWorkspaceAfterLateWrites)
+        assertEquals("// late REST workspace code", inactiveWorkspaceAfterLateWrites["solution_code"])
+        assertEquals("java", inactiveWorkspaceAfterLateWrites["solution_language"])
+        assertEquals("late REST workspace brief", inactiveWorkspaceAfterLateWrites["briefing_markdown"])
+        assertEquals(false, inactiveWorkspaceAfterLateWrites["workspace_focus_mode"])
+        assertEquals("AQID", inactiveWorkspaceAfterLateWrites["workspace_yjs_document_base64"])
+        assertEquals(99L, inactiveWorkspaceAfterLateWrites["workspace_yjs_sequence"])
     }
 
     @Test
@@ -2699,7 +3711,6 @@ class TeamInterviewCreationIntegrationTest(
         val team = team(owner, "Team room manager workspace")
         seedMembership(team.id, creator.id, role = "MEMBER")
         seedMembership(team.id, interviewer.id, role = "MEMBER")
-        seedMembership(team.id, candidate.id, role = "MEMBER")
 
         val firstTask = body(createTeamTask(owner, team.id, "Published task", "Published brief", "// published", "nodejs")).path("task")
         val secondTask = body(createTeamTask(owner, team.id, "Prepared task", "Prepared brief", "// prepared", "kotlin")).path("task")
@@ -2720,7 +3731,7 @@ class TeamInterviewCreationIntegrationTest(
             trackId = null,
             vacancyId = null,
             interviewerIds = listOf(interviewer.id),
-            candidateIds = listOf(candidate.id),
+            candidateIds = emptyList(),
         )
         assertStatus(created, 201, "team interview fixture must be created")
         val interview = body(created).path("interview")
@@ -2801,7 +3812,7 @@ class TeamInterviewCreationIntegrationTest(
             contentType = MediaType.APPLICATION_JSON
             content = objectMapper.writeValueAsString(mapOf("code" to "// removed", "revision" to 1))
         }.andReturn()
-        assertStatus(removedInterviewerSave, 404, "removed interviewer cannot keep saving a team task workspace")
+        assertStatus(removedInterviewerSave, 403, "removed interviewer cannot keep saving a team task workspace")
         assertBodyDoesNotContain(removedInterviewerSave, roomId, inviteCode, interviewer.id, "// removed")
     }
 
@@ -2984,25 +3995,27 @@ class TeamInterviewCreationIntegrationTest(
         expectedProgrammeId: String? = null,
         expectedProgrammeVersion: Long? = null,
         taskIds: List<String> = emptyList(),
-    ): MvcResult =
-        mockMvc.post("/api/teams/$teamId/interviews") {
+        selectedTaskIds: List<String>? = null,
+    ): MvcResult {
+        val requestBody = mutableMapOf<String, Any?>(
+            "title" to title,
+            "taskSetId" to taskSetId,
+            "taskIds" to taskIds,
+            "trackId" to trackId,
+            "vacancyId" to vacancyId,
+            "interviewerIds" to interviewerIds,
+            "candidateIds" to candidateIds,
+            "programmeId" to expectedProgrammeId,
+            "programmeVersion" to expectedProgrammeVersion,
+        )
+        selectedTaskIds?.let { requestBody["selectedTaskIds"] = it }
+        return mockMvc.post("/api/teams/$teamId/interviews") {
             authorize(actor)
             header("Idempotency-Key", key)
             contentType = MediaType.APPLICATION_JSON
-            content = objectMapper.writeValueAsString(
-                mapOf(
-                    "title" to title,
-                    "taskSetId" to taskSetId,
-                    "taskIds" to taskIds,
-                    "trackId" to trackId,
-                    "vacancyId" to vacancyId,
-                    "interviewerIds" to interviewerIds,
-                    "candidateIds" to candidateIds,
-                    "programmeId" to expectedProgrammeId,
-                    "programmeVersion" to expectedProgrammeVersion,
-                ),
-            )
+            content = objectMapper.writeValueAsString(requestBody)
         }.andReturn()
+    }
 
     private fun listTeamInterviews(actor: HrTestAccount, teamId: String, ownership: String? = null): MvcResult =
         mockMvc.get("/api/teams/$teamId/interviews") {

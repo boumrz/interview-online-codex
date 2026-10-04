@@ -124,7 +124,7 @@ try {
     .locator('[data-testid="room-private-notes-export"]')
     .click();
   await ownerPage1
-    .getByRole("heading", { name: "Экспорт личных заметок" })
+    .getByRole("dialog", { name: "Экспорт личных заметок" })
     .waitFor({ timeout: 5000 });
   const mdDownloadPromise = ownerPage1.waitForEvent("download");
   await ownerPage1.getByRole("button", { name: "Скачать .md" }).click();

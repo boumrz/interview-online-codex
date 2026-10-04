@@ -42,7 +42,7 @@ class UserPresetLifecycleIntegrationTest(
     }
 
     @Test
-    fun `personal task sets can be copied archived restored and versioned without losing order`() {
+    fun `personal task sets support copy revision updates and removed archive endpoints without losing order`() {
         postgres.verifyPostgres16()
         val owner = account("preset-owner")
         val foreign = account("preset-foreign")
@@ -72,26 +72,20 @@ class UserPresetLifecycleIntegrationTest(
         val foreignCopy = copyPreset(foreign, presetId)
         assertStatusAndCode(foreignCopy, 404, "PRESET_NOT_FOUND")
 
-        val archived = archivePreset(owner, presetId)
-        assertEquals(200, archived.response.status, "owner archives personal task set")
-        assertEquals("ARCHIVED", body(archived).path("status").asText())
-        assertEquals(1, body(archived).path("revision").asLong())
-        assertEquals(listOf(copyId), body(listPresets(owner)).map { it.path("id").asText() })
-        assertEquals(listOf(presetId), body(listPresets(owner, "archived")).map { it.path("id").asText() })
-
-        val restored = restorePreset(owner, presetId)
-        assertEquals(200, restored.response.status, "owner restores personal task set")
-        assertEquals("ACTIVE", body(restored).path("status").asText())
-        assertEquals(2, body(restored).path("revision").asLong())
+        assertEquals(404, archivePreset(owner, presetId).response.status, "archive endpoint removed")
+        assertEquals(404, restorePreset(owner, presetId).response.status, "restore endpoint removed")
+        assertEquals(setOf(copyId, presetId), body(listPresets(owner)).map { it.path("id").asText() }.toSet())
+        assertEquals(setOf(copyId, presetId), body(listPresets(owner, "archived")).map { it.path("id").asText() }.toSet())
+        assertEquals(200, updatePreset(owner, presetId, "Backend intermediate", listOf(firstTaskId, secondTaskId), revision = 0).response.status)
 
         val stale = updatePreset(owner, presetId, "Backend stale", listOf(secondTaskId), revision = 0)
         assertStatusAndCode(stale, 409, "PRESET_REVISION_CONFLICT")
-        assertEquals(2, body(stale).path("currentRevision").asLong())
+        assertEquals(1, body(stale).path("currentRevision").asLong())
 
-        val reordered = updatePreset(owner, presetId, "Backend interview set", listOf(secondTaskId, firstTaskId), revision = 2)
+        val reordered = updatePreset(owner, presetId, "Backend interview set", listOf(secondTaskId, firstTaskId), revision = 1)
         assertEquals(200, reordered.response.status, "owner updates with current revision")
         val reorderedBody = body(reordered)
-        assertEquals(3, reorderedBody.path("revision").asLong())
+        assertEquals(2, reorderedBody.path("revision").asLong())
         assertEquals("Backend interview set", reorderedBody.path("name").asText())
         assertEquals(listOf(secondTaskId, firstTaskId), reorderedBody.path("items").map { it.path("taskTemplateId").asText() })
         assertEquals(listOf(0, 1), reorderedBody.path("items").map { it.path("position").asInt() })

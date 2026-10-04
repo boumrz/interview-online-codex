@@ -1,0 +1,26 @@
+{
+  "": {
+    "swift-dependencies": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/master.swiftdeps"
+  },
+  "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Sources/NativeAXLifecycleHelper/AXStateMachine.swift": {
+    "dependencies": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/AXStateMachine.d",
+    "object": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/AXStateMachine.swift.o",
+    "swiftmodule": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/AXStateMachine~partial.swiftmodule",
+    "swift-dependencies": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/AXStateMachine.swiftdeps",
+    "diagnostics": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/AXStateMachine.dia"
+  },
+  "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Sources/NativeAXLifecycleHelper/DescriptorCleanup.swift": {
+    "dependencies": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/DescriptorCleanup.d",
+    "object": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/DescriptorCleanup.swift.o",
+    "swiftmodule": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/DescriptorCleanup~partial.swiftmodule",
+    "swift-dependencies": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/DescriptorCleanup.swiftdeps",
+    "diagnostics": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/DescriptorCleanup.dia"
+  },
+  "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Sources/NativeAXLifecycleHelper/NativeAXLifecycleHelper.swift": {
+    "dependencies": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/NativeAXLifecycleHelper.d",
+    "object": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/NativeAXLifecycleHelper.swift.o",
+    "swiftmodule": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/NativeAXLifecycleHelper~partial.swiftmodule",
+    "swift-dependencies": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/NativeAXLifecycleHelper.swiftdeps",
+    "diagnostics": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/NativeAXLifecycleHelper.dia"
+  }
+}

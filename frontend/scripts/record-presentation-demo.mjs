@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(scriptDirectory, "..", "..");
 const outputDirectory = path.join(repositoryRoot, "output", "playwright", "presentation-demo");
-const videoPath = path.join(outputDirectory, "interview-online-presentation-demo.webm");
+const videoPath = path.join(outputDirectory, "interhub-presentation-demo.webm");
 const markdownPreviewPath = path.join(outputDirectory, "interview-notes-preview.html");
 const baseUrl = process.env.DEMO_BASE_URL ?? "http://localhost:5174";
 const candidateBaseUrl = baseUrl.replace("localhost", "127.0.0.1");

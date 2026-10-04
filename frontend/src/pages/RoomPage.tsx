@@ -1,4 +1,4 @@
-﻿import React, {
+import React, {
   useCallback,
   useEffect,
   useId,
@@ -7,6 +7,7 @@
   useRef,
   useState,
 } from "react";
+import { App as AntDesignApp, Button as AntButton, Input as AntInput } from "antd";
 import {
   ActionIcon,
   Alert,
@@ -15,7 +16,6 @@ import {
   Button,
   Checkbox,
   Group,
-  Menu,
   Modal,
   MultiSelect,
   Radio,
@@ -27,14 +27,14 @@ import {
   Textarea,
   ThemeIcon,
   Tooltip,
-} from "@mantine/core";
+} from "components/antd-compat";
 import {
   IconChecklist,
   IconCode,
-  IconDots,
   IconDownload,
   IconFileDescription,
   IconGripVertical,
+  IconHelpCircle,
   IconHome2,
   IconMessages,
   IconNote,
@@ -43,7 +43,7 @@ import {
   IconTrash,
   IconUsers,
   IconX,
-} from "@tabler/icons-react";
+} from "components/antd-icons";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAppSelector } from "../app/hooks";
 import { useEscapeLayer } from "../components/useEscapeLayer";
@@ -136,6 +136,7 @@ import {
   updateRoomChatDraft,
 } from "../features/room/roomChatDelivery";
 
+import { isRoomReadOnly } from "../features/room/roomEditPolicy";
 import styles from "./RoomPage.module.css";
 
 type CursorInfo = {
@@ -175,6 +176,8 @@ type RealtimeState = {
    */
   personalNotes?: PersonalNoteEntry[];
   briefingMarkdown?: string;
+  roomEditorMode?: "code" | "markdown";
+  roomEditorModeRevision?: number;
   tasks?: RoomTask[];
   taskScores: Record<string, number | null>;
   participants: Participant[];
@@ -233,6 +236,7 @@ type PersonalNoteEntry = {
 
 type PendingPersonalNoteEntry = PersonalNoteEntry & {
   pending: true;
+  deliveryState: "pending" | "failed";
 };
 
 /**
@@ -449,6 +453,7 @@ function normalizeRealtimeTask(value: unknown): RoomTask | null {
   const mandatory = candidate.mandatory === true;
   if (!title) return null;
   return {
+    id: typeof candidate.id === "string" ? candidate.id : null,
     stepIndex,
     title,
     description,
@@ -654,6 +659,7 @@ function queryStatus(error: unknown): number | null {
 }
 
 export function RoomPage() {
+  const { notification } = AntDesignApp.useApp();
   const { inviteCode = "" } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -734,7 +740,7 @@ export function RoomPage() {
   /**
    * Регистрируем модалку экспорта в стеке Escape-слоёв: пока она открыта,
    * Esc сначала закрывает её, не задевая нижележащих слоёв (например,
-   * выпадающее Mantine Menu участников).
+   * выпадающее Ant Design меню участников).
    */
   useEscapeLayer(privateNotesExportModalOpened, closePrivateNotesExportModal);
   const [exportIncludeTimestamps, setExportIncludeTimestamps] = useState(false);
@@ -748,6 +754,7 @@ export function RoomPage() {
     | null
     | { progress: number; label: string; format: "md" | "pdf" }
   >(null);
+  const [privateNotesExportError, setPrivateNotesExportError] = useState<string | null>(null);
   const [verdictModalOpen, setVerdictModalOpen] = useState(false);
   const [selectedVerdict, setSelectedVerdict] = useState<string>("HIRE");
   const [verdictComment, setVerdictComment] = useState("");
@@ -761,7 +768,7 @@ export function RoomPage() {
   const hrAssignmentRequestsRef = useRef(new Map<string, { abort: () => void }>());
   const [pendingHrActions, setPendingHrActions] = useState<ReadonlyMap<string, HrAction>>(new Map());
   const [hrAssignmentFeedback, setHrAssignmentFeedback] = useState<{
-    kind: "success" | "error";
+    kind: "error";
     action: HrAction;
     message: string;
   } | null>(null);
@@ -811,6 +818,10 @@ export function RoomPage() {
   });
   const editorValueRef = useRef("");
   const briefingDebounceTimerRef = useRef<number | null>(null);
+  const briefingFlushTimerRef = useRef<number | null>(null);
+  const briefingLatestValueRef = useRef<string | null>(null);
+  const briefingLatestContextRef = useRef<{ syncKey: string | null; taskId: string | null } | null>(null);
+  const briefingSendRef = useRef<((value: string, context?: { syncKey: string | null; taskId: string | null }) => void) | null>(null);
   const briefingStepKeyRef = useRef<string>("");
 
   useEffect(() => {
@@ -909,6 +920,8 @@ export function RoomPage() {
         .filter((item): item is NoteMessage => Boolean(item)),
       personalNotes: [],
       briefingMarkdown: room.briefingMarkdown ?? "",
+      roomEditorMode: room.roomEditorMode ?? "code",
+      roomEditorModeRevision: room.roomEditorModeRevision ?? 0,
       tasks: [...(room.tasks ?? [])].sort(
         (left, right) => left.stepIndex - right.stepIndex,
       ),
@@ -919,6 +932,8 @@ export function RoomPage() {
         ? room.role
         : "candidate") as "owner" | "interviewer" | "candidate",
       canManageRoom: Boolean(room.canManageRoom),
+      status: room.status,
+      finishedAt: room.finishedAt ? Date.parse(room.finishedAt) : null,
       canGrantAccess: Boolean(room.canGrantAccess),
       notesLockedBySessionId: null,
       notesLockedByDisplayName: null,
@@ -943,6 +958,7 @@ export function RoomPage() {
   const mergedNotes = merged?.notes ?? "";
   const mergedBriefingMarkdown = merged?.briefingMarkdown ?? "";
   const canManageRoom = merged?.canManageRoom ?? false;
+  const roomReadOnly = isRoomReadOnly(merged);
   useEffect(() => {
     if (!merged || canManageRoom) return;
     setRoomChatDelivery((current) =>
@@ -1032,11 +1048,20 @@ export function RoomPage() {
     const stepKey = `${merged.inviteCode}:${merged.currentStep}`;
     const stepChanged = briefingStepKeyRef.current !== stepKey;
     if (stepChanged) {
+      if (briefingLatestValueRef.current != null && briefingLatestContextRef.current) {
+        briefingSendRef.current?.(briefingLatestValueRef.current, briefingLatestContextRef.current);
+      }
       briefingStepKeyRef.current = stepKey;
       if (briefingDebounceTimerRef.current != null) {
         window.clearTimeout(briefingDebounceTimerRef.current);
         briefingDebounceTimerRef.current = null;
       }
+      if (briefingFlushTimerRef.current != null) {
+        window.clearTimeout(briefingFlushTimerRef.current);
+        briefingFlushTimerRef.current = null;
+      }
+      briefingLatestValueRef.current = null;
+      briefingLatestContextRef.current = null;
       setBriefingDirty(false);
       setBriefingDraft(mergedBriefingMarkdown);
       return;
@@ -1089,13 +1114,13 @@ export function RoomPage() {
   /** Per-task counters used by the step list ("заметки N"). */
   const privateNotesCountByStep = useMemo(() => {
     const counts = new Map<number, number>();
-    visiblePersonalNotes.forEach((entry) => {
+    personalNotes.forEach((entry) => {
       const stepIndex = entry.blockStepIndex;
       if (typeof stepIndex !== "number") return;
       counts.set(stepIndex, (counts.get(stepIndex) ?? 0) + 1);
     });
     return counts;
-  }, [visiblePersonalNotes]);
+  }, [personalNotes]);
   /**
    * UI label and step pointer for the active private block. For step blocks
    * the label is `Шаг N` (export augments it with the task title).
@@ -1195,7 +1220,7 @@ export function RoomPage() {
       return;
     }
     if (mergedTasks.length === 0) {
-      if (activePrivateBlock != null) setActivePrivateBlock(null);
+      if (activePrivateBlock?.kind === "step") setActivePrivateBlock(null);
       lastAutoStepBlockRef.current = null;
       return;
     }
@@ -1255,6 +1280,9 @@ export function RoomPage() {
       }
       if (briefingDebounceTimerRef.current != null) {
         window.clearTimeout(briefingDebounceTimerRef.current);
+      }
+      if (briefingFlushTimerRef.current != null) {
+        window.clearTimeout(briefingFlushTimerRef.current);
       }
     };
   }, []);
@@ -1483,6 +1511,20 @@ export function RoomPage() {
         setResyncSignal((value) => value + 1);
       }
       clearRecoverySyncPending();
+      const lostBriefingAccess = previousState?.canManageRoom && !nextState.canManageRoom;
+      const becameReadOnly = isRoomReadOnly(nextState) && (!previousState || !isRoomReadOnly(previousState));
+      if (lostBriefingAccess || becameReadOnly) {
+        if (briefingDebounceTimerRef.current != null) window.clearTimeout(briefingDebounceTimerRef.current);
+        if (briefingFlushTimerRef.current != null) window.clearTimeout(briefingFlushTimerRef.current);
+        briefingDebounceTimerRef.current = null;
+        briefingFlushTimerRef.current = null;
+        briefingLatestValueRef.current = null;
+        briefingLatestContextRef.current = null;
+        if (lostBriefingAccess) {
+          setBriefingDirty(false);
+          setBriefingDraft(nextState.briefingMarkdown ?? "");
+        }
+      }
       stateRef.current = nextState;
       setState(nextState);
     },
@@ -1922,6 +1964,14 @@ export function RoomPage() {
     },
     [],
   );
+  const handlePrivateNoteFailure = useCallback(
+    ({ privateNoteId }: { privateNoteId: string }) => {
+      setPendingPrivateNotes((current) => current.map((entry) =>
+        entry.id === privateNoteId ? { ...entry, deliveryState: "failed" } : entry,
+      ));
+    },
+    [],
+  );
   const {
     connected,
     accessDenied: realtimeAccessDenied,
@@ -1929,6 +1979,7 @@ export function RoomPage() {
     terminateRoomUnavailable,
     participantId,
     sessionId,
+    sendRoomEditorModeUpdate,
     sendLanguageUpdate,
     sendSetStep,
     sendTaskRatingUpdate,
@@ -1966,7 +2017,9 @@ export function RoomPage() {
     onRequireRecoverySync: markRecoverySyncPending,
     onNoteMessageAck: handleNoteMessageAck,
     onNoteMessageFailure: handleNoteMessageFailure,
+    onPrivateNoteFailure: handlePrivateNoteFailure,
   });
+  briefingSendRef.current = sendBriefingUpdate;
 
   useLayoutEffect(() => {
     invalidateHrAssignments();
@@ -2028,10 +2081,10 @@ export function RoomPage() {
     try {
       await request.unwrap();
       if (!isCurrentRequest()) return false;
-      setHrAssignmentFeedback({
-        kind: "success",
-        action,
-        message: `${target.displayName}: ${action === "remove" ? "роль нанимающего снята" : "назначен нанимающим"}`,
+      notification.success({
+        title: `${target.displayName}: ${action === "remove" ? "роль нанимающего снята" : "назначен нанимающим"}`,
+        placement: "top",
+        role: "status",
       });
       return true;
     } catch (assignmentError) {
@@ -2065,7 +2118,7 @@ export function RoomPage() {
   }, [
     addHrManager, removeHrManager, authToken, canManageRoom, connected, inviteCode, ownerToken,
     interviewerToken, initialRoomUnavailable, realtimeRoomUnavailable,
-    terminateRoomUnavailable, isCurrentHrAuthority,
+    terminateRoomUnavailable, isCurrentHrAuthority, notification,
   ]);
 
   const assignParticipantHr = useCallback((participant: Participant) => {
@@ -2093,7 +2146,7 @@ export function RoomPage() {
   }, [authUser?.id, participantId, sessionId]);
 
   useEffect(() => {
-    if (!isLocalWorkspacePreview || !connected) {
+    if (!isLocalWorkspacePreview || !connected || roomReadOnly) {
       const previousStep = managerWorkspaceRef.current?.stepIndex;
       if (previousStep != null) closeManagerWorkspace(previousStep);
       managerWorkspaceRef.current = null;
@@ -2110,6 +2163,7 @@ export function RoomPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     connected,
+    roomReadOnly,
     isLocalWorkspacePreview,
     selectedManagerStep,
     localPreviewTask?.title,
@@ -2199,7 +2253,7 @@ export function RoomPage() {
   }, [pendingPrivateNotes.length, personalNotes]);
 
   useEffect(() => {
-    if (briefingDirty && briefingDraft === mergedBriefingMarkdown) {
+    if (briefingDirty && briefingDraft === mergedBriefingMarkdown && briefingLatestValueRef.current === null) {
       setBriefingDirty(false);
     }
   }, [briefingDirty, briefingDraft, mergedBriefingMarkdown]);
@@ -2365,7 +2419,7 @@ export function RoomPage() {
   const editorReady = Boolean(state);
 
   const submitNoteMessage = useCallback(() => {
-    if (!merged || !canManageRoom) return;
+    if (!merged || !canManageRoom || roomReadOnly) return;
     const text = noteComposer.trim();
     if (!text) return;
     const timestampEpochMs = Date.now();
@@ -2407,11 +2461,13 @@ export function RoomPage() {
     effectiveDisplayName,
     merged,
     noteComposer,
+    roomReadOnly,
     sendNoteMessage,
     sessionId,
   ]);
 
   const retryNoteMessage = useCallback(() => {
+    if (roomReadOnly) return;
     const intent = roomChatDelivery.intent;
     if (
       roomChatDelivery.status !== "retryable_error" ||
@@ -2441,7 +2497,7 @@ export function RoomPage() {
       intent.timestampEpochMs,
       intent.originalClientEventSequence,
     );
-  }, [roomChatDelivery.intent, roomChatDelivery.status, sendNoteMessage]);
+  }, [roomChatDelivery.intent, roomChatDelivery.status, sendNoteMessage, roomReadOnly]);
 
   /**
    * Maps a raw block name (typed by the user or chosen from suggestions) to
@@ -2462,6 +2518,7 @@ export function RoomPage() {
   );
 
   const submitPrivateNoteEntry = useCallback(() => {
+    if (roomReadOnly) return;
     if (!merged || !canManageRoom) return;
     const parsedCommand = parsePersonalNotesCommand(privateNoteComposer);
     if (parsedCommand.kind === "block_apply") {
@@ -2483,6 +2540,14 @@ export function RoomPage() {
     const noteId = crypto.randomUUID();
     const blockName = activePrivateBlockInfo?.label ?? null;
     const blockStepIndex = activePrivateBlockInfo?.stepIndex ?? null;
+    const clientEventSequence = sendPrivateNoteEntry(
+      noteId,
+      text,
+      timestampEpochMs,
+      blockName,
+      blockStepIndex,
+    );
+    if (clientEventSequence == null) return;
     const optimisticEntry: PendingPersonalNoteEntry = {
       id: noteId,
       text,
@@ -2490,22 +2555,17 @@ export function RoomPage() {
       blockStepIndex,
       timestampEpochMs,
       pending: true,
+      deliveryState: "pending",
     };
     setPendingPrivateNotes((current) => [...current, optimisticEntry]);
     setPrivateNoteComposer("");
-    sendPrivateNoteEntry(
-      noteId,
-      text,
-      timestampEpochMs,
-      blockName,
-      blockStepIndex,
-    );
   }, [
     activePrivateBlock,
     activePrivateBlockInfo,
     canManageRoom,
     merged,
     privateNoteComposer,
+    roomReadOnly,
     resolveBlockFromName,
     sendPrivateNoteEntry,
   ]);
@@ -2537,34 +2597,38 @@ export function RoomPage() {
   const exportPersonalNotesMarkdown = useCallback(async () => {
     if (!merged) return;
     if (exportProgress !== null) return;
+    const generation = hrAssignmentGenerationRef.current;
+    setPrivateNotesExportError(null);
     setExportProgress({
       progress: 0,
       label: "Готовим markdown",
       format: "md",
     });
-    const markdownFileName = buildRoomExportFileName(room?.title, "md");
-    const markdown = buildPersonalNotesMarkdownDocument(
-      mergedTasks.map((task) => ({
-        stepIndex: task.stepIndex,
-        title: task.title,
-      })),
-      visiblePersonalNotes,
-      {
-        includeTimestamps: exportIncludeTimestamps,
-        includeFreeNotes: exportIncludeFreeNotes,
-      },
-      merged.taskScores,
-      room?.title,
-    );
-    const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
-    triggerBrowserDownload(blob, markdownFileName);
-    setExportProgress({
-      progress: 1,
-      label: "Файл готов, начинаем скачивание",
-      format: "md",
-    });
-    await new Promise((resolve) => window.setTimeout(resolve, 280));
-    setExportProgress(null);
+    try {
+      const markdownFileName = buildRoomExportFileName(room?.title, "md");
+      const markdown = buildPersonalNotesMarkdownDocument(
+        mergedTasks.map((task) => ({
+          stepIndex: task.stepIndex,
+          title: task.title,
+        })),
+        personalNotes,
+        {
+          includeTimestamps: exportIncludeTimestamps,
+          includeFreeNotes: exportIncludeFreeNotes,
+        },
+        merged.taskScores,
+        room?.title,
+      );
+      const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+      triggerBrowserDownload(blob, markdownFileName);
+      if (isCurrentHrAuthority(generation)) {
+        notification.success({ title: "Заметки выгружены в Markdown", placement: "top", role: "status" });
+      }
+    } catch {
+      setPrivateNotesExportError("Не удалось выгрузить Markdown. Повторите попытку.");
+    } finally {
+      setExportProgress(null);
+    }
   }, [
     exportProgress,
     exportIncludeFreeNotes,
@@ -2572,12 +2636,16 @@ export function RoomPage() {
     merged,
     room?.title,
     mergedTasks,
-    visiblePersonalNotes,
+    personalNotes,
+    notification,
+    isCurrentHrAuthority,
   ]);
 
   const exportPersonalNotesPdf = useCallback(async () => {
     if (!merged) return;
     if (exportProgress !== null) return; // Защита от повторного клика.
+    const generation = hrAssignmentGenerationRef.current;
+    setPrivateNotesExportError(null);
     setExportProgress({
       progress: 0,
       label: "Готовим документ",
@@ -2589,7 +2657,7 @@ export function RoomPage() {
           stepIndex: task.stepIndex,
           title: task.title,
         })),
-        visiblePersonalNotes,
+        personalNotes,
         {
           includeTimestamps: exportIncludeTimestamps,
           includeFreeNotes: exportIncludeFreeNotes,
@@ -2601,18 +2669,22 @@ export function RoomPage() {
         markdown,
         fileName: buildRoomExportFileName(room?.title, "pdf"),
         onProgress: (progress, label) => {
-          setExportProgress({ progress, label, format: "pdf" });
+          if (progress < 1 && isCurrentHrAuthority(generation)) {
+            setExportProgress({ progress, label, format: "pdf" });
+          }
         },
       });
-      setExportProgress({
-        progress: 1,
-        label: "Файл готов, начинаем скачивание",
-        format: "pdf",
-      });
-      // Keep success state briefly so modal UI doesn't "jump" right after completion.
-      await new Promise((resolve) => window.setTimeout(resolve, 380));
+      if (isCurrentHrAuthority(generation)) {
+        notification.success({ title: "Заметки выгружены в PDF", placement: "top", role: "status" });
+      }
     } catch (error) {
-      console.error("PRIVATE_NOTES_PDF_EXPORT_FAIL", error);
+      if (isCurrentHrAuthority(generation)) {
+        setPrivateNotesExportError(
+          error instanceof Error && error.message === "PDF_CYRILLIC_FONT_LOAD_FAILED"
+            ? "Не удалось загрузить шрифт PDF. Повторите попытку."
+            : "Не удалось выгрузить PDF. Повторите попытку.",
+        );
+      }
     } finally {
       setExportProgress(null);
     }
@@ -2623,23 +2695,42 @@ export function RoomPage() {
     merged,
     room?.title,
     mergedTasks,
-    visiblePersonalNotes,
+    personalNotes,
+    notification,
+    isCurrentHrAuthority,
   ]);
 
   const changeBriefingMarkdown = useCallback(
     (value: string) => {
       setBriefingDraft(value);
       setBriefingDirty(true);
-      if (!canManageRoom) return;
+      if (!canManageRoom || roomReadOnly) return;
+      briefingLatestValueRef.current = value;
+      const editingState = stateRef.current;
+      briefingLatestContextRef.current = editingState ? {
+        syncKey: `${editingState.inviteCode}:${editingState.currentStep}:${editingState.language}`,
+        taskId: editingState.tasks?.find(task => task.stepIndex === editingState.currentStep)?.id ?? null,
+      } : null;
+      const flush = () => {
+        if (briefingDebounceTimerRef.current != null) window.clearTimeout(briefingDebounceTimerRef.current);
+        if (briefingFlushTimerRef.current != null) window.clearTimeout(briefingFlushTimerRef.current);
+        briefingDebounceTimerRef.current = null;
+        briefingFlushTimerRef.current = null;
+        if (briefingLatestValueRef.current != null) {
+          sendBriefingUpdate(briefingLatestValueRef.current, briefingLatestContextRef.current ?? undefined);
+          briefingLatestValueRef.current = null;
+          briefingLatestContextRef.current = null;
+        }
+      };
       if (briefingDebounceTimerRef.current != null) {
         window.clearTimeout(briefingDebounceTimerRef.current);
       }
-      briefingDebounceTimerRef.current = window.setTimeout(() => {
-        sendBriefingUpdate(value);
-        briefingDebounceTimerRef.current = null;
-      }, 160);
+      briefingDebounceTimerRef.current = window.setTimeout(flush, 160);
+      if (briefingFlushTimerRef.current == null) {
+        briefingFlushTimerRef.current = window.setTimeout(flush, 750);
+      }
     },
-    [canManageRoom, sendBriefingUpdate],
+    [canManageRoom, roomReadOnly, sendBriefingUpdate],
   );
 
   const addTasksFromCatalog = useCallback(
@@ -2920,15 +3011,15 @@ export function RoomPage() {
 
   const handleCandidateKeyPress = useCallback(
     (payload: KeyPressPayload) => {
-      if (merged?.role === "candidate") {
+      if (merged?.role === "candidate" && !roomReadOnly) {
         sendKeyPress(payload);
       }
     },
-    [merged?.role, sendKeyPress],
+    [merged?.role, roomReadOnly, sendKeyPress],
   );
 
   useCandidateKeyTracker({
-    active: merged?.role === "candidate",
+    active: merged?.role === "candidate" && !roomReadOnly,
     onKeyEvent: handleCandidateKeyPress,
   });
 
@@ -2937,7 +3028,7 @@ export function RoomPage() {
       <Box className={styles.shell} p="xl">
         <section className={styles.realtimeRoomUnavailable} data-testid="room-realtime-unavailable" role="alert">
           <Text fw={700} size="lg">Комната недоступна</Text>
-          <Text c="#b7c5d8" size="sm">
+          <Text c="var(--app-muted)" size="sm">
             Откройте актуальную ссылку-приглашение или обратитесь к организатору интервью.
           </Text>
           <Button component={Link} to="/" variant="light" color="blue">
@@ -2976,14 +3067,12 @@ export function RoomPage() {
   const currentTaskRating =
     merged.taskScores[String(merged.currentStep)] ?? step?.score ?? null;
   const stepStarterCode = step?.starterCode ?? "";
-  // Состояние «focus mode» (synced) хранится прямо в `briefingMarkdown`
-  // через скрытый sentinel-маркер (см. `briefingFocusMode.ts`). Это
-  // даёт синхронизацию через уже существующий канал без миграции БД.
+  // The editor mode is room-wide; legacy Markdown markers are stripped on display.
   const rawBriefingValue = briefingDirty ? briefingDraft : mergedBriefingMarkdown;
-  const briefingFocusMode = extractFocusMode(rawBriefingValue);
+  const briefingFocusMode = merged.roomEditorMode === "markdown";
   const ownerBriefingValue = stripFocusMarker(rawBriefingValue);
   const candidateBriefingValue = stripFocusMarker(mergedBriefingMarkdown);
-  const candidateBriefingFocusMode = extractFocusMode(mergedBriefingMarkdown);
+  const candidateBriefingFocusMode = briefingFocusMode;
   const localStatusTask = mergedTasks.find(
     (task) => task.stepIndex === localSelectedStep,
   );
@@ -3009,16 +3098,8 @@ export function RoomPage() {
     changeBriefingMarkdown(applyBriefingFocusMode(baseValue, next));
   };
 
-  /**
-   * Колбэк для изменения markdown из BriefingBoard: получает «чистый»
-   * текст (без маркера), а мы обратно прокидываем его в общий
-   * редактор с учётом текущего focus mode.
-   */
   const handleBriefingValueChange = (cleanValue: string) => {
-    const withFocus = briefingFocusMode
-      ? applyBriefingFocusMode(cleanValue, true)
-      : cleanValue;
-    changeBriefingMarkdown(withFocus);
+    changeBriefingMarkdown(cleanValue);
   };
 
   const applyManagerWorkspacePatch = (patch: Partial<RoomTaskWorkspace>) => {
@@ -3041,7 +3122,7 @@ export function RoomPage() {
 
   const managerWorkspaceBriefing = localWorkspacePreview?.briefingMarkdown ?? "";
   const managerWorkspaceFocusMode =
-    localWorkspacePreview?.focusMode ?? extractFocusMode(managerWorkspaceBriefing);
+    briefingFocusMode;
 
   const handleManagerWorkspaceBriefingChange = (cleanValue: string) => {
     const workspace = selectedManagerWorkspace();
@@ -3049,12 +3130,12 @@ export function RoomPage() {
     const briefingMarkdown = cleanValue;
     applyManagerWorkspacePatch({
       briefingMarkdown,
-      revision: (workspace.revision ?? 0) + 1,
     });
     sendManagerWorkspaceBriefingUpdate(
       workspace.stepIndex,
       briefingMarkdown,
       workspace.revision ?? 0,
+      workspace.briefingMarkdown,
     );
   };
 
@@ -3063,7 +3144,6 @@ export function RoomPage() {
     if (!workspace) return;
     applyManagerWorkspacePatch({
       focusMode: nextFocusMode,
-      revision: (workspace.revision ?? 0) + 1,
     });
     sendManagerWorkspaceFocusModeUpdate(
       workspace.stepIndex,
@@ -3082,7 +3162,6 @@ export function RoomPage() {
     const language = normalizeRoomLanguage(nextLanguage);
     applyManagerWorkspacePatch({
       language,
-      revision: (workspace.revision ?? 0) + 1,
     });
     sendManagerWorkspaceLanguageUpdate(
       workspace.stepIndex,
@@ -3172,23 +3251,24 @@ export function RoomPage() {
         closeOnEscape={false}
         withCloseButton={false}
         title="Представьтесь перед входом в комнату"
+        size={440}
         centered
       >
-        <Stack>
-          <Text size="sm" c="#cbd5e1">
-            Это имя увидит собеседующий в списке участников.
+        <Stack gap="sm">
+          <Text size="sm" c="var(--app-muted)">
+            Это имя увидят участники интервью.
           </Text>
-          <TextInput
+          <TextInput placeholder="Имя, которое увидят участники"
             label="Ваше имя"
             value={draftName}
             error={candidateNameError || undefined}
-            onChange={(event) => {
+            onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
               setDraftName(event.currentTarget.value);
               if (candidateNameError) {
                 setCandidateNameError("");
               }
             }}
-            onKeyDown={(event) => {
+            onKeyDown={(event: React.KeyboardEvent<HTMLElement>) => {
               if (event.key !== "Enter") return;
               event.preventDefault();
               submitCandidateName();
@@ -3200,7 +3280,7 @@ export function RoomPage() {
           </Button>
           {!authToken && (
             <Button variant="outline" color="gray" onClick={goToLoginAndReturn}>
-              Войти через аккаунт (по желанию)
+              Войти через аккаунт
             </Button>
           )}
         </Stack>
@@ -3224,17 +3304,18 @@ export function RoomPage() {
           participants={merged.participants}
           showParticipants={canManageRoom}
           showLanguageControl={canManageRoom && !(localWorkspacePreview ? localStatusTask?.mandatory : step?.mandatory)}
+          languageDisabled={roomReadOnly}
           currentLanguage={normalizeRoomLanguage(localWorkspacePreview?.language ?? merged.language)}
           onLanguageChange={(value) => {
-            if (!value) return;
+            if (!value || roomReadOnly) return;
             if (localWorkspacePreview) {
               handleManagerWorkspaceLanguageChange(value);
               return;
             }
             sendLanguageUpdate(value);
           }}
-          canGrantAccess={Boolean(merged.canGrantAccess)}
-          canAssignHr={canManageRoom}
+          canGrantAccess={!roomReadOnly && Boolean(merged.canGrantAccess)}
+          canAssignHr={canManageRoom && !roomReadOnly}
           pendingHrActions={pendingHrActions}
           onAssignHr={assignParticipantHr}
           onRemoveHr={removeParticipantHr}
@@ -3244,6 +3325,7 @@ export function RoomPage() {
         <div className={styles.interviewPanelHost}>
           <RoomStatusStrip
             role={merged.role}
+            roomStatus={merged.status}
             connected={connected}
             localStep={canManageRoom && localStatusTask
               ? { stepIndex: localStatusTask.stepIndex, title: localStatusTask.title }
@@ -3269,6 +3351,7 @@ export function RoomPage() {
               identityKey={authUser?.id ?? `guest:${participantId}`}
               canManageRoom={canManageRoom}
               isTeamRoom={room?.teamId != null}
+              teamId={room?.teamId ?? undefined}
               authorityGeneration={hrAssignmentGenerationRef.current}
               isCurrentAuthority={isCurrentHrAuthority}
               pendingHrActions={pendingHrActions}
@@ -3306,10 +3389,10 @@ export function RoomPage() {
             data-testid="room-step-change-notification"
           >
             <div className={styles.stepChangeNotificationCopy}>
-              <Text size="sm" fw={700} c="#e8eef8">
+              <Text size="sm" fw={700} c="var(--app-text)">
                 Активный шаг изменён
               </Text>
-              <Text size="xs" c="#b7c5d8">
+              <Text size="xs" c="var(--app-muted)">
                 {`В комнате активна задача «${stepChangeNotification.title}». Переключитесь на неё, чтобы продолжить вместе с кандидатом.`}
               </Text>
             </div>
@@ -3339,7 +3422,7 @@ export function RoomPage() {
         {realtimeAccessDenied ? (
           <section className={styles.realtimeAccessError} data-testid="room-realtime-access-error" role="alert">
             <Text fw={700} size="lg">Доступ к комнате не подтверждён</Text>
-            <Text c="#b7c5d8" size="sm">
+            <Text c="var(--app-muted)" size="sm">
               Проверьте ссылку-приглашение или войдите в аккаунт и откройте комнату снова.
             </Text>
             <Button component={Link} to="/login" variant="light" color="blue">
@@ -3349,7 +3432,7 @@ export function RoomPage() {
         ) : !hasRealtimeState ? (
           <section className={styles.realtimeAccessPending} data-testid="room-realtime-access-pending" role="status">
             <Text fw={700} size="lg">Подтверждаем доступ к комнате…</Text>
-            <Text c="#b7c5d8" size="sm">
+            <Text c="var(--app-muted)" size="sm">
               Рабочая область станет доступна после подключения к комнате.
             </Text>
           </section>
@@ -3394,6 +3477,9 @@ export function RoomPage() {
             onExportPrivateNotesMarkdown={exportPersonalNotesMarkdown}
             onExportPrivateNotesPdf={exportPersonalNotesPdf}
             pdfExportProgress={exportProgress}
+            privateNotesExportError={privateNotesExportError}
+            onRoomEditorModeChange={sendRoomEditorModeUpdate}
+            roomModeConnected={connected}
             briefingMarkdown={ownerBriefingValue}
             briefingFocusMode={briefingFocusMode}
             onBriefingChange={handleBriefingValueChange}
@@ -3520,6 +3606,9 @@ function OwnerLayout({
   onExportPrivateNotesMarkdown,
   onExportPrivateNotesPdf,
   pdfExportProgress,
+  privateNotesExportError,
+  onRoomEditorModeChange,
+  roomModeConnected,
   briefingMarkdown,
   briefingFocusMode,
   onBriefingChange,
@@ -3623,6 +3712,9 @@ function OwnerLayout({
         format: "md" | "pdf";
       }
     | null;
+  privateNotesExportError: string | null;
+  onRoomEditorModeChange: (mode: "code" | "markdown", revision: number) => Promise<void>;
+  roomModeConnected: boolean;
   briefingMarkdown: string;
   /**
    * Synced focus mode: когда `true`, у обоих участников вместо
@@ -3676,6 +3768,34 @@ function OwnerLayout({
   onSubmitVerdict: () => void;
   isSettingVerdict: boolean;
 }) {
+  const { notification: roomNotification } = AntDesignApp.useApp();
+  const [roomModeConfirmation, setRoomModeConfirmation] = useState<{ mode: "code" | "markdown"; revision: number } | null>(null);
+  const [roomModeSubmitting, setRoomModeSubmitting] = useState(false);
+  const [roomModeError, setRoomModeError] = useState<string | null>(null);
+  const roomModeContextRef = useRef({ inviteCode, sessionId, authToken, active: true });
+  useEffect(() => {
+    const context = { inviteCode, sessionId, authToken, active: true };
+    roomModeContextRef.current = context;
+    setRoomModeConfirmation(null); setRoomModeSubmitting(false); setRoomModeError(null);
+    return () => { context.active = false; };
+  }, [inviteCode, sessionId, authToken]);
+  const confirmRoomMode = async () => {
+    if (!roomModeConfirmation || roomModeSubmitting || roomReadOnly) return;
+    const context = roomModeContextRef.current;
+    const isCurrentModeAction = () => context.active && roomModeContextRef.current === context && (context.authToken ?? null) === localStorage.getItem("auth_token");
+    setRoomModeSubmitting(true); setRoomModeError(null);
+    try {
+      await onRoomEditorModeChange(roomModeConfirmation.mode, roomModeConfirmation.revision);
+      if (!isCurrentModeAction()) return;
+      setRoomModeConfirmation(null);
+      roomNotification.success({ placement: "top", role: "status", title: "Режим комнаты изменён", description: roomModeConfirmation.mode === "markdown" ? "Markdown" : "Code" });
+    } catch (failure) {
+      if (!isCurrentModeAction()) return;
+      setRoomModeError(failure instanceof Error ? failure.message : "Не удалось изменить режим комнаты.");
+    } finally {
+      if (isCurrentModeAction()) setRoomModeSubmitting(false);
+    }
+  };
   const isCompactLayout = useIsCompactRoomLayout(760);
   const [activeRailPanel, setActiveRailPanel] = useState<
     "tasks" | "roomTools" | null
@@ -3684,6 +3804,7 @@ function OwnerLayout({
   const [scorePickerOpen, setScorePickerOpen] = useState(false);
   const [activeMobileTab, setActiveMobileTab] =
     useState<MobileRoomTab>("editor");
+  const roomReadOnly = isRoomReadOnly(merged);
   const [addTaskModalOpened, setAddTaskModalOpened] = useState(false);
   const [addTaskMode, setAddTaskMode] = useState<"catalog" | "custom">(
     "catalog",
@@ -3723,7 +3844,7 @@ function OwnerLayout({
     setDeleteTaskSubmitting(false);
   }, []);
   const submitRenameTask = useCallback(async () => {
-    if (!renameTaskTarget) return;
+    if (!renameTaskTarget || roomReadOnly) return;
     const trimmed = renameTaskDraft.trim();
     if (!trimmed) {
       setRenameTaskError("Название не может быть пустым");
@@ -3748,9 +3869,10 @@ function OwnerLayout({
     onRenameTask,
     renameTaskDraft,
     renameTaskTarget,
+    roomReadOnly,
   ]);
   const submitDeleteTask = useCallback(async () => {
-    if (!deleteTaskTarget) return;
+    if (!deleteTaskTarget || roomReadOnly) return;
     setDeleteTaskSubmitting(true);
     try {
       await onDeleteTask(deleteTaskTarget.stepIndex);
@@ -3759,7 +3881,7 @@ function OwnerLayout({
       // Error is surfaced via the room error banner; just leave the modal.
       closeDeleteTaskModal();
     }
-  }, [closeDeleteTaskModal, deleteTaskTarget, onDeleteTask]);
+  }, [closeDeleteTaskModal, deleteTaskTarget, onDeleteTask, roomReadOnly]);
   /**
    * Register rename/delete modals as Escape layers — `useEscapeLayer` makes
    * sure Esc closes the topmost modal first instead of collapsing every
@@ -3767,6 +3889,13 @@ function OwnerLayout({
    */
   useEscapeLayer(Boolean(renameTaskTarget), closeRenameTaskModal);
   useEscapeLayer(Boolean(deleteTaskTarget), closeDeleteTaskModal);
+  useEffect(() => {
+    if (!roomReadOnly) return;
+    setAddTaskModalOpened(false);
+    setRenameTaskTarget(null);
+    setDeleteTaskTarget(null);
+    setScorePickerOpen(false);
+  }, [roomReadOnly]);
   const roomLanguage = normalizeRoomLanguage(merged.language);
   /**
    * Язык новой кастомной задачи. По умолчанию совпадает с языком комнаты,
@@ -3796,7 +3925,7 @@ function OwnerLayout({
   }, [addTaskModalOpened, roomLanguage]);
   /**
    * Регистрируем модалку «Добавить задачу» в стеке Escape-слоёв,
-   * чтобы открытое поверх неё Mantine Menu/SelectDropdown не закрывалось
+   * чтобы открытое поверх неё Ant Design Menu/Select dropdown не закрывалось
    * вместе с ней одним нажатием Esc.
    */
   useEscapeLayer(addTaskModalOpened, closeAddTaskModal);
@@ -3920,7 +4049,7 @@ function OwnerLayout({
     parsedPrivateNotesCommand.kind === "block_prompt" ||
     parsedPrivateNotesCommand.kind === "block_apply";
   const privateNotesInputPlaceholder = activePrivateBlockName
-    ? "/block <название> — сменить блок"
+    ? "Запишите наблюдение о решении. /block <название> — сменить блок"
     : 'Введите заметку или "/" для команд';
   /**
    * Block name suggestions shown after `/block`. Suggestions mirror the room's
@@ -3972,7 +4101,7 @@ function OwnerLayout({
   }, [availableCatalogTasks, selectedCatalogTaskIds]);
 
   const submitAddTasksToRoom = useCallback(async () => {
-    if (selectedCatalogTaskIds.length === 0) return;
+    if (selectedCatalogTaskIds.length === 0 || roomReadOnly) return;
     try {
       await onAddTasksFromCatalog(selectedCatalogTaskIds);
       setSelectedCatalogTaskIds([]);
@@ -3981,9 +4110,10 @@ function OwnerLayout({
     } catch {
       // Parent sets user-facing error.
     }
-  }, [onAddTasksFromCatalog, selectedCatalogTaskIds]);
+  }, [onAddTasksFromCatalog, selectedCatalogTaskIds, roomReadOnly]);
 
   const submitAddCustomTaskToRoom = useCallback(async () => {
+    if (roomReadOnly) return;
     const title = customTaskTitle.trim();
     const description = customTaskDescription.trim();
     if (!title) return;
@@ -4010,6 +4140,7 @@ function OwnerLayout({
     customTaskTitle,
     onAddCustomTask,
     roomLanguage,
+    roomReadOnly,
   ]);
 
   const toggleRailPanel = useCallback((panel: "tasks" | "roomTools") => {
@@ -4177,123 +4308,112 @@ function OwnerLayout({
         onClose={closeAddTaskModal}
         title="Добавить задачу в комнату"
         centered
+        size="xl"
+        authoring
         closeOnEscape={false}
       >
-        <Stack>
-          <SegmentedControl
-            value={addTaskMode}
-            onChange={(value) =>
-              setAddTaskMode(value === "custom" ? "custom" : "catalog")
-            }
-            data={[
-              { label: "Из банка", value: "catalog" },
-              { label: "Новая задача", value: "custom" },
-            ]}
-            fullWidth
-          />
-
-          {addTaskMode === "catalog" ? (
-            <>
-              <Text size="sm" c="dimmed">
-                Выберите задачи из списка, которые ещё не добавлены в комнату.
-              </Text>
-              <MultiSelect
-                value={selectedCatalogTaskIds}
-                onChange={setSelectedCatalogTaskIds}
-                data={catalogTaskOptions}
-                searchable
-                nothingFoundMessage="Задачи не найдены"
-                placeholder="Выберите задачи"
-                disabled={
-                  catalogTaskOptions.length === 0 || isAddingTasksFromCatalog
-                }
-              />
-              {catalogTaskOptions.length === 0 ? (
-                <Text size="xs" c="dimmed">
-                  В банке нет доступных задач для добавления.
-                </Text>
-              ) : null}
-              {selectedCatalogTasks.length > 0 ? (
-                <Text size="xs" c="dimmed">
-                  {`Выбрано задач: ${selectedCatalogTasks.length}`}
-                </Text>
-              ) : null}
-              <Button
-                leftSection={<IconPlus size={14} />}
-                onClick={() => void submitAddTasksToRoom()}
-                disabled={
-                  selectedCatalogTaskIds.length === 0 ||
-                  isAddingTasksFromCatalog
-                }
-                loading={isAddingTasksFromCatalog}
-              >
-                Добавить в комнату
-              </Button>
-            </>
-          ) : (
-            <>
-              <TextInput
-                label="Название"
-                value={customTaskTitle}
-                onChange={(event) =>
-                  setCustomTaskTitle(event.currentTarget.value)
-                }
-                placeholder="Например, Реализовать LRU-кэш"
-                disabled={isAddingTasksFromCatalog}
-                required
-              />
-              <Select
-                label="Язык"
-                description="По умолчанию — язык комнаты. Можно выбрать другой."
-                data={LANGUAGES}
-                value={customTaskLanguage}
-                onChange={(value) =>
-                  setCustomTaskLanguage(
-                    value ? normalizeRoomLanguage(value) : roomLanguage,
-                  )
-                }
-                allowDeselect={false}
-                disabled={isAddingTasksFromCatalog}
-                comboboxProps={{ withinPortal: false }}
-                data-testid="room-add-custom-task-language"
-              />
-              <Textarea
-                label="Описание (Markdown, необязательно)"
-                value={customTaskDescription}
-                onChange={(event) =>
-                  setCustomTaskDescription(event.currentTarget.value)
-                }
-                minRows={5}
-                autosize
-                disabled={isAddingTasksFromCatalog}
-              />
-              <Textarea
-                label="Стартовый код (необязательно)"
-                value={customTaskStarterCode}
-                onChange={(event) =>
-                  setCustomTaskStarterCode(event.currentTarget.value)
-                }
-                minRows={10}
-                autosize
-                styles={{
-                  input: {
-                    fontFamily:
-                      "IBM Plex Mono, ui-monospace, SFMono-Regular, Menlo, monospace",
-                  },
-                }}
-                disabled={isAddingTasksFromCatalog}
-              />
-              <Button
-                leftSection={<IconPlus size={14} />}
-                onClick={() => void submitAddCustomTaskToRoom()}
-                disabled={!canSubmitCustomTask || isAddingTasksFromCatalog}
-                loading={isAddingTasksFromCatalog}
-              >
-                Добавить в комнату
-              </Button>
-            </>
-          )}
-        </Stack>
+        <form className="app-authoring-form app-task-authoring" onSubmit={(event) => {
+          event.preventDefault();
+          if (addTaskMode === "custom") void submitAddCustomTaskToRoom();
+          else void submitAddTasksToRoom();
+        }}>
+          <div className="app-authoring-fields">
+            <SegmentedControl
+              value={addTaskMode}
+              onChange={(value) => setAddTaskMode(value === "custom" ? "custom" : "catalog")}
+              data={[
+                { label: "Из банка", value: "catalog" },
+                { label: "Новая задача", value: "custom" },
+              ]}
+              disabled={isAddingTasksFromCatalog}
+              aria-label="Источник задачи"
+            />
+            {addTaskMode === "catalog" ? (
+              catalogTaskOptions.length === 0 ? (
+                <div className="app-task-catalog-empty">
+                  <Text fw={600}>В банке нет доступных задач для добавления.</Text>
+                  <Text size="sm" c="dimmed">Создайте задачу прямо здесь: добавьте условие и заготовку решения.</Text>
+                  <Button type="button" variant="light" onClick={() => setAddTaskMode("custom")}>
+                    Создать новую задачу
+                  </Button>
+                </div>
+              ) : (
+                <section className="app-authoring-section">
+                  <Text size="sm" c="dimmed">Выберите задачи, которые ещё не добавлены в комнату.</Text>
+                  <MultiSelect
+                    label="Задачи из банка"
+                    value={selectedCatalogTaskIds}
+                    onChange={setSelectedCatalogTaskIds}
+                    data={catalogTaskOptions}
+                    searchable
+                    nothingFoundMessage="Задачи не найдены"
+                    placeholder="Найдите задачи по названию"
+                    disabled={isAddingTasksFromCatalog}
+                  />
+                  {selectedCatalogTasks.length > 0 ? <Text size="xs" c="dimmed">{`Выбрано задач: ${selectedCatalogTasks.length}`}</Text> : null}
+                </section>
+              )
+            ) : (
+              <>
+                <section className="app-task-metadata-grid">
+                  <TextInput
+                    label="Название"
+                    value={customTaskTitle}
+                    onChange={(event: React.ChangeEvent<HTMLInputElement>) => setCustomTaskTitle(event.currentTarget.value)}
+                    placeholder="Введите название задачи"
+                    disabled={isAddingTasksFromCatalog}
+                    required
+                  />
+                  <Select
+                    placeholder="Выберите язык решения"
+                    label="Язык"
+                    data={LANGUAGES}
+                    value={customTaskLanguage}
+                    onChange={(value) => setCustomTaskLanguage(value ? normalizeRoomLanguage(value) : roomLanguage)}
+                    allowDeselect={false}
+                    disabled={isAddingTasksFromCatalog}
+                    comboboxProps={{ withinPortal: false }}
+                    data-testid="room-add-custom-task-language"
+                  />
+                </section>
+                <section className="app-task-content-grid">
+                  <Textarea
+                    placeholder="Опишите условие, примеры и ожидаемый результат"
+                    label="Описание (Markdown, необязательно)"
+                    value={customTaskDescription}
+                    onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setCustomTaskDescription(event.currentTarget.value)}
+                    minRows={6}
+                    autosize
+                    maxRows={12}
+                    disabled={isAddingTasksFromCatalog}
+                  />
+                  <Textarea
+                    placeholder="Добавьте заготовку решения или оставьте поле пустым"
+                    label="Стартовый код (необязательно)"
+                    value={customTaskStarterCode}
+                    onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setCustomTaskStarterCode(event.currentTarget.value)}
+                    minRows={6}
+                    autosize
+                    maxRows={12}
+                    styles={{ input: { fontFamily: "IBM Plex Mono, ui-monospace, SFMono-Regular, Menlo, monospace" } }}
+                    disabled={isAddingTasksFromCatalog}
+                  />
+                </section>
+              </>
+            )}
+          </div>
+          <Group className="app-form-actions" justify="flex-end">
+            <Button type="button" variant="subtle" color="gray" onClick={closeAddTaskModal} disabled={isAddingTasksFromCatalog}>Отмена</Button>
+            <Button
+              type="submit"
+              leftSection={<IconPlus size={14} />}
+              disabled={isAddingTasksFromCatalog || (addTaskMode === "custom" ? !canSubmitCustomTask : selectedCatalogTaskIds.length === 0)}
+              loading={isAddingTasksFromCatalog}
+            >
+              Добавить в комнату
+            </Button>
+          </Group>
+        </form>
       </Modal>
 
       {/*
@@ -4312,14 +4432,14 @@ function OwnerLayout({
             Изменения увидят все участники комнаты — название обновится в
             списке шагов и в экспорте заметок.
           </Text>
-          <TextInput
-            label="Название"
+          <TextInput placeholder="Введите новое название задачи"
+            aria-label="Название"
             value={renameTaskDraft}
-            onChange={(event) => setRenameTaskDraft(event.currentTarget.value)}
+            onChange={(event: React.ChangeEvent<HTMLInputElement>) => setRenameTaskDraft(event.currentTarget.value)}
             data-testid="room-task-rename-input"
             disabled={renameTaskSubmitting}
             error={renameTaskError ?? undefined}
-            onKeyDown={(event) => {
+            onKeyDown={(event: React.KeyboardEvent<HTMLElement>) => {
               if (event.key === "Enter") {
                 event.preventDefault();
                 void submitRenameTask();
@@ -4359,7 +4479,7 @@ function OwnerLayout({
         closeOnEscape={false}
       >
         <Stack>
-          <Text size="sm" c="#cbd5e1">
+          <Text size="sm" c="var(--app-text)">
             {deleteTaskTarget
               ? `Задача «${deleteTaskTarget.title}» будет удалена из комнаты. Заметки и оценка по этому шагу также пропадут.`
               : ""}
@@ -4375,6 +4495,8 @@ function OwnerLayout({
             </Button>
             <Button
               color="red"
+              variant="light"
+              leftSection={<IconTrash size={16} aria-hidden="true" />}
               onClick={() => void submitDeleteTask()}
               loading={deleteTaskSubmitting}
               disabled={deleteTaskSubmitting}
@@ -4385,32 +4507,51 @@ function OwnerLayout({
           </Group>
         </Stack>
       </Modal>
+      <Modal opened={roomModeConfirmation !== null} onClose={() => { if (!roomModeSubmitting) setRoomModeConfirmation(null); }} title="Изменить режим комнаты?" centered closeOnEscape={!roomModeSubmitting} closeOnClickOutside={!roomModeSubmitting}>
+        <Stack gap={16}>
+          <Text>Изменится редактор кандидата и всех интервьюеров.</Text>
+          <Text>Режим: {roomModeConfirmation?.mode === "markdown" ? "Markdown" : "Code"}. Код и текст сохранятся. Выбранные задачи останутся прежними.</Text>
+          {roomModeError ? <Alert color="red" role="alert">{roomModeError}</Alert> : null}
+          <Group justify="flex-end">
+            <Button variant="default" disabled={roomModeSubmitting} onClick={() => setRoomModeConfirmation(null)}>Отмена</Button>
+            <Button loading={roomModeSubmitting} disabled={!roomModeConnected || roomModeSubmitting || roomReadOnly || roomModeConfirmation?.revision !== (merged.roomEditorModeRevision ?? 0)} onClick={() => void confirmRoomMode()}>Изменить режим</Button>
+          </Group>
+          {roomModeConfirmation && roomModeConfirmation.revision !== (merged.roomEditorModeRevision ?? 0) ? <Text role="status">Режим уже изменён другим участником. Закройте окно и выберите режим снова.</Text> : null}
+        </Stack>
+      </Modal>
       <RoomContextPanels
         layoutKey={inviteCode}
-        singleSurface={localWorkspacePreview ? managerWorkspaceFocusMode : briefingFocusMode}
+        showCondition={!briefingFocusMode}
         headerAction={
-          <Group gap="xs" wrap="nowrap">
-            <Button
-              type="button"
-              size="sm"
-              color="blue"
-              variant="filled"
-              leftSection={(localWorkspacePreview ? managerWorkspaceFocusMode : briefingFocusMode)
-                ? <IconCode size={16} />
-                : <IconFileDescription size={16} />}
-              aria-pressed={localWorkspacePreview ? managerWorkspaceFocusMode : briefingFocusMode}
-              data-testid="room-markdown-scenario-toggle"
-              disabled={isLocalWorkspacePreview && !localWorkspacePreview}
-              onClick={() => {
-                if (localWorkspacePreview) onManagerWorkspaceFocusModeChange(!managerWorkspaceFocusMode);
-                else onBriefingFocusModeChange(!briefingFocusMode);
+          <div className={styles.editorModeControl}>
+            <Select
+              data={[{ value: "code", label: "Code" }, { value: "markdown", label: "Markdown" }]}
+              className={styles.roomModeSelect}
+              labelRender={({ label }: { label: React.ReactNode }) => (
+                <span className={styles.roomModeSelectedLabel}>
+                  <span>Режим комнаты</span>{" "}
+                  <span aria-hidden="true">—</span>{" "}
+                  <span className={styles.roomModeSelectedValue}>{label}</span>
+                </span>
+              )}
+              value={merged.roomEditorMode ?? "code"}
+              aria-label="Режим комнаты"
+              data-testid="room-editor-mode-switch"
+              disabled={roomReadOnly || !roomModeConnected || roomModeSubmitting}
+              onChange={(value: string | null) => {
+                if (value !== "code" && value !== "markdown") return;
+                if (value === (merged.roomEditorMode ?? "code")) return;
+                setRoomModeConfirmation({ mode: value, revision: merged.roomEditorModeRevision ?? 0 });
+                setRoomModeError(null);
               }}
-            >
-              {(localWorkspacePreview ? managerWorkspaceFocusMode : briefingFocusMode)
-                ? "Вернуть редактор кода"
-                : "Заменить код на Markdown"}
+            />
+            <Tooltip motion={{ motionName: "" }} classNames={{ root: styles.roomModeTooltip }} trigger={["hover", "focus"]} label="Общий редактор для кандидата и всех интервьюеров. Код и Markdown сохраняются при переключении.">
+              <button type="button" className={styles.roomModeHelp} aria-label="Как работает режим комнаты"><IconHelpCircle size={18} aria-hidden="true" /></button>
+            </Tooltip>
+            <Button color="red" variant="light" size="sm" onClick={onOpenVerdictModal} disabled={roomReadOnly}>
+              {merged.status === "finished" ? "Изменить результат" : "Завершить интервью"}
             </Button>
-          </Group>
+          </div>
         }
       >
         <RoomContextSurface name="editor">
@@ -4426,7 +4567,8 @@ function OwnerLayout({
               <ManagerWorkspaceEditor
                 workspace={localWorkspacePreview}
                 isRefreshing={isLocalWorkspaceSnapshotFetching}
-                focusMode={managerWorkspaceFocusMode}
+                readOnly={roomReadOnly}
+                focusMode={briefingFocusMode}
                 onBriefingChange={onManagerWorkspaceBriefingChange}
                 sessionId={sessionId}
                 participantId={participantId}
@@ -4444,21 +4586,22 @@ function OwnerLayout({
                 aria-busy="true"
               >
                 <Text size="sm" c="dimmed">
-                  Загружаем рабочее пространство задачи…
+                  Загружаем задачу…
                 </Text>
               </Box>
             ) : (
               <Box className={styles.editorColumn}>
-                {briefingFocusMode ? (
+                <div className={styles.modeEditor} hidden={!briefingFocusMode}>
                   <BriefingBoard
                     mode="interviewer"
-                    readOnly={Boolean(tasks.find((task) => task.stepIndex === merged.currentStep)?.mandatory)}
+                    readOnly={roomReadOnly || Boolean(tasks.find((task) => task.stepIndex === merged.currentStep)?.mandatory)}
                     value={briefingMarkdown}
                     onChange={onBriefingChange}
                     focusMode
                     showModeToggle={false}
                   />
-                ) : <SharedRoomEditorPanel
+                </div>
+                <div className={styles.modeEditor} hidden={briefingFocusMode}><SharedRoomEditorPanel
                   merged={merged}
                   stepStarterCode={stepStarterCode}
                   editorReady={editorReady}
@@ -4474,7 +4617,7 @@ function OwnerLayout({
                   onEditorValueChange={onEditorValueChange}
                   onKeyPress={onKeyPress}
                   panelClassName={styles.editorPanel}
-                />}
+                /></div>
                 {error && <Text className={styles.error}>{error}</Text>}
               </Box>
             )}
@@ -4489,7 +4632,7 @@ function OwnerLayout({
               align="center"
               gap={8}
             >
-              <Text size="xs" c="#8b919b">
+              <Text size="xs" c="var(--app-muted)">
                 Шаг {localSelectedStep + 1} из {Math.max(tasks.length, 1)}
               </Text>
               <Button
@@ -4497,6 +4640,7 @@ function OwnerLayout({
                 variant="filled"
                 color="blue"
                 leftSection={<IconPlus size={12} />}
+                disabled={roomReadOnly}
                 onClick={() => setAddTaskModalOpened(true)}
               >
                 Задача
@@ -4518,8 +4662,13 @@ function OwnerLayout({
                     className={styles.stepRow}
                     data-local-selected={isLocalSelected ? "true" : undefined}
                     data-global-active={isGlobalActive ? "true" : undefined}
+                    onClick={(event) => {
+                      if ((event.target as HTMLElement).closest("button, a, input, select, textarea")) return;
+                      handleTaskStepSelect(task.stepIndex);
+                    }}
                   >
-                    <button
+                    <div className={styles.stepRowSelectGroup}>
+<button
                       type="button"
                       className={styles.stepRowMain}
                       data-testid={`room-step-row-${task.stepIndex}`}
@@ -4527,13 +4676,14 @@ function OwnerLayout({
                       aria-current={isLocalSelected ? "step" : undefined}
                       aria-label={fullLabel}
                       onClick={() => handleTaskStepSelect(task.stepIndex)}
-                      title={fullLabel}
                     >
                       <span className={styles.stepRowIndex} aria-hidden="true">
                         {task.stepIndex + 1}
                       </span>
                       <span className={styles.stepRowTitle}>{task.title}</span>
-                      <span className={styles.stepRowMeta}>
+</button>
+{!roomReadOnly && !task.mandatory ? <button type="button" className={styles.stepRenameButton} aria-label={`Переименовать задачу ${task.title}`} title="Переименовать задачу" data-testid={`room-task-rename-${task.stepIndex}`} onClick={() => { setRenameTaskTarget({ stepIndex: task.stepIndex, originalTitle: task.title }); setRenameTaskDraft(task.title); setRenameTaskError(null); }}><IconPencil size={14} aria-hidden="true" /></button> : null}
+<span className={styles.stepRowMeta}>
                         {task.mandatory ? (
                           <span className={styles.mandatoryStepMarker}>Обязательная</span>
                         ) : null}
@@ -4556,8 +4706,8 @@ function OwnerLayout({
                           </span>
                         ) : null}
                       </span>
-                    </button>
-                    {isLocalSelected && !isGlobalActive ? (
+</div>
+                    {!roomReadOnly && isLocalSelected && !isGlobalActive ? (
                       <button
                         type="button"
                         className={styles.stepRowPublishAction}
@@ -4568,53 +4718,23 @@ function OwnerLayout({
                         Переключить
                       </button>
                     ) : null}
-                    {!task.mandatory ? (
+                    {!roomReadOnly && !task.mandatory ? (
                       <div className={styles.stepRowActions}>
-                        <Menu withinPortal position="bottom-end" shadow="md" offset={4}>
-                          <Menu.Target>
-                            <ActionIcon
-                              size="sm"
-                              variant="subtle"
-                              color="gray"
-                              className={styles.stepRowActionsTrigger}
-                              aria-label={`Действия с задачей: ${task.title}`}
-                              data-testid={`room-task-actions-${task.stepIndex}`}
-                            >
-                              <IconDots size={14} stroke={2} />
-                            </ActionIcon>
-                          </Menu.Target>
-                          <Menu.Dropdown>
-                            <Menu.Item
-                              leftSection={<IconPencil size={14} />}
-                              onClick={() => {
-                                setRenameTaskTarget({
-                                  stepIndex: task.stepIndex,
-                                  originalTitle: task.title,
-                                });
-                                setRenameTaskDraft(task.title);
-                                setRenameTaskError(null);
-                              }}
-                              data-testid={`room-task-rename-${task.stepIndex}`}
-                            >
-                              Переименовать
-                            </Menu.Item>
-                            <Menu.Item
-                              color="red"
-                              leftSection={<IconTrash size={14} />}
-                              disabled={tasks.length <= 1}
-                              onClick={() => {
-                                if (tasks.length <= 1) return;
-                                setDeleteTaskTarget({
-                                  stepIndex: task.stepIndex,
-                                  title: task.title,
-                                });
-                              }}
-                              data-testid={`room-task-delete-${task.stepIndex}`}
-                            >
-                              Удалить
-                            </Menu.Item>
-                          </Menu.Dropdown>
-                        </Menu>
+                        <ActionIcon
+                          size="sm"
+                          variant="light"
+                          color="red"
+                          aria-label={`Удалить задачу ${task.title}`}
+                          title="Удалить задачу"
+                          disabled={tasks.length <= 1 || deleteTaskSubmitting}
+                          onClick={() => {
+                            if (tasks.length <= 1 || deleteTaskSubmitting) return;
+                            setDeleteTaskTarget({ stepIndex: task.stepIndex, title: task.title });
+                          }}
+                          data-testid={`room-task-delete-${task.stepIndex}`}
+                        >
+                          <IconTrash size={16} aria-hidden="true" />
+                        </ActionIcon>
                       </div>
                     ) : null}
                   </div>
@@ -4625,16 +4745,17 @@ function OwnerLayout({
             {localWorkspacePreview === null ? (
               <Box className={styles.taskRatingCard}>
                 <div className={styles.contextScorePicker}>
-                  <input
+                  <AntInput
                   className={styles.contextScoreInput}
                   aria-label="Оценка активного для всех шага"
                   aria-haspopup="listbox"
                   aria-expanded={scorePickerOpen}
                   readOnly
+                  disabled={roomReadOnly}
                   placeholder="Нет оценки"
                   value={currentTaskRating ? String(currentTaskRating) : ""}
                   onClick={() => setScorePickerOpen((current) => !current)}
-                  onKeyDown={(event) => {
+                  onKeyDown={(event: React.KeyboardEvent<HTMLInputElement>) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
                       setScorePickerOpen((current) => !current);
@@ -4651,9 +4772,9 @@ function OwnerLayout({
                       aria-label="Доступные оценки шага"
                     >
                       {[1, 2, 3, 4, 5].map((rating) => (
-                        <button
+                        <AntButton
                           key={rating}
-                          type="button"
+                          type="text" htmlType="button"
                           role="option"
                           aria-selected={currentTaskRating === rating}
                           onClick={() => {
@@ -4662,7 +4783,7 @@ function OwnerLayout({
                           }}
                         >
                           {rating}
-                        </button>
+                        </AntButton>
                       ))}
                     </div>
                   ) : null}
@@ -4673,7 +4794,7 @@ function OwnerLayout({
 
           {merged.canManageRoom ? (
             <div className={styles.verdictStrip}>
-              <Text size="xs" c="#8b919b" style={{ flex: 1 }}>
+              <Text size="xs" c="var(--app-muted)" style={{ flex: 1 }}>
                 {merged.status === "finished"
                   ? "Интервью завершено"
                   : "Активная сессия"}
@@ -4681,34 +4802,20 @@ function OwnerLayout({
               {merged.verdict ? (
                 <VerdictBadge verdict={merged.verdict} size="xs" />
               ) : null}
-              <Button
-                size="xs"
-                variant="subtle"
-                color={merged.status === "finished" ? "gray" : "red"}
-                onClick={onOpenVerdictModal}
-              >
-                {merged.status === "finished" ? "Изменить" : "Завершить интервью"}
-              </Button>
+
             </div>
           ) : null}
         </RoomContextSurface>
 
         <RoomContextSurface name="condition">
-          <div className={styles.contextConditionIntro}>
-            <Text fw={650} c="#e2e8f0">
-              {tasks.find((task) => task.stepIndex === localSelectedStep)?.title ??
-                `Шаг ${localSelectedStep + 1}`}
-            </Text>
-            <Text size="sm" c="#a8b5c4" className={styles.contextConditionBody}>
-              {stripFocusMarker(
-                localWorkspacePreview?.briefingMarkdown ?? briefingMarkdown,
-              )}
-            </Text>
-          </div>
+          <div className={styles.contextConditionContent}>
+          <h3 className={styles.contextConditionTitle}>{tasks.find(task => task.stepIndex === localSelectedStep)?.title ?? `Шаг ${localSelectedStep + 1}`}</h3>
+          {isLocalWorkspacePreview && !localWorkspacePreview ? <Text role="status">Загружаем условие задачи…</Text> : null}
+          <div hidden={isLocalWorkspacePreview && !localWorkspacePreview} className={styles.modeEditor}>
           <BriefingBoard
             key={`context-briefing-${localSelectedStep}`}
             mode="interviewer"
-            readOnly={Boolean(tasks.find((task) => task.stepIndex === localSelectedStep)?.mandatory)}
+            readOnly={roomReadOnly || (isLocalWorkspacePreview && !localWorkspacePreview) || Boolean(tasks.find((task) => task.stepIndex === localSelectedStep)?.mandatory)}
             value={stripFocusMarker(
               localWorkspacePreview?.briefingMarkdown ?? briefingMarkdown,
             )}
@@ -4729,19 +4836,28 @@ function OwnerLayout({
             }
             showModeToggle={false}
           />
+          </div>
+          </div>
         </RoomContextSurface>
 
         <RoomContextSurface name="notes">
           <div className={styles.contextSurfaceScroll}>
             <Group
-              justify="space-between"
+              justify="flex-end"
               align="center"
               gap={8}
               className={styles.contextNotesIntro}
             >
-              <Text size="sm" c="#a8b5c4">
-                Видны только вам. Кандидат и другие интервьюеры их не увидят.
-              </Text>
+              <Button
+                  size="xs"
+                  variant="outline"
+                  color="gray"
+                  leftSection={<IconFileDescription size={14} />}
+                  onClick={onOpenPrivateNotesExportModal}
+                  data-testid="room-private-notes-export"
+                >
+                  Экспорт заметок
+                </Button>
             </Group>
 
             {activePrivateBlockName ? (
@@ -4769,7 +4885,11 @@ function OwnerLayout({
             <div className={styles.privateNotesList} ref={privateNotesFeedRef}>
               {privateNotes.length > 0 ? (
                 privateNotes.map((entry) => (
-                  <article key={entry.id} className={styles.privateNoteEntry}>
+                  <article
+                    key={entry.id}
+                    className={styles.privateNoteEntry}
+                    data-private-note-delivery-state={(entry as PendingPersonalNoteEntry).deliveryState ?? "persisted"}
+                  >
                     <header className={styles.privateNoteEntryMeta}>
                       <time className={styles.privateNoteEntryTime}>
                         {formatNoteTimestamp(entry.timestampEpochMs)}
@@ -4783,12 +4903,17 @@ function OwnerLayout({
                           {entry.blockName}
                         </Badge>
                       ) : null}
+                      {(entry as PendingPersonalNoteEntry).pending ? (
+                        <Text size="xs" c="var(--app-muted)" role="status">
+                          {(entry as PendingPersonalNoteEntry).deliveryState === "failed" ? "Не сохранено" : "Сохраняем…"}
+                        </Text>
+                      ) : null}
                     </header>
                     <Text className={styles.privateNoteEntryText}>{entry.text}</Text>
                   </article>
                 ))
               ) : (
-                <Text size="sm" c="#64748b">
+                <Text size="sm" c="var(--app-muted)">
                   Пока нет записей
                 </Text>
               )}
@@ -4797,26 +4922,27 @@ function OwnerLayout({
             <div className={styles.privateNotesComposer}>
               <Textarea
                 value={privateNoteComposer}
-                onChange={(event) =>
+                onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
                   onPrivateNoteComposerChange(event.currentTarget.value)
                 }
-                onKeyDown={(event) => {
+                onKeyDown={(event: React.KeyboardEvent<HTMLElement>) => {
                   if (event.key !== "Enter" || event.shiftKey) return;
                   event.preventDefault();
                   onPrivateNoteSubmit();
                 }}
+                readOnly={roomReadOnly}
                 data-testid="room-private-notes-input"
                 placeholder={privateNotesInputPlaceholder}
                 aria-label="Заметка интервьюера"
-                classNames={{ input: styles.privateNotesComposerInput }}
+                classNames={{ textarea: styles.privateNotesComposerInput }}
               />
               {showPrivateNotesCommandMenu ? (
                 <div
                   className={styles.privateNotesCommandMenu}
                   data-testid="room-private-notes-command-menu"
                 >
-                  <button
-                    type="button"
+                  <AntButton
+                    type="text" htmlType="button"
                     className={styles.privateNotesCommandItem}
                     onClick={() => onPrivateNotesCommandShortcut("/block")}
                   >
@@ -4824,14 +4950,14 @@ function OwnerLayout({
                     <span className={styles.privateNotesCommandHint}>
                       Открыть блок заметок
                     </span>
-                  </button>
+                  </AntButton>
                   <Text className={styles.privateNotesCommandHelper}>
                     Введите своё название после <code>/block</code> — создастся
                     новый блок. Или выберите ниже один из шагов интервью.
                   </Text>
                   {customBlockCandidate ? (
-                    <button
-                      type="button"
+                    <AntButton
+                      type="text" htmlType="button"
                       className={styles.privateNotesCommandCreate}
                       data-testid="room-private-notes-command-create-custom"
                       onClick={() =>
@@ -4846,7 +4972,7 @@ function OwnerLayout({
                       <span className={styles.privateNotesCommandCreateName}>
                         {customBlockCandidate}
                       </span>
-                    </button>
+                    </AntButton>
                   ) : null}
                   {privateNotesCommandExamples.length > 0 ? (
                     <div
@@ -4858,16 +4984,16 @@ function OwnerLayout({
                         Шаги интервью
                       </Text>
                       {privateNotesCommandExamples.map((example) => (
-                        <button
+                        <AntButton
                           key={example}
-                          type="button"
+                          type="text" htmlType="button"
                           className={styles.privateNotesCommandExample}
                           onClick={() =>
                             onPrivateNotesCommandShortcut(`/block ${example}`)
                           }
                         >
                           {`/block ${example}`}
-                        </button>
+                        </AntButton>
                       ))}
                     </div>
                   ) : null}
@@ -4891,6 +5017,7 @@ function OwnerLayout({
                   size="xs"
                   onClick={onPrivateNoteSubmit}
                   disabled={
+                    roomReadOnly ||
                     !privateNoteComposer.trim() ||
                     parsedPrivateNotesCommand.kind === "menu" ||
                     parsedPrivateNotesCommand.kind === "block_prompt" ||
@@ -4902,16 +5029,7 @@ function OwnerLayout({
                     ? "Применить блок"
                     : "Добавить"}
                 </Button>
-                <Button
-                  size="xs"
-                  variant="light"
-                  color="gray"
-                  leftSection={<IconFileDescription size={14} />}
-                  onClick={onOpenPrivateNotesExportModal}
-                  data-testid="room-private-notes-export"
-                >
-                  Экспорт заметок
-                </Button>
+
               </Group>
             </div>
           </div>
@@ -4919,7 +5037,7 @@ function OwnerLayout({
 
         <RoomContextSurface name="chat">
           <div className={styles.contextSurfaceScroll}>
-            <Text size="sm" c="#a8b5c4">
+            <Text size="sm" c="var(--app-muted)">
               Виден интервьюерам этой комнаты. Кандидат не видит чат.
             </Text>
             {chatUnreadCount > 0 ? (
@@ -4966,6 +5084,11 @@ function OwnerLayout({
                         </time>
                       </header>
                       <Text className={styles.noteBubbleText}>{message.text}</Text>
+                      {deliveryState !== "persisted" ? (
+                        <Text size="xs" c="var(--app-muted)" role="status">
+                          {deliveryState === "retryable_error" ? "Не отправлено" : "Отправляем…"}
+                        </Text>
+                      ) : null}
                       {deliveryState === "retryable_error" &&
                       pendingMessage.retryAllowed ? (
                         <Button
@@ -4973,6 +5096,7 @@ function OwnerLayout({
                           size="compact-xs"
                           variant="light"
                           color="red"
+                          disabled={roomReadOnly}
                           onClick={onRetryNote}
                         >
                           Повторить отправку
@@ -4982,7 +5106,7 @@ function OwnerLayout({
                   );
                 })
               ) : (
-                <Text size="sm" c="#64748b">
+                <Text size="sm" c="var(--app-muted)">
                   Пока нет сообщений
                 </Text>
               )}
@@ -4990,28 +5114,30 @@ function OwnerLayout({
             <div className={styles.notesComposer}>
               <Textarea
                 value={noteComposer}
-                onChange={(event) =>
+                  readOnly={roomReadOnly}
+                onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
                   onNoteComposerChange(event.currentTarget.value)
                 }
-                onKeyDown={(event) => {
+                onKeyDown={(event: React.KeyboardEvent<HTMLElement>) => {
                   if (event.key !== "Enter" || event.shiftKey) return;
                   event.preventDefault();
                   onSendNote();
                 }}
                 autosize
-                minRows={1}
-                maxRows={8}
+                minRows={4}
+                maxRows={10}
+                style={{ minHeight: 112 }}
                 data-testid="room-notes-input"
                 placeholder="Напишите сообщение для интервьюеров"
                 aria-label="Сообщение в чат интервьюеров"
-                classNames={{ input: styles.notesComposerInput }}
+                classNames={{ textarea: styles.notesComposerInput }}
               />
               <Group justify="flex-end" className={styles.notesComposerFooter}>
                 <Button
                   type="button"
                   size="xs"
                   onClick={onSendNote}
-                  disabled={!noteComposer.trim() || noteSendPending}
+                  disabled={roomReadOnly || !noteComposer.trim() || noteSendPending}
                   data-testid="room-notes-send"
                 >
                   Отправить
@@ -5024,7 +5150,7 @@ function OwnerLayout({
         <RoomContextSurface name="activity">
           <div className={styles.contextSurfaceScroll}>
             <Group justify="space-between" align="center" gap={8}>
-              <Text size="sm" c="#a8b5c4">
+              <Text size="sm" c="var(--app-muted)">
                 Кандидат
               </Text>
               <Badge variant="light" data-state={candidatePresenceState}>
@@ -5045,8 +5171,8 @@ function OwnerLayout({
         </RoomContextSurface>
       </RoomContextPanels>
 
-      <button type="button" hidden tabIndex={-1} data-testid="room-rail-tasks" />
-      <button type="button" hidden tabIndex={-1} data-testid="room-rail-tools" />
+      <AntButton type="text" htmlType="button" hidden tabIndex={-1} data-testid="room-rail-tasks" />
+      <AntButton type="text" htmlType="button" hidden tabIndex={-1} data-testid="room-rail-tools" />
 
       <Modal
         opened={privateNotesExportModalOpened}
@@ -5063,14 +5189,14 @@ function OwnerLayout({
           </Text>
           <Checkbox
             checked={exportIncludeTimestamps}
-            onChange={(event) =>
+            onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
               onExportIncludeTimestampsChange(event.currentTarget.checked)
             }
             label="Включать время записей"
           />
           <Checkbox
             checked={exportIncludeFreeNotes}
-            onChange={(event) =>
+            onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
               onExportIncludeFreeNotesChange(event.currentTarget.checked)
             }
             label="Включать заметки вне блока"
@@ -5079,6 +5205,11 @@ function OwnerLayout({
             <Text size="xs" c="gray.4" data-testid="private-notes-pdf-progress">
               {pdfExportProgress.label}…{" "}
               {Math.round(pdfExportProgress.progress * 100)}%
+            </Text>
+          ) : null}
+          {privateNotesExportError ? (
+            <Text role="alert" size="sm" c="var(--app-danger)">
+              {privateNotesExportError}
             </Text>
           ) : null}
           <Group justify="flex-end">
@@ -5123,8 +5254,8 @@ function OwnerLayout({
           openDelay={250}
           withArrow
         >
-          <button
-            type="button"
+          <AntButton
+            type="text" htmlType="button"
             className={`${styles.railButton} ${activeRailPanel === "tasks" ? styles.railButtonActive : ""}`}
             aria-label="Открыть панель шагов и заметок"
             aria-pressed={activeRailPanel === "tasks"}
@@ -5134,7 +5265,7 @@ function OwnerLayout({
           >
             <IconChecklist size={16} stroke={1.8} />
             <span className={styles.railButtonLabel}>Шаги</span>
-          </button>
+          </AntButton>
         </Tooltip>
         <Tooltip
           label="Чат с напарниками и логи активности кандидата"
@@ -5142,8 +5273,8 @@ function OwnerLayout({
           openDelay={250}
           withArrow
         >
-          <button
-            type="button"
+          <AntButton
+            type="text" htmlType="button"
             className={`${styles.railButton} ${activeRailPanel === "roomTools" ? styles.railButtonActive : ""}`}
             aria-label="Открыть чат и логи активности кандидата"
             aria-pressed={activeRailPanel === "roomTools"}
@@ -5153,7 +5284,7 @@ function OwnerLayout({
           >
             <IconMessages size={16} stroke={1.8} />
             <span className={styles.railButtonLabel}>Чат</span>
-          </button>
+          </AntButton>
         </Tooltip>
       </nav>
 
@@ -5163,9 +5294,9 @@ function OwnerLayout({
           role="tablist"
           aria-label="Room panels"
         >
-          <button
+          <AntButton
             id={mobileEditorTabId}
-            type="button"
+            type="text" htmlType="button"
             role="tab"
             aria-selected={activeMobileTab === "editor"}
             aria-controls={mobileEditorPanelId}
@@ -5173,10 +5304,10 @@ function OwnerLayout({
             onClick={() => setActiveMobileTab("editor")}
           >
             <span className={styles.mobileRoomTabLabel}>Editor</span>
-          </button>
-          <button
+          </AntButton>
+          <AntButton
             id={mobileCollaborationTabId}
-            type="button"
+            type="text" htmlType="button"
             role="tab"
             aria-selected={activeMobileTab === "collaboration"}
             aria-controls={mobileCollaborationPanelId}
@@ -5184,10 +5315,10 @@ function OwnerLayout({
             onClick={() => setActiveMobileTab("collaboration")}
           >
             <span className={styles.mobileRoomTabLabel}>Team</span>
-          </button>
-          <button
+          </AntButton>
+          <AntButton
             id={mobileTasksTabId}
-            type="button"
+            type="text" htmlType="button"
             role="tab"
             aria-selected={activeMobileTab === "tasks"}
             aria-controls={mobileTasksPanelId}
@@ -5195,7 +5326,7 @@ function OwnerLayout({
             onClick={() => setActiveMobileTab("tasks")}
           >
             <span className={styles.mobileRoomTabLabel}>Tasks</span>
-          </button>
+          </AntButton>
         </nav>
       )}
 
@@ -5231,7 +5362,7 @@ function OwnerLayout({
               <Box className={styles.sidebar}>
                 <div className={styles.sidebarScrollContent}>
                 <Group justify="space-between" align="center" gap={8}>
-                  <Text size="xs" c="#8b919b">
+                  <Text size="xs" c="var(--app-muted)">
                     Шаг {localSelectedStep + 1} из {Math.max(tasks.length, 1)}
                   </Text>
                   <Group gap={6}>
@@ -5250,6 +5381,7 @@ function OwnerLayout({
                       variant="filled"
                       color="blue"
                       leftSection={<IconPlus size={12} />}
+                      disabled={roomReadOnly}
                       onClick={() => setAddTaskModalOpened(true)}
                     >
                       Задача
@@ -5279,8 +5411,13 @@ function OwnerLayout({
                         data-global-active={
                           isGlobalActive ? "true" : undefined
                         }
+                        onClick={(event) => {
+                          if ((event.target as HTMLElement).closest("button, a, input, select, textarea")) return;
+                          handleTaskStepSelect(task.stepIndex);
+                        }}
                       >
-                        <button
+                        <div className={styles.stepRowSelectGroup}>
+<button
                           type="button"
                           className={styles.stepRowMain}
                           data-testid={`room-step-row-${task.stepIndex}`}
@@ -5290,8 +5427,7 @@ function OwnerLayout({
                           aria-current={isLocalSelected ? "step" : undefined}
                           aria-label={fullLabel}
                           onClick={() => handleTaskStepSelect(task.stepIndex)}
-                          title={fullLabel}
-                        >
+                            >
                           <span
                             className={styles.stepRowIndex}
                             aria-hidden="true"
@@ -5301,7 +5437,9 @@ function OwnerLayout({
                           <span className={styles.stepRowTitle}>
                             {task.title}
                           </span>
-                          <span className={styles.stepRowMeta}>
+</button>
+{!roomReadOnly && !task.mandatory ? <button type="button" className={styles.stepRenameButton} aria-label={`Переименовать задачу ${task.title}`} title="Переименовать задачу" data-testid={`room-task-rename-${task.stepIndex}`} onClick={() => { setRenameTaskTarget({ stepIndex: task.stepIndex, originalTitle: task.title }); setRenameTaskDraft(task.title); setRenameTaskError(null); }}><IconPencil size={14} aria-hidden="true" /></button> : null}
+<span className={styles.stepRowMeta}>
                             {task.mandatory ? (
                               <span className={styles.mandatoryStepMarker}>Обязательная</span>
                             ) : null}
@@ -5342,8 +5480,8 @@ function OwnerLayout({
                               </span>
                             ) : null}
                           </span>
-                        </button>
-                        {isLocalSelected && !isGlobalActive ? (
+</div>
+                        {!roomReadOnly && isLocalSelected && !isGlobalActive ? (
                           <button
                             type="button"
                             className={styles.stepRowPublishAction}
@@ -5354,71 +5492,22 @@ function OwnerLayout({
                             Переключить
                           </button>
                         ) : null}
-                        {/*
-                         * Per-step actions live in a sibling button so we
-                         * don't nest <button> in <button> (invalid HTML).
-                         * Tooltip explains the menu, and the menu trigger
-                         * itself shows up only on hover/focus to keep the
-                         * row visually quiet (see `.stepRowActions` CSS).
-                         */}
-                        {!task.mandatory ? <div className={styles.stepRowActions}>
-                          <Menu
-                            withinPortal
-                            position="bottom-end"
-                            shadow="md"
-                            offset={4}
+                        {!roomReadOnly && !task.mandatory ? <div className={styles.stepRowActions}>
+                          <ActionIcon
+                            size="sm"
+                            variant="light"
+                            color="red"
+                            aria-label={`Удалить задачу ${task.title}`}
+                            title="Удалить задачу"
+                            disabled={!canDeleteThis || deleteTaskSubmitting}
+                            onClick={() => {
+                              if (!canDeleteThis || deleteTaskSubmitting) return;
+                              setDeleteTaskTarget({ stepIndex: task.stepIndex, title: task.title });
+                            }}
+                            data-testid={`room-task-delete-${task.stepIndex}`}
                           >
-                            <Menu.Target>
-                              {/*
-                               * Action menu trigger. The previous "Действия
-                               * с задачей" tooltip was redundant — `aria-label`
-                               * already names the control for screen readers,
-                               * and the dropdown items are self-explanatory.
-                               * Removed per UX feedback (felt noisy on hover).
-                               */}
-                              <ActionIcon
-                                size="sm"
-                                variant="subtle"
-                                color="gray"
-                                className={styles.stepRowActionsTrigger}
-                                aria-label={`Действия с задачей: ${task.title}`}
-                                data-testid={`room-task-actions-${task.stepIndex}`}
-                              >
-                                <IconDots size={14} stroke={2} />
-                              </ActionIcon>
-                            </Menu.Target>
-                            <Menu.Dropdown>
-                              <Menu.Item
-                                leftSection={<IconPencil size={14} />}
-                                onClick={() => {
-                                  setRenameTaskTarget({
-                                    stepIndex: task.stepIndex,
-                                    originalTitle: task.title,
-                                  });
-                                  setRenameTaskDraft(task.title);
-                                  setRenameTaskError(null);
-                                }}
-                                data-testid={`room-task-rename-${task.stepIndex}`}
-                              >
-                                Переименовать
-                              </Menu.Item>
-                              <Menu.Item
-                                color="red"
-                                leftSection={<IconTrash size={14} />}
-                                disabled={!canDeleteThis}
-                                onClick={() => {
-                                  if (!canDeleteThis) return;
-                                  setDeleteTaskTarget({
-                                    stepIndex: task.stepIndex,
-                                    title: task.title,
-                                  });
-                                }}
-                                data-testid={`room-task-delete-${task.stepIndex}`}
-                              >
-                                Удалить
-                              </Menu.Item>
-                            </Menu.Dropdown>
-                          </Menu>
+                            <IconTrash size={16} aria-hidden="true" />
+                          </ActionIcon>
                         </div> : null}
                       </div>
                     );
@@ -5429,6 +5518,7 @@ function OwnerLayout({
                 <Box className={styles.taskRatingCard}>
                   <Select
                     className={styles.taskRating}
+                    disabled={roomReadOnly}
                     classNames={{ option: styles.taskRatingOption }}
                     label="Оценка активного для всех шага"
                     placeholder="Нет оценки"
@@ -5449,22 +5539,22 @@ function OwnerLayout({
                     ]}
                     styles={{
                       label: {
-                        color: "#9ba0a8",
+                        color: "var(--app-muted)",
                         fontSize: 11,
                         textTransform: "uppercase",
                         letterSpacing: 0.6,
                       },
                       input: {
-                        backgroundColor: "#11161f",
-                        borderColor: "#273242",
-                        color: "#d6dce6",
+                        backgroundColor: "var(--app-surface)",
+                        borderColor: "var(--app-control-border)",
+                        color: "var(--app-text)",
                         fontSize: 12,
                       },
                       dropdown: {
-                        backgroundColor: "#11161f",
-                        borderColor: "#273242",
+                        backgroundColor: "var(--app-surface-elevated)",
+                        borderColor: "var(--app-border)",
                       },
-                      option: { color: "#d6dce6" },
+                      option: { color: "var(--app-text)" },
                     }}
                   />
                 </Box>
@@ -5529,6 +5619,7 @@ function OwnerLayout({
                           data-pending={Boolean(
                             (entry as PendingPersonalNoteEntry).pending,
                           )}
+                          data-private-note-delivery-state={(entry as PendingPersonalNoteEntry).deliveryState ?? "persisted"}
                         >
                           <header className={styles.privateNoteEntryMeta}>
                             <time className={styles.privateNoteEntryTime}>
@@ -5557,6 +5648,11 @@ function OwnerLayout({
                                 Вне блока
                               </Badge>
                             )}
+                            {(entry as PendingPersonalNoteEntry).pending ? (
+                              <Text size="xs" c="var(--app-muted)" role="status">
+                                {(entry as PendingPersonalNoteEntry).deliveryState === "failed" ? "Не сохранено" : "Сохраняем…"}
+                              </Text>
+                            ) : null}
                           </header>
                           <Text className={styles.privateNoteEntryText}>
                             {entry.text}
@@ -5579,26 +5675,27 @@ function OwnerLayout({
                   <div className={styles.privateNotesComposer}>
                     <Textarea
                       value={privateNoteComposer}
-                      onChange={(event) =>
+                      onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
                         onPrivateNoteComposerChange(event.currentTarget.value)
                       }
-                      onKeyDown={(event) => {
+                      onKeyDown={(event: React.KeyboardEvent<HTMLElement>) => {
                         if (event.key !== "Enter" || event.shiftKey) return;
                         event.preventDefault();
                         onPrivateNoteSubmit();
                       }}
+                      readOnly={roomReadOnly}
                       data-testid="room-private-notes-input"
                       placeholder={privateNotesInputPlaceholder}
                       aria-label="Заметка интервьюера"
-                      classNames={{ input: styles.privateNotesComposerInput }}
+                      classNames={{ textarea: styles.privateNotesComposerInput }}
                     />
                     {showPrivateNotesCommandMenu ? (
                       <div
                         className={styles.privateNotesCommandMenu}
                         data-testid="room-private-notes-command-menu"
                       >
-                        <button
-                          type="button"
+                        <AntButton
+                          type="text" htmlType="button"
                           className={styles.privateNotesCommandItem}
                           onClick={() => onPrivateNotesCommandShortcut("/block")}
                         >
@@ -5608,7 +5705,7 @@ function OwnerLayout({
                           <span className={styles.privateNotesCommandHint}>
                             Открыть блок заметок
                           </span>
-                        </button>
+                        </AntButton>
 
                         <Text className={styles.privateNotesCommandHelper}>
                           Введите своё название после <code>/block</code> —
@@ -5617,8 +5714,8 @@ function OwnerLayout({
                         </Text>
 
                         {customBlockCandidate ? (
-                          <button
-                            type="button"
+                          <AntButton
+                            type="text" htmlType="button"
                             className={styles.privateNotesCommandCreate}
                             data-testid="room-private-notes-command-create-custom"
                             onClick={() =>
@@ -5637,7 +5734,7 @@ function OwnerLayout({
                             >
                               {customBlockCandidate}
                             </span>
-                          </button>
+                          </AntButton>
                         ) : null}
 
                         {privateNotesCommandExamples.length > 0 ? (
@@ -5652,9 +5749,9 @@ function OwnerLayout({
                               Шаги интервью
                             </Text>
                             {privateNotesCommandExamples.map((example) => (
-                              <button
+                              <AntButton
                                 key={example}
-                                type="button"
+                                type="text" htmlType="button"
                                 className={styles.privateNotesCommandExample}
                                 onClick={() =>
                                   onPrivateNotesCommandShortcut(
@@ -5663,7 +5760,7 @@ function OwnerLayout({
                                 }
                               >
                                 {`/block ${example}`}
-                              </button>
+                              </AntButton>
                             ))}
                           </div>
                         ) : null}
@@ -5688,6 +5785,7 @@ function OwnerLayout({
                         size="xs"
                         onClick={onPrivateNoteSubmit}
                         disabled={
+                          roomReadOnly ||
                           !privateNoteComposer.trim() ||
                           parsedPrivateNotesCommand.kind === "menu" ||
                           parsedPrivateNotesCommand.kind === "block_prompt" ||
@@ -5711,7 +5809,7 @@ function OwnerLayout({
                       className={styles.verdictStrip}
                       {...(merged.verdict ? { "data-verdict": merged.verdict } : {})}
                     >
-                      <Text size="xs" fw={600} c="#a8b5c4" style={{ flex: 1 }}>
+                      <Text size="xs" fw={600} c="var(--app-muted)" style={{ flex: 1 }}>
                         Интервью завершено
                       </Text>
                       {merged.verdict && (
@@ -5728,7 +5826,7 @@ function OwnerLayout({
                     </div>
                   ) : (
                     <div className={styles.verdictStrip}>
-                      <Text size="xs" c="#6b7280" style={{ flex: 1 }}>
+                      <Text size="xs" c="var(--app-muted)" style={{ flex: 1 }}>
                         Активная сессия
                       </Text>
                       <Button
@@ -5757,7 +5855,7 @@ function OwnerLayout({
                     </Text>
                     <Checkbox
                       checked={exportIncludeTimestamps}
-                      onChange={(event) =>
+                      onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
                         onExportIncludeTimestampsChange(
                           event.currentTarget.checked,
                         )
@@ -5766,7 +5864,7 @@ function OwnerLayout({
                     />
                     <Checkbox
                       checked={exportIncludeFreeNotes}
-                      onChange={(event) =>
+                      onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
                         onExportIncludeFreeNotesChange(
                           event.currentTarget.checked,
                         )
@@ -5791,8 +5889,8 @@ function OwnerLayout({
                           <div
                             style={{
                               height: 4,
-                              background: "#1c2230",
-                              borderRadius: 2,
+                              background: "var(--app-surface-soft)",
+                              borderRadius: 8,
                               overflow: "hidden",
                             }}
                           >
@@ -5803,7 +5901,7 @@ function OwnerLayout({
                                   4,
                                   Math.round(pdfExportProgress.progress * 100),
                                 )}%`,
-                                background: "#3b82f6",
+                                background: "var(--app-primary)",
                                 transition: "width 120ms linear",
                               }}
                             />
@@ -5870,34 +5968,34 @@ function OwnerLayout({
                     role="tablist"
                     aria-label="Панель комнаты"
                   >
-                    <button
+                    <AntButton
                       id={notesTabId}
-                      type="button"
+                      type="text" htmlType="button"
                       role="tab"
                       aria-selected={roomToolsTab === "notes"}
                       aria-controls={notesPanelId}
                       className={`${styles.panelTab} ${roomToolsTab === "notes" ? styles.panelTabActive : ""}`}
                       onClick={() => setRoomToolsTab("notes")}
-                      onKeyDown={(event) =>
+                    onKeyDown={(event: React.KeyboardEvent<HTMLButtonElement>) =>
                         handleRoomToolsTabKeyDown(event, "notes")
                       }
                     >
                       Чат
-                    </button>
-                    <button
+                    </AntButton>
+                    <AntButton
                       id={logsTabId}
-                      type="button"
+                      type="text" htmlType="button"
                       role="tab"
                       aria-selected={roomToolsTab === "logs"}
                       aria-controls={logsPanelId}
                       className={`${styles.panelTab} ${roomToolsTab === "logs" ? styles.panelTabActive : ""}`}
                       onClick={() => setRoomToolsTab("logs")}
-                      onKeyDown={(event) =>
+                    onKeyDown={(event: React.KeyboardEvent<HTMLButtonElement>) =>
                         handleRoomToolsTabKeyDown(event, "logs")
                       }
                     >
                       Логи
-                    </button>
+                    </AntButton>
                   </div>
 
                   {roomToolsTab === "notes" ? (
@@ -5965,6 +6063,11 @@ function OwnerLayout({
                                 <Text className={styles.noteBubbleText}>
                                   {message.text}
                                 </Text>
+                                {deliveryState !== "persisted" ? (
+                                  <Text size="xs" c="var(--app-muted)" role="status">
+                                    {deliveryState === "retryable_error" ? "Не отправлено" : "Отправляем…"}
+                                  </Text>
+                                ) : null}
                                 {deliveryState === "retryable_error" &&
                                 pendingMessage.retryAllowed ? (
                                   <Button
@@ -5972,6 +6075,7 @@ function OwnerLayout({
                                     size="compact-xs"
                                     variant="light"
                                     color="red"
+                                    disabled={roomReadOnly}
                                     onClick={onRetryNote}
                                   >
                                     Повторить отправку
@@ -5995,21 +6099,23 @@ function OwnerLayout({
                       <div className={styles.notesComposer}>
                         <Textarea
                           value={noteComposer}
-                          onChange={(event) =>
+                  readOnly={roomReadOnly}
+                          onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
                             onNoteComposerChange(event.currentTarget.value)
                           }
-                          onKeyDown={(event) => {
+                          onKeyDown={(event: React.KeyboardEvent<HTMLElement>) => {
                             if (event.key !== "Enter" || event.shiftKey) return;
                             event.preventDefault();
                             onSendNote();
                           }}
                           autosize
-                          minRows={3}
-                          maxRows={14}
+                          minRows={4}
+                          maxRows={10}
+                          style={{ minHeight: 112 }}
                           data-testid="room-notes-input"
                           placeholder="Напишите сообщение для интервьюеров"
                           aria-label="Сообщение в чат интервьюеров"
-                          classNames={{ input: styles.notesComposerInput }}
+                          classNames={{ textarea: styles.notesComposerInput }}
                         />
                         <Group
                           justify="flex-end"
@@ -6020,7 +6126,7 @@ function OwnerLayout({
                             type="button"
                             size="xs"
                             onClick={onSendNote}
-                            disabled={!noteComposer.trim() || noteSendPending}
+                            disabled={roomReadOnly || !noteComposer.trim() || noteSendPending}
                             data-testid="room-notes-send"
                           >
                             Отправить
@@ -6086,7 +6192,8 @@ function OwnerLayout({
               <ManagerWorkspaceEditor
                 workspace={localWorkspacePreview}
                 isRefreshing={isLocalWorkspaceSnapshotFetching}
-                focusMode={managerWorkspaceFocusMode}
+                readOnly={roomReadOnly}
+                focusMode={briefingFocusMode}
                 onBriefingChange={onManagerWorkspaceBriefingChange}
                 sessionId={sessionId}
                 participantId={participantId}
@@ -6103,14 +6210,14 @@ function OwnerLayout({
                 data-testid="manager-workspace-loading"
                 aria-busy="true"
               >
-                <Text size="sm" c="dimmed">Загружаем рабочее пространство задачи…</Text>
+                <Text size="sm" c="dimmed">Загружаем задачу…</Text>
               </Box>
             ) : (
               <Box className={styles.editorColumn}>
                 <BriefingBoard
                   key={`briefing-${merged.currentStep}`}
                   mode="interviewer"
-                  readOnly={Boolean(tasks.find((task) => task.stepIndex === merged.currentStep)?.mandatory)}
+                  readOnly={roomReadOnly || Boolean(tasks.find((task) => task.stepIndex === merged.currentStep)?.mandatory)}
                   value={briefingMarkdown}
                   onChange={onBriefingChange}
                   focusMode={briefingFocusMode}
@@ -6154,10 +6261,6 @@ function OwnerLayout({
         onClose={onCloseVerdictModal}
         title="Завершить интервью"
         centered
-        styles={{
-          content: { background: "#14171d", color: "#f3f5f7" },
-          header: { background: "#14171d", color: "#f3f5f7" },
-        }}
       >
         <Stack gap="md">
           <Radio.Group
@@ -6177,18 +6280,18 @@ function OwnerLayout({
             label="Обоснование"
             placeholder="Опишите ключевые наблюдения..."
             value={verdictComment}
-            onChange={(e) => onVerdictCommentChange(e.currentTarget.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => onVerdictCommentChange(e.currentTarget.value)}
             minRows={3}
             styles={{
-              label: { color: "#9ba0a8" },
-              input: { background: "#0f1218", borderColor: "#272b34", color: "#f3f5f7" },
+              label: { color: "var(--app-text)" },
+              input: { background: "var(--app-surface)", borderColor: "var(--app-control-border)", color: "var(--app-text)" },
             }}
           />
           <Button
             fullWidth
             loading={isSettingVerdict}
             onClick={onSubmitVerdict}
-            style={{ background: "#f3f5f7", color: "#0f1115" }}
+            style={{ background: "var(--app-primary)", color: "var(--app-on-primary)" }}
           >
             Сохранить вердикт
           </Button>
@@ -6206,6 +6309,7 @@ function OwnerLayout({
 function ManagerWorkspaceEditor({
   workspace,
   isRefreshing,
+  readOnly,
   focusMode,
   onBriefingChange,
   sessionId,
@@ -6219,6 +6323,7 @@ function ManagerWorkspaceEditor({
 }: {
   workspace: RoomTaskWorkspace;
   isRefreshing: boolean;
+  readOnly: boolean;
   focusMode: boolean;
   onBriefingChange: (value: string) => void;
   sessionId: string;
@@ -6266,15 +6371,17 @@ function ManagerWorkspaceEditor({
       className={styles.editorColumn}
       aria-busy={isRefreshing || undefined}
     >
-      {focusMode ? (
+      <div className={styles.modeEditor} hidden={!focusMode}>
         <BriefingBoard
           mode="interviewer"
+          readOnly={readOnly}
           value={workspace.briefingMarkdown}
           onChange={onBriefingChange}
           focusMode
           showModeToggle={false}
         />
-      ) : (
+      </div>
+      <div className={styles.modeEditor} hidden={focusMode}>
         <Box className={styles.editorPanel}>
           <div className={styles.editorWrap}>
             <RoomCodeEditor
@@ -6287,7 +6394,7 @@ function ManagerWorkspaceEditor({
               lastCodeUpdatedBySessionId={null}
               resyncSignal={workspace.revision ?? 0}
               syncKey={syncKey}
-              readOnly={isRefreshing}
+              readOnly={readOnly || isRefreshing}
               sessionId={sessionId}
               participantId={participantId}
               participantLabel={participantLabel}
@@ -6301,7 +6408,7 @@ function ManagerWorkspaceEditor({
             />
           </div>
         </Box>
-      )}
+      </div>
     </Box>
   );
 }
@@ -6362,14 +6469,14 @@ function CandidateLayout({
             </ThemeIcon>
             <Text
               size="sm"
-              c="#d2d8e1"
+              c="var(--app-text)"
               data-testid="room-current-published-step-title"
             >
               Текущий шаг: {stepTitle}
             </Text>
           </Group>
           <Badge variant="light" color="gray">
-            Совместный режим
+            Режим комнаты — {briefingFocusMode ? "Markdown" : "Code"}
           </Badge>
         </Group>
       </Box>
@@ -6381,7 +6488,7 @@ function CandidateLayout({
         focusMode={briefingFocusMode}
       />
 
-      {!briefingFocusMode ? (
+      <div className={styles.modeEditor} hidden={briefingFocusMode}>
         <SharedRoomEditorPanel
           merged={merged}
           stepStarterCode={stepStarterCode}
@@ -6400,7 +6507,7 @@ function CandidateLayout({
           onPaste={onPaste}
           panelClassName={styles.candidatePanel}
         />
-      ) : null}
+      </div>
 
       {error && <Text className={styles.error}>{error}</Text>}
     </Box>
@@ -6442,12 +6549,18 @@ function SharedRoomEditorPanel({
   onPaste?: (payload: import("../features/room/pasteDetection").PastePayload) => void;
   panelClassName: string;
 }) {
+  // A completed viewer must discard unaccepted local CRDT history. Managers
+  // keep their editor and pending edits; a paused room also keeps its instance.
+  const documentContextKey = `${syncKey}:${merged.tasks?.length ? "task" : "taskless"}`;
+  const editorKey = merged.status === "finished" && !merged.canManageRoom
+    ? `${documentContextKey}:completed-viewer`
+    : documentContextKey;
   return (
     <Box className={panelClassName}>
       <div className={styles.editorWrap}>
         {editorReady ? (
           <RoomCodeEditor
-            key={syncKey}
+            key={editorKey}
             height="100%"
             language={toEditorLanguage(merged.language)}
             value={
@@ -6461,7 +6574,7 @@ function SharedRoomEditorPanel({
             }
             resyncSignal={resyncSignal}
             syncKey={syncKey}
-            readOnly={!editorReady}
+            readOnly={!editorReady || isRoomReadOnly(merged)}
             sessionId={sessionId}
             participantId={participantId}
             participantLabel={participantLabel}
@@ -6480,7 +6593,7 @@ function SharedRoomEditorPanel({
               height: "100%",
               display: "grid",
               placeItems: "center",
-              color: "#8b919b",
+              color: "var(--app-muted)",
               fontSize: 13,
             }}
           >

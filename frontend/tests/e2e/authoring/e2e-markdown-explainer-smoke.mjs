@@ -29,7 +29,7 @@ async function enterNameIfPrompted(page, name) {
 }
 
 async function fillMarkdownEditor(page, content) {
-  const editorRoot = page.locator('[data-testid="room-markdown-editor"]');
+  const editorRoot = page.getByRole("region", { name: "Условие", exact: true }).getByTestId("room-markdown-editor");
   await editorRoot.waitFor({ state: "visible", timeout: 8000 });
   const editable = editorRoot.locator(".cm-content");
   await editable.click();
@@ -38,7 +38,7 @@ async function fillMarkdownEditor(page, content) {
 }
 
 async function assertMarkdownEditorHighlighting(page) {
-  const editorRoot = page.locator('[data-testid="room-markdown-editor"]');
+  const editorRoot = page.getByRole("region", { name: "Условие", exact: true }).getByTestId("room-markdown-editor");
   await editorRoot.locator(".cm-gutters").waitFor({ state: "visible", timeout: 8000 });
   await editorRoot.locator(".cm-lineNumbers").waitFor({ state: "visible", timeout: 8000 });
   await editorRoot.locator(".cm-line").filter({ hasText: "| Left columns" }).first().waitFor({
@@ -55,7 +55,7 @@ async function assertMarkdownEditorHighlighting(page) {
   await codeLine.waitFor({ state: "visible", timeout: 8000 });
   await page.waitForFunction(
     () => {
-      const root = document.querySelector('[data-testid="room-markdown-editor"]');
+      const root = document.querySelector('#room-context-region-condition [data-testid="room-markdown-editor"]');
       const lines = Array.from(root?.querySelectorAll(".cm-line") ?? []);
       const line = lines.find((item) => item.textContent?.includes("answer"));
       return (line?.querySelectorAll("span[class]").length ?? 0) >= 2;
@@ -81,6 +81,7 @@ try {
   const interviewerPage = await interviewerContext.newPage();
   await gotoWithRetry(interviewerPage, webBaseUrl);
   await interviewerPage.getByRole("button", { name: "Создать комнату" }).click();
+  await interviewerPage.getByRole("dialog", { name: "Создать комнату" }).getByRole("button", { name: "Создать комнату", exact: true }).click();
   await interviewerPage.waitForURL(/\/room\//, { timeout: 15000 });
   await interviewerPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
 
@@ -90,15 +91,17 @@ try {
   // Expectations for the new markdown explainer block:
   // - Interviewer: editor + preview
   // - Candidate: preview only
-  const markdownEditor = interviewerPage.locator('[data-testid="room-markdown-editor"]');
-  const markdownPreview = interviewerPage.locator('[data-testid="room-markdown-preview"]');
+  const condition = interviewerPage.getByRole("region", { name: "Условие", exact: true });
+  const markdownEditor = condition.getByTestId("room-markdown-editor");
+  const markdownPreview = condition.getByTestId("room-markdown-preview");
+  await markdownEditor.waitFor({ state: "visible", timeout: 8000 });
   if (!(await markdownEditor.isVisible().catch(() => false))) {
     throw new Error("MARKDOWN_EXPLAINER_EDITOR_NOT_FOUND (expected data-testid=room-markdown-editor)");
   }
   if (!(await markdownPreview.isVisible().catch(() => false))) {
     throw new Error("MARKDOWN_EXPLAINER_PREVIEW_NOT_FOUND (expected data-testid=room-markdown-preview)");
   }
-  const codeBlockButtonLabel = (await interviewerPage.getByRole("button", { name: "Code block" }).textContent())?.trim();
+  const codeBlockButtonLabel = (await condition.getByRole("button", { name: "Code block" }).textContent())?.trim();
   if (codeBlockButtonLabel !== "Code" || codeBlockButtonLabel.includes("`")) {
     throw new Error(`MARKDOWN_CODEBLOCK_BUTTON_LABEL_BAD label=${codeBlockButtonLabel}`);
   }

@@ -1050,6 +1050,8 @@ class TeamCreateRestartHttpIntegrationTest {
                 *(postgres.applicationProperties() + mapOf(
                     "server.port" to 0,
                     "app.features.team-workspaces-enabled" to true,
+                    "app.team-invitation-link-encryption.active-key-id" to "integration-v1",
+                    "app.team-invitation-link-encryption.keys.integration-v1" to "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
                     "spring.main.banner-mode" to "off",
                 )).map { (name, value) -> "--$name=$value" }.toTypedArray(),
             )
@@ -1331,19 +1333,37 @@ private fun assertLegacyTeamRoomIsolation(
         assertEquals(safeUnavailable(unknownDelete), safeUnavailable(denial), "TEAM and unknown DELETE must be indistinguishable")
     }
 
+    listOf(
+        mockMvc.get("/api/rooms/${room.inviteCode}") { authorize(owner) }.andReturn().expectStatus(200),
+        mockMvc.get("/api/rooms/${room.inviteCode}") { header("X-Room-Owner-Token", fixture.ownerToken) }.andReturn().expectStatus(200),
+        mockMvc.get("/api/rooms/${room.inviteCode}") { header("X-Room-Interviewer-Token", fixture.interviewerToken) }.andReturn().expectStatus(200),
+        mockMvc.get("/api/rooms/${room.inviteCode}") { authorize(fixture.candidate) }.andReturn().expectStatus(200),
+    ).forEach { admission ->
+        val body = objectMapper.readTree(admission.response.contentAsString)
+        assertEquals("candidate", body.path("role").asText())
+        assertFalse(body.path("canManageRoom").asBoolean())
+        assertEquals(0, body.path("accessMembers").size())
+        assertEquals(0, body.path("notesMessages").size())
+        assertFalse(admission.response.contentAsString.contains(fixture.ownerToken))
+        assertFalse(admission.response.contentAsString.contains(fixture.interviewerToken))
+    }
+    mockMvc.get("/api/realtime/rooms/${room.inviteCode}/stream-status") {
+        param("ownerToken", fixture.ownerToken)
+    }.andReturn().expectStatus(204)
+    val publicStream = mockMvc.get("/api/realtime/rooms/${room.inviteCode}/stream") {
+        param("sessionId", "public-${UUID.randomUUID()}")
+        param("authToken", owner.token)
+    }.andReturn().expectStatus(200)
+    val payload = publicStream.response.contentAsString.lineSequence()
+        .filter { it.startsWith("data:") }
+        .map { objectMapper.readTree(it.removePrefix("data:")) }
+        .last { it.path("type").asText() == "state_sync" }.path("payload")
+    assertEquals("candidate", payload.path("role").asText())
+    assertEquals(0, payload.path("notesMessages").size())
+    assertEquals(0, payload.path("personalNotes").size())
+
     val denials = listOf(
         mockMvc.get("/api/me/hr/rooms/${room.id}") { authorize(owner) }.andReturn().expectStatus(404),
-        mockMvc.get("/api/rooms/${room.inviteCode}") { authorize(owner) }.andReturn().expectStatus(404),
-        mockMvc.get("/api/rooms/${room.inviteCode}") { header("X-Room-Owner-Token", fixture.ownerToken) }.andReturn().expectStatus(404),
-        mockMvc.get("/api/rooms/${room.inviteCode}") { header("X-Room-Interviewer-Token", fixture.interviewerToken) }.andReturn().expectStatus(404),
-        mockMvc.get("/api/rooms/${room.inviteCode}") { authorize(fixture.candidate) }.andReturn().expectStatus(404),
-        mockMvc.get("/api/realtime/rooms/${room.inviteCode}/stream-status") {
-            param("ownerToken", fixture.ownerToken)
-        }.andReturn().expectStatus(404),
-        mockMvc.get("/api/realtime/rooms/${room.inviteCode}/stream") {
-            param("sessionId", "denied-${UUID.randomUUID()}")
-            param("authToken", owner.token)
-        }.andReturn().expectStatus(404),
         mockMvc.post("/api/realtime/rooms/${room.inviteCode}/events") {
             contentType = MediaType.APPLICATION_JSON
             content = objectMapper.writeValueAsString(
@@ -1355,19 +1375,18 @@ private fun assertLegacyTeamRoomIsolation(
                     "codeSequence" to 1,
                 ),
             )
-        }.andReturn().expectStatus(404),
+        }.andReturn().expectStatus(403),
         mockMvc.post("/api/rooms/${room.inviteCode}/next-step") {
             header("X-Room-Owner-Token", fixture.ownerToken)
-        }.andReturn().expectStatus(404),
+        }.andReturn().expectStatus(403),
         mockMvc.post("/api/rooms/${room.inviteCode}/participants/${fixture.candidate.id}/role") {
             authorize(owner)
             contentType = MediaType.APPLICATION_JSON
             content = """{"role":"interviewer"}"""
-        }.andReturn().expectStatus(404),
+        }.andReturn().expectStatus(403),
     )
     val unknown = mockMvc.get("/api/rooms/missing-${UUID.randomUUID()}") { authorize(owner) }
         .andReturn().expectStatus(404)
-    assertEquals(safeUnavailable(denials[1]), safeUnavailable(unknown), "TEAM room and unknown room must be indistinguishable")
     val secrets = listOf(
         room.id,
         room.inviteCode,
@@ -1461,13 +1480,18 @@ private fun assertArchivedLegacyTeamMutations(
         track(unknownInvite).expectStatus(404),
     )
     assertEquals(archivedBefore, roomMutationSnapshot(jdbcTemplate, room.id), "archived TEAM legacy denials must be side-effect free")
-    known.zip(unknown).forEach { (teamDenial, unknownDenial) ->
-        teamDenial.expectStatus(404)
-        assertEquals(
-            safeUnavailable(unknownDenial),
-            safeUnavailable(teamDenial),
-            "archived TEAM and unknown legacy mutations must be indistinguishable",
-        )
+    known.zip(unknown).forEachIndexed { index, (teamDenial, unknownDenial) ->
+        val expectedStatus = if (index in 1..3) 410 else 404
+        teamDenial.expectStatus(expectedStatus)
+        if (expectedStatus == 404) {
+            assertEquals(
+                safeUnavailable(unknownDenial),
+                safeUnavailable(teamDenial),
+                "archived TEAM and unknown legacy mutations must be indistinguishable",
+            )
+        } else {
+            assertEquals("GONE", objectMapper.readTree(teamDenial.response.contentAsString).path("code").asText())
+        }
     }
     val forbidden = listOf(
         room.id,

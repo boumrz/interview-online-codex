@@ -1,6 +1,9 @@
 package com.interviewonline.service
 
 import com.interviewonline.model.User
+import com.interviewonline.repository.HrHostNotesExportRepository
+import com.interviewonline.repository.HrHostNotesExportSnapshot
+import com.fasterxml.jackson.databind.ObjectMapper
 import org.apache.poi.xssf.streaming.SXSSFWorkbook
 import org.junit.jupiter.api.Assertions.assertAll
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -18,9 +21,11 @@ class HrWorkbookCleanupTest {
     fun `render failure preserves its cause and attempts every cleanup even when close fails`() {
         val interviewService = mock(HrInterviewService::class.java)
         val user = User(id = UUID.randomUUID().toString())
-        `when`(interviewService.exportSnapshot(user, null, null)).thenReturn(
+        `when`(interviewService.exportSnapshot(user, null, null, null, null, null)).thenReturn(
             HrInterviewService.ExportSnapshot(emptyList(), HrInterviewService.DateRange(null, null, null, null), false, 0),
         )
+        val hostNotes = mock(HrHostNotesExportRepository::class.java)
+        `when`(hostNotes.snapshot(emptyList())).thenReturn(HrHostNotesExportSnapshot(emptyMap(), emptyMap()))
         val before = reportFiles()
         try {
             mockConstruction(SXSSFWorkbook::class.java, withSettings().defaultAnswer(RETURNS_DEEP_STUBS)) { workbook, _ ->
@@ -28,7 +33,7 @@ class HrWorkbookCleanupTest {
                 doThrow(IOException("close failure")).`when`(workbook).close()
             }.use { construction ->
                 val failure = assertThrows(IOException::class.java) {
-                    HrWorkbookService(interviewService).generate(user, null, null)
+                    HrWorkbookService(interviewService, hostNotes, ObjectMapper()).generate(user, null, null)
                 }
                 assertAll(
                     { assertEquals("write failure", failure.message) },

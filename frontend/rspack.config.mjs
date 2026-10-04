@@ -7,6 +7,10 @@ const isProduction = isBuildCommand;
 
 export default defineConfig({
   mode: isProduction ? "production" : "development",
+  // Infrastructure request URLs can contain private SSE query values; compilation stats stay visible.
+  infrastructureLogging: { level: "none" },
+  // Compile imported screens before serving them so the first room/PDF load does not wait for a dev proxy reload.
+  lazyCompilation: false,
   entry: "./src/main.tsx",
   devtool: isProduction ? false : "cheap-module-source-map",
   output: {
@@ -21,20 +25,53 @@ export default defineConfig({
     // SSE must stay uncompressed in dev; gzip buffering prevents EventSource from receiving updates promptly.
     compress: false,
     historyApiFallback: true,
+    // Keep source assets from being embedded by another origin on plain HTTP.
+    headers: { "Cross-Origin-Resource-Policy": "same-origin" },
+    setupMiddlewares(middlewares) {
+      // These local actions are unused by the app and accept unsafe cross-site GETs upstream.
+      const safeMiddlewares = middlewares.filter(({ name }) => (
+        name !== "rspack-dev-server-open-editor" && name !== "rspack-dev-server-invalidate"
+      ));
+      safeMiddlewares.unshift({
+        name: "deny-dev-server-actions",
+        middleware(req, res, next) {
+          let pathname;
+          try {
+            pathname = decodeURIComponent(new URL(req.url ?? "/", "http://localhost").pathname);
+          } catch {
+            res.statusCode = 400;
+            res.end("Invalid request path");
+            return;
+          }
+          if (/^\/(?:rspack|webpack)-dev-server\/(?:open-editor|invalidate)(?:\/|$)/i.test(pathname)) {
+            res.statusCode = 403;
+            res.end("Development server action disabled");
+            return;
+          }
+          next();
+        }
+      });
+      return safeMiddlewares;
+    },
     proxy: [
       {
-        context: ["/api"],
+        pathFilter: ["/api"],
         target: process.env.DEV_API_PROXY_TARGET ?? "http://localhost:8080",
         changeOrigin: true,
-        onProxyReq(proxyReq, req, res) {
-          if (!/^\/api\/realtime\/rooms\/[^/]+\/stream(?:\?|$)/.test(req.url ?? "")) return;
-          res.once("close", () => proxyReq.destroy());
+        on: {
+          proxyReq(proxyReq, req, res) {
+            if (!/^\/api\/realtime\/rooms\/[^/]+\/stream(?:\?|$)/.test(req.url ?? "")) return;
+            res.once("close", () => proxyReq.destroy());
+          }
         }
       }
     ]
   },
   resolve: {
-    extensions: [".ts", ".tsx", ".js"]
+    extensions: [".ts", ".tsx", ".js"],
+    alias: {
+      components: path.resolve(process.cwd(), "src/components")
+    }
   },
   module: {
     rules: [

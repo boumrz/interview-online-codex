@@ -1,0 +1,54 @@
+---
+triple:          'arm64-apple-darwin'
+binary-path:     '/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXFocusSink'
+relocations:
+  - { offset: 0xCBFC0, size: 0x8, addend: 0x0, symName: '_$s17NativeAXFocusSinkAAV4mainyyFZ', symObjAddr: 0x0, symBinAddr: 0x100000F68, symSize: 0x29C }
+  - { offset: 0xCC043, size: 0x8, addend: 0x0, symName: '_$sSo8NSWindowCMa', symObjAddr: 0x29C, symBinAddr: 0x100001204, symSize: 0x60 }
+  - { offset: 0xCC057, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVMa', symObjAddr: 0x2FC, symBinAddr: 0x100001264, symSize: 0x94 }
+  - { offset: 0xCC06B, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVABs10SetAlgebraSCWl', symObjAddr: 0x3D0, symBinAddr: 0x100001338, symSize: 0x6C }
+  - { offset: 0xCC07F, size: 0x8, addend: 0x0, symName: ___swift_project_boxed_opaque_existential_0, symObjAddr: 0x4AC, symBinAddr: 0x100001414, symSize: 0x4C }
+  - { offset: 0xCC093, size: 0x8, addend: 0x0, symName: ___swift_destroy_boxed_opaque_existential_0, symObjAddr: 0x4F8, symBinAddr: 0x100001460, symSize: 0x60 }
+  - { offset: 0xCC0A7, size: 0x8, addend: 0x0, symName: '_$s17NativeAXFocusSinkAAVMa', symObjAddr: 0x588, symBinAddr: 0x1000014F0, symSize: 0x14 }
+  - { offset: 0xCC0BB, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVs9OptionSetSCSYWb', symObjAddr: 0xA78, symBinAddr: 0x1000019E0, symSize: 0x14 }
+  - { offset: 0xCC0CF, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVABSYSCWl', symObjAddr: 0xA8C, symBinAddr: 0x1000019F4, symSize: 0x6C }
+  - { offset: 0xCC0E3, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVs9OptionSetSCs0E7AlgebraPWb', symObjAddr: 0xAF8, symBinAddr: 0x100001A60, symSize: 0x14 }
+  - { offset: 0xCC0F7, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVs10SetAlgebraSCSQWb', symObjAddr: 0xB0C, symBinAddr: 0x100001A74, symSize: 0x14 }
+  - { offset: 0xCC10B, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVABSQSCWl', symObjAddr: 0xB20, symBinAddr: 0x100001A88, symSize: 0x6C }
+  - { offset: 0xCC11F, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVs10SetAlgebraSCs25ExpressibleByArrayLiteralPWb', symObjAddr: 0xB8C, symBinAddr: 0x100001AF4, symSize: 0x14 }
+  - { offset: 0xCC133, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVABs25ExpressibleByArrayLiteralSCWl', symObjAddr: 0xBA0, symBinAddr: 0x100001B08, symSize: 0x6C }
+  - { offset: 0xCC147, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVABs9OptionSetSCWl', symObjAddr: 0xC0C, symBinAddr: 0x100001B74, symSize: 0x6C }
+  - { offset: 0xCC15B, size: 0x8, addend: 0x0, symName: '_$sS2us17FixedWidthIntegersWl', symObjAddr: 0xC78, symBinAddr: 0x100001BE0, symSize: 0x64 }
+  - { offset: 0xCC16F, size: 0x8, addend: 0x0, symName: '_$sSa12_endMutationyyF', symObjAddr: 0xCE0, symBinAddr: 0x100001C48, symSize: 0xC }
+  - { offset: 0xCC19B, size: 0x8, addend: 0x0, symName: '_$s17NativeAXFocusSinkAAV4mainyyFZ', symObjAddr: 0x0, symBinAddr: 0x100000F68, symSize: 0x29C }
+  - { offset: 0xCC203, size: 0x8, addend: 0x0, symName: '_$ss27_finalizeUninitializedArrayySayxGABnlF', symObjAddr: 0x390, symBinAddr: 0x1000012F8, symSize: 0x40 }
+  - { offset: 0xCC249, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVs10SetAlgebraSCsACPxycfCTW', symObjAddr: 0x5FC, symBinAddr: 0x100001564, symSize: 0x40 }
+  - { offset: 0xCC265, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVs10SetAlgebraSCsACP8containsySb7ElementQzFTW', symObjAddr: 0x63C, symBinAddr: 0x1000015A4, symSize: 0x38 }
+  - { offset: 0xCC281, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVs10SetAlgebraSCsACP5unionyxxnFTW', symObjAddr: 0x674, symBinAddr: 0x1000015DC, symSize: 0x3C }
+  - { offset: 0xCC29D, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVs10SetAlgebraSCsACP12intersectionyxxFTW', symObjAddr: 0x6B0, symBinAddr: 0x100001618, symSize: 0x3C }
+  - { offset: 0xCC2B9, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVs10SetAlgebraSCsACP19symmetricDifferenceyxxnFTW', symObjAddr: 0x6EC, symBinAddr: 0x100001654, symSize: 0x3C }
+  - { offset: 0xCC2D5, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVs10SetAlgebraSCsACP6insertySb8inserted_7ElementQz17memberAfterInserttAHnFTW', symObjAddr: 0x728, symBinAddr: 0x100001690, symSize: 0x40 }
+  - { offset: 0xCC2F1, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVs10SetAlgebraSCsACP6removey7ElementQzSgAGFTW', symObjAddr: 0x768, symBinAddr: 0x1000016D0, symSize: 0x3C }
+  - { offset: 0xCC30D, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVs10SetAlgebraSCsACP6update4with7ElementQzSgAHn_tFTW', symObjAddr: 0x7A4, symBinAddr: 0x10000170C, symSize: 0x3C }
+  - { offset: 0xCC329, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVs10SetAlgebraSCsACP9formUnionyyxnFTW', symObjAddr: 0x7E0, symBinAddr: 0x100001748, symSize: 0x40 }
+  - { offset: 0xCC345, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVs10SetAlgebraSCsACP16formIntersectionyyxFTW', symObjAddr: 0x820, symBinAddr: 0x100001788, symSize: 0x40 }
+  - { offset: 0xCC361, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVs10SetAlgebraSCsACP23formSymmetricDifferenceyyxnFTW', symObjAddr: 0x860, symBinAddr: 0x1000017C8, symSize: 0x40 }
+  - { offset: 0xCC37D, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVs10SetAlgebraSCsACP11subtractingyxxFTW', symObjAddr: 0x8A0, symBinAddr: 0x100001808, symSize: 0x14 }
+  - { offset: 0xCC399, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVs10SetAlgebraSCsACP8isSubset2ofSbx_tFTW', symObjAddr: 0x8B4, symBinAddr: 0x10000181C, symSize: 0x18 }
+  - { offset: 0xCC3B5, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVs10SetAlgebraSCsACP10isDisjoint4withSbx_tFTW', symObjAddr: 0x8CC, symBinAddr: 0x100001834, symSize: 0x18 }
+  - { offset: 0xCC3D1, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVs10SetAlgebraSCsACP10isSuperset2ofSbx_tFTW', symObjAddr: 0x8E4, symBinAddr: 0x10000184C, symSize: 0x18 }
+  - { offset: 0xCC3ED, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVs10SetAlgebraSCsACP7isEmptySbvgTW', symObjAddr: 0x8FC, symBinAddr: 0x100001864, symSize: 0x18 }
+  - { offset: 0xCC409, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVs10SetAlgebraSCsACPyxqd__ncSTRd__7ElementQyd__AERtzlufCTW', symObjAddr: 0x914, symBinAddr: 0x10000187C, symSize: 0x38 }
+  - { offset: 0xCC425, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVs10SetAlgebraSCsACP8subtractyyxFTW', symObjAddr: 0x94C, symBinAddr: 0x1000018B4, symSize: 0x14 }
+  - { offset: 0xCC441, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVSQSCSQ2eeoiySbx_xtFZTW', symObjAddr: 0x960, symBinAddr: 0x1000018C8, symSize: 0x48 }
+  - { offset: 0xCC45D, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVs25ExpressibleByArrayLiteralSCsACP05arrayG0x0fG7ElementQzd_tcfCTW', symObjAddr: 0x9A8, symBinAddr: 0x100001910, symSize: 0x3C }
+  - { offset: 0xCC5B6, size: 0x8, addend: 0x0, symName: '_$sSo8NSWindowC11contentRect9styleMask7backing5deferABSo6CGRectV_So0a5StyleE0VSo18NSBackingStoreTypeVSbtcfC', symObjAddr: 0x43C, symBinAddr: 0x1000013A4, symSize: 0x70 }
+  - { offset: 0xCC5CA, size: 0x8, addend: 0x0, symName: '_$s17NativeAXFocusSinkAAV5$mainyyFZ', symObjAddr: 0x558, symBinAddr: 0x1000014C0, symSize: 0x14 }
+  - { offset: 0xCC5EA, size: 0x8, addend: 0x0, symName: '_$s17NativeAXFocusSinkAAVABycfC', symObjAddr: 0x56C, symBinAddr: 0x1000014D4, symSize: 0x4 }
+  - { offset: 0xCC60B, size: 0x8, addend: 0x0, symName: _NativeAXFocusSink_main, symObjAddr: 0x570, symBinAddr: 0x1000014D8, symSize: 0x18 }
+  - { offset: 0xCC626, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskV8rawValueABSu_tcfC', symObjAddr: 0x59C, symBinAddr: 0x100001504, symSize: 0x4 }
+  - { offset: 0xCC63A, size: 0x8, addend: 0x0, symName: '_$sSo8NSWindowC11contentRect9styleMask7backing5deferABSo6CGRectV_So0a5StyleE0VSo18NSBackingStoreTypeVSbtcfcTO', symObjAddr: 0x5A0, symBinAddr: 0x100001508, symSize: 0x5C }
+  - { offset: 0xCC655, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVs9OptionSetSCsACP8rawValuex03RawG0Qz_tcfCTW', symObjAddr: 0x9E4, symBinAddr: 0x10000194C, symSize: 0x2C }
+  - { offset: 0xCC669, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVSYSCSY8rawValuexSg03RawE0Qz_tcfCTW', symObjAddr: 0xA10, symBinAddr: 0x100001978, symSize: 0x3C }
+  - { offset: 0xCC67D, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskVSYSCSY8rawValue03RawE0QzvgTW', symObjAddr: 0xA4C, symBinAddr: 0x1000019B4, symSize: 0x2C }
+  - { offset: 0xCC691, size: 0x8, addend: 0x0, symName: '_$sSo17NSWindowStyleMaskV8rawValueSuvg', symObjAddr: 0xCDC, symBinAddr: 0x100001C44, symSize: 0x4 }
+...

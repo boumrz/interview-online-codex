@@ -51,6 +51,7 @@ try {
 
   await owner.goto(BASE_URL, { waitUntil: "domcontentloaded" });
   await owner.getByRole("button", { name: "Создать комнату" }).click();
+  await owner.getByRole("dialog", { name: "Создать комнату" }).getByRole("button", { name: "Создать комнату", exact: true }).click();
   await owner.waitForURL(/\/room\//, { timeout: 15000 });
   await owner.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
   const roomUrl = owner.url();

@@ -1,34 +1,30 @@
-import React, { FormEvent, useEffect, useMemo, useState } from "react";
-import {
-  Anchor,
-  Box,
-  Button,
-  Card,
-  Checkbox,
-  Container,
-  Group,
-  PasswordInput,
-  SegmentedControl,
-  Stack,
-  Text,
-  TextInput,
-  ThemeIcon,
-  Title
-} from "@mantine/core";
-import { IconKey, IconUser } from "@tabler/icons-react";
+import React, { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { Alert, Button, Card, Checkbox, Input, Segmented, Space, Typography } from "antd";
+import { KeyOutlined, UserOutlined } from "@ant-design/icons";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../app/hooks";
+import { store } from "../app/store";
+import { API_BASE_URL } from "../config/runtime";
 import { clearAuth, setAuthToken, setCurrentUser } from "../features/auth/authSlice";
-import { api, useLazyMeProfileQuery, useLoginMutation, useRegisterMutation } from "../services/api";
+import { api, useLoginMutation, useRegisterMutation } from "../services/api";
 import { setVisitParams, trackEvent } from "../services/analytics";
+import { ThemeToggleButton } from "../features/theme/ThemeToggleButton";
+import type { User } from "../types";
+import styles from "./LoginPage.module.css";
 
-const fieldStyles = {
-  label: { color: "#9ba0a8", fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.6 },
-  input: {
-    backgroundColor: "#14171d",
-    borderColor: "#272b34",
-    color: "#f3f5f7"
-  }
+type AuthenticationAttempt = {
+  initialToken: string | null;
+  initialStoredToken: string | null;
+  initialLocation: string;
+  controller: AbortController;
+  abortCredentials?: () => void;
+};
+
+type ProfileRetry = {
+  token: string;
+  draft: string;
+  initialToken: string | null;
+  initialStoredToken: string | null;
 };
 
 export function LoginPage() {
@@ -53,10 +49,14 @@ export function LoginPage() {
   const [passwordError, setPasswordError] = useState("");
   const [login, loginState] = useLoginMutation();
   const [register, registerState] = useRegisterMutation();
-  const [fetchMeProfile] = useLazyMeProfileQuery();
-  const isLoading = loginState.isLoading || registerState.isLoading;
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [hasProfileRetry, setHasProfileRetry] = useState(false);
+  const mountedRef = useRef(false);
+  const attemptRef = useRef<AuthenticationAttempt | null>(null);
+  const profileRetryRef = useRef<ProfileRetry | null>(null);
+  const isLoading = isAuthenticating || loginState.isLoading || registerState.isLoading;
   const isRegisterMode = mode === "register";
-  const feedbackText = error || " ";
+  const credentialDraft = JSON.stringify([mode, nickname, displayName, password, isHr]);
   const nextPath = useMemo(() => {
     const locationState = location.state;
     if (
@@ -64,258 +64,280 @@ export function LoginPage() {
       && typeof locationState === "object"
       && "teamInvitationReturn" in locationState
       && locationState.teamInvitationReturn === true
-    ) {
-      return "/join/team?resume=accept";
-    }
+    ) return "/join/team?resume=accept";
     const requested = new URLSearchParams(location.search).get("next")?.trim() ?? "";
-    if (!requested.startsWith("/") || requested.startsWith("//")) {
-      return "/workspace/personal/interviews";
-    }
+    if (!requested.startsWith("/") || requested.startsWith("//")) return "/workspace/personal/interviews";
     return requested;
   }, [location.search, location.state]);
 
   useEffect(() => {
     trackEvent("mkt_login_view", { auth_status: "anonymous" });
-    setVisitParams({
-      entrypoint: "login",
-      auth_status: "anonymous"
-    });
+    setVisitParams({ entrypoint: "login", auth_status: "anonymous" });
   }, [nextPath]);
 
-  if (authToken) {
-    return <Navigate to={nextPath} replace />;
-  }
+  useEffect(() => {
+    mountedRef.current = true;
+    const cancelAttempt = () => {
+      const attempt = attemptRef.current;
+      attemptRef.current = null;
+      profileRetryRef.current = null;
+      attempt?.controller.abort();
+      attempt?.abortCredentials?.();
+    };
+    const onPageHide = () => {
+      cancelAttempt();
+      setIsAuthenticating(false);
+      setHasProfileRetry(false);
+    };
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      mountedRef.current = false;
+      window.removeEventListener("pagehide", onPageHide);
+      cancelAttempt();
+    };
+  }, []);
 
-  const onSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    trackEvent(isRegisterMode ? "mkt_register_submit" : "mkt_login_submit", {
-      nickname_len: nickname.trim().length
-    });
+  useEffect(() => {
+    profileRetryRef.current = null;
+    setHasProfileRetry(false);
+  }, [credentialDraft]);
+
+  const isCurrentAttempt = (attempt: AuthenticationAttempt) => (
+    mountedRef.current
+    && attemptRef.current === attempt
+    && store.getState().auth.token === attempt.initialToken
+    && localStorage.getItem("auth_token") === attempt.initialStoredToken
+    && window.location.href === attempt.initialLocation
+  );
+
+  if (authToken) return <Navigate to={nextPath} replace />;
+
+  const onSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (attemptRef.current || isLoading || !mountedRef.current) return;
+    trackEvent(isRegisterMode ? "mkt_register_submit" : "mkt_login_submit", { nickname_len: nickname.trim().length });
+    let attempt: AuthenticationAttempt | null = null;
+    let issuedToken: string | null = null;
     try {
       setError("");
       setPasswordError("");
       if (isRegisterMode && password.length < 6) {
-        const passwordValidationError = "Пароль должен быть не короче 6 символов";
-        setPasswordError(passwordValidationError);
-        setError(passwordValidationError);
+        const message = "Пароль должен быть не короче 6 символов";
+        setPasswordError(message);
         trackEvent("mkt_register_validation_failed", { reason: "password_too_short" });
         return;
       }
       if (isRegisterMode && !displayName.trim()) {
-        const displayNameValidationError = "Имя обязательно";
-        setError(displayNameValidationError);
+        const message = "Имя обязательно";
+        setError(message);
         trackEvent("mkt_register_validation_failed", { reason: "display_name_required" });
         return;
       }
       if (isRegisterMode && !nickname.trim()) {
-        const nicknameValidationError = "Ник обязателен";
-        setError(nicknameValidationError);
+        const message = "Ник обязателен";
+        setError(message);
         trackEvent("mkt_register_validation_failed", { reason: "nickname_required" });
         return;
       }
       if (isRegisterMode && nickname.trim().length < 3) {
-        const nicknameValidationError = "Ник должен быть от 3 до 32 символов";
-        setError(nicknameValidationError);
+        const message = "Ник должен быть от 3 до 32 символов";
+        setError(message);
         trackEvent("mkt_register_validation_failed", { reason: "nickname_too_short" });
         return;
       }
       if (isRegisterMode && /\s/.test(nickname.trim())) {
-        const nicknameValidationError = "Ник не должен содержать пробелы";
-        setError(nicknameValidationError);
+        const message = "Ник не должен содержать пробелы";
+        setError(message);
         trackEvent("mkt_register_validation_failed", { reason: "nickname_has_space" });
         return;
       }
-      const auth = isRegisterMode
-        ? await register({ nickname: nickname.trim(), displayName, password, isHr }).unwrap()
-        : await login({ nickname, password }).unwrap();
+      attempt = {
+        initialToken: store.getState().auth.token,
+        initialStoredToken: localStorage.getItem("auth_token"),
+        initialLocation: window.location.href,
+        controller: new AbortController(),
+      };
+      attemptRef.current = attempt;
+      setIsAuthenticating(true);
+      const retry = profileRetryRef.current;
+      if (retry && retry.draft === credentialDraft
+        && retry.initialToken === attempt.initialToken
+        && retry.initialStoredToken === attempt.initialStoredToken) {
+        issuedToken = retry.token;
+      } else {
+        profileRetryRef.current = null;
+        setHasProfileRetry(false);
+        const request = isRegisterMode
+          ? register({ nickname: nickname.trim(), displayName, password, isHr })
+          : login({ nickname, password });
+        attempt.abortCredentials = request.abort;
+        issuedToken = (await request.unwrap()).token;
+      }
+      if (!isCurrentAttempt(attempt)) return;
+      const response = await fetch(`${API_BASE_URL}/me/profile`, {
+        headers: { Authorization: `Bearer ${issuedToken}` },
+        credentials: "same-origin",
+        cache: "no-store",
+        signal: attempt.controller.signal,
+      });
+      const data: unknown = await response.json().catch(() => null);
+      if (!response.ok) throw { status: response.status, data };
+      if (!data || typeof data !== "object" || !("id" in data) || typeof data.id !== "string"
+        || !("displayName" in data) || typeof data.displayName !== "string") {
+        throw { status: "PARSING_ERROR", data: null };
+      }
+      const freshProfile = data as User;
+      if (!isCurrentAttempt(attempt)) return;
+      // Publish only the confirmed session; no async work may split these writes.
+      attemptRef.current = null;
+      profileRetryRef.current = null;
       dispatch(clearAuth());
       dispatch(api.util.resetApiState());
-      dispatch(setAuthToken(auth.token));
-      const freshProfile = await fetchMeProfile(auth.token, false).unwrap();
+      dispatch(setAuthToken(issuedToken));
       dispatch(setCurrentUser(freshProfile));
       localStorage.setItem("auth_user", JSON.stringify(freshProfile));
       localStorage.setItem("display_name", freshProfile.displayName);
-      trackEvent(isRegisterMode ? "mkt_register_success" : "mkt_login_success", {
-        auth_status: "authenticated"
-      });
+      trackEvent(isRegisterMode ? "mkt_register_success" : "mkt_login_success", { auth_status: "authenticated" });
       navigate(nextPath, { replace: true });
     } catch (err) {
+      if (!attempt || !isCurrentAttempt(attempt)) return;
+      if (issuedToken) {
+        // A retry checks the issued session again without duplicating registration.
+        profileRetryRef.current = {
+          token: issuedToken,
+          draft: credentialDraft,
+          initialToken: attempt.initialToken,
+          initialStoredToken: attempt.initialStoredToken,
+        };
+        setHasProfileRetry(true);
+      }
       dispatch(clearAuth());
       dispatch(api.util.resetApiState());
       const apiMessage = extractApiErrorMessage(err);
       if (isRegisterMode) {
         const registerMessage = apiMessage || "Не удалось зарегистрироваться. Проверьте данные и попробуйте снова.";
         setError(registerMessage);
-        if (registerMessage.toLowerCase().includes("пароль")) {
-          setPasswordError(registerMessage);
-        }
-        trackEvent("mkt_register_failed", {
-          has_api_message: Boolean(apiMessage)
-        });
+        if (registerMessage.toLowerCase().includes("пароль")) setPasswordError(registerMessage);
+        trackEvent("mkt_register_failed", { has_api_message: Boolean(apiMessage) });
         return;
       }
       setError(apiMessage || "Не удалось выполнить вход. Проверьте ник и пароль.");
-      trackEvent("mkt_login_failed", {
-        has_api_message: Boolean(apiMessage)
-      });
+      trackEvent("mkt_login_failed", { has_api_message: Boolean(apiMessage) });
+    } finally {
+      if (attempt && attemptRef.current === attempt) {
+        if (!isCurrentAttempt(attempt)) {
+          profileRetryRef.current = null;
+          if (mountedRef.current) setHasProfileRetry(false);
+        }
+        attemptRef.current = null;
+        if (mountedRef.current) setIsAuthenticating(false);
+      }
     }
   };
 
+  const onModeChange = (value: string) => {
+    if (attemptRef.current || isLoading) return;
+    setMode(value as "login" | "register");
+    setError("");
+    setPasswordError("");
+    trackEvent("mkt_auth_mode_changed", { mode: value });
+  };
+
   return (
-    <Box style={{ minHeight: "100vh", background: "#0f1115", display: "flex", alignItems: "center" }}>
-      <Container size="xs" py={40}>
+    <main className={styles.page}>
+      <header className={styles.header}>
+        <Link className={styles.brand} to="/" aria-label="На главную страницу InterHub">
+          <span className={styles.brandMark}><KeyOutlined aria-hidden="true" /></span>
+          <span>InterHub</span>
+        </Link>
+        <ThemeToggleButton />
+      </header>
+      <section className={styles.content}>
         <h1 className="visually-hidden">Личный кабинет — вход и регистрация</h1>
-        <Card
-          withBorder
-          radius="lg"
-          padding="xl"
-          bg="#11151c"
-          c="gray.1"
-          style={{ borderColor: "#272b34", width: "100%", maxWidth: 460 }}
-        >
-          <Stack>
-            <Group justify="space-between">
-              <Group>
-                <ThemeIcon color="gray" variant="light">
-                  <IconUser size={16} />
-                </ThemeIcon>
-                <Title order={2} c="#f3f5f7" size="h3">
-                  Личный кабинет
-                </Title>
-              </Group>
-            </Group>
-
-            <Text c="#8b919b" size="sm">
+        <Card className={styles.card}>
+          <Space orientation="vertical" size={8} className={styles.intro}>
+            <Typography.Title level={2}>Личный кабинет</Typography.Title>
+            <Typography.Paragraph>
               Вход по нику и паролю. При регистрации укажите ник и имя для комнаты.
-            </Text>
+            </Typography.Paragraph>
+          </Space>
 
-            <SegmentedControl
-              value={mode}
-              onChange={(value) => {
-                setMode(value as "login" | "register");
-                setError("");
-                setPasswordError("");
-                trackEvent("mkt_auth_mode_changed", { mode: value });
-              }}
-              fullWidth
-              data={[
-                { label: "Вход", value: "login" },
-                { label: "Регистрация", value: "register" }
-              ]}
-            />
+          <Segmented
+            aria-label="Режим авторизации"
+            block
+            disabled={isLoading}
+            onChange={onModeChange}
+            options={[{ label: "Вход", value: "login" }, { label: "Регистрация", value: "register" }]}
+            value={mode}
+          />
 
-            <form onSubmit={onSubmit}>
-              <Stack>
-                {isRegisterMode ? (
-                  <>
-                    <TextInput
-                      label="Ник"
-                      description="Используется для входа в аккаунт"
-                      leftSection={<IconUser size={15} />}
-                      value={nickname}
-                      onChange={(e) => setNickname(e.currentTarget.value)}
-                      styles={fieldStyles}
-                      required
-                      withAsterisk={false}
-                    />
-                    <TextInput
-                      label="Имя для комнаты"
-                      description="Это имя будет видно другим участникам комнаты"
-                      leftSection={<IconUser size={15} />}
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.currentTarget.value)}
-                      styles={fieldStyles}
-                      required
-                      withAsterisk={false}
-                    />
-                  </>
-                ) : (
-                  <TextInput
-                    label="Ник"
-                    leftSection={<IconUser size={15} />}
-                    value={nickname}
-                    onChange={(e) => setNickname(e.currentTarget.value)}
-                    styles={fieldStyles}
-                    required
-                    withAsterisk={false}
-                  />
-                )}
-                <PasswordInput
-                  label="Пароль"
-                  description={isRegisterMode ? "Минимум 6 символов" : undefined}
-                  leftSection={<IconKey size={15} />}
-                  value={password}
-                  onChange={(e) => {
-                    const nextPassword = e.currentTarget.value;
-                    setPassword(nextPassword);
-                    if (!isRegisterMode) return;
-                    if (nextPassword.length >= 6) {
-                      setPasswordError("");
-                    }
-                  }}
-                  error={passwordError || undefined}
-                  styles={fieldStyles}
-                  required
-                  withAsterisk={false}
-                  visibilityToggleButtonProps={{
-                    "aria-label": "Показать символы",
-                  }}
-                />
-                {isRegisterMode ? (
-                  <Checkbox
-                    label="Я нанимающий"
-                    description="Добавит личный список интервью. Права в комнатах выдаются отдельно."
-                    checked={isHr}
-                    onChange={(event) => setIsHr(event.currentTarget.checked)}
-                    disabled={isLoading}
-                  />
-                ) : null}
-                <Button
-                  type="submit"
-                  loading={isLoading}
-                  fullWidth
-                  h={42}
-                  style={{ background: "#f3f5f7", color: "#0f1115" }}
-                >
-                  {mode === "login" ? "Войти в кабинет" : "Создать аккаунт"}
-                </Button>
-              </Stack>
-            </form>
+          <form className={styles.form} onSubmit={onSubmit}>
+            {isRegisterMode ? (
+              <>
+                <label className={styles.field}>
+                  <span>Ник</span>
+                  <Typography.Text className={styles.hint}>Используется для входа в аккаунт</Typography.Text>
+                  <Input placeholder="Введите ник для входа" aria-label="Ник" autoComplete="username" disabled={isLoading} prefix={<UserOutlined />} value={nickname} onChange={(event) => setNickname(event.currentTarget.value)} required />
+                </label>
+                <label className={styles.field}>
+                  <span>Имя для комнаты</span>
+                  <Typography.Text className={styles.hint}>Это имя будет видно другим участникам комнаты</Typography.Text>
+                  <Input placeholder="Введите имя для отображения" aria-label="Имя для комнаты" autoComplete="name" disabled={isLoading} prefix={<UserOutlined />} value={displayName} onChange={(event) => setDisplayName(event.currentTarget.value)} required />
+                </label>
+              </>
+            ) : (
+              <label className={styles.field}>
+                <span>Ник</span>
+                <Input placeholder="Введите ник для входа" aria-label="Ник" autoComplete="username" disabled={isLoading} prefix={<UserOutlined />} value={nickname} onChange={(event) => setNickname(event.currentTarget.value)} required />
+              </label>
+            )}
+            <label className={styles.field}>
+              <span>Пароль</span>
+              {isRegisterMode && <Typography.Text className={styles.hint}>Минимум 6 символов</Typography.Text>}
+              <Input.Password
+                placeholder={isRegisterMode ? "Придумайте пароль: минимум 6 символов" : "Введите пароль вашего аккаунта"}
+                autoComplete={isRegisterMode ? "new-password" : "current-password"}
+                aria-label="Пароль"
+                disabled={isLoading}
+                prefix={<KeyOutlined />}
+                value={password}
+                onChange={(event) => {
+                  const nextPassword = event.currentTarget.value;
+                  setPassword(nextPassword);
+                  if (isRegisterMode && nextPassword.length >= 6) setPasswordError("");
+                }}
+                required
+              />
+              {passwordError && <Typography.Text role="alert" type="danger">{passwordError}</Typography.Text>}
+            </label>
+            {isRegisterMode && (
+              <div className={styles.checkboxField}>
+                <Checkbox checked={isHr} disabled={isLoading} onChange={(event) => setIsHr(event.target.checked)}>
+                  Я нанимающий
+                </Checkbox>
+                <Typography.Text className={styles.hint}>Для приглашений внешним нанимающим по личному ID. В команде кандидаты доступны всем участникам автоматически.</Typography.Text>
+              </div>
+            )}
+            <Button block htmlType="submit" loading={isLoading} disabled={isLoading} aria-busy={isLoading} aria-label={hasProfileRetry ? "Повторить" : isRegisterMode ? "Создать аккаунт" : "Войти в кабинет"} size="large" type="primary">
+              {hasProfileRetry ? "Повторить" : isRegisterMode ? "Создать аккаунт" : "Войти в кабинет"}
+            </Button>
+            <div className={styles.feedback} aria-live="polite">
+              {error && <Alert showIcon type="error" message={error} />}
+            </div>
+          </form>
 
-            <Text
-              c={error ? "red.4" : "transparent"}
-              size="sm"
-              aria-live="polite"
-              style={{ minHeight: 44, overflowWrap: "anywhere" }}
-            >
-              {feedbackText}
-            </Text>
-
-            <Group justify="center">
-              <Anchor component={Link} to="/" c="#c9d0db">
-                На главную страницу
-              </Anchor>
-            </Group>
-          </Stack>
+          <Link className={styles.homeLink} to="/">На главную страницу</Link>
         </Card>
-      </Container>
-    </Box>
+      </section>
+    </main>
   );
 }
 
 function extractApiErrorMessage(error: unknown): string | null {
   if (!error || typeof error !== "object") return null;
-  const maybeError = error as {
-    data?: unknown;
-    error?: string;
-  };
-  if (typeof maybeError.error === "string" && maybeError.error.trim()) {
-    return maybeError.error;
-  }
+  const maybeError = error as { data?: unknown; error?: string };
+  if (typeof maybeError.error === "string" && maybeError.error.trim()) return maybeError.error;
   if (!maybeError.data || typeof maybeError.data !== "object") return null;
   const data = maybeError.data as { error?: unknown };
-  if (typeof data.error === "string" && data.error.trim()) {
-    return data.error;
-  }
-  return null;
+  return typeof data.error === "string" && data.error.trim() ? data.error : null;
 }

@@ -1,0 +1,1203 @@
+{
+  "builtTestProducts" : [
+    {
+      "binaryPath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessPackageTests.xctest/Contents/MacOS/NativeAXHarnessPackageTests",
+      "packagePath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax",
+      "productName" : "NativeAXHarnessPackageTests"
+    }
+  ],
+  "copyCommands" : {
+
+  },
+  "explicitTargetDependencyImportCheckingMode" : {
+    "none" : {
+
+    }
+  },
+  "generatedSourceTargetSet" : [
+
+  ],
+  "pluginDescriptions" : [
+
+  ],
+  "swiftCommands" : {
+    "C.BrowserLeaseBootstrap-arm64-apple-macosx26.0-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/BrowserLeaseBootstrap.build/sources",
+      "importPath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Sources/BrowserLeaseBootstrap/Bootstrap.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Sources/BrowserLeaseBootstrap/main.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/BrowserLeaseBootstrap.build/sources"
+        }
+      ],
+      "isLibrary" : false,
+      "moduleName" : "BrowserLeaseBootstrap",
+      "moduleOutputPath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/Modules/BrowserLeaseBootstrap.swiftmodule",
+      "objects" : [
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/BrowserLeaseBootstrap.build/Bootstrap.swift.o",
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/BrowserLeaseBootstrap.build/main.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx14.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-j12",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-Xfrontend",
+        "-entry-point-function-name",
+        "-Xfrontend",
+        "BrowserLeaseBootstrap_main",
+        "-swift-version",
+        "6",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "native_ax"
+      ],
+      "outputFileMapPath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/BrowserLeaseBootstrap.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/BrowserLeaseBootstrap.build/Bootstrap.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/BrowserLeaseBootstrap.build/main.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/Modules/BrowserLeaseBootstrap.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Sources/BrowserLeaseBootstrap/Bootstrap.swift",
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Sources/BrowserLeaseBootstrap/main.swift"
+      ],
+      "tempsPath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/BrowserLeaseBootstrap.build",
+      "wholeModuleOptimization" : false
+    },
+    "C.NativeAXFocusSink-arm64-apple-macosx26.0-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXFocusSink.build/sources",
+      "importPath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Sources/NativeAXFocusSink/main.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXFocusSink.build/sources"
+        }
+      ],
+      "isLibrary" : false,
+      "moduleName" : "NativeAXFocusSink",
+      "moduleOutputPath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/Modules/NativeAXFocusSink.swiftmodule",
+      "objects" : [
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXFocusSink.build/main.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx14.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-j12",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-Xfrontend",
+        "-entry-point-function-name",
+        "-Xfrontend",
+        "NativeAXFocusSink_main",
+        "-parse-as-library",
+        "-swift-version",
+        "6",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "native_ax"
+      ],
+      "outputFileMapPath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXFocusSink.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXFocusSink.build/main.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/Modules/NativeAXFocusSink.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Sources/NativeAXFocusSink/main.swift"
+      ],
+      "tempsPath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXFocusSink.build",
+      "wholeModuleOptimization" : false
+    },
+    "C.NativeAXHarnessPackageTests-arm64-apple-macosx26.0-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessPackageTests.build/sources",
+      "importPath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessPackageTests.derived/runner.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/Modules/NativeAXHarnessTests.swiftmodule"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessPackageTests.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "NativeAXHarnessPackageTests",
+      "moduleOutputPath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/Modules/NativeAXHarnessPackageTests.swiftmodule",
+      "objects" : [
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessPackageTests.build/runner.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx14.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-Xfrontend",
+        "-enable-cross-import-overlays",
+        "-j12",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-emit-objc-header",
+        "-emit-objc-header-path",
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessPackageTests.build/include/NativeAXHarnessPackageTests-Swift.h",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "native_ax"
+      ],
+      "outputFileMapPath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessPackageTests.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessPackageTests.build/runner.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/Modules/NativeAXHarnessPackageTests.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessPackageTests.derived/runner.swift"
+      ],
+      "tempsPath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessPackageTests.build",
+      "wholeModuleOptimization" : false
+    },
+    "C.NativeAXHarnessTests-arm64-apple-macosx26.0-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessTests.build/sources",
+      "importPath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Tests/NativeAXHarnessTests/AXForbiddenApiPolicyTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Tests/NativeAXHarnessTests/AXStateMachineTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Tests/NativeAXHarnessTests/BrowserLeaseBootstrapTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Tests/NativeAXHarnessTests/DescriptorCleanupTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Tests/NativeAXHarnessTests/LeaseValidationTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/BrowserLeaseBootstrap"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/Modules/NativeAXLifecycleHelper.swiftmodule"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessTests.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "NativeAXHarnessTests",
+      "moduleOutputPath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/Modules/NativeAXHarnessTests.swiftmodule",
+      "objects" : [
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessTests.build/AXForbiddenApiPolicyTests.swift.o",
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessTests.build/AXStateMachineTests.swift.o",
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessTests.build/BrowserLeaseBootstrapTests.swift.o",
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessTests.build/DescriptorCleanupTests.swift.o",
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessTests.build/LeaseValidationTests.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx14.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-Xfrontend",
+        "-enable-cross-import-overlays",
+        "-j12",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-swift-version",
+        "6",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "native_ax"
+      ],
+      "outputFileMapPath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessTests.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessTests.build/AXForbiddenApiPolicyTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessTests.build/AXStateMachineTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessTests.build/BrowserLeaseBootstrapTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessTests.build/DescriptorCleanupTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessTests.build/LeaseValidationTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/Modules/NativeAXHarnessTests.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Tests/NativeAXHarnessTests/AXForbiddenApiPolicyTests.swift",
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Tests/NativeAXHarnessTests/AXStateMachineTests.swift",
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Tests/NativeAXHarnessTests/BrowserLeaseBootstrapTests.swift",
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Tests/NativeAXHarnessTests/DescriptorCleanupTests.swift",
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Tests/NativeAXHarnessTests/LeaseValidationTests.swift"
+      ],
+      "tempsPath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessTests.build",
+      "wholeModuleOptimization" : false
+    },
+    "C.NativeAXLifecycleHelper-arm64-apple-macosx26.0-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/sources",
+      "importPath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Sources/NativeAXLifecycleHelper/AXStateMachine.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Sources/NativeAXLifecycleHelper/DescriptorCleanup.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Sources/NativeAXLifecycleHelper/NativeAXLifecycleHelper.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "NativeAXLifecycleHelper",
+      "moduleOutputPath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/Modules/NativeAXLifecycleHelper.swiftmodule",
+      "objects" : [
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/AXStateMachine.swift.o",
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/DescriptorCleanup.swift.o",
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/NativeAXLifecycleHelper.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx14.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-j12",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-emit-objc-header",
+        "-emit-objc-header-path",
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/include/NativeAXLifecycleHelper-Swift.h",
+        "-swift-version",
+        "6",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "native_ax"
+      ],
+      "outputFileMapPath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/AXStateMachine.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/DescriptorCleanup.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/NativeAXLifecycleHelper.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/Modules/NativeAXLifecycleHelper.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Sources/NativeAXLifecycleHelper/AXStateMachine.swift",
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Sources/NativeAXLifecycleHelper/DescriptorCleanup.swift",
+        "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Sources/NativeAXLifecycleHelper/NativeAXLifecycleHelper.swift"
+      ],
+      "tempsPath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build",
+      "wholeModuleOptimization" : false
+    }
+  },
+  "swiftFrontendCommands" : {
+
+  },
+  "swiftTargetScanArgs" : {
+    "BrowserLeaseBootstrap" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "BrowserLeaseBootstrap",
+      "-package-name",
+      "native_ax",
+      "-c",
+      "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Sources/BrowserLeaseBootstrap/Bootstrap.swift",
+      "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Sources/BrowserLeaseBootstrap/main.swift",
+      "-I",
+      "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx14.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-j12",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-Xfrontend",
+      "-entry-point-function-name",
+      "-Xfrontend",
+      "BrowserLeaseBootstrap_main",
+      "-swift-version",
+      "6",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "native_ax",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ],
+    "NativeAXFocusSink" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "NativeAXFocusSink",
+      "-package-name",
+      "native_ax",
+      "-c",
+      "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Sources/NativeAXFocusSink/main.swift",
+      "-I",
+      "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx14.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-j12",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-Xfrontend",
+      "-entry-point-function-name",
+      "-Xfrontend",
+      "NativeAXFocusSink_main",
+      "-parse-as-library",
+      "-swift-version",
+      "6",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "native_ax",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ],
+    "NativeAXHarnessPackageTests" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "NativeAXHarnessPackageTests",
+      "-package-name",
+      "native_ax",
+      "-c",
+      "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessPackageTests.derived/runner.swift",
+      "-I",
+      "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx14.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-Xfrontend",
+      "-enable-cross-import-overlays",
+      "-j12",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-emit-objc-header",
+      "-emit-objc-header-path",
+      "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessPackageTests.build/include/NativeAXHarnessPackageTests-Swift.h",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "native_ax",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ],
+    "NativeAXHarnessTests" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "NativeAXHarnessTests",
+      "-package-name",
+      "native_ax",
+      "-c",
+      "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Tests/NativeAXHarnessTests/AXForbiddenApiPolicyTests.swift",
+      "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Tests/NativeAXHarnessTests/AXStateMachineTests.swift",
+      "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Tests/NativeAXHarnessTests/BrowserLeaseBootstrapTests.swift",
+      "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Tests/NativeAXHarnessTests/DescriptorCleanupTests.swift",
+      "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Tests/NativeAXHarnessTests/LeaseValidationTests.swift",
+      "-I",
+      "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx14.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-Xfrontend",
+      "-enable-cross-import-overlays",
+      "-j12",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-swift-version",
+      "6",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "native_ax",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ],
+    "NativeAXLifecycleHelper" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "NativeAXLifecycleHelper",
+      "-package-name",
+      "native_ax",
+      "-c",
+      "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Sources/NativeAXLifecycleHelper/AXStateMachine.swift",
+      "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Sources/NativeAXLifecycleHelper/DescriptorCleanup.swift",
+      "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Sources/NativeAXLifecycleHelper/NativeAXLifecycleHelper.swift",
+      "-I",
+      "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx14.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-j12",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-emit-objc-header",
+      "-emit-objc-header-path",
+      "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/include/NativeAXLifecycleHelper-Swift.h",
+      "-swift-version",
+      "6",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "native_ax",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ]
+  },
+  "targetDependencyMap" : {
+    "BrowserLeaseBootstrap" : [
+
+    ],
+    "NativeAXFocusSink" : [
+
+    ],
+    "NativeAXHarnessPackageTests" : [
+      "NativeAXHarnessTests",
+      "NativeAXLifecycleHelper",
+      "BrowserLeaseBootstrap"
+    ],
+    "NativeAXHarnessTests" : [
+      "NativeAXLifecycleHelper",
+      "BrowserLeaseBootstrap"
+    ],
+    "NativeAXLifecycleHelper" : [
+
+    ]
+  },
+  "testDiscoveryCommands" : {
+
+  },
+  "testEntryPointCommands" : {
+    "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessPackageTests.derived/runner.swift" : {
+      "inputs" : [
+
+      ],
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessPackageTests.derived/runner.swift"
+        }
+      ]
+    }
+  },
+  "traitConfiguration" : {
+    "default" : {
+
+    }
+  },
+  "writeCommands" : {
+    "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/BrowserLeaseBootstrap-entitlement.plist" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<entitlement-plist>"
+        },
+        {
+          "kind" : "virtual",
+          "name" : "<com.apple.security.get-task-allow>"
+        }
+      ],
+      "outputFilePath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/BrowserLeaseBootstrap-entitlement.plist"
+    },
+    "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/BrowserLeaseBootstrap.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Sources/BrowserLeaseBootstrap/Bootstrap.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Sources/BrowserLeaseBootstrap/main.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/BrowserLeaseBootstrap.build/sources"
+    },
+    "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/BrowserLeaseBootstrap.product/Objects.LinkFileList" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<link-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/BrowserLeaseBootstrap.build/Bootstrap.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/BrowserLeaseBootstrap.build/main.swift.o"
+        }
+      ],
+      "outputFilePath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/BrowserLeaseBootstrap.product/Objects.LinkFileList"
+    },
+    "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXFocusSink-entitlement.plist" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<entitlement-plist>"
+        },
+        {
+          "kind" : "virtual",
+          "name" : "<com.apple.security.get-task-allow>"
+        }
+      ],
+      "outputFilePath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXFocusSink-entitlement.plist"
+    },
+    "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXFocusSink.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Sources/NativeAXFocusSink/main.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXFocusSink.build/sources"
+    },
+    "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXFocusSink.product/Objects.LinkFileList" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<link-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXFocusSink.build/main.swift.o"
+        }
+      ],
+      "outputFilePath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXFocusSink.product/Objects.LinkFileList"
+    },
+    "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessPackageTests.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessPackageTests.derived/runner.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessPackageTests.build/sources"
+    },
+    "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessPackageTests.product/Objects.LinkFileList" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<link-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/BrowserLeaseBootstrap.build/Bootstrap.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/BrowserLeaseBootstrap.build/main.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessPackageTests.build/runner.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessTests.build/AXForbiddenApiPolicyTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessTests.build/AXStateMachineTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessTests.build/BrowserLeaseBootstrapTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessTests.build/DescriptorCleanupTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessTests.build/LeaseValidationTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/AXStateMachine.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/DescriptorCleanup.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/NativeAXLifecycleHelper.swift.o"
+        }
+      ],
+      "outputFilePath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessPackageTests.product/Objects.LinkFileList"
+    },
+    "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessTests.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Tests/NativeAXHarnessTests/AXForbiddenApiPolicyTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Tests/NativeAXHarnessTests/AXStateMachineTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Tests/NativeAXHarnessTests/BrowserLeaseBootstrapTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Tests/NativeAXHarnessTests/DescriptorCleanupTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Tests/NativeAXHarnessTests/LeaseValidationTests.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessTests.build/sources"
+    },
+    "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Sources/NativeAXLifecycleHelper/AXStateMachine.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Sources/NativeAXLifecycleHelper/DescriptorCleanup.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/Sources/NativeAXLifecycleHelper/NativeAXLifecycleHelper.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXLifecycleHelper.build/sources"
+    },
+    "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt" : {
+      "alwaysOutOfDate" : true,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<swift-get-version>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+        }
+      ],
+      "outputFilePath" : "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+    }
+  }
+}

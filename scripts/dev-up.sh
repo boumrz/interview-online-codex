@@ -5,7 +5,7 @@
 #   1. Поднимает PostgreSQL (Docker-compose; fallback — brew postgresql@16).
 #   2. Дожидается готовности БД.
 #   3. Стартует backend (mvn spring-boot:run) в фоне.
-#   4. Дожидается /actuator/health.
+#   4. Дожидается /api/public/health.
 #   5. Стартует frontend (npm run dev) в фоне.
 #   6. Открывает браузер на http://localhost:5173.
 #   7. По Ctrl+C аккуратно гасит оба процесса.
@@ -142,17 +142,15 @@ export DB_USER="${DB_USER:-interview}"
 export DB_PASSWORD="${DB_PASSWORD:-interview}"
 export CHAT_RECEIPT_HMAC_SECRET
 
-(
-  cd "$ROOT_DIR/backend"
-  "$MVN" -q spring-boot:run &
-  echo $! > "$BACKEND_PID_FILE"
-)
+cd "$ROOT_DIR/backend"
+"$MVN" -q spring-boot:run &
+echo $! > "$BACKEND_PID_FILE"
 echo "    pid=$(cat "$BACKEND_PID_FILE")  output=terminal"
 
-echo ">>> Жду /actuator/health (может занять до 90 сек на первом запуске)..."
+echo ">>> Жду /api/public/health (может занять до 90 сек на первом запуске)..."
 HEALTH=0
 for _ in $(seq 1 90); do
-  if curl -fsS http://localhost:8080/actuator/health 2>/dev/null | grep -q '"status":"UP"'; then
+  if curl -fsS http://localhost:8080/api/public/health 2>/dev/null | grep -q '"status":"ok"'; then
     HEALTH=1
     break
   fi
@@ -167,15 +165,13 @@ echo "✅ Backend готов: http://localhost:8080"
 
 # ----- 4. Frontend ----------------------------------------------------------
 echo ">>> Стартую frontend (rspack dev)..."
-(
-  cd "$ROOT_DIR/frontend"
-  if [[ ! -d node_modules ]]; then
-    echo "    node_modules не найден — npm install..."
-    npm install --no-audit --no-fund
-  fi
-  npm run dev &
-  echo $! > "$FRONTEND_PID_FILE"
-)
+cd "$ROOT_DIR/frontend"
+if [[ ! -d node_modules ]]; then
+  echo "    node_modules не найден — npm install..."
+  npm install --no-audit --no-fund
+fi
+npm run dev &
+echo $! > "$FRONTEND_PID_FILE"
 echo "    pid=$(cat "$FRONTEND_PID_FILE")  output=terminal"
 
 echo ">>> Жду :5173..."

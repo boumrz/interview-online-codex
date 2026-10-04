@@ -1,11 +1,11 @@
 ---
 name: repository-hygiene
-description: Safely clean and reorganize the interview-online repository. Use for requests to remove logs, generated files, unused code, stale debug artefacts, duplicate configuration, or to group tests and scripts into logical directories.
+description: Safely clean and reorganize the InterHub repository. Use for requests to remove logs, generated files, unused code, stale debug artefacts, duplicate configuration, or to group tests and scripts into logical directories.
 ---
 
 # Repository hygiene
 
-Use OpenSpec and the project `AGENTS.md` before changing project files. Treat a dirty worktree as user-owned until a task explicitly covers the affected path.
+Use the project `AGENTS.md`, `SPEC.md` and the owning feature contract before changing project files. Use `specs/README.md` for documentation changes; OpenSpec is historical. Treat a dirty worktree as user-owned until a task explicitly covers the affected path.
 
 ## Workflow
 
@@ -16,7 +16,7 @@ Use OpenSpec and the project `AGENTS.md` before changing project files. Treat a 
 
 2. Classify every candidate.
    - **Safe generated state:** logs, PID files, caches, test output, browser recordings, build output, and ignored session/debug files.
-   - **Durable project material:** source code, tests, package/build configuration, OpenSpec, shared agent rules, and assets referenced by code or documentation.
+   - **Durable project material:** source code, tests, package/build configuration, current specifications, historical OpenSpec, shared agent rules, and assets referenced by code or documentation.
    - **Ambiguous material:** analytics, presentations, exports, screenshots, or any ignored directory that may be a deliverable. Keep it and report it unless the user explicitly approves removal.
 
 3. Remove or move only with evidence.

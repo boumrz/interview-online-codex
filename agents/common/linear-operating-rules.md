@@ -1,33 +1,13 @@
-# Linear Operating Rules (All Sub-Agents)
+# Linked Linear Work
 
-## Rules
+Linear is optional. Local tasks may proceed from [SPEC.md](../../SPEC.md) and their feature contract without a linked issue or a prescribed issue state.
 
-- Do not take work outside the `interview-online` project scope.
-- Do not start work without a linked issue.
-- Every handoff must be reflected in an issue comment.
-- Every reviewer must leave an explicit verdict in `Linear`.
-- Every blocking risk must be clearly marked.
-- Every agent update should include:
-  - what was used as input;
-  - what was done;
-  - what remains;
-  - who receives the next handoff.
+When the user requests Linear work or the assignment is already linked:
 
-## Recommended Linear Comment Format
+- Keep the issue scope and actual delivery state consistent with the feature contract.
+- Link the feature and relevant R/AC identifiers; do not copy the entire specification.
+- Record a concise result, relevant verification, and material blockers when authorized to update the issue.
+- Use the project's existing states rather than imposing an agent-specific state machine.
+- Do not create duplicate issues or comments for every internal role transition.
 
-```text
-Agent: <agent name>
-Task: <task id / title>
-Status recommendation: <state>
-Summary:
-<short summary>
-
-Artifacts:
-- ...
-
-Risks:
-- ...
-
-Next handoff:
-- <next agent>: <reason>
-```
+A useful comment contains the outcome, artifact links, checks and results, and any concrete remaining action. A comment template, reviewer comment, or handoff never authorizes messaging or editing an external system by itself.

@@ -13,12 +13,12 @@ import {
   Textarea,
   ThemeIcon,
   Title,
-} from "@mantine/core";
+} from "components/antd-compat";
 import {
   IconBolt,
   IconRobot,
   IconShieldCheck,
-} from "@tabler/icons-react";
+} from "components/antd-icons";
 import type {
   AgentPolicyGateResult,
   AgentRun,
@@ -140,9 +140,9 @@ function AgentRunFormCard({
       withBorder
       radius="lg"
       padding="lg"
-      bg="#11151c"
+      bg="var(--app-surface)"
       c="gray.1"
-      style={{ borderColor: "#272b34" }}
+      style={{ borderColor: "var(--app-border)" }}
     >
       <form onSubmit={onSubmit}>
         <Stack>
@@ -159,11 +159,11 @@ function AgentRunFormCard({
             label="Задача Linear"
             placeholder="LDT-76"
             value={issueId}
-            onChange={(event) => onIssueIdChange(event.currentTarget.value)}
+            onChange={(event: React.ChangeEvent<HTMLInputElement>) => onIssueIdChange(event.currentTarget.value)}
             styles={darkFieldStyles}
             required
           />
-          <Select
+          <Select placeholder="Выберите провайдера процесса"
             label="Провайдер процесса"
             value={provider}
             onChange={(value) =>
@@ -176,24 +176,24 @@ function AgentRunFormCard({
             styles={darkSelectStyles}
             labelProps={{ onClick: (e: React.MouseEvent) => e.preventDefault() }}
           />
-          <TextInput
+          <TextInput placeholder="Введите роль процесса"
             label="Текущая роль"
             value={role}
-            onChange={(event) => onRoleChange(event.currentTarget.value)}
+            onChange={(event: React.ChangeEvent<HTMLInputElement>) => onRoleChange(event.currentTarget.value)}
             styles={darkFieldStyles}
           />
           <Switch
             label="Ручное подтверждение обязательно для финальных этапов"
             checked={requiresApproval}
-            onChange={(event) =>
+            onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
               onRequiresApprovalChange(event.currentTarget.checked)
             }
           />
-          <Textarea
+          <Textarea placeholder="Опишите ожидаемый результат: один критерий на строку"
             label="Критерии приемки (по строкам)"
             minRows={5}
             value={criteria}
-            onChange={(event) => onCriteriaChange(event.currentTarget.value)}
+            onChange={(event: React.ChangeEvent<HTMLInputElement>) => onCriteriaChange(event.currentTarget.value)}
             styles={darkFieldStyles}
           />
           <Button type="submit" loading={isSubmitting}>
@@ -226,9 +226,9 @@ function EnvironmentDoctorCard({
       withBorder
       radius="lg"
       padding="lg"
-      bg="#11151c"
+      bg="var(--app-surface)"
       c="gray.1"
-      style={{ borderColor: "#272b34" }}
+      style={{ borderColor: "var(--app-border)" }}
     >
       <Stack>
         <Group justify="space-between">
@@ -252,8 +252,8 @@ function EnvironmentDoctorCard({
               withBorder
               radius="md"
               padding="xs"
-              bg="#121720"
-              style={{ borderColor: "#2a3039" }}
+              bg="var(--app-surface-soft)"
+              style={{ borderColor: "var(--app-border)" }}
             >
               <Group justify="space-between" align="flex-start">
                 <Stack gap={2}>
@@ -297,9 +297,9 @@ function RealtimeFaultsCard({
       withBorder
       radius="lg"
       padding="lg"
-      bg="#11151c"
+      bg="var(--app-surface)"
       c="gray.1"
-      style={{ borderColor: "#272b34" }}
+      style={{ borderColor: "var(--app-border)" }}
     >
       <form onSubmit={onConfigure}>
         <Stack>
@@ -318,22 +318,22 @@ function RealtimeFaultsCard({
               label="Код приглашения"
               placeholder="r-xxxxxxxx"
               value={inviteCode}
-              onChange={(event) =>
+              onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
                 onInviteCodeChange(event.currentTarget.value)
               }
               styles={darkFieldStyles}
               required
             />
-            <TextInput
+            <TextInput placeholder="Введите задержку в миллисекундах"
               label="Задержка (мс)"
               value={latencyMs}
-              onChange={(event) => onLatencyMsChange(event.currentTarget.value)}
+              onChange={(event: React.ChangeEvent<HTMLInputElement>) => onLatencyMsChange(event.currentTarget.value)}
               styles={darkFieldStyles}
             />
-            <TextInput
+            <TextInput placeholder="0 — без пропусков; 5 — каждый пятый"
               label="Пропускать каждый N-й"
               value={dropEvery}
-              onChange={(event) => onDropEveryChange(event.currentTarget.value)}
+              onChange={(event: React.ChangeEvent<HTMLInputElement>) => onDropEveryChange(event.currentTarget.value)}
               styles={darkFieldStyles}
             />
           </Group>
@@ -377,9 +377,9 @@ function AgentRunsCard({
       withBorder
       radius="lg"
       padding="lg"
-      bg="#11151c"
+      bg="var(--app-surface)"
       c="gray.1"
-      style={{ borderColor: "#272b34" }}
+      style={{ borderColor: "var(--app-border)" }}
     >
       <Stack>
         <Group justify="space-between">
@@ -395,10 +395,10 @@ function AgentRunsCard({
             Обновить список
           </Button>
         </Group>
-        <TextInput
+        <TextInput placeholder="Опишите результат и следующий шаг"
           label="Комментарий для передачи"
           value={transitionComment}
-          onChange={(event) =>
+          onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
             onTransitionCommentChange(event.currentTarget.value)
           }
           styles={darkFieldStyles}
@@ -410,8 +410,8 @@ function AgentRunsCard({
               withBorder
               radius="md"
               padding="sm"
-              bg="#121720"
-              style={{ borderColor: "#2a3039" }}
+              bg="var(--app-surface-soft)"
+              style={{ borderColor: "var(--app-border)" }}
             >
               <Stack gap="xs">
                 <Group justify="space-between">
@@ -476,8 +476,8 @@ function AgentRunsCard({
             withBorder
             radius="md"
             padding="sm"
-            bg="#121720"
-            style={{ borderColor: "#2a3039" }}
+            bg="var(--app-surface-soft)"
+            style={{ borderColor: "var(--app-border)" }}
           >
             <Stack gap="xs">
               <Group justify="space-between">

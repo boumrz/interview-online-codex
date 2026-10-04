@@ -1,81 +1,28 @@
-# Shared Contract for All Agents
+# Shared Agent Contract
 
-## Shared Rules
+Follow [AGENTS.md](../../AGENTS.md) and [the specification standard](../../specs/README.md). [SPEC.md](../../SPEC.md) is the feature index, work order, and brief status; `specs/features/` holds the editable current behavior. Historical notes cannot override it.
 
-Each agent must:
+## Assignment
 
-- work only inside its own responsibility area;
-- avoid changing product, architecture, or priority decisions outside its role;
-- use `OpenSpec` as the source of requirement truth;
-- use `Linear` as the single source of task state;
-- return structured outputs instead of free-form reasoning dumps;
-- escalate conflicts instead of silently making disputed decisions;
-- respect the project stack:
-  - frontend: `React + TypeScript + RTK + RTK Query + CSS Modules + Rspack`
-  - backend: `Kotlin + PostgreSQL`
+Use plain Markdown. Supply only what the role needs:
 
-## Shared Input Format
+- Goal and relevant feature path with R/AC identifiers.
+- Scope, file ownership, constraints, and necessary dependencies.
+- Applicable risk category and the specific review question, if any.
+- Existing implementation, design, or verification links.
+- Linked issue only when the task already uses Linear.
 
-```yaml
-task:
-  id: TASK-###
-  title: ...
-  linear_issue_id: ...
-  linear_url: ...
-  project: interview-online
-  priority: P0|P1|P2|P3
-  status: ...
-context:
-  product_goal: ...
-  product_area: ...
-  dependencies: []
-  constraints: []
-artifacts:
-  openspec_change: []
-  prd: []
-  architecture: []
-  design: []
-  api_contracts: []
-  test_docs: []
-acceptance_criteria:
-  - ...
-requested_by: ...
-reviewers:
-  - ...
-```
+An agent must preserve unrelated and concurrent edits, avoid silently expanding scope, and distinguish an actual blocker from a routine implementation choice. Ask about unresolved decisions that change observable behavior; make proportionate technical choices within the accepted contract.
 
-## Shared Output Format
+## Result
 
-```yaml
-agent: ...
-task_id: TASK-###
-summary: ...
-status_recommendation: ...
-artifacts_created:
-  - type: ...
-    title: ...
-    location: ...
-decisions:
-  - ...
-risks:
-  - ...
-blockers:
-  - ...
-handoff_to:
-  - agent: ...
-    reason: ...
-linear_update:
-  state: ...
-  comment_summary: ...
-review_required:
-  - ...
-```
+Return a short human-readable result:
 
-## Shared Review Gates
+- What changed or the review verdict.
+- Relevant artifacts and requirement identifiers.
+- Verification performed and its outcome; explain unavailable checks.
+- Material unresolved decisions, risks, or required fixes.
 
-No task is considered complete unless:
+No mandatory YAML envelope or exhaustive reasoning dump. When an assignment names a real runtime/API consumer, preserve its existing machine schema and artifact types; this document does not replace those contracts.
 
-- acceptance criteria are checked;
-- results are captured in `Linear`;
-- ownership is explicitly handed off to the next role or reviewer;
-- open risks and assumptions are documented.
+Do not create or update external issues or send messages merely to satisfy a handoff convention. Use the user's authorization and tool rules. A next specialist is needed only for a concrete remaining question or a risk-based independent review.

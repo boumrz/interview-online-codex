@@ -1,14 +1,10 @@
-/**
- * Mantine `styles` overrides reused across dashboard forms to keep the
- * dark "deep navy" form palette consistent. Kept as plain objects rather
- * than CSS modules because Mantine's API takes the prop literally.
- */
+/** Shared form overrides backed by the active product theme tokens. */
 export const darkFieldStyles = {
-  label: { color: "#cbd5e1" },
+  label: { color: "var(--app-text)" },
   input: {
-    backgroundColor: "#0b1529",
-    borderColor: "#27456f",
-    color: "#e2e8f0",
+    backgroundColor: "var(--app-surface)",
+    borderColor: "var(--app-control-border)",
+    color: "var(--app-text)",
   },
 };
 
@@ -39,6 +35,6 @@ export const codeInputStyles = {
 
 export const darkSelectStyles = {
   ...darkFieldStyles,
-  dropdown: { backgroundColor: "#0f1c34", borderColor: "#27456f" },
-  option: { color: "#e2e8f0" },
+  dropdown: { backgroundColor: "var(--app-surface-elevated)", borderColor: "var(--app-border)" },
+  option: { color: "var(--app-text)" },
 };

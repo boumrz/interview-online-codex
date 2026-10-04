@@ -31,6 +31,8 @@ import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionSynchronizationManager
+import jakarta.persistence.EntityManager
 import java.text.Normalizer
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -47,6 +49,7 @@ class TeamTrackService(
     private val programmeRepository: TeamInterviewProgrammeRepository,
     private val featureGate: TeamWorkspaceFeatureGate,
     private val jdbcTemplate: JdbcTemplate,
+    private val entityManager: EntityManager,
 ) {
     @Transactional(readOnly = true)
     fun list(actor: User, teamId: String, rawStatus: String?, rawQuery: String?): TeamTracksDto {
@@ -510,8 +513,12 @@ class TeamTrackService(
     private fun requireActiveMember(actor: User, teamId: String): TeamAccess {
         featureGate.requireEnabled()
         val actorId = requireNotNull(actor.id)
-        val team = teamRepository.findById(teamId).orElse(null)?.takeIf { it.state == ACTIVE }
-            ?: throw teamNotFound()
+        val team = if (TransactionSynchronizationManager.isCurrentTransactionReadOnly()) {
+            teamRepository.findById(teamId).orElse(null)
+        } else {
+            teamRepository.lockById(teamId)?.also(entityManager::refresh)
+        }
+        if (team == null || team.state != ACTIVE) throw teamNotFound()
         val membership = membershipRepository.findByTeamIdAndUserId(team.id, actorId)
             ?.takeIf { it.state == ACTIVE }
             ?: throw teamNotFound()

@@ -38,6 +38,7 @@ try {
   const ownerPage = await ownerContext.newPage();
   await ownerPage.goto(webBaseUrl, { waitUntil: "domcontentloaded" });
   await ownerPage.getByRole("button", { name: "Создать комнату" }).click();
+  await ownerPage.getByRole("dialog", { name: "Создать комнату" }).getByRole("button", { name: "Создать комнату", exact: true }).click();
   await ownerPage.waitForURL(/\/room\//, { timeout: 15000 });
   await ownerPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
 

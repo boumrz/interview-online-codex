@@ -116,17 +116,21 @@ export function triggerBrowserDownload(blob: Blob, fileName: string): void {
   anchor.href = href;
   anchor.download = fileName;
   document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  const debugWindow = window as Window & {
-    __roomLastDownload?: { fileName: string; mime: string; timestamp: number };
-  };
-  debugWindow.__roomLastDownload = {
-    fileName,
-    mime: blob.type,
-    timestamp: Date.now(),
-  };
-  URL.revokeObjectURL(href);
+  try {
+    anchor.click();
+    const debugWindow = window as Window & {
+      __roomLastDownload?: { fileName: string; mime: string; timestamp: number };
+    };
+    debugWindow.__roomLastDownload = {
+      fileName,
+      mime: blob.type,
+      timestamp: Date.now(),
+    };
+  } finally {
+    anchor.remove();
+    // Browsers can begin consuming the URL after the click handler returns.
+    setTimeout(() => URL.revokeObjectURL(href), 1000);
+  }
 }
 
 /**

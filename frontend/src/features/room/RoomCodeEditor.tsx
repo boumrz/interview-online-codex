@@ -28,7 +28,9 @@ import {
   syntaxHighlighting,
   defaultHighlightStyle,
 } from "@codemirror/language";
-import { oneDark } from "@codemirror/theme-one-dark";
+import { placeholder } from "@codemirror/view";
+import { useThemeMode } from "../theme/ThemeProvider";
+import { codeMirrorTheme } from "./codeMirrorTheme";
 import { javascript } from "@codemirror/lang-javascript";
 import { python } from "@codemirror/lang-python";
 import { java } from "@codemirror/lang-java";
@@ -149,7 +151,15 @@ export function RoomCodeEditor({
   const onEditorValueChangeRef = useRef(onEditorValueChange);
   const onKeyPressRef = useRef(onKeyPress);
   const readOnlyCompartmentRef = useRef(new Compartment());
+  const readOnlyRef = useRef(readOnly);
+  readOnlyRef.current = readOnly;
+  const previousReadOnlyRef = useRef(readOnly);
+  const emitFullSnapshotRef = useRef<YjsSnapshotEmitter | null>(null);
   const languageCompartmentRef = useRef(new Compartment());
+  const themeCompartmentRef = useRef(new Compartment());
+  const { mode } = useThemeMode();
+  const themeModeRef = useRef(mode);
+  themeModeRef.current = mode;
   const lastAppliedServerYjsSeqRef = useRef(-1);
   const lastAppliedServerYjsSnapRef = useRef<string | null>(null);
   const lastSyncKeyForServerSeqRef = useRef(syncKey);
@@ -374,7 +384,8 @@ export function RoomCodeEditor({
       state: EditorState.create({
         doc: yText.toString(),
         extensions: [
-          oneDark,
+          themeCompartmentRef.current.of(codeMirrorTheme(themeModeRef.current)),
+          placeholder("Напишите решение задачи на выбранном языке"),
           lineNumbers(),
           highlightActiveLine(),
           drawSelection(),
@@ -390,7 +401,10 @@ export function RoomCodeEditor({
             ...defaultKeymap,
             ...historyKeymap,
           ]),
-          readOnlyCompartment.of(EditorState.readOnly.of(readOnly)),
+          readOnlyCompartment.of([
+            EditorState.readOnly.of(readOnly),
+            EditorView.editable.of(!readOnly),
+          ]),
           languageCompartment.of(languageExtension),
           yCollab(yText, awareness, { undoManager: false }),
           remoteCursorDarkTheme,
@@ -493,7 +507,7 @@ export function RoomCodeEditor({
     syncKeyRef.current = syncKey;
 
     const handleDocUpdate = (updateBytes: Uint8Array, origin: unknown) => {
-      if (origin === "remote" || origin === "bootstrap") return;
+      if (readOnlyRef.current || origin === "remote" || origin === "bootstrap") return;
       const encodedUpdate = bytesToBase64(updateBytes);
       // Always send full Yjs state with each local edit so the server snapshot stays current.
       // After a tab refresh, missed SSE increments cannot be replayed; reconnecting clients rely on state_sync yjsDocumentBase64.
@@ -509,6 +523,7 @@ export function RoomCodeEditor({
     yDoc.on("update", handleDocUpdate);
 
     const emitFullSnapshot = () => {
+      if (readOnlyRef.current) return;
       const d = yDocRef.current;
       const t = yTextRef.current;
       if (!d || !t) return;
@@ -521,7 +536,7 @@ export function RoomCodeEditor({
         latestServerYjsSequenceRef.current,
       );
     };
-
+    emitFullSnapshotRef.current = emitFullSnapshot;
     onYjsSnapshotBridgeReady?.(emitFullSnapshot);
 
     // Idle tabs still refresh the server snapshot so a reloaded peer does not bootstrap from stale CRDT state.
@@ -553,6 +568,7 @@ export function RoomCodeEditor({
     return () => {
       window.clearTimeout(snapshotTimerId);
       window.clearInterval(heartbeatId);
+      emitFullSnapshotRef.current = null;
       yDoc.off("update", handleDocUpdate);
       awareness.off("update", onAwarenessChanged);
       scroller.removeEventListener("scroll", rememberEditorScroll);
@@ -576,6 +592,10 @@ export function RoomCodeEditor({
     // never re-attached the listener, so outbound Yjs updates stopped after the first remote sync.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onYjsBridgeReady, syncKey]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: themeCompartmentRef.current.reconfigure(codeMirrorTheme(mode)) });
+  }, [mode, syncKey]);
 
   /** Merge server CRDT when `lastYjsSequence` advances (same step); passive tabs and late snapshots. */
   useEffect(() => {
@@ -683,11 +703,14 @@ export function RoomCodeEditor({
   useEffect(() => {
     const activeView = viewRef.current;
     if (!activeView) return;
+    const wasReadOnly = previousReadOnlyRef.current;
+    previousReadOnlyRef.current = readOnly;
     activeView.dispatch({
       effects: readOnlyCompartmentRef.current.reconfigure(
-        EditorState.readOnly.of(readOnly),
+        [EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)],
       ),
     });
+    if (wasReadOnly && !readOnly) emitFullSnapshotRef.current?.();
   }, [readOnly]);
 
   useEffect(() => {

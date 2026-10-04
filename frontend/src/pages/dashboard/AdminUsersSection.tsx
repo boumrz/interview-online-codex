@@ -1,6 +1,7 @@
 import React from "react";
 import {
   Badge,
+  ActionIcon,
   Button,
   Card,
   Group,
@@ -9,8 +10,8 @@ import {
   Text,
   ThemeIcon,
   Title,
-} from "@mantine/core";
-import { IconUsers } from "@tabler/icons-react";
+} from "components/antd-compat";
+import { IconTrash, IconUsers } from "components/antd-icons";
 import type { AdminUser } from "../../types";
 import { darkSelectStyles } from "./dashboardFieldStyles";
 import { formatCreatedAt } from "./dashboardHelpers";
@@ -49,9 +50,9 @@ export function AdminUsersSection({
       withBorder
       radius="lg"
       padding="lg"
-      bg="#11151c"
+      bg="var(--app-surface)"
       c="gray.1"
-      style={{ borderColor: "#272b34" }}
+      style={{ borderColor: "var(--app-border)" }}
     >
       <Stack>
         <Group justify="space-between" align="center">
@@ -82,8 +83,8 @@ export function AdminUsersSection({
                 withBorder
                 radius="md"
                 padding="sm"
-                bg="#121720"
-                style={{ borderColor: "#2a3039" }}
+                bg="var(--app-surface-soft)"
+                style={{ borderColor: "var(--app-border)" }}
               >
                 <Stack gap="sm">
                   <Group justify="space-between" align="center">
@@ -109,7 +110,7 @@ export function AdminUsersSection({
                   </Group>
 
                   <Group align="end" wrap="wrap">
-                    <Select
+                    <Select placeholder="Выберите роль участника"
                       label="Роль"
                       value={draftRole}
                       onChange={(value) => {
@@ -133,15 +134,17 @@ export function AdminUsersSection({
                     >
                       Сохранить роль
                     </Button>
-                    <Button
+                    <ActionIcon
                       color="red"
-                      variant="outline"
+                      variant="light"
+                      aria-label={`Удалить пользователя @${user.nickname}`}
+                      title="Удалить пользователя"
                       loading={isDeleting}
                       disabled={isCurrentUser || isProtected}
                       onClick={() => onDeleteUser(user)}
                     >
-                      Удалить пользователя
-                    </Button>
+                      <IconTrash size={16} aria-hidden="true" />
+                    </ActionIcon>
                   </Group>
                 </Stack>
               </Card>

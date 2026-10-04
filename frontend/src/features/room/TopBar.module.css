@@ -1,0 +1,57 @@
+.roleMenu :global(.ant-dropdown-menu) {
+  min-width: 224px;
+  max-width: min(360px, calc(100vw - 24px));
+  padding: 6px;
+  border: 1px solid var(--app-control-border);
+  border-radius: 10px;
+  background: var(--app-surface-elevated);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 28%), 0 2px 6px rgb(0 0 0 / 18%);
+}
+
+.roleMenu :global(.ant-dropdown-menu-item) {
+  min-height: 36px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  color: var(--app-text);
+  line-height: 20px;
+  white-space: normal;
+  transition: background-color 100ms ease;
+}
+
+.roleMenu :global(.ant-dropdown-menu-item:not(.ant-dropdown-menu-item-disabled):hover),
+.roleMenu :global(.ant-dropdown-menu-item-active:not(.ant-dropdown-menu-item-disabled)) {
+  background: var(--app-selected-hover);
+  color: var(--app-primary-text);
+}
+
+.roleMenu :global(.ant-dropdown-menu-item:focus-visible) {
+  outline: 2px solid var(--app-focus);
+  outline-offset: -2px;
+}
+
+:global(:root[data-theme="light"]) .roleMenu :global(.ant-dropdown-menu) {
+  box-shadow: 0 8px 28px rgb(17 20 24 / 14%), 0 2px 6px rgb(17 20 24 / 8%);
+}
+
+@media (max-height: 439px) {
+  .returnAction {
+    position: absolute;
+    z-index: 4;
+    top: 4px;
+    left: 6px;
+    width: 36px;
+    height: 36px;
+    min-height: 36px;
+    padding: 0 !important;
+    visibility: visible;
+  }
+
+  .returnAction :global(.app-compat-button-label) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}

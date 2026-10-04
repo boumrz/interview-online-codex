@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Button, Card, Group, Stack, Text, TextInput, Title } from "@mantine/core";
+import { App } from "antd";
+import { Alert, Button, Card, Group, Stack, Text, TextInput, Title } from "components/antd-compat";
+import { useClipboardNotification } from "../../components/useClipboardNotification";
 import {
   createTeamInvitation,
   listTeamInvitations,
@@ -116,12 +118,13 @@ function updateInvitation(
 }
 
 export function TeamInvitationManagement({ accountId, authToken, teamId }: Props) {
+  const { notification } = App.useApp();
+  const copyToClipboard = useClipboardNotification();
   const contextKey = `${accountId}:${teamId}`;
   const [invitations, setInvitations] = useState<ReadonlyArray<TeamInvitation>>(() => recoveredInvitations(contextKey));
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [actionError, setActionError] = useState("");
-  const [status, setStatus] = useState("");
   const [retryAction, setRetryAction] = useState<RetryAction | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [revealedUrls, setRevealedUrls] = useState<Readonly<Record<string, string>>>({});
@@ -140,12 +143,14 @@ export function TeamInvitationManagement({ accountId, authToken, teamId }: Props
   const isCurrent = (identity: RequestIdentity) => (
     identity.accountId === identityRef.current.accountId
     && identity.authToken === identityRef.current.authToken
+    && identity.authToken === localStorage.getItem("auth_token")
     && identity.teamId === identityRef.current.teamId
     && identity.generation === identityRef.current.generation
   );
   const isSameContext = (identity: RequestIdentity) => (
     identity.accountId === identityRef.current.accountId
     && identity.authToken === identityRef.current.authToken
+    && identity.authToken === localStorage.getItem("auth_token")
     && identity.teamId === identityRef.current.teamId
   );
 
@@ -190,7 +195,6 @@ export function TeamInvitationManagement({ accountId, authToken, teamId }: Props
     setLoading(true);
     setLoadError(false);
     setActionError("");
-    setStatus("");
     setRetryAction(null);
     setBusyKey(null);
     setRevealedUrls({});
@@ -214,7 +218,6 @@ export function TeamInvitationManagement({ accountId, authToken, teamId }: Props
     const identity = captureIdentity();
     setBusyKey("create");
     setActionError("");
-    setStatus("");
     setRetryAction(null);
     setRevealedUrls({});
     revealAttemptRef.current.clear();
@@ -226,7 +229,7 @@ export function TeamInvitationManagement({ accountId, authToken, teamId }: Props
       publishPendingRecovery(contextKey, created);
       setInvitations([created]);
       setRevealedUrls({});
-      setStatus("Ссылка выпущена");
+      notification.success({ title: "Ссылка выпущена", placement: "top", role: "status" });
     } catch (error) {
       if (!isCurrent(identity)) return;
       const failure = requestFailure(error);
@@ -249,7 +252,6 @@ export function TeamInvitationManagement({ accountId, authToken, teamId }: Props
     setRevealFailures((current) => ({ ...current, [invitation.id]: false }));
     setBusyKey(`reveal:${invitation.id}`);
     setActionError("");
-    setStatus("");
     setRetryAction(null);
     try {
       const url = await revealTeamInvitationLink(identity.teamId, invitation.id, identity.authToken);
@@ -298,7 +300,6 @@ export function TeamInvitationManagement({ accountId, authToken, teamId }: Props
     const identity = captureIdentity();
     setBusyKey(`${operation}:${invitation.id}`);
     setActionError("");
-    setStatus("");
     setRetryAction(null);
     clearRevealedUrl(invitation.id);
     let targetInvitation = invitation;
@@ -316,7 +317,7 @@ export function TeamInvitationManagement({ accountId, authToken, teamId }: Props
       listRequestRef.current += 1;
       publishPendingRecovery(contextKey, result);
       setInvitations((current) => updateInvitation(current, result));
-      setStatus(operation === "reissue" ? "Ссылка перевыпущена" : "Приглашение отозвано");
+      notification.success({ title: operation === "reissue" ? "Ссылка перевыпущена" : "Приглашение отозвано", placement: "top", role: "status" });
       void loadInvitations();
     } catch (error) {
       if (!isCurrent(identity)) return;
@@ -337,16 +338,15 @@ export function TeamInvitationManagement({ accountId, authToken, teamId }: Props
   const revoke = (invitation: TeamInvitation) => runMutation("revoke", invitation);
 
   const copy = async (invitation: TeamInvitation, url: string) => {
-    try {
-      await navigator.clipboard.writeText(url);
+    const copied = await copyToClipboard(url, {
+      success: "Ссылка приглашения готова к отправке.",
+      failure: "Разрешите доступ к буферу обмена и повторите попытку.",
+    });
+    if (copied) {
       publishPendingRecovery(contextKey, invitation);
       setCopyFailures((current) => ({ ...current, [invitation.id]: false }));
-      setActionError("");
-      setRetryAction(null);
-      setStatus("Ссылка скопирована");
-    } catch {
+    } else {
       setCopyFailures((current) => ({ ...current, [invitation.id]: true }));
-      setActionError("Не удалось скопировать ссылку");
     }
   };
 
@@ -362,10 +362,10 @@ export function TeamInvitationManagement({ accountId, authToken, teamId }: Props
   return (
     <Stack className={styles.management} gap="lg">
       <Group className={styles.headingWithCreate} justify="space-between" align="flex-end" gap="md" wrap="wrap">
-        <div>
+        <Stack gap="xs">
           <Title order={2}>Приглашения</Title>
-          <Text c="gray.5" mt={6}>Одна ссылка для всей команды. Её можно отправить нескольким людям.</Text>
-        </div>
+          <Text c="gray.5">Одна ссылка для всей команды. Её можно отправить нескольким людям.</Text>
+        </Stack>
         <Button className={styles.primaryAction} loading={busyKey === "create"} onClick={() => void runCreate()}>
           {invitations.some((item) => item.state === "PENDING") ? "Перевыпустить ссылку" : "Выпустить ссылку"}
         </Button>
@@ -384,8 +384,6 @@ export function TeamInvitationManagement({ accountId, authToken, teamId }: Props
         </Alert>
       ) : null}
 
-      {status ? <Text className={styles.status} role="status">{status}</Text> : null}
-
       {loading ? (
         <Stack gap="xs" role="status" aria-label="Загружаем приглашения">
           <Text c="gray.5">Загружаем приглашения…</Text>
@@ -402,8 +400,10 @@ export function TeamInvitationManagement({ accountId, authToken, teamId }: Props
 
       {!loading && !loadError && invitations.length === 0 ? (
         <Card className={styles.panel} withBorder>
-          <Text fw={700}>Ссылка ещё не выпущена</Text>
-          <Text size="sm" c="gray.5">Ожидающая ссылка не добавляет сотрудника до явного принятия.</Text>
+          <Stack gap="xs">
+            <Text fw={700}>Ссылка ещё не выпущена</Text>
+            <Text size="sm" c="gray.5">Ожидающая ссылка не добавляет сотрудника до явного принятия.</Text>
+          </Stack>
         </Card>
       ) : null}
 
@@ -422,10 +422,10 @@ export function TeamInvitationManagement({ accountId, authToken, teamId }: Props
           >
             <Stack gap="sm">
               <Group justify="space-between" align="flex-start" wrap="wrap">
-                <div>
+                <Stack gap="xs">
                   <Text fw={700}>Ссылка для вступления в команду</Text>
                   <Text size="sm" c="gray.5">{invitationStateLabel(invitation.state)}</Text>
-                </div>
+                </Stack>
                 {isPending ? (
                   <Group className={styles.actions} gap="sm">
                     <Button

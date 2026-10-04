@@ -1,5 +1,6 @@
 import React from "react";
-import { Badge } from "@mantine/core";
+import { Tag } from "antd";
+import styles from "./VerdictBadge.module.css";
 
 type VerdictBadgeProps = {
   verdict: string;
@@ -13,19 +14,19 @@ const VERDICT_LABELS: Record<string, string> = {
   STRONG_NO_HIRE: "Strong No Hire",
 };
 
-const VERDICT_COLORS: Record<string, string> = {
-  STRONG_HIRE: "green",
-  HIRE: "teal",
-  NO_HIRE: "orange",
-  STRONG_NO_HIRE: "red",
+const VERDICT_TONES: Record<string, string> = {
+  STRONG_HIRE: "success",
+  HIRE: "success",
+  NO_HIRE: "warning",
+  STRONG_NO_HIRE: "error",
 };
 
 export function VerdictBadge({ verdict, size = "sm" }: VerdictBadgeProps) {
   const label = VERDICT_LABELS[verdict] ?? verdict;
-  const color = VERDICT_COLORS[verdict] ?? "gray";
+  const tone = VERDICT_TONES[verdict] ?? "neutral";
   return (
-    <Badge color={color} variant="filled" size={size}>
+    <Tag className={`${styles.badge} ${styles[tone]} ${size === "lg" || size === "xl" ? styles.large : ""}`} data-verdict={verdict}>
       {label}
-    </Badge>
+    </Tag>
   );
 }

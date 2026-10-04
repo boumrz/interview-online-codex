@@ -1,8 +1,8 @@
 .notice {
   width: 100%;
-  background: #151b25;
-  border-bottom: 1px solid #334258;
-  color: #eef4ff;
+  background: var(--app-surface);
+  border-bottom: 1px solid var(--app-border);
+  color: var(--app-text);
   padding: 10px 14px;
   position: relative;
   z-index: 3000;
@@ -25,7 +25,7 @@
 
 .title {
   margin: 0;
-  color: #f5f8ff;
+  color: var(--app-text);
   font-size: 13px;
   font-weight: 700;
   line-height: 1.25;
@@ -33,7 +33,7 @@
 
 .text {
   margin: 0;
-  color: #b9c5d6;
+  color: var(--app-muted);
   font-size: 12px;
   line-height: 1.35;
 }
@@ -44,26 +44,28 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-height: 32px;
+  height: auto;
   border-radius: 8px;
-  border: 1px solid #4f78b8;
-  background: #1f3a63;
-  color: #ffffff;
+  border: 1px solid var(--app-primary);
+  background: var(--app-primary);
+  color: var(--app-on-primary);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1;
-  padding: 0 12px;
+  padding: 5px 12px;
   text-decoration: none;
   white-space: nowrap;
 }
 
 .action:hover {
-  background: #264877;
-  border-color: #6a95d8;
+  background: var(--app-primary-hover);
+  border-color: var(--app-primary-hover);
 }
 
 .action:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(105, 149, 216, 0.34);
+  outline: 2px solid var(--app-focus);
+  outline-offset: 2px;
 }
 
 @media (max-width: 720px) {

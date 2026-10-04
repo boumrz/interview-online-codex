@@ -15,8 +15,8 @@
 ```text
 internet :80/:443
   -> interview-online-web
-       interview.vtools.tech      -> interview-online frontend/backend
-       interview.domiknote.ru     -> interview-online frontend/backend
+       interview.vtools.tech      -> InterHub frontend/backend
+       interview.domiknote.ru     -> InterHub frontend/backend
        domiknote.ru               -> finance-assistant-web-1:80
 ```
 

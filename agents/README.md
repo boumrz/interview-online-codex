@@ -1,43 +1,27 @@
-# Multi-Agent System — Agent Contracts
+# InterHub Agent Roles
 
-This folder contains the universal agent contracts for the `interview-online` project.
-These contracts are tool-agnostic: the same roles and rules apply in Claude Code, Cursor, and Codex.
+Specialists are optional tools for a concrete question, implementation slice, or independent review. Direct implementation is the default; there is no mandatory role pipeline.
 
-OpenSpec is the source of truth for specifications:
+Read [AGENTS.md](../AGENTS.md) for project rules and [the specification standard](../specs/README.md) for preparation, review depth, and completion criteria. [SPEC.md](../SPEC.md) links to the current feature contracts in `specs/features/`. OpenSpec is historical background only.
 
-- project context: `../openspec/project.md`
-- accepted requirements: `../openspec/specs/`
-- active changes: `../openspec/changes/`
+Use the smallest relevant role set. Give each agent a bounded objective, the relevant feature and R/AC identifiers, owned files, and only the context needed for that assignment. Agents sharing a checkout must preserve each other's work.
 
-Every feature, bug fix, or behavior-changing refactor starts with an OpenSpec change before implementation.
+## Common references
 
-## Common files
+- [Shared contract](common/shared-contract.md): lightweight assignment and result format.
+- [Collaboration scenarios](common/handoff-scenarios.md): optional specialist use and risk-based independent review.
+- [Task status](common/orchestrator-status-model.md): compact status guidance when coordination is needed.
+- [Linked Linear work](common/linear-operating-rules.md): applies only when the task uses Linear.
+- [Model policy](common/model-policy.md): runtime settings and avoiding unnecessary invocations.
 
-- `common/shared-contract.md` — shared input/output formats for all agents
-- `common/handoff-scenarios.md` — required handoff flows between roles
-- `common/orchestrator-status-model.md` — task state model for orchestrators
-- `common/linear-operating-rules.md` — Linear operating rules and comment template
-- `common/model-policy.md` — model tier assignments per agent (Opus / Sonnet / Haiku)
+## Role prompts and tool adapters
 
-## Role files
+[Role prompts](roles/README.md) define each specialist's responsibility. They supplement shared rules rather than repeating the complete development process.
 
-- `roles/*.md` — one file per agent role (system prompt + scope + decision rules)
+| Tool | Entry points |
+|---|---|
+| Codex | `AGENTS.md` and `.codex/agents/*.toml` |
+| Claude Code | `CLAUDE.md` and `.claude/agents/*.md` |
+| Cursor | `.cursor/rules/00-multi-agent-system.mdc` and `.cursor/rules/agents/*.mdc` |
 
-## Tool-specific entry points
-
-| Tool | File |
-|------|------|
-| Claude Code | `CLAUDE.md` + `.claude/agents/*.md` |
-| Cursor | `.cursor/rules/00-multi-agent-system.mdc` + `.cursor/rules/agents/*.mdc` |
-| Codex (OpenAI) | `AGENTS.md` |
-
-## Model assignments (summary)
-
-| Agent | Tier |
-|-------|------|
-| Specification (TZ) Agent | **Opus** |
-| Product Owner, Architect, Team Lead, Developer, Designer | Sonnet |
-| Solution Reviewer, Security & Reliability Agent | Sonnet |
-| QA, Prompt/Task Auditor, Test Reviewer, UX Critic | Haiku |
-
-Full rationale: `common/model-policy.md`
+Adapters must use the same current feature contracts. Do not add a second specification, PRD, issue system, approval chain, or model tier solely because a specialist is invoked. Detailed verification evidence belongs in a linked report, not in the active behavior contract.

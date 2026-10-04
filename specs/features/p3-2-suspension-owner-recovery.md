@@ -1,123 +1,85 @@
-### P3.2 Срочное приостановление и восстановление владельца
+# P3.2 — восстановление владельца и старых приостановок
 
-Цель: админ может срочно приостановить участие и безопасно передать зависшие комнаты.
+Статус: реализована в текущих границах. Актуализировано: 2026-10-02.
+Результат: команда безопасно восстанавливает владельца orphan-интервью;
+старые SUSPENDED memberships поддерживаются без новых действий приостановки в UI.
 
-Готово:
+## Границы и связи
 
-- backend `POST /api/teams/{teamId}/members/{userId}/suspend` доступен
-  OWNER/ADMIN, переводит активного non-owner участника в `SUSPENDED`, пишет
-  audit `MEMBER_SUSPENDED`, двигает epoch/security revision и идемпотентно
-  восстанавливает ответ по тому же `Idempotency-Key`;
-- suspend очищает старые team room grants пользователя (`room_participants`,
-  `room_hr_assignments`) только внутри команды и после commit синхронизирует
-  live realtime-доступ;
-- suspended участник теряет команду в `/api/me/workspaces`, не может читать
-  roster и получает безопасный `404` для старой TEAM-room и realtime
-  stream-status;
-- backend `POST /api/teams/{teamId}/members/{userId}/resume` возвращает
-  `SUSPENDED` non-owner участника в `ACTIVE`, пишет audit `MEMBER_RESUMED`,
-  двигает epoch/security revision и не восстанавливает старые room grants;
-- resumed участник снова видит командное пространство и roster, но старые
-  назначения на TEAM-room остаются недоступными до явного нового назначения;
-- backend `GET /api/teams/{teamId}/members?state=SUSPENDED` возвращает
-  отдельный безопасный manager-only список приостановленных участников:
-  default roster остаётся только `ACTIVE`, non-manager получает `403
-  TEAM_MEMBER_LIST_FORBIDDEN`, сам suspended-участник получает безопасный
-  `404 TEAM_NOT_FOUND`;
-- UI настроек команды получил действие «Приостановить участника» с явным
-  подтверждением, выбором активного non-owner участника, retry/idempotency-path
-  и refresh прав;
-- UI настроек команды показывает блок «Приостановленные участники» и кнопку
-  «Восстановить участника»: восстановление дергает resume API, обновляет
-  active/suspended roster и не восстанавливает старые назначения в интервью;
-- backend `GET /api/teams/{teamId}/interviews?ownership=orphaned` даёт
-  manager-only очередь активных TEAM-интервью, где `rooms.owner_user_id` больше
-  не является активным участником этой команды; обычный участник получает
-  `403 TEAM_INTERVIEW_QUEUE_FORBIDDEN`;
-- элементы списка интервью включают безопасные поля владельца:
-  `ownerUserId`, `ownerDisplayName`, `ownershipState`
-  (`ACTIVE`, `OWNER_SUSPENDED`, `OWNER_LEFT`, `OWNER_REMOVED`,
-  `OWNER_MISSING`) и lifecycle `status` (`active`, `frozen`, `finished`);
-- UI вкладки «Интервью» для OWNER/ADMIN показывает блок «Интервью без
-  владельца» с причиной orphan-состояния и исходным владельцем; обычные
-  участники этот endpoint не запрашивают;
-- backend offer lifecycle получил MVP:
-  - `POST /api/teams/{teamId}/interviews/{interviewId}/owner-offers` создаёт
-    manager-only предложение новому активному участнику, только если интервью
-    находится в orphaned-состоянии;
-  - `GET /api/teams/{teamId}/interview-owner-offers?status=pending` показывает
-    целевому активному участнику только его pending offers;
-  - `POST /api/teams/{teamId}/interviews/{interviewId}/owner-offers/{offerId}/accept`
-    доступен только target-участнику, переводит offer в `ACCEPTED`, меняет
-    `rooms.owner_user_id` на нового активного владельца и явно выдаёт ему
-    room-role `owner` без автоматического resume frozen-комнаты;
-  - `POST /api/teams/{teamId}/interviews/{interviewId}/owner-offers/{offerId}/decline`
-    доступен только target-участнику, переводит offer в `DECLINED`, убирает
-    его из pending inbox и не меняет владельца интервью;
-  - `POST /api/teams/{teamId}/interviews/{interviewId}/archive` доступен
-    OWNER/ADMIN только для orphaned-интервью, архивирует комнату без
-    преемника, закрывает realtime после commit и переводит pending owner
-    offers по комнате в `CANCELLED`;
-  - offers имеют `expiresAt`, expired offer не принимается, не возвращается в
-    pending inbox и при чтении inbox переводится из `PENDING` в `EXPIRED`;
-- backend freeze/resume lifecycle:
-  - `POST /api/teams/{teamId}/interviews/{interviewId}/freeze` доступен
-    OWNER/ADMIN только для orphaned-интервью, переводит комнату в `frozen`,
-    пишет audit `TEAM_INTERVIEW_FROZEN` и закрывает live realtime после commit;
-  - frozen TEAM-room скрывает обычного кандидата безопасным `404` для REST и
-    realtime stream-status, но остаётся доступной управляющим ролям;
-  - `POST /api/teams/{teamId}/interviews/{interviewId}/resume` доступен
-    OWNER/ADMIN или текущему новому `owner_user_id`, переводит frozen-комнату
-    обратно в `active` и пишет audit `TEAM_INTERVIEW_RESUMED`;
-- UI вкладки «Интервью» позволяет OWNER/ADMIN выбрать активного участника в
-  блоке «Интервью без владельца» и отправить предложение; target-участник видит
-  блок «Предложения владения интервью» и принимает либо отклоняет владение из
-  интерфейса;
-- UI очереди «Интервью без владельца» позволяет OWNER/ADMIN архивировать
-  orphaned-интервью без преемника; pending offer у target после архивации
-  исчезает;
-- UI очереди «Интервью без владельца» позволяет OWNER/ADMIN заморозить
-  orphaned-интервью для кандидата, показывает бейдж «Заморожено для
-  кандидата», а новый owner после accept видит карточку frozen-интервью и сам
-  нажимает «Возобновить интервью»;
-- проверки:
-  - backend focused RED→GREEN suspend scenario — зелёный;
-  - backend focused RED→GREEN resume scenario — зелёный;
-  - backend focused RED→GREEN suspended directory scenario — зелёный;
-  - backend focused RED→GREEN orphaned interview queue scenario — зелёный;
-  - backend `TeamMemberDirectoryIntegrationTest` — зелёный `8/8`;
-  - backend management/interview lifecycle suite — зелёный `41/41`;
-  - backend focused owner offer accept/decline/expire-cleanup scenarios —
-    зелёный `3/3`;
-  - backend focused orphaned interview blind archive scenario — зелёный `1/1`;
-  - backend focused orphaned interview freeze/resume scenario — зелёный `1/1`;
-  - backend `TeamInterviewCreationIntegrationTest` — зелёный `20/20`;
-  - frontend `npm run typecheck` — зелёный;
-  - frontend isolated E2E P3 suspend settings — зелёный `1/1`;
-  - frontend isolated E2E P3 resume settings — зелёный `1/1`;
-  - frontend isolated E2E P3.2 orphaned queue + owner offer accept — зелёный `1/1`;
-  - frontend isolated E2E P3.2 owner offer decline — зелёный `1/1`;
-  - frontend isolated E2E P3.2 orphaned interview blind archive — зелёный
-    `1/1`;
-  - frontend isolated E2E P3.2 orphaned interview freeze/resume — зелёный
-    `1/1`;
-  - frontend isolated E2E P3 lifecycle settings — зелёный `1/1`;
-  - frontend combined E2E P3 retry: новые suspend/resume сценарии зелёные,
-    старый lifecycle сценарий один раз дал известный timeout ожидания статуса
-    и затем прошёл отдельно.
+Новые приостановки сняты с пользовательского продукта. Старые переходные
+suspend/resume данные/API не становятся новым обычным способом управления:
+основной путь — удаление по [P3.1](p3-1-membership-lifecycle.md).
+Общий доступ ACTIVE/candidate — [P1.5](p1-5-team-interview-creation.md), внешние
+назначения — [P2.3](p2-3-room-assignments.md), права finished/frozen/archived —
+[P3.3](p3-3-interview-result.md). Общие interviewer права не расширяют отдельные
+OWNER/ADMIN orphan lifecycle операции.
 
-Что сделать:
+## Прежние приостановки
 
-- функциональный scope P3.2 по orphaned/freeze/resume закрыт; дальше двигаться
-  к P3.3 и расширенным состояниям завершения/результата;
+- **R-01. Legacy membership:** сохранённый suspend переводит active non-owner в
+  SUSPENDED; resume возвращает в ACTIVE. Только OWNER/ADMIN выполняет эти
+  переходные операции. Переходы имеют `Idempotency-Key`, audit
+  `MEMBER_SUSPENDED`/`MEMBER_RESUMED`, epoch/security revision. Suspend очищает
+  explicit participant/HR grants и после commit пересчитывает live права только
+  своей команды. Командный owner не снимается этим способом.
+- **R-02. Видимость:** SUSPENDED отсутствует в обычном ACTIVE roster/workspaces;
+  protected team endpoints безопасно отказывают. `members?state=SUSPENDED` —
+  отдельный OWNER/ADMIN список; обычный участник получает 403
+  `TEAM_MEMBER_LIST_FORBIDDEN`, suspended — 404 `TEAM_NOT_FOUND`. Публичный
+  candidate admission комнаты сохраняется по P1.5; новое external hiring
+  назначение SUSPENDED запрещено по P2.3.
+- **R-03. Resume:** старые explicit room grants не восстанавливаются. ACTIVE
+  возвращает общие TEAM interviewer права по P1.5; прежнее правило ожидания
+  нового индивидуального назначения отменено.
 
-Исторический acceptance приостановки (неактивен для новых действий):
+## Интервью без владельца
 
-- suspend срабатывает даже при активных Yjs/POST/export;
-- нет deadlock;
-- candidate не получает frozen room;
-- новый owner сам принимает и отдельно возобновляет интервью.
+Orphaned — активное TEAM-интервью, текущий owner которого больше не является
+активным участником команды. Передача комнаты не передаёт владение командой.
 
-## Корректировка по продуктовой проверке 2026-09-23
+- **R-04. Очередь:** `interviews?ownership=orphaned` и UI очередь доступны OWNER/ADMIN;
+  обычный участник получает `TEAM_INTERVIEW_QUEUE_FORBIDDEN`/403. Проекция
+  сохраняет `ownerUserId`, `ownerDisplayName`, причины `ACTIVE`, `OWNER_SUSPENDED`,
+  `OWNER_LEFT`, `OWNER_REMOVED`, `OWNER_MISSING` и lifecycle status.
+- **R-05. Предложение:** OWNER/ADMIN создаёт owner-offer для активного преемника
+  только orphaned-комнаты. Pending inbox показывает человеку только его offers.
+  Accept/decline доступны только target; accept меняет owner и room-role owner,
+  decline не меняет владение. Истёкший `expiresAt` не принимается, не показывается
+  в pending inbox и переводит PENDING → EXPIRED при чтении.
+- **R-06. Архив:** OWNER/ADMIN может архивировать orphaned-интервью без преемника;
+  pending offers становятся CANCELLED, realtime закрывается после commit.
+  Finished исключён из этого lifecycle по P3.3.
+- **R-07. Заморозка/возобновление:** OWNER/ADMIN freeze orphaned-интервью с audit
+  `TEAM_INTERVIEW_FROZEN`; live после commit инвалидируется. Resume допускает
+  OWNER/ADMIN либо текущего нового owner, возвращает active с audit
+  `TEAM_INTERVIEW_RESUMED`. Accept ownership не выполняет resume автоматически.
+  Frozen допускает публичный просмотр candidate, но блокирует editor/live/task/
+  workspace записи всем по P3.3; старое скрытие кандидата отменено.
+- **R-08. Resume и кэш:** commit resume инвалидирует прежний cached SSE state/
+  eventToken. Тот же browser session после reconnect получает новый token и
+  active состояние; EditorView не пересоздаётся. Finished нельзя resume.
 
-- Новые приостановки участников больше не предлагаются в интерфейсе. Восстановление старых приостановленных учётных записей остаётся внутренним переходным сценарием; обычное управление доступом использует удаление участника.
+## Контракты и интерфейс
+
+Owner-offers, accept/decline, archive, freeze/resume используют существующие
+`/api/teams/{teamId}/interviews/{interviewId}/...` endpoints; pending inbox —
+`/api/teams/{teamId}/interview-owner-offers?status=pending`.
+UI показывает причины orphan, предложение активному участнику, его accept/
+decline и отдельное действие возобновления новым владельцем. Архив удаляет
+предложение из inbox. Legacy suspended recovery остаётся внутренним переходным
+сценарием; кнопка новой приостановки не возвращается.
+
+## Приёмка и проверка
+
+| ID | Требования | Сценарий → результат | Проверка |
+| --- | --- | --- | --- |
+| AC-01 | R-01–R-03 | Старый suspend/resume → отзыв старых grants и возврат ACTIVE shared access; manager-only список без утечки | Membership integration |
+| AC-02 | R-04–R-05 | OWNER/ADMIN предлагает → только target принимает/отклоняет; stale/expired → отказ без передачи | Owner-offer PostgreSQL integration + existing UI flow |
+| AC-03 | R-06 | Архив orphaned → CANCELLED offers, closed realtime, недоступная публичная запись | Lifecycle integration |
+| AC-04 | R-07–R-08 | Accept frozen → остаётся frozen; разрешённый resume → active/new event token без нового EditorView | Lifecycle integration + hydration E2E |
+| AC-05 | R-04–R-08 | MEMBER/чужой target/finished lifecycle → безопасный отказ; public frozen candidate → просмотр без live записи | Permission/status integration |
+
+Прежние результаты — [историческая редакция](../references/history/p3-2-suspension-owner-recovery-before-2026-10-02.md),
+[UI-проверки resume](../references/ui-2-verification-2026-09-27.md),
+[актуальные shared права 28.09](../references/business-logic-verification-2026-09-28.md).
+Нормализация 02.10 не объявляет свежий PASS или включение feature flags.

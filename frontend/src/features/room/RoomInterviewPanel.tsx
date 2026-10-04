@@ -1,4 +1,5 @@
 import React, { FormEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { App } from "antd";
 import {
   Alert,
   Badge,
@@ -11,7 +12,9 @@ import {
   Text,
   TextInput,
   Title,
-} from "@mantine/core";
+} from "components/antd-compat";
+import { HiringManagerPicker } from "../hr/HiringManagerPicker";
+import { IconUsers } from "components/antd-icons";
 import { CopyHrId } from "../hr/CopyHrId";
 import { instantToMoscowInput, moscowInputToInstant } from "../hr/hrDate";
 import {
@@ -25,10 +28,13 @@ import type { HrAction } from "./TopBar";
 import styles from "./RoomInterviewPanel.module.css";
 
 type Props = {
+  triggerLabel?: string;
+  triggerAriaLabel?: string;
   inviteCode: string;
   identityKey: string;
   canManageRoom: boolean;
   isTeamRoom: boolean;
+  teamId?: string;
   authorityGeneration: number;
   isCurrentAuthority: (generation: number) => boolean;
   pendingHrActions: ReadonlyMap<string, HrAction>;
@@ -60,10 +66,13 @@ function isAbortError(error: unknown): boolean {
 }
 
 export function RoomInterviewPanel({
+  triggerLabel = "Кандидат и нанимающие",
+  triggerAriaLabel,
   inviteCode,
   identityKey,
   canManageRoom,
   isTeamRoom,
+  teamId,
   authorityGeneration,
   isCurrentAuthority,
   pendingHrActions,
@@ -73,6 +82,7 @@ export function RoomInterviewPanel({
   interviewerToken,
   eventToken,
 }: Props) {
+  const { notification } = App.useApp();
   const [opened, setOpened] = useState(false);
   const [loading, setLoading] = useState(false);
   const [archived, setArchived] = useState(false);
@@ -81,11 +91,8 @@ export function RoomInterviewPanel({
   const [candidateName, setCandidateName] = useState("");
   const [position, setPosition] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
-  const [hrId, setHrId] = useState("");
   const [panelError, setPanelError] = useState("");
   const [inviteError, setInviteError] = useState("");
-  const [saveMessage, setSaveMessage] = useState("");
-  const [inviteMessage, setInviteMessage] = useState("");
   const [conflict, setConflict] = useState(false);
   const [accessMessage, setAccessMessage] = useState("");
   const hadManagerAccess = useRef(false);
@@ -150,11 +157,8 @@ export function RoomInterviewPanel({
     setCandidateName("");
     setPosition("");
     setScheduledAt("");
-    setHrId("");
     setPanelError("");
     setInviteError("");
-    setSaveMessage("");
-    setInviteMessage("");
     setConflict(false);
     setArchived(false);
   };
@@ -236,7 +240,6 @@ export function RoomInterviewPanel({
     event.preventDefault();
     if (!metadata || archived) return;
     setPanelError("");
-    setSaveMessage("");
     setConflict(false);
     const normalizedInstant = scheduledAt ? moscowInputToInstant(scheduledAt) : null;
     if (scheduledAt && !normalizedInstant) {
@@ -257,7 +260,7 @@ export function RoomInterviewPanel({
       const next = await request.unwrap();
       if (!isCurrentGeneration(generation)) return;
       applyMetadata(next);
-      setSaveMessage("Сведения сохранены");
+      notification.success({ title: "Сведения сохранены", placement: "top", role: "status" });
     } catch (error) {
       if (!isCurrentGeneration(generation) || isAbortError(error)) return;
       if (statusOf(error) === 409) {
@@ -272,22 +275,20 @@ export function RoomInterviewPanel({
     }
   };
 
-  const invite = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!hrId.trim() || archived) return;
+  const invite = async (userId: string) => {
+    if (!userId.trim() || archived || pending || !isCurrentAuthority(authorityGeneration)) return false;
     setInviteError("");
-    setInviteMessage("");
     const generation = beginRequestGeneration();
     try {
       const request = trackRequest(addManager({
         ...requestCredentials(),
-        userId: hrId,
+        userId,
       }));
       const nextManagers = await request.unwrap();
       if (!isCurrentGeneration(generation)) return;
       setManagers(nextManagers);
-      setHrId("");
-      setInviteMessage("Нанимающий добавлен");
+      notification.success({ title: "Нанимающий добавлен", placement: "top", role: "status" });
+      return true;
     } catch (error) {
       if (!isCurrentGeneration(generation) || isAbortError(error)) return;
       if (statusOf(error) === 410) {
@@ -299,6 +300,7 @@ export function RoomInterviewPanel({
         setInviteError(messageOf(error, "Не удалось добавить нанимающего"));
       }
     }
+    return false;
   };
 
   const remove = async (manager: HrManager) => {
@@ -312,8 +314,16 @@ export function RoomInterviewPanel({
   return (
     <>
       {canManageRoom ? (
-        <Button type="button" size="xs" variant="light" onClick={open}>
-          Кандидат и нанимающие
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className={styles.candidateAction}
+          aria-label={triggerAriaLabel}
+          leftSection={<IconUsers size={16} />}
+          onClick={open}
+        >
+          {triggerLabel}
         </Button>
       ) : null}
       <Text size="xs" c="yellow.4" aria-live="polite" className={styles.accessMessage}>
@@ -332,7 +342,7 @@ export function RoomInterviewPanel({
       >
         <Stack gap="lg">
           <Text size="sm" c="gray.5">
-            Эти сведения доступны только менеджерам комнаты и назначенным нанимающим.
+            {isTeamRoom ? "Сведения кандидата доступны всем участникам команды и приглашённым внешним нанимающим." : "Эти сведения доступны только менеджерам комнаты и назначенным нанимающим."}
           </Text>
           {loading ? (
             <Group justify="center" py="xl" aria-busy="true"><Loader size="sm" /><Text>Загружаем сведения…</Text></Group>
@@ -355,19 +365,19 @@ export function RoomInterviewPanel({
               <form onSubmit={save}>
                 <Stack gap="sm">
                   <Title order={4}>Сведения о кандидате</Title>
-                  <TextInput
+                  <TextInput placeholder="Введите имя кандидата"
                     label="Имя кандидата"
                     description={candidateName.length > 180 ? `Осталось ${200 - candidateName.length} символов` : undefined}
                     value={candidateName}
-                    onChange={(event) => setCandidateName(event.currentTarget.value)}
+                    onChange={(event: React.ChangeEvent<HTMLInputElement>) => setCandidateName(event.currentTarget.value)}
                     maxLength={200}
                     disabled={pending || archived || metadata === null}
                   />
-                  <TextInput
+                  <TextInput placeholder="Введите название должности"
                     label="Позиция"
                     description={position.length > 180 ? `Осталось ${200 - position.length} символов` : undefined}
                     value={position}
-                    onChange={(event) => setPosition(event.currentTarget.value)}
+                    onChange={(event: React.ChangeEvent<HTMLInputElement>) => setPosition(event.currentTarget.value)}
                     maxLength={200}
                     disabled={pending || archived || metadata === null}
                   />
@@ -376,22 +386,21 @@ export function RoomInterviewPanel({
                     label="Дата и время интервью (МСК)"
                     description="Время сохраняется и показывается в часовом поясе Москвы (МСК)."
                     value={scheduledAt}
-                    onChange={(event) => setScheduledAt(event.currentTarget.value)}
+                    onChange={(event: React.ChangeEvent<HTMLInputElement>) => setScheduledAt(event.currentTarget.value)}
                     disabled={pending || archived || metadata === null}
                   />
                   <Group align="center">
                     <Button type="submit" loading={updateState.isLoading} disabled={pending || archived || metadata === null || !metadataChanged}>
                       {updateState.isLoading ? "Сохраняем…" : "Сохранить сведения"}
                     </Button>
-                    <Text size="sm" c="teal.4" aria-live="polite">{saveMessage}</Text>
                   </Group>
                 </Stack>
               </form>
 
-              <Divider color="#272b34" />
+              <Divider color="var(--app-border)" />
               <Stack gap="sm">
                 <Title order={4}>Нанимающие</Title>
-                {removalError && !isTeamRoom ? <Alert color="red" role="alert">{removalError}</Alert> : null}
+                {removalError ? <Alert color="red" role="alert">{removalError}</Alert> : null}
                 {managers.length === 0 ? <Text size="sm" c="gray.5">Нанимающие пока не добавлены</Text> : null}
                 {managers.map((manager) => (
                   <div key={manager.userId} className={styles.managerRow}>
@@ -400,7 +409,7 @@ export function RoomInterviewPanel({
                       {manager.isOwner ? <Badge color="gray">Владелец</Badge> : null}
                     </Group>
                     <CopyHrId id={manager.userId} compact />
-                    {!manager.isOwner && !isTeamRoom ? (
+                    {!manager.isOwner ? (
                       <Button
                         type="button"
                         size="xs"
@@ -417,23 +426,8 @@ export function RoomInterviewPanel({
                     ) : null}
                   </div>
                 ))}
-                {!isTeamRoom ? <form onSubmit={invite}>
-                  <Stack gap="xs">
-                    <TextInput
-                      label="ID нанимающего"
-                      value={hrId}
-                      onChange={(event) => setHrId(event.currentTarget.value)}
-                      error={inviteError || undefined}
-                      disabled={pending || archived}
-                    />
-                    <Group>
-                      <Button type="submit" loading={addState.isLoading} disabled={pending || archived || !hrId.trim()}>
-                        {addState.isLoading ? "Добавляем…" : "Добавить нанимающего"}
-                      </Button>
-                      <Text size="sm" c="teal.4" aria-live="polite">{inviteMessage}</Text>
-                    </Group>
-                  </Stack>
-                </form> : null}
+                <HiringManagerPicker showSuccess={false} key={`${identityKey}:${authorityGeneration}`} teamId={teamId} selectedIds={managers.map(manager => manager.userId)} disabled={pending || archived} onSelect={person => invite(person.normalizedId)} />
+                {inviteError ? <Text role="alert" c="red.4" size="sm">{inviteError}</Text> : null}
               </Stack>
 
               <Group justify="flex-end" className={styles.footer}>

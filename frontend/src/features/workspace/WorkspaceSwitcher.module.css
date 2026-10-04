@@ -1,37 +1,35 @@
 .trigger {
   min-width: 44px;
-  min-height: 44px;
+  height: 36px;
+  box-shadow: none;
   max-width: 100%;
-  flex: 0 1 auto;
-  width: fit-content;
+  flex: 0 0 240px;
+  width: 240px;
   padding-inline: 12px;
   overflow: hidden;
-  border: 0;
-  border-radius: 12px;
-  color: #eaf3ff;
-  background: linear-gradient(135deg, #173867, #142947);
-  box-shadow: 0 5px 18px rgba(3, 11, 25, .24);
+  border-radius: 8px;
+  color: var(--app-text);
+  border-color: var(--app-border);
+  background: var(--app-surface);
 }
 
 .trigger:hover {
-  background: linear-gradient(135deg, #24518d, #1a365b);
+  color: var(--app-text) !important;
+  border-color: var(--app-border) !important;
+  background: var(--app-neutral-hover) !important;
 }
 
 .trigger:focus-visible,
-.choiceButton:focus-visible {
-  outline: 3px solid #8ab4ff;
+.choiceButton:focus-visible,
+.createButton:focus-visible {
+  outline: 2px solid var(--app-focus);
   outline-offset: 2px;
-}
-
-.trigger :global(.mantine-Button-inner) {
-  width: auto;
-  min-width: 0;
 }
 
 .triggerContent {
   display: flex;
   min-width: 0;
-  width: auto;
+  width: 100%;
   align-items: center;
   gap: 9px;
   overflow: hidden;
@@ -50,22 +48,28 @@
 .triggerIcon,
 .triggerChevron {
   flex: 0 0 auto;
-  color: #a8d3ff;
+  color: var(--app-muted);
 }
 
 .triggerLabel {
-  flex: 0 1 auto;
-  max-width: 190px;
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: left;
+}
+
+@media (pointer: coarse) {
+  .trigger {
+    height: 44px;
+  }
 }
 
 .triggerCue {
   font-size: 12px;
   font-weight: 700;
-  color: #b9d6ff;
+  color: var(--app-primary-text);
 }
 
 @media (max-width: 720px) {
@@ -74,30 +78,92 @@
   }
 }
 
+.dropdownSurface {
+  padding: 0 !important;
+  overflow: hidden;
+  border: 1px solid var(--app-border);
+  background: var(--app-surface) !important;
+}
+
+.workspaceMenu {
+  display: flex;
+  flex-direction: column;
+  width: min(320px, calc(100vw - 32px));
+  max-height: min(440px, calc(100dvh - 96px));
+  color: var(--app-text);
+}
+
+.workspaceList {
+  display: grid;
+  gap: 4px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px;
+  scrollbar-gutter: stable;
+}
+
 .choiceButton {
-  min-height: 52px;
+  display: flex;
+  width: 100%;
+  min-height: 40px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
   border: 0;
-  border-radius: 12px;
-  color: #e3e9f2;
-  background: #1d232c;
+  border-radius: 8px;
+  color: var(--app-text);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
   text-align: left;
 }
 
 .choiceButton:hover {
-  background: #25344a;
+  background: var(--app-neutral-hover);
 }
 
 .choiceSelected {
-  color: #fff;
-  background: #173b6a;
+  color: var(--app-selected-text);
+  background: var(--app-selected-bg);
 }
 
 .choiceSelected:hover {
-  color: #fff;
-  background: #103156;
+  color: var(--app-selected-text) !important;
+  background: var(--app-selected-hover) !important;
 }
 
 .createButton {
+  display: flex;
   min-height: 48px;
-  border-radius: 12px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--app-border);
+  color: var(--app-text);
+  background: var(--app-surface);
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.createButton:hover {
+  background: var(--app-neutral-hover);
+}
+
+.listFeedback {
+  padding: 8px;
+}
+
+.workspaceName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
 }

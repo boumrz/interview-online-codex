@@ -14,6 +14,7 @@ import com.interviewonline.service.LanguageNormalizer.normalize as normalizeLang
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.Instant
 
 @Service
 class UserTaskService(
@@ -78,26 +79,19 @@ class UserTaskService(
 
     @Transactional
     fun deleteTask(user: User, taskId: String) {
-        // Verify ownership before any further checks.
-        if (taskRepository.findByIdAndOwnerUserId(taskId, user.id!!) == null) {
-            throw ApiException(HttpStatus.NOT_FOUND, "Задача не найдена")
+        val task = taskRepository.findByIdAndOwnerUserId(taskId, user.id!!)
+            ?: throw ApiException(HttpStatus.NOT_FOUND, "Задача не найдена")
+        val usedItems = presetItemRepository.findByTaskTemplateIdWithPreset(taskId)
+        val removedItemIds = usedItems.map { it.id }.toSet()
+        usedItems.mapNotNull { it.preset }.distinctBy { it.id }.forEach { preset ->
+            preset.items.removeIf { it.id in removedItemIds }
+            preset.items.sortedBy { it.position }.forEachIndexed { index, item -> item.position = index }
+            preset.revision += 1
+            preset.updatedAt = Instant.now()
         }
-
-        // Block deletion when the task is referenced by one or more presets.
-        val usedInItems = presetItemRepository.findByTaskTemplateIdWithPreset(taskId)
-        if (usedInItems.isNotEmpty()) {
-            val presetWord = if (usedInItems.size == 1) "пресете" else "пресетах"
-            val presetNames = usedInItems
-                .mapNotNull { it.preset?.name }
-                .distinct()
-                .joinToString(", ") { "«$it»" }
-            throw ApiException(
-                HttpStatus.CONFLICT,
-                "Нельзя удалить задачу: она используется в $presetWord $presetNames. Сначала удалите её из пресета.",
-            )
-        }
-
-        taskRepository.deleteByIdAndOwnerUserId(taskId, user.id!!)
+        presetItemRepository.flush()
+        taskRepository.delete(task)
+        taskRepository.flush()
     }
 
     @Transactional

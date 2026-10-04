@@ -11,8 +11,9 @@
   </parent>
 
   <groupId>com.interviewonline</groupId>
-  <artifactId>interview-online-backend</artifactId>
+  <artifactId>interhub-backend</artifactId>
   <version>0.0.1-SNAPSHOT</version>
+  <name>InterHub Backend</name>
 
   <properties>
     <java.version>17</java.version>

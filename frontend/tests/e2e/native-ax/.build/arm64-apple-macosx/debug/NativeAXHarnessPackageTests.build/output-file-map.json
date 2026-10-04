@@ -1,0 +1,12 @@
+{
+  "": {
+    "swift-dependencies": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessPackageTests.build/master.swiftdeps"
+  },
+  "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessPackageTests.derived/runner.swift": {
+    "dependencies": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessPackageTests.build/runner.d",
+    "object": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessPackageTests.build/runner.swift.o",
+    "swiftmodule": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessPackageTests.build/runner~partial.swiftmodule",
+    "swift-dependencies": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessPackageTests.build/runner.swiftdeps",
+    "diagnostics": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex/frontend/tests/e2e/native-ax/.build/arm64-apple-macosx/debug/NativeAXHarnessPackageTests.build/runner.dia"
+  }
+}

@@ -24,6 +24,8 @@ data class RoomRealtimePayload(
      */
     val personalNotes: List<PersonalNoteEntryPayload> = emptyList(),
     val briefingMarkdown: String = "",
+    val roomEditorMode: String = "code",
+    val roomEditorModeRevision: Long = 0,
     val participants: List<ParticipantPayload>,
     val isOwner: Boolean = false,
     val role: String = "candidate",
@@ -56,6 +58,7 @@ data class RoomTaskPayload(
     val score: Int?,
     val sourceTaskTemplateId: String? = null,
     val mandatory: Boolean = false,
+    val id: String? = null,
 )
 
 /**
@@ -74,6 +77,7 @@ data class ManagerWorkspacePayload(
     val yjsSequence: Long = 0,
     /** True only for a rejected manager Yjs write that must be rebased and retried. */
     val recovery: Boolean = false,
+    val taskId: String? = null,
 )
 
 data class NoteMessagePayload(
@@ -105,6 +109,8 @@ data class PersonalNoteEntryPayload(
      */
     val blockStepIndex: Int? = null,
     val timestampEpochMs: Long,
+    /** Server proof of the fresh OWNER role when this entry was written. */
+    val writtenByHost: Boolean = false,
 )
 
 data class ParticipantPayload(

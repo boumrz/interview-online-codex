@@ -1,14 +1,11 @@
-@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700;800&display=swap");
+@import /* webpackIgnore: true */ url("/fonts/ibm-plex/fonts.css");
 
 :root {
-  color-scheme: dark;
-  --app-bg: #0f1115;
-  --app-surface: #11151c;
-  --app-surface-soft: #141921;
-  --app-border: #262b34;
-  --app-text: #f3f5f7;
-  --app-muted: #8b919b;
-  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  font-family: var(--font-base);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 * {
@@ -21,10 +18,31 @@ body,
   min-height: 100%;
 }
 
+html {
+  scrollbar-gutter: stable;
+}
+
 body {
   margin: 0;
   background: var(--app-bg);
   color: var(--app-text);
+  font-family: var(--font-base);
+  font-size: 15px;
+  line-height: 22px;
+}
+
+/* Passive feedback leaves the page usable; explicit notice actions stay clickable. */
+.ant-notification,
+.ant-notification .ant-notification-notice-wrapper,
+.ant-notification .ant-notification-notice {
+  pointer-events: none;
+}
+
+.ant-notification .ant-notification-notice-close,
+.ant-notification .ant-notification-notice-actions,
+.ant-notification .ant-notification-notice button,
+.ant-notification .ant-notification-notice a[href] {
+  pointer-events: auto;
 }
 
 h1,
@@ -36,12 +54,17 @@ p {
 
 a {
   text-decoration: none;
+  color: var(--app-primary-text);
+}
+
+a:hover {
+  color: var(--app-primary-text-hover);
 }
 
 code,
 pre,
 .monaco-editor {
-  font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+  font-family: var(--font-code);
 }
 
 button,
@@ -49,6 +72,74 @@ input,
 textarea,
 select {
   font: inherit;
+}
+
+/* Cursor affordances follow the action, including native calendar triggers. */
+:where(
+  button,
+  a[href],
+  summary,
+  select,
+  input[type="button"],
+  input[type="submit"],
+  input[type="reset"],
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="date"],
+  input[type="datetime-local"],
+  input[type="time"],
+  input[type="month"],
+  input[type="week"],
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"],
+  [role="menuitemradio"],
+  [role="menuitemcheckbox"],
+  [role="switch"],
+  [role="checkbox"],
+  [role="radio"]
+):not(:disabled):not([aria-disabled="true"]):not([role="separator"]) {
+  cursor: pointer;
+}
+
+input:not(:disabled)::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px var(--app-surface) inset;
+  -webkit-text-fill-color: var(--app-text);
+  caret-color: var(--app-text);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--app-focus);
+  outline-offset: 2px;
+}
+
+.ant-dropdown .ant-dropdown-menu .ant-dropdown-menu-item :is(a, button):focus-visible {
+  outline: 2px solid var(--app-focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /*
@@ -66,4 +157,472 @@ select {
   clip: rect(0, 0, 0, 0) !important;
   white-space: nowrap !important;
   border: 0 !important;
+}
+
+/* Ant Design controls share the product tokens instead of page-specific palettes. */
+.ant-typography,
+.ant-typography a {
+  color: inherit;
+  font-family: var(--font-base);
+}
+
+.ant-typography-secondary,
+.ant-form-item-extra {
+  color: var(--app-muted) !important;
+}
+
+.ant-typography h1,
+.ant-typography h2,
+.ant-typography h3,
+.ant-typography h4,
+.ant-typography h5 {
+  color: var(--app-text-heading);
+}
+
+.ant-btn {
+  font-weight: 500;
+  box-shadow: none;
+}
+
+.ant-btn.app-compat-button {
+  transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.ant-btn.app-compat-button[data-button-variant="light"] {
+  border-color: var(--app-border) !important;
+  color: var(--app-primary-text) !important;
+  background: var(--app-selected-bg) !important;
+}
+
+.ant-btn.app-compat-button[data-button-variant="subtle"],
+.ant-btn.app-compat-button[data-button-variant="transparent"] {
+  border-color: transparent !important;
+  color: var(--app-muted) !important;
+  background: transparent !important;
+}
+
+.ant-btn.app-compat-button[data-button-variant="outline"] {
+  border-color: var(--app-control-border) !important;
+  color: var(--app-primary-text) !important;
+  background: var(--app-surface) !important;
+}
+
+.ant-btn.app-compat-button[data-button-variant="outline"][data-button-color="gray"] {
+  color: var(--app-text) !important;
+}
+
+.ant-btn.app-compat-button[data-button-variant="filled"]:not(:disabled):not(.ant-btn-disabled):hover,
+.ant-btn.app-compat-button[data-button-variant="filled"]:not(:disabled):not(.ant-btn-disabled):focus-visible {
+  border-color: var(--app-primary-hover) !important;
+  color: var(--app-on-primary) !important;
+  background: var(--app-primary-hover) !important;
+}
+
+.ant-btn.app-compat-button[data-button-variant="light"]:not(:disabled):not(.ant-btn-disabled):hover,
+.ant-btn.app-compat-button[data-button-variant="light"]:not(:disabled):not(.ant-btn-disabled):focus-visible {
+  border-color: var(--app-primary) !important;
+  color: var(--app-primary-text-hover) !important;
+  background: var(--app-selected-hover) !important;
+}
+
+.ant-btn.app-compat-button[data-button-variant="outline"]:not(:disabled):not(.ant-btn-disabled):hover,
+.ant-btn.app-compat-button[data-button-variant="outline"]:not(:disabled):not(.ant-btn-disabled):focus-visible {
+  border-color: var(--app-primary) !important;
+  color: var(--app-primary-text-hover) !important;
+  background: var(--app-neutral-hover) !important;
+}
+
+.ant-btn.app-compat-button[data-button-variant="outline"][data-button-color="gray"]:not(:disabled):hover,
+.ant-btn.app-compat-button[data-button-variant="outline"][data-button-color="gray"]:not(:disabled):focus-visible {
+  color: var(--app-text) !important;
+}
+
+.ant-btn.app-compat-button[data-button-variant="subtle"]:not(:disabled):not(.ant-btn-disabled):hover,
+.ant-btn.app-compat-button[data-button-variant="subtle"]:not(:disabled):not(.ant-btn-disabled):focus-visible,
+.ant-btn.app-compat-button[data-button-variant="transparent"]:not(:disabled):not(.ant-btn-disabled):hover,
+.ant-btn.app-compat-button[data-button-variant="transparent"]:not(:disabled):not(.ant-btn-disabled):focus-visible {
+  border-color: transparent !important;
+  color: var(--app-text) !important;
+  background: var(--app-neutral-hover) !important;
+}
+
+.ant-btn.app-compat-button.ant-btn-dangerous[data-button-variant="filled"]:not(:disabled):hover,
+.ant-btn.app-compat-button.ant-btn-dangerous[data-button-variant="filled"]:not(:disabled):focus-visible {
+  border-color: var(--app-error-hover) !important;
+  color: var(--app-on-error) !important;
+  background: var(--app-error-hover) !important;
+}
+
+.ant-btn.app-compat-button[data-button-color="danger"][data-button-variant="light"],
+.ant-btn.app-compat-button[data-button-color="danger"][data-button-variant="subtle"],
+.ant-btn.app-compat-action-icon[data-button-color="danger"][data-button-variant="light"] {
+  border-color: transparent !important;
+  color: var(--app-error) !important;
+  background: var(--app-error-bg) !important;
+}
+
+.ant-btn.app-compat-button[data-button-color="green"][data-button-variant="light"],
+.ant-btn.app-compat-button[data-button-color="teal"][data-button-variant="light"],
+.ant-btn.app-compat-button[data-button-color="green"][data-button-variant="subtle"],
+.ant-btn.app-compat-button[data-button-color="teal"][data-button-variant="subtle"],
+.ant-btn.app-compat-action-icon[data-button-color="green"][data-button-variant="light"],
+.ant-btn.app-compat-action-icon[data-button-color="teal"][data-button-variant="light"] {
+  border-color: transparent !important;
+  color: var(--app-success) !important;
+  background: var(--app-success-bg) !important;
+}
+
+.ant-btn.app-compat-button[data-button-color="orange"][data-button-variant="light"],
+.ant-btn.app-compat-button[data-button-color="yellow"][data-button-variant="light"],
+.ant-btn.app-compat-button[data-button-color="orange"][data-button-variant="subtle"],
+.ant-btn.app-compat-button[data-button-color="yellow"][data-button-variant="subtle"],
+.ant-btn.app-compat-action-icon[data-button-color="orange"][data-button-variant="light"],
+.ant-btn.app-compat-action-icon[data-button-color="yellow"][data-button-variant="light"] {
+  border-color: transparent !important;
+  color: var(--app-warning) !important;
+  background: var(--app-warning-bg) !important;
+}
+
+.ant-btn.app-compat-button[data-button-color="gray"][data-button-variant="light"],
+.ant-btn.app-compat-action-icon[data-button-color="gray"][data-button-variant="light"] {
+  border-color: transparent !important;
+  color: var(--app-text) !important;
+  background: var(--app-surface-soft) !important;
+}
+
+.ant-btn.app-compat-button[data-button-color="danger"][data-button-variant="light"]:not(:disabled):hover,
+.ant-btn.app-compat-button[data-button-color="danger"][data-button-variant="light"]:not(:disabled):focus-visible,
+.ant-btn.app-compat-button[data-button-color="danger"][data-button-variant="subtle"]:not(:disabled):hover,
+.ant-btn.app-compat-button[data-button-color="danger"][data-button-variant="subtle"]:not(:disabled):focus-visible,
+.ant-btn.app-compat-action-icon[data-button-color="danger"][data-button-variant="light"]:not(:disabled):hover,
+.ant-btn.app-compat-action-icon[data-button-color="danger"][data-button-variant="light"]:not(:disabled):focus-visible {
+  border-color: var(--app-error-hover) !important;
+  color: var(--app-error) !important;
+  background: color-mix(in srgb, var(--app-error) 16%, var(--app-surface)) !important;
+}
+
+.ant-btn.app-compat-button[data-button-color="green"]:is([data-button-variant="light"], [data-button-variant="subtle"]):not(:disabled):hover,
+.ant-btn.app-compat-button[data-button-color="green"]:is([data-button-variant="light"], [data-button-variant="subtle"]):not(:disabled):focus-visible,
+.ant-btn.app-compat-button[data-button-color="teal"]:is([data-button-variant="light"], [data-button-variant="subtle"]):not(:disabled):hover,
+.ant-btn.app-compat-button[data-button-color="teal"]:is([data-button-variant="light"], [data-button-variant="subtle"]):not(:disabled):focus-visible,
+.ant-btn.app-compat-action-icon[data-button-color="green"][data-button-variant="light"]:not(:disabled):hover,
+.ant-btn.app-compat-action-icon[data-button-color="green"][data-button-variant="light"]:not(:disabled):focus-visible,
+.ant-btn.app-compat-action-icon[data-button-color="teal"][data-button-variant="light"]:not(:disabled):hover,
+.ant-btn.app-compat-action-icon[data-button-color="teal"][data-button-variant="light"]:not(:disabled):focus-visible {
+  border-color: var(--app-success) !important;
+  color: var(--app-success) !important;
+  background: color-mix(in srgb, var(--app-success) 18%, var(--app-surface)) !important;
+}
+
+.ant-btn.app-compat-button[data-button-color="orange"]:is([data-button-variant="light"], [data-button-variant="subtle"]):not(:disabled):hover,
+.ant-btn.app-compat-button[data-button-color="orange"]:is([data-button-variant="light"], [data-button-variant="subtle"]):not(:disabled):focus-visible,
+.ant-btn.app-compat-button[data-button-color="yellow"]:is([data-button-variant="light"], [data-button-variant="subtle"]):not(:disabled):hover,
+.ant-btn.app-compat-button[data-button-color="yellow"]:is([data-button-variant="light"], [data-button-variant="subtle"]):not(:disabled):focus-visible,
+.ant-btn.app-compat-action-icon[data-button-color="orange"][data-button-variant="light"]:not(:disabled):hover,
+.ant-btn.app-compat-action-icon[data-button-color="orange"][data-button-variant="light"]:not(:disabled):focus-visible,
+.ant-btn.app-compat-action-icon[data-button-color="yellow"][data-button-variant="light"]:not(:disabled):hover,
+.ant-btn.app-compat-action-icon[data-button-color="yellow"][data-button-variant="light"]:not(:disabled):focus-visible {
+  border-color: var(--app-warning-accent) !important;
+  color: var(--app-warning) !important;
+  background: color-mix(in srgb, var(--app-warning-accent) 18%, var(--app-surface)) !important;
+}
+
+.ant-btn.app-compat-button[data-button-color="gray"][data-button-variant="light"]:not(:disabled):hover,
+.ant-btn.app-compat-button[data-button-color="gray"][data-button-variant="light"]:not(:disabled):focus-visible,
+.ant-btn.app-compat-action-icon[data-button-color="gray"][data-button-variant="light"]:not(:disabled):hover,
+.ant-btn.app-compat-action-icon[data-button-color="gray"][data-button-variant="light"]:not(:disabled):focus-visible {
+  border-color: var(--app-control-border) !important;
+  color: var(--app-text) !important;
+  background: var(--app-neutral-hover) !important;
+}
+
+.ant-btn.app-compat-action-icon {
+  transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease;
+}
+
+/* Router links using the compatibility Button adapter don't get Ant's generated
+   component class, so give them the same stable button affordance explicitly. */
+.app-compat-button-link {
+  box-sizing: border-box;
+  border: 1px solid var(--app-border);
+  color: var(--app-text);
+  text-decoration: none;
+  transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.app-compat-button-link[data-button-variant="filled"] {
+  border-color: var(--app-primary);
+  color: var(--app-on-primary);
+  background: var(--app-primary);
+}
+
+.app-compat-button-link[data-button-variant="light"] {
+  border-color: var(--app-border);
+  color: var(--app-primary-text);
+  background: var(--app-selected-bg);
+}
+
+.app-compat-button-link[data-button-variant="outline"] {
+  border-color: var(--app-control-border);
+  color: var(--app-primary-text);
+  background: var(--app-surface);
+}
+
+.app-compat-button-link[data-button-variant="outline"][data-button-color="gray"] {
+  color: var(--app-text);
+}
+
+.app-compat-button-link[data-button-variant="subtle"],
+.app-compat-button-link[data-button-variant="transparent"] {
+  border-color: transparent;
+  color: var(--app-muted);
+  background: transparent;
+}
+
+.app-compat-button-link[data-button-variant="filled"]:hover,
+.app-compat-button-link[data-button-variant="filled"]:focus-visible {
+  border-color: var(--app-primary-hover);
+  color: var(--app-on-primary);
+  background: var(--app-primary-hover);
+}
+
+.app-compat-button-link[data-button-variant="light"]:hover,
+.app-compat-button-link[data-button-variant="light"]:focus-visible {
+  border-color: var(--app-primary);
+  color: var(--app-primary-text-hover);
+  background: var(--app-selected-hover);
+}
+
+.app-compat-button-link[data-button-variant="outline"]:hover,
+.app-compat-button-link[data-button-variant="outline"]:focus-visible {
+  border-color: var(--app-primary);
+  color: var(--app-primary-text-hover);
+  background: var(--app-neutral-hover);
+}
+
+.app-compat-button-link[data-button-variant="outline"][data-button-color="gray"]:hover,
+.app-compat-button-link[data-button-variant="outline"][data-button-color="gray"]:focus-visible {
+  color: var(--app-text);
+}
+
+.app-compat-button-link:focus-visible {
+  outline: 2px solid var(--app-focus);
+  outline-offset: 2px;
+}
+
+.app-compat-button-link[aria-disabled="true"] {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.ant-btn-primary:not(:disabled):hover {
+  color: var(--app-on-primary);
+}
+
+.interview-online.ant-btn.ant-btn-text[aria-label="Меню разделов"] {
+  border: 0 !important;
+  color: var(--app-muted) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.interview-online.ant-btn.ant-btn-text[aria-label="Меню разделов"]:not(:disabled):not(.ant-btn-disabled):hover {
+  border: 0 !important;
+  border-color: transparent !important;
+  color: var(--app-text) !important;
+  background: var(--app-neutral-hover) !important;
+  box-shadow: none !important;
+}
+
+.interview-online.ant-btn.ant-btn-text[aria-label="Меню разделов"]:focus-visible {
+  border: 0 !important;
+  border-color: transparent !important;
+  outline: 2px solid var(--app-focus) !important;
+  outline-offset: 2px;
+  box-shadow: none !important;
+}
+
+.app-compat-button-content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  line-height: 1.2;
+}
+
+.app-compat-button-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.app-compat-button-icon .anticon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+}
+
+.app-compat-button-label {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.ant-input,
+.ant-input-affix-wrapper,
+.ant-select-selector,
+.ant-select,
+.ant-picker {
+  border-radius: 8px !important;
+}
+
+.ant-select .ant-select-selector,
+.ant-select .ant-select-content,
+.ant-select .ant-select-content-item,
+.ant-select .ant-select-content-item-content,
+.ant-select .ant-select-input,
+.ant-select .ant-select-selection-item,
+.ant-select .ant-select-selection-placeholder,
+.ant-select .ant-select-selection-search-input,
+.ant-select-dropdown .ant-select-item-option-content {
+  text-align: left !important;
+}
+
+.ant-select .ant-select-selection-overflow {
+  justify-content: flex-start;
+}
+
+.ant-select-dropdown .ant-select-item-option {
+  border-radius: 8px;
+  justify-content: flex-start;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.ant-select-dropdown .ant-select-item-option:not(.ant-select-item-option-disabled):hover,
+.ant-select-dropdown .ant-select-item-option:not(.ant-select-item-option-disabled):focus-visible {
+  color: var(--app-text) !important;
+  background: var(--app-neutral-hover) !important;
+}
+
+.ant-select-dropdown .ant-select-item-option-active:not(.ant-select-item-option-disabled) {
+  color: var(--app-text) !important;
+  background: var(--app-neutral-active) !important;
+}
+
+.ant-select-dropdown .ant-select-item-option-selected:not(.ant-select-item-option-disabled) {
+  color: var(--app-selected-text) !important;
+  background: var(--app-selected-bg) !important;
+  font-weight: 600;
+}
+
+.ant-select-dropdown .ant-select-item-option-selected.ant-select-item-option-active:not(.ant-select-item-option-disabled) {
+  background: var(--app-selected-hover) !important;
+}
+
+.ant-card {
+  color: var(--app-text);
+  border-color: var(--app-border);
+  background: var(--app-surface);
+  box-shadow: none;
+}
+
+.ant-card .ant-card-body {
+  color: inherit;
+}
+
+.ant-tag {
+  align-self: center;
+  height: auto;
+  min-height: 22px;
+  line-height: 18px;
+  padding-block: 2px;
+}
+
+.ant-form-item {
+  min-width: 0;
+  margin: 0;
+}
+
+.ant-form-item.ant-form-item > .ant-form-item-label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--app-text);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.ant-form-item-extra,
+.ant-form-item-explain-error {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.ant-form-item-explain-error {
+  color: var(--app-error);
+}
+
+.app-switch-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--app-text);
+}
+
+.ant-divider {
+  width: 100%;
+  height: 1px;
+  margin: 16px 0;
+  border: 0;
+  background: var(--app-border);
+}
+
+/* Common authoring rhythm and a footer that stays in view. */
+.ant-modal-body form > .ant-flex { row-gap: 20px !important; }
+.ant-modal-body .ant-form-item.ant-form-item > .ant-form-item-label { white-space: normal; padding: 0; }
+.app-authoring-form { display: flex; flex-direction: column; min-height: 0; }
+.app-authoring-fields { display: flex; flex-direction: column; gap: 24px; max-height: min(64vh, calc(100dvh - 220px)); overflow-y: auto; overscroll-behavior: contain; padding: 2px 4px 4px; scrollbar-gutter: stable; }
+.app-authoring-section { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.app-authoring-section + .app-authoring-section { padding-top: 24px; border-top: 1px solid var(--app-border); }
+.app-authoring-section h4 { margin: 0; color: var(--app-text-heading); font-size: 16px; font-weight: 600; line-height: 24px; }
+.app-authoring-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.app-authoring-fields .ant-form-item { width: 100%; min-width: 0; }
+.app-form-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 12px; flex-shrink: 0; padding: 16px 0 0; margin-top: 20px; border-top: 1px solid var(--app-border); }
+.app-authoring-modal .ant-modal-header { margin-bottom: 20px; padding-right: 24px; }
+.app-authoring-modal .ant-modal-title { font-size: 19px; line-height: 28px; }
+#root .app-header-control { color: var(--header-control-color, var(--app-text)) !important; border-color: var(--header-control-border, var(--app-border)) !important; }
+#root .app-header-control:hover { color: var(--header-control-color, var(--app-text)) !important; background: var(--app-neutral-hover) !important; border-color: var(--header-control-border, var(--app-border)) !important; box-shadow: none !important; }
+#root .app-header-control:focus-visible { outline: 2px solid var(--app-focus); outline-offset: 2px; }
+@media (max-width: 599px) { .app-authoring-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* Task forms use the wider authoring canvas with compact metadata and actions. */
+.app-task-metadata-grid,
+.app-task-content-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  min-width: 0;
+}
+.app-task-authoring .app-authoring-fields > .ant-segmented { align-self: flex-start; max-width: 100%; }
+.app-task-content-grid textarea { font-size: 14px; line-height: 22px; }
+.app-task-content-grid > .ant-form-item:last-child textarea { font-family: var(--font-code); }
+.app-task-catalog-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 24px; border: 1px dashed var(--app-border); border-radius: 8px; }
+.app-task-catalog-empty .ant-typography { display: block; }
+@media (min-width: 900px) {
+  .app-task-metadata-grid { grid-template-columns: minmax(0, 2fr) minmax(200px, 1fr); align-items: start; }
+  .app-task-content-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Shared selector and action-menu options follow the same reading edge. */
+.ant-select-dropdown .ant-select-item-option-content,
+.ant-dropdown-menu .ant-dropdown-menu-item,
+.ant-dropdown-menu .ant-dropdown-menu-title-content {
+  text-align: left !important;
+  justify-content: flex-start !important;
 }

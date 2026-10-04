@@ -16,7 +16,6 @@ import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
-import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 
@@ -29,10 +28,9 @@ class PresetController(
     @GetMapping
     fun listPresets(
         @RequestHeader("Authorization", required = false) authorization: String?,
-        @RequestParam("status", required = false) status: String?,
     ): List<PresetSummaryDto> {
         val user = authService.requireUserByToken(authorization?.removePrefix("Bearer ")?.trim())
-        return userPresetService.listPresets(user, status)
+        return userPresetService.listPresets(user)
     }
 
     @GetMapping("/{id}")
@@ -72,24 +70,6 @@ class PresetController(
     ): PresetDetailDto {
         val user = authService.requireUserByToken(authorization?.removePrefix("Bearer ")?.trim())
         return userPresetService.copyPreset(user, id)
-    }
-
-    @PostMapping("/{id}/archive")
-    fun archivePreset(
-        @RequestHeader("Authorization", required = false) authorization: String?,
-        @PathVariable id: String,
-    ): PresetDetailDto {
-        val user = authService.requireUserByToken(authorization?.removePrefix("Bearer ")?.trim())
-        return userPresetService.archivePreset(user, id)
-    }
-
-    @PostMapping("/{id}/restore")
-    fun restorePreset(
-        @RequestHeader("Authorization", required = false) authorization: String?,
-        @PathVariable id: String,
-    ): PresetDetailDto {
-        val user = authService.requireUserByToken(authorization?.removePrefix("Bearer ")?.trim())
-        return userPresetService.restorePreset(user, id)
     }
 
     @DeleteMapping("/{id}")

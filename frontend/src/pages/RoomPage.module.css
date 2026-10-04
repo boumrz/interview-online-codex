@@ -5,8 +5,8 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #0f1115;
-  color: #f3f5f7;
+  background: var(--app-bg);
+  color: var(--app-text);
 }
 
 .shellCandidate {
@@ -22,24 +22,28 @@
   padding: 28px;
   display: grid;
   gap: 12px;
-  border: 1px solid rgba(87, 106, 133, 0.5);
-  border-radius: 16px;
-  background: #131922;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  color: var(--app-text);
+  background: var(--app-surface);
   text-align: center;
 }
 
 .realtimeAccessError {
-  border-color: rgba(245, 101, 101, 0.55);
+  border-color: var(--app-error);
 }
 
 .realtimeRoomUnavailable {
-  border-color: rgba(245, 158, 11, 0.5);
+  border-color: var(--app-warning-accent);
 }
 
 .topBar {
+  position: sticky;
+  z-index: 20;
+  top: 0;
   min-height: 54px;
-  border-bottom: 1px solid #252a32;
-  background: #101318;
+  border-bottom: 1px solid var(--app-border);
+  background: var(--app-surface);
   flex-shrink: 0;
 }
 
@@ -54,9 +58,10 @@
   align-items: center;
   gap: 10px;
   padding: 10px 12px 10px 14px;
-  border: 1px solid rgba(96, 165, 250, 0.44);
-  border-radius: 12px;
-  background: rgba(17, 30, 49, 0.98);
+  border: 1px solid var(--app-info-accent);
+  border-radius: 8px;
+  color: var(--app-info);
+  background: var(--app-info-bg);
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.38);
 }
 
@@ -101,7 +106,7 @@
 .brandTitle {
   font-size: 14px;
   font-weight: 700;
-  color: #f3f5f7;
+  color: var(--app-text-heading);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -129,44 +134,52 @@
 }
 
 .participantCard {
-  --participant-role-color: #d6dce6;
-  --participant-cursor-color: #6c9fff;
-  --participant-cursor-color-light: rgba(108, 159, 255, 0.22);
   min-width: 0;
-  max-width: 148px;
+  max-width: 220px;
   flex: 0 0 auto;
-  display: grid;
-  gap: 1px;
-  padding: 6px 10px 7px;
-  border-radius: 12px;
-  border: 1px solid #55606f;
-  background: linear-gradient(180deg, rgba(22, 28, 37, 0.96) 0%, rgba(16, 21, 29, 0.98) 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 0 0 1px var(--participant-cursor-color-light);
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--app-border);
+  color: var(--app-text);
+  background: var(--app-surface);
+  box-shadow: none;
 }
 
-.participantCard[data-presence="active"] {
-  border-color: rgba(95, 195, 160, 0.9);
+.participantCard[data-presence="active"]::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--app-success);
 }
 
 .participantCard[data-presence="away"] {
-  border-color: rgba(128, 136, 148, 0.72);
+  border-color: var(--app-tertiary);
 }
 
 .participantCardButton {
   text-align: left;
   cursor: pointer;
-  transition: transform 140ms ease, border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
+  transition: border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
 }
 
 .participantCardButton:hover {
-  transform: translateY(-1px);
-  background: linear-gradient(180deg, rgba(26, 34, 44, 0.98) 0%, rgba(18, 24, 33, 1) 100%);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+  transform: none;
+  color: var(--app-text) !important;
+  border-color: var(--app-border) !important;
+  background: var(--app-neutral-hover) !important;
+  box-shadow: none;
 }
 
 .participantCardButton:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(108, 159, 255, 0.28), 0 10px 24px rgba(0, 0, 0, 0.2);
+  outline: 2px solid var(--app-focus);
+  outline-offset: 2px;
+  box-shadow: none;
 }
 
 .participantName {
@@ -174,7 +187,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--participant-role-color);
+  color: var(--app-text);
   font-size: 10px;
   font-weight: 700;
   line-height: 1.1;
@@ -192,7 +205,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--participant-role-color);
+  color: var(--app-text);
   font-size: 10px;
   line-height: 1;
   font-weight: 700;
@@ -201,60 +214,45 @@
 .participantHrBadge {
   flex: 0 0 auto;
   padding: 2px 4px;
-  border-radius: 4px;
-  background: rgba(108, 159, 255, 0.16);
-  color: #c0d7ff;
+  border-radius: 8px;
+  background: var(--app-selected-bg);
+  color: var(--app-selected-text);
   font-size: 9px;
   font-weight: 700;
   line-height: 1;
 }
 
 /*
- * Caret hint that appears next to participant names whose role can be
- * toggled by the current viewer. Subtle (opacity 0.45) so it doesn't
- * compete with the name; brightens on card hover/focus to confirm
- * the affordance.
+ * A persistent caret shows that an actionable participant opens a menu.
+ * It stays visible without hover and flips only while that menu is open.
  */
 .participantMenuCaret {
   flex: 0 0 auto;
   margin-left: 1px;
-  color: var(--participant-role-color);
-  opacity: 0.45;
-  transition: opacity 140ms ease;
+  color: var(--app-text);
+  opacity: 0.8;
+  transition: transform 140ms ease;
 }
 
-.participantCardButton:hover .participantMenuCaret,
-.participantCardButton:focus-visible .participantMenuCaret {
-  opacity: 0.9;
+.participantCardButton[aria-expanded="true"] .participantMenuCaret {
+  transform: rotate(180deg);
 }
 
 /*
- * Inline "what is this?" affordance shown in the participants row when the
- * current user can promote someone. Behaves like a quiet info badge: muted
- * by default, picks up colour on hover/focus. Tooltip carries the full
- * instruction so the row stays compact.
+ * Participant actions help is available on hover and keyboard focus.
  */
 .participantsHelpHint {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  color: #b6c0cf;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  cursor: help;
-  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
-}
-
-.participantsHelpHint:hover,
-.participantsHelpHint:focus-visible {
-  outline: none;
-  color: #f3f5f7;
-  background: rgba(108, 159, 255, 0.18);
-  border-color: rgba(108, 159, 255, 0.45);
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  color: var(--app-muted);
+  background: transparent;
 }
 
 .topActions {
@@ -273,26 +271,26 @@
 }
 
 .topLanguageSelect {
-  width: 132px;
+  width: 176px;
   flex-shrink: 0;
 }
 
 .topLanguageInput {
-  background-color: #131922;
-  border-color: #2a3342;
-  color: #e3e9f3;
+  background-color: var(--app-surface);
+  border-color: var(--app-control-border);
+  color: var(--app-text);
   font-size: 12px;
   min-height: 30px;
   font-weight: 600;
 }
 
 .topLanguageDropdown {
-  background-color: #121823;
-  border-color: #2a3342;
+  background-color: var(--app-surface-elevated);
+  border-color: var(--app-border);
 }
 
 .topLanguageOption {
-  color: #d8dfeb;
+  color: var(--app-text);
 }
 
 .topActionButtons {
@@ -316,20 +314,20 @@
   border-radius: 50%;
   display: inline-block;
   flex-shrink: 0;
-  background: #3aa776;
-  box-shadow: 0 0 0 2px rgba(58, 167, 118, 0.18);
+  background: var(--app-success);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-success) 18%, transparent);
   transition: background-color 160ms ease, box-shadow 160ms ease;
 }
 
 .connectionDot[data-state="offline"] {
-  background: #d59a3c;
-  box-shadow: 0 0 0 2px rgba(213, 154, 60, 0.18);
+  background: var(--app-warning-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-warning-accent) 18%, transparent);
 }
 
 .invitesBar {
   flex-shrink: 0;
-  border-bottom: 1px solid #222b36;
-  background: #0f141c;
+  border-bottom: 1px solid var(--app-border);
+  background: var(--app-surface);
   padding: 6px 12px;
 }
 
@@ -369,6 +367,11 @@
   gap: 12px;
   overflow: auto;
   padding: 12px;
+  scroll-padding-block: 44px;
+}
+
+.contextSurfaceScroll :is(textarea, input, button) {
+  scroll-margin-block: 44px;
 }
 
 .contextConditionIntro {
@@ -391,15 +394,9 @@
   flex: 1 1 auto;
 }
 
-.notesComposerInput:focus-visible {
-  outline: 2px solid #60a5fa !important;
-  outline-offset: 2px;
-}
-
 .contextSurfaceScroll button:focus-visible,
-.contextSurfaceScroll input:focus-visible,
-.contextSurfaceScroll textarea:focus-visible {
-  outline: 2px solid #60a5fa !important;
+.contextSurfaceScroll input:focus-visible {
+  outline: 2px solid var(--app-focus) !important;
   outline-offset: 2px;
 }
 
@@ -416,10 +413,10 @@
 .contextScoreInput {
   width: 100%;
   min-height: 44px;
-  border: 1px solid #334155;
+  border: 1px solid var(--app-control-border);
   border-radius: 8px;
-  background: #11161f;
-  color: #d6dce6;
+  background: var(--app-surface);
+  color: var(--app-text);
   padding: 0 12px;
   font: inherit;
   cursor: pointer;
@@ -434,29 +431,29 @@
   display: grid;
   gap: 3px;
   padding: 5px;
-  border: 1px solid #334155;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #111827;
-  box-shadow: 0 12px 30px rgba(2, 6, 23, 0.45);
+  background: var(--app-surface-elevated);
+  box-shadow: 0 8px 24px rgba(17, 20, 24, 0.16);
 }
 
 .contextScoreOptions button {
   min-height: 44px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 8px;
   background: transparent;
-  color: #d6dce6;
+  color: var(--app-text);
   font: inherit;
   cursor: pointer;
 }
 
 .contextScoreOptions button:hover,
 .contextScoreOptions button[aria-selected="true"] {
-  background: rgba(59, 130, 246, 0.18);
-  color: #dbeafe;
+  background: var(--app-selected-bg);
+  color: var(--app-selected-text);
 }
 
-@media (max-height: 650px) {
+@media (max-height: 650px), (max-width: 760px) and (max-height: 700px) {
   .contextSurfaceScroll {
     gap: 6px;
     padding: 6px;
@@ -473,8 +470,10 @@
 
   .contextSurfaceScroll .notesComposerInput,
   .contextSurfaceScroll .privateNotesComposerInput {
-    min-height: 44px;
-    height: 44px;
+    min-height: 44px !important;
+    height: 44px !important;
+    max-height: 44px !important;
+    overflow-y: auto !important;
     resize: none;
   }
 
@@ -483,8 +482,10 @@
   }
 
   .contextSurfaceScroll .notesComposerFooter {
-    margin-top: -6px;
-  }
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
 }
 
 @media (max-height: 439px) {
@@ -497,7 +498,6 @@
     padding-top: 2px;
   }
 
-  .contextNotesIntro,
   .contextSurfaceScroll .privateNotesList {
     position: absolute;
     width: 1px;
@@ -514,8 +514,8 @@
 .leftRail {
   width: 56px;
   flex-shrink: 0;
-  border-right: 1px solid #252a32;
-  background: #0e131a;
+  border-right: 1px solid var(--app-border);
+  background: var(--app-surface-soft);
   padding: 10px 6px;
   display: flex;
   flex-direction: column;
@@ -530,9 +530,9 @@
  */
 .railButton {
   border: 1px solid transparent;
-  border-radius: 9px;
-  background: #151b25;
-  color: #97a3b6;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--app-muted);
   width: 100%;
   min-height: 52px;
   display: inline-flex;
@@ -546,21 +546,21 @@
 }
 
 .railButton:hover {
-  background: #1a2535;
-  color: #dbe5f4;
+  background: var(--app-neutral-hover);
+  color: var(--app-text);
   transform: translateY(-1px);
 }
 
 .railButton:focus-visible {
   outline: none;
-  border-color: #5a7cae;
-  box-shadow: 0 0 0 2px rgba(90, 124, 174, 0.25);
+  border-color: var(--app-focus);
+  box-shadow: 0 0 0 2px var(--app-focus-ring);
 }
 
 .railButtonActive {
-  background: #20304a;
-  border-color: #34527b;
-  color: #f2f6ff;
+  background: var(--app-selected-bg);
+  border-color: var(--app-selected-bg);
+  color: var(--app-selected-text);
 }
 
 .railButtonLabel {
@@ -591,9 +591,9 @@
   height: 56px;
   border: none;
   border-radius: 999px;
-  background: rgba(21, 27, 36, 0.86);
-  color: #aebbd0;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  background: var(--app-surface-elevated);
+  color: var(--app-muted);
+  box-shadow: 0 8px 20px rgba(17, 20, 24, 0.16), inset 0 0 0 1px var(--app-border);
   display: grid;
   place-items: center;
   cursor: pointer;
@@ -603,13 +603,13 @@
 
 .edgeToggle:hover {
   opacity: 1;
-  background: rgba(28, 36, 48, 0.95);
-  color: #e3ebf8;
+  background: var(--app-neutral-hover);
+  color: var(--app-text);
 }
 
 .edgeToggle:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(109, 154, 227, 0.35), 0 8px 20px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 0 0 2px var(--app-focus-ring), 0 8px 20px rgba(17, 20, 24, 0.16);
 }
 
 .leftEdgeToggle {
@@ -629,8 +629,8 @@
   height: 100%;
   min-width: 0;
   overflow: hidden; /* clip children; inner div handles scroll */
-  border-right: 1px solid #252a32;
-  background: #11151c;
+  border-right: 1px solid var(--app-border);
+  background: var(--app-surface);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -674,48 +674,49 @@
 .stepRow {
   width: 100%;
   min-width: 0;
+  min-height: 44px;
   display: flex;
-  align-items: stretch;
-  border: none;
+  align-items: center;
+  border: 0;
   border-radius: 8px;
-  background: #14202c;
-  color: #cdd5df;
+  background: var(--app-surface);
+  color: var(--app-text);
   font-size: 12px;
   font-weight: 500;
-  transition:
-    background 120ms ease,
-    color 120ms ease;
+  transition: background-color 120ms ease, color 120ms ease;
 }
 
 .stepRow:hover {
-  background: #1a283a;
+  background: var(--app-neutral-hover);
 }
 
 .stepRow[data-local-selected="true"] {
-  background: #232f43;
-  color: #f3f5f7;
+  background: var(--app-selected-bg);
+  color: var(--app-selected-text);
 }
 
 .stepRowMain {
   flex: 1 1 auto;
   min-width: 0;
+  min-height: 44px;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
-  padding: 6px 4px 6px 6px;
+  padding: 6px 8px;
   background: transparent;
-  border: none;
+  border: 0;
+  box-shadow: none;
   color: inherit;
   text-align: left;
   font: inherit;
   cursor: pointer;
-  border-radius: 8px 0 0 8px;
+  border-radius: 8px;
 }
 
 .stepRowMain:focus-visible {
   outline: none;
-  box-shadow: inset 0 0 0 2px rgba(90, 124, 174, 0.45);
+  box-shadow: inset 0 0 0 2px var(--app-focus);
 }
 
 /*
@@ -732,35 +733,33 @@
 
 .stepRowPublishAction {
   flex: 0 0 auto;
-  align-self: center;
-  min-height: 20px;
-  margin: 4px 2px 4px 0;
-  padding: 0 7px;
-  border: none;
-  border-radius: 999px;
-  background: rgba(76, 145, 235, 0.18);
-  color: #8fc7ff;
+  min-height: 32px;
+  margin: 0 8px 0 4px;
+  padding: 0 10px;
+  border: 1px solid var(--app-primary-border);
+  border-radius: 8px;
+  background: var(--app-selected-bg);
+  color: var(--app-primary-text);
   font: inherit;
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1;
+  font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
-  transition: background-color 120ms ease;
 }
 
 .stepRowPublishAction:hover {
-  background: rgba(76, 145, 235, 0.28);
+  background: var(--app-selected-hover);
+  color: var(--app-selected-text);
 }
 
 .stepRowPublishAction:focus-visible {
-  outline: 2px solid rgba(117, 184, 255, 0.9);
+  outline: 2px solid var(--app-focus);
   outline-offset: 1px;
 }
 
 .stepRowActionsTrigger {
-  opacity: 0.35;
-  transition: opacity 120ms ease, background-color 120ms ease;
+  opacity: 1;
+  color: var(--app-muted);
+  transition: color 120ms ease, background-color 120ms ease;
 }
 
 .stepRow:hover .stepRowActionsTrigger,
@@ -773,19 +772,18 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.05);
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--app-surface-soft);
   font-weight: 600;
-  font-size: 11px;
-  color: #b8c2cf;
-  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--app-muted);
 }
 
 .stepRow[data-local-selected="true"] .stepRowIndex {
-  background: rgba(255, 255, 255, 0.12);
-  color: #f3f5f7;
+  background: var(--app-primary);
+  color: var(--app-on-primary);
 }
 
 .stepRowTitle {
@@ -820,8 +818,8 @@
 }
 
 .stepRowRating {
-  background: #2a3a52;
-  color: #ecd6a4;
+  background: var(--app-warning-bg);
+  color: var(--app-warning);
 }
 
 /*
@@ -830,9 +828,9 @@
  * «N в кружочке»).
  */
 .stepRowNotes {
-  background: #1f2c3f;
-  color: #b3c4dc;
-  border: 1px solid #2a3a52;
+  background: var(--app-surface-soft);
+  color: var(--app-muted);
+  border: 1px solid var(--app-border);
   gap: 4px;
 }
 
@@ -847,8 +845,8 @@
   padding: 0 7px;
   border: none;
   border-radius: 999px;
-  background: rgba(38, 117, 94, 0.26);
-  color: #8be2c6;
+  background: var(--app-success-bg);
+  color: var(--app-success);
   font-size: 10px;
   font-weight: 700;
   white-space: nowrap;
@@ -860,8 +858,8 @@
   min-height: 20px;
   padding: 0 7px;
   border-radius: 999px;
-  background: rgba(60, 115, 190, 0.22);
-  color: #a9cbff;
+  background: var(--app-selected-bg);
+  color: var(--app-selected-text);
   font-size: 10px;
   font-weight: 700;
   white-space: nowrap;
@@ -871,9 +869,9 @@
   display: grid;
   gap: 6px;
   padding: 8px;
-  border: 1px solid #252a32;
-  border-radius: 10px;
-  background: #10151c;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface);
 }
 
 .taskRating {
@@ -882,39 +880,39 @@
 
 .taskRatingOption[data-combobox-selected],
 .taskRatingOption[data-checked] {
-  background: #1f2f45;
-  color: #f3f5f7;
+  background: var(--app-selected-bg);
+  color: var(--app-selected-text);
   font-weight: 700;
 }
 
 .taskRatingHint {
-  color: #6f7a88;
+  color: var(--app-muted);
   font-size: 10px;
 }
 
 .resizeHandle {
   width: 10px;
   flex-shrink: 0;
-  border-left: 1px solid #1f242d;
-  border-right: 1px solid #1f242d;
-  background: #0f141b;
+  border-left: 1px solid var(--app-border);
+  border-right: 1px solid var(--app-border);
+  background: var(--app-surface-soft);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #5f6772;
+  color: var(--app-muted);
   cursor: col-resize;
 }
 
 .resizeHandle:hover {
-  color: #8f99a6;
-  background: #121824;
+  color: var(--app-text);
+  background: var(--app-neutral-hover);
 }
 
 .resizeHandle:focus-visible {
   outline: none;
-  color: #9eb0ca;
-  background: #172135;
-  box-shadow: inset 0 0 0 1px rgba(108, 159, 255, 0.55);
+  color: var(--app-primary-text);
+  background: var(--app-selected-bg);
+  box-shadow: inset 0 0 0 1px var(--app-focus);
 }
 
 .workspace {
@@ -946,21 +944,30 @@
 }
 
 .editorPanel,
-.outputPanel,
+.outputPanel {
+  min-width: 0;
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  background: var(--app-surface);
+  overflow: hidden;
+}
+
 .candidatePanel {
   min-width: 0;
-  border: 1px solid #252a32;
-  border-radius: 12px;
-  background: #11151c;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  color: var(--app-text);
+  background: var(--app-surface);
   overflow: hidden;
 }
 
 .briefingPanel {
   flex: 0 1 auto;
   flex-shrink: 0;
-  border: 1px solid #252a32;
-  border-radius: 12px;
-  background: #11151c;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  color: var(--app-text);
+  background: var(--app-surface);
   padding: 10px;
   min-height: 140px;
   height: clamp(180px, 30dvh, 360px);
@@ -988,6 +995,8 @@
 .briefingPanel[data-mode="candidate"] {
   display: block;
   overflow: auto;
+  border-color: var(--app-border);
+  background: var(--app-surface);
 }
 
 /*
@@ -1037,7 +1046,7 @@
     inset: 0 !important;
     width: 100vw !important;
     height: 100dvh !important;
-    border-radius: 0;
+    border-radius: 8px;
     padding: 10px;
   }
 }
@@ -1058,9 +1067,9 @@
 }
 
 .briefingToolButtonActive {
-  background: #1d2c45 !important;
-  border-color: #3b6dba !important;
-  color: #cfe0ff !important;
+  background: var(--app-selected-bg) !important;
+  border-color: var(--app-primary) !important;
+  color: var(--app-selected-text) !important;
 }
 
 .briefingSplit {
@@ -1072,15 +1081,15 @@
   min-height: 0;
 }
 
-/* Корневой контейнер Mantine Textarea: тянем на 100% колонки. */
+/* CodeMirror surfaces follow the active product theme. */
 .briefingEditorRoot {
   min-width: 0;
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  border: 1px solid #273242;
+  border: 1px solid var(--app-border);
   border-radius: 10px;
-  background: #11161f;
+  background: var(--app-editor-bg);
 }
 
 .managerWorkspacePreview {
@@ -1100,7 +1109,7 @@
 .managerWorkspacePreviewTitle {
   min-width: 0;
   overflow: hidden;
-  color: #f3f5f7;
+  color: var(--app-text-heading);
   font-size: 14px;
   font-weight: 650;
   text-overflow: ellipsis;
@@ -1109,7 +1118,7 @@
 
 .managerWorkspacePreviewLanguage {
   flex: 0 0 auto;
-  color: #8d9caf;
+  color: var(--app-muted);
   font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
 }
@@ -1121,7 +1130,7 @@
   margin: 0;
   overflow: auto;
   border-radius: 12px;
-  background: #11151c;
+  background: var(--app-surface);
 }
 
 .managerWorkspacePreviewBriefing {
@@ -1130,7 +1139,8 @@
 
 .managerWorkspacePreviewCode {
   padding: 14px;
-  color: #dbe8fa;
+  color: var(--app-editor-text);
+  background: var(--app-editor-bg);
   font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 13px;
   line-height: 1.55;
@@ -1139,14 +1149,14 @@
 }
 
 .briefingEditorRoot:focus-within {
-  border-color: #4f70a6;
-  box-shadow: 0 0 0 2px rgba(79, 112, 166, 0.18);
+  border-color: var(--app-focus);
+  box-shadow: 0 0 0 2px var(--app-focus-ring);
 }
 
 .briefingEditorRoot :global(.cm-editor) {
   height: 100%;
-  background: #11161f;
-  color: #d6dce6;
+  background: var(--app-editor-bg);
+  color: var(--app-editor-text);
 }
 
 .briefingEditorRoot :global(.cm-focused) {
@@ -1162,7 +1172,7 @@
 .briefingEditorRoot :global(.cm-content) {
   min-height: 100%;
   padding: 10px 0;
-  caret-color: #f3f5f7;
+  caret-color: var(--app-editor-text);
 }
 
 .briefingEditorRoot :global(.cm-line) {
@@ -1170,9 +1180,9 @@
 }
 
 .briefingEditorRoot :global(.cm-gutters) {
-  background: #0d131c;
-  border-right: 1px solid #273242;
-  color: #67758a;
+  background: var(--app-editor-bg);
+  border-right: 1px solid var(--app-border);
+  color: var(--app-editor-muted);
 }
 
 .briefingEditorRoot :global(.cm-lineNumbers .cm-gutterElement) {
@@ -1181,24 +1191,24 @@
 }
 
 .briefingEditorRoot :global(.cm-activeLine) {
-  background: rgba(83, 124, 190, 0.1);
+  background: var(--app-editor-active-line);
 }
 
 .briefingEditorRoot :global(.cm-activeLineGutter) {
-  background: rgba(83, 124, 190, 0.16);
-  color: #dbe8ff;
+  background: var(--app-editor-active-line);
+  color: var(--app-editor-text);
 }
 
 .briefingEditorRoot :global(.cm-selectionBackground),
 .briefingEditorRoot :global(.cm-content ::selection) {
-  background: rgba(83, 124, 190, 0.35) !important;
+  background: var(--app-editor-selection) !important;
 }
 
 .briefingEditorRoot :global(.cm-placeholder) {
-  color: #6f7b8f;
+  color: var(--app-editor-muted);
 }
 
-/* Промежуточный wrapper Mantine Textarea — растягиваем в колонке. */
+/* Compact markdown formatting controls. */
 .briefingToolbar {
   display: flex;
   flex-wrap: wrap;
@@ -1207,10 +1217,10 @@
 }
 
 .briefingToolButton {
-  border: 1px solid #2c394b;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #141d2a;
-  color: #d4deeb;
+  background: var(--app-surface);
+  color: var(--app-text);
   font-size: 11px;
   font-weight: 600;
   line-height: 1;
@@ -1222,23 +1232,23 @@
 }
 
 .briefingToolButton:hover {
-  background: #1b2738;
-  border-color: #3a4d67;
-  color: #f3f5f7;
+  background: var(--app-neutral-hover);
+  border-color: var(--app-focus);
+  color: var(--app-text);
 }
 
 .briefingToolButton:focus-visible {
   outline: none;
-  border-color: #5a7cae;
-  box-shadow: 0 0 0 2px rgba(90, 124, 174, 0.25);
+  border-color: var(--app-focus);
+  box-shadow: 0 0 0 2px var(--app-focus-ring);
 }
 
 .briefingPreviewPane {
   height: 100%;
   min-height: 0;
-  border: 1px solid #273242;
-  border-radius: 10px;
-  background: #0f141c;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface-soft);
   padding: 10px;
   overflow: auto;
 }
@@ -1246,12 +1256,12 @@
 .briefingPanel[data-mode="candidate"] .briefingPreviewPane {
   border: none;
   background: transparent;
-  border-radius: 0;
+  border-radius: 8px;
   padding: 0;
 }
 
 .briefingMarkdown {
-  color: #d4deeb;
+  color: var(--app-text);
   font-size: 13px;
   line-height: 1.52;
 }
@@ -1263,13 +1273,13 @@
 .briefingMarkdown h5,
 .briefingMarkdown h6 {
   margin: 0 0 9px;
-  color: #f3f5f7;
+  color: var(--app-text-heading);
   line-height: 1.22;
 }
 
 .briefingMarkdown h1 {
   font-size: 20px;
-  border-bottom: 1px solid #283445;
+  border-bottom: 1px solid var(--app-border);
   padding-bottom: 7px;
 }
 
@@ -1308,7 +1318,7 @@
 }
 
 .briefingMarkdown a {
-  color: #8ab4ff;
+  color: var(--app-primary-text);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -1316,10 +1326,10 @@
 .briefingMarkdown blockquote {
   margin: 0 0 10px;
   padding: 8px 12px;
-  border-left: 3px solid #4f6f9e;
-  background: rgba(45, 67, 99, 0.22);
-  color: #bec9d8;
-  border-radius: 0 8px 8px 0;
+  border-left: 3px solid var(--app-border);
+  background: var(--app-surface-soft);
+  color: var(--app-muted);
+  border-radius: 8px 8px 8px 8px;
 }
 
 .briefingMarkdown blockquote > :last-child {
@@ -1328,14 +1338,15 @@
 
 .briefingMarkdown hr {
   border: 0;
-  border-top: 1px solid #2d3b4f;
+  border-top: 1px solid var(--app-border);
   margin: 14px 0;
 }
 
 .briefingMarkdown code {
   font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  background: rgba(46, 66, 93, 0.55);
-  border-radius: 6px;
+  background: var(--app-editor-bg);
+  color: var(--app-editor-text);
+  border-radius: 8px;
   padding: 1px 4px;
 }
 
@@ -1344,8 +1355,8 @@
   padding: 0;
   border-radius: 8px;
   overflow: auto;
-  background: #0b1017;
-  border: 1px solid #273242;
+  background: var(--app-editor-bg);
+  border: 1px solid var(--app-border);
 }
 
 .briefingMarkdown pre code {
@@ -1353,8 +1364,8 @@
   min-width: 100%;
   padding: 11px 12px;
   background: transparent;
-  border-radius: 0;
-  color: #d6deeb;
+  border-radius: 8px;
+  color: var(--app-editor-text);
   line-height: 1.5;
   white-space: pre;
 }
@@ -1367,23 +1378,23 @@
 
 .briefingMarkdown th,
 .briefingMarkdown td {
-  border: 1px solid #2d3b4f;
+  border: 1px solid var(--app-border);
   padding: 6px 8px;
   vertical-align: top;
 }
 
 .briefingMarkdown th {
-  background: #121b28;
-  color: #f3f5f7;
+  background: var(--app-surface-soft);
+  color: var(--app-text-heading);
   font-weight: 600;
 }
 
 .briefingMarkdown tbody tr:nth-child(even) td {
-  background: rgba(24, 34, 49, 0.35);
+  background: var(--app-surface-soft);
 }
 
 .briefingEmpty {
-  color: #8d97a5;
+  color: var(--app-muted);
   font-size: 12px;
 }
 
@@ -1448,8 +1459,8 @@
   gap: 12px;
   min-height: 68px;
   padding: 9px 12px;
-  border-bottom: 1px solid rgba(37, 44, 55, 0.92);
-  background: linear-gradient(180deg, rgba(18, 24, 33, 0.92) 0%, rgba(14, 19, 25, 0.86) 100%);
+  border-bottom: 1px solid var(--app-border);
+  background: var(--app-surface-soft);
 }
 
 .ownerPresenceCopy {
@@ -1460,7 +1471,7 @@
 }
 
 .ownerPresenceLabel {
-  color: #87909d;
+  color: var(--app-muted);
   font-size: 9px;
   letter-spacing: 0.5px;
   text-transform: uppercase;
@@ -1470,7 +1481,7 @@
 
 .ownerPresenceDetail {
   min-height: calc(1.32em * 2);
-  color: rgba(217, 225, 235, 0.72);
+  color: var(--app-text);
   font-size: 11px;
   line-height: 1.32;
   display: -webkit-box;
@@ -1484,18 +1495,18 @@
 }
 
 .ownerPresenceBadge[data-state="offline"] {
-  background: rgba(112, 116, 124, 0.18);
-  color: #c7ced8;
+  background: var(--app-surface-soft);
+  color: var(--app-muted);
 }
 
 .ownerPresenceBadge[data-state="away"] {
-  background: rgba(125, 93, 33, 0.24);
-  color: #f5c26b;
+  background: var(--app-warning-bg);
+  color: var(--app-warning);
 }
 
 .ownerPresenceBadge[data-state="active"] {
-  background: rgba(41, 104, 84, 0.24);
-  color: #8fd6a8;
+  background: var(--app-success-bg);
+  color: var(--app-success);
 }
 
 /* Verdict / action strip — true flex footer of the Шаги sidebar.
@@ -1506,45 +1517,36 @@
   justify-content: space-between;
   gap: 8px;
   padding: 8px 12px;
-  border-top: 1px solid rgba(37, 44, 55, 0.92);
-  background: rgba(11, 16, 23, 0.8);
+  border-top: 1px solid var(--app-border);
+  background: var(--app-surface);
   flex-shrink: 0;
 }
 
 .verdictStrip[data-verdict="STRONG_HIRE"],
 .verdictStrip[data-verdict="HIRE"] {
-  background: rgba(22, 58, 44, 0.55);
-  border-top-color: rgba(46, 120, 92, 0.4);
+  background: var(--app-success-bg);
+  border-top-color: var(--app-success);
 }
 
 .verdictStrip[data-verdict="NO_HIRE"],
 .verdictStrip[data-verdict="STRONG_NO_HIRE"] {
-  background: rgba(58, 22, 22, 0.55);
-  border-top-color: rgba(120, 46, 46, 0.4);
-}
-
-/* Remove Mantine's built-in transition animation on radio button indicators */
-.verdictRadioGroup :global(.mantine-Radio-icon) {
-  animation: none;
-  transition: none;
-}
-.verdictRadioGroup :global(.mantine-Radio-radio) {
-  transition: none;
+  background: var(--app-error-bg);
+  border-top-color: var(--app-error);
 }
 
 .panelTabsList {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   padding: 8px;
-  border-bottom: 1px solid #273242;
-  background: #0f141c;
+  border-bottom: 1px solid var(--app-border);
+  background: var(--app-surface-soft);
   gap: 6px;
 }
 
 .panelTab {
   border: 1px solid transparent;
-  background: #121a26;
-  color: #9da7b4;
+  background: transparent;
+  color: var(--app-muted);
   border-radius: 8px;
   font-size: 12px;
   font-weight: 600;
@@ -1556,18 +1558,18 @@
 }
 
 .panelTab:hover {
-  background: #182436;
+  background: var(--app-neutral-hover);
 }
 
 .panelTab:focus-visible {
   outline: none;
-  border-color: #5a7cae;
+  border-color: var(--app-focus);
 }
 
 .panelTabActive {
-  color: #f3f5f7;
-  background: #1b283a;
-  border-color: #2e4b73;
+  color: var(--app-selected-text);
+  background: var(--app-selected-bg);
+  border-color: var(--app-selected-bg);
 }
 
 .panelTabPanel {
@@ -1585,7 +1587,7 @@
 }
 
 .panelSectionTitle {
-  color: #d8e0ea;
+  color: var(--app-text-heading);
   font-size: 11px;
   letter-spacing: 0.6px;
   text-transform: uppercase;
@@ -1598,8 +1600,8 @@
 
 .notesRatingOption[data-combobox-selected],
 .notesRatingOption[data-checked] {
-  background: #1f2f45;
-  color: #f3f5f7;
+  background: var(--app-selected-bg);
+  color: var(--app-selected-text);
   font-weight: 700;
 }
 
@@ -1617,7 +1619,7 @@
 }
 
 .notesHeaderHint {
-  color: #8d97a5;
+  color: var(--app-muted);
   font-size: 12px;
   line-height: 1.4;
 }
@@ -1634,7 +1636,7 @@
   padding-right: 4px;
   resize: none;
   scrollbar-width: thin;
-  scrollbar-color: #3a4658 transparent;
+  scrollbar-color: var(--app-border) transparent;
 }
 
 .notesMessagesList::-webkit-scrollbar {
@@ -1642,7 +1644,7 @@
 }
 
 .notesMessagesList::-webkit-scrollbar-thumb {
-  background: #3a4658;
+  background: var(--app-border);
   border-radius: 8px;
 }
 
@@ -1653,9 +1655,10 @@
   gap: 8px;
   padding: 10px 12px 11px;
   border-radius: 14px;
-  border: 1px solid #273242;
-  background: linear-gradient(180deg, #141b24 0%, #11161f 100%);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  border: 1px solid var(--app-border);
+  color: var(--app-text);
+  background: var(--app-surface-soft);
+  box-shadow: 0 2px 8px rgba(17, 20, 24, 0.08);
 }
 
 .noteBubble[data-pending="true"] {
@@ -1664,8 +1667,8 @@
 
 .noteBubbleOwn {
   align-self: flex-end;
-  border-color: rgba(92, 134, 214, 0.36);
-  background: linear-gradient(180deg, rgba(26, 39, 61, 0.96) 0%, rgba(18, 27, 41, 0.98) 100%);
+  border-color: var(--app-primary);
+  background: var(--app-selected-bg);
 }
 
 .noteBubbleHeader {
@@ -1684,14 +1687,14 @@
 }
 
 .noteBubbleAuthor {
-  color: #edf2f8;
+  color: var(--app-text-heading);
   font-size: 9px;
   font-weight: 500;
   line-height: 1.2;
 }
 
 .noteBubbleTime {
-  color: #8c97a8;
+  color: var(--app-muted);
   font-size: 9px;
   font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   line-height: 1.2;
@@ -1700,7 +1703,7 @@
 
 .noteBubbleText {
   margin: 0;
-  color: #d5deeb;
+  color: var(--app-text);
   font-size: 13px;
   line-height: 1.5;
   white-space: pre-wrap;
@@ -1711,14 +1714,14 @@
   display: grid;
   gap: 8px;
   padding-top: 10px;
-  border-top: 1px solid #273242;
+  border-top: 1px solid var(--app-border);
 }
 
 .notesComposerInput {
-  min-height: 88px;
-  background-color: #11161f;
-  border-color: #273242;
-  color: #d6dce6;
+  min-height: 112px;
+  background-color: var(--app-surface);
+  border-color: var(--app-control-border);
+  color: var(--app-text);
   font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   line-height: 1.45;
   font-size: 12px;
@@ -1730,7 +1733,8 @@
 }
 
 .notesComposerHint {
-  color: #8d97a5;
+  flex: 1 1 180px;
+  color: var(--app-muted);
   font-size: 11px;
 }
 
@@ -1741,31 +1745,31 @@
 .notesEmpty {
   margin: 0;
   min-height: 144px;
-  border: 1px dashed #303c4d;
-  border-radius: 12px;
+  border: 1px dashed var(--app-border);
+  border-radius: 8px;
   display: grid;
   place-content: center;
   text-align: center;
-  background: #111821;
+  background: var(--app-surface-soft);
   padding: 16px;
 }
 
 .notesEmptyTitle {
   margin: 0;
-  color: #c2cddd;
+  color: var(--app-text);
   font-size: 13px;
 }
 
 .notesEmptyText {
   margin: 4px 0 0;
-  color: #7f8ca1;
+  color: var(--app-muted);
   font-size: 12px;
 }
 
 .privateNotesSection {
   display: grid;
   gap: 10px;
-  border-top: 1px solid #273242;
+  border-top: 1px solid var(--app-border);
   padding-top: 12px;
 }
 
@@ -1784,18 +1788,18 @@
 
 .privateNotesHint {
   margin: 0;
-  color: #8d97a5;
+  color: var(--app-muted);
   font-size: 12px;
   line-height: 1.4;
 }
 
 .privateNotesHint code {
   font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  background: #182131;
-  border: 1px solid #2a3648;
-  border-radius: 5px;
+  background: var(--app-surface-soft);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
   padding: 1px 6px;
-  color: #d3e1f7;
+  color: var(--app-text);
 }
 
 .privateNotesActiveBlock {
@@ -1812,12 +1816,12 @@
  * текст эллипсисом, чтобы он не растягивал сайдбар по ширине и не
  * выходил за пределы карточки.
  */
-.privateNotesActiveBlock :global(.mantine-Badge-root) {
+.privateNotesActiveBlock :global(.ant-tag) {
   max-width: 100%;
   text-transform: none;
 }
 
-.privateNotesActiveBlock :global(.mantine-Badge-label) {
+.privateNotesActiveBlock :global(.ant-tag span) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1848,7 +1852,7 @@
   overflow-y: auto;
   padding-right: 4px;
   scrollbar-width: thin;
-  scrollbar-color: #3a4658 transparent;
+  scrollbar-color: var(--app-border) transparent;
 }
 
 .privateNotesList::-webkit-scrollbar {
@@ -1856,18 +1860,18 @@
 }
 
 .privateNotesList::-webkit-scrollbar-thumb {
-  background: #3a4658;
+  background: var(--app-border);
   border-radius: 8px;
 }
 
 .privateNotesEmpty {
   margin: 0;
-  border: 1px dashed #303c4d;
-  border-radius: 12px;
+  border: 1px dashed var(--app-border);
+  border-radius: 8px;
   display: grid;
   place-content: center;
   text-align: center;
-  background: #111821;
+  background: var(--app-surface-soft);
   padding: 12px;
   min-height: 88px;
 }
@@ -1875,9 +1879,9 @@
 .privateNoteEntry {
   display: grid;
   gap: 6px;
-  border: 1px solid #273242;
-  border-radius: 10px;
-  background: #111821;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface);
   padding: 9px 10px;
 }
 
@@ -1893,14 +1897,14 @@
 }
 
 .privateNoteEntryTime {
-  color: #8c97a8;
+  color: var(--app-muted);
   font-size: 10px;
   font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 .privateNoteEntryText {
   margin: 0;
-  color: #d5deeb;
+  color: var(--app-text);
   font-size: 12px;
   line-height: 1.45;
   white-space: pre-wrap;
@@ -1918,9 +1922,9 @@
   min-height: unset;
   overflow-y: auto;
   resize: none;
-  background-color: #101721;
-  border-color: #2a3648;
-  color: #d6dce6;
+  background-color: var(--app-surface);
+  border-color: var(--app-control-border);
+  color: var(--app-text);
   font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   line-height: 1.4;
   font-size: 12px;
@@ -1931,27 +1935,32 @@
   gap: 6px;
   min-width: min(300px, 100%);
   width: 100%;
-  border: 1px solid #2d3e56;
-  background: #121a26;
-  border-radius: 10px;
+  border: 1px solid var(--app-border);
+  background: var(--app-surface-elevated);
+  border-radius: 8px;
   padding: 8px;
 }
 
-.privateNotesCommandItem {
+.privateNotesCommandItem:global(.ant-btn) {
   display: grid;
+  height: auto;
+  min-height: 52px;
+  justify-items: start;
+  justify-content: stretch;
   gap: 3px;
   width: 100%;
   text-align: left;
-  border: 1px solid #2a374a;
-  background: #162233;
-  color: #e5ecf7;
+  border: 1px solid var(--app-border);
+  background: var(--app-surface);
+  color: var(--app-text);
   border-radius: 8px;
   padding: 8px;
   cursor: pointer;
+  white-space: normal;
 }
 
 .privateNotesCommandItem:hover {
-  border-color: #3a5376;
+  border-color: var(--app-focus);
 }
 
 .privateNotesCommandLabel {
@@ -1963,8 +1972,9 @@
 }
 
 .privateNotesCommandHint {
-  color: #92a0b6;
+  color: var(--app-muted);
   font-size: 11px;
+  line-height: 1.4;
 }
 
 /*
@@ -1974,7 +1984,7 @@
  */
 .privateNotesCommandHelper {
   margin: 0;
-  color: #b8c2cf;
+  color: var(--app-muted);
   font-size: 11.5px;
   line-height: 1.45;
   padding: 4px 2px 0;
@@ -1982,11 +1992,11 @@
 
 .privateNotesCommandHelper code {
   font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  background: #1f2a3a;
-  border: 1px solid #2c3b54;
-  border-radius: 4px;
+  background: var(--app-surface-soft);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
   padding: 1px 5px;
-  color: #e2eaf5;
+  color: var(--app-text);
 }
 
 /*
@@ -1994,16 +2004,18 @@
  * пользователь набирает после `/block ` имя, не совпадающее с шагами.
  * Визуально выделяется среди подсказок — это первичный CTA для нового блока.
  */
-.privateNotesCommandCreate {
+.privateNotesCommandCreate:global(.ant-btn) {
+  height: auto;
+  min-height: 40px;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   width: 100%;
   text-align: left;
-  border: 1px solid #4a73b3;
-  background: linear-gradient(180deg, #1d2b46 0%, #182441 100%);
-  color: #eaf1ff;
+  border: 1px solid var(--app-primary);
+  background: var(--app-selected-bg);
+  color: var(--app-selected-text);
   border-radius: 8px;
   padding: 8px 10px;
   cursor: pointer;
@@ -2011,8 +2023,8 @@
 }
 
 .privateNotesCommandCreate:hover {
-  background: linear-gradient(180deg, #243353 0%, #1c2a4f 100%);
-  border-color: #5d8be0;
+  background: var(--app-selected-hover);
+  border-color: var(--app-primary-hover);
 }
 
 .privateNotesCommandCreateLabel {
@@ -2020,14 +2032,14 @@
   font-weight: 700;
   letter-spacing: 0.4px;
   text-transform: uppercase;
-  color: #93b6f1;
+  color: var(--app-primary-text);
   white-space: nowrap;
 }
 
 .privateNotesCommandCreateName {
   font-size: 12px;
   font-weight: 600;
-  color: #f3f5f7;
+  color: var(--app-text-heading);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2043,7 +2055,7 @@
   display: grid;
   gap: 6px;
   padding-top: 4px;
-  border-top: 1px dashed #233045;
+  border-top: 1px dashed var(--app-border);
 }
 
 .privateNotesCommandSectionTitle {
@@ -2052,16 +2064,20 @@
   font-weight: 700;
   letter-spacing: 0.6px;
   text-transform: uppercase;
-  color: #7d8a9e;
+  color: var(--app-muted);
   padding: 2px 2px 0;
 }
 
-.privateNotesCommandExample {
+.privateNotesCommandExample:global(.ant-btn) {
+  height: auto;
+  min-height: 36px;
+  white-space: normal;
   width: 100%;
+  justify-content: flex-start;
   text-align: left;
-  border: 1px dashed #33465f;
-  background: #121b2a;
-  color: #bed0ea;
+  border: 1px dashed var(--app-border);
+  background: var(--app-surface-soft);
+  color: var(--app-text);
   border-radius: 8px;
   padding: 7px 8px;
   font-size: 11px;
@@ -2070,19 +2086,41 @@
 }
 
 .privateNotesCommandExample:hover {
-  border-color: #486893;
+  border-color: var(--app-focus);
+}
+
+.editorModeControl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.editorModeLabel {
+  color: var(--app-muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.notesComposerInput:focus,
+.notesComposerInput:focus-visible,
+.privateNotesComposerInput:focus,
+.privateNotesComposerInput:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: var(--app-focus) !important;
 }
 
 .privateNotesCommandUnknown {
   margin: 0;
-  color: #d6b896;
+  color: var(--app-warning);
   font-size: 11px;
 }
 
 .privateNotesCommandUnknown code {
   font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  background: #1f232b;
-  border-radius: 4px;
+  background: var(--app-surface-soft);
+  border-radius: 8px;
   padding: 1px 5px;
 }
 
@@ -2091,10 +2129,10 @@
   flex-direction: column;
   flex: 1 1 0;
   min-height: 0;
-  border: 1px solid #252c37;
-  border-radius: 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
   overflow: hidden;
-  background: linear-gradient(180deg, #11161d 0%, #0e1319 100%);
+  background: var(--app-surface);
 }
 
 
@@ -2112,11 +2150,11 @@
 }
 
 .candidateMeta {
-  border: 1px solid #252a32;
-  border-radius: 10px;
-  background: #11151c;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface);
   padding: 10px 12px 11px;
-  color: #c9d0db;
+  color: var(--app-text);
   font-size: 13px;
   display: grid;
   gap: 6px;
@@ -2128,10 +2166,10 @@
 }
 
 .mobileRoomTab {
-  border: 1px solid #2b3646;
-  border-radius: 12px;
-  background: linear-gradient(180deg, #151c26 0%, #111720 100%);
-  color: #d4deec;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface);
+  color: var(--app-text);
   min-height: 48px;
   height: 48px;
   width: 100%;
@@ -2143,12 +2181,13 @@
 }
 
 .mobileRoomTab:hover {
-  border-color: #3e546f;
+  border-color: var(--app-focus);
 }
 
 .mobileRoomTabActive {
-  border-color: #5a7faa;
-  background: linear-gradient(180deg, #1f2d40 0%, #152131 100%);
+  border-color: var(--app-primary);
+  background: var(--app-selected-bg);
+  color: var(--app-selected-text);
 }
 
 .mobileRoomTabLabel {
@@ -2175,7 +2214,7 @@
 }
 
 .error {
-  color: #ff8484;
+  color: var(--app-error);
   font-size: 12px;
   padding: 8px 4px;
 }
@@ -2196,15 +2235,15 @@
 }
 
 .remoteCursorCaretOwner {
-  border-left-color: #ffaa4d;
+  border-left-color: var(--app-warning-accent);
 }
 
 .remoteCursorCaretInterviewer {
-  border-left-color: #5fc3a0;
+  border-left-color: var(--app-success);
 }
 
 .remoteCursorCaretCandidate {
-  border-left-color: #6c9fff;
+  border-left-color: var(--app-primary);
 }
 
 @media (max-width: 1180px) {
@@ -2263,10 +2302,10 @@
   }
 
   .shell {
-    height: auto;
+    height: 100dvh;
     min-height: 100dvh;
     min-height: 100vh;
-    overflow: visible;
+    overflow: hidden;
   }
 
   .shellCandidate {
@@ -2389,7 +2428,7 @@
   }
 
   .topLanguageSelect {
-    width: 132px;
+    width: 176px;
     max-width: 45vw;
   }
 
@@ -2409,8 +2448,8 @@
   gap: 10px;
   min-height: 40px;
   padding: 6px 14px;
-  border-bottom: 1px solid #272b34;
-  background: #101318;
+  border-bottom: 1px solid var(--app-border);
+  background: var(--app-surface);
 }
 
 .interviewPanelActions {
@@ -2499,6 +2538,38 @@
   }
 }
 
+@media (max-width: 760px) and (min-height: 440px) and (max-height: 650px) {
+  .topBar,
+  .topInner {
+    height: auto;
+    overflow: visible;
+  }
+
+  .topInner {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .participantsHost {
+    width: 100%;
+  }
+
+  .topActions,
+  .topActionButtons {
+    flex-wrap: wrap;
+  }
+
+  .topLanguageControl {
+    flex: 1 1 176px;
+  }
+
+  .topActionButtons {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+
 @media (max-height: 439px) {
   .shell {
     position: relative;
@@ -2530,7 +2601,7 @@
   }
 
   .topActions {
-    display: none;
+    visibility: hidden;
   }
 
   .interviewPanelHost {
@@ -2558,4 +2629,87 @@
     min-width: 0;
     overflow: hidden;
   }
+}
+
+.stepRow[data-local-selected="true"]:hover {
+  background: var(--app-selected-hover);
+}
+.stepRowMain:hover { background: transparent; }
+
+.participantCard { min-height: 32px; max-height: 32px; box-sizing: border-box; font: inherit; }
+.participantCardButton:hover, .participantCardButton[aria-expanded="true"] { background: var(--app-selected-bg) !important; }
+.participantsHelpHint:hover, .participantsHelpHint:active { border: 0; background: var(--app-neutral-hover); box-shadow: none; }
+.participantsHelpHint:focus-visible { outline: 2px solid var(--app-focus); outline-offset: 2px; }
+
+.stepRowSelectGroup { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; }
+.stepRowSelectGroup .stepRowMain { flex: 0 1 auto; grid-template-columns: 28px minmax(0, 1fr); }
+.stepRowSelectGroup .stepRowMeta { margin-left: auto; padding-left: 8px; }
+.stepRenameButton { flex: 0 0 28px; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 32px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--app-muted); cursor: pointer; }
+.stepRenameButton:hover { background: var(--app-selected-hover); color: var(--app-selected-text); }
+.stepRenameButton:focus-visible { outline: 2px solid var(--app-focus); outline-offset: 1px; }
+
+.roomModeHelp { display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 6px; width: 28px; height: 28px; flex: 0 0 auto; background: transparent; color: var(--app-muted); cursor: help; }
+.roomModeHelp:hover { background: var(--app-neutral-hover); color: var(--app-text); }
+.editorModeControl { flex-wrap: wrap; }
+.stepRow { font-family: var(--app-font-family, inherit); font-size: 14px; gap: 8px; }
+.stepRowTitle, .stepRowPublishAction { font-size: inherit; }
+
+.modeEditor { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; min-height: 0; overflow: hidden; }
+.modeEditor[hidden] { display: none; }
+.roomModeHelp:focus-visible { outline: 2px solid var(--app-focus); outline-offset: 2px; }
+
+.roomModeTooltip { animation: none !important; transition: none !important; transform: none !important; }
+
+.roomModeSelect { width: 266px; max-width: 100%; }
+.roomModeSelectedLabel { display: inline-flex; align-items: baseline; gap: 6px; color: var(--app-text); }
+.roomModeSelectedValue { font-size: 13px; color: var(--app-muted); }
+
+.contextConditionContent {
+  display: flex;
+  flex: 1 0 180px;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  min-height: 180px;
+  padding: 12px;
+}
+
+.contextConditionContent .modeEditor { flex: 1 1 0; min-height: 120px; }
+
+.contextConditionTitle {
+  flex: 0 0 auto;
+  margin: 0;
+  color: var(--app-text);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contextConditionContent .briefingPanel:not([data-expanded="on"]) {
+  flex: 1 1 0;
+  min-height: 0;
+  height: auto;
+  max-height: none;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  resize: none;
+}
+
+.contextConditionContent .briefingToolbar {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  min-height: 32px;
+  padding: 2px;
+}
+
+.contextConditionContent .briefingToolButton { flex: 0 0 auto; }
+.contextConditionContent .briefingEditorRoot { min-height: 0; }
+
+@media (max-width: 760px) {
+  .contextConditionContent .briefingSplit { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

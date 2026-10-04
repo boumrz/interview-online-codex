@@ -12,6 +12,8 @@ import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.web.bind.annotation.ExceptionHandler
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
@@ -27,16 +29,31 @@ class HiringManagerPreviewController(
 ) {
     private val jsonUtf8 = MediaType("application", "json", StandardCharsets.UTF_8)
 
+    @GetMapping("/hiring-manager-options")
+    fun options(
+        @RequestHeader("Authorization", required = false) authorization: String?,
+        @RequestParam(required = false) teamId: String?,
+    ): ResponseEntity<Any> {
+        try {
+            val actor = authService.requireUserByToken(authorization?.removePrefix("Bearer ")?.trim())
+            return ResponseEntity.ok().headers(privacyHeaders()).body(hiringManagerPreviewService.options(actor, teamId))
+        } catch (ex: ApiException) {
+            throw ApiException(ex.status, ex.message, privacyHeaders())
+        } catch (_: DataAccessException) {
+            return genericError(HttpStatus.SERVICE_UNAVAILABLE, "Временная ошибка сервиса")
+        }
+    }
+
     @PostMapping("/hiring-manager-preview")
     fun preview(
         @RequestHeader("Authorization", required = false) authorization: String?,
         @RequestBody request: ResolveHiringManagerPreviewRequest,
     ): ResponseEntity<Any> {
         try {
-            authService.requireUserByToken(authorization?.removePrefix("Bearer ")?.trim())
+            val actor = authService.requireUserByToken(authorization?.removePrefix("Bearer ")?.trim())
             return ResponseEntity.ok()
                 .headers(privacyHeaders())
-                .body(hiringManagerPreviewService.resolve(request))
+                .body(hiringManagerPreviewService.resolve(request, actor))
         } catch (ex: ApiException) {
             throw ApiException(ex.status, ex.message, privacyHeaders())
         } catch (_: DataAccessException) {

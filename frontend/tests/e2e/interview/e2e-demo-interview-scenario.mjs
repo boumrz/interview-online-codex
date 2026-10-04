@@ -3,6 +3,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { chromium } from "playwright";
+import assert from "node:assert/strict";
 
 const webBaseUrl = process.env.E2E_BASE_URL || "http://localhost:5173";
 const apiBaseUrl = process.env.E2E_API_URL || "http://localhost:8080/api";
@@ -121,36 +122,24 @@ async function enterNameIfPrompted(page, name) {
   await promptTitle.waitFor({ state: "hidden", timeout: 5000 }).catch(() => {});
 }
 
+async function openSharedCodeEditor(page) {
+  const tabs = page.getByRole("tablist", { name: "Рабочие области комнаты", exact: true });
+  await tabs.waitFor({ state: "visible", timeout: 15000 });
+  assert.deepEqual(await tabs.getByRole("tab").allTextContents(), ["Шаги", "Мои заметки", "Чат", "Активность"]);
+  assert.equal(await tabs.getByRole("tab", { name: "Шаги", exact: true }).getAttribute("aria-selected"), "true");
+  const condition = page.getByRole("region", { name: "Условие", exact: true });
+  await condition.waitFor({ state: "visible", timeout: 10000 });
+  const returnToEditor = page.getByRole("button", { name: "Вернуться к редактору", exact: true });
+  if (await returnToEditor.isVisible()) await returnToEditor.click();
+  const editor = page.getByRole("region", { name: "Редактор", exact: true });
+  await editor.getByTestId("room-code-editor-host").locator(".cm-editor").waitFor({ state: "visible", timeout: 15000 });
+  assert.equal(await condition.isVisible(), true, "Condition stays visible when the shared code editor opens");
+}
+
 async function openTasksPanelIfNeeded(page) {
-  const privateInput = page.locator('[data-testid="room-private-notes-input"]');
-  if (await privateInput.isVisible().catch(() => false)) return;
-
-  const tasksRailButton = page.locator('[data-testid="room-rail-tasks"]');
-  if (await tasksRailButton.isVisible().catch(() => false)) {
-    await tasksRailButton.click();
-    await page.waitForTimeout(350);
-    if (await privateInput.isVisible().catch(() => false)) return;
-  }
-
-  const toolsRailButton = page.locator('[data-testid="room-rail-tools"]');
-  if (await toolsRailButton.isVisible().catch(() => false)) {
-    await toolsRailButton.click();
-    await page.waitForTimeout(250);
-    const notesTab = page.getByRole("tab", { name: /^(Заметки|Чат)$/ }).first();
-    if (await notesTab.isVisible().catch(() => false)) {
-      await notesTab.click();
-      await page.waitForTimeout(300);
-    }
-  }
-
-  const tabMatchers = [/^Tasks$/i, /^Team$/i, /^Editor$/i, /^Задачи$/i, /^Команда$/i];
-  for (const matcher of tabMatchers) {
-    const tab = page.getByRole("tab", { name: matcher }).first();
-    if (!(await tab.isVisible().catch(() => false))) continue;
-    await tab.click();
-    await page.waitForTimeout(320);
-    if (await privateInput.isVisible().catch(() => false)) return;
-  }
+  await page.getByRole("tab", { name: "Мои заметки", exact: true }).click();
+  await page.locator('[data-room-context-surface="notes"][data-room-context-visible="true"]').waitFor({ state: "visible", timeout: 10000 });
+  await page.getByTestId("room-private-notes-input").waitFor({ state: "visible", timeout: 10000 });
 }
 
 async function addPrivateNote(page, noteText) {
@@ -338,14 +327,14 @@ try {
   await interviewerPage.goto(`${webBaseUrl}/room/${room.inviteCode}`, {
     waitUntil: "domcontentloaded",
   });
-  await interviewerPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
+  await openSharedCodeEditor(interviewerPage);
   await interviewerPage.waitForTimeout(900);
 
   await candidatePage.goto(`${webBaseUrl}/room/${room.inviteCode}`, {
     waitUntil: "domcontentloaded",
   });
   await enterNameIfPrompted(candidatePage, "Candidate Demo");
-  await candidatePage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
+  await candidatePage.getByTestId("room-code-editor-host").locator(".cm-editor").waitFor({ state: "visible", timeout: 15000 });
   await candidatePage.waitForTimeout(900);
 
   await typeSharedCode(interviewerPage, candidatePage);

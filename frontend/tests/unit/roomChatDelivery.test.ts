@@ -40,6 +40,7 @@ test("a new intent owns one normalized body, UUID, timestamp, original sequence 
     originalClientEventSequence: 41,
     timestampEpochMs: 1_000,
     contextGeneration: 0,
+    submittedDraftRevision: 1,
     messageId: null,
     errorCode: null,
     retryAllowed: true,
@@ -161,6 +162,29 @@ test("ACK and SSE echo reconcile by server messageId without duplicating the opt
     assert.equal(state.messages.filter((message) => message.id === serverMessage.id).length, 1);
   }
 });
+
+for (const followingDraft of ["  Следующий черновик\n", "Первое сообщение"]) {
+  test(`ACK and repeated SSE preserve a subsequent draft: ${JSON.stringify(followingDraft)}`, async () => {
+    const { applyRoomChatAck, applyRoomChatSseMessage, beginRoomChatIntent,
+      createRoomChatDeliveryState, updateRoomChatDraft } = await loadDelivery();
+    const pending = beginRoomChatIntent(
+      updateRoomChatDraft(createRoomChatDeliveryState(context), "Первое сообщение"),
+      { clientEventSequence: 15, timestampEpochMs: 8_000,
+        createClientMessageId: () => "draft-preservation-intent" },
+    );
+    // The composer clears on submission; the user may then write even identical text.
+    const following = updateRoomChatDraft(updateRoomChatDraft(pending, ""), followingDraft);
+    const confirmed = applyRoomChatAck(following, ack("draft-preservation-intent"), 0);
+    assert.equal(confirmed.draft, followingDraft, "ACK must preserve the new draft exactly");
+    const echo = { id: "message-server-1", sessionId: "manager-session",
+      displayName: "Владелец", role: "owner" as const, text: "Первое сообщение", timestampEpochMs: 8_100 };
+    const echoed = applyRoomChatSseMessage(confirmed, echo, 0);
+    const repeated = applyRoomChatAck(applyRoomChatSseMessage(echoed, echo, 0), ack("draft-preservation-intent"), 0);
+    assert.equal(repeated.draft, followingDraft, "late confirmations must not erase another draft");
+    assert.equal(repeated.messages.length, 1);
+    assert.equal(repeated.status, "persisted");
+  });
+}
 
 test("409 stays a local error on the same intent and never invents a replacement UUID", async () => {
   const {

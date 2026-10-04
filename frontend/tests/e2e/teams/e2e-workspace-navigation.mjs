@@ -113,6 +113,17 @@ async function openAccount(auth, path, {
   waitForWorkspaceData = true,
 } = {}) {
   const context = await browser.newContext({ viewport, permissions });
+  if (permissions.includes("clipboard-read")) {
+    // Context-scoped clipboard prevents parallel browser suites from replacing
+    // this flow's exported data between the UI write and assertion read.
+    await context.addInitScript(() => {
+      let copied = "";
+      Object.defineProperty(navigator, "clipboard", { configurable: true, value: {
+        writeText: async (text) => { copied = text; },
+        readText: async () => copied,
+      } });
+    });
+  }
   await context.addInitScript(({ token, user }) => {
     localStorage.setItem("auth_token", token);
     localStorage.setItem("auth_user", JSON.stringify(user));
@@ -131,10 +142,29 @@ async function openAccount(auth, path, {
     : null;
   onPage?.(page);
   page.setDefaultTimeout(10000);
-  await page.goto(`${web}${path}`, { waitUntil: "domcontentloaded" });
+  if (path === "/workspace/personal/interviews/new") {
+    // A routed create form must have real browser history so Back remains
+    // available even while a mutation makes its modal close control busy.
+    await page.goto(`${web}/workspace/personal/interviews`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: "Создать интервью", exact: true }).click();
+    await page.waitForURL(`**${path}`);
+  } else {
+    await page.goto(`${web}${path}`, { waitUntil: "domcontentloaded" });
+  }
   await workspaceDataReady;
   await settleApp(page);
   return { context, page };
+}
+
+async function readCopiedLibraryData(page, predicate) {
+  // Read in the same browser world as the context-scoped clipboard fixture.
+  // The utility-world polling used by waitForFunction can read native data.
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    try { if (predicate(JSON.parse(copied))) return copied; } catch { /* wait for the UI write */ }
+    await page.waitForTimeout(20);
+  }
+  assert.fail("LIBRARY_UI_CLIPBOARD_WRITE_NOT_OBSERVED");
 }
 
 function pathnameAndSearch(page) {
@@ -147,6 +177,13 @@ function assertRoute(page, expected, marker) {
 }
 
 async function logoutAndLogin(page, auth, destination = "/workspace/personal/interviews") {
+  const openDialog = page.getByRole("dialog");
+  if (await openDialog.count()) {
+    const close = openDialog.getByRole("button", { name: "Закрыть", exact: true });
+    if (await close.count()) await close.first().click();
+    else await page.goBack();
+    await openDialog.waitFor({ state: "hidden" });
+  }
   await page.getByRole("button", { name: "Выйти", exact: true }).click();
   await page.waitForURL(`${web}/`);
   await page.getByRole("link", { name: "Личный кабинет", exact: true }).click();
@@ -284,7 +321,7 @@ test("infrastructure: current dashboard, API and authenticated room list are rea
   }
 });
 
-test("workspace preserves the established product palette", async (t) => {
+test("workspace follows the unified light palette and focus treatment", async (t) => {
   for (const viewport of [
     { width: 1366, height: 768 },
     { width: 768, height: 1024 },
@@ -293,13 +330,13 @@ test("workspace preserves the established product palette", async (t) => {
       const { context, page } = await openAccount(fixtures.unified, "/workspace/personal/library", { viewport });
       try {
         await page.waitForURL("**/workspace/personal/library");
-        const main = page.getByRole("main", { name: "Личное пространство: Библиотека", exact: true });
+        const main = page.getByRole("main", { name: "Личный раздел: Библиотека", exact: true });
         assert.equal(await main.count(), 1, "PALETTE_CANONICAL_LANDMARK_MISSING");
         assert.equal(await main.getByRole("heading", { name: "Библиотека", exact: true }).count(), 1, "PALETTE_CANONICAL_HEADING_MISSING");
 
         const shell = main.locator("..");
         const header = page.locator("header");
-        const brand = header.getByText("IO", { exact: true });
+        const brand = header.getByText("IH", { exact: true });
         const activeNav = header.getByRole("link", { name: "Библиотека", exact: true });
         const activeTab = main.getByRole("tab", { name: "Задачи", exact: true });
 
@@ -311,26 +348,26 @@ test("workspace preserves the established product palette", async (t) => {
             backgroundImage: style.backgroundImage,
           };
         }), {
-          color: "rgb(248, 250, 252)",
-          backgroundColor: "rgb(15, 17, 21)",
-          backgroundImage: "radial-gradient(900px 420px at 12% -18%, rgba(59, 130, 246, 0.16), rgba(0, 0, 0, 0) 60%), radial-gradient(780px 360px at 92% -20%, rgba(148, 163, 184, 0.12), rgba(0, 0, 0, 0) 62%)",
+          color: "rgb(29, 33, 41)",
+          backgroundColor: "rgb(243, 245, 251)",
+          backgroundImage: "none",
         }, "PALETTE_WORKSPACE_SURFACE_CHANGED");
 
         assert.deepEqual(await header.evaluate((element) => {
           const style = getComputedStyle(element);
           return { borderBottomColor: style.borderBottomColor, backgroundImage: style.backgroundImage };
         }), {
-          borderBottomColor: "rgb(39, 43, 52)",
-          backgroundImage: "linear-gradient(120deg, rgba(16, 19, 24, 0.98), rgba(15, 17, 21, 0.98))",
+          borderBottomColor: "rgb(224, 225, 232)",
+          backgroundImage: "none",
         }, "PALETTE_WORKSPACE_HEADER_CHANGED");
 
         assert.deepEqual(await brand.evaluate((element) => {
           const style = getComputedStyle(element);
           return { color: style.color, backgroundColor: style.backgroundColor, borderColor: style.borderColor };
         }), {
-          color: "rgb(138, 180, 255)",
-          backgroundColor: "rgb(11, 21, 41)",
-          borderColor: "rgb(39, 69, 111)",
+          color: "rgb(70, 12, 235)",
+          backgroundColor: "rgb(242, 241, 255)",
+          borderColor: "rgb(224, 225, 232)",
         }, "PALETTE_WORKSPACE_BRAND_CHANGED");
 
         if (await activeNav.count()) {
@@ -338,21 +375,37 @@ test("workspace preserves the established product palette", async (t) => {
             const style = getComputedStyle(element);
             return { color: style.color, backgroundColor: style.backgroundColor };
           }), {
-            color: "rgb(248, 250, 252)",
-            backgroundColor: "rgb(16, 33, 58)",
+            color: "rgb(70, 12, 235)",
+            backgroundColor: "rgb(242, 241, 255)",
           }, "PALETTE_WORKSPACE_ACTIVE_NAV_CHANGED");
         }
         assert.deepEqual(await activeTab.evaluate((element) => {
           const style = getComputedStyle(element);
           return { color: style.color, backgroundColor: style.backgroundColor };
         }), {
-          color: "rgb(248, 250, 252)",
-          backgroundColor: "rgb(29, 78, 216)",
+          color: "rgb(70, 12, 235)",
+          backgroundColor: "rgba(0, 0, 0, 0)",
         }, "PALETTE_WORKSPACE_ACTIVE_TAB_CHANGED");
+
+        const primaryAction = main.getByRole("button", { name: "Создать задачу", exact: true });
+        const assertPrimaryHover = async (theme) => {
+          const initial = await primaryAction.evaluate((element) => {
+            const style = getComputedStyle(element);
+            return { color: style.color, backgroundColor: style.backgroundColor };
+          });
+          await primaryAction.hover();
+          await page.waitForTimeout(180);
+          const hovered = await primaryAction.evaluate((element) => {
+            const style = getComputedStyle(element);
+            return { color: style.color, backgroundColor: style.backgroundColor };
+          });
+          assert.notDeepEqual(hovered, initial, `BUTTON_HOVER_MUST_BE_VISIBLE_IN_${theme.toUpperCase()}`);
+        };
+        await assertPrimaryHover("light");
 
         const focusTarget = await activeNav.count()
           ? activeNav
-          : header.getByRole("button", { name: "Меню разделов", exact: true });
+          : header.getByRole("button", { name: /^Меню разделов/ });
         let reachedActiveNav = false;
         for (let step = 0; step < 12; step += 1) {
           await page.keyboard.press("Tab");
@@ -366,9 +419,25 @@ test("workspace preserves the established product palette", async (t) => {
           const style = getComputedStyle(element);
           return { outlineColor: style.outlineColor, outlineStyle: style.outlineStyle };
         }), {
-          outlineColor: "rgb(138, 180, 255)",
+          outlineColor: "rgb(100, 46, 255)",
           outlineStyle: "solid",
         }, "PALETTE_WORKSPACE_FOCUS_CHANGED");
+
+        await page.evaluate(() => {
+          document.body.style.minHeight = "1800px";
+          window.scrollTo(0, 520);
+        });
+        await page.waitForTimeout(80);
+        const stickyHeader = await header.boundingBox();
+        assert.ok(stickyHeader && Math.abs(stickyHeader.y) <= 1, "WORKSPACE_HEADER_MUST_STAY_STICKY_WHILE_PAGE_SCROLLS");
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await page.getByRole("button", { name: "Тёмная тема", exact: true }).click();
+        await page.waitForFunction(() => document.documentElement.dataset.theme === "dark");
+        await assertPrimaryHover("dark");
+        await page.evaluate(() => window.scrollTo(0, 520));
+        await page.waitForTimeout(80);
+        const darkHeader = await header.boundingBox();
+        assert.ok(darkHeader && Math.abs(darkHeader.y) <= 1, "DARK_WORKSPACE_HEADER_MUST_STAY_STICKY_WHILE_PAGE_SCROLLS");
       } finally {
         await context.close();
       }
@@ -380,20 +449,19 @@ test("owner role badge uses established teal mapping", async () => {
   const { context, page } = await openAccount(fixtures.unified, "/workspace/personal/interviews");
   try {
     await page.waitForURL("**/workspace/personal/interviews");
-    const main = page.getByRole("main", { name: "Личное пространство: Интервью", exact: true });
+    const main = page.getByRole("main", { name: "Личный раздел: Интервью", exact: true });
     assert.equal(await main.count(), 1, "OWNER_BADGE_CANONICAL_LANDMARK_MISSING");
 
     const ownerRow = main.getByRole("row", { name: new RegExp(fixtures.ownedRoom.title) });
     assert.equal(await ownerRow.count(), 1, "OWNER_BADGE_ROW_NOT_UNIQUE");
     const ownerBadgeLabel = ownerRow.getByText("Владелец", { exact: true });
     assert.equal(await ownerBadgeLabel.count(), 1, "OWNER_ROLE_BADGE_NOT_UNIQUE");
-    const ownerBadge = ownerBadgeLabel.locator("..");
-    assert.deepEqual(await ownerBadge.evaluate((element) => {
+    assert.deepEqual(await ownerBadgeLabel.evaluate((element) => {
       const style = getComputedStyle(element);
       return { color: style.color, backgroundColor: style.backgroundColor };
     }), {
-      color: "rgb(99, 230, 190)",
-      backgroundColor: "rgba(18, 184, 134, 0.15)",
+      color: "rgb(6, 116, 58)",
+      backgroundColor: "rgb(238, 254, 240)",
     }, "OWNER_ROLE_BADGE_PALETTE_CHANGED");
   } finally {
     await context.close();
@@ -460,7 +528,110 @@ test("personal library keeps tasks and presets under Tasks and Sets tabs", async
   }
 });
 
-test("P1.4: personal task sets copy to clipboard, archive and restore from the library UI", { timeout: 45_000 }, async () => {
+test("personal interview actions and library rows keep stable alignment", { timeout: 45_000 }, async () => {
+  const actionColumnWidths = [];
+
+  for (const [auth, isOwner] of [[fixtures.rolesOwner, true], [fixtures.interviewer, false]]) {
+    const { context, page } = await openAccount(auth, "/workspace/personal/interviews");
+    try {
+      const row = page.getByRole("row", { name: new RegExp(fixtures.roleRoom.title) });
+      await row.waitFor();
+      const cells = row.locator("td");
+      const titleCell = cells.first();
+      const actionCell = cells.last();
+      const rename = titleCell.getByRole("button", { name: `Переименовать интервью ${fixtures.roleRoom.title}`, exact: true });
+
+      assert.equal(await rename.count(), isOwner ? 1 : 0, "RENAME_CONTROL_MUST_BE_NEXT_TO_TITLE");
+      assert.doesNotMatch(await actionCell.innerText(), /Переименовать/, "RENAME_TEXT_MUST_NOT_TAKE_ACTION_COLUMN_SPACE");
+      assert.equal(await actionCell.getByRole("button", { name: "Открыть интервью", exact: true }).count(), 1);
+
+      const alignment = await actionCell.evaluate((cell) => {
+        const rect = cell.getBoundingClientRect();
+        const style = getComputedStyle(cell);
+        const buttons = [...cell.querySelectorAll("button")];
+        const finalButton = buttons.at(-1);
+        const finalButtonRect = finalButton?.getBoundingClientRect();
+        return {
+          width: rect.width,
+          rightInset: finalButtonRect ? rect.right - Number.parseFloat(style.paddingRight) - finalButtonRect.right : null,
+        };
+      });
+      actionColumnWidths.push(alignment.width);
+      assert.ok(alignment.rightInset !== null && Math.abs(alignment.rightInset) <= 2, "ACTION_GROUP_MUST_ALIGN_TO_RIGHT_CONTENT_EDGE");
+    } finally {
+      await context.close();
+    }
+  }
+
+  assert.ok(Math.abs(actionColumnWidths[0] - actionColumnWidths[1]) <= 1, "ACTION_COLUMN_WIDTH_MUST_NOT_CHANGE_WITH_ROW_ROLE");
+
+  const { context, page } = await openAccount(fixtures.unified, "/workspace/personal/library");
+  try {
+    const taskCard = page.getByTestId("task-bank-panel").locator(".ant-card").filter({ hasText: fixtures.task.title }).first();
+    await taskCard.waitFor();
+    const cardBody = taskCard.locator(":scope > .ant-card-body");
+    const detailLayout = await cardBody.evaluate((body) => {
+      const details = body.firstElementChild?.firstElementChild;
+      if (!details) return null;
+      const style = getComputedStyle(details);
+      return { display: style.display, rowGap: style.rowGap };
+    });
+    assert.ok(detailLayout, "PERSONAL_LIBRARY_TASK_DETAILS_MISSING");
+    assert.equal(detailLayout.display, "grid", "PERSONAL_LIBRARY_TASK_TEXT_MUST_STACK_WITH_SPACING");
+    assert.ok(Number.parseFloat(detailLayout.rowGap) >= 8, "PERSONAL_LIBRARY_TASK_TEXT_GAP_MUST_BE_VISIBLE");
+    const taskTag = taskCard.locator(".ant-tag").first();
+    const tagStyle = await taskTag.evaluate((tag) => ({ alignSelf: getComputedStyle(tag).alignSelf, height: tag.getBoundingClientRect().height }));
+    assert.equal(tagStyle.alignSelf, "center", "PERSONAL_LIBRARY_BADGES_MUST_NOT_STRETCH_TO_ROW_HEIGHT");
+    assert.ok(tagStyle.height < 36, `PERSONAL_LIBRARY_BADGE_HEIGHT_MUST_REMAIN_COMPACT:${tagStyle.height}`);
+    const metrics = await cardBody.evaluate((body) => {
+      const padding = getComputedStyle(body);
+      const row = body.firstElementChild;
+      const details = row?.firstElementChild;
+      const actions = row?.lastElementChild;
+      if (!row || !details || !actions) return null;
+      const detailsRect = details.getBoundingClientRect();
+      const actionsRect = actions.getBoundingClientRect();
+      const bodyRect = body.getBoundingClientRect();
+      return {
+        paddingLeft: Number.parseFloat(padding.paddingLeft),
+        paddingRight: Number.parseFloat(padding.paddingRight),
+        verticalCenterDelta: Math.abs((detailsRect.top + detailsRect.bottom) / 2 - (actionsRect.top + actionsRect.bottom) / 2),
+        actionsRightInset: bodyRect.right - Number.parseFloat(padding.paddingRight) - actionsRect.right,
+      };
+    });
+    assert.ok(metrics, "PERSONAL_TASK_ROW_CONTENT_MISSING");
+    assert.ok(metrics.paddingLeft >= 16 && metrics.paddingRight >= 16, "PERSONAL_TASK_ROW_PADDING_MUST_REMAIN_VISIBLE");
+    assert.ok(metrics.verticalCenterDelta <= 2, "PERSONAL_TASK_ACTIONS_MUST_BE_VERTICALLY_CENTERED");
+    assert.ok(Math.abs(metrics.actionsRightInset) <= 2, "PERSONAL_TASK_ACTIONS_MUST_ALIGN_TO_RIGHT_EDGE");
+
+    await page.setViewportSize({ width: 375, height: 812 });
+    const narrowMetrics = await cardBody.evaluate((body) => {
+      const row = body.firstElementChild;
+      const actions = row?.lastElementChild;
+      if (!actions) return null;
+      const rect = actions.getBoundingClientRect();
+      const buttons = [...actions.querySelectorAll("button, .ant-tag")].map((item) => item.getBoundingClientRect());
+      const bodyRect = body.getBoundingClientRect();
+      const paddingRight = Number.parseFloat(getComputedStyle(body).paddingRight);
+      return {
+        actionWidth: rect.width,
+        contentRight: bodyRect.right - paddingRight,
+        actionsRight: rect.right,
+        itemRects: buttons.map((item) => ({ top: item.top, bottom: item.bottom })),
+      };
+    });
+    assert.ok(narrowMetrics && narrowMetrics.actionWidth > 0, "NARROW_PERSONAL_TASK_ACTIONS_MISSING");
+    assert.ok(narrowMetrics.actionsRight <= narrowMetrics.contentRight + 1, "NARROW_PERSONAL_TASK_ACTIONS_MUST_STAY_INSIDE_CARD");
+    assert.ok(
+      Math.min(...narrowMetrics.itemRects.map((item) => item.bottom)) > Math.max(...narrowMetrics.itemRects.map((item) => item.top)),
+      "NARROW_PERSONAL_TASK_ACTIONS_MUST_WRAP_AS_ONE_GROUP",
+    );
+  } finally {
+    await context.close();
+  }
+});
+
+test("P1.4: personal task sets copy to clipboard and delete from the library UI", { timeout: 45_000 }, async () => {
   const auth = await account({ displayName: "Владелец наборов задач" });
   const task = await createTask(auth, `Задача для набора ${unique()}`, "kotlin");
   const preset = await createPreset(auth, `Набор lifecycle ${unique()}`, task.id);
@@ -469,61 +640,28 @@ test("P1.4: personal task sets copy to clipboard, archive and restore from the l
     await page.getByRole("tab", { name: "Наборы задач", exact: true }).click();
     const presetCard = page.getByTestId(`preset-card-${preset.id}`);
     await presetCard.waitFor();
-    await presetCard.getByText("Активный", { exact: true }).waitFor();
-    await presetCard.getByText("v0", { exact: true }).waitFor();
+    assert.equal(await page.getByRole("tab", { name: "Архив", exact: true }).count(), 0);
 
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     await presetCard.getByRole("button", { name: "Копировать", exact: true }).click();
-    await page.waitForFunction(async (name) => (await navigator.clipboard.readText()).includes(name), preset.name);
-    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    const copied = await readCopiedLibraryData(page, (data) => data.kind === "task-set" && data.name === preset.name);
     assert.match(copied, new RegExp(preset.name));
     assert.match(copied, new RegExp(task.title));
     assert.equal(await page.getByText(`${preset.name} (копия)`, { exact: true }).count(), 0);
 
-    const archiveResponse = page.waitForResponse((response) =>
-      new URL(response.url()).pathname === `/api/me/presets/${preset.id}/archive` &&
-      response.request().method() === "POST" &&
-      response.status() === 200);
-    const activeRefreshAfterArchive = page.waitForResponse((response) =>
-      response.url().includes("/me/presets") &&
-      response.url().includes("status=active") &&
-      response.status() === 200);
-    await presetCard.getByRole("button", { name: "В архив", exact: true }).click();
-    await archiveResponse;
-    await activeRefreshAfterArchive;
+    const deleteResponse = page.waitForResponse((response) =>
+      new URL(response.url()).pathname === `/api/me/presets/${preset.id}` && response.request().method() === "DELETE" && response.status() === 200);
+    await presetCard.getByRole("button", { name: `Удалить набор ${preset.name}`, exact: true }).click();
+    await page.getByRole("dialog", { name: "Удалить набор?", exact: true }).getByRole("button", { name: "Удалить", exact: true }).click();
+    await deleteResponse;
     await presetCard.waitFor({ state: "detached" });
-
-    const archivedListResponse = page.waitForResponse((response) =>
-      response.url().includes("/me/presets") &&
-      response.url().includes("status=archived") &&
-      response.status() === 200);
-    await page.getByRole("tab", { name: "Архив", exact: true }).click();
-    await archivedListResponse;
-    const archivedCard = page.getByTestId(`preset-card-${preset.id}`);
-    await archivedCard.getByText("Архив", { exact: true }).waitFor();
-    await archivedCard.getByText("v1", { exact: true }).waitFor();
-    assert.equal(await archivedCard.getByRole("button", { name: "Копировать", exact: true }).count(), 0);
-
-    const restoreResponse = page.waitForResponse((response) =>
-      new URL(response.url()).pathname === `/api/me/presets/${preset.id}/restore` &&
-      response.request().method() === "POST" &&
-      response.status() === 200);
-    await archivedCard.getByRole("button", { name: "Восстановить", exact: true }).click();
-    await restoreResponse;
-
-    const activeListResponse = page.waitForResponse((response) =>
-      response.url().includes("/me/presets") &&
-      response.url().includes("status=active") &&
-      response.status() === 200);
-    await page.getByRole("tab", { name: "Активные", exact: true }).click();
-    await activeListResponse;
-    await page.getByTestId(`preset-card-${preset.id}`).getByText("v2", { exact: true }).waitFor();
   } finally {
     await context.close();
   }
 });
 
-test("library clipboard data transfers a task and set between accounts and into a team", { timeout: 90_000 }, async () => {
+test("library clipboard data transfers a task and set between accounts and into a team", { timeout: 90_000 }, async (t) => {
+  if (process.env.E2E_EXPECT_TEAM_WORKSPACES !== "true") return t.skip("team workspaces are disabled in this runtime");
   const sender = await account({ displayName: "Автор материалов" });
   const receiver = await account({ displayName: "Получатель материалов" });
   const title = `Передаваемая задача ${unique()}`;
@@ -537,17 +675,19 @@ test("library clipboard data transfers a task and set between accounts and into 
   try {
     await authorView.page.getByText(title, { exact: true }).waitFor();
     await authorView.page.getByRole("button", { name: "Копировать", exact: true }).click();
+    await authorView.page.locator(".ant-notification-notice").filter({ hasText: "Скопировано" }).waitFor({ state: "visible" });
+    assert.equal(
+      await authorView.page.getByRole("status").filter({ hasText: "готова к передаче" }).count(),
+      0,
+      "CLIPBOARD_SUCCESS_MUST_NOT_BE_INSERTED_INTO_LIBRARY_FLOW",
+    );
     taskData = await authorView.page.evaluate(() => navigator.clipboard.readText());
     assert.equal(JSON.parse(taskData).task.starterCode, "export function solve() { return 42; }");
     await authorView.page.getByRole("tab", { name: "Наборы задач", exact: true }).click();
     const card = authorView.page.getByTestId(`preset-card-${preset.id}`);
     await card.getByRole("button", { name: "Копировать", exact: true }).click();
-    await authorView.page.waitForFunction(async () => {
-      const data = await navigator.clipboard.readText();
-      return data.includes('"kind": "task-set"');
-    });
-    setData = await authorView.page.evaluate(() => navigator.clipboard.readText());
-    assert.equal(JSON.parse(setData).tasks[0].description, "Условие личной задачи для проверки совместимости библиотеки");
+    setData = await readCopiedLibraryData(authorView.page, (data) => data.kind === "task-set" && data.name === preset.name && Array.isArray(data.tasks));
+    assert.equal(JSON.parse(setData).tasks[0]?.description, "Условие личной задачи для проверки совместимости библиотеки");
   } finally {
     await authorView.context.close();
   }
@@ -592,15 +732,19 @@ test("library clipboard data transfers a task and set between accounts and into 
 test("workspace switcher stays compact and interview search remains wide", async () => {
   const { context, page } = await openAccount(fixtures.rolesOwner, "/workspace/personal/interviews");
   try {
-    const switcher = page.getByRole("button", { name: /^Рабочее пространство:/ });
-    const switcherBox = await switcher.boundingBox();
+    const switcher = page.getByRole("button", { name: /^Команды:/ });
     const searchBox = await page.getByLabel("Поиск интервью", { exact: true }).boundingBox();
-    assert.ok(switcherBox && switcherBox.width < 300, "WORKSPACE_SWITCHER_TOO_WIDE");
     assert.ok(searchBox && searchBox.width >= 450, "INTERVIEW_SEARCH_TOO_NARROW");
+    if (process.env.E2E_EXPECT_TEAM_WORKSPACES !== "true") {
+      assert.equal(await switcher.count(), 0, "WORKSPACE_NAV_FEATURE_OFF_FALSE_SWITCHER");
+      return;
+    }
+    const switcherBox = await switcher.boundingBox();
+    assert.ok(switcherBox && switcherBox.width < 300, "WORKSPACE_SWITCHER_TOO_WIDE");
     await switcher.click();
-    const dialog = page.getByRole("dialog", { name: "Выбор рабочего пространства", exact: true });
-    const activeColor = await dialog.getByRole("button", { name: "Личное пространство", exact: true }).evaluate((node) => getComputedStyle(node).backgroundColor);
-    const createColor = await dialog.getByRole("button", { name: "Создать команду", exact: true }).evaluate((node) => getComputedStyle(node).backgroundColor);
+    const dialog = page.getByRole("menu", { name: "Выбор команды", exact: true });
+    const activeColor = await dialog.getByRole("menuitemradio", { name: "Личное", exact: true }).evaluate((node) => getComputedStyle(node).backgroundColor);
+    const createColor = await dialog.getByRole("menuitem", { name: "Создать команду", exact: true }).evaluate((node) => getComputedStyle(node).backgroundColor);
     assert.notEqual(activeColor, createColor, "CREATE_TEAM_BLEND_WITH_ACTIVE_WORKSPACE");
   } finally {
     await context.close();
@@ -611,16 +755,18 @@ test("profile is a standalone account settings route", async () => {
   const { context, page } = await openAccount(fixtures.hr, "/profile");
   try {
     assertRoute(page, "/profile", "STANDALONE_PROFILE_ROUTE_MISSING");
+    await page.getByRole("heading", { name: "Профиль", exact: true }).waitFor();
     assert.equal(await page.getByRole("heading", { name: "Профиль", exact: true }).count(), 1);
-    assert.equal(await page.getByRole("checkbox", { name: "Я нанимающий", exact: true }).count(), 1);
-    assert.equal(await page.getByText(/Для личных интервью\. В команде вас назначают на конкретное интервью/).count(), 1);
+    assert.equal(await page.getByRole("switch", { name: "Я участвую в найме", exact: true }).count(), 1);
+    assert.equal(await page.getByText(/Кандидаты и Excel в команде доступны всем её участникам/).count(), 1);
     assert.equal(await page.getByRole("heading", { name: "Кандидаты", exact: true }).count(), 0);
   } finally {
     await context.close();
   }
 });
 
-test("profile link keeps the selected team workspace", async () => {
+test("profile link keeps the selected team workspace", async (t) => {
+  if (process.env.E2E_EXPECT_TEAM_WORKSPACES !== "true") return t.skip("team workspaces are disabled in this runtime");
   const auth = await account({ displayName: "Участник команды" });
   const team = await createTeamApi(auth, `Профиль команды ${unique()}`);
   const { context, page } = await openAccount(auth, `/workspace/teams/${team.id}/interviews`);
@@ -628,7 +774,7 @@ test("profile link keeps the selected team workspace", async () => {
     await page.getByRole("link", { name: `Открыть профиль @${auth.user.nickname}` }).click();
     await page.waitForURL(`**/workspace/teams/${team.id}/profile`);
     await page.getByRole("heading", { name: "Профиль", exact: true }).waitFor();
-    assert.match(await page.getByRole("button", { name: /^Рабочее пространство:/ }).innerText(), new RegExp(team.name));
+    assert.match(await page.getByRole("button", { name: /^Команды:/ }).innerText(), new RegExp(team.name));
     await page.reload();
     await page.getByRole("heading", { name: "Профиль", exact: true }).waitFor();
     assertRoute(page, `/workspace/teams/${team.id}/profile`, "PROFILE_TEAM_CONTEXT_LOST_ON_RELOAD");
@@ -642,8 +788,8 @@ test("enabling hiring role shows earlier personal interviews under Candidates", 
   const room = await createRoom(auth, `Личное интервью ${unique()}`);
   const { context, page } = await openAccount(auth, "/profile");
   try {
-    await page.getByRole("checkbox", { name: "Я нанимающий", exact: true }).check();
-    await page.getByRole("button", { name: "Сохранить профиль", exact: true }).click();
+    await page.getByRole("switch", { name: "Я участвую в найме", exact: true }).click();
+    await page.getByRole("switch", { name: "Я участвую в найме", exact: true }).waitFor();
     await page.getByRole("link", { name: "Кандидаты", exact: true }).click();
     await page.waitForURL("**/workspace/personal/candidates");
     await page.getByText(room.title, { exact: true }).waitFor();
@@ -663,12 +809,15 @@ test("failed personal interview creation keeps scope and draft and creates no ro
   });
   try {
     assertRoute(page, "/workspace/personal/interviews/new", "WORKSPACE_PERSONAL_CREATE_ROUTE_MISSING");
+    await page.getByRole("dialog", { name: "Создать интервью", exact: true }).waitFor();
+    await page.getByRole("heading", { name: "Интервью", exact: true }).waitFor();
     await page.getByLabel("Название интервью", { exact: true }).fill(title);
-    await page.getByRole("button", { name: "Создать интервью", exact: true }).click();
+    await page.getByRole("dialog", { name: "Создать интервью", exact: true })
+      .getByRole("button", { name: "Создать интервью", exact: true }).click();
     assert.equal(await page.getByRole("alert").filter({ hasText: /Не удалось|Повтор/ }).count(), 1);
     assert.equal(await page.getByLabel("Название интервью", { exact: true }).inputValue(), title);
     assert.equal(
-      await page.getByRole("main", { name: "Личное пространство: Создать интервью", exact: true }).count(),
+      await page.getByRole("main", { name: "Личный раздел: Создать интервью", exact: true }).count(),
       1,
       "CREATE_SCOPE_MAIN_LANDMARK_MISSING",
     );
@@ -679,7 +828,7 @@ test("failed personal interview creation keeps scope and draft and creates no ro
   }
 });
 
-test("successful personal interview creation sends one POST and returns the new row to the same list", async () => {
+test("successful personal interview creation sends one POST and opens the new room", async () => {
   const title = `Новое личное интервью ${unique()}`;
   const before = await rawRoomSnapshot(fixtures.creator.token);
   let roomPosts = 0;
@@ -691,14 +840,18 @@ test("successful personal interview creation sends one POST and returns the new 
   try {
     assertRoute(page, "/workspace/personal/interviews/new", "WORKSPACE_PERSONAL_CREATE_ROUTE_MISSING");
     await page.getByLabel("Название интервью", { exact: true }).fill(title);
-    await page.getByRole("button", { name: "Создать интервью", exact: true }).click();
-    await page.waitForURL("**/workspace/personal/interviews");
+    const createResponse = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname === "/api/rooms");
+    await page.getByRole("dialog", { name: "Создать интервью", exact: true })
+      .getByRole("button", { name: "Создать интервью", exact: true }).click();
+    const response = await createResponse;
+    assert.equal(response.status(), 200, `PERSONAL_CREATE_FAILED:${await response.text()}`);
+    const created = await response.json();
+    await page.waitForURL(`**/room/${created.inviteCode}`);
+    await page.waitForFunction(() => document.querySelector('[data-testid="room-connection-status"]')?.getAttribute("data-state") === "online");
     assert.equal(roomPosts, 1, "CREATE_MUST_SEND_EXACTLY_ONE_ROOM_POST");
     const after = await rawRoomSnapshot(fixtures.creator.token);
     assert.equal(after.rooms.length, before.rooms.length + 1, "CREATE_MUST_ADD_EXACTLY_ONE_ROOM");
     assert.equal(after.rooms.filter((room) => room.title === title).length, 1);
-    await page.getByText(title, { exact: true }).waitFor();
-    assert.equal(await page.getByText(title, { exact: true }).count(), 1);
   } finally {
     await context.close();
   }
@@ -794,9 +947,10 @@ const longCandidateName = "Александра-Екатерина Конста�
 
 async function assertCreationFormLayout(page, baseViewport, zoom) {
   assertRoute(page, "/workspace/personal/interviews/new", "WORKSPACE_PERSONAL_CREATE_ROUTE_MISSING");
+  await page.getByRole("heading", { name: "Создать интервью", exact: true }).waitFor();
   assert.equal(await page.getByRole("heading", { name: "Создать интервью", exact: true }).count(), 1);
   assert.equal(
-    await page.getByRole("main", { name: "Личное пространство: Создать интервью", exact: true }).count(),
+    await page.getByRole("main", { name: "Личный раздел: Создать интервью", exact: true }).count(),
     1,
     "CREATE_SCOPE_MAIN_LANDMARK_MISSING",
   );
@@ -806,9 +960,9 @@ async function assertCreationFormLayout(page, baseViewport, zoom) {
   const title = page.getByLabel("Название интервью", { exact: true });
   const candidate = page.getByLabel("Имя кандидата", { exact: true });
   const position = page.getByLabel("Позиция", { exact: true });
-  const submit = page.getByRole("button", { name: "Создать интервью", exact: true });
-  const openSubmit = page.getByRole("button", { name: "Создать и открыть комнату", exact: true });
-  for (const control of [title, candidate, position, submit, openSubmit]) {
+  const submit = page.getByRole("dialog", { name: "Создать интервью", exact: true })
+    .getByRole("button", { name: "Создать интервью", exact: true });
+  for (const control of [title, candidate, position, submit]) {
     assert.equal(await control.count(), 1, `CREATE_FORM_CONTROL_MISSING: ${await control.toString()}`);
   }
 
@@ -831,7 +985,7 @@ async function assertCreationFormLayout(page, baseViewport, zoom) {
   assert.equal(await title.inputValue(), longInterviewName, "RESIZE_OR_ZOOM_LOST_TITLE_DRAFT");
   assert.equal(await candidate.inputValue(), longCandidateName, "RESIZE_OR_ZOOM_LOST_CANDIDATE_DRAFT");
   assert.equal(
-    await page.getByRole("main", { name: "Личное пространство: Создать интервью", exact: true }).count(),
+    await page.getByRole("main", { name: "Личный раздел: Создать интервью", exact: true }).count(),
     1,
     "RESIZE_OR_ZOOM_CHANGED_SCOPE",
   );
@@ -911,14 +1065,14 @@ test("remediation: primary navigation keeps one row and exposes complete overflo
     viewport: { width: 768, height: 1024 },
   });
   try {
-    const nav = page.getByRole("navigation", { name: "Разделы личного пространства", exact: true });
+    const nav = page.getByRole("navigation", { name: "Разделы личного раздела", exact: true });
     await nav.waitFor();
     const constrained = await page.addStyleTag({
-      content: '[aria-label="Разделы личного пространства"]{width:300px!important;flex:0 0 300px!important}',
+      content: '[aria-label="Разделы личного раздела"]{width:300px!important;flex:0 0 300px!important}',
     });
     await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 
-    const overflow = nav.getByRole("button", { name: "Меню разделов", exact: true });
+    const overflow = nav.getByRole("button", { name: /^Меню разделов/ });
     assert.equal(await overflow.count(), 1, "WORKSPACE_NAV_NAMED_OVERFLOW_CONTROL_MISSING");
     assert.equal(await overflow.getAttribute("aria-haspopup"), "menu", "WORKSPACE_NAV_OVERFLOW_MENU_SEMANTICS_MISSING");
     const directRows = await nav.locator("a, button").evaluateAll((elements) => (
@@ -927,6 +1081,26 @@ test("remediation: primary navigation keeps one row and exposes complete overflo
     assert.equal(directRows.length, 1, `WORKSPACE_NAV_WRAPPED_TO_MULTIPLE_ROWS:${JSON.stringify(directRows)}`);
     const pageGeometry = await page.evaluate(() => ({ clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }));
     assert.ok(pageGeometry.scrollWidth <= pageGeometry.clientWidth + 1, `WORKSPACE_NAV_PAGE_HORIZONTAL_OVERFLOW:${JSON.stringify(pageGeometry)}`);
+
+    const normalStyle = await overflow.evaluate((element) => ({
+      color: getComputedStyle(element).color,
+      borderWidth: getComputedStyle(element).borderWidth,
+    }));
+    await overflow.hover();
+    await page.waitForTimeout(200);
+    const hoverBefore = await overflow.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { backgroundColor: style.backgroundColor, color: style.color, borderColor: style.borderColor, borderWidth: style.borderWidth, hovered: element.matches(":hover") };
+    });
+    await page.waitForTimeout(500);
+    const hoverAfter = await overflow.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { backgroundColor: style.backgroundColor, color: style.color, borderColor: style.borderColor, borderWidth: style.borderWidth, hovered: element.matches(":hover") };
+    });
+    assert.equal(hoverBefore.hovered, true, `WORKSPACE_NAV_POINTER_MUST_REMAIN_OVER_TRIGGER:${JSON.stringify(hoverBefore)}`);
+    assert.equal(hoverBefore.color, normalStyle.color, "WORKSPACE_NAV_HOVER_MUST_KEEP_BUTTON_COLOR");
+    assert.equal(hoverBefore.borderWidth, "0px", "WORKSPACE_NAV_HOVER_MUST_NOT_FLASH_A_BORDER");
+    assert.deepEqual(hoverAfter, hoverBefore, "WORKSPACE_NAV_HOVER_MUST_REMAIN_STABLE_WHILE_POINTER_STAYS");
 
     await overflow.focus();
     await overflow.press("Enter");
@@ -943,15 +1117,135 @@ test("remediation: primary navigation keeps one row and exposes complete overflo
     );
     await page.keyboard.press("Escape");
     await menu.waitFor({ state: "hidden" });
+    await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label")?.startsWith("Меню разделов"));
     assert.equal(await overflow.evaluate((element) => document.activeElement === element), true, "WORKSPACE_NAV_OVERFLOW_ESCAPE_FOCUS_NOT_RETURNED");
-    const switcherCount = await page.getByRole("button", { name: /^Рабочее пространство:/ }).count();
-    if (process.env.E2E_EXPECT_TEAM_WORKSPACES === "false") {
-      assert.equal(switcherCount, 0, "WORKSPACE_NAV_FEATURE_OFF_FALSE_SWITCHER");
-    } else {
+    const switcherCount = await page.getByRole("button", { name: /^Команды:/ }).count();
+    if (process.env.E2E_EXPECT_TEAM_WORKSPACES === "true") {
       assert.equal(switcherCount, 1, "WORKSPACE_NAV_FEATURE_ON_SWITCHER_MISSING");
+    } else {
+      assert.equal(switcherCount, 0, "WORKSPACE_NAV_FEATURE_OFF_FALSE_SWITCHER");
     }
     await constrained.evaluate((element) => element.remove());
   } finally {
+    await context.close();
+  }
+});
+
+test("remediation: pending menu focus cannot outlive fast Escape, later Tab or a new open", { timeout: 30_000 }, async () => {
+  const { context, page } = await openAccount(fixtures.hr, "/workspace/personal/interviews", {
+    viewport: { width: 768, height: 1024 },
+  });
+  try {
+    const nav = page.getByRole("navigation", { name: "Разделы личного раздела", exact: true });
+    await page.addStyleTag({ content: '[aria-label="Разделы личного раздела"]{width:300px!important;flex:0 0 300px!important}' });
+    const overflow = nav.getByRole("button", { name: /^Меню разделов/ });
+    await overflow.waitFor();
+    await overflow.focus();
+    await page.keyboard.press("Shift+Tab");
+    const previousTarget = await page.evaluate(() => ({ tag: document.activeElement?.tagName, text: document.activeElement?.textContent, href: document.activeElement?.getAttribute("href") }));
+    assert.notEqual(await overflow.evaluate(element => document.activeElement === element), true, "SHIFT_TAB_DID_NOT_MOVE_TO_PREVIOUS_CONTROL");
+    await overflow.focus();
+    await page.evaluate(() => {
+      const nativeFrame = window.requestAnimationFrame, nativeCancel = window.cancelAnimationFrame;
+      const pending = new Map();
+      let sequence = 0;
+      window.requestAnimationFrame = callback => { const id = --sequence; pending.set(id, callback); return id; };
+      window.cancelAnimationFrame = id => { if (!pending.delete(id)) nativeCancel.call(window, id); };
+      window.__navigationFrames = {
+        advance(count) {
+          for (let frame = 0; frame < count; frame++) {
+            const callbacks = [...pending.values()]; pending.clear();
+            callbacks.forEach(callback => callback(performance.now()));
+          }
+        },
+        restore() { pending.clear(); window.requestAnimationFrame = nativeFrame; window.cancelAnimationFrame = nativeCancel; },
+      };
+    });
+    const menu = page.locator('[role="menu"][aria-label="Дополнительные разделы"]');
+    await overflow.press("Enter");
+    await menu.waitFor({ state: "attached" });
+    assert.equal(await overflow.getAttribute("aria-expanded"), "true");
+    // Native keys run before any pending animation-frame autofocus can execute.
+    await page.keyboard.press("Escape");
+    await page.evaluate(() => window.__navigationFrames.advance(8));
+    assert.equal(await overflow.evaluate(element => document.activeElement === element), true, "CLOSED_MENU_STOLE_ESCAPE_FOCUS");
+
+    await overflow.press("Enter");
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Tab");
+    const nextTarget = await page.evaluate(() => ({ tag: document.activeElement?.tagName, text: document.activeElement?.textContent, href: document.activeElement?.getAttribute("href") }));
+    assert.notEqual(await overflow.evaluate(element => document.activeElement === element), true, "TAB_DID_NOT_MOVE_TO_NEXT_CONTROL");
+    await page.evaluate(() => window.__navigationFrames.advance(8));
+    assert.deepEqual(await page.evaluate(() => ({ tag: document.activeElement?.tagName, text: document.activeElement?.textContent, href: document.activeElement?.getAttribute("href") })), nextTarget, "CLOSED_MENU_OVERRODE_LATER_TAB_INTENT");
+
+    await overflow.focus();
+    await overflow.press("Enter");
+    await page.keyboard.press("Escape");
+    await overflow.press("Enter");
+    await page.evaluate(() => window.__navigationFrames.advance(8));
+    assert.equal(await overflow.getAttribute("aria-expanded"), "true", "OLD_CLOSE_CANCELLED_NEW_OPEN");
+    assert.equal(await menu.evaluate(element => element.contains(document.activeElement)), true, "NEW_OPEN_DID_NOT_FOCUS_ITS_MENU");
+    await page.keyboard.press("Escape");
+    await page.evaluate(() => window.__navigationFrames.advance(8));
+    assert.equal(await overflow.evaluate(element => document.activeElement === element), true, "FOCUSED_MENU_ESCAPE_DID_NOT_RETURN_FOCUS");
+    await overflow.press("Enter");
+    await page.evaluate(() => window.__navigationFrames.advance(8));
+    assert.equal(await menu.evaluate(element => element.contains(document.activeElement)), true, "TAB_STARTS_FROM_FOCUSED_MENU");
+    await page.keyboard.press("Tab");
+    await page.evaluate(() => window.__navigationFrames.advance(8));
+    assert.equal(await overflow.getAttribute("aria-expanded"), "false", "MENU_TAB_DID_NOT_CLOSE_MENU");
+    assert.deepEqual(await page.evaluate(() => ({ tag: document.activeElement?.tagName, text: document.activeElement?.textContent, href: document.activeElement?.getAttribute("href") })), nextTarget, "MENU_TAB_DID_NOT_REACH_NEXT_NATIVE_CONTROL");
+    await overflow.focus();
+    await overflow.press("Enter");
+    await page.evaluate(() => window.__navigationFrames.advance(8));
+    assert.equal(await menu.evaluate(element => element.contains(document.activeElement)), true, "SHIFT_TAB_STARTS_FROM_FOCUSED_MENU");
+    await page.keyboard.press("Shift+Tab");
+    await page.evaluate(() => window.__navigationFrames.advance(8));
+    assert.equal(await overflow.getAttribute("aria-expanded"), "false", "MENU_SHIFT_TAB_DID_NOT_CLOSE_MENU");
+    assert.deepEqual(await page.evaluate(() => ({ tag: document.activeElement?.tagName, text: document.activeElement?.textContent, href: document.activeElement?.getAttribute("href") })), previousTarget, "MENU_SHIFT_TAB_DID_NOT_REACH_PREVIOUS_NATIVE_CONTROL");
+    for (const key of ["ArrowDown", "Home", "End"]) {
+      await overflow.focus();
+      await overflow.press("Enter");
+      await page.evaluate(() => window.__navigationFrames.advance(8));
+      assert.equal(await menu.evaluate(element => element.contains(document.activeElement)), true, `${key}_STARTS_FROM_FOCUSED_MENU`);
+      await page.keyboard.press(key);
+      await page.keyboard.press("Escape");
+      if (key !== "ArrowDown") await page.keyboard.press("Tab");
+      await page.evaluate(() => window.__navigationFrames.advance(8));
+      if (key === "ArrowDown") {
+        assert.equal(await overflow.evaluate(element => document.activeElement === element), true, "CLOSED_MENU_ARROW_FOCUS_OVERRODE_ESCAPE");
+      } else {
+        assert.deepEqual(await page.evaluate(() => ({ tag: document.activeElement?.tagName, text: document.activeElement?.textContent, href: document.activeElement?.getAttribute("href") })), nextTarget, `CLOSED_MENU_${key}_FOCUS_OVERRODE_LATER_TAB`);
+      }
+      await overflow.focus();
+      await overflow.press("Enter");
+      await page.evaluate(() => window.__navigationFrames.advance(8));
+      const initialLabel = await menu.evaluate(element => {
+        window.__retiredNavigationMenu = element;
+        return document.activeElement?.textContent;
+      });
+      await page.keyboard.press(key);
+      await page.keyboard.press("Escape");
+      assert.equal(await page.evaluate(() => window.__retiredNavigationMenu.inert), true, `${key}_RETAINED_CLOSING_MENU_MUST_BE_INERT`);
+      await overflow.press("Enter");
+      assert.equal(await page.evaluate(() => window.__retiredNavigationMenu.isConnected), false, `${key}_OLD_NATIVE_MENU_GENERATION_MUST_BE_DETACHED`);
+      assert.equal(await menu.evaluate(element => element !== window.__retiredNavigationMenu && !element.inert), true, `${key}_REOPEN_MUST_HAVE_A_NEW_ACTIVE_MENU_GENERATION`);
+      await page.evaluate(() => window.__navigationFrames.advance(8));
+      assert.equal(await overflow.getAttribute("aria-expanded"), "true", `${key}_OLD_FOCUS_CANCELLED_NEW_OPEN`);
+      assert.equal(await menu.evaluate(element => element.contains(document.activeElement)), true, `${key}_NEW_OPEN_DID_NOT_FOCUS_CURRENT_MENU`);
+      assert.equal(await menu.evaluate(element => document.activeElement?.textContent), initialLabel, `${key}_OLD_NAVIGATION_FOCUS_LEAKED_INTO_NEW_OPEN`);
+      await page.keyboard.press("Escape");
+      await page.evaluate(() => window.__navigationFrames.advance(8));
+    }
+    await overflow.focus();
+    await overflow.press("Enter");
+    await page.keyboard.press("Escape");
+    await page.evaluate(() => window.__navigationFrames.advance(8));
+    await page.evaluate(() => window.__navigationFrames.restore());
+    await menu.waitFor({ state: "hidden" });
+    assert.equal(await overflow.evaluate(element => document.activeElement === element), true, "FINAL_ESCAPE_FOCUS_NOT_RETURNED");
+  } finally {
+    await page.evaluate(() => window.__navigationFrames?.restore()).catch(() => {});
     await context.close();
   }
 });
@@ -970,7 +1264,7 @@ async function assertActiveOverflowNavigation({ auth, path, navigationName, acti
     await page.setViewportSize({ width: 384, height: 512 });
     await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 
-    const trigger = nav.getByRole("button", { name: "Меню разделов", exact: true });
+    const trigger = nav.getByRole("button", { name: /^Меню разделов/ });
     assert.equal(await trigger.count(), 1, "WORKSPACE_NAV_ACTIVE_OVERFLOW_TRIGGER_FULL_LABEL_MISSING");
     assert.equal(await trigger.getAttribute("aria-haspopup"), "menu", "WORKSPACE_NAV_ACTIVE_OVERFLOW_TRIGGER_MENU_SEMANTICS_MISSING");
     assertRoute(page, expectedRoute, "WORKSPACE_NAV_ACTIVE_OVERFLOW_ROUTE_CHANGED_BEFORE_OPEN");
@@ -1007,7 +1301,7 @@ async function assertActiveOverflowNavigation({ auth, path, navigationName, acti
     assertRoute(page, expectedRoute, "WORKSPACE_NAV_ACTIVE_OVERFLOW_ROUTE_CHANGED_AFTER_ESCAPE");
     if (process.env.E2E_EXPECT_TEAM_WORKSPACES === "false") {
       assert.equal(
-        await page.getByRole("button", { name: /^Рабочее пространство:/ }).count(),
+        await page.getByRole("button", { name: /^Команды:/ }).count(),
         0,
         "WORKSPACE_NAV_ACTIVE_OVERFLOW_FEATURE_OFF_FALSE_SWITCHER",
       );
@@ -1022,24 +1316,27 @@ test("remediation: active personal candidates section in overflow keeps its curr
   await assertActiveOverflowNavigation({
     auth: fixtures.hr,
     path: "/workspace/personal/candidates",
-    navigationName: "Разделы личного пространства",
+    navigationName: "Разделы личного раздела",
     activeLabel: "Кандидаты",
   });
 });
 
-test("remediation: active team members section in overflow keeps its current state", { timeout: 30_000 }, async () => {
+test("remediation: active team settings uses its own gear outside navigation overflow", { timeout: 30_000 }, async (t) => {
+  if (process.env.E2E_EXPECT_TEAM_WORKSPACES !== "true") return t.skip("team workspaces are disabled in this runtime");
   const team = await createTeamApi(fixtures.hr, `Команда активного раздела ${unique()}`);
-  await assertActiveOverflowNavigation({
-    auth: fixtures.hr,
-    path: `/workspace/teams/${team.id}/members`,
-    navigationName: "Разделы командного пространства",
-    activeLabel: "Участники",
-  });
+  const { context, page } = await openAccount(fixtures.hr, `/workspace/teams/${team.id}/settings`);
+  try {
+    await page.getByRole("heading", { name: "Настройки команды", exact: true }).waitFor();
+    const gear = page.getByRole("link", { name: "Настройки команды", exact: true });
+    assert.equal(await gear.getAttribute("aria-current"), "page");
+    assert.equal(await page.getByRole("navigation", { name: "Разделы команды", exact: true }).getByRole("link", { name: "Настройки команды", exact: true }).count(), 0);
+  } finally { await context.close(); }
 });
 
 test("remediation: workspace create surface renders the current account identity exactly once", async () => {
   const { context, page } = await openAccount(fixtures.creator, "/workspace/personal/interviews/new");
   try {
+    await page.getByText(`@${fixtures.creator.user.nickname}`, { exact: true }).waitFor();
     assert.equal(
       await page.getByText(`@${fixtures.creator.user.nickname}`, { exact: true }).count(),
       1,
@@ -1064,7 +1361,7 @@ test("remediation: distinct owner interviewer and candidate rows expose permitte
       assert.equal(await row.count(), 1, `ROLE_ROW_MISSING: ${roleLabel}`);
       assert.equal(await row.getByText(roleLabel, { exact: true }).count(), 1, `ROLE_LABEL_MISSING: ${roleLabel}`);
       assert.equal(
-        await row.getByRole("button", { name: new RegExp(`Переименовать ${fixtures.roleRoom.title}`) }).count(),
+        await row.getByRole("button", { name: new RegExp(`Переименовать интервью ${fixtures.roleRoom.title}`) }).count(),
         canManage ? 1 : 0,
         `ROLE_RENAME_POLICY_WRONG: ${roleLabel}`,
       );
@@ -1094,11 +1391,13 @@ test("remediation: distinct owner interviewer and candidate rows expose permitte
   });
   try {
     const row = page.getByRole("row", { name: new RegExp(fixtures.roleRoom.title) });
-    await row.getByRole("button", { name: `Переименовать ${fixtures.roleRoom.title}`, exact: true }).click();
-    const input = row.getByLabel("Название интервью", { exact: true });
+    await row.getByRole("button", { name: `Переименовать интервью ${fixtures.roleRoom.title}`, exact: true }).click();
+    const renameDialog = page.getByRole("dialog", { name: "Переименовать интервью", exact: true });
+    const input = renameDialog.getByLabel("Название интервью", { exact: true });
     assert.equal(await input.count(), 1, "OWNER_RENAME_INPUT_MISSING");
     await input.fill(renamedTitle);
-    await row.getByRole("button", { name: "Сохранить название", exact: true }).click();
+    await renameDialog.getByRole("button", { name: "Сохранить", exact: true }).click();
+    await renameDialog.waitFor({ state: "hidden" });
     assert.equal(renameMutations, 1, `OWNER_RENAME_MUTATION_COUNT: ${renameMutations}`);
     assert.equal(await row.getByText(renamedTitle, { exact: true }).count(), 1, "OWNER_RENAME_RESULT_MISSING");
     fixtures.roleRoom.title = renamedTitle;
@@ -1144,7 +1443,10 @@ test("remediation-2: library language query is normalized, filters real tasks, a
     assertRoute(page, "/workspace/personal/library?language=python", "LANGUAGE_QUERY_NOT_NORMALIZED");
     assert.equal(await page.getByText(fixtures.pythonTask.title, { exact: true }).count(), 1, "PYTHON_TASK_MISSING");
     assert.equal(await page.getByText(fixtures.task.title, { exact: true }).count(), 0, "NODE_TASK_NOT_FILTERED");
-    await page.getByLabel("Язык задач", { exact: true }).selectOption("sql");
+    await page.getByRole("combobox", { name: "Язык задач", exact: true }).click();
+    const languageOptions = page.locator(".ant-select-dropdown:visible").last();
+    await languageOptions.waitFor({ state: "visible" });
+    await languageOptions.locator(".ant-select-item-option").filter({ hasText: /^SQL$/ }).click();
     assert.equal(await page.getByText("Для выбранного языка задач нет", { exact: true }).count(), 1, "LANGUAGE_FILTER_EMPTY_MISSING");
     assert.equal(await page.getByText("В библиотеке пока нет задач", { exact: true }).count(), 0, "FILTER_EMPTY_COLLAPSED_TO_LIBRARY_EMPTY");
     await page.getByRole("button", { name: "Сбросить фильтр", exact: true }).click();
@@ -1161,6 +1463,7 @@ for (const entry of ["/workspace/personal/interviews/new"]) {
     const { context, page } = await openAccount(fixtures.hr, entry);
     try {
       assertRoute(page, "/workspace/personal/interviews/new", `CREATE_ENTRY_NOT_CANONICAL: ${entry}`);
+      await page.getByTestId("create-room-card").waitFor();
       assert.equal(await page.getByTestId("create-room-card").count(), 1, "CREATE_SURFACE_COUNT_WRONG");
       assert.equal(await page.getByLabel("Название интервью", { exact: true }).count(), 1, "CREATE_FORM_COUNT_WRONG");
       assert.equal(await page.getByRole("checkbox", { name: "Я нанимающий", exact: true }).count(), 0, "PROFILE_LEAKED_INTO_CREATE");
@@ -1183,7 +1486,7 @@ test("remediation-2 identity fence: delayed profile PATCH from account A cannot 
   const patchStarted = new Promise((resolve) => { signalPatch = resolve; });
   let signalPatchFinished;
   const patchFinished = new Promise((resolve) => { signalPatchFinished = resolve; });
-  const { context, page } = await openAccount(accountA, "/profile", {
+  const { context, page } = await openAccount(accountA, "/workspace/personal/interviews", {
     onPage: (openedPage) => openedPage.route("**/api/me/profile", async (route) => {
       if (route.request().method() !== "PATCH") return route.continue();
       signalPatch();
@@ -1196,19 +1499,26 @@ test("remediation-2 identity fence: delayed profile PATCH from account A cannot 
     }),
   });
   try {
+    await page.getByRole("link", { name: `Открыть профиль @${accountA.user.nickname}` }).click();
+    await page.waitForURL("**/profile");
+    await page.getByRole("button", { name: "Изменить имя", exact: true }).click();
     await page.getByLabel("Имя для отображения", { exact: true }).fill("Черновик профиля A");
     await page.getByRole("button", { name: "Сохранить имя", exact: true }).click();
     await patchStarted;
+    await page.goBack();
+    await page.waitForURL("**/workspace/personal/interviews");
     await logoutAndLogin(page, accountB);
     await page.getByRole("link", { name: `Открыть профиль @${accountB.user.nickname}` }).click();
     await page.waitForURL("**/profile");
+    await page.getByRole("button", { name: "Изменить имя", exact: true }).click();
     await page.getByLabel("Имя для отображения", { exact: true }).waitFor();
     releasePatch();
     await patchFinished;
     assertRoute(page, "/profile", "STALE_PROFILE_PATCH_CHANGED_B_ROUTE");
     assert.equal(await page.getByText(`@${accountB.user.nickname}`, { exact: true }).count(), 1, "STALE_PROFILE_PATCH_CHANGED_B_IDENTITY");
     assert.equal(await page.getByLabel("Имя для отображения", { exact: true }).inputValue(), accountB.user.displayName, "STALE_PROFILE_PATCH_CHANGED_B_NAME");
-    assert.equal(await page.getByRole("checkbox", { name: "Я нанимающий", exact: true }).isChecked(), false, "STALE_PROFILE_PATCH_CHANGED_B_CAPABILITY");
+    await page.getByRole("dialog", { name: "Изменить имя", exact: true }).getByRole("button", { name: "Отмена", exact: true }).click();
+    assert.equal(await page.getByRole("switch", { name: "Я участвую в найме", exact: true }).isChecked(), false, "STALE_PROFILE_PATCH_CHANGED_B_CAPABILITY");
     assert.equal(await page.getByText("Имя сохранено", { exact: true }).count(), 0, "STALE_PROFILE_PATCH_NOTIFIED_B");
   } finally {
     await context.close();
@@ -1247,7 +1557,8 @@ test("remediation-2 identity fence: delayed room POST from account A cannot leak
   });
   try {
     await page.getByLabel("Название интервью", { exact: true }).fill(title);
-    await page.getByRole("button", { name: "Создать интервью", exact: true }).click();
+    await page.getByRole("dialog", { name: "Создать интервью", exact: true })
+      .getByRole("button", { name: "Создать интервью", exact: true }).click();
     await postStarted;
     await logoutAndLogin(page, accountB);
     assertRoute(page, "/workspace/personal/interviews", "B_ROUTE_NOT_READY_BEFORE_STALE_ROOM_RELEASE");
@@ -1302,7 +1613,8 @@ test("remediation-2 identity fence: delayed metadata retry from account A cannot
   try {
     await page.getByLabel("Название интервью", { exact: true }).fill(title);
     await page.getByLabel("Имя кандидата", { exact: true }).fill("Кандидат A");
-    await page.getByRole("button", { name: "Создать интервью", exact: true }).click();
+    await page.getByRole("dialog", { name: "Создать интервью", exact: true })
+      .getByRole("button", { name: "Создать интервью", exact: true }).click();
     const partial = page.getByRole("alert").filter({ hasText: "Интервью создано, но данные кандидата не сохранены" });
     await partial.waitFor();
     await page.getByRole("button", { name: "Повторить сохранение", exact: true }).click();
@@ -1355,6 +1667,7 @@ test("remediation: standalone profile saves display name handles retry and alway
     permissions: ["clipboard-read", "clipboard-write"],
   });
   try {
+    await page.getByRole("button", { name: "Изменить имя", exact: true }).click();
     const displayName = page.getByLabel("Имя для отображения", { exact: true });
     assert.equal(await displayName.count(), 1, "PROFILE_DISPLAY_NAME_INPUT_MISSING");
     const savedName = `Сохранённое имя ${unique()}`;
@@ -1366,13 +1679,15 @@ test("remediation: standalone profile saves display name handles retry and alway
     assert.equal(await page.getByText("Имя сохранено", { exact: true }).count(), 1, "PROFILE_SAVE_FEEDBACK_MISSING");
     await page.reload({ waitUntil: "domcontentloaded" });
     await settleApp(page);
+    await page.getByRole("button", { name: "Изменить имя", exact: true }).click();
     assert.equal(await page.getByLabel("Имя для отображения", { exact: true }).inputValue(), savedName, "PROFILE_NAME_DID_NOT_SURVIVE_RELOAD");
+    await page.getByRole("dialog", { name: "Изменить имя", exact: true }).getByRole("button", { name: "Отмена", exact: true }).click();
     assert.equal(await page.getByText(fixtures.profile.user.id, { exact: true }).count(), 1, "PERSONAL_ID_MISSING_WITHOUT_HR_OPT_IN");
     const copy = page.getByRole("button", { name: "Скопировать личный ID", exact: true });
     assert.equal(await copy.count(), 1, "PERSONAL_ID_COPY_MISSING");
     await copy.click();
     assert.equal(await page.evaluate(() => navigator.clipboard.readText()), fixtures.profile.user.id, "PERSONAL_ID_COPY_WRONG");
-    assert.equal(await page.getByRole("checkbox", { name: "Я нанимающий", exact: true }).count(), 1, "HIRING_TOGGLE_SEMANTICS_LOST");
+    assert.equal(await page.getByRole("switch", { name: "Я участвую в найме", exact: true }).count(), 1, "HIRING_SETTINGS_ACCESS_LOST");
 
     const failedDraft = `Черновик профиля ${unique()}`;
     const rejectProfile = (route) => route.fulfill({
@@ -1381,6 +1696,7 @@ test("remediation: standalone profile saves display name handles retry and alway
       body: '{"error":"Временно недоступно"}',
     });
     await page.route("**/api/me/profile", rejectProfile);
+    await page.getByRole("button", { name: "Изменить имя", exact: true }).click();
     await displayName.fill(failedDraft);
     const failedSaveResponse = page.waitForResponse((response) => response.request().method() === "PATCH" && response.url().endsWith("/api/me/profile") && response.status() === 503);
     await page.getByRole("button", { name: "Сохранить имя", exact: true }).click();
@@ -1388,7 +1704,7 @@ test("remediation: standalone profile saves display name handles retry and alway
     await settleApp(page);
     assert.equal(await page.getByRole("alert").filter({ hasText: /Не удалось сохранить имя/ }).count(), 1, "PROFILE_SAVE_ERROR_MISSING");
     assert.equal(await displayName.inputValue(), failedDraft, "PROFILE_FAILED_SAVE_LOST_DRAFT");
-    const retry = page.getByRole("button", { name: "Повторить сохранение", exact: true });
+    const retry = page.getByRole("dialog", { name: "Изменить имя", exact: true }).getByRole("button", { name: "Сохранить имя", exact: true });
     assert.equal(await retry.count(), 1, "PROFILE_SAVE_RETRY_MISSING");
     await page.unroute("**/api/me/profile", rejectProfile);
     const retryResponse = page.waitForResponse((response) => response.request().method() === "PATCH" && response.url().endsWith("/api/me/profile") && response.ok());
@@ -1565,7 +1881,10 @@ for (const routeCase of remediationLegacyRoutes) {
         }
       }
       if (routeCase.oldPath.includes("language=python")) {
-        assert.equal(await page.getByLabel("Язык задач", { exact: true }).inputValue(), "python", "SUPPORTED_LANGUAGE_QUERY_NOT_APPLIED");
+        const selectedLanguage = await page.getByRole("combobox", { name: "Язык задач", exact: true }).evaluate((element) => (
+          element.parentElement?.getAttribute("title") || element.parentElement?.textContent?.trim()
+        ));
+        assert.equal(selectedLanguage, "Python", "SUPPORTED_LANGUAGE_QUERY_NOT_APPLIED");
       }
     } finally {
       await context.close();
@@ -1574,11 +1893,11 @@ for (const routeCase of remediationLegacyRoutes) {
 }
 
 const coldCanonicalRoutes = [
-  ["/workspace/personal/interviews", "Личное пространство: Интервью"],
-  ["/workspace/personal/interviews/new", "Личное пространство: Создать интервью"],
-  ["/workspace/personal/library", "Личное пространство: Библиотека"],
-  ["/workspace/personal/candidates", "Личное пространство: Кандидаты"],
-  ["/profile", "Личное пространство: Профиль"],
+  ["/workspace/personal/interviews", "Личный раздел: Интервью"],
+  ["/workspace/personal/interviews/new", "Личный раздел: Создать интервью"],
+  ["/workspace/personal/library", "Личный раздел: Библиотека"],
+  ["/workspace/personal/candidates", "Личный раздел: Кандидаты"],
+  ["/profile", "Личный раздел: Профиль"],
 ];
 
 for (const [path, landmarkName] of coldCanonicalRoutes) {
@@ -1607,7 +1926,7 @@ for (const [path, landmarkName] of coldCanonicalRoutes) {
   });
 }
 
-test("remediation: metadata partial failure retries only PUT and completes the original list intent", async () => {
+test("remediation: metadata partial failure retries only PUT and then opens the room", async () => {
   const title = `Интервью с повтором метаданных ${unique()}`;
   const candidateName = "Кандидат после повторного сохранения";
   const position = "Инженер надёжности";
@@ -1637,7 +1956,8 @@ test("remediation: metadata partial failure retries only PUT and completes the o
     await page.getByLabel("Имя кандидата", { exact: true }).fill(candidateName);
     await page.getByLabel("Позиция", { exact: true }).fill(position);
     const failedMetadataResponse = page.waitForResponse((response) => response.request().method() === "PUT" && response.url().includes("/interview-metadata") && response.status() === 503);
-    await page.getByRole("button", { name: "Создать интервью", exact: true }).click();
+    await page.getByRole("dialog", { name: "Создать интервью", exact: true })
+      .getByRole("button", { name: "Создать интервью", exact: true }).click();
     await firstPutStarted;
     await failedMetadataResponse;
     await settleApp(page);
@@ -1647,7 +1967,7 @@ test("remediation: metadata partial failure retries only PUT and completes the o
     assert.equal(await page.getByRole("alert").filter({ hasText: "Интервью создано, но данные кандидата не сохранены" }).count(), 1, "PARTIAL_METADATA_ALERT_MISSING");
     assert.equal(await page.getByLabel("Название интервью", { exact: true }).inputValue(), title, "PARTIAL_METADATA_LOST_TITLE");
     assert.equal(await page.getByLabel("Имя кандидата", { exact: true }).inputValue(), candidateName, "PARTIAL_METADATA_LOST_CANDIDATE");
-    assert.equal(await page.getByText("После сохранения откроется список интервью", { exact: true }).count(), 1, "PARTIAL_METADATA_LOST_ORIGINAL_INTENT");
+    assert.equal(await page.getByText("После сохранения данных откроется созданная комната.", { exact: true }).count(), 1, "PARTIAL_METADATA_ROOM_DESTINATION_MISSING");
     const created = (await rawRoomSnapshot(fixtures.creator.token)).rooms.find((room) => room.title === title);
     assert.ok(created, "PARTIAL_METADATA_CREATED_ROOM_IDENTITY_MISSING_FROM_API");
     assert.equal(await page.getByText(created.inviteCode, { exact: true }).count(), 1, "PARTIAL_METADATA_CREATED_ROOM_CODE_MISSING");
@@ -1657,12 +1977,10 @@ test("remediation: metadata partial failure retries only PUT and completes the o
     const metadataRead = page.waitForResponse((response) => response.request().method() === "GET" && response.url().endsWith(`/api/rooms/${created.inviteCode}/interview-metadata`));
     await retry.click();
     await metadataRead;
-    await page.waitForURL("**/workspace/personal/interviews");
+    await page.waitForURL(`**/room/${created.inviteCode}`);
+    await page.waitForFunction(() => document.querySelector('[data-testid="room-connection-status"]')?.getAttribute("data-state") === "online");
     assert.equal(roomPosts, 1, "PARTIAL_METADATA_RETRY_RECREATED_ROOM");
     assert.equal(metadataPuts, 2, "PARTIAL_METADATA_RETRY_DID_NOT_SEND_ONE_PUT");
-    const row = page.getByRole("row", { name: new RegExp(title) });
-    await row.getByText(candidateName, { exact: true }).waitFor();
-    assert.match(await row.innerText(), new RegExp(candidateName), "PARTIAL_METADATA_RETRY_RESULT_NOT_RENDERED");
   } finally {
     await context.close();
   }
@@ -1695,7 +2013,7 @@ for (const viewport of viewports) {
         const documentGeometry = await page.evaluate(() => ({ clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }));
         assert.ok(documentGeometry.scrollWidth <= documentGeometry.clientWidth + 1, `HR_DOCUMENT_HORIZONTAL_OVERFLOW: ${JSON.stringify(documentGeometry)}`);
 
-        const firstFilter = page.getByLabel("Период с", { exact: true });
+        const firstFilter = page.getByLabel("С", { exact: true });
         await firstFilter.focus();
         let primaryReached = false;
         let visibleFocus = false;

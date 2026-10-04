@@ -1,23 +1,12 @@
 import React, { FormEvent, useEffect, useState } from "react";
-import {
-  Badge,
-  Box,
-  Button,
-  Card,
-  Container,
-  Group,
-  Select,
-  Stack,
-  Text,
-  TextInput,
-  ThemeIcon,
-  Title
-} from "@mantine/core";
-import { IconArrowRight, IconCode, IconDeviceLaptop, IconUsers } from "@tabler/icons-react";
+import { Alert, Button, Card, Input, Modal, Select, Space, Tag, Typography } from "antd";
+import { ArrowRightOutlined, CodeOutlined, LaptopOutlined, TeamOutlined } from "@ant-design/icons";
 import { Link, useNavigate } from "react-router-dom";
 import { useAppSelector } from "../app/hooks";
 import { useCreateGuestRoomMutation } from "../services/api";
 import { setVisitParams, trackEvent } from "../services/analytics";
+import { ThemeToggleButton } from "../features/theme/ThemeToggleButton";
+import styles from "./LandingPage.module.css";
 
 const LANGUAGES = [
   { value: "nodejs", label: "Node JS" },
@@ -25,26 +14,8 @@ const LANGUAGES = [
   { value: "kotlin", label: "Kotlin" },
   { value: "java", label: "Java" },
   { value: "sql", label: "SQL" },
-  // Plain text — для интервью без привязки к синтаксису (теория,
-  // алгоритмическое обсуждение, перевод задачи и т.д.).
   { value: "plaintext", label: "Plain text" }
 ];
-
-const darkFieldStyles = {
-  label: { color: "#9ba0a8", fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.6 },
-  input: {
-    backgroundColor: "#14171d",
-    borderColor: "#272b34",
-    color: "#f3f5f7"
-  },
-  dropdown: {
-    backgroundColor: "#14171d",
-    borderColor: "#272b34"
-  },
-  option: {
-    color: "#f3f5f7"
-  }
-};
 
 export function LandingPage() {
   const navigate = useNavigate();
@@ -54,20 +25,16 @@ export function LandingPage() {
   const [language, setLanguage] = useState("nodejs");
   const [inviteCode, setInviteCode] = useState("");
   const [error, setError] = useState("");
+  const [createOpened, setCreateOpened] = useState(false);
   const [createGuestRoom, { isLoading }] = useCreateGuestRoomMutation();
 
   useEffect(() => {
-    trackEvent("mkt_landing_view", {
-      authenticated: Boolean(authToken)
-    });
-    setVisitParams({
-      entrypoint: "landing",
-      authenticated: Boolean(authToken)
-    });
+    trackEvent("mkt_landing_view", { authenticated: Boolean(authToken) });
+    setVisitParams({ entrypoint: "landing", authenticated: Boolean(authToken) });
   }, [authToken]);
 
-  const onCreate = async (e: FormEvent) => {
-    e.preventDefault();
+  const onCreate = async (event: FormEvent) => {
+    event.preventDefault();
     trackEvent("prod_guest_room_create_submit", {
       language,
       has_title: title.trim().length > 0,
@@ -75,39 +42,19 @@ export function LandingPage() {
     });
     try {
       setError("");
-      const room = await createGuestRoom({
-        title,
-        ownerDisplayName: displayName,
-        language
-      }).unwrap();
-      // Persist the owner session token only for true anonymous rooms.
-      // When the visitor is already authenticated the backend binds the
-      // room to their account (`ownerUser`) and doesn't return a session
-      // token — it isn't needed because we authorize via Bearer.
-      if (room.ownerToken) {
-        localStorage.setItem(`owner_token_${room.inviteCode}`, room.ownerToken);
-      }
-      // Guest display name is only relevant for anonymous owners. For
-      // authenticated users we read the name from their profile in
-      // `RoomPage`, so storing a fallback here just litters localStorage.
-      if (!authToken) {
-        localStorage.setItem(`guest_display_name_${room.inviteCode}`, displayName);
-      }
-      trackEvent("prod_guest_room_create_success", {
-        language,
-        room_invite_len: room.inviteCode.length
-      });
+      const room = await createGuestRoom({ title, ownerDisplayName: displayName, language }).unwrap();
+      if (room.ownerToken) localStorage.setItem(`owner_token_${room.inviteCode}`, room.ownerToken);
+      if (!authToken) localStorage.setItem(`guest_display_name_${room.inviteCode}`, displayName);
+      trackEvent("prod_guest_room_create_success", { language, room_invite_len: room.inviteCode.length });
       navigate(`/room/${room.inviteCode}`);
     } catch {
       setError("Не удалось создать комнату. Повторите попытку.");
-      trackEvent("prod_guest_room_create_failed", {
-        language
-      });
+      trackEvent("prod_guest_room_create_failed", { language });
     }
   };
 
-  const onJoin = (e: FormEvent) => {
-    e.preventDefault();
+  const onJoin = (event: FormEvent) => {
+    event.preventDefault();
     if (!inviteCode.trim()) return;
     const name = (displayName || "Участник").trim();
     const code = inviteCode.trim();
@@ -120,197 +67,109 @@ export function LandingPage() {
   };
 
   return (
-    <Box style={{ minHeight: "100vh", background: "#0f1115", color: "#f3f5f7" }}>
-      <Box style={{ borderBottom: "1px solid #262a31", background: "#101318" }}>
-        <Container size="xl" py={10}>
-          <Group justify="space-between">
-            <Group gap="sm">
-              <ThemeIcon size={30} radius={8} variant="light" color="gray">
-                <IconCode size={16} />
-              </ThemeIcon>
-              <Stack gap={0}>
-                <Title order={4} fw={700} c="#f3f5f7">
-                  Interview Online
-                </Title>
-                <Text size="xs" c="#8b919b">
-                  realtime coding room
-                </Text>
-              </Stack>
-            </Group>
-            <Group>
-              <Badge variant="outline" color="gray">
-                Minimal mode
-              </Badge>
-              <Button
-                component={Link}
-                to={authToken ? "/dashboard/rooms" : "/login"}
-                size="xs"
-                variant="light"
-                color="gray"
-              >
-                Личный кабинет
-              </Button>
-            </Group>
-          </Group>
-        </Container>
-      </Box>
+    <main className={styles.page}>
+      <header className={styles.header}>
+        <div className={styles.headerInner}>
+          <Link className={styles.brand} to="/" aria-label="InterHub — главная">
+            <span className={styles.brandMark}><CodeOutlined aria-hidden="true" /></span>
+            <span>
+              <Typography.Text className={styles.brandName}>InterHub</Typography.Text>
+              <Typography.Text className={styles.brandCaption}>realtime coding room</Typography.Text>
+            </span>
+          </Link>
+          <div className={styles.headerActions}>
+            <Tag className={styles.headerTag}>Live coding</Tag>
+            <Link className={`${styles.headerButton} app-header-control`} to={authToken ? "/dashboard/rooms" : "/login"}>
+              Личный кабинет
+            </Link>
+            <ThemeToggleButton />
+          </div>
+        </div>
+      </header>
 
-      <Container size="xl" py={24}>
-        <Group align="stretch" gap="md" wrap="nowrap" style={{ flexWrap: "wrap" }}>
-          <Card
-            withBorder
-            radius="lg"
-            p="xl"
-            style={{
-              flex: 1.1,
-              minWidth: 320,
-              background: "linear-gradient(180deg, #141821 0%, #101318 100%)",
-              borderColor: "#272b34"
-            }}
-          >
-            <Stack gap="lg">
-              <Stack gap={6}>
-                <Text size="xs" c="#8b919b" tt="uppercase" fw={700} lts={1.2}>
-                  Live Coding Session
-                </Text>
-                <Title order={1} fw={800} c="#f3f5f7" style={{ maxWidth: 520 }}>
-                  Запускайте интервью за 30 секунд.
-                </Title>
-                <Text c="#a6acb7" maw={560}>
-                  Общий редактор, шаги интервью и стабильная синхронизация участников без визуального шума.
-                </Text>
-              </Stack>
+      <div className={styles.content}>
+        <section className={styles.hero} aria-labelledby="landing-title">
+          <div className={styles.heroCopy}>
+            <Typography.Text className={styles.eyebrow}>КОМНАТА ДЛЯ ТЕХНИЧЕСКОГО ИНТЕРВЬЮ</Typography.Text>
+            <Typography.Title id="landing-title" className={styles.heroTitle} level={1}>
+              Запускайте интервью за 30 секунд.
+            </Typography.Title>
+            <Typography.Paragraph className={styles.heroDescription}>
+              Общий редактор, шаги интервью и стабильная синхронизация участников без визуального шума.
+            </Typography.Paragraph>
 
-              <Group grow>
-                <Card withBorder p="md" bg="#12161c" style={{ borderColor: "#242931" }}>
-                  <Group>
-                    <ThemeIcon color="gray" variant="light" size={26}>
-                      <IconUsers size={14} />
-                    </ThemeIcon>
-                    <Stack gap={0}>
-                      <Text fw={700} size="sm" c="#eff2f6">
-                        Interviewer + Candidate
-                      </Text>
-                      <Text size="xs" c="#8b919b">
-                        Список участников и контроль ролей
-                      </Text>
-                    </Stack>
-                  </Group>
-                </Card>
-                <Card withBorder p="md" bg="#12161c" style={{ borderColor: "#242931" }}>
-                  <Group>
-                    <ThemeIcon color="gray" variant="light" size={26}>
-                      <IconDeviceLaptop size={14} />
-                    </ThemeIcon>
-                    <Stack gap={0}>
-                      <Text fw={700} size="sm" c="#eff2f6">
-                        Step-by-step flow
-                      </Text>
-                      <Text size="xs" c="#8b919b">
-                        Управление задачами по шагам
-                      </Text>
-                    </Stack>
-                  </Group>
-                </Card>
-              </Group>
-
-              <Card withBorder p="md" bg="#0f1218" style={{ borderColor: "#242931" }}>
-                <Text component="pre" c="#c9d0db" style={{ margin: 0, fontSize: 13, lineHeight: 1.6 }}>
-{`# Python
-
-def solve(nums):
-    return sum(nums)
-
-# Node JS
-function solve(nums) {
-  return nums.reduce((a, b) => a + b, 0);
-}`}
-                </Text>
+            <div className={styles.featureGrid}>
+              <Card className={styles.featureCard}>
+                <span className={styles.featureIcon}><TeamOutlined aria-hidden="true" /></span>
+                <span>
+                  <Typography.Text strong>Interviewer + Candidate</Typography.Text>
+                  <Typography.Text className={styles.secondaryText}>Участники и контроль ролей</Typography.Text>
+                </span>
               </Card>
-            </Stack>
-          </Card>
+              <Card className={styles.featureCard}>
+                <span className={styles.featureIcon}><LaptopOutlined aria-hidden="true" /></span>
+                <span>
+                  <Typography.Text strong>Step-by-step flow</Typography.Text>
+                  <Typography.Text className={styles.secondaryText}>Задачи и публикация шагов</Typography.Text>
+                </span>
+              </Card>
+            </div>
 
-          <Stack style={{ flex: 0.9, minWidth: 320 }} gap="md">
-            <Card
-              withBorder
-              radius="lg"
-              p="xl"
-              style={{ background: "#11151c", borderColor: "#272b34" }}
-            >
-              <form onSubmit={onCreate}>
-                <Stack>
-                  <Title order={2} c="#f3f5f7" size="h3">
-                    Создать комнату
-                  </Title>
-                  <Text size="sm" c="#8b919b">
-                    Быстрый вход для интервьюера без регистрации.
-                  </Text>
-                  <TextInput
-                    label="Ваш ник"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.currentTarget.value)}
-                    styles={darkFieldStyles}
-                    required
-                  />
-                  <TextInput
-                    label="Название комнаты"
-                    value={title}
-                    onChange={(e) => setTitle(e.currentTarget.value)}
-                    styles={darkFieldStyles}
-                    required
-                  />
-                  <Select
-                    label="Язык"
-                    data={LANGUAGES}
-                    value={language}
-                    onChange={(value) => setLanguage(value ?? "nodejs")}
-                    styles={darkFieldStyles}
-                    required
-                  />
-                  <Button
-                    type="submit"
-                    loading={isLoading}
-                    rightSection={<IconArrowRight size={15} />}
-                    style={{ background: "#f3f5f7", color: "#0f1115" }}
-                  >
-                    Создать комнату
-                  </Button>
-                </Stack>
+            <div className={styles.codeSample} aria-label="Пример кода редактора">
+              <div className={styles.codeSampleHeader}><i aria-hidden="true" /><i aria-hidden="true" /><i aria-hidden="true" /><Typography.Text>solve.py</Typography.Text></div>
+              <pre>{`# Python\ndef solve(nums):\n    return sum(nums)\n\n# Node JS\nfunction solve(nums) {\n  return nums.reduce((a, b) => a + b, 0);\n}`}</pre>
+            </div>
+          </div>
+
+          <aside className={styles.forms} aria-label="Быстрый вход в интервью">
+            <Card className={styles.formCard}>
+              <Space orientation="vertical" size={4}>
+                <Typography.Title level={2}>Создать комнату</Typography.Title>
+                <Typography.Text className={styles.secondaryText}>Быстрый вход для интервьюера без регистрации.</Typography.Text>
+              </Space>
+              <Button block type="primary" size="large" icon={<ArrowRightOutlined aria-hidden="true" />} onClick={() => { setError(""); setCreateOpened(true); }}>Создать комнату</Button>
+            </Card>
+            <Modal open={createOpened} onCancel={() => { if (!isLoading) setCreateOpened(false); }} title="Создать комнату" centered footer={null} mask={{ closable: !isLoading }} keyboard={!isLoading} closable={!isLoading}>
+              <form className={styles.form} onSubmit={onCreate}>
+                <label className={styles.field}>
+                  <span>Ваше имя</span>
+                  <Input autoComplete="name" placeholder="Введите имя для отображения" value={displayName} onChange={(event) => setDisplayName(event.currentTarget.value)} required autoFocus />
+                </label>
+                <label className={styles.field}>
+                  <span>Название комнаты</span>
+                  <Input placeholder="Введите название интервью" value={title} onChange={(event) => setTitle(event.currentTarget.value)} required />
+                </label>
+                <label className={styles.field}>
+                  <span>Язык</span>
+                  <Select aria-label="Язык" placeholder="Выберите язык решения" options={LANGUAGES} value={language} onChange={(value) => setLanguage(value)} style={{ width: "100%" }} />
+                </label>
+                <Space style={{ justifyContent: "flex-end", width: "100%" }}>
+                <Button htmlType="button" disabled={isLoading} onClick={() => setCreateOpened(false)}>Отмена</Button>
+                <Button htmlType="submit" loading={isLoading} type="primary" icon={<ArrowRightOutlined aria-hidden="true" />}>
+                  Создать комнату
+                </Button>
+                </Space>
+                {error && <Alert className={styles.formAlert} role="alert" showIcon type="error" message={error} />}
+              </form>
+            </Modal>
+
+            <Card className={styles.joinCard}>
+              <Typography.Title level={3}>Войти по коду</Typography.Title>
+              <form className={styles.form} onSubmit={onJoin}>
+                <label className={styles.field}>
+                  <span>Ваше имя</span>
+                  <Input autoComplete="name" placeholder="Имя, которое увидят участники" value={displayName} onChange={(event) => setDisplayName(event.currentTarget.value)} required />
+                </label>
+                <label className={styles.field}>
+                  <span>Код комнаты</span>
+                  <Input placeholder="r-xxxxxxxx" value={inviteCode} onChange={(event) => setInviteCode(event.currentTarget.value)} required />
+                </label>
+                <Button block htmlType="submit">Подключиться</Button>
               </form>
             </Card>
-
-            <Card withBorder radius="lg" p="xl" style={{ background: "#11151c", borderColor: "#272b34" }}>
-              <form onSubmit={onJoin}>
-                <Stack>
-                  <Title order={2} c="#f3f5f7" size="h3">
-                    Войти по коду
-                  </Title>
-                  <TextInput
-                    label="Ваш ник"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.currentTarget.value)}
-                    styles={darkFieldStyles}
-                    required
-                  />
-                  <TextInput
-                    label="Код комнаты"
-                    value={inviteCode}
-                    onChange={(e) => setInviteCode(e.currentTarget.value)}
-                    placeholder="r-xxxxxxxx"
-                    styles={darkFieldStyles}
-                    required
-                  />
-                  <Button variant="outline" color="gray" type="submit">
-                    Подключиться
-                  </Button>
-                </Stack>
-              </form>
-            </Card>
-
-            {error && <Text c="red.4">{error}</Text>}
-          </Stack>
-        </Group>
-      </Container>
-    </Box>
+          </aside>
+        </section>
+      </div>
+    </main>
   );
 }

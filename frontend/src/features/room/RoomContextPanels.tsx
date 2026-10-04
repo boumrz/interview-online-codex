@@ -11,6 +11,9 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { Button, Tooltip } from "antd";
+import { IconHelpCircle } from "components/antd-icons";
+import { isRoomReadOnly } from "./roomEditPolicy";
 
 import styles from "./RoomContextPanels.module.css";
 import {
@@ -59,9 +62,9 @@ const SURFACE_INDEX = new Map(
   SURFACES.map((surface, index) => [surface.name, index]),
 );
 
-type AuxiliarySurfaceName = Exclude<RoomContextSurfaceName, "editor">;
+type AuxiliarySurfaceName = Exclude<RoomContextSurfaceName, "editor" | "condition">;
 const AUXILIARY_SURFACES = SURFACES.filter(
-  (surface): surface is (typeof surface & { name: AuxiliarySurfaceName }) => surface.name !== "editor",
+  (surface): surface is (typeof surface & { name: AuxiliarySurfaceName }) => surface.name !== "editor" && surface.name !== "condition",
 );
 
 type Geometry = {
@@ -69,6 +72,7 @@ type Geometry = {
   height: number;
   surfaceWidth: number;
   surfaceHeight: number;
+  conditionSpace: number;
 };
 
 const OVERVIEW_MIN_SURFACE_WIDTH = 240 + 480 + 320 + 20;
@@ -94,6 +98,7 @@ function readUsableGeometry(
       height: 768,
       surfaceWidth: 1024,
       surfaceHeight: 768,
+      conditionSpace: 688,
     };
   }
 
@@ -112,6 +117,10 @@ function readUsableGeometry(
       height: Math.floor(bounds.height),
       surfaceWidth: Math.max(0, Math.floor(surfaceWidth)),
       surfaceHeight: Math.max(0, Math.floor(surfaceHeight)),
+      conditionSpace: Math.max(0, Math.floor(bounds.height
+        - (element?.firstElementChild?.getBoundingClientRect().height ?? 0)
+        - Number.parseFloat(window.getComputedStyle(element!).rowGap || "0") * 2
+        - Number.parseFloat(surfaceStyle?.paddingBottom ?? "0"))),
     };
   }
 
@@ -122,6 +131,7 @@ function readUsableGeometry(
     height,
     surfaceWidth: width,
     surfaceHeight: height,
+    conditionSpace: Math.max(0, height - 80),
   };
 }
 
@@ -156,6 +166,7 @@ function RoomLayoutSeparator({
   onChange,
   orientation,
   value,
+  growthDirection = -1,
 }: {
   bounds: SplitBounds;
   className: string;
@@ -163,13 +174,14 @@ function RoomLayoutSeparator({
   onChange: (value: number) => void;
   orientation: SplitOrientation;
   value: number;
+  growthDirection?: 1 | -1;
 }) {
   const dragRef = useRef<{ pointerId: number; startPosition: number; startValue: number } | null>(null);
   const position = (event: PointerEvent<HTMLButtonElement>) => orientation === "vertical" ? event.clientX : event.clientY;
   const updateFromPointer = (event: PointerEvent<HTMLButtonElement>) => {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
-    onChange(clampSplitValue(drag.startValue - (position(event) - drag.startPosition), bounds));
+    onChange(clampSplitValue(drag.startValue + growthDirection * (position(event) - drag.startPosition), bounds));
   };
 
   return (
@@ -213,12 +225,14 @@ export function RoomStatusStrip({
   localStep,
   publishedStep,
   candidateStatus,
+  roomStatus,
 }: {
   role: "owner" | "interviewer" | "candidate";
   connected: boolean;
   localStep?: RoomStatusStep;
   publishedStep?: RoomStatusStep;
   candidateStatus?: string;
+  roomStatus?: string;
 }) {
   const roleLabel = role === "owner"
     ? "Владелец"
@@ -234,6 +248,7 @@ export function RoomStatusStrip({
     <div
       className={styles.statusRow}
       data-testid="room-persistent-status"
+      data-has-lifecycle={roomStatus === "finished" || roomStatus === "frozen" ? "true" : undefined}
       role="group"
       aria-label="Статус участника и комнаты"
     >
@@ -245,6 +260,14 @@ export function RoomStatusStrip({
       >
         {roleLabel}
       </span>
+      {roomStatus === "finished" || roomStatus === "frozen" ? (
+        <span className={styles.lifecycleStatus} role="status" aria-live="polite" data-testid="room-lifecycle-status" data-room-status={roomStatus}>
+          <span>{roomStatus === "finished" ? "Интервью завершено" : "Изменения приостановлены"}</span>
+          {isRoomReadOnly({ status: roomStatus, canManageRoom: role !== "candidate" }) ? (
+            <span className={styles.lifecycleAccess}>Только просмотр</span>
+          ) : null}
+        </span>
+      ) : null}
       {!connected ? (
         <span
           className={styles.statusItem}
@@ -253,11 +276,6 @@ export function RoomStatusStrip({
           aria-live="polite"
         >
           Соединение: восстанавливается
-        </span>
-      ) : null}
-      {showPublishedStep && publishedStep ? (
-        <span className={styles.statusItem} data-testid="room-published-step-status">
-          {`Опубликован: шаг ${publishedStep.stepIndex + 1} · ${publishedStep.title}`}
         </span>
       ) : null}
       {candidateStatus ? (
@@ -278,15 +296,16 @@ export function RoomContextPanels({
   children,
   headerAction,
   layoutKey,
-  singleSurface = false,
+  showCondition = true,
 }: {
   children: ReactNode;
   headerAction?: ReactNode;
   layoutKey?: string;
-  singleSurface?: boolean;
+  showCondition?: boolean;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const surfaceGridRef = useRef<HTMLDivElement | null>(null);
+  const conditionOwnsFocusRef = useRef(false);
   const tabRefs = useRef(new Map<AuxiliarySurfaceName, HTMLButtonElement>());
   const initialGeometry = useMemo(readUsableGeometry, []);
   const [geometry, setGeometry] = useState(initialGeometry);
@@ -294,17 +313,20 @@ export function RoomContextPanels({
   const previousAutomaticModeRef = useRef(initialAutomaticMode);
   const [mode, setMode] = useState<RoomContextLayoutMode>(initialAutomaticMode);
   const [activeSurface, setActiveSurface] = useState<RoomContextSurfaceName>(
-    initialAutomaticMode === "focus" ? "editor" : "condition",
+    "steps",
   );
   const [focusedSurface, setFocusedSurface] =
     useState<RoomContextSurfaceName>(
-      initialAutomaticMode === "focus" ? "editor" : "condition",
+      "steps",
     );
   const [lastAuxiliarySurface, setLastAuxiliarySurface] =
-    useState<AuxiliarySurfaceName>("condition");
-  const availableAuxiliarySurfaces = singleSurface
-    ? AUXILIARY_SURFACES.filter((surface) => surface.name !== "condition")
-    : AUXILIARY_SURFACES;
+    useState<AuxiliarySurfaceName>("steps");
+  const availableAuxiliarySurfaces = AUXILIARY_SURFACES;
+  const [conditionExpanded, setConditionExpanded] = useState(true);
+  const [conditionHeight, setConditionHeight] = useState<number | null>(null);
+  const childSurfaces = React.Children.toArray(children);
+  const conditionChildren = childSurfaces.filter(child => React.isValidElement<{ name?: RoomContextSurfaceName }>(child) && child.props.name === "condition");
+  const tabbedChildren = childSurfaces.filter(child => !React.isValidElement<{ name?: RoomContextSurfaceName }>(child) || child.props.name !== "condition");
   const [showBothCommunicationSurfaces, setShowBothCommunicationSurfaces] =
     useState(false);
   const [workAuxiliaryWidth, setWorkAuxiliaryWidth] = useState(() =>
@@ -326,6 +348,7 @@ export function RoomContextPanels({
           && current.height === next.height
           && current.surfaceWidth === next.surfaceWidth
           && current.surfaceHeight === next.surfaceHeight
+          && current.conditionSpace === next.conditionSpace
           ? current
           : next,
       );
@@ -354,7 +377,7 @@ export function RoomContextPanels({
   }, []);
 
   useEffect(() => {
-    const nextAutomaticMode = singleSurface ? "focus" : automaticMode(geometry);
+    const nextAutomaticMode = automaticMode(geometry);
     const previousAutomaticMode = previousAutomaticModeRef.current;
     previousAutomaticModeRef.current = nextAutomaticMode;
 
@@ -370,14 +393,7 @@ export function RoomContextPanels({
       }
       return currentMode;
     });
-  }, [geometry, singleSurface]);
-
-  useEffect(() => {
-    setMode(singleSurface ? "focus" : automaticMode(geometry));
-    setActiveSurface("editor");
-    setFocusedSurface(singleSurface ? "steps" : "condition");
-    setLastAuxiliarySurface(singleSurface ? "steps" : "condition");
-  }, [singleSurface]);
+  }, [geometry]);
 
   useEffect(() => {
     if (previousLayoutKeyRef.current === layoutKey) return;
@@ -387,9 +403,11 @@ export function RoomContextPanels({
     previousAutomaticModeRef.current = nextMode;
     setGeometry(nextGeometry);
     setMode(nextMode);
-    setActiveSurface(nextMode === "focus" ? "editor" : "condition");
-    setFocusedSurface(nextMode === "focus" ? "editor" : "condition");
-    setLastAuxiliarySurface("condition");
+    setActiveSurface("steps");
+    setFocusedSurface("steps");
+    setLastAuxiliarySurface("steps");
+    setConditionExpanded(true);
+    setConditionHeight(null);
     setShowBothCommunicationSurfaces(false);
     setWorkAuxiliaryWidth(defaultSplitValue(
       workAuxiliaryBounds(nextGeometry.surfaceWidth),
@@ -406,6 +424,21 @@ export function RoomContextPanels({
   }, [layoutKey]);
 
   const workBounds = workAuxiliaryBounds(geometry.surfaceWidth);
+  // The automatic size leaves the editor visible without scrolling. Explicit
+  // resizing has a wider range; the editor keeps its minimum height and the
+  // room itself scrolls when the participant chooses a larger condition.
+  const automaticConditionMaximum = mode === "focus"
+    ? Math.max(80, Math.floor(Math.min(geometry.conditionSpace - 180, (window.visualViewport?.height ?? window.innerHeight) * 0.35)))
+    : Math.max(80, geometry.conditionSpace - 400);
+  const automaticConditionBounds = { min: Math.min(160, automaticConditionMaximum), max: automaticConditionMaximum };
+  const conditionBounds = { min: automaticConditionBounds.min, max: Math.max(mode === "focus" ? 240 : automaticConditionBounds.min, geometry.conditionSpace - 180) };
+  const resolvedConditionHeight = conditionHeight === null
+    ? clampSplitValue(240, automaticConditionBounds)
+    : clampSplitValue(conditionHeight, conditionBounds);
+  const conditionNeedsRoomScroll = showCondition && conditionExpanded
+    && (mode === "work"
+      ? resolvedConditionHeight + 400 > geometry.conditionSpace
+      : conditionHeight !== null && resolvedConditionHeight > automaticConditionMaximum);
   const overviewRightBounds = overviewRightColumnBounds(geometry.surfaceWidth);
   const overviewChatBounds = overviewChatHeightBounds(geometry.surfaceHeight);
   const resolvedWorkAuxiliaryWidth = workBounds ? clampSplitValue(workAuxiliaryWidth, workBounds) : null;
@@ -422,7 +455,20 @@ export function RoomContextPanels({
     if (overviewChatBounds) setOverviewChatHeight((current) => clampSplitValue(current, overviewChatBounds));
   }, [overviewChatBounds?.max, overviewChatBounds?.min]);
 
+  useLayoutEffect(() => {
+    // A remote mode change can remove the focused resize handle before this
+    // effect runs. Remember focus ownership rather than relying on a removed
+    // node still being document.activeElement.
+    if (showCondition || !conditionOwnsFocusRef.current) return;
+    const root = rootRef.current;
+    const target = root?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
+      ?? root?.querySelector<HTMLElement>('[role="tab"][tabindex="0"]');
+    target?.focus();
+    conditionOwnsFocusRef.current = false;
+  }, [showCondition]);
+
   const activateSurface = useCallback((surface: RoomContextSurfaceName) => {
+    if (surface === "condition") return;
     setActiveSurface(surface);
     if (surface !== "editor") {
       setLastAuxiliarySurface(surface);
@@ -433,7 +479,7 @@ export function RoomContextPanels({
   }, []);
 
   const moveVisibleFocus = (
-    event: KeyboardEvent<HTMLButtonElement>,
+    event: KeyboardEvent<HTMLElement>,
     surface: AuxiliarySurfaceName,
   ) => {
     const currentIndex = availableAuxiliarySurfaces.findIndex((item) => item.name === surface);
@@ -474,13 +520,13 @@ export function RoomContextPanels({
   const showAuxiliaryTablist = true;
   const visibleSurfaces = useMemo(() => {
     if (mode === "focus") {
-      return new Set<RoomContextSurfaceName>([activeSurface]);
+      return new Set<RoomContextSurfaceName>([activeSurface, ...(showCondition && conditionExpanded ? ["condition" as const] : [])]);
     }
     if (mode === "work") {
-      return new Set<RoomContextSurfaceName>(["editor", workAuxiliarySurface]);
+      return new Set<RoomContextSurfaceName>(["editor", workAuxiliarySurface, ...(showCondition && conditionExpanded ? ["condition" as const] : [])]);
     }
 
-    const overviewSurfaces = new Set<RoomContextSurfaceName>(["steps", "editor"]);
+    const overviewSurfaces = new Set<RoomContextSurfaceName>(["steps", "editor", ...(showCondition && conditionExpanded ? ["condition" as const] : [])]);
     if (showBothCommunicationSurfaces) {
       overviewSurfaces.add("chat");
       overviewSurfaces.add("activity");
@@ -492,7 +538,7 @@ export function RoomContextPanels({
       );
     }
     return overviewSurfaces;
-  }, [activeSurface, mode, showBothCommunicationSurfaces, workAuxiliarySurface]);
+  }, [activeSurface, conditionExpanded, mode, showBothCommunicationSurfaces, showCondition, workAuxiliarySurface]);
 
   const contextValue = useMemo<RoomContextValue>(
     () => ({ activeSurface, activateSurface, mode, showAuxiliaryTablist, visibleSurfaces }),
@@ -505,6 +551,7 @@ export function RoomContextPanels({
       className={styles.root}
       data-room-context-mode={mode}
       data-room-context-narrow-tabs={geometry.width < 950 ? "true" : "false"}
+      data-room-context-condition-scroll={conditionNeedsRoomScroll ? "true" : undefined}
       style={{
         "--room-work-auxiliary-width": resolvedWorkAuxiliaryWidth ? `${resolvedWorkAuxiliaryWidth}px` : undefined,
         "--room-overview-right-width": resolvedOverviewRightWidth ? `${resolvedOverviewRightWidth}px` : undefined,
@@ -523,7 +570,7 @@ export function RoomContextPanels({
               <button
                 key={surface.name}
                 ref={(node) => {
-                  if (node) tabRefs.current.set(surface.name, node);
+                  if (node) tabRefs.current.set(surface.name, node as HTMLButtonElement);
                   else tabRefs.current.delete(surface.name);
                 }}
                 id={surfaceTabId(surface.name)}
@@ -552,21 +599,42 @@ export function RoomContextPanels({
         <div className={styles.secondaryControls}>
           {headerAction}
           {mode === "focus" && activeSurface !== "editor" ? (
-            <button
-              type="button"
+            <Button
+              type="text"
+              htmlType="button"
               className={styles.modeButton}
               aria-label="Вернуться к редактору"
               onClick={() => setActiveSurface("editor")}
             >
               К редактору
-            </button>
+            </Button>
           ) : null}
         </div>
       </div>
 
       <RoomContext.Provider value={contextValue}>
+        {conditionChildren.length > 0 ? <div className={styles.conditionSection} hidden={!showCondition} data-condition-expanded={conditionExpanded ? "true" : "false"} style={{ height: conditionExpanded ? resolvedConditionHeight : 36 }}
+          onFocusCapture={() => { conditionOwnsFocusRef.current = true; }}
+          onBlurCapture={event => {
+            if (event.relatedTarget instanceof Node && !event.currentTarget.contains(event.relatedTarget)) conditionOwnsFocusRef.current = false;
+          }}
+        >
+          <button id="room-condition-toggle" type="button" className={styles.conditionToggle} aria-label={conditionExpanded ? "Свернуть условие" : "Развернуть условие"} aria-expanded={conditionExpanded} aria-controls={surfaceRegionId("condition")} onClick={() => setConditionExpanded(value => !value)}>
+            <span>Условие</span><span>{conditionExpanded ? "Свернуть условие" : "Развернуть условие"}</span>
+          </button>
+          {conditionChildren}
+          {showCondition && conditionExpanded ? <RoomLayoutSeparator
+            bounds={conditionBounds}
+            className={styles.conditionHeightSeparator}
+            label="Изменить высоту условия"
+            onChange={setConditionHeight}
+            orientation="horizontal"
+            value={resolvedConditionHeight}
+            growthDirection={1}
+          /> : null}
+        </div> : null}
         <div ref={surfaceGridRef} className={styles.surfaceGrid} data-testid="room-context-surface-grid">
-          {children}
+          {tabbedChildren}
           {mode === "work" && workBounds && resolvedWorkAuxiliaryWidth ? (
             <RoomLayoutSeparator
               bounds={workBounds}
@@ -623,7 +691,7 @@ export function RoomContextSurface({
 
   const definition = SURFACES[SURFACE_INDEX.get(name) ?? 0];
   const visible = context.visibleSurfaces.has(name);
-  const usesTabLabel = name !== "editor" && context.showAuxiliaryTablist;
+  const usesTabLabel = name !== "editor" && name !== "condition" && context.showAuxiliaryTablist;
   const isSupportingEditor =
     visible && name === "editor" && context.activeSurface !== "editor";
   useLayoutEffect(() => {
@@ -634,7 +702,17 @@ export function RoomContextSurface({
     const updateTabOrder = () => {
       const retainsActiveFocus = region.contains(document.activeElement);
       if (!visible && retainsActiveFocus) {
-        if (context.activeSurface !== "editor") {
+        if (name === "condition") {
+          const toggle = document.getElementById("room-condition-toggle");
+          if (toggle?.getClientRects().length) toggle.focus();
+          else {
+            const panels = region.closest("[data-room-context-mode]");
+            const target = panels?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
+              ?? panels?.querySelector<HTMLElement>('[role="tab"][tabindex="0"]');
+            target?.focus();
+          }
+        }
+        else if (context.activeSurface !== "editor") {
           document.getElementById(surfaceTabId(context.activeSurface))?.focus();
         }
       }
@@ -691,13 +769,35 @@ export function RoomContextSurface({
       aria-hidden={visible ? undefined : true}
       data-room-context-surface={name}
       data-room-context-visible={visible ? "true" : "false"}
-      onFocusCapture={() => {
-        if (visible && context.activeSurface !== name) {
+      onFocusCapture={(event) => {
+        if (name !== "condition" && visible && context.activeSurface !== name) {
           context.activateSurface(name);
+        }
+        const target = event.target;
+        const panels = regionRef.current?.closest<HTMLElement>("[data-room-context-mode]");
+        if (visible && panels && target instanceof HTMLElement && target.matches("input, textarea, select, button:focus-visible, a[href]:focus-visible")) {
+          for (let parent = target.parentElement; parent; parent = parent.parentElement) {
+            if (parent.scrollHeight > parent.clientHeight && /auto|scroll/.test(getComputedStyle(parent).overflowY)) {
+              const bounds = parent.getBoundingClientRect();
+              const control = target.getBoundingClientRect();
+              const controls = parent === panels ? panels.firstElementChild : null;
+              const top = controls && getComputedStyle(controls).position === "sticky"
+                ? controls.getBoundingClientRect().bottom : bounds.top + parent.clientTop;
+              const bottom = bounds.top + parent.clientTop + parent.clientHeight;
+              if (control.top < top) parent.scrollTop -= top - control.top;
+              else if (control.bottom > bottom) parent.scrollTop += control.bottom - bottom;
+            }
+            if (parent === panels) break;
+          }
         }
       }}
     >
-      <h2 className={styles.surfaceTitle}>{definition.regionTitle}</h2>
+      <h2 aria-label={definition.regionTitle} className={`${styles.surfaceTitle} ${name === "notes" ? styles.notesTitle : ""}`}>
+        {definition.regionTitle}
+        {name === "notes" ? <Tooltip trigger={["hover", "focus"]} title="Заметки видны только вам. Другие участники интервью их не увидят.">
+          <button type="button" className={styles.notesHelp} aria-label="Кто видит мои заметки"><IconHelpCircle size={16} aria-hidden="true" /></button>
+        </Tooltip> : null}
+      </h2>
       <div className={styles.surfaceBody}>{children}</div>
     </section>
   );

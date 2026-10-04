@@ -5,7 +5,7 @@
  * язык не базовый, то при самом создании по умолчанию базовый язык —
  * должен быть тот, который выбран в табах"):
  *
- * 1. Регистрируем пользователя и заходим на dashboard/tasks.
+ * 1. Регистрируем пользователя и заходим в личную библиотеку.
  * 2. Переключаем активный таб языка на `python` (через query-param
  *    `?lang=python`, который уже использует приложение).
  * 3. Открываем модалку «Создать задачу» — у селекта `Язык` value
@@ -26,9 +26,10 @@ const page = await context.newPage();
 const nickname = `qa_lang_${Date.now()}`;
 
 async function selectedLanguage() {
-  return page
-    .locator('[data-testid="create-task-language-select"]')
-    .inputValue();
+  return page.getByRole("dialog", { name: "Создать задачу", exact: true })
+    .getByRole("combobox", { name: "Язык", exact: true })
+    .locator('xpath=ancestor::*[contains(concat(" ",normalize-space(@class)," ")," ant-select ")][1]')
+    .innerText();
 }
 
 try {
@@ -38,10 +39,10 @@ try {
   await page.getByLabel("Имя для комнаты").fill(nickname);
   await page.getByLabel("Пароль").fill("secret123");
   await page.getByRole("button", { name: "Создать аккаунт" }).click();
-  await page.waitForURL(/\/dashboard\/rooms/, { timeout: 15000 });
+  await page.waitForURL(/\/workspace\/personal\/interviews$/, { timeout: 15000 });
 
-  // Переходим в `Задачи` и сразу выставляем активный таб через URL.
-  await page.goto(`${webBaseUrl}/dashboard/tasks?lang=python`, {
+  // Переходим в библиотеку и выставляем язык фильтра через URL.
+  await page.goto(`${webBaseUrl}/workspace/personal/library?lang=python`, {
     waitUntil: "domcontentloaded",
   });
   await page
@@ -55,7 +56,7 @@ try {
 
   // Закрываем модалку (ESC) и проверяем другой язык.
   await page.keyboard.press("Escape");
-  await page.goto(`${webBaseUrl}/dashboard/tasks?lang=kotlin`, {
+  await page.goto(`${webBaseUrl}/workspace/personal/library?lang=kotlin`, {
     waitUntil: "domcontentloaded",
   });
   await page
@@ -71,7 +72,7 @@ try {
 
   // И финально — plain text как новый язык (см. e2e-plaintext-language).
   await page.keyboard.press("Escape");
-  await page.goto(`${webBaseUrl}/dashboard/tasks?lang=plaintext`, {
+  await page.goto(`${webBaseUrl}/workspace/personal/library?lang=plaintext`, {
     waitUntil: "domcontentloaded",
   });
   await page

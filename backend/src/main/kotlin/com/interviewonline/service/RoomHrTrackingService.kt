@@ -11,9 +11,11 @@ import com.interviewonline.model.User
 import com.interviewonline.repository.RoomHrAssignmentRepository
 import com.interviewonline.repository.RoomParticipantRepository
 import com.interviewonline.repository.RoomRepository
+import com.interviewonline.repository.TeamRepository
 import com.interviewonline.repository.TeamMembershipRepository
 import com.interviewonline.repository.lockByInviteCode
 import com.interviewonline.repository.UserRepository
+import jakarta.persistence.EntityManager
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -24,10 +26,12 @@ import java.util.UUID
 
 @Service
 class RoomHrTrackingService(
+    private val entityManager: EntityManager,
     private val roomRepository: RoomRepository,
     private val assignmentRepository: RoomHrAssignmentRepository,
     private val participantRepository: RoomParticipantRepository,
     private val teamMembershipRepository: TeamMembershipRepository,
+    private val teamRepository: TeamRepository,
     private val userRepository: UserRepository,
     private val roomAccessService: RoomAccessService,
     private val collaborationService: CollaborationService,
@@ -61,9 +65,7 @@ class RoomHrTrackingService(
         eventToken: String?,
     ): InterviewMetadataDto {
         if (request.revision < 0) throw ApiException(HttpStatus.BAD_REQUEST, "Некорректная ревизия метаданных")
-        val room = roomRepository.lockByInviteCode(inviteCode)
-            ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
-        roomAccessService.requirePersonalScope(room)
+        val room = lockRoomForManagement(inviteCode)
         if (room.archivedAt != null) throw ApiException(HttpStatus.GONE, "Комната архивирована")
         roomAccessService.requireManager(
             room,
@@ -123,9 +125,7 @@ class RoomHrTrackingService(
         interviewerToken: String?,
         eventToken: String?,
     ): List<HrManagerDto> {
-        val room = roomRepository.lockByInviteCode(inviteCode)
-            ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
-        roomAccessService.requirePersonalScope(room)
+        val room = lockRoomForManagement(inviteCode)
         if (room.archivedAt != null) throw ApiException(HttpStatus.GONE, "Комната архивирована")
         roomAccessService.requireManager(
             room,
@@ -136,8 +136,13 @@ class RoomHrTrackingService(
         )
         val targetId = canonicalUuidOrNotFound(rawTargetUserId)
         val target = userRepository.lockById(targetId)
+            ?.also { entityManager.refresh(it) }
             ?.takeIf { it.isHr }
             ?: throw hrNotFound()
+        room.teamId?.let { teamId ->
+            val membership = teamMembershipRepository.lockByTeamIdAndUserId(teamId, targetId)
+            if (membership != null && membership.state !in setOf("LEFT", "REMOVED")) throw hrNotFound()
+        }
         assignHiringManager(room, target)
         return currentManagers(room)
     }
@@ -159,9 +164,7 @@ class RoomHrTrackingService(
         eventToken: String?,
     ) {
         collaborationService.mutateRoomPermissions(inviteCode) {
-            val room = roomRepository.lockByInviteCode(inviteCode)
-                ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
-            roomAccessService.requirePersonalScope(room)
+            val room = lockRoomForManagement(inviteCode)
             if (room.archivedAt != null) throw ApiException(HttpStatus.GONE, "Комната архивирована")
             roomAccessService.requireManager(
                 room, user, ownerToken, interviewerToken,
@@ -238,17 +241,33 @@ class RoomHrTrackingService(
         return RoomPermissionMutation(HrTrackingDto(roomId), if (grantsMembership) setOf(requireNotNull(stored.id)) else emptySet())
     }
 
+    private fun lockRoomForManagement(inviteCode: String): Room {
+        val initialTeamId = requireRoom(inviteCode).teamId
+        // Membership removal also locks the team first, then clears room grants.
+        // Serializing here prevents a concurrent invitation from restoring them.
+        initialTeamId?.let { teamId ->
+            teamRepository.lockById(teamId)?.also { entityManager.refresh(it) }?.takeIf { it.state == "ACTIVE" }
+                ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+        }
+        val room = roomRepository.lockByInviteCode(inviteCode)
+            ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+        entityManager.refresh(room)
+        if (room.teamId != initialTeamId) throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+        return room
+    }
+
     private fun currentManagers(room: Room): List<HrManagerDto> {
         val roomId = requireNotNull(room.id)
         val ownerId = room.ownerUser?.id
         room.teamId?.let { teamId ->
-            return participantRepository.findAllByRoomIdOrderByCreatedAtAsc(roomId)
-                .mapNotNull { participant ->
-                    val assigned = participant.user ?: return@mapNotNull null
+            return assignmentRepository.findAllByRoomIdOrderByCreatedAtAscIdAsc(roomId)
+                .mapNotNull { assignment ->
+                    val assigned = assignment.user ?: return@mapNotNull null
                     val userId = assigned.id ?: return@mapNotNull null
+                    val membership = teamMembershipRepository.findByTeamIdAndUserId(teamId, userId)
                     if (!assigned.isHr ||
-                        (userId != ownerId && participant.role != "interviewer") ||
-                        !teamMembershipRepository.existsByTeamIdAndUserIdAndState(teamId, userId, "ACTIVE")
+                        participantRepository.findByRoomIdAndUserId(roomId, userId)?.role != "interviewer" ||
+                        (membership != null && (membership.state !in setOf("LEFT", "REMOVED") || assignment.createdAt <= membership.updatedAt))
                     ) return@mapNotNull null
                     HrManagerDto(
                         userId = userId,
@@ -277,11 +296,15 @@ class RoomHrTrackingService(
             }
     }
 
-    private fun ensureAssignment(room: Room, user: User) {
+    private fun ensureAssignment(room: Room, user: User, renew: Boolean = false) {
         val roomId = requireNotNull(room.id)
         val userId = requireNotNull(user.id)
-        if (!assignmentRepository.existsByRoomIdAndUserId(roomId, userId)) {
+        val existing = assignmentRepository.findByRoomIdAndUserId(roomId, userId)
+        if (existing == null) {
             assignmentRepository.save(RoomHrAssignment(room = room, user = user))
+        } else if (renew) {
+            existing.createdAt = Instant.now()
+            assignmentRepository.save(existing)
         }
     }
 
@@ -297,7 +320,7 @@ class RoomHrTrackingService(
                 participantRepository.save(existing)
             }
         }
-        ensureAssignment(room, target)
+        ensureAssignment(room, target, renew = true)
     }
 
     private fun requireRoom(inviteCode: String): Room = roomRepository.findByInviteCode(inviteCode)

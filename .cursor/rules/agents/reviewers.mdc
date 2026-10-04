@@ -1,54 +1,19 @@
 ---
-description: Rules for all reviewer and auditor agents: solution-reviewer, security-reliability, prompt-task-auditor, test-reviewer, ux-critic. Reference when running any review or audit step.
+description: Focused review and audit guidance for engineering, security/reliability, requirements, test coverage, and UX.
 ---
 
-# Reviewer and Auditor Agents
+# Review and Audit Roles
 
-## Mandatory test-first check
+Follow `AGENTS.md` and `specs/README.md`. Choose a reviewer for a specific uncertainty or risk; do not route every task through all reviewers.
 
-For every behavioural change, reviewers require a selected acceptance test, evidence that it ran red before production implementation, and final green verification. User-observable behaviour uses E2E unless the active OpenSpec task records a proportionate integration/unit exception. The Prompt/Task Auditor returns `needs-clarification` and the Solution Reviewer returns `revise` when this evidence is absent.
+| Need | Canonical prompt | Result |
+|---|---|---|
+| Engineering or architecture correctness | `agents/roles/solution-reviewer-agent.md` | approve / revise / reject |
+| Significant permissions, invitations, realtime, migrations or other sensitive boundaries | `agents/roles/security-reliability-agent.md` | pass / pass-with-notes / block; independent review required |
+| Doubtful task/spec completeness | `agents/roles/prompt-task-auditor-agent.md` | ready / needs-clarification |
+| Complex or doubtful test coverage | `agents/roles/test-reviewer-agent.md` | coverage-sufficient / coverage-incomplete |
+| Complex or uncertain interaction design | `agents/roles/ux-critic-agent.md` | ux-approved / ux-issues-found |
 
-## Solution Reviewer Agent
-**MODEL: Sonnet**
+Review against the current feature contract and its R/AC identifiers. Derive permissions and lifecycle rules from it rather than imposing owner-only controls, expiry rules, timing targets, or new infrastructure. Check test-first practice and verification in proportion to executable behavior; documentation/planning without runtime changes does not require application tests.
 
-Returns `approve` | `revise` | `reject` verdict on engineering/architecture output.
-- Blocking finding (bug, contract violation) → `revise` or `reject`
-- Overengineered for MVP → `major` finding, recommend simplification
-- Approve → task proceeds to QA
-
-## Security & Reliability Agent
-**MODEL: Sonnet**
-
-Validates security and reliability of auth, room ownership, execution, and WebSocket features.
-
-Non-negotiable blocking conditions:
-- Owner-only actions not enforced server-side → BLOCK
-- Code execution without sandbox → BLOCK
-- Invite token without expiry strategy → BLOCK
-- Reconnect that silently corrupts state → BLOCK
-
-## Prompt/Task Auditor Agent
-**MODEL: Haiku**
-
-Checks task definitions before execution. Every task from Team Lead passes through this agent first.
-
-Checklist:
-- Goal defined? AC defined? Owner assigned? Reviewers listed?
-- Inputs listed? Dependencies explicit? Scope fits one handoff?
-- Stack compliant? No conflicts with existing decisions?
-
-All 9 pass → `ready`. Any fail → `needs-clarification`, list what's missing.
-
-## Test Reviewer Agent
-**MODEL: Haiku**
-
-Reviews QA Agent's test coverage completeness.
-Checks: happy path, negative paths, race conditions, reconnect, permission checks, reproducibility.
-
-## UX Critic Agent
-**MODEL: Haiku**
-
-Reviews Designer Agent's UX flows and screen specs.
-Checks: room creation clarity, role visibility, step switching, run code distinction, error/loading states.
-
-Returns `ux-approved` or `ux-issues-found` with blocking/non-blocking classification.
+Findings need concrete evidence, affected requirement/file, impact, and a necessary correction. A blocking security/reliability finding prevents acceptance until fixed and rechecked. Return concise readable findings; use a machine schema only for a named actual consumer.

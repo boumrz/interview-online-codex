@@ -246,6 +246,16 @@ async function assertManagerControls(manager) {
   assertCondition(await manager.page.locator("[data-testid^='room-step-row-']").count() >= 3, `${manager.label}_MANAGER_STEP_CONTROLS_MISSING`);
 }
 
+async function selectManagerStep(manager, stepIndex, starterCode) {
+  await manager.page.getByRole('tab', { name: 'Шаги', exact: true }).click();
+  await manager.page.locator(`[data-testid='room-step-row-${stepIndex}']`).click();
+  await manager.page.waitForFunction(({ stepIndex, starterCode }) => {
+    const context = document.querySelector('[data-testid="room-current-local-step-context"]');
+    const view = document.querySelector('[data-testid="room-code-editor-host"]')?.__roomEditorView;
+    return context?.getAttribute('data-step-index') === String(stepIndex) && view?.state.doc.toString() === starterCode;
+  }, { stepIndex, starterCode });
+}
+
 async function assertOnline(participants, label) {
   await Promise.all(participants.map((participant) => waitForRealtimeReady(participant.page, `${label}_${participant.label}`)));
 }
@@ -317,11 +327,11 @@ async function runFourManagersOneCandidate(browser, runNumber, samples) {
     }
 
     await Promise.all([
-      managers[0].page.locator("[data-testid='room-step-row-1']").click(),
-      managers[1].page.locator("[data-testid='room-step-row-1']").click(),
-      managers[2].page.locator("[data-testid='room-step-row-1']").click(),
+      selectManagerStep(managers[0], 1, tasks[1].starterCode),
+      selectManagerStep(managers[1], 1, tasks[1].starterCode),
+      selectManagerStep(managers[2], 1, tasks[1].starterCode),
     ]);
-    await managers[3].page.locator("[data-testid='room-step-row-2']").click();
+    await selectManagerStep(managers[3], 2, tasks[2].starterCode);
     await managers[0].page.locator("[data-testid='room-publish-step']").waitFor({ state: "visible", timeout: 10_000 });
     await managers[1].page.locator("[data-testid='room-publish-step']").waitFor({ state: "visible", timeout: 10_000 });
     const privateObservers = [managers[0], managers[1], managers[2]];

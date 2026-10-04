@@ -2,26 +2,37 @@
   display: none;
 }
 
+.candidateAction {
+  min-height: 40px;
+  padding-inline: 14px;
+  border-color: var(--app-control-border) !important;
+  color: var(--app-primary-text) !important;
+  background: var(--app-surface) !important;
+  font-weight: 600;
+}
+
+.candidateAction:hover,
+.candidateAction:focus-visible {
+  border-color: var(--app-primary) !important;
+  color: var(--app-primary-text-hover) !important;
+  background: var(--app-neutral-hover) !important;
+}
+
 .modalBody {
   max-height: min(78vh, 760px);
   overflow-y: auto;
 }
 
 .managerRow {
-  border: 1px solid #2a3039;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
   padding: 10px;
   overflow-wrap: anywhere;
 }
 
 .footer {
-  position: sticky;
-  bottom: -16px;
-  z-index: 1;
-  margin: 0 -16px -16px;
-  padding: 12px 16px;
-  border-top: 1px solid #272b34;
-  background: #1a1b1e;
+  padding-top: 12px;
+  border-top: 1px solid var(--app-border);
 }
 
 @media (max-width: 719px) {

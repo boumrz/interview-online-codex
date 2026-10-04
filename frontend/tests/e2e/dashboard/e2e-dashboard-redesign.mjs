@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { chromium } from "playwright";
 
 const webBaseUrl = process.env.E2E_BASE_URL || "http://localhost:5173";
@@ -20,20 +21,25 @@ async function register() {
   return payload;
 }
 
-function rgbChannels(rgbText) {
-  const match = rgbText.match(/\d+/g);
-  if (!match || match.length < 3) return [0, 0, 0];
-  return match.slice(0, 3).map((value) => Number(value));
+async function assertThemeSurface(page, surface, theme, token = '--app-surface-soft') {
+  await page.evaluate(value => { localStorage.setItem('interview-online:ui-theme', value); window.dispatchEvent(new StorageEvent('storage', { key: 'interview-online:ui-theme', newValue: value })); }, theme);
+  await page.waitForFunction(value => document.documentElement.dataset.theme === value, theme);
+  const expected = await page.evaluate(token => {
+    const probe = document.createElement('span'); probe.style.color = `var(${token})`; document.body.append(probe);
+    const color = getComputedStyle(probe).color; probe.remove(); return color;
+  }, token);
+  await page.waitForFunction(({ element, expected }) => getComputedStyle(element).backgroundColor === expected, { element: await surface.elementHandle(), expected });
 }
 
 const browser = await chromium.launch({ headless: true });
 
 try {
   const auth = await register();
-  const context = await browser.newContext();
+  const context = await browser.newContext({ viewport: { width: 1366, height: 900 } });
   await context.addInitScript(({ token, user }) => {
     localStorage.setItem("auth_token", token);
     localStorage.setItem("auth_user", JSON.stringify(user));
+    localStorage.setItem("interview-online:ui-theme", "dark");
   }, auth);
 
   const page = await context.newPage();
@@ -54,15 +60,8 @@ try {
     throw new Error(`TASK_BANK_NOT_FULL_WIDTH_ENOUGH:${taskBankWidthShare}`);
   }
 
-  const taskBankBackground = await page.evaluate(() => {
-    const panel = document.querySelector('[data-testid="task-bank-panel"]');
-    if (!panel) return "rgb(0,0,0)";
-    return getComputedStyle(panel).backgroundColor;
-  });
-  const [taskR, taskG, taskB] = rgbChannels(taskBankBackground);
-  if (taskR > 120 || taskG > 120 || taskB > 120) {
-    throw new Error(`TASK_BANK_THEME_TOO_LIGHT:${taskBankBackground}`);
-  }
+  const taskBank = page.getByTestId('task-bank-panel');
+  assert.equal(await taskBank.evaluate(element => getComputedStyle(element).backgroundColor), 'rgba(0, 0, 0, 0)', 'task list shares the workspace canvas');
 
   await page.locator('[data-testid="open-create-task-modal"]').click();
   await page.locator("#create-task-title").waitFor({ timeout: 15000 });
@@ -71,43 +70,41 @@ try {
   await page.locator("#create-task-code").fill("function solve(){ return 42; }");
   await page.locator('[data-testid="create-task-submit-button"]').click();
   await page.locator(`[data-testid="task-bank-panel"] >> text=${createdTaskTitle}`).waitFor({ timeout: 15000 });
+  const taskCard = taskBank.locator(".ant-card").filter({ hasText: createdTaskTitle });
+  for (const theme of ["light", "dark"]) await assertThemeSurface(page, taskCard, theme);
 
-  await page.goto(`${webBaseUrl}/dashboard/rooms`, { waitUntil: "domcontentloaded" });
-  await page.locator('[data-testid="create-room-card"]').waitFor({ timeout: 15000 });
-  if (await page.locator('[data-testid="create-room-card"]').count() !== 1) {
-    throw new Error("CREATE_ROOM_SURFACE_MUST_BE_UNIQUE");
+  await page.goto(`${webBaseUrl}/workspace/personal/interviews/new`, { waitUntil: "domcontentloaded" });
+  const dialog = page.getByRole('dialog', { name: 'Создать интервью', exact: true });
+  await dialog.waitFor();
+  assert.equal(await page.getByTestId('create-room-card').count(), 1, 'creation has a single modal surface');
+  const modalSurface = dialog.locator('.ant-modal-container');
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(value => { localStorage.setItem('interview-online:ui-theme', value); window.dispatchEvent(new StorageEvent('storage', { key: 'interview-online:ui-theme', newValue: value })); }, theme);
+    await page.waitForFunction(value => document.documentElement.dataset.theme === value, theme);
+    const expected = await page.evaluate(() => { const probe = document.createElement('span'); probe.style.color = 'var(--app-surface-elevated)'; document.body.append(probe); const color = getComputedStyle(probe).color; probe.remove(); return color; });
+    await page.waitForFunction(({ element, expected }) => getComputedStyle(element).backgroundColor === expected, { element: await modalSurface.elementHandle(), expected });
   }
-
-  const roomPanelWidthShare = await page.evaluate(() => {
-    const panel = document.querySelector('[data-testid="create-room-card"]');
-    if (!panel) return 0;
-    const rect = panel.getBoundingClientRect();
-    return rect.width / window.innerWidth;
-  });
-  if (roomPanelWidthShare < 0.6) {
-    throw new Error(`ROOM_LAYOUT_NOT_FULL_WIDTH_ENOUGH:${roomPanelWidthShare}`);
-  }
-
-  const roomPanelBackground = await page.evaluate(() => {
-    const panel = document.querySelector('[data-testid="create-room-card"]');
-    if (!panel) return "rgb(0,0,0)";
-    return getComputedStyle(panel).backgroundColor;
-  });
-  const [roomR, roomG, roomB] = rgbChannels(roomPanelBackground);
-  if (roomR > 120 || roomG > 120 || roomB > 120) {
-    throw new Error(`ROOM_PANEL_THEME_TOO_LIGHT:${roomPanelBackground}`);
-  }
-
-  const taskSelectInput = page.locator('[data-testid="room-task-select"]').first();
+  const taskSelectInput = dialog.getByRole('combobox', { name: 'Задачи для интервью', exact: true });
   await taskSelectInput.click();
   await taskSelectInput.fill(createdTaskTitle);
-  await page.getByRole("option", { name: createdTaskTitle }).click();
-
-  await page.locator('[data-testid="selected-task-preview"]').getByText(createdTaskTitle).waitFor({ timeout: 15000 });
-  await page
-    .locator('[data-testid="selected-task-preview"]')
-    .getByText(createdTaskDescription)
-    .waitFor({ timeout: 15000 });
+  await page.getByRole('option', { name: `${createdTaskTitle} · Node JS`, exact: true }).waitFor({ state: 'attached' });
+  await taskSelectInput.press('ArrowDown');
+  await taskSelectInput.press('Enter');
+  await page.keyboard.press('Escape');
+  assert.equal(await dialog.getByText(`${createdTaskTitle} · Node JS`, { exact: true }).count(), 1, 'selected task is shown once as a selector chip');
+  assert.equal(await dialog.getByTestId('selected-task-preview').count(), 0, 'selected tasks must not have a duplicate preview card');
+  assert.equal(await dialog.getByText(createdTaskDescription, { exact: true }).count(), 0, 'task description must not create another selected-task list');
+  await dialog.getByLabel('Название интервью', { exact: true }).fill(`UI interview ${Date.now()}`);
+  const submitted = page.waitForRequest(request => request.url().endsWith('/api/rooms') && request.method() === 'POST');
+  await dialog.getByRole('button', { name: 'Создать интервью', exact: true }).click();
+  const payload = JSON.parse((await submitted).postData());
+  const taskGroups = await fetch(`${apiBaseUrl}/me/tasks`, { headers: { Authorization: `Bearer ${auth.token}` } }).then(response => response.json());
+  const task = taskGroups.flatMap(group => group.tasks).find(task => task.title === createdTaskTitle);
+  assert.ok(task, 'created task remains in the personal library');
+  assert.deepEqual(payload.taskIds, [task.id], 'creation submits the selected task exactly once');
+  assert.equal(Object.hasOwn(payload, 'hiringManagerIds'), false, 'empty optional hiring-manager selection is omitted');
+  await page.waitForURL(/\/room\//);
+  await page.getByTestId('room-code-editor-host').waitFor();
 
   console.log("DASHBOARD_REDESIGN_OK");
   await context.close();

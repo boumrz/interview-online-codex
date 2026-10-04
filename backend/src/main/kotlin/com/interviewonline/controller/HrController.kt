@@ -32,8 +32,11 @@ class HrController(
         @RequestParam(defaultValue = "20") size: Int,
         @RequestParam(required = false) from: String?,
         @RequestParam(required = false) to: String?,
+        @RequestParam(required = false) teamId: String?,
+        @RequestParam(required = false) trackId: String?,
+        @RequestParam(required = false) vacancyId: String?,
     ): ResponseEntity<HrInterviewPageDto> = noStore(
-        interviewService.page(requireUser(authorization), page, size, from, to),
+        interviewService.page(requireUser(authorization), page, size, from, to, teamId, trackId, vacancyId),
     )
 
     @GetMapping("/export")
@@ -41,8 +44,11 @@ class HrController(
         @RequestHeader("Authorization", required = false) authorization: String?,
         @RequestParam(required = false) from: String?,
         @RequestParam(required = false) to: String?,
+        @RequestParam(required = false) teamId: String?,
+        @RequestParam(required = false) trackId: String?,
+        @RequestParam(required = false) vacancyId: String?,
     ): ResponseEntity<ByteArray> {
-        val result = workbookService.generate(requireUser(authorization), from, to)
+        val result = workbookService.generate(requireUser(authorization), from, to, teamId, trackId, vacancyId)
         val today = LocalDate.now(ZoneId.of("Europe/Moscow"))
         return ResponseEntity.ok()
             .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))

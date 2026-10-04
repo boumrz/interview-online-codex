@@ -3,6 +3,7 @@ package com.interviewonline.service
 import com.interviewonline.repository.RoomKeystrokeEventRepository
 import com.interviewonline.repository.RoomRepository
 import com.interviewonline.repository.lockById
+import com.interviewonline.model.RoomStatus
 import com.interviewonline.ws.CandidateKeyPayload
 import org.springframework.stereotype.Service
 import org.springframework.http.HttpStatus
@@ -29,12 +30,14 @@ class KeystrokePersistenceService(
     fun accept(roomId: String, payload: CandidateKeyPayload): Acceptance {
         val sourceEventId = requireNotNull(payload.sourceEventId) { "sourceEventId must be assigned before persistence" }
 
-        roomKeystrokeEventRepository.findByRoomIdAndSourceEventId(roomId, sourceEventId)?.let { existing ->
-            return Acceptance(existing.toPayload(), created = false)
-        }
-
         val room = requireNotNull(roomRepository.lockById(roomId)) { "Room $roomId was not found while accepting activity" }
         if (room.archivedAt != null) throw ApiException(HttpStatus.GONE, "Комната архивирована")
+        if (room.status == RoomStatus.FINISHED.wireValue) {
+            throw ApiException(HttpStatus.FORBIDDEN, "Интервью доступно только для просмотра", code = "ROOM_READ_ONLY")
+        }
+        if (room.status == RoomStatus.FROZEN.wireValue) {
+            throw ApiException(HttpStatus.CONFLICT, "Комната недоступна для изменений")
+        }
         roomKeystrokeEventRepository.findByRoomIdAndSourceEventId(roomId, sourceEventId)?.let { existing ->
             return Acceptance(existing.toPayload(), created = false)
         }

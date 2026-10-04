@@ -114,6 +114,8 @@ data class RoomResponse(
     val notes: String,
     val notesMessages: List<RoomNoteMessageDto> = emptyList(),
     val briefingMarkdown: String = "",
+    val roomEditorMode: String = "code",
+    val roomEditorModeRevision: Long = 0,
     val ownerToken: String?,
     val interviewerToken: String?,
     val role: String = "candidate",

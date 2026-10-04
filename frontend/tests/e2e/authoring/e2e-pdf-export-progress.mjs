@@ -12,11 +12,13 @@
  *    a. показать индикатор прогресса (data-testid="private-notes-pdf-progress");
  *    b. дать клику ниже сработать (например, переключить чекбокс
  *       «Включать время записей») в течение секунды.
- * 5. По завершении прогресс исчезает, файл `*.pdf` действительно
- *    скачивается (по `window.__roomLastDownload`).
+ * 5. По завершении прогресс исчезает; браузер скачивает PDF с правильным
+ *    заголовком и встроенным шрифтом.
  */
 
 import { chromium } from "playwright";
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 
 const webBaseUrl = process.env.E2E_BASE_URL || "http://localhost:5173";
 const apiBaseUrl = process.env.E2E_API_URL || "http://localhost:8080/api";
@@ -38,21 +40,19 @@ async function createGuestRoom() {
   return payload;
 }
 
-async function openTasksPanelIfNeeded(page) {
+async function openNotesPanelIfNeeded(page) {
   const privateNotesInput = page.locator(
     '[data-testid="room-private-notes-input"]',
   );
-  let railClickCount = 0;
-  if (!(await privateNotesInput.isVisible().catch(() => false))) {
-    const tasksRailButton = page.locator('[data-testid="room-rail-tasks"]');
-    if (await tasksRailButton.isVisible().catch(() => false)) {
-      await tasksRailButton.click();
-      railClickCount += 1;
-    }
+  const notesSurface = page.locator('[data-room-context-surface="notes"][data-room-context-visible="true"]');
+  let tabClickCount = 0;
+  if (!(await notesSurface.count())) {
+    await page.getByRole("tab", { name: "Мои заметки", exact: true }).click();
+    tabClickCount += 1;
   }
-
+  await notesSurface.waitFor({ state: "visible", timeout: 15000 });
   await privateNotesInput.waitFor({ state: "visible", timeout: 15000 });
-  return { input: privateNotesInput, railClickCount };
+  return { input: privateNotesInput, tabClickCount };
 }
 
 const browser = await chromium.launch({ headless: true });
@@ -80,23 +80,22 @@ try {
   // Дожидаемся, пока редактор готов.
   await page.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
 
-  const initialPanelSetup = await openTasksPanelIfNeeded(page);
-  const privateNotesInput = initialPanelSetup.input;
+  await openNotesPanelIfNeeded(page);
 
-  const alreadyOpenProbe = await openTasksPanelIfNeeded(page);
-  if (alreadyOpenProbe.railClickCount !== 0) {
+  const alreadyOpenProbe = await openNotesPanelIfNeeded(page);
+  if (alreadyOpenProbe.tabClickCount !== 0) {
     throw new Error(
-      `PDF_PANEL_OPEN_BRANCH_RAIL_CLICKS expected=0 got=${alreadyOpenProbe.railClickCount}`,
+      `PDF_PANEL_OPEN_BRANCH_TAB_CLICKS expected=0 got=${alreadyOpenProbe.tabClickCount}`,
     );
   }
 
-  await page.keyboard.press("Escape");
-  await privateNotesInput.waitFor({ state: "hidden", timeout: 5000 });
+  await page.getByRole("tab", { name: "Шаги", exact: true }).click();
+  await page.locator('[data-room-context-surface="notes"][data-room-context-visible="true"]').waitFor({ state: "detached", timeout: 5000 });
 
-  const closedPanelProbe = await openTasksPanelIfNeeded(page);
-  if (closedPanelProbe.railClickCount !== 1) {
+  const closedPanelProbe = await openNotesPanelIfNeeded(page);
+  if (closedPanelProbe.tabClickCount !== 1) {
     throw new Error(
-      `PDF_PANEL_CLOSED_BRANCH_RAIL_CLICKS expected=1 got=${closedPanelProbe.railClickCount}`,
+      `PDF_PANEL_CLOSED_BRANCH_TAB_CLICKS expected=1 got=${closedPanelProbe.tabClickCount}`,
     );
   }
   if (!(await closedPanelProbe.input.isVisible())) {
@@ -110,21 +109,18 @@ try {
     await input.fill(`Заметка #${i} — длинный текст для нагрузки PDF-экспорта`);
     await page.keyboard.press("Enter");
   }
+  await page.locator('[data-private-note-delivery-state="persisted"]').filter({ hasText: "Заметка #119 —" }).waitFor({ timeout: 30000 });
+  assert.equal(await page.locator('[data-private-note-delivery-state="persisted"]').count(), 120, "all 120 UI entries must be persisted before export");
 
   // Открываем модалку экспорта.
-  const openExport = page.locator('[data-testid="open-export-private-notes"]');
-  if (await openExport.isVisible().catch(() => false)) {
-    await openExport.click();
-  } else {
-    // Фолбэк по тексту, если data-testid в этой версии не выставлен.
-    await page.getByRole("button", { name: "Экспорт", exact: false }).click();
-  }
+  await page.getByTestId("room-private-notes-export").click();
 
   // Жмём «Скачать .pdf» (не дожидаясь окончания).
   const pdfButton = page.locator(
     '[data-testid="private-notes-pdf-export-button"]',
   );
   await pdfButton.waitFor({ state: "visible", timeout: 8000 });
+  const downloadEvent = page.waitForEvent("download", { timeout: 30000 });
   await pdfButton.click();
 
   // Прогресс должен показаться (UI не залип).
@@ -144,16 +140,19 @@ try {
 
   // Ждём, пока выгрузка завершится (прогресс пропал).
   await progress.waitFor({ state: "detached", timeout: 30000 });
+  const success = page.locator(".ant-notification-top .ant-notification-notice").filter({ hasText: "Заметки выгружены в PDF" });
+  await success.waitFor();
+  assert.equal(await success.count(), 1, "completed export has one top notification");
+  assert.equal(await page.getByRole("dialog", { name: "Экспорт личных заметок" }).getByText("Файл готов, начинаем скачивание", { exact: false }).count(), 0, "export has no inline completion duplicate");
 
-  // Проверяем факт скачивания через дебаг-крючок.
-  const downloaded = await page.evaluate(() => window.__roomLastDownload || null);
-  if (!downloaded || !/\.pdf$/i.test(downloaded.fileName)) {
-    throw new Error(
-      `PDF_EXPORT_DOWNLOAD_NOT_RECORDED ${JSON.stringify(downloaded)}`,
-    );
-  }
+  const downloaded = await downloadEvent;
+  assert.equal(await downloaded.failure(), null);
+  assert.match(downloaded.suggestedFilename(), /\.pdf$/i);
+  const bytes = await readFile(await downloaded.path());
+  assert.equal(bytes.subarray(0, 5).toString(), "%PDF-", "download is a real PDF document");
+  assert.ok(bytes.length > 10000, "PDF contains the embedded font and notes");
 
-  console.log("PDF_EXPORT_PROGRESS_OK", downloaded.fileName);
+  console.log("PDF_EXPORT_PROGRESS_OK", downloaded.suggestedFilename());
 } catch (error) {
   console.error("PDF_EXPORT_PROGRESS_FAIL", error);
   process.exitCode = 1;

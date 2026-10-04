@@ -40,7 +40,7 @@ class TeamTaskSetIntegrationTest(
     @Autowired private val jdbcTemplate: JdbcTemplate,
 ) {
     @Test
-    fun `author can delete an unused task set without deleting its tasks`() {
+    fun `author can delete unused and used task sets without deleting tasks or snapshots`() {
         val owner = account("delete-set-owner")
         val team = team(owner, "Delete set")
         val taskId = body(createTeamTask(owner, team.id, "Graph", "kotlin")).path("task").path("id").asText()
@@ -59,9 +59,9 @@ class TeamTaskSetIntegrationTest(
             contentType = MediaType.APPLICATION_JSON
             content = objectMapper.writeValueAsString(mapOf("title" to "Using set", "taskSetId" to usedSetId))
         }.andReturn(), 201, "interview references set")
-        assertStatusAndCode(mockMvc.delete("/api/teams/${team.id}/task-sets/$usedSetId") {
+        assertStatus(mockMvc.delete("/api/teams/${team.id}/task-sets/$usedSetId") {
             header("Authorization", "Bearer ${owner.token}")
-        }.andReturn(), 409, "TEAM_TASK_SET_IN_USE")
+        }.andReturn(), 204, "used set deleted; snapshot stays independent")
     }
     companion object {
         private val postgres = Postgres16TestSupport.create("team_task_sets")
@@ -76,7 +76,7 @@ class TeamTaskSetIntegrationTest(
     }
 
     @Test
-    fun `team task sets preserve task order support copy archive restore and enforce manager edits`() {
+    fun `team task sets preserve order and copy enforce manager edits and expose no archive lifecycle`() {
         postgres.verifyPostgres16()
         val owner = account("team-set-owner")
         val member = account("team-set-member")
@@ -145,18 +145,10 @@ class TeamTaskSetIntegrationTest(
         assertEquals(listOf(firstTaskId, secondTaskId), copied.path("items").map { it.path("taskId").asText() })
         assertFalse(copied.path("id").asText() == taskSetId, "copy must allocate a new team task set")
 
-        val archived = archiveTaskSet(owner, team.id, taskSetId)
-        assertStatus(archived, 200, "owner archives team task set")
-        assertEquals("ARCHIVED", body(archived).path("taskSet").path("status").asText())
-        assertEquals(2, body(archived).path("taskSet").path("revision").asLong())
-        assertEquals(1, body(teamTaskSets(owner, team.id)).path("items").size(), "copy remains active after original archive")
-        assertEquals(1, body(teamTaskSets(owner, team.id, "archived")).path("items").size(), "archive filter exposes archived set")
-
-        val restored = restoreTaskSet(owner, team.id, taskSetId)
-        assertStatus(restored, 200, "owner restores team task set")
-        assertEquals("ACTIVE", body(restored).path("taskSet").path("status").asText())
-        assertEquals(3, body(restored).path("taskSet").path("revision").asLong())
+        assertStatus(archiveTaskSet(owner, team.id, taskSetId), 404, "archive endpoint removed")
+        assertStatus(restoreTaskSet(owner, team.id, taskSetId), 404, "restore endpoint removed")
         assertEquals(2, body(teamTaskSets(owner, team.id)).path("items").size())
+        assertEquals(2, body(teamTaskSets(owner, team.id, "archived")).path("items").size(), "legacy status parameter does not hide common library")
 
         val foreignRead = teamTaskSets(foreign, team.id)
         assertStatusAndCode(foreignRead, 404, "TEAM_NOT_FOUND")
@@ -224,9 +216,8 @@ class TeamTaskSetIntegrationTest(
         val hidden = importPersonalPreset(member, team.id, body(foreignPreset).path("id").asText())
         assertStatusAndCode(hidden, 404, "PERSONAL_PRESET_NOT_FOUND")
 
-        archivePersonalPreset(member, sourcePresetId)
-        val archived = importPersonalPreset(member, team.id, sourcePresetId)
-        assertStatusAndCode(archived, 404, "PERSONAL_PRESET_NOT_FOUND")
+        assertStatus(archivePersonalPreset(member, sourcePresetId), 404, "personal archive endpoint removed")
+        assertStatus(importPersonalPreset(member, team.id, sourcePresetId), 201, "source remains available to its owner")
     }
 
     private fun account(prefix: String): HrTestAccount = HrHttpFixtures.register(mockMvc, objectMapper, false, prefix).first

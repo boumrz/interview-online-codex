@@ -1,0 +1,53 @@
+.page {
+  min-height: 100vh;
+  background: var(--app-bg);
+  color: var(--app-text);
+}
+
+.header {
+  position: sticky;
+  z-index: 20;
+  top: 0;
+  display: flex;
+  height: var(--header-height);
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 max(24px, calc((100vw - var(--container-width)) / 2));
+  border-bottom: 1px solid var(--app-border);
+  background: var(--app-surface);
+}
+
+.brand { display: inline-flex; align-items: center; gap: 10px; color: var(--app-text); font-weight: 600; }
+.brandMark { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 8px; color: var(--app-primary-text); background: var(--app-selected-bg); }
+
+.content {
+  display: grid;
+  min-height: calc(100vh - var(--header-height));
+  place-items: center;
+  padding: 32px 16px;
+}
+
+.card {
+  width: min(460px, 100%);
+  padding: 24px !important;
+  background: var(--app-surface);
+}
+
+.card :global(.ant-card-body) { display: grid; gap: 20px; padding: 0; }
+.intro :global(.ant-typography) { margin: 0; }
+.intro h2 { font-size: 24px; line-height: 32px; }
+.intro p { color: var(--app-muted); }
+
+.form { display: grid; gap: 16px; }
+.field { display: grid; gap: 8px; font-size: 14px; font-weight: 500; }
+.hint { color: var(--app-muted); font-size: 12px; font-weight: 400; line-height: 18px; }
+.checkboxField { display: grid; gap: 6px; }
+.feedback { min-height: 44px; }
+.feedback :global(.ant-alert) { margin: 0; }
+.homeLink { justify-self: center; color: var(--app-primary-text); }
+
+@media (max-width: 480px) {
+  .header { padding-inline: 16px; }
+  .card { padding: 20px !important; }
+}

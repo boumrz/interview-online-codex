@@ -60,7 +60,7 @@ class TeamMergeMigrationTest {
                     }
                     statement.executeQuery("SELECT version FROM flyway_schema_history WHERE success=true ORDER BY installed_rank DESC LIMIT 1").use { row ->
                         row.next()
-                        assertEquals("28", row.getString(1))
+                        assertEquals("33", row.getString(1))
                     }
                 }
             }

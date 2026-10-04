@@ -97,9 +97,10 @@ async function openRoom(auth, room, viewport = { width: 1280, height: 720 }) {
   const page = await context.newPage();
   page.setDefaultTimeout(12_000);
   await page.goto(`${web}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
-  await page.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 20_000 });
+  await page.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ state: "attached", timeout: 20_000 });
   await page.locator('[data-testid="room-connection-status"][data-state="online"]').waitFor({ timeout: 20_000 });
   await settle(page);
+  assert.equal(await page.getByRole("tab", { name: "Шаги", exact: true }).getAttribute("aria-selected"), "true", "AC12_ROOM_STARTS_WITH_STEPS");
   return { context, page };
 }
 
@@ -201,7 +202,10 @@ test("AC-12 preserves draft, panel and read position through local step changes 
     await unread.waitFor({ state: "visible" });
     assert.equal((await unread.textContent())?.trim(), "1", "AC12_UNREAD_COUNT_WRONG");
 
-    await openSurface(ownerView.page, "Условие");
+    await openSurface(ownerView.page, "Шаги");
+    await ownerView.page.getByRole("button", { name: "Свернуть условие", exact: true }).click();
+    await ownerView.page.getByRole("button", { name: "Развернуть условие", exact: true }).click();
+    assert.equal(await ownerView.page.getByRole("tab", { name: "Шаги", exact: true }).getAttribute("aria-selected"), "true", "AC12_CONDITION_CHANGED_AUXILIARY_PANEL");
     assert.equal((await unread.textContent())?.trim(), "1", "AC12_UNREAD_CLEARED_WITHOUT_READING_CHAT");
     await openSurface(ownerView.page, "Чат");
     await ownerView.page.getByRole("button", { name: "Перейти к новым сообщениям", exact: true }).click();
@@ -267,6 +271,7 @@ test("AC-12 polls durable activity only while visible and performs one serialize
     assert.ok(calls.length > closedAt, "AC12_ACTIVITY_REOPEN_DID_NOT_CATCH_UP");
     assert.equal(maxInFlight, 1, "AC12_ACTIVITY_CATCH_UP_OVERLAPPED");
   } finally {
+    await view.page.unrouteAll({ behavior: "wait" });
     await view.context.close();
   }
 });

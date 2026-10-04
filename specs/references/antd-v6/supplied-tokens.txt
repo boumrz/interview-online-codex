@@ -1,0 +1,233 @@
+:root {
+    /* Offset between elements */
+    --container-width: 1366px;
+    --header-height: 48px;
+    --offset-tiny: 2px;
+    --offset-xxs: 4px;
+    --offset-xs: 8px;
+    --offset-sm: 12px;
+    --offset-md: 16px;
+    --offset-lg: 20px;
+    --offset-xl: 24px;
+    --offset-xxl: 28px;
+    --offset-huge: 32px;
+    --offset-jumbo: 40px;
+
+    /* Size of elements (icon, radius etc) */
+    --size-tiny: 2px;
+    --size-xxs: 4px;
+    --size-xs: 8px;
+    --size-sm: 12px;
+    --size-md: 16px;
+    --size-lg: 20px;
+    --size-xl: 24px;
+    --size-xxl: 28px;
+    --size-huge: 32px;
+    --size-jumbo: 40px;
+
+    /* Fonts */
+    --font-fallback: "Verdana", sans-serif;
+    --font-base: "SBSansText", var(--font-fallback);
+    --font-caps: "SB Sans UI Caps", var(--font-base);
+    --font-10-12-medium: 500 10px / 12px var(--font-base);
+    --font-10-14: 400 10px / 14px var(--font-base);
+
+    /**
+    * @deprecated 
+    */
+    --font-12: 400 12px / 20px var(--font-base);
+    --font-12-20: 400 12px / 20px var(--font-base);
+
+    /**
+    * @deprecated 
+    */
+    --font-12-1: 400 12px / 1 var(--font-base);
+    --font-12-12: 400 12px / 12px var(--font-base);
+    --font-12-16: 400 12px / 16px var(--font-base);
+    --font-12-16-medium: 500 12px / 16px var(--font-base);
+
+    /**
+    * @deprecated 
+    */
+    --font-13: 400 13px / 20px var(--font-base);
+    --font-13-16: 400 13px / 16px var(--font-base);
+    --font-13-18: 400 13px / 18px var(--font-base);
+    --font-13-20: 400 13px / 20px var(--font-base);
+    --font-13-18-medium: 500 13px / 18px var(--font-base);
+    --font-13-18-bold: 600 13px / 18px var(--font-base);
+
+    /**
+    * @deprecated 
+    */
+    --font-14: 400 14px / 20px var(--font-base);
+    --font-14-16: 400 14px / 16px var(--font-base);
+    --font-14-18: 400 14px / 18px var(--font-base);
+    --font-14-20: 400 14px / 20px var(--font-base);
+    --font-14-22: 400 14px / 22px var(--font-base);
+    --font-14-24: 400 14px / 24px var(--font-base);
+    --font-14-medium: 500 14px / 18px var(--font-base);
+    --font-14-18-medium: 500 14px / 18px var(--font-base);
+    --font-14-20-medium: 500 14px / 20px var(--font-base);
+    --font-14-22-medium: 500 14px / 22px var(--font-base);
+    --font-14-24-medium: 500 14px / 24px var(--font-base);
+    --font-14-20-bold: 600 14px / 20px var(--font-base);
+
+    /**
+    * @deprecated 
+    */
+    --font-16: 400 16px / 20px var(--font-base);
+    --font-16-20: 400 16px / 20px var(--font-base);
+    --font-16-22: 400 16px / 22px var(--font-base);
+    --font-16-24: 400 16px / 24px var(--font-base);
+    --font-16-22-medium: 500 16px / 22px var(--font-base);
+    --font-16-22-bold: 600 16px / 22px var(--font-base);
+
+    /**
+    * @deprecated 
+    */
+    --font-16-medium: 500 16px / 20px var(--font-base);
+    --font-16-20-medium: 500 16px / 20px var(--font-base);
+    --font-16-24-medium: 500 16px / 24px var(--font-base);
+    --font-18-24: 400 18px / 24px var(--font-base);
+    --font-18-24-medium: 500 18px / 24px var(--font-base);
+    --font-18-24-bold: 600 18px / 24px var(--font-base);
+
+    /**
+    * @deprecated 
+    */
+    --font-20-20-medium: 500 20px / 20px var(--font-base);
+    --font-20-medium: 500 20px / 20px var(--font-base);
+    --font-20-24-medium: 500 20px / 24px var(--font-base);
+    --font-20-24-bold: 600 20px / 24px var(--font-base);
+    --font-20-28-bold: 600 20px / 28px var(--font-base);
+    --font-21-07-bold: 700 21px / 70% var(--font-base);
+    --font-24-32-bold: 600 24px / 32px var(--font-base);
+    --font-30-07-bold: 700 30px / 70% var(--font-base);
+    --font-30-18-bold: 600 30px / 18px var(--font-base);
+    --font-40-44-bold: 600 40px / 44px var(--font-base);
+
+    /* Fonts */
+    --font-fallback: "Verdana", "Roboto", sans-serif;
+    --font-base: "SB Sans Text", var(--font-fallback);
+    --font-10: 400 10px / 12px var(--font-base);
+    --font-12: 400 12px / 14px var(--font-base);
+    --font-12-high: 500 12px / 16px var(--font-base);
+    --font-12-bold-hight: 500 12px / 20px var(--font-base);
+    --font-14: 400 14px / 18px var(--font-base);
+    --font-14-medium: 500 14px / 18px var(--font-base);
+    --font-14-high: 500 14px / 20px var(--font-base);
+    --font-14-semibold: 600 14px / 18px var(--font-base);
+    --font-14-bold: 700 14px / 18px var(--font-base);
+    --font-16: 400 16px / 20px var(--font-base);
+    --font-16-high: 400 16px / 24px var(--font-base);
+    --font-16-medium: 500 16px / 20px var(--font-base);
+    --font-16-semibold: 600 16px / 20px var(--font-base);
+    --font-16-caps: 400 16px / 20px var(--font-caps);
+    --font-16-bold: 700 16px / 20px var(--font-base);
+    --font-18: 400 18px / 23px var(--font-base);
+    --font-18-medium: 600 18px / 23px var(--font-base);
+    --font-20: 400 20px / 25px var(--font-base);
+    --font-20-medium: 500 20px / 25px var(--font-base);
+    --font-20-bold: 600 20px / 25px var(--font-base);
+    --font-24-medium: 500 24px / 30px var(--font-base);
+    --font-24-bold: 600 24px / 30px var(--font-base);
+    --font-20-semibold: 600 20px / 25px var(--font-base);
+    --font-28-medium: 500 28px / 35px var(--font-base);
+    --font-28-bold: 600 28px / 35px var(--font-base);
+    --font-32-semibold: 600 32px / 40px var(--font-base);
+    --font-40-semibold: 600 40px / 50px var(--font-base);
+
+    /* Caps UI */
+    /**
+    * @deprecated 
+    */
+    --font-12-caps: 400 12px / 14px var(--font-caps);
+    --font-12-14-caps: 400 12px / 14px var(--font-caps);
+
+    /**
+    * @deprecated 
+    */
+    --font-20-caps: 400 20px / 28px var(--font-caps);
+    --font-20-28-caps: 400 20px / 28px var(--font-caps);
+
+    /* Base Colors Deprecated */
+    --color-gray: #5c5c5c;
+    --color-black: #2c2c2c;
+    --color-gray-dark: #dadde3;
+    --color-white: #fff;
+    --color-red: #f00;
+    --color-yellow: #ffbf00;
+    --color-error: #de350b;
+    --color-success: #8dd9be;
+    --color-danger: #ff5630;
+
+    /* Base Colors */
+    --black: #111418;
+    --white: #fff;
+
+    /* Global Token Link */
+    --blue-50: #eff5ff;
+    --blue-500: #00a3f5;
+
+    /* Global Token Success */
+    --green-100: #eefef0;
+    --green-200: #76f9af;
+    --green-300: #00d664;
+    --green-400: #09ae51;
+    --green-500: #06743a;
+
+    /* Global Token Warning */
+    --orange-100: #fffbea;
+    --orange-200: #fef2c5;
+    --orange-300: #ffd25c;
+    --orange-400: #fbb500;
+    --orange-500: #eea002;
+
+    /* Global Token Error */
+    --red-100: #fff2f1;
+    --red-200: #fe7284;
+    --red-300: #f42a4b;
+    --red-400: #cb0b38;
+    --red-500: #b30c33;
+
+    /* Global Token Gray */
+    --gray-50: #fafafc;
+    --gray-100: #f3f5fb;
+    --gray-150: #eaecf6;
+    --gray-200: #e0e1e8;
+    --gray-300: #ccced9;
+    --gray-400: #bec0ce;
+    --gray-500: #9298ab;
+    --gray-600: #838c9e;
+    --gray-700: #616a7b;
+    --gray-800: #4b4e58;
+    --gray-850: #383e4d;
+    --gray-900: #272b36;
+    --gray-950: #1f242e;
+    --gray-1000: #1d2129;
+
+    /* Global Token Brand */
+    --brand-25: #f7f6fe;
+    --brand-50: #f2f1ff;
+    --brand-75: #ecebff;
+    --brand-100: #e2e0ff;
+    --brand-200: #d6d3fa;
+    --brand-300: #b8b3fc;
+    --brand-400: #766cf9;
+    --brand-500: #642eff;
+    --brand-600: #460ceb;
+    --brand-700: #2c21ca;
+    --brand-800: #251ba7;
+    --brand-900: #191272;
+
+    /* Global Token Neutral */
+    --neutral-100: #fafafc;
+    --neutral-200: #ebeff9;
+    --neutral-300: #e4e6f1;
+    --neutral-400: #dcddeb;
+    --neutral-500: #b6b9ce;
+    --neutral-600: #a0a3bd;
+    --neutral-700: #898da9;
+    --neutral-800: #6b7094;
+    --neutral-900: #3c4166;
+}

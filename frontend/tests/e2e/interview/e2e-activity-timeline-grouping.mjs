@@ -296,8 +296,9 @@ async function enterCandidate(page, displayName) {
 }
 
 async function openActivityTimeline(page) {
-  await page.getByTestId("room-rail-tools").click();
-  await page.getByRole("tab", { name: "Логи", exact: true }).click();
+  const tools = page.getByTestId("room-rail-tools");
+  if (await tools.isVisible()) await tools.click();
+  await page.getByRole("tab", { name: /^(Логи|Активность)$/ }).click();
 }
 
 async function fetchRawEvents(inviteCode, ownerToken) {
@@ -944,6 +945,7 @@ async function runPostStepActivityPersistenceRegression(browser) {
     await enterCandidate(candidatePage, "Persisted step candidate");
     await candidatePage.waitForTimeout(350);
 
+    await ownerPage.getByRole("tab", { name: "Шаги", exact: true }).click();
     await ownerPage.getByTestId("room-step-row-1").click();
     const publishStep = ownerPage.getByTestId("room-publish-step");
     await publishStep.waitFor({ state: "visible", timeout: rawExportTimeoutMs });
@@ -1284,7 +1286,12 @@ try {
   await candidatePage.waitForTimeout(180);
 
   // The server accepts this source event, but the browser loses its response.
-  // A reconnect must retry the same sourceEventId rather than silently losing it.
+  // Recovery must retry the same sourceEventId rather than silently losing it.
+  // It may hydrate through the surviving stream; real stream replacement is
+  // asserted separately by the disconnect scenarios below.
+  const messageCountBeforeRecovery = await candidatePage.evaluate(
+    () => window.__candidateActivitySseTransport.messages.length,
+  );
   await candidatePage.keyboard.press("r");
   // This marker is captured after recovery starts but before the fresh state
   // sync. It must stay queued instead of being discarded during reconnect.
@@ -1293,7 +1300,40 @@ try {
   await candidateContext.setOffline(true);
   await candidatePage.waitForTimeout(250);
   await candidateContext.setOffline(false);
-  await candidatePage.waitForTimeout(2_000);
+  await waitForCondition("LOST_RESPONSE_QUEUE_NOT_RECOVERED", () =>
+    lostResponseSourceId !== null &&
+    activityPosts.filter((payload) => payload.sourceEventId === lostResponseSourceId).length === 2 &&
+    activityPosts.some((payload) => payload.key === "q"),
+  );
+  await candidatePage.waitForFunction((previousMessageCount) => {
+    const transport = window.__candidateActivitySseTransport;
+    if (!transport) return false;
+    return transport.messages.some((captured, index) => {
+      if (index < previousMessageCount || captured.transportOpenCount !== transport.openCount) return false;
+      try {
+        const message = JSON.parse(captured.data);
+        return message.type === "state_sync" && Boolean(message.payload?.eventToken);
+      } catch {
+        return false;
+      }
+    });
+  }, messageCountBeforeRecovery, { timeout: rawExportTimeoutMs }).catch(async (error) => {
+    const state = await candidatePage.evaluate(() => ({
+      openCount: window.__candidateActivitySseTransport.openCount,
+      stateSyncs: window.__candidateActivitySseTransport.messages.flatMap((captured) => {
+        try {
+          const message = JSON.parse(captured.data);
+          return message.type === "state_sync"
+            ? [{ openCount: captured.transportOpenCount, hasToken: Boolean(message.payload?.eventToken) }]
+            : [];
+        } catch { return []; }
+      }),
+    }));
+    throw new Error(`RECOVERY_NOT_READY previousMessages=${messageCountBeforeRecovery} state=${JSON.stringify(state)}: ${error.message}`);
+  });
+  // The next scenario starts after recovery; reacquire the actual editable
+  // surface because reconnect may replace the previous focused editor node.
+  await candidatePage.locator('[data-testid="room-code-editor-host"] .cm-content[contenteditable="true"]').click();
 
   // Delay only the manager's SSE `candidate_key` delivery for L. T is accepted
   // and delivered normally first; releasing L later verifies that the manager
@@ -1302,7 +1342,8 @@ try {
     window.__holdCandidateKeyDelivery = true;
   });
   await candidatePage.keyboard.press("l");
-  await candidatePage.waitForTimeout(180);
+  await waitForCondition("LATE_SOURCE_NOT_CAPTURED", () => delayedSourceEventId !== null);
+  await ownerPage.waitForFunction(() => window.__heldCandidateKeyDeliveries.length > 0);
   await ownerPage.evaluate(() => {
     window.__holdCandidateKeyDelivery = false;
   });
@@ -2440,7 +2481,7 @@ try {
       );
     });
     const csvDownloadPromise = authorizationInterviewerPage.waitForEvent("download");
-    await authorizationInterviewerPage.getByRole("button", { name: "CSV", exact: true }).click();
+    await authorizationInterviewerPage.getByRole("button", { name: "Скачать логи в CSV", exact: true }).click();
     const [csvResponse, csvDownload] = await Promise.all([csvResponsePromise, csvDownloadPromise]);
     const csvDownloadText = await readDownloadText(csvDownload);
     const csvRequestHeaders = csvResponse.request().headers();

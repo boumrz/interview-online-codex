@@ -14,7 +14,7 @@ RUN apk add --no-cache curl
 
 WORKDIR /app
 
-COPY --from=build /app/target/interview-online-backend-0.0.1-SNAPSHOT.jar app.jar
+COPY --from=build /app/target/interhub-backend-0.0.1-SNAPSHOT.jar app.jar
 
 EXPOSE 8080
 

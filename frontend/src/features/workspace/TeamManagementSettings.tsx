@@ -1,7 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { IconPencil } from "@tabler/icons-react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { App } from "antd";
+import { useAppSelector } from "../../app/hooks";
+import { IconPencil, IconTrash } from "components/antd-icons";
 import {
   Alert,
+  ActionIcon,
   Badge,
   Button,
   Card,
@@ -12,9 +15,8 @@ import {
   Text,
   TextInput,
   Title,
-} from "@mantine/core";
+} from "components/antd-compat";
 import {
-  useGetTeamMembersQuery,
   useLeaveTeamMutation,
   useRenameTeamMutation,
   useRemoveTeamMemberMutation,
@@ -23,7 +25,7 @@ import {
 } from "../../services/api";
 import type {
   TeamDetail,
-  TeamMemberRole,
+  TeamMemberDirectoryItem,
   TeamManagementTeam,
 } from "../../types";
 import {
@@ -34,6 +36,8 @@ import {
   type ManagementIntent,
 } from "./teamManagementIntent";
 import styles from "./TeamManagementSettings.module.css";
+import { TeamMemberDirectory } from "./TeamMemberDirectory";
+import { TeamInvitationManagement } from "./TeamInvitationManagement";
 
 type Props = {
   readonly accountId: string;
@@ -54,8 +58,6 @@ type RetryAction =
   | { kind: "remove"; intent: ManagementIntent<RemoveBody> };
 type CommandProblem = { kind: ManagementErrorKind; retry: RetryAction | null };
 
-const MEMBER_PAGE_SIZE = 100;
-
 function roleLabel(role: TeamManagementTeam["role"]): string {
   if (role === "OWNER") return "Владелец";
   if (role === "ADMIN") return "Администратор";
@@ -63,63 +65,91 @@ function roleLabel(role: TeamManagementTeam["role"]): string {
 }
 
 export function TeamManagementSettings({ accountId, team, onTeamRefresh }: Props) {
+  const { notification } = App.useApp();
+  const authToken = useAppSelector((state) => state.auth.token);
+  const actionContext = `${accountId}:${authToken}:${team.id}`;
+  const actionContextRef = useRef<string | null>(actionContext);
+  actionContextRef.current = actionContext;
+  useEffect(() => {
+    actionContextRef.current = actionContext;
+    return () => { actionContextRef.current = null; };
+  }, [actionContext]);
+  const isCurrentAction = (requestContext: string | null) => (
+    actionContextRef.current === requestContext && localStorage.getItem("auth_token") === authToken
+  );
   const [visibleTeam, setVisibleTeam] = useState<TeamManagementTeam>(team);
   const [nameDraft, setNameDraft] = useState(team.name);
   const [renameOpened, setRenameOpened] = useState(false);
   const [problem, setProblem] = useState<CommandProblem | null>(null);
-  const [terminalStatus, setTerminalStatus] = useState("");
   const [roleOpened, setRoleOpened] = useState(false);
   const [transferOpened, setTransferOpened] = useState(false);
   const [leaveOpened, setLeaveOpened] = useState(false);
   const [removeOpened, setRemoveOpened] = useState(false);
-  const [roleTargetId, setRoleTargetId] = useState("");
+  const [selectedRoleTarget, setSelectedRoleTarget] = useState<TeamMemberDirectoryItem | null>(null);
   const [roleDraft, setRoleDraft] = useState<"ADMIN" | "MEMBER">("MEMBER");
-  const [transferTargetId, setTransferTargetId] = useState("");
-  const [removeTargetId, setRemoveTargetId] = useState("");
+  const [selectedTransferTarget, setSelectedTransferTarget] = useState<TeamMemberDirectoryItem | null>(null);
+  const [selectedRemoveTarget, setSelectedRemoveTarget] = useState<TeamMemberDirectoryItem | null>(null);
   const [authorityRefreshPending, setAuthorityRefreshPending] = useState(false);
   const [authorityRefreshFailed, setAuthorityRefreshFailed] = useState(false);
-  const transferButtonRef = useRef<HTMLButtonElement | null>(null);
-  const terminalStatusRef = useRef<HTMLDivElement | null>(null);
+  const settingsIntroRef = useRef<HTMLElement | null>(null);
+  const actionInitiatorRef = useRef<HTMLElement | null>(null);
+  const completedActionFocusRef = useRef(false);
   const restoreTransferFocusRef = useRef(false);
+  const confirmedRoleRef = useRef(team.role);
 
   useEffect(() => {
     setVisibleTeam(team);
-    setNameDraft(team.name);
+    if (!renameOpened || team.role === "MEMBER") setNameDraft(team.name);
     setAuthorityRefreshPending(false);
     setAuthorityRefreshFailed(false);
+    const previousRole = confirmedRoleRef.current;
+    if (team.role !== "OWNER") {
+      setRoleOpened(false);
+      setTransferOpened(false);
+    }
+    if (team.role !== "OWNER" && team.role !== "ADMIN") {
+      setRenameOpened(false);
+      setRemoveOpened(false);
+    }
+    if (team.role === "OWNER") setLeaveOpened(false);
+    if ((previousRole === "OWNER" && team.role !== "OWNER")
+      || (previousRole === "ADMIN" && team.role === "MEMBER")) setProblem(null);
+    confirmedRoleRef.current = team.role;
   }, [team]);
 
   const isOwner = visibleTeam.role === "OWNER";
   const isManager = isOwner || visibleTeam.role === "ADMIN";
+  const managementActionsWithheld = authorityRefreshPending || authorityRefreshFailed;
   const scope = useMemo(() => ({ accountId, kind: "TEAM" as const, teamId: visibleTeam.id, query: "" }), [accountId, visibleTeam.id]);
-  const memberQuery = useMemo(() => ({ accountId, teamId: visibleTeam.id, page: 0, size: MEMBER_PAGE_SIZE }), [accountId, visibleTeam.id]);
-  const members = useGetTeamMembersQuery(memberQuery, { skip: !isManager, refetchOnMountOrArgChange: true });
   const [renameTeam] = useRenameTeamMutation();
   const [updateRole] = useUpdateTeamMemberRoleMutation();
   const [transferOwnership] = useTransferTeamOwnershipMutation();
   const [leaveTeam] = useLeaveTeamMutation();
   const [removeTeamMember] = useRemoveTeamMemberMutation();
 
-  const roleTargets = useMemo(() => (
-    (members.data?.items ?? [])
-      .filter((member) => member.userId !== accountId && member.role !== "OWNER")
-      .sort((left, right) => {
-        const priority = (role: TeamMemberRole) => role === "ADMIN" ? 0 : 1;
-        return priority(left.role) - priority(right.role) || left.displayName.localeCompare(right.displayName, "ru");
-      })
-  ), [accountId, members.data?.items]);
-  const removeTargets = useMemo(() => (
-    (members.data?.items ?? [])
-      .filter((member) => member.userId !== accountId && member.role !== "OWNER")
-      .sort((left, right) => left.displayName.localeCompare(right.displayName, "ru"))
-  ), [accountId, members.data?.items]);
-  const preferredRoleTarget = roleTargets.find((member) => member.role === "MEMBER") ?? roleTargets[0] ?? null;
-  const selectedRoleTarget = roleTargets.find((member) => member.userId === roleTargetId) ?? preferredRoleTarget;
-  const selectedTransferTarget = roleTargets.find((member) => member.userId === transferTargetId) ?? roleTargets[0] ?? null;
-  const selectedRemoveTarget = removeTargets.find((member) => member.userId === removeTargetId) ?? removeTargets[0] ?? null;
+  const reconcileMembers = useCallback((members: readonly TeamMemberDirectoryItem[]) => {
+    const reconcile = (current: TeamMemberDirectoryItem | null) => current
+      ? members.find(member => member.userId === current.userId) ?? current
+      : null;
+    setSelectedRoleTarget(reconcile);
+    setSelectedTransferTarget(reconcile);
+    setSelectedRemoveTarget(reconcile);
+  }, []);
 
-  const focusTerminalStatus = () => {
-    window.setTimeout(() => terminalStatusRef.current?.focus(), 0);
+  const captureActionInitiator = () => {
+    actionInitiatorRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    completedActionFocusRef.current = false;
+  };
+
+  const restoreCompletedActionFocus = (opened: boolean) => {
+    if (opened || !completedActionFocusRef.current) return;
+    completedActionFocusRef.current = false;
+    const initiator = actionInitiatorRef.current;
+    if (initiator?.isConnected && !initiator.matches(":disabled")) {
+      initiator.focus({ preventScroll: true });
+    } else {
+      settingsIntroRef.current?.querySelector<HTMLElement>("h1")?.focus({ preventScroll: true });
+    }
   };
 
   const showCommandProblem = (error: unknown, retry: RetryAction | null) => {
@@ -141,62 +171,70 @@ export function TeamManagementSettings({ accountId, team, onTeamRefresh }: Props
       return null;
     }
     setVisibleTeam(refreshedTeam);
-    setNameDraft(refreshedTeam.name);
-    if (isManager) {
-      void members.refetch();
-    }
+    if (!renameOpened || refreshedTeam.role === "MEMBER") setNameDraft(refreshedTeam.name);
     if (withholdRevisionBoundActions) setAuthorityRefreshPending(false);
     return refreshedTeam;
   };
 
   const refreshAuthority = () => {
-    void reconcileAuthority();
+    void reconcileAuthority(true);
   };
 
   const executeRename = async (intent: ManagementIntent<RenameBody>) => {
+    const requestContext = actionContextRef.current;
     setProblem(null);
     try {
       const result = await renameTeam({ ...scope, ...intent.body, idempotencyKey: intent.idempotencyKey }).unwrap();
+      if (!isCurrentAction(requestContext)) return;
       setVisibleTeam(result.team);
       setNameDraft(result.team.name);
       setRenameOpened(false);
-      setTerminalStatus(result.outcome === "UNCHANGED" ? "Название команды уже актуально" : "Название команды сохранено");
+      notification.success({ title: result.outcome === "UNCHANGED" ? "Название команды уже актуально" : "Название команды сохранено", placement: "top", role: "status" });
+      completedActionFocusRef.current = true;
       void reconcileAuthority(true);
-      focusTerminalStatus();
     } catch (error) {
+      if (!isCurrentAction(requestContext)) return;
       showCommandProblem(error, { kind: "rename", intent });
     }
   };
 
   const submitRename = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (authorityRefreshPending) return;
-    void executeRename(createManagementIntent({ name: nameDraft, revision: visibleTeam.revision }));
+    if (managementActionsWithheld || !isManager) return;
+    const retry = problem?.retry;
+    const intent = retry?.kind === "rename" && retry.intent.body.name === nameDraft
+      ? retry.intent
+      : createManagementIntent({ name: nameDraft, revision: visibleTeam.revision });
+    void executeRename(intent);
   };
 
-  const openRoleDialog = () => {
-    if (authorityRefreshPending) return;
+  const openRoleDialog = (member: TeamMemberDirectoryItem) => {
+    if (managementActionsWithheld || !isOwner || member.userId === accountId || member.role === "OWNER") return;
+    captureActionInitiator();
     setProblem(null);
-    setRoleTargetId(preferredRoleTarget?.userId ?? "");
-    setRoleDraft(preferredRoleTarget?.role === "ADMIN" ? "ADMIN" : "MEMBER");
+    setSelectedRoleTarget(member);
+    setRoleDraft(member.role === "ADMIN" ? "ADMIN" : "MEMBER");
     setRoleOpened(true);
   };
 
   const executeRole = async (intent: ManagementIntent<RoleBody>) => {
+    const requestContext = actionContextRef.current;
     setProblem(null);
     try {
       const result = await updateRole({ ...scope, ...intent.body, idempotencyKey: intent.idempotencyKey }).unwrap();
+      if (!isCurrentAction(requestContext)) return;
       setRoleOpened(false);
-      setTerminalStatus(result.outcome === "UNCHANGED" ? "Роль участника уже актуальна" : "Роль участника изменена");
+      notification.success({ title: result.outcome === "UNCHANGED" ? "Роль участника уже актуальна" : "Роль участника изменена", placement: "top", role: "status" });
+      completedActionFocusRef.current = true;
       void reconcileAuthority(true);
-      focusTerminalStatus();
     } catch (error) {
+      if (!isCurrentAction(requestContext)) return;
       showCommandProblem(error, { kind: "role", intent });
     }
   };
 
   const submitRole = () => {
-    if (authorityRefreshPending || !selectedRoleTarget) return;
+    if (managementActionsWithheld || !isOwner || !selectedRoleTarget) return;
     void executeRole(createManagementIntent({
       userId: selectedRoleTarget.userId,
       role: roleDraft,
@@ -206,89 +244,101 @@ export function TeamManagementSettings({ accountId, team, onTeamRefresh }: Props
 
   const closeTransfer = () => {
     restoreTransferFocusRef.current = true;
-    transferButtonRef.current?.focus();
+    actionInitiatorRef.current?.focus();
     setTransferOpened(false);
-    window.queueMicrotask(() => transferButtonRef.current?.focus());
-    window.setTimeout(() => transferButtonRef.current?.focus(), 0);
+    window.queueMicrotask(() => actionInitiatorRef.current?.focus());
+    window.setTimeout(() => actionInitiatorRef.current?.focus(), 0);
   };
 
-  const openTransferDialog = () => {
-    if (authorityRefreshPending) return;
-    if (roleTargets[0]) setTransferTargetId(roleTargets[0].userId);
+  const openTransferDialog = (member: TeamMemberDirectoryItem) => {
+    if (managementActionsWithheld || !isOwner || member.userId === accountId || member.role === "OWNER") return;
+    captureActionInitiator();
+    setSelectedTransferTarget(member);
     setProblem(null);
     setTransferOpened(true);
   };
 
   const executeTransfer = async (intent: ManagementIntent<TransferBody>) => {
+    const requestContext = actionContextRef.current;
     setProblem(null);
     try {
       const result = await transferOwnership({ ...scope, ...intent.body, idempotencyKey: intent.idempotencyKey }).unwrap();
+      if (!isCurrentAction(requestContext)) return;
       setVisibleTeam(result.team);
       setTransferOpened(false);
-      setTerminalStatus("Владение командой передано. Вы остаетесь администратором.");
+      notification.success({ title: "Владение командой передано. Вы остаетесь администратором.", placement: "top", role: "status" });
+      completedActionFocusRef.current = true;
       void reconcileAuthority(true);
-      focusTerminalStatus();
     } catch (error) {
+      if (!isCurrentAction(requestContext)) return;
       showCommandProblem(error, { kind: "transfer", intent });
     }
   };
 
   const submitTransfer = () => {
-    if (authorityRefreshPending || !selectedTransferTarget) return;
+    if (managementActionsWithheld || !isOwner || !selectedTransferTarget) return;
     void executeTransfer(createManagementIntent({ targetUserId: selectedTransferTarget.userId, revision: visibleTeam.revision }));
   };
 
-  const openRemoveDialog = () => {
-    if (authorityRefreshPending) return;
-    if (removeTargets[0]) setRemoveTargetId(removeTargets[0].userId);
+  const openRemoveDialog = (member: TeamMemberDirectoryItem) => {
+    if (managementActionsWithheld || !isManager || member.userId === accountId || member.role === "OWNER") return;
+    captureActionInitiator();
+    setSelectedRemoveTarget(member);
     setProblem(null);
     setRemoveOpened(true);
   };
 
   const executeRemove = async (intent: ManagementIntent<RemoveBody>) => {
+    const requestContext = actionContextRef.current;
     setProblem(null);
     try {
       const result = await removeTeamMember({ ...scope, ...intent.body, idempotencyKey: intent.idempotencyKey }).unwrap();
+      if (!isCurrentAction(requestContext)) return;
       setRemoveOpened(false);
-      setTerminalStatus(result.recovered ? "Удаление участника уже применено" : "Участник удалён из команды");
+      notification.success({ title: result.recovered ? "Удаление участника уже применено" : "Участник удалён из команды", placement: "top", role: "status" });
+      completedActionFocusRef.current = true;
       void reconcileAuthority(true);
-      focusTerminalStatus();
     } catch (error) {
+      if (!isCurrentAction(requestContext)) return;
       showCommandProblem(error, { kind: "remove", intent });
     }
   };
 
   const submitRemove = () => {
-    if (authorityRefreshPending || !selectedRemoveTarget) return;
+    if (managementActionsWithheld || !isManager || !selectedRemoveTarget) return;
     void executeRemove(createManagementIntent({ userId: selectedRemoveTarget.userId }));
   };
 
   const executeLeave = async (intent: ManagementIntent<LeaveBody>) => {
+    const requestContext = actionContextRef.current;
     setProblem(null);
     try {
       const result = await leaveTeam({ ...scope, idempotencyKey: intent.idempotencyKey }).unwrap();
+      if (!isCurrentAction(requestContext)) return;
       setLeaveOpened(false);
-      setTerminalStatus(result.recovered ? "Выход из команды уже применён" : "Вы вышли из команды");
+      notification.success({ title: result.recovered ? "Выход из команды уже применён" : "Вы вышли из команды", placement: "top", role: "status" });
+      completedActionFocusRef.current = true;
       void reconcileAuthority(true);
-      focusTerminalStatus();
     } catch (error) {
+      if (!isCurrentAction(requestContext)) return;
       showCommandProblem(error, { kind: "leave", intent });
     }
   };
 
   const submitLeave = () => {
-    if (authorityRefreshPending || isOwner) return;
+    if (managementActionsWithheld || isOwner) return;
     void executeLeave(createManagementIntent({}));
   };
 
   const retryCommand = () => {
+    if (managementActionsWithheld) return;
     const retry = problem?.retry;
     if (!retry) return;
-    if (retry.kind === "rename") void executeRename(retry.intent);
-    if (retry.kind === "role") void executeRole(retry.intent);
-    if (retry.kind === "transfer") void executeTransfer(retry.intent);
-    if (retry.kind === "leave") void executeLeave(retry.intent);
-    if (retry.kind === "remove") void executeRemove(retry.intent);
+    if (retry.kind === "rename" && isManager) void executeRename(retry.intent);
+    if (retry.kind === "role" && isOwner) void executeRole(retry.intent);
+    if (retry.kind === "transfer" && isOwner) void executeTransfer(retry.intent);
+    if (retry.kind === "leave" && !isOwner) void executeLeave(retry.intent);
+    if (retry.kind === "remove" && isManager) void executeRemove(retry.intent);
   };
 
   const retryCommandFromKeyboard = (event: React.KeyboardEvent<HTMLButtonElement>) => {
@@ -302,47 +352,18 @@ export function TeamManagementSettings({ accountId, team, onTeamRefresh }: Props
     { value: "ADMIN", label: "Администратор" },
   ];
 
-  const selectRoleTarget = (userId: string) => {
-    const target = roleTargets.find((member) => member.userId === userId);
-    setRoleTargetId(userId);
-    setRoleDraft(target?.role === "ADMIN" ? "ADMIN" : "MEMBER");
-  };
-
-  const moveRoleTarget = (event: React.KeyboardEvent<HTMLSelectElement>) => {
-    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-    const selectedIndex = roleTargets.findIndex((member) => member.userId === roleTargetId);
-    const offset = event.key === "ArrowDown" ? 1 : -1;
-    const nextIndex = Math.min(Math.max(selectedIndex + offset, 0), roleTargets.length - 1);
-    const nextTarget = roleTargets[nextIndex];
-    if (!nextTarget) return;
-    event.preventDefault();
-    selectRoleTarget(nextTarget.userId);
-  };
-
-  useEffect(() => {
-    if (transferOpened && !transferTargetId && roleTargets[0]) {
-      setTransferTargetId(roleTargets[0].userId);
-    }
-  }, [roleTargets, transferOpened, transferTargetId]);
-
-  useEffect(() => {
-    if (removeOpened && !removeTargetId && removeTargets[0]) {
-      setRemoveTargetId(removeTargets[0].userId);
-    }
-  }, [removeOpened, removeTargetId, removeTargets]);
-
   useEffect(() => {
     if (!transferOpened && restoreTransferFocusRef.current) {
       restoreTransferFocusRef.current = false;
-      transferButtonRef.current?.focus();
+      actionInitiatorRef.current?.focus();
     }
   }, [transferOpened]);
 
   return (
     <Stack className={styles.settings} gap="lg">
-      <header className={styles.intro}>
-        <Text className={styles.kicker}>Управление пространством</Text>
-        <Title order={1}>Настройки команды</Title>
+      <header ref={settingsIntroRef} className={styles.intro}>
+        <Text className={styles.kicker}>Команда</Text>
+        <Title order={1} tabIndex={-1}>Настройки команды</Title>
         <Text c="gray.5" mt={6}>Права и изменения подтверждаются сервером при каждом действии.</Text>
       </header>
 
@@ -350,7 +371,7 @@ export function TeamManagementSettings({ accountId, team, onTeamRefresh }: Props
         <Group justify="space-between" align="center" gap="md" wrap="wrap">
           <div>
             <Text className={styles.identityLabel}>Команда</Text>
-            <Group gap="xs" wrap="nowrap">
+            <Group gap="xs" wrap="nowrap" align="center">
               <Text fw={800} size="lg">{visibleTeam.name}</Text>
               {isManager ? (
                 <Button
@@ -359,11 +380,12 @@ export function TeamManagementSettings({ accountId, team, onTeamRefresh }: Props
                   aria-label="Переименовать команду"
                   title="Переименовать команду"
                   onClick={() => {
+                    captureActionInitiator();
                     setNameDraft(visibleTeam.name);
                     setProblem(null);
                     setRenameOpened(true);
                   }}
-                  disabled={authorityRefreshPending}
+                  disabled={managementActionsWithheld}
                 >
                   <IconPencil size={18} aria-hidden="true" />
                 </Button>
@@ -374,15 +396,10 @@ export function TeamManagementSettings({ accountId, team, onTeamRefresh }: Props
             {roleLabel(visibleTeam.role)}
           </Badge>
         </Group>
-        <Text className={styles.identityHint} size="sm">Ваша роль: {roleLabel(visibleTeam.role)}</Text>
-        {isOwner ? <Text size="xs" c="gray.5">ID команды: {visibleTeam.id}</Text> : null}
+        <Stack className={styles.identityHint} gap={4}>
+          <Text size="sm">Ваша роль: {roleLabel(visibleTeam.role)}</Text>
+        </Stack>
       </Card>
-
-      {terminalStatus ? (
-        <div ref={terminalStatusRef} className={styles.terminalStatus} role="status" tabIndex={-1}>
-          {terminalStatus}
-        </div>
-      ) : null}
 
       {authorityRefreshPending ? (
         <Text role="status" c="gray.5" size="sm">Проверяем актуальные права и данные команды…</Text>
@@ -408,7 +425,7 @@ export function TeamManagementSettings({ accountId, team, onTeamRefresh }: Props
                 <Button className={styles.action} variant="light" onClick={refreshAuthority}>Обновить данные</Button>
               ) : null}
               {problem.retry ? (
-                <Button className={styles.action} variant="light" onClick={retryCommand} onKeyDown={retryCommandFromKeyboard}>
+                <Button className={styles.action} variant="light" disabled={managementActionsWithheld} onClick={retryCommand} onKeyDown={retryCommandFromKeyboard}>
                   Повторить
                 </Button>
               ) : null}
@@ -417,68 +434,61 @@ export function TeamManagementSettings({ accountId, team, onTeamRefresh }: Props
         </Alert>
       ) : null}
 
-      <Card className={styles.commandCard} withBorder>
-        <Stack gap="md">
-          <div>
-            <Text className={styles.sectionNumber}>УПРАВЛЕНИЕ ДОСТУПОМ</Text>
-            <Text fw={800} size="lg">Роли, владение и доступ</Text>
-            <Text c="gray.5" size="sm">
-              {isOwner
-                ? "Выберите активного участника, чтобы изменить роль, передать владение или удалить доступ."
-                : isManager
-                  ? "Администратор может удалить доступ участника, а также выйти из команды сам."
-                  : "Вы можете выйти из команды. Повторное вступление потребует нового приглашения."}
-            </Text>
-          </div>
-          <Group gap="sm" wrap="wrap">
-            {isOwner ? (
-              <>
-                <Button className={styles.action} onClick={openRoleDialog} disabled={authorityRefreshPending}>
-                  Изменить роль участника
-                </Button>
-                <Button ref={transferButtonRef} className={styles.action} color="blue" variant="light" onClick={openTransferDialog} disabled={authorityRefreshPending}>
-                  Передать владение командой
-                </Button>
-              </>
-            ) : null}
-            {isManager ? (
-              <>
-                <Button className={styles.action} color="red" variant="light" onClick={openRemoveDialog} disabled={authorityRefreshPending || removeTargets.length === 0}>
-                  Удалить участника
-                </Button>
-              </>
-            ) : null}
-            {!isOwner ? (
-              <Button className={styles.action} color="red" variant="outline" onClick={() => setLeaveOpened(true)} disabled={authorityRefreshPending}>
-                Выйти из команды
-              </Button>
-            ) : null}
-          </Group>
-          {members.isFetching && isManager ? <Text size="sm" c="gray.5" role="status">Загружаем активных участников…</Text> : null}
-        </Stack>
-      </Card>
+      {isManager ? <TeamInvitationManagement accountId={accountId} authToken={authToken ?? ""} teamId={visibleTeam.id} /> : null}
+      <TeamMemberDirectory
+        accountId={accountId}
+        teamId={visibleTeam.id}
+        onMembersChange={reconcileMembers}
+        renderActions={(member, fetching) => {
+          const disabled = managementActionsWithheld || fetching;
+          const ownRow = member.userId === accountId;
+          const manageable = !ownRow && member.role !== "OWNER";
+          return <Group gap="xs" wrap="wrap">
+            {isOwner && manageable ? <>
+              <Button className={styles.rowAction} variant="light" aria-label="Изменить роль участника" onClick={() => openRoleDialog(member)} disabled={disabled}>Изменить роль</Button>
+              <Button className={styles.rowAction} color="blue" variant="light" aria-label="Передать владение командой" onClick={() => openTransferDialog(member)} disabled={disabled}>Передать владение</Button>
+            </> : null}
+            {isManager && manageable ? <ActionIcon className={styles.rowAction} size="lg" color="red" variant="light" aria-label="Удалить участника" title="Удалить участника" onClick={() => openRemoveDialog(member)} disabled={disabled}><IconTrash size={16} aria-hidden="true" /></ActionIcon> : null}
+            {!isOwner && ownRow ? <Button className={styles.rowAction} color="red" variant="light" onClick={() => { if (disabled) return; captureActionInitiator(); setProblem(null); setLeaveOpened(true); }} disabled={disabled}>Выйти из команды</Button> : null}
+          </Group>;
+        }}
+      />
 
-      <Modal opened={renameOpened} onClose={() => setRenameOpened(false)} title="Название команды" centered>
+      <Modal opened={renameOpened && isManager} onClose={() => setRenameOpened(false)} afterOpenChange={restoreCompletedActionFocus} title="Переименовать команду" centered>
         <form onSubmit={submitRename}>
           <Stack gap="md">
-            <TextInput
+            <TextInput placeholder="Введите название команды"
               className={styles.field}
-              label="Название команды"
+              aria-label="Название команды"
               value={nameDraft}
-              onChange={(event) => setNameDraft(event.currentTarget.value)}
+              onChange={(event: React.ChangeEvent<HTMLInputElement>) => setNameDraft(event.currentTarget.value)}
               autoFocus
-              disabled={authorityRefreshPending}
+              disabled={managementActionsWithheld}
             />
-            {problem ? <Text role="alert" c="red.4">{managementErrorMessage(problem.kind)}</Text> : null}
+            {problem ? (
+              <Alert className={styles.alert} color={problem.kind === "conflict" ? "yellow" : "red"} role="alert" title="Действие не выполнено">
+                <Stack gap="sm">
+                  <Text size="sm">{managementErrorMessage(problem.kind)}</Text>
+                  <Group gap="sm">
+                    {problem.kind === "conflict" ? (
+                      <Button className={styles.action} variant="light" onClick={refreshAuthority}>Обновить данные</Button>
+                    ) : null}
+                    {problem.retry ? (
+                      <Button className={styles.action} variant="light" disabled={managementActionsWithheld} onClick={retryCommand} onKeyDown={retryCommandFromKeyboard}>Повторить</Button>
+                    ) : null}
+                  </Group>
+                </Stack>
+              </Alert>
+            ) : null}
             <Group justify="flex-end">
               <Button variant="subtle" onClick={() => setRenameOpened(false)}>Отмена</Button>
-              <Button type="submit" disabled={authorityRefreshPending || !nameDraft.trim()}>Сохранить название</Button>
+              <Button type="submit" disabled={managementActionsWithheld || !nameDraft.trim()}>Сохранить название</Button>
             </Group>
           </Stack>
         </form>
       </Modal>
 
-      <Modal opened={roleOpened} onClose={() => setRoleOpened(false)} title="Изменить роль участника" centered>
+      <Modal opened={roleOpened && isOwner} onClose={() => setRoleOpened(false)} afterOpenChange={restoreCompletedActionFocus} title="Изменить роль участника" centered>
         <Stack gap="md">
           {problem ? (
             <Alert className={styles.alert} color={problem.kind === "conflict" ? "yellow" : "red"} role="alert" title="Действие не выполнено">
@@ -489,7 +499,7 @@ export function TeamManagementSettings({ accountId, team, onTeamRefresh }: Props
                     <Button className={styles.action} variant="light" onClick={refreshAuthority}>Обновить данные</Button>
                   ) : null}
                   {problem.retry ? (
-                    <Button className={styles.action} variant="light" onClick={retryCommand} onKeyDown={retryCommandFromKeyboard}>
+                    <Button className={styles.action} variant="light" disabled={managementActionsWithheld} onClick={retryCommand} onKeyDown={retryCommandFromKeyboard}>
                       Повторить
                     </Button>
                   ) : null}
@@ -497,24 +507,14 @@ export function TeamManagementSettings({ accountId, team, onTeamRefresh }: Props
               </Stack>
             </Alert>
           ) : null}
-          <NativeSelect
-            className={styles.field}
-            label="Участник"
-            data={roleTargets.map((member) => ({ value: member.userId, label: member.displayName }))}
-            value={roleTargetId}
-            onChange={(event) => selectRoleTarget(event.currentTarget.value)}
-            onKeyDown={moveRoleTarget}
-            disabled={authorityRefreshPending || roleTargets.length === 0}
-          />
           {selectedRoleTarget ? <Text>Выбранный участник: <strong>{selectedRoleTarget.displayName}</strong></Text> : null}
-          {!selectedRoleTarget ? <Text c="gray.5">Загружаем доступных участников…</Text> : null}
-          <NativeSelect
+          <NativeSelect placeholder="Выберите роль участника"
             className={styles.field}
             label="Роль"
             data={roleOptions}
             value={roleDraft}
-            onChange={(event) => setRoleDraft(event.currentTarget.value as "ADMIN" | "MEMBER")}
-            onKeyDown={(event) => {
+              onChange={(event: React.ChangeEvent<HTMLSelectElement>) => setRoleDraft(event.currentTarget.value as "ADMIN" | "MEMBER")}
+            onKeyDown={(event: React.KeyboardEvent<HTMLElement>) => {
               if (event.key === "ArrowDown") {
                 event.preventDefault();
                 setRoleDraft("ADMIN");
@@ -524,91 +524,67 @@ export function TeamManagementSettings({ accountId, team, onTeamRefresh }: Props
                 setRoleDraft("MEMBER");
               }
             }}
-            disabled={authorityRefreshPending || !selectedRoleTarget}
+            disabled={managementActionsWithheld || !selectedRoleTarget}
           />
           <Group justify="flex-end">
             <Button className={styles.action} variant="subtle" onClick={() => setRoleOpened(false)}>Отмена</Button>
-            <Button className={styles.action} onClick={submitRole} disabled={authorityRefreshPending || !selectedRoleTarget}>Сохранить роль</Button>
+            <Button className={styles.action} onClick={submitRole} disabled={managementActionsWithheld || !selectedRoleTarget}>Сохранить роль</Button>
           </Group>
         </Stack>
       </Modal>
 
-      <Modal opened={transferOpened} onClose={closeTransfer} title="Передать владение командой" centered returnFocus={false}>
+      <Modal opened={transferOpened && isOwner} onClose={closeTransfer} afterOpenChange={restoreCompletedActionFocus} title="Передать владение командой" centered returnFocus={false}>
         <Stack gap="md">
           <Text>После подтверждения прежний владелец станет ADMIN, а выбранный участник получит роль владельца.</Text>
           {problem ? (
             <Alert className={styles.alert} color={problem.kind === "conflict" ? "yellow" : "red"} role="alert" title="Действие не выполнено">
               <Stack gap="sm">
                 <Text size="sm">{managementErrorMessage(problem.kind)}</Text>
-                {problem.retry ? <Button className={styles.action} variant="light" onClick={retryCommand}>Повторить</Button> : null}
+                {problem.retry ? <Button className={styles.action} variant="light" disabled={managementActionsWithheld} onClick={retryCommand}>Повторить</Button> : null}
               </Stack>
             </Alert>
           ) : null}
-          <NativeSelect
-            className={styles.field}
-            label="Новый владелец"
-            data={roleTargets.map((member) => ({ value: member.userId, label: member.displayName }))}
-            value={transferTargetId}
-            onChange={(event) => setTransferTargetId(event.currentTarget.value)}
-            onKeyDown={(event) => {
-              if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-              const selectedIndex = roleTargets.findIndex((member) => member.userId === transferTargetId);
-              const offset = event.key === "ArrowDown" ? 1 : -1;
-              const nextIndex = Math.min(Math.max(selectedIndex + offset, 0), roleTargets.length - 1);
-              const nextTarget = roleTargets[nextIndex];
-              if (!nextTarget) return;
-              event.preventDefault();
-              setTransferTargetId(nextTarget.userId);
-            }}
-            disabled={authorityRefreshPending}
-          />
+          {selectedTransferTarget ? <Text>Новый владелец: <strong>{selectedTransferTarget.displayName}</strong></Text> : null}
           <Group justify="flex-end">
             <Button className={styles.action} variant="subtle" onClick={closeTransfer}>Отмена</Button>
-            <Button className={styles.action} color="blue" onClick={submitTransfer} disabled={authorityRefreshPending || !selectedTransferTarget}>Подтвердить передачу</Button>
+            <Button className={styles.action} color="blue" onClick={submitTransfer} disabled={managementActionsWithheld || !selectedTransferTarget}>Подтвердить передачу</Button>
           </Group>
         </Stack>
       </Modal>
 
-      <Modal opened={removeOpened} onClose={() => setRemoveOpened(false)} title="Удалить участника из команды" centered>
+      <Modal opened={removeOpened && isManager} onClose={() => setRemoveOpened(false)} afterOpenChange={restoreCompletedActionFocus} title="Удалить участника из команды" centered>
         <Stack gap="md">
-          <Text>Участник потеряет доступ к командному пространству и командным интервью. Повторное вступление потребует нового приглашения.</Text>
+          <Text>Участник потеряет доступ к команде и её интервью. Повторное вступление потребует нового приглашения.</Text>
           {problem ? (
             <Alert className={styles.alert} color={problem.kind === "conflict" ? "yellow" : "red"} role="alert" title="Удаление не выполнено">
               <Stack gap="sm">
                 <Text size="sm">{managementErrorMessage(problem.kind)}</Text>
-                {problem.retry ? <Button className={styles.action} variant="light" onClick={retryCommand}>Повторить</Button> : null}
+                {problem.retry ? <Button className={styles.action} variant="light" disabled={managementActionsWithheld} onClick={retryCommand}>Повторить</Button> : null}
               </Stack>
             </Alert>
           ) : null}
-          <NativeSelect
-            className={styles.field}
-            label="Участник"
-            data={removeTargets.map((member) => ({ value: member.userId, label: member.displayName }))}
-            value={selectedRemoveTarget?.userId ?? ""}
-            onChange={(event) => setRemoveTargetId(event.currentTarget.value)}
-            disabled={authorityRefreshPending || removeTargets.length === 0}
-          />
+          {selectedRemoveTarget ? <Text>Удаляемый участник: <strong>{selectedRemoveTarget.displayName}</strong></Text> : null}
           <Group justify="flex-end">
             <Button className={styles.action} variant="subtle" onClick={() => setRemoveOpened(false)}>Отмена</Button>
-            <Button className={styles.action} color="red" onClick={submitRemove} disabled={authorityRefreshPending || !selectedRemoveTarget}>Удалить участника</Button>
+            <Button className={styles.action} variant="light" color="red" leftSection={<IconTrash size={16} aria-hidden="true" />} onClick={submitRemove} disabled={managementActionsWithheld || !selectedRemoveTarget}>Удалить участника</Button>
           </Group>
         </Stack>
       </Modal>
 
-      <Modal opened={leaveOpened} onClose={() => setLeaveOpened(false)} title="Выйти из команды" centered>
+      <Modal opened={leaveOpened && !isOwner} onClose={() => setLeaveOpened(false)} afterOpenChange={restoreCompletedActionFocus} title="Выйти из команды" centered>
         <Stack gap="md">
-          <Text>После выхода командное пространство пропадёт из списка. Старые ссылки и назначения не восстановят доступ автоматически.</Text>
+          <Text>После выхода команда пропадёт из списка. Старые ссылки и назначения не восстановят доступ автоматически.</Text>
           {problem ? (
             <Alert className={styles.alert} color={problem.kind === "conflict" ? "yellow" : "red"} role="alert" title="Выход не выполнен">
               <Stack gap="sm">
                 <Text size="sm">{managementErrorMessage(problem.kind)}</Text>
-                {problem.retry ? <Button className={styles.action} variant="light" onClick={retryCommand}>Повторить</Button> : null}
+                {problem.retry ? <Button className={styles.action} variant="light" disabled={managementActionsWithheld} onClick={retryCommand}>Повторить</Button> : null}
               </Stack>
             </Alert>
           ) : null}
           <Group justify="flex-end">
             <Button className={styles.action} variant="subtle" onClick={() => setLeaveOpened(false)}>Отмена</Button>
-            <Button className={styles.action} color="red" onClick={submitLeave} disabled={authorityRefreshPending || isOwner}>Выйти из команды</Button>
+            <Button className={styles.action} color="red" onClick={submitLeave} disabled={managementActionsWithheld || isOwner}>Выйти из команды</Button>
           </Group>
         </Stack>
       </Modal>

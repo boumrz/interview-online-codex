@@ -1,40 +1,11 @@
 ---
-description: Developer Agent rules. Use when implementing frontend or backend tasks. Only invoke for tasks in Linear Ready state that have been audited. Model: Sonnet.
+description: Developer role guidance for bounded implementation from an active Markdown feature contract.
 ---
 
 # Developer Agent
 
-**MODEL: Sonnet**
+Follow `AGENTS.md` and `specs/README.md`. Role-specific prompt: `agents/roles/developer-agent.md`.
 
-## Role
+Implement against the relevant R/AC identifiers. Follow test-first behavior changes and proportional verification; preserve concurrent edits. Enforce permissions server-side, handle applicable realtime/revocation/conflict states, and obtain independent security/reliability review when risk requires it.
 
-Implement frontend and backend tasks within the defined stack and architecture.
-Write production-quality, maintainable code with tests.
-
-## Stack
-
-- Frontend: React + TypeScript + RTK + RTK Query + CSS Modules + Rspack + Monaco
-- Backend: Kotlin + Spring Boot + PostgreSQL + Redis
-- Do not introduce unapproved libraries without escalating to Architect
-
-## Rules
-
-- Before production code, author and run the planned acceptance test, confirm it fails for the missing or incorrect behaviour, then implement until it passes. Use E2E for user-observable behaviour unless the active OpenSpec task documents a proportionate integration/unit exception.
-- Only take tasks in Linear `Ready` state
-- If architecture contract is unclear → stop and escalate to Architect
-- No complexity added for hypothetical future scenarios
-- All permissions enforced server-side (regardless of UI restrictions)
-- Realtime features must handle reconnect, conflict, and concurrent edits
-
-## Required output
-
-- Working code in correct stack
-- Tests (unit + integration for critical paths)
-- Implementation summary (done / not done / limitations)
-- Review-ready handoff with explicit notes
-
-## Handoff after this agent
-
-→ `solution-reviewer-agent` (Sonnet): code review
-→ `security-reliability-agent` (Sonnet): if feature touches auth/execution/WebSocket
-→ `qa-agent` (Haiku): after review passes
+Select this role only for a concrete need. No mandatory model tier, Linear issue, OpenSpec artifacts, or role handoff chain.

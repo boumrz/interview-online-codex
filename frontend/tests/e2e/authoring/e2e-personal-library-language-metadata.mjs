@@ -61,19 +61,36 @@ try {
   await page.goto(`${webBaseUrl}/workspace/personal/library`, { waitUntil: "domcontentloaded" });
   await page.getByTestId("open-create-task-modal").waitFor({ state: "visible", timeout: 15_000 });
 
-  const filterValues = await page.getByLabel("Язык задач", { exact: true }).locator("option").evaluateAll(
-    (options) => options.map((option) => [option.value, option.textContent?.trim() ?? ""]),
-  );
-  assert.deepEqual(filterValues, [["", "Все языки"], ...expectedLanguages], "PERSONAL_LIBRARY_LANGUAGE_FILTER_REGRESSION");
+  await page.getByRole("combobox", { name: "Язык задач", exact: true }).click();
+  const filterDropdown = page.locator(".ant-select-dropdown:visible").last();
+  await filterDropdown.waitFor({ state: "visible" });
+  const filterLabels = await filterDropdown.locator(".ant-select-item-option").allTextContents();
+  assert.deepEqual(filterLabels, expectedLanguages.map(([, label]) => label), "PERSONAL_LIBRARY_LANGUAGE_FILTER_REGRESSION");
+  const languageFilter = page.getByRole("combobox", { name: "Язык задач", exact: true });
+  for (const [index, [value]] of expectedLanguages.entries()) {
+    if (index > 0) await languageFilter.click();
+    const activeDropdown = page.locator(".ant-select-dropdown:visible").last();
+    await activeDropdown.waitFor({ state: "visible" });
+    await activeDropdown.locator(".ant-select-item-option").nth(index).click();
+    await page.waitForFunction((expectedValue) => new URL(location.href).searchParams.get("language") === expectedValue, value);
+  }
 
   await page.getByTestId("open-create-task-modal").click();
-  const languageSelect = page.getByRole("textbox", { name: "Язык", exact: true });
+  const languageSelect = page.getByRole("combobox", { name: "Язык", exact: true });
   await languageSelect.click();
-  const creationLabels = await page.locator(".mantine-Select-options [role=option]").allTextContents();
+  const creationDropdown = page.locator(".ant-select-dropdown:visible").last();
+  await creationDropdown.waitFor({ state: "visible" });
+  const creationLabels = await creationDropdown.locator(".ant-select-item-option").allTextContents();
   assert.deepEqual(creationLabels, expectedLanguages.map(([, label]) => label), "PERSONAL_TASK_CREATE_LANGUAGE_REGRESSION");
 
   await page.keyboard.press("Escape");
+  await page.waitForFunction(() => Array.from(document.querySelectorAll(".ant-select-dropdown")).every((dropdown) => {
+    const style = getComputedStyle(dropdown);
+    return style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0;
+  }), null, { timeout: 5_000 });
+  await page.waitForFunction(() => document.querySelectorAll(".ant-select-open").length === 0);
   await page.keyboard.press("Escape");
+  await page.locator(".ant-modal-wrap:visible").waitFor({ state: "hidden", timeout: 5_000 });
   await page.getByRole("tab", { name: "Наборы задач", exact: true }).click();
   const presetCard = page.getByTestId(`preset-card-${preset.id}`);
   await presetCard.waitFor({ state: "visible" });
@@ -81,10 +98,12 @@ try {
   await presetCard.getByText("Node JS · 2, Python · 1", { exact: true }).waitFor({ timeout: 5_000 });
 
   const createPreset = page.getByRole("button", { name: "Создать набор", exact: true });
-  await createPreset.click();
-  const taskPicker = page.getByRole("textbox", { name: "Задачи", exact: true });
+  await createPreset.click({ timeout: 5_000 });
+  const taskPicker = page.getByRole("combobox", { name: "Задачи", exact: true });
   await taskPicker.click();
-  const taskOptions = await page.locator(".mantine-MultiSelect-options [role=option]").allTextContents();
+  const taskPickerDropdown = page.locator(".ant-select-dropdown:visible").last();
+  await taskPickerDropdown.waitFor({ state: "visible" });
+  const taskOptions = await taskPickerDropdown.locator(".ant-select-item-option").allTextContents();
   assert.deepEqual(
     taskOptions.toSorted(),
     ["Две суммы — Node JS", "Очередь событий — Node JS", "Группировка данных — Python"].toSorted(),
@@ -92,11 +111,16 @@ try {
   );
 
   await page.keyboard.press("Escape");
+  await page.waitForFunction(() => Array.from(document.querySelectorAll('.ant-select-input[role="combobox"]')).every((input) => input.getAttribute("aria-expanded") !== "true"), null, { timeout: 5_000 });
+  await page.waitForFunction(() => document.querySelectorAll(".ant-select-open").length === 0);
   await page.keyboard.press("Escape");
-  await presetCard.getByRole("button", { name: "Изменить", exact: true }).click();
-  const editPicker = page.getByRole("textbox", { name: "Задачи", exact: true });
+  await page.getByRole("dialog", { name: "Создать набор", exact: true }).waitFor({ state: "hidden" });
+  await presetCard.getByRole("button", { name: `Редактировать набор ${preset.name}`, exact: true }).click();
+  const editPicker = page.getByRole("combobox", { name: "Задачи", exact: true });
   await editPicker.click();
-  const editOptions = await page.locator(".mantine-MultiSelect-options [role=option]").allTextContents();
+  const editDropdown = page.locator(".ant-select-dropdown:visible").last();
+  await editDropdown.waitFor({ state: "visible" });
+  const editOptions = await editDropdown.locator(".ant-select-item-option").allTextContents();
   assert.deepEqual(editOptions, taskOptions, "PRESET_EDIT_TASK_OPTION_LANGUAGE_MISSING");
 
   console.log("PERSONAL_LIBRARY_LANGUAGE_METADATA_OK");

@@ -1,4 +1,5 @@
 import React from "react";
+import { Button } from "antd";
 import styles from "./LegacyDomainNotice.module.css";
 
 const LEGACY_DOMAIN = process.env.VITE_LEGACY_PUBLIC_DOMAIN ?? "interview.domiknote.ru";
@@ -55,9 +56,9 @@ export function LegacyDomainNotice() {
             чтобы продолжить пользоваться инструментом.
           </p>
         </div>
-        <a className={styles.action} href={newDomainUrl} data-testid="legacy-domain-notice-link">
+        <Button className={styles.action} href={newDomainUrl} type="primary" data-testid="legacy-domain-notice-link">
           Перейти на interview.vtools.tech
-        </a>
+        </Button>
       </div>
     </section>
   );

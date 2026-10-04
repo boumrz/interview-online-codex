@@ -1,10 +1,10 @@
-# interview-online
+# InterHub
 
 Платформа для технических собеседований в реальном времени (MVP).
 
 ## Stack
 
-- Frontend: React + TypeScript + RTK + RTK Query + Mantine UI + Rspack
+- Frontend: React + TypeScript + RTK + RTK Query + Ant Design v6 + CSS Modules + Rspack
 - Backend: Kotlin + Spring Boot + PostgreSQL
 - Agent Platform: Workflow state machine (Temporal-first, LangGraph-compatible), Linear sync adapter, policy gates, artifact registry
 
@@ -20,10 +20,15 @@
 ## Development Workflow
 
 Use `SPEC.md` to find the relevant feature specification in `specs/features/`.
-Before implementing a feature or bug fix, read that file,
-update it if the requirement changed, write the most relevant test first when
-the behavior is executable, then implement the smallest scoped change and run
-targeted verification.
+Follow the [specification standard](specs/README.md); use the
+[feature template](specs/templates/feature.md) for new work. Update requirements
+in place, make a brief completeness pass, test executable behavior first and
+verify the smallest coherent change in proportion to risk. Significant access,
+realtime and migration changes require an independent scoped review before release.
+
+Direct implementation is the default. Specialist roles, Linear and separate
+planning artifacts are used when the task actually needs them. Keep current
+contracts separate from historical run reports in `specs/references/`.
 
 The `openspec/` directory is retained only for historical context and evidence.
 New work should not create OpenSpec changes or require the OpenSpec CLI.
@@ -123,6 +128,11 @@ cd ../frontend
 FEATURE_TEAM_WORKSPACES=true FEATURE_TEAM_MERGE_COMMIT=true npm run dev
 ```
 
+Для совместного локального запуска backend и frontend с переключателем
+пространств используйте `FEATURE_TEAM_WORKSPACES=true scripts/dev-up.sh`.
+Командные пространства включатся только в этих локальных процессах; флаг по
+умолчанию остаётся выключенным.
+
 Эти переменные включают весь командный путь и финальный запуск объединения
 только в выбранных процессах. По умолчанию флаг запуска объединения выключен;
 общая проверка активности комнат для нескольких процессов находится в
@@ -199,6 +209,22 @@ curl -I -H "Accept-Encoding: gzip" https://<your-domain>/
 - `GET /api/agent/runs/{runId}/trace` - trace-события handoff/decision
 - `POST /api/agent/realtime/faults/{inviteCode}` - fault profile (latency/drop)
 - `DELETE /api/agent/realtime/faults/{inviteCode}` - очистка fault profile
+
+Environment Doctor требует токен аккаунта InterHub в переменной окружения
+`INTERHUB_AUTH_TOKEN`. Для локальной проверки из Bash можно ввести его без
+отображения и записи в историю команд:
+
+```bash
+read -r -s -p 'Токен аккаунта InterHub: ' INTERHUB_AUTH_TOKEN
+printf '\n'
+export INTERHUB_AUTH_TOKEN
+bash backend/scripts/environment_doctor.sh http://localhost:8080
+unset INTERHUB_AUTH_TOKEN
+```
+
+Скрипт передаёт токен только в заголовке авторизации и показывает итоговый
+`PASS` или `WARN`. Отсутствие токена, ошибка запроса, некорректный отчёт и
+результат `FAIL` завершают проверку с ненулевым кодом.
 
 ## Chaos QA Harness
 

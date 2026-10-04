@@ -75,6 +75,12 @@ class Room(
     @Column(nullable = false)
     var language: String = "nodejs",
 
+    @Column(name = "room_editor_mode", nullable = false, length = 16)
+    var roomEditorMode: String = "code",
+
+    @Column(name = "room_editor_mode_revision", nullable = false)
+    var roomEditorModeRevision: Long = 0,
+
     @Column(name = "current_step", nullable = false)
     var currentStep: Int = 0,
 

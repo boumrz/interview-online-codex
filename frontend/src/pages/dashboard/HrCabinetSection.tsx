@@ -1,4 +1,5 @@
 import React, { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { App, Table as AntTable, type TableColumnsType } from "antd";
 import {
   Alert,
   Badge,
@@ -10,14 +11,15 @@ import {
   Pagination,
   Skeleton,
   Stack,
-  Table,
   Text,
   TextInput,
   Title,
-} from "@mantine/core";
-import { IconDownload, IconRefresh } from "@tabler/icons-react";
+  Tooltip,
+} from "components/antd-compat";
+import { IconDownload, IconRefresh, IconHelpCircle } from "components/antd-icons";
 import { useNavigate } from "react-router-dom";
 import { CopyHrId } from "../../features/hr/CopyHrId";
+import { TeamProcessFilters, type TeamProcessFilterValue } from "../../features/workspace/TeamProcessFilters";
 import { formatMoscowDateTime } from "../../features/hr/hrDate";
 import { useGetHrInterviewsQuery, useLazyGetHrInterviewQuery } from "../../services/api";
 import { downloadHrWorkbook, HrExportError } from "../../services/hrExport";
@@ -121,13 +123,15 @@ function DetailModal({
             <DetailItem label="Запланировано" value={formatMoscowDateTime(data.scheduledAt)} />
             <DetailItem label="Первое завершение" value={formatMoscowDateTime(data.finishedAt)} />
             <DetailItem label="Вердикт" value={fallback(data.verdict)} />
+            {data.trackName ? <DetailItem label="Трек" value={data.trackName} /> : null}
+            {data.vacancyTitle ? <DetailItem label="Вакансия" value={data.vacancyTitle} /> : null}
           </div>
-          <div>
+          <Stack gap={4}>
             <Text size="xs" c="gray.5" fw={700}>Комментарий к вердикту</Text>
             <Text style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
               {fallback(data.verdictComment)}
             </Text>
-          </div>
+          </Stack>
           <div>
             <Title order={4}>Оценки по задачам</Title>
             {data.taskScores.length === 0 ? (
@@ -156,10 +160,10 @@ function DetailModal({
 
 function DetailItem({ label, value }: { label: string; value: string }) {
   return (
-    <div>
+    <Stack gap={4}>
       <Text size="xs" c="gray.5" fw={700}>{label}</Text>
       <Text style={{ overflowWrap: "anywhere" }}>{value}</Text>
-    </div>
+    </Stack>
   );
 }
 
@@ -182,15 +186,16 @@ function RowActions({ interview, onResults }: { interview: HrInterview; onResult
   );
 }
 
-export function HrCabinetSection({ user, token }: { user: User; token: string }) {
+export function HrCabinetSection({ user, token, teamId }: { user: User; token: string; teamId?: string }) {
+  const { notification } = App.useApp();
   const [page, setPage] = useState(0);
   const [fromDraft, setFromDraft] = useState("");
   const [toDraft, setToDraft] = useState("");
   const [appliedRange, setAppliedRange] = useState<{ from: string; to: string } | null>(null);
+  const [processFilter, setProcessFilter] = useState<TeamProcessFilterValue>({ trackId: "", vacancyId: "" });
   const [filterError, setFilterError] = useState("");
   const [detailRoomId, setDetailRoomId] = useState<string | null>(null);
   const [exportError, setExportError] = useState("");
-  const [exportFeedback, setExportFeedback] = useState("");
   const [exporting, setExporting] = useState(false);
   const exportControllerRef = useRef<AbortController | null>(null);
   const exportGenerationRef = useRef(0);
@@ -198,11 +203,14 @@ export function HrCabinetSection({ user, token }: { user: User; token: string })
     () => ({
       page,
       size: PAGE_SIZE,
+      ...(teamId ? { teamId } : {}),
+      ...(processFilter.trackId ? { trackId: processFilter.trackId } : {}),
+      ...(processFilter.vacancyId ? { vacancyId: processFilter.vacancyId } : {}),
       ...(appliedRange ?? {}),
     }),
-    [appliedRange, page],
+    [appliedRange, page, teamId, processFilter],
   );
-  const { data, error, isFetching, refetch } = useGetHrInterviewsQuery(args, {
+  const { currentData: data, error, isFetching, refetch } = useGetHrInterviewsQuery(args, {
     refetchOnMountOrArgChange: true,
   });
 
@@ -216,12 +224,14 @@ export function HrCabinetSection({ user, token }: { user: User; token: string })
     exportGenerationRef.current += 1;
     exportControllerRef.current?.abort();
     exportControllerRef.current = null;
+    setExporting(false);
+    setExportError("");
     return () => {
       exportGenerationRef.current += 1;
       exportControllerRef.current?.abort();
       exportControllerRef.current = null;
     };
-  }, [token]);
+  }, [token, teamId, processFilter, appliedRange]);
 
   const applyPeriod = (event?: FormEvent) => {
     event?.preventDefault();
@@ -260,16 +270,22 @@ export function HrCabinetSection({ user, token }: { user: User; token: string })
     exportGenerationRef.current = generation;
     setExporting(true);
     setExportError("");
-    setExportFeedback("");
     try {
       const count = await downloadHrWorkbook({
         token,
+        teamId,
+        trackId: processFilter.trackId || undefined,
+        vacancyId: processFilter.vacancyId || undefined,
         ...(appliedRange ?? {}),
         signal: controller.signal,
         isSessionCurrent: () => localStorage.getItem("auth_token") === token,
       });
       if (controller.signal.aborted || exportGenerationRef.current !== generation) return;
-      setExportFeedback(count === 0 ? "Excel скачан: интервью нет" : `Excel скачан: ${count} интервью`);
+      notification.success({
+        title: count === 0 ? "Excel скачан: интервью нет" : `Excel скачан: ${count} интервью`,
+        placement: "top",
+        role: "status",
+      });
     } catch (caught) {
       if (controller.signal.aborted || exportGenerationRef.current !== generation) return;
       if (caught instanceof HrExportError && caught.status === 413) {
@@ -292,34 +308,73 @@ export function HrCabinetSection({ user, token }: { user: User; token: string })
   const stale = Boolean(error && hasData);
   const firstVisible = data && data.totalElements > 0 ? data.page * data.size + 1 : 0;
   const lastVisible = data ? Math.min((data.page + 1) * data.size, data.totalElements) : 0;
+  const interviewColumns: TableColumnsType<HrInterview> = [
+    { title: "Кандидат", dataIndex: "candidateName", key: "candidate", className: styles.wrappingCell, render: (value) => fallback(value) },
+    { title: "Позиция", dataIndex: "position", key: "position", className: styles.wrappingCell, render: (value) => fallback(value) },
+    ...(teamId ? [{ title: "Трек / вакансия", key: "process", className: styles.wrappingCell, render: (_: unknown, interview: HrInterview) => <Stack gap={4}>
+      <Text size="sm">{interview.trackName || "Без трека"}</Text>
+      <Text size="xs" c="gray.5">{interview.vacancyTitle || "Без вакансии"}</Text>
+    </Stack> }] : []),
+    { title: "Комната", dataIndex: "title", key: "room", className: styles.wrappingCell },
+    {
+      title: "Дата интервью",
+      key: "date",
+      render: (_, interview) => (
+        <Stack gap={4}>
+          <Text size="sm">{formatMoscowDateTime(interview.scheduledAt)}</Text>
+          {!interview.scheduledAt ? (
+            <Text size="xs" c="gray.5">
+              {dateSourceLabel(interview.dateSource)}: {formatMoscowDateTime(interview.effectiveAt)}
+            </Text>
+          ) : null}
+        </Stack>
+      ),
+    },
+    {
+      title: "Статус",
+      key: "status",
+      render: (_, interview) => {
+        const badge = interviewBadge(interview);
+        return <Badge color={badge.color}>{badge.label}</Badge>;
+      },
+    },
+    { title: "Действия", key: "actions", width: 160, render: (_, interview) => <RowActions interview={interview} onResults={() => setDetailRoomId(interview.roomId)} /> },
+  ];
 
   return (
-    <Card withBorder radius="lg" padding="lg" bg="#11151c" c="gray.1" className={styles.cabinet}>
+    <Card withBorder radius="lg" padding="lg" bg="var(--app-surface)" c="gray.1" className={styles.cabinet}>
       <Stack gap="lg">
         <Group justify="space-between" align="flex-start" gap="xl" wrap="wrap">
           <div>
             <Title order={2}>Кандидаты и интервью</Title>
             <Text c="gray.5" size="sm" mt={4}>
-              Только закреплённые за вами интервью. Даты показаны по времени Москвы.
+              {teamId ? "Кандидаты и интервью этой команды доступны всем её участникам." : "Ваши интервью и назначения нанимающим."}
             </Text>
           </div>
-          <CopyHrId id={user.id} compact />
+          {!teamId ? <CopyHrId id={user.id} compact /> : null}
         </Group>
 
+        {teamId ? <TeamProcessFilters accountId={user.id} teamId={teamId} value={processFilter} onChange={value => { setProcessFilter(value); setPage(0); setDetailRoomId(null); }} /> : null}
+
         <form onSubmit={applyPeriod}>
+          <Group gap={4} align="center" mb="xs">
+            <Text size="sm" fw={500}>Период</Text>
+            <Tooltip position="top" w={320} trigger={["hover", "focus"]} label="Даты по Москве, обе границы включены. Если дата интервью не назначена, используется дата завершения или создания.">
+              <Button type="button" size="xs" variant="subtle" className={styles.periodHint} aria-label="Как выбирается период"><IconHelpCircle size={16} aria-hidden="true" /></Button>
+            </Tooltip>
+          </Group>
           <Group align="flex-end" wrap="wrap" className={styles.toolbar}>
-            <TextInput
+            <TextInput className={styles.periodDate}
               type="date"
-              label="Период с"
+              label="С"
               value={fromDraft}
-              onChange={(event) => setFromDraft(event.currentTarget.value)}
-              error={filterError || undefined}
+              onChange={(event: React.ChangeEvent<HTMLInputElement>) => setFromDraft(event.currentTarget.value)}
             />
-            <TextInput
+            <TextInput className={styles.periodDate}
               type="date"
-              label="Период по"
+              label="По"
               value={toDraft}
-              onChange={(event) => setToDraft(event.currentTarget.value)}
+              onChange={(event: React.ChangeEvent<HTMLInputElement>) => setToDraft(event.currentTarget.value)}
             />
             <Button type="submit" variant="light">Применить период</Button>
             <Button
@@ -348,10 +403,7 @@ export function HrCabinetSection({ user, token }: { user: User; token: string })
               {exporting ? "Готовим Excel…" : "Скачать Excel"}
             </Button>
           </Group>
-          <Text size="xs" c="gray.5" mt="xs">
-            Границы периода включительны, время — московское (МСК). Для отбора используется
-            запланированная дата, а если её нет — дата первого завершения или создания комнаты.
-          </Text>
+          {filterError ? <Text role="alert" size="sm" c="red.4" mt="xs" style={{ display: "block" }}>{filterError}</Text> : null}
         </form>
 
         {error ? (
@@ -368,7 +420,6 @@ export function HrCabinetSection({ user, token }: { user: User; token: string })
             </Button>
           </Alert>
         ) : null}
-        <Text size="sm" c="teal.4" aria-live="polite" style={{ minHeight: 20 }}>{exportFeedback}</Text>
 
         <Box aria-busy={isFetching} aria-label="Список интервью">
           {!hasData && isFetching ? (
@@ -379,46 +430,20 @@ export function HrCabinetSection({ user, token }: { user: User; token: string })
             </Stack>
           ) : !hasData ? null : items.length === 0 ? (
             <Text ta="center" py="xl" c="gray.4">
-              {appliedRange ? "За выбранный период интервью нет" : "Пока нет интервью"}
+              {processFilter.trackId || processFilter.vacancyId ? "По выбранным фильтрам кандидатов нет" : appliedRange ? "За выбранный период интервью нет" : "Пока нет интервью"}
             </Text>
           ) : (
             <>
-              <div className={styles.desktopTable}>
-                <Table striped highlightOnHover withTableBorder>
-                  <Table.Thead>
-                    <Table.Tr>
-                      <Table.Th>Кандидат</Table.Th>
-                      <Table.Th>Позиция</Table.Th>
-                      <Table.Th>Комната</Table.Th>
-                      <Table.Th>Дата интервью</Table.Th>
-                      <Table.Th>Статус</Table.Th>
-                      <Table.Th>Действия</Table.Th>
-                    </Table.Tr>
-                  </Table.Thead>
-                  <Table.Tbody>
-                    {items.map((interview) => {
-                      const badge = interviewBadge(interview);
-                      return (
-                        <Table.Tr key={interview.roomId}>
-                          <Table.Td className={styles.wrappingCell}>{fallback(interview.candidateName)}</Table.Td>
-                          <Table.Td className={styles.wrappingCell}>{fallback(interview.position)}</Table.Td>
-                          <Table.Td className={styles.wrappingCell}>{interview.title}</Table.Td>
-                          <Table.Td>
-                            <Text size="sm">{formatMoscowDateTime(interview.scheduledAt)}</Text>
-                            {!interview.scheduledAt ? (
-                              <Text size="xs" c="gray.5">
-                                {dateSourceLabel(interview.dateSource)}: {formatMoscowDateTime(interview.effectiveAt)}
-                              </Text>
-                            ) : null}
-                          </Table.Td>
-                          <Table.Td><Badge color={badge.color}>{badge.label}</Badge></Table.Td>
-                          <Table.Td><RowActions interview={interview} onResults={() => setDetailRoomId(interview.roomId)} /></Table.Td>
-                        </Table.Tr>
-                      );
-                    })}
-                  </Table.Tbody>
-                </Table>
-              </div>
+              <AntTable<HrInterview>
+                className={styles.desktopTable}
+                rowKey="roomId"
+                size="middle"
+                columns={interviewColumns}
+                dataSource={items}
+                pagination={false}
+                tableLayout="fixed"
+                scroll={{ x: teamId ? 1100 : 900 }}
+              />
             </>
           )}
         </Box>

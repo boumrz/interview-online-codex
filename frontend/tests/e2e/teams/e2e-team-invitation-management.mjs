@@ -123,21 +123,23 @@ async function openAccount(
   if (observeLifecycle) {
     await context.addInitScript(() => {
       const events = [];
-      const record = (type) => {
+      const record = (type, event) => {
         events.push({
           type,
           order: events.length,
           timestamp: Date.now(),
           visibilityState: document.visibilityState,
+          hasFocus: document.hasFocus(),
+          isTrusted: event.isTrusted,
         });
       };
       Object.defineProperty(window, "__ac03LifecycleEvents", {
         configurable: true,
         value: events,
       });
-      window.addEventListener("blur", () => record("blur"));
-      window.addEventListener("focus", () => record("focus"));
-      document.addEventListener("visibilitychange", () => record("visibilitychange"));
+      window.addEventListener("blur", (event) => record("blur", event));
+      window.addEventListener("focus", (event) => record("focus", event));
+      document.addEventListener("visibilitychange", (event) => record("visibilitychange", event));
     });
   }
   if (suppressNativeWindowFocus) {
@@ -176,7 +178,7 @@ async function openAccount(
   const page = await context.newPage();
   page.setDefaultTimeout(6000);
   beforeNavigate?.(page);
-  await page.goto(`${web}${path}`, { waitUntil: "domcontentloaded" });
+  await page.goto(new URL(path, web).href, { waitUntil: "domcontentloaded" });
   await page.locator("#root").waitFor({ state: "attached" });
   return { context, page };
 }
@@ -197,17 +199,19 @@ function secretFromUrl(url) {
 }
 
 async function assertSecretAbsent(page, secret, marker) {
-  const absent = await page.evaluate((value) => {
+  const exposed = await page.evaluate((value) => {
     const storageIsClean = (storage) => Array.from({ length: storage.length }, (_, index) => storage.getItem(storage.key(index)))
       .every((item) => !String(item).includes(value));
-    return !location.href.includes(value)
-      && !JSON.stringify(history.state ?? {}).includes(value)
-      && !document.body.innerText.includes(value)
-      && !document.documentElement.innerHTML.includes(value)
-      && storageIsClean(localStorage)
-      && storageIsClean(sessionStorage);
+    return {
+      route: location.href.includes(value),
+      history: JSON.stringify(history.state ?? {}).includes(value),
+      text: document.body.innerText.includes(value),
+      html: document.documentElement.innerHTML.includes(value),
+      local: !storageIsClean(localStorage),
+      session: !storageIsClean(sessionStorage),
+    };
   }, secret);
-  assert.equal(absent, true, marker);
+  assert.deepEqual(exposed, { route: false, history: false, text: false, html: false, local: false, session: false }, marker);
 }
 
 function redactSecretsInValue(value, secrets, seen = new WeakSet()) {
@@ -260,9 +264,33 @@ async function waitForInvitationResponse(page, teamId, operation = "create") {
 }
 
 async function assertKeyboardTarget(page, locator, marker) {
+  // Ant Design may update its focused link outline on a following animation
+  // frame. Observe the actual visible indicator before measuring its bounds.
+  const handle = await locator.elementHandle();
+  try {
+    await page.waitForFunction(node => {
+      const style = getComputedStyle(node);
+      const animationRoot = node.closest('.ant-dropdown') ?? node;
+      const moving = animationRoot.getAnimations({ subtree: true }).some(animation =>
+        (animation.playState === 'running' || animation.pending)
+        && Number.isFinite(animation.effect?.getComputedTiming().endTime));
+      return document.activeElement === node && node.matches(":focus-visible")
+        && !moving
+        && ((style.outlineStyle !== "none" && Number.parseFloat(style.outlineWidth) > 0) || style.boxShadow !== "none");
+    }, handle, { timeout: 1500 });
+  } finally { await handle.dispose(); }
   const metrics = await locator.evaluate((node) => {
-    const rect = node.getBoundingClientRect();
+    const focusRect = node.getBoundingClientRect();
     const style = getComputedStyle(node);
+    const menuitem = node.closest('[role="menuitem"]');
+    const linkOverlay = getComputedStyle(node, '::after');
+    // Ant Dropdown preserves a real anchor and extends its actual hit area
+    // over the menuitem with an absolute inset:0 pseudo-element.
+    const expandedLinkTarget = node.tagName === 'A' && menuitem
+      && getComputedStyle(menuitem).position === 'relative'
+      && linkOverlay.position === 'absolute' && linkOverlay.content !== 'none'
+      && [linkOverlay.top, linkOverlay.right, linkOverlay.bottom, linkOverlay.left].every(value => value === '0px');
+    const rect = expandedLinkTarget ? menuitem.getBoundingClientRect() : focusRect;
     const visualViewport = window.visualViewport ?? {
       width: innerWidth,
       height: innerHeight,
@@ -274,7 +302,7 @@ async function assertKeyboardTarget(page, locator, marker) {
     const focusInset = Math.max(0, outlineWidth + outlineOffset);
     const pointIsOwnedByTarget = (x, y) => {
       const topmost = document.elementFromPoint(x, y);
-      return Boolean(topmost && (topmost === node || node.contains(topmost) || topmost.contains(node)));
+      return Boolean(topmost && (topmost === node || node.contains(topmost) || (!expandedLinkTarget && topmost.contains(node))));
     };
     const points = [
       [rect.left + 2, rect.top + 2],
@@ -300,30 +328,39 @@ async function assertKeyboardTarget(page, locator, marker) {
     return {
       active: document.activeElement === node,
       focusVisible: node.matches(":focus-visible"),
-      focusIndicator: style.outlineStyle !== "none" && Number.parseFloat(style.outlineWidth) > 0,
+      focusIndicator: (style.outlineStyle !== "none" && Number.parseFloat(style.outlineWidth) > 0) || style.boxShadow !== "none",
       height: rect.height,
       width: rect.width,
+      hitArea: { expanded: Boolean(expandedLinkTarget), anchorHeight: focusRect.height, itemHeight: menuitem?.getBoundingClientRect().height ?? null,
+        itemPosition: menuitem ? getComputedStyle(menuitem).position : null, overlayPosition: linkOverlay.position,
+        overlayContent: linkOverlay.content, overlayInset: [linkOverlay.top, linkOverlay.right, linkOverlay.bottom, linkOverlay.left] },
       left: rect.left,
       right: rect.right,
       top: rect.top,
       bottom: rect.bottom,
-      focusLeft: rect.left - focusInset,
-      focusRight: rect.right + focusInset,
-      focusTop: rect.top - focusInset,
-      focusBottom: rect.bottom + focusInset,
+      focusLeft: focusRect.left - focusInset,
+      focusRight: focusRect.right + focusInset,
+      focusTop: focusRect.top - focusInset,
+      focusBottom: focusRect.bottom + focusInset,
       viewportHeight: visualViewport.height,
       viewportWidth: visualViewport.width,
       viewportLeft: visualViewport.offsetLeft,
       viewportTop: visualViewport.offsetTop,
       pointOccluded: points.some(([x, y]) => !pointIsOwnedByTarget(x, y)),
+      occludedPoints: points.filter(([x, y]) => !pointIsOwnedByTarget(x, y)).map(([x, y]) => {
+        const topmost = document.elementFromPoint(x, y);
+        return { x, y, tag: topmost?.tagName, role: topmost?.getAttribute("role"), label: topmost?.getAttribute("aria-label"), className: topmost?.getAttribute("class") };
+      }),
       intersectsAnotherInteractiveSurface,
     };
   });
   assert.equal(metrics.active, true, `${marker}_NOT_FOCUSED`);
   assert.equal(metrics.focusVisible, true, `${marker}_FOCUS_NOT_VISIBLE`);
   assert.equal(metrics.focusIndicator, true, `${marker}_FOCUS_INDICATOR_MISSING`);
-  assert.equal(metrics.width >= 44, true, `${marker}_WIDTH_BELOW_44`);
-  assert.equal(metrics.height >= 44, true, `${marker}_HEIGHT_BELOW_44`);
+  // UI.1 current default target is 32px (36px text controls); 44px is the
+  // coarse-pointer contract, not a universal fine-pointer desktop minimum.
+  assert.equal(metrics.width >= 32, true, `${marker}_WIDTH_BELOW_CURRENT_DEFAULT`);
+  assert.equal(metrics.height >= 32, true, `${marker}_HEIGHT_BELOW_CURRENT_DEFAULT:${JSON.stringify(metrics.hitArea)}`);
   assert.equal(
     metrics.focusLeft >= metrics.viewportLeft && metrics.focusRight <= metrics.viewportLeft + metrics.viewportWidth,
     true,
@@ -332,9 +369,9 @@ async function assertKeyboardTarget(page, locator, marker) {
   assert.equal(
     metrics.focusTop >= metrics.viewportTop && metrics.focusBottom <= metrics.viewportTop + metrics.viewportHeight,
     true,
-    `${marker}_VERTICALLY_CLIPPED`,
+    `${marker}_VERTICALLY_CLIPPED:${JSON.stringify({ top: metrics.top, bottom: metrics.bottom, focusTop: metrics.focusTop, focusBottom: metrics.focusBottom, viewportTop: metrics.viewportTop, viewportHeight: metrics.viewportHeight })}`,
   );
-  assert.equal(metrics.pointOccluded, false, `${marker}_OCCLUDED_AT_FOCUS_POINT`);
+  assert.equal(metrics.pointOccluded, false, `${marker}_OCCLUDED_AT_FOCUS_POINT:${JSON.stringify(metrics.occludedPoints)}`);
   assert.equal(metrics.intersectsAnotherInteractiveSurface, false, `${marker}_OCCLUDED_BY_INTERACTIVE_SURFACE`);
 }
 
@@ -357,6 +394,7 @@ async function focusWithKeyboard(page, locator, marker, key = "Tab") {
   if (await locator.evaluate((node) => document.activeElement === node)) return;
   for (let attempt = 0; attempt < 100; attempt += 1) {
     await page.keyboard.press(key);
+    if (key.startsWith("Arrow")) await page.evaluate(() => new Promise(requestAnimationFrame));
     if (await locator.evaluate((node) => document.activeElement === node)) return;
   }
   assert.fail(`${marker}_NOT_KEYBOARD_REACHABLE`);
@@ -376,7 +414,7 @@ async function assertInvitationPageGeometry(page, marker) {
 }
 
 async function assertLongTeamHeaderAccessible(page, teamName, marker) {
-  await page.getByRole("main", { name: `Команда ${teamName}: Участники`, exact: true }).waitFor();
+  await page.getByRole("main", { name: `Команда ${teamName}: Настройки команды`, exact: true }).waitFor();
   const header = page.locator("[title]").filter({ hasText: teamName }).first();
   await header.waitFor({ state: "attached" });
   const accessibleHeader = await header.evaluate((node) => ({
@@ -396,7 +434,7 @@ async function assertInvitationControls(page, marker, controls) {
   }
 }
 
-const invitationControlPattern = /Создать приглашение|Показать ссылку|Копировать ссылку|Повторить копирование|Закрыть ссылку|Перевыпустить ссылку|Отозвать приглашение/;
+const invitationControlPattern = /Выпустить ссылку|Копировать ссылку|Повторить копирование|Перевыпустить ссылку|Отозвать приглашение/;
 
 function isInvitationMutation(request, teamId) {
   const url = new URL(request.url());
@@ -437,15 +475,16 @@ async function waitForRosterResponse(page, teamId) {
 }
 
 function invitationCard(page, invitationId) {
-  return page.getByRole("article", { name: `Приглашение ${invitationId}`, exact: true });
+  return page.locator(`[aria-label="Приглашение ${invitationId}"]`);
 }
 
 function invitationControl(page, invitationId, name) {
+  if (name === "Перевыпустить ссылку") return page.getByRole("button", { name, exact: true });
   return invitationCard(page, invitationId).getByRole("button", { name, exact: true });
 }
 
 function invitationLinkField(page, invitationId) {
-  return invitationCard(page, invitationId).getByLabel("Одноразовая ссылка", { exact: true });
+  return invitationCard(page, invitationId).getByLabel("Ссылка для приглашения", { exact: true });
 }
 
 async function createInvitationMetadata(page, teamId, trigger) {
@@ -456,24 +495,39 @@ async function createInvitationMetadata(page, teamId, trigger) {
   return created;
 }
 
+async function retryInvitationListIfFailed(page, teamId) {
+  const unavailable = page.getByRole('alert').filter({ hasText: 'Не удалось загрузить приглашения' });
+  if (await unavailable.count() === 0) return;
+  const refreshed = waitForInvitationListResponse(page, teamId);
+  await unavailable.getByRole('button', { name: 'Повторить', exact: true }).click();
+  assert.equal((await refreshed).status(), 200, 'invitation metadata read must recover before automatically loading its link');
+}
+
 async function revealInvitationUrl(page, teamId, invitationId) {
-  const revealResponse = waitForInvitationRevealResponse(page, teamId, invitationId);
-  await invitationControl(page, invitationId, "Показать ссылку").click();
-  const response = await revealResponse;
-  assert.equal(response.status(), 200, "INVITATION_CREATOR_REVEAL_DENIED");
-  const url = (await response.json()).url;
-  assert.equal(typeof url, "string", "INVITATION_REVEAL_RESPONSE_URL_MISSING");
+  // The UI must obtain and display the current creator link automatically.
+  // An independent authorized read checks its value without racing an already
+  // completed automatic GET or adding an obsolete reveal interaction.
   const field = invitationLinkField(page, invitationId);
   await field.waitFor();
-  assert.equal(await field.inputValue() === url, true, "INVITATION_REVEAL_VIEW_DIVERGED_FROM_RESPONSE");
+  const token = await page.evaluate(() => localStorage.getItem("auth_token"));
+  const response = await json(`/teams/${teamId}/invitations/${invitationId}/link`, { token });
+  assert.equal(response.response.status, 200, "INVITATION_CREATOR_REVEAL_DENIED");
+  assert.equal(response.response.headers.get("cache-control"), "private, no-store", "creator link response must never enter a shared or persistent HTTP cache");
+  const url = new URL(response.body.url, web).href;
+  assert.equal(typeof url, "string", "INVITATION_REVEAL_RESPONSE_URL_MISSING");
+  await withRedactedSecrets([secretFromUrl(url)], async () => {
+    await page.waitForFunction(expected => Array.from(document.querySelectorAll('input')).some(input => input.value === expected), url);
+    assert.equal(await field.inputValue() === url, true, "INVITATION_REVEAL_VIEW_DIVERGED_FROM_RESPONSE");
+  });
   return url;
 }
 
 async function reissueInvitationMetadata(page, teamId, invitationId, trigger) {
-  const reissueResponse = waitForInvitationResponse(page, teamId, "reissue");
+  const reissueResponse = waitForInvitationResponse(page, teamId);
   await trigger();
   const replacement = invitation(await (await reissueResponse).json());
   assert.equal("url" in replacement, false, "INVITATION_REISSUE_RESPONSE_LEAKED_RAW_URL");
+  assert.equal(replacement.id, invitationId, "manual rotation must retain the single invitation ID");
   return replacement;
 }
 
@@ -571,11 +625,29 @@ function isVisibleLifecycleEvent(event) {
 }
 
 async function foregroundForTeamRevalidation(context, targetPage, teamId, marker, { requireLifecycleWitness = false } = {}) {
+  if (requireLifecycleWitness) {
+    // Playwright enables focus emulation even for headed Chromium, making every
+    // page report focused/visible. Remove that override to observe real events.
+    const session = await context.newCDPSession(targetPage);
+    await session.send("Emulation.setFocusEmulationEnabled", { enabled: false });
+    await session.detach();
+    await targetPage.bringToFront();
+    await targetPage.waitForFunction(() => document.visibilityState === "visible" && document.hasFocus());
+  }
   const lifecycleBaseline = requireLifecycleWitness
     ? await targetPage.evaluate(() => window.__ac03LifecycleEvents?.length ?? 0)
     : 0;
   let requestObservedAt = 0;
   let backgroundPage;
+  const pendingObservations = [];
+  const observe = (promise) => {
+    // All observers are armed before switching tabs. A different observer can
+    // fail first; retain that failure without an unhandled rejection or a waiter
+    // continuing after the role exercise has closed its context.
+    promise.catch(() => {});
+    pendingObservations.push(promise);
+    return promise;
+  };
   const observeDetailRequest = (request) => {
     if (requestObservedAt === 0 && isExactTeamDetailRequest(request, teamId)) requestObservedAt = Date.now();
   };
@@ -584,26 +656,29 @@ async function foregroundForTeamRevalidation(context, targetPage, teamId, marker
       window.__ac03AllowNativeWindowFocus = true;
     });
     const hiddenLifecycle = requireLifecycleWitness
-      ? targetPage.waitForFunction((baseline) => {
+      ? observe(targetPage.waitForFunction((baseline) => {
         const events = window.__ac03LifecycleEvents ?? [];
         return events.slice(baseline).find((event) => event.type === "blur"
           || (event.type === "visibilitychange" && event.visibilityState === "hidden")) ?? null;
-      }, lifecycleBaseline)
+      }, lifecycleBaseline))
       : null;
 
     targetPage.on("request", observeDetailRequest);
-    const detailRequest = targetPage.waitForRequest((request) => isExactTeamDetailRequest(request, teamId));
-    const detailResponse = targetPage.waitForResponse((response) =>
-      isExactTeamDetailRequest(response.request(), teamId));
+    const detailRequest = observe(targetPage.waitForRequest((request) => isExactTeamDetailRequest(request, teamId)));
+    const detailResponse = observe(targetPage.waitForResponse((response) =>
+      isExactTeamDetailRequest(response.request(), teamId)));
     const visibleLifecycle = requireLifecycleWitness
-      ? targetPage.waitForFunction((baseline) => {
+      ? observe(targetPage.waitForFunction((baseline) => {
         const events = window.__ac03LifecycleEvents ?? [];
         return events.slice(baseline).find((event) => (event.type === "focus" || event.type === "visibilitychange")
           && event.visibilityState === "visible") ?? null;
-      }, lifecycleBaseline)
+      }, lifecycleBaseline))
       : null;
     if (requireLifecycleWitness) {
       backgroundPage = await context.newPage();
+      const session = await context.newCDPSession(backgroundPage);
+      await session.send("Emulation.setFocusEmulationEnabled", { enabled: false });
+      await session.detach();
       await backgroundPage.goto(`${web}/`, { waitUntil: "domcontentloaded" });
       await backgroundPage.bringToFront();
       if (hiddenLifecycle) await hiddenLifecycle;
@@ -620,6 +695,7 @@ async function foregroundForTeamRevalidation(context, targetPage, teamId, marker
       const visibleEvent = await (await visibleLifecycle).jsonValue();
       assert.equal(isHiddenLifecycleEvent(hiddenEvent), true, `${marker}_HIDDEN_OR_BLUR_WITNESS_MISSING`);
       assert.equal(isVisibleLifecycleEvent(visibleEvent), true, `${marker}_VISIBLE_FOCUS_WITNESS_MISSING`);
+      assert.equal(hiddenEvent.isTrusted && visibleEvent.isTrusted, true, `${marker}_UNTRUSTED_LIFECYCLE_WITNESS`);
       assert.equal(hiddenEvent.order < visibleEvent.order, true, `${marker}_LIFECYCLE_EVENT_ORDER_INVALID`);
       assert.equal(hiddenEvent.timestamp <= visibleEvent.timestamp, true, `${marker}_LIFECYCLE_TIMESTAMP_ORDER_INVALID`);
       assert.equal(requestObservedAt >= visibleEvent.timestamp, true, `${marker}_DETAIL_GET_PRECEDES_VISIBLE_WITNESS`);
@@ -627,6 +703,7 @@ async function foregroundForTeamRevalidation(context, targetPage, teamId, marker
     return response;
   } finally {
     targetPage.off("request", observeDetailRequest);
+    await Promise.allSettled(pendingObservations);
     await targetPage.evaluate(() => {
       window.__ac03AllowNativeWindowFocus = false;
     }).catch(() => {});
@@ -661,14 +738,14 @@ async function assertMemberInvitationBoundary(member, team, cell, marker) {
     { suppressNativeWindowFocus: !headedFocusLifecycleEnabled },
   );
   try {
-    await page.getByRole("heading", { name: "Участники", exact: true }).waitFor();
+    await page.getByText("Состав команды", { exact: true }).waitFor();
     await assertInvitationPageGeometry(page, `${marker}_MEMBER_INITIAL`);
     await assertNoInvitationControls(page, `${marker}_MEMBER_INITIAL`);
     await assertNoRawInvitationSurface(page, `${marker}_MEMBER_INITIAL`);
     const mutationsBeforeRemount = mutations;
     const response = await foregroundForTeamRevalidation(context, page, team.id, `${marker}_MEMBER_REMOUNT`);
     assert.equal(response.status(), 200, `${marker}_MEMBER_REMOUNT_DETAIL_DENIED`);
-    await page.getByRole("heading", { name: "Участники", exact: true }).waitFor();
+    await page.getByText("Состав команды", { exact: true }).waitFor();
     await assertInvitationPageGeometry(page, `${marker}_MEMBER_REMOUNT`);
     await assertNoInvitationControls(page, `${marker}_MEMBER_REMOUNT`);
     await assertNoRawInvitationSurface(page, `${marker}_MEMBER_REMOUNT`);
@@ -698,7 +775,7 @@ async function assertUnavailableInvitationBoundary(owner, team, cell, marker) {
   let interceptedDetailCount = 0;
   let routeInstalled = false;
   try {
-    await page.getByRole("heading", { name: "Участники", exact: true }).waitFor();
+    await page.getByText("Состав команды", { exact: true }).waitFor();
     const create = page.getByRole("button", { name: /^(Выпустить|Перевыпустить) ссылку$/ });
     await assertInvitationControls(page, `${marker}_UNAVAILABLE_INITIAL`, [["CREATE", create]]);
     const created = await createInvitationMetadata(page, team.id, () => page.keyboard.press("Enter"));
@@ -711,7 +788,7 @@ async function assertUnavailableInvitationBoundary(owner, team, cell, marker) {
       await copy.waitFor();
       await focusWithKeyboard(page, copy, `${marker}_UNAVAILABLE_COPY`);
       await page.keyboard.press("Enter");
-      await page.getByRole("status").getByText("Ссылка скопирована", { exact: true }).waitFor();
+      await page.getByText("Ссылка приглашения готова к отправке.", { exact: true }).waitFor();
       await reissue.waitFor();
       const oldReissueHandle = await reissue.elementHandle();
       assert.ok(oldReissueHandle, `${marker}_UNAVAILABLE_OLD_REISSUE_HANDLE_MISSING`);
@@ -737,7 +814,7 @@ async function assertUnavailableInvitationBoundary(owner, team, cell, marker) {
       assert.equal(response.status(), 404, `${marker}_UNAVAILABLE_DETAIL_STATUS_NOT_404`);
       assert.equal(interceptedDetailCount, 1, `${marker}_UNAVAILABLE_DETAIL_INTERCEPTION_NOT_EXACTLY_ONCE`);
       await assertDetachedAfterParentRemount(page, oldReissueHandle, `${marker}_UNAVAILABLE_REISSUE`);
-      await page.getByRole("alert", { name: "Команда недоступна" }).waitFor();
+      await page.getByRole("alert").filter({ hasText: "Команда недоступна" }).waitFor();
       await assertNoInvitationControls(page, `${marker}_UNAVAILABLE`);
       await assertInvitationPageGeometry(page, `${marker}_UNAVAILABLE`);
       await assertSecretAbsent(page, secret, `${marker}_UNAVAILABLE_LEFT_SECRET`);
@@ -756,33 +833,22 @@ async function assertUnavailableInvitationBoundary(owner, team, cell, marker) {
 }
 
 async function navigateToTeamMembersWithKeyboard(page, team, marker) {
-  const switcher = page.getByRole("button", { name: /Рабочее пространство:.*Сменить рабочее пространство/ });
+  const switcher = page.getByRole("button", { name: /Команды:.*Сменить команду/ });
   await focusWithKeyboard(page, switcher, `${marker}_WORKSPACE_SWITCHER`);
   await page.keyboard.press("Enter");
-  await page.getByRole("dialog", { name: "Выбор рабочего пространства" }).waitFor();
-  const choice = page.getByRole("button", { name: new RegExp(team.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) });
-  await focusWithKeyboard(page, choice, `${marker}_TEAM_CHOICE`);
+  await page.getByRole("menu", { name: "Выбор команды" }).waitFor();
+  const choice = page.getByRole("menuitemradio", { name: new RegExp(team.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) });
+  await focusWithKeyboard(page, choice, `${marker}_TEAM_CHOICE`, "ArrowDown");
   await page.keyboard.press("Enter");
   await page.waitForURL(`**/workspace/teams/${team.id}/interviews`);
   await page.getByRole("main", { name: `Команда ${team.name}: Интервью`, exact: true }).waitFor();
 
-  const membersLink = page.getByRole("link", { name: "Участники", exact: true });
-  if (await membersLink.count() > 0 && await membersLink.isVisible()) {
-    await focusWithKeyboard(page, membersLink, `${marker}_MEMBERS_LINK`);
-    await page.keyboard.press("Enter");
-  } else {
-    const overflow = page.getByRole("button", { name: /Ещё(?:: Участники| разделы)/ });
-    await focusWithKeyboard(page, overflow, `${marker}_MEMBERS_OVERFLOW`);
-    await page.keyboard.press("Enter");
-    const menuItem = page.getByRole("menuitem", { name: "Участники", exact: true });
-    await menuItem.waitFor();
-    // Mantine exposes overflow entries as an ARIA menu. Its public keyboard
-    // model is ArrowDown/ArrowUp rather than the page-wide Tab sequence.
-    await focusWithKeyboard(page, menuItem, `${marker}_MEMBERS_MENU_ITEM`, "ArrowDown");
-    await assertKeyboardTarget(page, menuItem, `${marker}_MEMBERS_MENU_ITEM`);
-    await page.keyboard.press("Enter");
-  }
-  await page.waitForURL(`**/workspace/teams/${team.id}/members`);
+  const settingsGear = page.getByRole("link", { name: "Настройки команды", exact: true });
+  await settingsGear.waitFor();
+  await focusWithKeyboard(page, settingsGear, `${marker}_SETTINGS_GEAR`);
+  await assertKeyboardTarget(page, settingsGear, `${marker}_SETTINGS_GEAR`);
+  await page.keyboard.press("Enter");
+  await page.waitForURL(`**/workspace/teams/${team.id}/settings`);
 }
 
 async function assertKeyboardLogoutReloginCleanup(owner, team, cell, marker) {
@@ -798,7 +864,7 @@ async function assertKeyboardLogoutReloginCleanup(owner, team, cell, marker) {
     { suppressNativeWindowFocus: !headedFocusLifecycleEnabled },
   );
   try {
-    await page.getByRole("heading", { name: "Участники", exact: true }).waitFor();
+    await page.getByText("Состав команды", { exact: true }).waitFor();
     const create = page.getByRole("button", { name: /^(Выпустить|Перевыпустить) ссылку$/ });
     await assertInvitationControls(page, `${marker}_LOGOUT_INITIAL`, [["CREATE", create]]);
     const created = await createInvitationMetadata(page, team.id, () => page.keyboard.press("Enter"));
@@ -811,7 +877,7 @@ async function assertKeyboardLogoutReloginCleanup(owner, team, cell, marker) {
       await copy.waitFor();
       await focusWithKeyboard(page, copy, `${marker}_LOGOUT_COPY`);
       await page.keyboard.press("Enter");
-      await page.getByRole("status").getByText("Ссылка скопирована", { exact: true }).waitFor();
+      await page.getByText("Ссылка приглашения готова к отправке.", { exact: true }).waitFor();
       await reissue.waitFor();
       const oldReissueHandle = await reissue.elementHandle();
       assert.ok(oldReissueHandle, `${marker}_LOGOUT_OLD_REISSUE_HANDLE_MISSING`);
@@ -841,13 +907,11 @@ async function assertKeyboardLogoutReloginCleanup(owner, team, cell, marker) {
       await page.keyboard.press("Enter");
       await page.waitForURL("**/workspace/personal/interviews");
       await navigateToTeamMembersWithKeyboard(page, team, `${marker}_POST_LOGIN`);
-      await page.getByRole("heading", { name: "Участники", exact: true }).waitFor();
+      await page.getByText("Состав команды", { exact: true }).waitFor();
       await assertDetachedAfterParentRemount(page, oldReissueHandle, `${marker}_LOGOUT_OLD_ACTION`);
       await assertInvitationPageGeometry(page, `${marker}_POST_LOGIN`);
-      await assertSecretAbsent(page, secret, `${marker}_POST_LOGIN_LEFT_SECRET`);
-      await assertNoRawInvitationSurface(page, `${marker}_POST_LOGIN`);
-      await invitationControl(page, created.id, "Показать ссылку").waitFor();
-      assert.equal(await invitationLinkField(page, created.id).count(), 0, `${marker}_POST_LOGIN_AUTO_REVEALED_RAW_URL`);
+      await invitationLinkField(page, created.id).waitFor();
+      await assertSecretOnlyInTransientView(page, secret, `${marker}_POST_LOGIN_TRANSIENT_ONLY`);
       assert.equal(await invitationControl(page, created.id, "Перевыпустить ссылку").count(), 1, `${marker}_POST_LOGIN_REISSUE_MISSING`);
       assert.equal(await invitationControl(page, created.id, "Отозвать приглашение").count(), 1, `${marker}_POST_LOGIN_REVOKE_MISSING`);
       assert.equal(await revealInvitationUrl(page, team.id, created.id), createdUrl, `${marker}_POST_LOGIN_REVEAL_ROTATED_LINK`);
@@ -862,248 +926,79 @@ async function assertKeyboardLogoutReloginCleanup(owner, team, cell, marker) {
 
 async function exerciseInvitationManagementByKeyboard(auth, role, team, cell, teamName, marker) {
   let lifecycleBrowser;
-  let context;
-  let page;
-  const invitationMutationPaths = [];
-  const countManagementRequests = (request) => {
-    if (isInvitationMutation(request, team.id)) invitationMutationPaths.push(new URL(request.url()).pathname);
-  };
+  if (headedFocusLifecycleEnabled) lifecycleBrowser = await chromium.launch({ headless: false });
+  const { context, page } = await openAccount(auth, `/workspace/teams/${team.id}/settings`, cell.viewport, undefined, {
+    browserInstance: lifecycleBrowser ?? browser,
+    observeLifecycle: headedFocusLifecycleEnabled,
+    suppressNativeWindowFocus: !headedFocusLifecycleEnabled,
+  });
+  const mutations = [];
+  page.on("request", request => { if (isInvitationMutation(request, team.id)) mutations.push(new URL(request.url()).pathname); });
+  const secrets = [];
   try {
-    if (headedFocusLifecycleEnabled) lifecycleBrowser = await chromium.launch({ headless: false });
-    ({ context, page } = await openAccount(
-      auth,
-      `/workspace/teams/${team.id}/members`,
-      cell.viewport,
-      undefined,
-      {
-        browserInstance: lifecycleBrowser ?? browser,
-        observeLifecycle: headedFocusLifecycleEnabled,
-        suppressNativeWindowFocus: !headedFocusLifecycleEnabled,
-      },
-    ));
-    page.on("request", countManagementRequests);
-    await page.getByRole("heading", { name: "Участники", exact: true }).waitFor();
+    await page.getByRole("heading", { name: "Настройки команды", exact: true }).waitFor();
     await assertLongTeamHeaderAccessible(page, teamName, `${marker}_${role}`);
-    let create = page.getByRole("button", { name: /^(Выпустить|Перевыпустить) ссылку$/ });
-    const createPath = `/api/teams/${team.id}/invitations`;
-    await assertInvitationControls(page, `${marker}_${role}_INITIAL`, [["CREATE", create]]);
-
-    // Finish the public focus/visibility revalidation before a creator reveals
-    // a bearer URL. Keyboard traversal can otherwise race that parent remount
-    // and erase an already-revealed local-only link.
-    const initialRemountResponse = await foregroundForTeamRevalidation(
-      context,
-      page,
-      team.id,
-      `${marker}_${role}_INITIAL_REMOUNT`,
-    );
-    assert.equal(initialRemountResponse.status(), 200, `${marker}_${role}_INITIAL_REMOUNT_DETAIL_DENIED`);
-    await page.getByRole("heading", { name: "Участники", exact: true }).waitFor();
-    await assertLongTeamHeaderAccessible(page, teamName, `${marker}_${role}_INITIAL_REMOUNT`);
-    create = page.getByRole("button", { name: /^(Выпустить|Перевыпустить) ссылку$/ });
-    await create.waitFor();
-    await create.focus();
-
+    const issue = page.getByRole("button", { name: /^(Выпустить|Перевыпустить) ссылку$/ });
+    await assertInvitationControls(page, `${marker}_${role}_INITIAL`, [["ISSUE", issue]]);
     const created = await createInvitationMetadata(page, team.id, () => page.keyboard.press("Enter"));
-    const originalId = created.id;
-    const originalUrl = await revealInvitationUrl(page, team.id, originalId);
-    const originalSecret = secretFromUrl(originalUrl);
-
-    await withRedactedSecrets([originalSecret], async () => {
-      const rawLink = page.getByLabel("Одноразовая ссылка", { exact: true });
+    const initialUrl = await revealInvitationUrl(page, team.id, created.id);
+    const initialSecret = secretFromUrl(initialUrl); secrets.push(initialSecret);
+    await withRedactedSecrets(secrets, async () => {
+      const link = invitationLinkField(page, created.id);
       const copy = page.getByRole("button", { name: "Копировать ссылку", exact: true });
-      const close = invitationControl(page, originalId, "Закрыть ссылку");
-      const revoke = invitationControl(page, originalId, "Отозвать приглашение");
-      await rawLink.waitFor();
-      assert.equal(await rawLink.inputValue(), originalUrl, `${marker}_${role}_RAW_URL_NOT_SHOWN_ONCE`);
-      assert.deepEqual(invitationMutationPaths, [createPath], `${marker}_${role}_CREATE_NOT_ONE_SHOT`);
-      await assertInvitationControls(page, `${marker}_${role}_LINK_VISIBLE`, [
-        ["COPY", copy],
-        ["CLOSE", close],
-        ["REVOKE", revoke],
-        ["CREATE", create],
-      ]);
-
+      const revoke = invitationControl(page, created.id, "Отозвать приглашение");
+      await assertInvitationControls(page, `${marker}_${role}_ACTIVE`, [["LINK", link], ["COPY", copy], ["REVOKE", revoke]]);
       await page.evaluate(() => { window.__ac03ClipboardMode = "failure"; });
-      assert.equal(await copy.count(), 1, `${marker}_${role}_COPY_DISAPPEARED_DURING_KEYBOARD_NAVIGATION`);
-      await tabTo(page, copy, `${marker}_${role}_COPY_FAILURE`, "Shift+Tab");
+      await focusWithKeyboard(page, copy, `${marker}_${role}_COPY_FAILURE`);
       await page.keyboard.press("Enter");
-      await page.getByRole("alert").getByText("Не удалось скопировать ссылку", { exact: true }).waitFor();
-      const retry = page.getByRole("button", { name: "Повторить копирование", exact: true });
-      await assertInvitationControls(page, `${marker}_${role}_COPY_FAILED`, [
-        ["RETRY", retry],
-        ["CLOSE", close],
-        ["REVOKE", revoke],
-        ["CREATE", create],
-      ]);
-
+      const retryCopy = page.getByRole("button", { name: "Повторить копирование", exact: true });
+      await retryCopy.waitFor();
+      await page.getByText("Разрешите доступ к буферу обмена и повторите попытку.", { exact: true }).waitFor();
+      assert.equal((await link.inputValue()) === initialUrl, true, `${marker}_${role}_COPY_FAILURE_CHANGED_LINK`);
       await page.evaluate(() => { window.__ac03ClipboardMode = "success"; });
-      await tabTo(page, retry, `${marker}_${role}_RETRY_COPY`, "Shift+Tab");
+      await focusWithKeyboard(page, retryCopy, `${marker}_${role}_COPY_RETRY`);
       await page.keyboard.press("Enter");
-      await page.waitForFunction((value) => window.__ac03ClipboardWrites.includes(value), originalUrl);
-      assert.equal(
-        await page.evaluate((value) => window.__ac03ClipboardWrites.includes(value), originalUrl),
-        true,
-        `${marker}_${role}_RETRY_COPY_DID_NOT_WRITE`,
-      );
-      await page.getByRole("status").getByText("Ссылка скопирована", { exact: true }).waitFor();
-      assert.deepEqual(invitationMutationPaths, [createPath], `${marker}_${role}_RETRY_COPY_CREATED_ANOTHER_INVITATION`);
-      assert.equal(await rawLink.inputValue(), originalUrl, `${marker}_${role}_RETRY_COPY_CLEARED_CURRENT_VIEW`);
-      await assertSecretOnlyInTransientView(page, originalSecret, `${marker}_${role}_RETRY_COPY`);
-      await assertInvitationPageGeometry(page, `${marker}_${role}_RETRY_COPY_PAGE`);
-
-      const reissue = invitationControl(page, originalId, "Перевыпустить ссылку");
-      await reissue.waitFor();
-      await revoke.waitFor();
-      const oldReissueHandle = await reissue.elementHandle();
-      const oldRevokeHandle = await revoke.elementHandle();
-      assert.ok(oldReissueHandle, `${marker}_${role}_OLD_REISSUE_HANDLE_MISSING`);
-      assert.ok(oldRevokeHandle, `${marker}_${role}_OLD_REVOKE_HANDLE_MISSING`);
-
-      const firstRemountResponse = await foregroundForTeamRevalidation(
-        context,
-        page,
-        team.id,
-        `${marker}_${role}_COPY_SUCCESS_REMOUNT`,
-        { requireLifecycleWitness: headedFocusLifecycleEnabled },
-      );
-      assert.equal(firstRemountResponse.status(), 200, `${marker}_${role}_COPY_SUCCESS_REMOUNT_DETAIL_DENIED`);
-      await assertDetachedAfterParentRemount(page, oldReissueHandle, `${marker}_${role}_COPY_SUCCESS_REISSUE`);
-      await assertDetachedAfterParentRemount(page, oldRevokeHandle, `${marker}_${role}_COPY_SUCCESS_REVOKE`);
-      await assertSecretAbsent(page, originalSecret, `${marker}_${role}_COPY_SUCCESS_REMOUNT_LEFT_RAW_URL`);
-      await assertNoRawInvitationSurface(page, `${marker}_${role}_COPY_SUCCESS_REMOUNT`);
-
-      const recoveredReissue = invitationControl(page, originalId, "Перевыпустить ссылку");
-      const recoveredRevoke = invitationControl(page, originalId, "Отозвать приглашение");
-      assert.equal(await recoveredReissue.count(), 1, `${marker}_${role}_COPY_SUCCESS_REMOUNT_REISSUE_NOT_RECOVERED`);
-      assert.equal(await recoveredRevoke.count(), 1, `${marker}_${role}_COPY_SUCCESS_REMOUNT_REVOKE_NOT_RECOVERED`);
-      await assertInvitationControls(page, `${marker}_${role}_COPY_RETRIED`, [
-        ["CREATE", create],
-        ["REISSUE", recoveredReissue],
-        ["REVOKE", recoveredRevoke],
-      ]);
-      await tabTo(page, recoveredReissue, `${marker}_${role}_REISSUE`);
-      const reissueMutationStart = invitationMutationPaths.length;
-      const replacement = await reissueInvitationMetadata(
-        page,
-        team.id,
-        originalId,
-        () => page.keyboard.press("Enter"),
-      );
-      const replacementId = replacement.id;
-      const replacementUrl = await revealInvitationUrl(page, team.id, replacementId);
-      const replacementSecret = secretFromUrl(replacementUrl);
-
-      await withRedactedSecrets([originalSecret, replacementSecret], async () => {
-        const expectedOriginalReissuePath = `/api/teams/${team.id}/invitations/${originalId}/reissue`;
-        assert.notEqual(replacementId, originalId, `${marker}_${role}_REISSUE_DID_NOT_REPLACE_ID`);
-        assert.deepEqual(
-          invitationMutationPaths.slice(reissueMutationStart),
-          [expectedOriginalReissuePath],
-          `${marker}_${role}_REISSUE_TARGETED_STALE_OR_DUPLICATE_INVITATION`,
-        );
-        assert.equal(invitationMutationPaths.filter((path) => path === createPath).length, 1, `${marker}_${role}_REISSUE_CREATED_ANOTHER_INVITATION`);
-        assert.notEqual(replacementSecret, originalSecret, `${marker}_${role}_REISSUE_DID_NOT_REPLACE_SECRET`);
-        const oldPreview = await json("/team-invitations/preview", { method: "POST", body: { token: originalSecret } });
-        assert.equal(oldPreview.response.status, 410, `${marker}_${role}_REISSUE_OLD_SECRET_NOT_GENERICALLY_UNAVAILABLE`);
-
-        const replacementLink = invitationLinkField(page, replacementId);
-        const replacementCopy = page.getByRole("button", { name: "Копировать ссылку", exact: true });
-        const replacementClose = invitationControl(page, replacementId, "Закрыть ссылку");
-        const replacementRevoke = invitationControl(page, replacementId, "Отозвать приглашение");
-        await replacementLink.waitFor();
-        await assertInvitationControls(page, `${marker}_${role}_REISSUED`, [
-          ["COPY", replacementCopy],
-          ["CLOSE", replacementClose],
-          ["REVOKE", replacementRevoke],
-          ["CREATE", create],
-        ]);
-
-        await tabTo(page, replacementCopy, `${marker}_${role}_DISMISS_COPY`, "Shift+Tab");
-        await tabTo(page, replacementClose, `${marker}_${role}_DISMISS_CLOSE`);
-        await tabTo(page, replacementCopy, `${marker}_${role}_DISMISS_COPY_REVERSE`, "Shift+Tab");
-        await tabTo(page, replacementClose, `${marker}_${role}_DISMISS_CLOSE_FORWARD`);
-        await page.keyboard.press("Enter");
-        await page.getByRole("status").getByText("Ссылка закрыта", { exact: true }).waitFor();
-        assert.equal(await replacementLink.count(), 0, `${marker}_${role}_DISMISS_LEFT_RAW_URL_VISIBLE`);
-        await assertSecretAbsent(page, replacementSecret, `${marker}_${role}_DISMISS_LEFT_RAW_URL`);
-        await assertNoRawInvitationSurface(page, `${marker}_${role}_DISMISS`);
-        await assertInvitationPageGeometry(page, `${marker}_${role}_DISMISS_PAGE`);
-
-        const replacementReissue = invitationControl(page, replacementId, "Перевыпустить ссылку");
-        await replacementReissue.waitFor();
-        await replacementRevoke.waitFor();
-        const replacementReissueHandle = await replacementReissue.elementHandle();
-        const replacementRevokeHandle = await replacementRevoke.elementHandle();
-        assert.ok(replacementReissueHandle, `${marker}_${role}_REPLACEMENT_REISSUE_HANDLE_MISSING`);
-        assert.ok(replacementRevokeHandle, `${marker}_${role}_REPLACEMENT_REVOKE_HANDLE_MISSING`);
-
-        const replacementRemountResponse = await foregroundForTeamRevalidation(
-          context,
-          page,
-          team.id,
-          `${marker}_${role}_REPLACEMENT_DISMISS_REMOUNT`,
-          { requireLifecycleWitness: headedFocusLifecycleEnabled },
-        );
-        assert.equal(replacementRemountResponse.status(), 200, `${marker}_${role}_REPLACEMENT_REMOUNT_DETAIL_DENIED`);
-        await assertDetachedAfterParentRemount(page, replacementReissueHandle, `${marker}_${role}_REPLACEMENT_REISSUE`);
-        await assertDetachedAfterParentRemount(page, replacementRevokeHandle, `${marker}_${role}_REPLACEMENT_REVOKE`);
-        await assertSecretAbsent(page, replacementSecret, `${marker}_${role}_REPLACEMENT_REMOUNT_LEFT_RAW_URL`);
-        await assertNoRawInvitationSurface(page, `${marker}_${role}_REPLACEMENT_REMOUNT`);
-
-        const recoveredReplacementReissue = invitationControl(page, replacementId, "Перевыпустить ссылку");
-        const recoveredReplacementRevoke = invitationControl(page, replacementId, "Отозвать приглашение");
-        assert.equal(await recoveredReplacementReissue.count(), 1, `${marker}_${role}_REPLACEMENT_REISSUE_NOT_RECOVERED`);
-        assert.equal(await recoveredReplacementRevoke.count(), 1, `${marker}_${role}_REPLACEMENT_REVOKE_NOT_RECOVERED`);
-        await assertInvitationControls(page, `${marker}_${role}_DISMISSED`, [
-          ["CREATE", create],
-          ["REISSUE", recoveredReplacementReissue],
-          ["REVOKE", recoveredReplacementRevoke],
-        ]);
-
-        const revokeHandle = await recoveredReplacementRevoke.elementHandle();
-        assert.ok(revokeHandle, `${marker}_${role}_CURRENT_REPLACEMENT_REVOKE_HANDLE_MISSING`);
-        const revokeMutationStart = invitationMutationPaths.length;
-        const revokeResponse = waitForInvitationResponse(page, team.id, "revoke");
-        await tabTo(page, recoveredReplacementRevoke, `${marker}_${role}_REVOKE`);
-        await page.keyboard.press("Enter");
-        assert.equal((await revokeResponse).status(), 200, `${marker}_${role}_REVOKE_FAILED`);
-        await page.getByRole("status").getByText("Приглашение отозвано", { exact: true }).waitFor();
-        const expectedReplacementRevokePath = `/api/teams/${team.id}/invitations/${replacementId}/revoke`;
-        const forbiddenOriginalRevokePath = `/api/teams/${team.id}/invitations/${originalId}/revoke`;
-        assert.deepEqual(
-          invitationMutationPaths.slice(revokeMutationStart),
-          [expectedReplacementRevokePath],
-          `${marker}_${role}_REVOKE_TARGETED_STALE_OR_DUPLICATE_INVITATION`,
-        );
-        assert.equal(invitationMutationPaths.includes(forbiddenOriginalRevokePath), false, `${marker}_${role}_REVOKE_USED_ORIGINAL_INVITATION`);
-
-        const revokeRemountMutationCount = invitationMutationPaths.length;
-        const revokedRemountResponse = await foregroundForTeamRevalidation(
-          context,
-          page,
-          team.id,
-          `${marker}_${role}_REVOKE_REMOUNT`,
-          { requireLifecycleWitness: headedFocusLifecycleEnabled },
-        );
-        assert.equal(revokedRemountResponse.status(), 200, `${marker}_${role}_REVOKE_REMOUNT_DETAIL_DENIED`);
-        await assertDetachedAfterParentRemount(page, revokeHandle, `${marker}_${role}_REVOKE`);
-        assert.equal(await invitationControl(page, replacementId, "Перевыпустить ссылку").count(), 0, `${marker}_${role}_REVOKE_REMOUNT_REISSUE_RESTORED`);
-        assert.equal(await invitationControl(page, replacementId, "Отозвать приглашение").count(), 0, `${marker}_${role}_REVOKE_REMOUNT_REVOKE_RESTORED`);
-        assert.equal(invitationMutationPaths.length, revokeRemountMutationCount, `${marker}_${role}_REVOKE_REMOUNT_MUTATION_SENT`);
-        assert.equal(await recoveredReplacementRevoke.count(), 0, `${marker}_${role}_REVOKE_CONTROL_REMAINED`);
-        await assertInvitationControls(page, `${marker}_${role}_REVOKED`, [["CREATE", create]]);
-        const revokedPreview = await json("/team-invitations/preview", { method: "POST", body: { token: replacementSecret } });
-        assert.equal(revokedPreview.response.status, 410, `${marker}_${role}_REVOKED_SECRET_NOT_GENERICALLY_UNAVAILABLE`);
-        await assertSecretAbsent(page, replacementSecret, `${marker}_${role}_REVOKE_REMOUNT_LEFT_RAW_URL`);
-        await assertNoRawInvitationSurface(page, `${marker}_${role}_REVOKE_REMOUNT`);
-      });
+      await page.waitForFunction(() => window.__ac03ClipboardWrites.length === 1);
+      assert.equal(await page.evaluate(value => window.__ac03ClipboardWrites[0] === value, initialUrl), true);
+      await page.evaluate(() => { window.__ac03ClipboardWrites = []; });
+      await assertSecretOnlyInTransientView(page, initialSecret, `${marker}_${role}_COPY`);
+      const oldHandle = await link.elementHandle();
+      const beforeRevalidation = mutations.length;
+      const refreshed = await foregroundForTeamRevalidation(context, page, team.id, `${marker}_${role}_REVALIDATION`, { requireLifecycleWitness: headedFocusLifecycleEnabled });
+      assert.equal(refreshed.status(), 200);
+      if (headedFocusLifecycleEnabled) {
+        assert.equal(await oldHandle.evaluate(node => node.isConnected), true, `${marker}_${role}_CONFIRMED_CONTEXT_FOCUS_REMOUNTED_LINK`);
+      } else {
+        // The headless revalidation seam navigates/reloads the document; this
+        // verifies recovery/cleanup, not a native background/foreground event.
+        await assertDetachedAfterParentRemount(page, oldHandle, `${marker}_${role}_OLD_RELOADED_LINK`);
+      }
+      assert.equal((await revealInvitationUrl(page, team.id, created.id)) === initialUrl, true, `${marker}_${role}_REVALIDATION_ROTATED_LINK`);
+      assert.equal(mutations.length, beforeRevalidation, `${marker}_${role}_REVALIDATION_MUTATED_INVITATION`);
+      const rotate = invitationControl(page, created.id, "Перевыпустить ссылку");
+      await focusWithKeyboard(page, rotate, `${marker}_${role}_ROTATE`);
+      const rotated = await reissueInvitationMetadata(page, team.id, created.id, () => page.keyboard.press("Enter"));
+      const rotatedUrl = await revealInvitationUrl(page, team.id, rotated.id);
+      const rotatedSecret = secretFromUrl(rotatedUrl); secrets.push(rotatedSecret);
+      assert.notEqual(rotatedSecret, initialSecret, `${marker}_${role}_ROTATION_REUSED_SECRET`);
+      await assertSecretAbsent(page, initialSecret, `${marker}_${role}_ROTATION_LEFT_OLD_SECRET`);
+      assert.equal((await json("/team-invitations/preview", { method: "POST", body: { token: initialSecret } })).response.status, 410);
+      await assertInvitationControls(page, `${marker}_${role}_ROTATED`, [["LINK", invitationLinkField(page, rotated.id)], ["COPY", page.getByRole("button", { name: "Копировать ссылку", exact: true })]]);
+      const currentRevoke = invitationControl(page, rotated.id, "Отозвать приглашение");
+      await focusWithKeyboard(page, currentRevoke, `${marker}_${role}_REVOKE`);
+      const revoked = waitForInvitationResponse(page, team.id, "revoke");
+      await page.keyboard.press("Enter");
+      assert.equal((await revoked).status(), 200);
+      await page.getByRole("status").getByText("Приглашение отозвано", { exact: true }).waitFor();
+      await assertSecretAbsent(page, rotatedSecret, `${marker}_${role}_REVOKE_LEFT_SECRET`);
+      assert.equal((await json("/team-invitations/preview", { method: "POST", body: { token: rotatedSecret } })).response.status, 410);
+      assert.equal(await page.getByRole("button", { name: "Копировать ссылку", exact: true }).count(), 0);
+      const mutationCount = mutations.length;
+      await foregroundForTeamRevalidation(context, page, team.id, `${marker}_${role}_REVOKED_REVALIDATION`);
+      await assertNoRawInvitationSurface(page, `${marker}_${role}_REVOKED_REVALIDATION`);
+      assert.equal(mutations.length, mutationCount, `${marker}_${role}_REVOKED_REVALIDATION_MUTATED`);
     });
-  } finally {
-    page?.off("request", countManagementRequests);
-    await context?.close();
-    await lifecycleBrowser?.close();
-  }
+  } finally { await context.close(); await lifecycleBrowser?.close(); }
 }
 
 function rgb(value) {
@@ -1148,7 +1043,10 @@ test("AC-03 management: OWNER recovers lost create metadata with the same key, t
   let lostInvitation;
   let recoveredInvitation;
   await page.route(`**/api/teams/${team.id}/invitations`, async (route) => {
-    if (route.request().method() !== "POST") return route.continue();
+    if (route.request().method() !== "POST") {
+      if (attempts.length === 1) return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "INJECTED_LIST_UNAVAILABLE" }) });
+      return route.continue();
+    }
     attempts.push({
       key: await route.request().headerValue("Idempotency-Key"),
       body: route.request().postDataJSON(),
@@ -1167,8 +1065,11 @@ test("AC-03 management: OWNER recovers lost create metadata with the same key, t
   try {
     await page.getByRole("button", { name: /^(Выпустить|Перевыпустить) ссылку$/ }).click();
     await page.getByRole("alert").getByText("Не удалось создать приглашение", { exact: true }).waitFor();
+    const replay = waitForInvitationResponse(page, team.id);
     await page.getByRole("button", { name: "Повторить создание", exact: true }).click();
-    await page.getByRole("status").getByText("Приглашение создано", { exact: true }).waitFor();
+    assert.equal((await replay).status(), 201);
+    await retryInvitationListIfFailed(page, team.id);
+    await page.getByLabel("Ссылка для приглашения", { exact: true }).waitFor();
 
     assert.equal(attempts.length, 2, "lost response must retry the same logical create exactly once");
     assert.match(attempts[0].key, /^[0-9a-f-]{36}$/i);
@@ -1180,7 +1081,7 @@ test("AC-03 management: OWNER recovers lost create metadata with the same key, t
     assert.equal(typeof recoveredInvitation.expiresAt, "string");
     assert.equal("url" in recoveredInvitation, false, "recovery metadata must never reconstruct the secret");
     assert.equal("url" in lostInvitation, false, "AC03_LOST_CREATE_RESPONSE_LEAKED_RAW_URL");
-    await invitationControl(page, recoveredInvitation.id, "Показать ссылку").waitFor();
+    await invitationLinkField(page, recoveredInvitation.id).waitFor();
     const oldUrl = await revealInvitationUrl(page, team.id, recoveredInvitation.id);
     const oldSecret = secretFromUrl(oldUrl);
     await withRedactedSecrets([oldSecret], async () => {
@@ -1197,8 +1098,8 @@ test("AC-03 management: OWNER recovers lost create metadata with the same key, t
     const newUrl = await revealInvitationUrl(page, team.id, replacement.id);
     const newSecret = secretFromUrl(newUrl);
     await withRedactedSecrets([oldSecret, newSecret], async () => {
-      assert.notEqual(newSecret, oldSecret, "reissue must mint a distinct one-shot secret");
-      await page.getByLabel("Одноразовая ссылка", { exact: true }).waitFor();
+      assert.notEqual(newSecret, oldSecret, "manual rotation must mint a distinct reusable-link secret");
+      await page.getByLabel("Ссылка для приглашения", { exact: true }).waitFor();
 
       const oldPreview = await json("/team-invitations/preview", { method: "POST", body: { token: oldSecret } });
       assert.equal(oldPreview.response.status, 410, "reissue must make old preview generically unavailable");
@@ -1242,13 +1143,17 @@ test("AC-03 management: committed reissue response recovers the same replacement
     const originalUrl = await revealInvitationUrl(page, team.id, original.id);
     const originalSecret = secretFromUrl(originalUrl);
     secrets.push(originalSecret);
-    await invitationControl(page, original.id, "Закрыть ссылку").click();
+
 
     const reissueAttempts = [];
     const reissueOutcomes = [];
     let replacementSecret;
-    const reissuePattern = `**/api/teams/${team.id}/invitations/${original.id}/reissue`;
+    const reissuePattern = `**/api/teams/${team.id}/invitations`;
     await page.route(reissuePattern, async (route) => {
+      if (route.request().method() !== "POST") {
+        if (reissueAttempts.length === 1) return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "INJECTED_LIST_UNAVAILABLE" }) });
+        return route.continue();
+      }
       reissueAttempts.push({
         key: await route.request().headerValue("Idempotency-Key"),
         body: route.request().postDataJSON(),
@@ -1265,17 +1170,22 @@ test("AC-03 management: committed reissue response recovers the same replacement
 
     await withRedactedSecrets(secrets, async () => {
       await invitationControl(page, original.id, "Перевыпустить ссылку").click();
-      await page.getByRole("alert").getByText("Не удалось перевыпустить ссылку", { exact: true }).waitFor();
-      await page.getByRole("button", { name: "Повторить", exact: true }).click();
-      await page.getByRole("status").getByText("Ссылка перевыпущена", { exact: true }).waitFor();
+      await page.getByRole("alert").getByText("Не удалось создать приглашение", { exact: true }).waitFor();
+      const replay = waitForInvitationResponse(page, team.id);
+      await page.getByRole("button", { name: "Повторить создание", exact: true }).click();
+      assert.equal((await replay).status(), 201);
+      await retryInvitationListIfFailed(page, team.id);
+      await invitationLinkField(page, original.id).waitFor();
 
       assert.equal(reissueAttempts.length, 2, "lost committed reissue must be replayed exactly once");
       assert.match(reissueAttempts[0].key, /^[0-9a-f-]{36}$/i);
       assert.equal(reissueAttempts[1].key, reissueAttempts[0].key, "reissue retry must preserve Idempotency-Key");
-      assert.deepEqual(reissueAttempts.map((attempt) => attempt.body), [{ revision: 0 }, { revision: 0 }]);
+      assert.deepEqual(reissueAttempts.map((attempt) => attempt.body), [{}, {}]);
+      assert.equal(reissueOutcomes[0].id, original.id, "rotation retains the current invitation ID");
+      assert.equal(reissueOutcomes[0].revision, original.revision + 1);
       assert.equal(reissueOutcomes[1].id, reissueOutcomes[0].id, "reissue replay must recover the same replacement id");
       assert.equal("url" in reissueOutcomes[1], false, "reissue replay returns metadata only");
-      assert.equal(await page.getByLabel("Одноразовая ссылка", { exact: true }).count(), 0, "metadata recovery must not invent the replacement URL");
+      await invitationLinkField(page, original.id).waitFor(); // recovered metadata triggers an authorized automatic GET
       await page.waitForTimeout(250);
       assert.equal(reissueAttempts.length, 2, "reissue recovery must not automatically mint another replacement");
       const replacementUrl = await revealInvitationUrl(page, team.id, reissueOutcomes[0].id);
@@ -1303,7 +1213,7 @@ test("AC-03 management: committed revoke response replays the same revoked outco
       () => page.getByRole("button", { name: /^(Выпустить|Перевыпустить) ссылку$/ }).click(),
     );
     secret = secretFromUrl(await revealInvitationUrl(page, team.id, original.id));
-    await invitationControl(page, original.id, "Закрыть ссылку").click();
+
 
     const attempts = [];
     const outcomes = [];
@@ -1395,55 +1305,40 @@ test("AC-03 management: committed accept response replays the same key and creat
   }
 });
 
-test("AC-03 management: OWNER and ADMIN can manage invitations, MEMBER cannot, with frozen desktop/tablet palette checks", { timeout: 60000 }, async () => {
+test("P0.1 management: OWNER and ADMIN actions and MEMBER boundary use current themes and settings", { timeout: 60000 }, async () => {
   const { owner, admin, member, team } = await managementFixture("ac03_roles");
-  const ownerSession = await openAccount(owner, `/workspace/teams/${team.id}/members`);
-  try {
-    const create = ownerSession.page.getByRole("button", { name: /^(Выпустить|Перевыпустить) ссылку$/ });
-    await create.waitFor();
-    const colors = await ownerSession.page.evaluate(() => ({
-      surface: getComputedStyle(document.querySelector("main").parentElement).backgroundColor,
-      owner: getComputedStyle(Array.from(document.querySelectorAll("*")).find((node) => node.textContent?.trim() === "OWNER")).color,
-      nav: getComputedStyle(Array.from(document.querySelectorAll("a")).find((node) => node.textContent?.trim() === "Участники")).backgroundColor,
-    }));
-    await create.focus();
-    const actionColors = await create.evaluate((node) => ({
-      background: getComputedStyle(node).backgroundColor,
-      focus: getComputedStyle(node).outlineColor,
-    }));
-    const [sr, sg, sb] = rgb(colors.surface);
-    assert.equal(Math.max(sr, sg, sb) <= 40 && Math.max(sr, sg, sb) - Math.min(sr, sg, sb) <= 16, true, "surface stays graphite-neutral");
-    const [ar, , ab] = rgb(actionColors.background);
-    assert.equal(ab > ar + 30, true, "primary invitation action stays blue");
-    const [fr, , fb] = rgb(actionColors.focus);
-    assert.equal(fb > fr + 20, true, "keyboard focus stays blue");
-    const [or, og, ob] = rgb(colors.owner);
-    assert.equal(og > or + 20 && ob > or + 20, true, "OWNER marker stays teal");
-    const [nr, , nb] = rgb(colors.nav);
-    assert.equal(nb > nr + 12, true, "active navigation stays blue");
-  } finally {
-    await ownerSession.context.close();
+  for (const [auth, viewport] of [[owner, { width: 1280, height: 720 }], [admin, { width: 768, height: 1024 }]]) {
+    const { context, page } = await openAccount(auth, `/workspace/teams/${team.id}/settings`, viewport);
+    try {
+      const issue = page.getByRole("button", { name: /^(Выпустить|Перевыпустить) ссылку$/ });
+      await issue.waitFor();
+      const backgrounds = [];
+      for (const theme of ["light", "dark"]) {
+        if ((await page.locator('html').getAttribute('data-theme')) !== theme) await page.getByRole("button", { name: "Тёмная тема", exact: true }).click();
+        await page.waitForFunction(mode => document.documentElement.dataset.theme === mode, theme);
+        await assertInvitationPageGeometry(page, `P01_${theme}_ROLE_GEOMETRY`);
+        const color = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+        backgrounds.push(color);
+        const [r,,b] = rgb(await issue.evaluate(node => getComputedStyle(node).backgroundColor));
+        assert.equal(b > r + 20, true, "invitation primary action must follow the blue theme token");
+      }
+      assert.notEqual(backgrounds[0], backgrounds[1], "theme change must update the settings surface");
+      const created = await createInvitationMetadata(page, team.id, () => issue.click());
+      const url = await revealInvitationUrl(page, team.id, created.id);
+      await withRedactedSecrets([secretFromUrl(url)], () => assertSecretOnlyInTransientView(page, secretFromUrl(url), "P01_MANAGER_TRANSIENT_LINK"));
+    } finally { await context.close(); }
   }
-
-  const adminSession = await openAccount(admin, `/workspace/teams/${team.id}/members`);
+  const memberSession = await openAccount(member, `/workspace/teams/${team.id}/settings`, { width: 768, height: 1024 });
   try {
-    await adminSession.page.getByRole("button", { name: /^(Выпустить|Перевыпустить) ссылку$/ }).waitFor();
-  } finally {
-    await adminSession.context.close();
-  }
-
-  const memberSession = await openAccount(member, `/workspace/teams/${team.id}/members`, { width: 768, height: 1024 });
-  try {
-    await memberSession.page.getByRole("heading", { name: "Участники", exact: true }).waitFor();
-    await assertNoInvitationControls(memberSession.page, "AC03_MEMBER_TABLET");
-    const noPageOverflow = await memberSession.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
-    assert.equal(noPageOverflow, true, "tablet management page must not introduce page-level horizontal overflow");
-  } finally {
-    await memberSession.context.close();
-  }
+    await memberSession.page.getByText("Состав команды", { exact: true }).waitFor();
+    await assertNoInvitationControls(memberSession.page, "P01_MEMBER_TABLET");
+    await assertNoRawInvitationSurface(memberSession.page, "P01_MEMBER_TABLET");
+    await assertInvitationPageGeometry(memberSession.page, "P01_MEMBER_TABLET");
+    assert.equal((await raw(`/teams/${team.id}/invitations`, { token: member.token })).status, 403, "UI hiding must retain server-side membership boundary");
+  } finally { await memberSession.context.close(); }
 });
 
-test("AC-03 management: copy failure allows retry, success preserves the view, while dismiss/team/account changes clear it", { timeout: 90000 }, async () => {
+test("AC-03 management: copy failure allows retry, success preserves the view, while revoke/team/account changes clear it", { timeout: 90000 }, async () => {
   const { owner, team } = await managementFixture("ac03_cleanup");
   const otherTeam = await createTeam(owner, `Orbit ${unique()}`);
   const { context, page } = await openAccount(owner, `/workspace/teams/${team.id}/members`);
@@ -1456,18 +1351,18 @@ test("AC-03 management: copy failure allows retry, success preserves the view, w
     const firstSecret = secretFromUrl(createdUrl);
     secrets.push(firstSecret);
     await withRedactedSecrets(secrets, async () => {
-      const link = page.getByLabel("Одноразовая ссылка", { exact: true });
+      const link = page.getByLabel("Ссылка для приглашения", { exact: true });
       await link.waitFor();
       await page.evaluate(() => { window.__ac03ClipboardMode = "failure"; });
       await page.getByRole("button", { name: "Копировать ссылку", exact: true }).click();
-      await page.getByRole("alert").getByText("Не удалось скопировать ссылку", { exact: true }).waitFor();
-      assert.equal(await link.inputValue(), createdUrl, "copy failure retains the one-shot URL for retry");
+      await page.getByText("Разрешите доступ к буферу обмена и повторите попытку.", { exact: true }).waitFor();
+      assert.equal(await link.inputValue(), createdUrl, "copy failure retains the current reusable URL for retry");
 
       await page.evaluate(() => { window.__ac03ClipboardMode = "success"; });
       await page.getByRole("button", { name: "Повторить копирование", exact: true }).click();
       assert.equal(await page.evaluate((value) => window.__ac03ClipboardWrites.includes(value), createdUrl), true);
       await page.evaluate(() => { window.__ac03ClipboardWrites = []; });
-      await page.getByRole("status").getByText("Ссылка скопирована", { exact: true }).waitFor();
+      await page.getByText("Ссылка приглашения готова к отправке.", { exact: true }).waitFor();
       assert.equal(await link.inputValue(), createdUrl, "AC03_COPY_SUCCESS_CLEARED_CURRENT_VIEW");
       await assertSecretOnlyInTransientView(page, firstSecret, "AC03_COPY_SUCCESS");
     });
@@ -1482,11 +1377,10 @@ test("AC-03 management: copy failure allows retry, success preserves the view, w
     secrets.push(dismissedSecret);
     await withRedactedSecrets(secrets, async () => {
       await invitationLinkField(page, dismissed.id).waitFor();
-      await invitationControl(page, dismissed.id, "Закрыть ссылку").click();
-      await assertSecretAbsent(page, dismissedSecret, "AC03_DISMISS_LEFT_RAW_URL");
       const revokeResponse = waitForInvitationResponse(page, team.id, "revoke");
       await invitationControl(page, dismissed.id, "Отозвать приглашение").click();
       assert.equal((await revokeResponse).status(), 200, "explicit revoke must confirm the management mutation");
+      await assertSecretAbsent(page, dismissedSecret, "AC03_REVOKE_LEFT_RAW_URL");
       const revokedPreview = await json("/team-invitations/preview", { method: "POST", body: { token: dismissedSecret } });
       assert.equal(revokedPreview.response.status, 410, "revoked URL must be generically unavailable");
     });
@@ -1534,181 +1428,94 @@ test("AC-03 management: copy failure allows retry, success preserves the view, w
   }
 });
 
-test("AC-06 invitation continuity: copy keeps the creator view and reload reveals the same link without browser persistence", { timeout: 90000 }, async () => {
-  const { owner, team } = await managementFixture("ac06_copy_reload");
-  const { context, page } = await openAccount(owner, `/workspace/teams/${team.id}/members`);
-  const mutationPaths = [];
-  const observeMutation = (request) => {
-    if (isInvitationMutation(request, team.id)) mutationPaths.push(new URL(request.url()).pathname);
-  };
-  page.on("request", observeMutation);
+test("P0.1 continuity: copy and reload automatically restore the same active link without browser persistence", { timeout: 60000 }, async () => {
+  const { owner, team } = await managementFixture("p01_reload");
+  const { context, page } = await openAccount(owner, `/workspace/teams/${team.id}/settings`);
+  const mutations = [];
+  page.on("request", request => { if (isInvitationMutation(request, team.id)) mutations.push(new URL(request.url()).pathname); });
   try {
-    const createResponse = waitForInvitationResponse(page, team.id);
-    await page.getByRole("button", { name: /^(Выпустить|Перевыпустить) ссылку$/ }).click();
-    const created = invitation(await (await createResponse).json());
-    assert.equal("url" in created, false, "AC06_CREATE_RESPONSE_MUST_NOT_CONTAIN_RAW_URL");
-    assert.equal(created.state, "PENDING", "AC06_CREATED_INVITATION_NOT_PENDING");
-
-    const safeList = await raw(`/teams/${team.id}/invitations`, { token: owner.token });
-    assert.equal(safeList.status, 200, "AC06_MANAGER_LIST_UNAVAILABLE");
-    assert.equal(safeList.headers.get("cache-control"), "private, no-store", "AC06_MANAGER_LIST_CACHE_POLICY_INVALID");
-    const safeListPayload = await safeList.json();
-    assertSafeInvitationList(safeListPayload, "AC06_MANAGER_LIST");
-
-    const reveal = invitationControl(page, created.id, "Показать ссылку");
-    await reveal.waitFor();
-    assert.equal(await invitationLinkField(page, created.id).count(), 0, "AC06_RAW_URL_AUTO_RENDERED");
-    const revealResponse = waitForInvitationRevealResponse(page, team.id, created.id);
-    await reveal.click();
-    const firstReveal = await revealResponse;
-    assert.equal(firstReveal.status(), 200, "AC06_CREATOR_REVEAL_DENIED");
-    const firstUrl = (await firstReveal.json()).url;
-    assert.equal(typeof firstUrl, "string", "AC06_REVEAL_RESPONSE_URL_MISSING");
-    const firstSecret = secretFromUrl(firstUrl);
-
-    await withRedactedSecrets([firstSecret], async () => {
-      const rawLink = invitationLinkField(page, created.id);
-      await rawLink.waitFor();
-      assert.equal(await rawLink.inputValue(), firstUrl, "AC06_REVEALED_URL_DOES_NOT_MATCH_RESPONSE");
-      await assertSecretOnlyInTransientView(page, firstSecret, "AC06_REVEALED");
-
-      await page.getByRole("button", { name: "Копировать ссылку", exact: true }).click();
-      await page.getByRole("status").getByText("Ссылка скопирована", { exact: true }).waitFor();
-      assert.equal(await rawLink.inputValue(), firstUrl, "AC06_COPY_CLEARED_CURRENT_CREATOR_VIEW");
-      assert.equal(await page.evaluate((url) => window.__ac03ClipboardWrites.includes(url), firstUrl), true, "AC06_COPY_DID_NOT_WRITE_REVEALED_URL");
-      await assertSecretOnlyInTransientView(page, firstSecret, "AC06_POST_COPY");
-      assert.deepEqual(mutationPaths, [`/api/teams/${team.id}/invitations`], "AC06_COPY_TRIGGERED_INVITATION_MUTATION");
-
-      await invitationControl(page, created.id, "Закрыть ссылку").click();
-      assert.equal(await invitationLinkField(page, created.id).count(), 0, "AC06_CLOSE_LEFT_RAW_FIELD_VISIBLE");
-      await assertSecretAbsent(page, firstSecret, "AC06_CLOSE_LEFT_RAW_URL");
-      const reopenedReveal = waitForInvitationRevealResponse(page, team.id, created.id);
-      await invitationControl(page, created.id, "Показать ссылку").click();
-      const reopened = await reopenedReveal;
-      assert.equal(reopened.status(), 200, "AC06_CLOSE_REVEAL_DENIED");
-      assert.equal((await reopened.json()).url, firstUrl, "AC06_CLOSE_REVEAL_ROTATED_LINK");
-      assert.equal(await invitationLinkField(page, created.id).inputValue(), firstUrl, "AC06_CLOSE_REVEAL_DID_NOT_RESTORE_CURRENT_VIEW");
-      await assertSecretOnlyInTransientView(page, firstSecret, "AC06_CLOSE_REVEAL");
-
-      const reloadList = waitForInvitationListResponse(page, team.id);
-      await page.reload({ waitUntil: "domcontentloaded" });
-      const reloadListResponse = await reloadList;
-      assert.equal(reloadListResponse.status(), 200, "AC06_RELOAD_MANAGER_LIST_UNAVAILABLE");
-      assertSafeInvitationList(await reloadListResponse.json(), "AC06_RELOAD_MANAGER_LIST");
-      await page.getByRole("heading", { name: "Участники", exact: true }).waitFor();
-      await invitationControl(page, created.id, "Показать ссылку").waitFor();
-      assert.equal(await invitationLinkField(page, created.id).count(), 0, "AC06_RELOAD_AUTO_REVEALED_RAW_URL");
-      await assertSecretAbsent(page, firstSecret, "AC06_RELOAD_LEFT_RAW_URL");
-
-      const recoveredReveal = waitForInvitationRevealResponse(page, team.id, created.id);
-      await invitationControl(page, created.id, "Показать ссылку").click();
-      const recovered = await recoveredReveal;
-      assert.equal(recovered.status(), 200, "AC06_RELOAD_CREATOR_REVEAL_DENIED");
-      assert.equal((await recovered.json()).url, firstUrl, "AC06_RELOAD_REVEAL_ROTATED_LINK");
-      await assertSecretOnlyInTransientView(page, firstSecret, "AC06_RECOVERED");
-      assert.deepEqual(mutationPaths, [`/api/teams/${team.id}/invitations`], "AC06_RELOAD_OR_REVEAL_TRIGGERED_MUTATION");
-    });
-  } finally {
-    page.off("request", observeMutation);
-    await context.close();
-  }
-});
-
-test("AC-06 invitation continuity: manual reissue rotates only its selected link and retains another creator link", { timeout: 90000 }, async () => {
-  const { owner, team } = await managementFixture("ac06_independent_links");
-  const { context, page } = await openAccount(owner, `/workspace/teams/${team.id}/members`);
-  try {
-    const firstCreateResponse = waitForInvitationResponse(page, team.id);
-    await page.getByRole("button", { name: /^(Выпустить|Перевыпустить) ссылку$/ }).click();
-    const first = invitation(await (await firstCreateResponse).json());
-    assert.equal("url" in first, false, "AC06_FIRST_CREATE_RESPONSE_LEAKED_URL");
-    const firstRevealResponse = waitForInvitationRevealResponse(page, team.id, first.id);
-    await invitationControl(page, first.id, "Показать ссылку").click();
-    const firstUrl = (await (await firstRevealResponse).json()).url;
-    const firstSecret = secretFromUrl(firstUrl);
-
-    await withRedactedSecrets([firstSecret], async () => {
-      await invitationControl(page, first.id, "Закрыть ссылку").click();
-      const secondCreateResponse = waitForInvitationResponse(page, team.id);
-      await page.getByRole("button", { name: /^(Выпустить|Перевыпустить) ссылку$/ }).click();
-      const secondResponse = await secondCreateResponse;
-      const second = invitation(await secondResponse.json());
-      assert.equal("url" in second, false, "AC06_SECOND_CREATE_RESPONSE_LEAKED_URL");
-      assert.notEqual(second.id, first.id, "AC06_SECOND_CREATE_DID_NOT_CREATE_INDEPENDENT_INVITATION");
-
-      const secondRevealResponse = waitForInvitationRevealResponse(page, team.id, second.id);
-      await invitationControl(page, second.id, "Показать ссылку").click();
-      const secondUrl = (await (await secondRevealResponse).json()).url;
-      const secondSecret = secretFromUrl(secondUrl);
-
-      await withRedactedSecrets([secondSecret], async () => {
-        await invitationControl(page, second.id, "Закрыть ссылку").click();
-        const reissueResponse = waitForInvitationResponse(page, team.id, "reissue");
-        await invitationControl(page, first.id, "Перевыпустить ссылку").click();
-        const replacement = invitation(await (await reissueResponse).json());
-        assert.equal("url" in replacement, false, "AC06_REISSUE_RESPONSE_LEAKED_URL");
-        assert.notEqual(replacement.id, first.id, "AC06_REISSUE_DID_NOT_REPLACE_SELECTED_INVITATION");
-
-        const oldPreview = await json("/team-invitations/preview", { method: "POST", body: { token: firstSecret } });
-        assert.equal(oldPreview.response.status, 410, "AC06_REISSUE_LEFT_FIRST_LINK_ACTIVE");
-
-        const survivingRevealResponse = waitForInvitationRevealResponse(page, team.id, second.id);
-        await invitationControl(page, second.id, "Показать ссылку").click();
-        const survivingReveal = await survivingRevealResponse;
-        assert.equal(survivingReveal.status(), 200, "AC06_SECOND_LINK_NOT_REVEALABLE_AFTER_FIRST_REISSUE");
-        assert.equal((await survivingReveal.json()).url, secondUrl, "AC06_FIRST_REISSUE_ROTATED_SECOND_LINK");
-        await assertSecretOnlyInTransientView(page, secondSecret, "AC06_SECOND_LINK_AFTER_FIRST_REISSUE");
-      });
-    });
-  } finally {
-    await context.close();
-  }
-});
-
-test("AC-06 invitation continuity: team change and logout clear only the transient raw-link view", { timeout: 90000 }, async () => {
-  const { owner, invitee, team } = await managementFixture("ac06_context_cleanup");
-  const otherTeam = await createTeam(owner, `Other team ${unique()}`);
-  const { context, page } = await openAccount(owner, `/workspace/teams/${team.id}/members`);
-  try {
-    const createResponse = waitForInvitationResponse(page, team.id);
-    await page.getByRole("button", { name: /^(Выпустить|Перевыпустить) ссылку$/ }).click();
-    const created = invitation(await (await createResponse).json());
-    assert.equal("url" in created, false, "AC06_CONTEXT_CREATE_RESPONSE_LEAKED_URL");
-    const revealResponse = waitForInvitationRevealResponse(page, team.id, created.id);
-    await invitationControl(page, created.id, "Показать ссылку").click();
-    const rawUrl = (await (await revealResponse).json()).url;
-    const secret = secretFromUrl(rawUrl);
-
+    const metadata = await createInvitationMetadata(page, team.id, () => page.getByRole("button", { name: "Выпустить ссылку", exact: true }).click());
+    const url = await revealInvitationUrl(page, team.id, metadata.id); const secret = secretFromUrl(url);
     await withRedactedSecrets([secret], async () => {
-      await invitationLinkField(page, created.id).waitFor();
-      await assertSecretOnlyInTransientView(page, secret, "AC06_CONTEXT_INITIAL");
-      await page.goto(`${web}/workspace/teams/${otherTeam.id}/members`, { waitUntil: "domcontentloaded" });
-      await page.getByRole("heading", { name: "Участники", exact: true }).waitFor();
-      await assertSecretAbsent(page, secret, "AC06_TEAM_CHANGE_LEFT_RAW_URL");
-      await assertNoRawInvitationSurface(page, "AC06_TEAM_CHANGE");
+      await assertSecretOnlyInTransientView(page, secret, "P01_INITIAL_LINK");
+      await page.getByRole("button", { name: "Копировать ссылку", exact: true }).click();
+      await page.waitForFunction(() => window.__ac03ClipboardWrites.length === 1);
+      assert.equal(await page.evaluate(value => window.__ac03ClipboardWrites[0] === value, url), true);
+      assert.equal((await invitationLinkField(page, metadata.id).inputValue()) === url, true);
+      const automaticLink = waitForInvitationRevealResponse(page, team.id, metadata.id);
+      await page.reload({ waitUntil: "domcontentloaded" });
+      assert.equal((await automaticLink).status(), 200, "reload must authorize and fetch the current link automatically");
+      assert.equal((await revealInvitationUrl(page, team.id, metadata.id)) === url, true, "reload must not rotate the link");
+      await assertSecretOnlyInTransientView(page, secret, "P01_RELOADED_LINK");
+      assert.equal(mutations.length, 1, "copy/reload must not create a new invitation mutation");
+      assert.equal(await page.getByRole("button", { name: /Показать ссылку|Закрыть ссылку/ }).count(), 0);
+      const listed = await json(`/teams/${team.id}/invitations`, { token: owner.token });
+      assertSafeInvitationList(listed.body, "P01_LIST_SAFE");
+      assert.equal(listed.body.items.filter(item => item.state === "PENDING").length, 1);
+      assert.equal(listed.body.items[0].id, metadata.id);
+    });
+  } finally { await context.close(); }
+});
 
-      await page.goto(`${web}/workspace/teams/${team.id}/members`, { waitUntil: "domcontentloaded" });
-      await invitationControl(page, created.id, "Показать ссылку").waitFor();
-      assert.equal(await invitationLinkField(page, created.id).count(), 0, "AC06_TEAM_RETURN_AUTO_REVEALED_RAW_URL");
-      const returnRevealResponse = waitForInvitationRevealResponse(page, team.id, created.id);
-      await invitationControl(page, created.id, "Показать ссылку").click();
-      assert.equal((await (await returnRevealResponse).json()).url, rawUrl, "AC06_TEAM_RETURN_ROTATED_LINK");
+test("P0.1 continuity: manual rotations retain one invitation ID and invalidate both earlier tokens", { timeout: 60000 }, async () => {
+  const { owner, invitee, team } = await managementFixture("p01_rotation");
+  const { context, page } = await openAccount(owner, `/workspace/teams/${team.id}/settings`);
+  const secrets = [];
+  try {
+    let metadata = await createInvitationMetadata(page, team.id, () => page.getByRole("button", { name: "Выпустить ссылку", exact: true }).click());
+    const originalId = metadata.id;
+    secrets.push(secretFromUrl(await revealInvitationUrl(page, team.id, metadata.id)));
+    await withRedactedSecrets(secrets, async () => {
+      for (let index = 0; index < 2; index++) {
+        const next = await reissueInvitationMetadata(page, team.id, originalId, () => invitationControl(page, originalId, "Перевыпустить ссылку").click());
+        assert.equal(next.revision, metadata.revision + 1);
+        metadata = next;
+        const nextSecret = secretFromUrl(await revealInvitationUrl(page, team.id, originalId));
+        assert.equal(secrets.includes(nextSecret), false, "manual rotation must use a new token"); secrets.push(nextSecret);
+      }
+      for (const oldSecret of secrets.slice(0, -1)) {
+        assert.equal((await json("/team-invitations/preview", { method: "POST", body: { token: oldSecret } })).response.status, 410);
+        assert.equal((await json("/team-invitations/accept", { token: invitee.token, method: "POST", key: randomUUID(), body: { token: oldSecret } })).response.status, 410);
+        await assertSecretAbsent(page, oldSecret, "P01_ROTATION_OLD_RAW_ABSENT");
+      }
+      assert.equal((await json("/team-invitations/preview", { method: "POST", body: { token: secrets.at(-1) } })).response.status, 200);
+      const listed = await json(`/teams/${team.id}/invitations`, { token: owner.token });
+      assertSafeInvitationList(listed.body, "P01_ROTATION_LIST");
+      assert.equal(listed.body.items.filter(item => item.state === "PENDING").length, 1);
+      assert.equal(listed.body.items.find(item => item.state === "PENDING").id, originalId);
+    });
+  } finally { await context.close(); }
+});
 
+test("P0.1 continuity: team switch and logout remove the old transient view; returning authorizes the same link", { timeout: 60000 }, async () => {
+  const { owner, team } = await managementFixture("p01_context");
+  const otherTeam = await createTeam(owner, `Other ${unique()}`);
+  const { context, page } = await openAccount(owner, `/workspace/teams/${team.id}/settings`);
+  const mutations = []; page.on("request", request => { if (isInvitationMutation(request, team.id)) mutations.push(request.method()); });
+  try {
+    const created = await createInvitationMetadata(page, team.id, () => page.getByRole("button", { name: "Выпустить ссылку", exact: true }).click());
+    const url = await revealInvitationUrl(page, team.id, created.id); const secret = secretFromUrl(url);
+    await withRedactedSecrets([secret], async () => {
+      const previousLink = await invitationLinkField(page, created.id).elementHandle();
+      await page.goto(`${web}/workspace/teams/${otherTeam.id}/settings`, { waitUntil: "domcontentloaded" });
+      await page.getByRole("heading", { name: "Настройки команды", exact: true }).waitFor();
+      await assertDetachedAfterParentRemount(page, previousLink, "P01_TEAM_SWITCH_DETACHED");
+      await assertSecretAbsent(page, secret, "P01_OTHER_TEAM_RAW_ABSENT");
+      await assertNoRawInvitationSurface(page, "P01_OTHER_TEAM_NO_RAW");
+      const automaticLink = waitForInvitationRevealResponse(page, team.id, created.id);
+      await page.goto(`${web}/workspace/teams/${team.id}/settings`, { waitUntil: "domcontentloaded" });
+      assert.equal((await automaticLink).status(), 200);
+      assert.equal((await revealInvitationUrl(page, team.id, created.id)) === url, true);
+      await assertSecretOnlyInTransientView(page, secret, "P01_RETURN_TEAM_TRANSIENT");
+      const returnedLink = await invitationLinkField(page, created.id).elementHandle();
       await page.getByRole("button", { name: "Выйти", exact: true }).click();
       await page.waitForURL(`${web}/`);
-      await page.getByRole("link", { name: "Личный кабинет", exact: true }).waitFor();
-      await assertSecretAbsent(page, secret, "AC06_LOGOUT_LEFT_RAW_URL");
-      await assertNoRawInvitationSurface(page, "AC06_LOGOUT");
-      await page.goto(`${web}/login`, { waitUntil: "domcontentloaded" });
-      await page.getByLabel("Ник", { exact: true }).fill(invitee.user.nickname);
-      await page.getByLabel("Пароль", { exact: true }).fill(password);
-      await page.getByRole("button", { name: "Войти в кабинет", exact: true }).click();
-      await page.waitForURL("**/workspace/personal/interviews");
-      await assertSecretAbsent(page, secret, "AC06_ACCOUNT_CHANGE_LEFT_RAW_URL");
+      await assertDetachedAfterParentRemount(page, returnedLink, "P01_LOGOUT_LINK_DETACHED");
+      await assertSecretAbsent(page, secret, "P01_LOGOUT_RAW_ABSENT");
+      await assertNoRawInvitationSurface(page, "P01_LOGOUT_NO_RAW");
+      assert.equal(mutations.length, 1, "context changes must not rotate the invitation");
     });
-  } finally {
-    await context.close();
-  }
+  } finally { await context.close(); }
 });
 
 test("AC-06 participant roster: accepted second account is visible to owner and sees its own safe roster without invitation controls", { timeout: 90000 }, async () => {
@@ -1721,9 +1528,7 @@ test("AC-06 participant roster: accepted second account is visible to owner and 
     await ownerSession.page.getByRole("button", { name: /^(Выпустить|Перевыпустить) ссылку$/ }).click();
     const created = invitation(await (await createResponse).json());
     assert.equal("url" in created, false, "AC06_ROSTER_CREATE_RESPONSE_LEAKED_URL");
-    const revealResponse = waitForInvitationRevealResponse(ownerSession.page, team.id, created.id);
-    await invitationControl(ownerSession.page, created.id, "Показать ссылку").click();
-    const joinUrl = (await (await revealResponse).json()).url;
+    const joinUrl = await revealInvitationUrl(ownerSession.page, team.id, created.id);
     const secret = secretFromUrl(joinUrl);
 
     await withRedactedSecrets([secret], async () => {
@@ -1733,6 +1538,15 @@ test("AC-06 participant roster: accepted second account is visible to owner and 
       await acceptInvitation.waitFor({ timeout: 15_000 });
       await acceptInvitation.click();
       await inviteeSession.page.waitForURL(`**/workspace/teams/${team.id}/interviews`);
+
+      const secondInvitee = await account("p01_reusable_member");
+      const secondAccept = await json("/team-invitations/accept", {
+        token: secondInvitee.token,
+        method: "POST",
+        key: randomUUID(),
+        body: { token: secret },
+      });
+      assert.equal(secondAccept.response.status, 200, "the same active link must admit a second distinct user");
 
       const ownerRoster = await foregroundForRosterRevalidation(
         ownerSession.page,
@@ -1748,7 +1562,13 @@ test("AC-06 participant roster: accepted second account is visible to owner and 
         true,
         "AC06_OWNER_ROSTER_MISSING_ACCEPTED_MEMBER",
       );
+      assert.equal(ownerRosterPayload.items.some(item => item.userId === secondInvitee.user.id && item.role === "MEMBER" && item.state === "ACTIVE"), true, "owner roster must contain both users from the same invitation");
+      assert.equal((await json("/team-invitations/preview", { method: "POST", body: { token: secret } })).response.status, 200, "acceptance must not consume the reusable invitation");
+      const stillActive = await json(`/teams/${team.id}/invitations`, { token: owner.token });
+      assertSafeInvitationList(stillActive.body, "P01_REUSABLE_LIST_SAFE");
+      assert.equal(stillActive.body.items.filter(item => item.state === "PENDING").length, 1);
       await ownerSession.page.getByText(invitee.user.displayName, { exact: true }).waitFor();
+      await ownerSession.page.getByText(secondInvitee.user.displayName, { exact: true }).waitFor();
 
       inviteeSession.page.on("request", (request) => {
         if (isInvitationMutation(request, team.id)) memberMutationPaths.push(new URL(request.url()).pathname);
@@ -1776,7 +1596,7 @@ test("AC-06 participant roster: accepted second account is visible to owner and 
       await memberNavigation;
       const unavailableRoster = await unavailableRosterResponse;
       assert.equal(unavailableRoster.status(), 503, "AC06_MEMBER_ROSTER_UNAVAILABLE_STATE_NOT_EXERCISED");
-      await inviteeSession.page.getByRole("heading", { name: "Участники", exact: true }).waitFor();
+      await inviteeSession.page.getByText("Состав команды", { exact: true }).waitFor();
       await inviteeSession.page.getByRole("alert", { name: "Не удалось загрузить участников" }).waitFor();
       assert.equal(await inviteeSession.page.getByText("Раздел готовится", { exact: true }).count(), 0, "AC06_MEMBER_STAGED_PLACEHOLDER_VISIBLE");
       await assertNoInvitationControls(inviteeSession.page, "AC06_MEMBER_ROSTER");
@@ -1788,42 +1608,29 @@ test("AC-06 participant roster: accepted second account is visible to owner and 
       const memberRoster = await memberRosterResponse;
       assert.equal(memberRoster.status(), 200, "AC06_MEMBER_ROSTER_UNAVAILABLE");
       assertSafeRoster(await memberRoster.json(), "AC06_MEMBER_ROSTER");
-      await inviteeSession.page.getByText(invitee.user.displayName, { exact: true }).waitFor();
+      await inviteeSession.page.getByRole("table", { name: "Состав команды", exact: true }).getByText(invitee.user.displayName, { exact: true }).waitFor();
       await inviteeSession.page.getByText("Вы", { exact: true }).waitFor();
-      const rosterSearch = inviteeSession.page.getByLabel("Поиск участников", { exact: true });
-      await rosterSearch.waitFor();
+      assert.equal(await inviteeSession.page.getByLabel("Поиск участников", { exact: true }).count(), 0, "AC06_ROSTER_SEARCH_REMOVED");
       await inviteeSession.page.getByRole("navigation", { name: "Пагинация участников" }).waitFor();
 
-      const emptyNeedle = `Нет совпадений ${unique()}`;
-      const emptySearchResponse = inviteeSession.page.waitForResponse((candidate) => {
-        if (!isExactRosterRequest(candidate.request(), team.id)) return false;
-        return new URL(candidate.url()).searchParams.get("q") === emptyNeedle;
-      });
+      const emptyRoster = { items: [], page: 0, size: 25, totalElements: 0, totalPages: 0 };
       await inviteeSession.page.route(rosterPattern, async (route) => {
-        const requested = new URL(route.request().url());
-        if (requested.searchParams.get("q") !== emptyNeedle) return route.fallback();
         await route.fulfill({
           status: 200,
           contentType: "application/json",
           headers: { "Cache-Control": "private, no-store" },
-          body: JSON.stringify({ items: [], page: 0, size: 25, totalElements: 0, totalPages: 0 }),
+          body: JSON.stringify(emptyRoster),
         });
       });
-      await rosterSearch.fill(`  ${emptyNeedle}  `);
-      const emptySearch = await emptySearchResponse;
-      assert.equal(emptySearch.status(), 200, "AC06_ROSTER_SEARCH_Q_UNAVAILABLE");
-      assert.equal(new URL(emptySearch.url()).searchParams.get("q"), emptyNeedle, "AC06_ROSTER_SEARCH_Q_NOT_TRIMMED");
+      const emptyRosterResponse = waitForRosterResponse(inviteeSession.page, team.id);
+      await inviteeSession.page.reload({ waitUntil: "domcontentloaded" });
+      const emptyResponse = await emptyRosterResponse;
+      assert.equal(emptyResponse.status(), 200, "AC06_ROSTER_EMPTY_STATE_NOT_EXERCISED");
+      assert.equal(new URL(emptyResponse.url()).searchParams.has("q"), false, "AC06_ROSTER_UI_SENT_SEARCH_QUERY");
       await inviteeSession.page.getByText("Участники не найдены", { exact: true }).waitFor();
       await inviteeSession.page.unroute(rosterPattern);
 
-      const invalidNeedle = `Некорректный запрос ${unique()}`;
-      const invalidSearchResponse = inviteeSession.page.waitForResponse((candidate) => {
-        if (!isExactRosterRequest(candidate.request(), team.id)) return false;
-        return new URL(candidate.url()).searchParams.get("q") === invalidNeedle;
-      });
       await inviteeSession.page.route(rosterPattern, async (route) => {
-        const requested = new URL(route.request().url());
-        if (requested.searchParams.get("q") !== invalidNeedle) return route.fallback();
         await route.fulfill({
           status: 400,
           contentType: "application/json",
@@ -1831,21 +1638,28 @@ test("AC-06 participant roster: accepted second account is visible to owner and 
           body: JSON.stringify({ error: "Некорректный параметр списка", code: "INVALID_LIST_QUERY" }),
         });
       });
-      await rosterSearch.fill(invalidNeedle);
-      const invalidSearch = await invalidSearchResponse;
-      assert.equal(invalidSearch.status(), 400, "AC06_ROSTER_INVALID_QUERY_STATE_NOT_EXERCISED");
+      const invalidRosterResponse = waitForRosterResponse(inviteeSession.page, team.id);
+      await inviteeSession.page.reload({ waitUntil: "domcontentloaded" });
+      assert.equal((await invalidRosterResponse).status(), 400, "AC06_ROSTER_INVALID_QUERY_STATE_NOT_EXERCISED");
       await inviteeSession.page.getByRole("alert", { name: "Не удалось загрузить участников" }).getByText(
-        "Проверьте поисковый запрос: он не должен быть длиннее 200 символов.",
+        "Не удалось открыть эту страницу состава. Обновите данные и повторите попытку.",
         { exact: true },
       ).waitFor();
       assert.equal(await inviteeSession.page.getByText("Участники не найдены", { exact: true }).count(), 0, "AC06_ROSTER_INVALID_QUERY_LEFT_STALE_EMPTY_STATE");
       await inviteeSession.page.unroute(rosterPattern);
 
+      await inviteeSession.page.route(rosterPattern, async (route) => route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        headers: { "Cache-Control": "private, no-store" },
+        body: JSON.stringify(emptyRoster),
+      }));
       const invalidRetryResponse = waitForRosterResponse(inviteeSession.page, team.id);
       await inviteeSession.page.getByRole("button", { name: "Повторить", exact: true }).click();
       assert.equal((await invalidRetryResponse).status(), 200, "AC06_ROSTER_INVALID_QUERY_RETRY_UNAVAILABLE");
       await inviteeSession.page.getByText("Участники не найдены", { exact: true }).waitFor();
       assert.equal(await inviteeSession.page.getByRole("alert", { name: "Не удалось загрузить участников" }).count(), 0, "AC06_ROSTER_INVALID_QUERY_RETRY_LEFT_ERROR");
+      await inviteeSession.page.unroute(rosterPattern);
 
       const pageZero = {
         items: [{ userId: invitee.user.id, displayName: invitee.user.displayName, role: "MEMBER", state: "ACTIVE", revision: 0 }],
@@ -1876,8 +1690,8 @@ test("AC-06 participant roster: accepted second account is visible to owner and 
       const paginatedInitial = waitForRosterResponse(inviteeSession.page, team.id);
       await inviteeSession.page.goto(`${web}/workspace/teams/${team.id}/members`, { waitUntil: "domcontentloaded" });
       assert.equal((await paginatedInitial).status(), 200, "AC06_ROSTER_PAGINATION_INITIAL_UNAVAILABLE");
-      await inviteeSession.page.getByText(invitee.user.displayName, { exact: true }).waitFor();
-      const nextPage = inviteeSession.page.getByRole("navigation", { name: "Пагинация участников" }).getByRole("button", { name: "2", exact: true });
+      await inviteeSession.page.getByRole("table", { name: "Состав команды", exact: true }).getByText(invitee.user.displayName, { exact: true }).waitFor();
+      const nextPage = inviteeSession.page.getByRole("navigation", { name: "Пагинация участников" }).getByTitle("2", { exact: true });
       await nextPage.waitFor();
       const paginatedNext = waitForRosterResponse(inviteeSession.page, team.id);
       await nextPage.click();
@@ -1932,6 +1746,47 @@ async function runShortViewportInvitationCell(cell, marker) {
     // drops its disposable schema after the independently registered suite.
   }
 }
+
+test("navigation overflow Enter activates its autofocus menuitem and preserves pointer link navigation", { timeout: 30000 }, async () => {
+  const owner = await account("overflow_keyboard");
+  const team = await createTeam(owner, `Keyboard overflow ${unique()}`);
+  const { context, page } = await openAccount(owner, `/workspace/teams/${team.id}/interviews`, { width: 384, height: 512 });
+  try {
+    await page.getByRole("main", { name: `Команда ${team.name}: Интервью`, exact: true }).waitFor();
+    const opener = page.getByRole("button", { name: /Меню разделов/ });
+    await focusWithKeyboard(page, opener, "OVERFLOW_INITIAL_OPENER");
+    await page.keyboard.press("Enter");
+    const menu = page.getByRole("menu", { name: "Дополнительные разделы", exact: true });
+    await menu.waitFor();
+    await page.waitForFunction(() => document.querySelector('[role="menu"][aria-label="Дополнительные разделы"] [role="menuitem"]') === document.activeElement);
+    const firstLink = menu.getByRole("menuitem").first().getByRole("link");
+    const firstHref = await firstLink.getAttribute("href");
+    assert.equal(firstHref.startsWith(`/workspace/teams/${team.id}/`), true, "overflow retains the real team link context");
+    await page.keyboard.press("Enter");
+    await page.waitForURL(new URL(firstHref, web).href);
+    assert.equal(new URL(page.url()).pathname, firstHref, "Enter on the initial menuitem navigates without an extra arrow key");
+
+    await opener.click();
+    await menu.waitFor();
+    const settings = menu.getByRole("link", { name: "Треки и вакансии", exact: true });
+    const settingsHref = await settings.getAttribute("href");
+    const newTab = context.waitForEvent("page");
+    const modifier = await page.evaluate(() => navigator.platform.includes("Mac") ? "Meta" : "Control");
+    await settings.click({ modifiers: [modifier] });
+    const destination = await newTab;
+    await destination.waitForURL(new URL(settingsHref, web).href);
+    assert.equal(new URL(page.url()).pathname, firstHref, "modified pointer activation retains the original tab");
+    await destination.close();
+    // A closing dropdown can remain visible while its retained menu is inert.
+    await page.waitForFunction(() => document.querySelector('button[aria-label^="Меню разделов"]')?.getAttribute("aria-expanded") === "false");
+    await opener.click();
+    await page.waitForFunction(() => document.querySelector('button[aria-label^="Меню разделов"]')?.getAttribute("aria-expanded") === "true"
+      && document.querySelector('[role="menu"][aria-label="Дополнительные разделы"]')?.inert === false);
+    await menu.getByRole("link", { name: "Треки и вакансии", exact: true }).click();
+    await page.waitForURL(new URL(settingsHref, web).href);
+    assert.equal(new URL(page.url()).pathname, settingsHref, "ordinary pointer activation reaches the same link once");
+  } finally { await context.close(); }
+});
 
 test("BUG-AC03-QA-001: invitation management remains keyboard-operable at 1280x720 → 640x360", { timeout: 300000 }, async () => {
   await runShortViewportInvitationCell(

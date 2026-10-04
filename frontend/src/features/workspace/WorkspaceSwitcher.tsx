@@ -1,12 +1,13 @@
-import React, { useCallback, useMemo, useRef, useState, type FormEvent } from "react";
-import { Alert, Button, Group, Loader, Modal, Stack, Text, TextInput } from "@mantine/core";
-import { IconCheck, IconChevronDown, IconLayoutGrid } from "@tabler/icons-react";
+import React, { startTransition, useCallback, useMemo, useRef, useState, type FormEvent } from "react";
+import { Alert, Button, Flex, Form, Input, Modal, Popover, Spin } from "antd";
+import { CheckOutlined, DownOutlined, AppstoreOutlined, PlusOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { useAppSelector } from "../../app/hooks";
 import { TEAM_WORKSPACES_ENABLED } from "../../config/runtime";
 import { useCreateTeamMutation, useLazyGetWorkspacesQuery } from "../../services/api";
 import type { WorkspaceCacheScope, WorkspaceSummary } from "../../types";
 import { rememberCreatedTeam } from "./transientWorkspaceIdentity";
+import { useEscapeLayer } from "../../components/useEscapeLayer";
 import styles from "./WorkspaceSwitcher.module.css";
 
 type WorkspaceSwitcherProps = {
@@ -40,8 +41,6 @@ type WorkspaceListState = {
   status: "loading" | "ready" | "error";
   teams: WorkspaceSummary[];
 };
-
-const shortId = (id: string) => id.slice(0, 8);
 
 function canonicalTeamName(value: string) {
   return value.normalize("NFKC").trim();
@@ -90,6 +89,8 @@ export function WorkspaceSwitcher({ currentTeamId, currentTeamName }: WorkspaceS
   resetMutationRef.current = resetMutation;
   const [workspaceOpened, setWorkspaceOpened] = useState(false);
   const workspaceTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
+  const workspaceMenuId = React.useId();
   const [createOpened, setCreateOpened] = useState(false);
   const [name, setName] = useState("");
   const [error, setError] = useState("");
@@ -175,6 +176,7 @@ export function WorkspaceSwitcher({ currentTeamId, currentTeamName }: WorkspaceS
 
   React.useEffect(() => {
     clearCreateState(true);
+    setWorkspaceOpened(false);
     return abortActiveCreate;
   }, [abortActiveCreate, clearCreateState, contextKey]);
 
@@ -202,23 +204,49 @@ export function WorkspaceSwitcher({ currentTeamId, currentTeamName }: WorkspaceS
     };
   }, [revalidateWorkspaces]);
 
-  if (!TEAM_WORKSPACES_ENABLED) return null;
-
-  const closeWorkspaceDialog = () => {
+  const closeWorkspaceMenu = useCallback(() => {
     setWorkspaceOpened(false);
     window.requestAnimationFrame(() => workspaceTriggerRef.current?.focus());
+  }, []);
+
+  useEscapeLayer(workspaceOpened, closeWorkspaceMenu);
+
+  React.useEffect(() => {
+    if (!workspaceOpened) return;
+    const frame = window.requestAnimationFrame(() => {
+      workspaceMenuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [workspaceOpened]);
+
+  if (!TEAM_WORKSPACES_ENABLED) return null;
+
+  const navigateMenu = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const buttons = Array.from(workspaceMenuRef.current?.querySelectorAll<HTMLButtonElement>(
+      '[role="menuitem"], [role="menuitemradio"]',
+    ) ?? []);
+    if (event.key === "Tab") {
+      setWorkspaceOpened(false);
+      return;
+    }
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key) || buttons.length === 0) return;
+    event.preventDefault();
+    const index = buttons.findIndex((button) => button === document.activeElement);
+    const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 :
+      (index + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) % buttons.length;
+    buttons[next]?.focus();
   };
 
   const selectPersonal = () => {
     setWorkspaceOpened(false);
     clearCreateState(true);
-    navigate("/workspace/personal/interviews");
+    startTransition(() => { void navigate("/workspace/personal/interviews"); });
   };
 
   const selectTeam = (workspace: WorkspaceSummary) => {
     setWorkspaceOpened(false);
     clearCreateState(true);
-    navigate(`/workspace/teams/${workspace.id}/interviews`);
+    startTransition(() => { void navigate(`/workspace/teams/${workspace.id}/interviews`); });
   };
 
   const openCreate = () => {
@@ -256,7 +284,7 @@ export function WorkspaceSwitcher({ currentTeamId, currentTeamName }: WorkspaceS
       if (identityRef.current !== startedIn || activeCreateRef.current !== active) return;
       rememberCreatedTeam(accountId, response.team);
       clearCreateState(true);
-      navigate(`/workspace/teams/${response.team.id}/interviews`);
+      startTransition(() => { void navigate(`/workspace/teams/${response.team.id}/interviews`); });
     } catch (requestError) {
       if (identityRef.current !== startedIn || activeCreateRef.current !== active) return;
       setError(apiError(requestError));
@@ -272,102 +300,116 @@ export function WorkspaceSwitcher({ currentTeamId, currentTeamName }: WorkspaceS
   const visibleCurrentName = currentTeamName ?? undefined;
   const currentLabel = currentTeamId
     ? currentTeamName === null
-      ? "Командное пространство"
-      : `${visibleCurrentName ?? "Команда"} · ${shortId(currentTeamId)}`
-    : "Личное пространство";
+      ? "Команда"
+      : visibleCurrentName ?? "Команда"
+    : "Личное";
   const listIsCurrent = workspaceList.contextKey === contextKey;
   const listStatus = listIsCurrent ? workspaceList.status : "loading";
   const workspaces = listIsCurrent ? workspaceList.teams : [];
 
   return (
     <>
+      <Popover
+        open={workspaceOpened}
+        onOpenChange={setWorkspaceOpened}
+        trigger="click"
+        placement="bottomLeft"
+        arrow={false}
+        destroyOnHidden
+        classNames={{ container: styles.dropdownSurface }}
+        content={
+          <div
+            id={workspaceMenuId}
+            ref={workspaceMenuRef}
+            role="menu"
+            aria-label="Выбор команды"
+            className={styles.workspaceMenu}
+            onKeyDown={navigateMenu}
+            onBlur={(event) => {
+              if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget as Node)) {
+                setWorkspaceOpened(false);
+              }
+            }}
+          >
+            <button type="button" role="menuitem" className={styles.createButton} onClick={openCreate}>
+              <PlusOutlined aria-hidden="true" />
+              <span>Создать команду</span>
+            </button>
+            <div className={styles.workspaceList}>
+              {listStatus === "loading" ? <div className={styles.listFeedback}><Spin size="small" aria-label="Загружаем команды" /></div> : null}
+              {listStatus === "error" ? (
+                <Alert className={styles.listFeedback} type="error" showIcon title="Не удалось загрузить команды" action={
+                  <Button size="small" onClick={() => void revalidateWorkspaces(true, "retry")}>Повторить</Button>
+                } role="alert" />
+              ) : null}
+              <button
+                type="button"
+                role="menuitemradio"
+                className={`${styles.choiceButton} ${workspaceId === "personal" ? styles.choiceSelected : ""}`}
+                aria-checked={workspaceId === "personal"}
+                aria-current={workspaceId === "personal" ? "true" : undefined}
+                onClick={selectPersonal}
+              >
+                <span className={styles.workspaceName}>Личное</span>
+                {workspaceId === "personal" ? <CheckOutlined aria-hidden="true" /> : null}
+              </button>
+              {workspaces.map((workspace) => (
+                <button
+                  key={workspace.id}
+                  type="button"
+                  role="menuitemradio"
+                  className={`${styles.choiceButton} ${workspace.id === workspaceId ? styles.choiceSelected : ""}`}
+                  aria-checked={workspace.id === workspaceId}
+                  aria-current={workspace.id === workspaceId ? "true" : undefined}
+                  onClick={() => selectTeam(workspace)}
+                >
+                  <span className={styles.workspaceName} title={workspace.name}>{workspace.name}</span>
+                  {workspace.id === workspaceId ? <CheckOutlined aria-hidden="true" /> : null}
+                </button>
+              ))}
+            </div>
+          </div>
+        }
+      >
       <Button
         ref={workspaceTriggerRef}
-        type="button"
-        variant="light"
-        className={styles.trigger}
-        aria-label={`Рабочее пространство: ${currentLabel}. Сменить рабочее пространство`}
+        htmlType="button"
+        className={`${styles.trigger} app-header-control`}
+        aria-label={`Команды: ${currentLabel}. Сменить команду`}
         aria-expanded={workspaceOpened}
-        aria-controls="workspace-switcher-dialog"
-        onClick={() => setWorkspaceOpened(true)}
+        aria-controls={workspaceOpened ? workspaceMenuId : undefined}
+        aria-haspopup="menu"
+        onKeyDown={(event) => {
+          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            event.preventDefault();
+            setWorkspaceOpened(true);
+          }
+        }}
       >
         <span className={styles.triggerContent}>
-          <IconLayoutGrid size={18} className={styles.triggerIcon} aria-hidden="true" />
-          <span className={styles.triggerPrefix}>Пространство:</span>
+          <AppstoreOutlined className={styles.triggerIcon} aria-hidden="true" />
+          <span className={styles.triggerPrefix}>Команды:</span>
           <span className={styles.triggerLabel} data-workspace-switcher-label title={currentLabel}>
             {currentLabel}
           </span>
-          <span className={styles.triggerCue} data-workspace-switcher-cue aria-hidden="true">
-            {workspaceOpened ? "Свернуть" : "Сменить"}
-          </span>
-          <IconChevronDown size={16} className={styles.triggerChevron} aria-hidden="true" />
+          <DownOutlined className={styles.triggerChevron} aria-hidden="true" />
         </span>
       </Button>
-      <Modal
-        id="workspace-switcher-dialog"
-        opened={workspaceOpened}
-        onClose={closeWorkspaceDialog}
-        title="Выбор рабочего пространства"
-        centered
-      >
-        <Stack gap="sm">
-          {listStatus === "loading" ? <Loader size="sm" aria-label="Загружаем рабочие пространства" /> : null}
-          {listStatus === "error" ? (
-            <Alert color="red" role="alert" title="Не удалось загрузить пространства">
-              <Button type="button" variant="light" size="xs" onClick={() => void revalidateWorkspaces(true, "retry")}>Повторить</Button>
-            </Alert>
-          ) : null}
-          <Button
-            type="button"
-            variant="default"
-            className={`${styles.choiceButton} ${workspaceId === "personal" ? styles.choiceSelected : ""}`}
-            fullWidth
-            aria-current={workspaceId === "personal" ? "true" : undefined}
-            onClick={selectPersonal}
-          >
-            <Group justify="space-between" wrap="nowrap" w="100%">
-              <Text span>Личное пространство</Text>
-              {workspaceId === "personal" ? <IconCheck size={18} aria-hidden="true" /> : null}
-            </Group>
-          </Button>
-          {workspaces.map((workspace) => (
-            <Button
-              key={workspace.id}
-              type="button"
-              variant="default"
-              className={`${styles.choiceButton} ${workspace.id === workspaceId ? styles.choiceSelected : ""}`}
-              fullWidth
-              aria-current={workspace.id === workspaceId ? "true" : undefined}
-              onClick={() => selectTeam(workspace)}
-            >
-              <Group justify="space-between" wrap="nowrap" w="100%">
-                <Text span>{workspace.name}</Text>
-                <Text span size="xs">{shortId(workspace.id)}</Text>
-                {workspace.id === workspaceId ? <IconCheck size={18} aria-hidden="true" /> : null}
-              </Group>
-            </Button>
-          ))}
-          <Button type="button" color="gray" className={styles.createButton} onClick={openCreate}>Создать команду</Button>
-        </Stack>
-      </Modal>
-      <Modal opened={createOpened} onClose={closeCreate} title="Создать команду" centered>
+      </Popover>
+      <Modal open={createOpened} onCancel={closeCreate} title="Создать команду" centered footer={null} destroyOnHidden>
         <form onSubmit={submit}>
-          <Stack gap="md">
-            <TextInput
-              label="Название команды"
-              value={name}
-              onChange={(event) => setName(event.currentTarget.value)}
-              disabled={isCreating}
-              autoFocus
-            />
-            {error ? <Alert color="red" role="alert">{error}</Alert> : null}
-            <Group justify="flex-end">
-              <Button type="button" variant="subtle" disabled={isCreating} onClick={closeCreate}>Отмена</Button>
-              <Button type="submit" color="blue" loading={isCreating}>
+          <Flex vertical gap={16}>
+            <Form.Item required style={{ marginBottom: 0 }}>
+              <Input aria-label="Название команды" placeholder="Введите название команды" value={name} onChange={(event) => setName(event.currentTarget.value)} disabled={isCreating} autoFocus />
+            </Form.Item>
+            {error ? <Alert type="error" showIcon role="alert" message={error} /> : null}
+            <Flex justify="flex-end" gap={8}>
+              <Button htmlType="button" disabled={isCreating} onClick={closeCreate}>Отмена</Button>
+              <Button htmlType="submit" type="primary" loading={isCreating} aria-label={error ? "Повторить" : "Создать команду"} aria-busy={isCreating}>
                 {error ? "Повторить" : "Создать команду"}
               </Button>
-            </Group>
-          </Stack>
+            </Flex>
+          </Flex>
         </form>
       </Modal>
     </>

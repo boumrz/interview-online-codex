@@ -49,6 +49,10 @@ data class HrInterviewDto(
     val effectiveAt: String,
     val dateSource: String,
     val taskScores: List<HrTaskScoreDto>,
+    val trackId: String? = null,
+    val trackName: String? = null,
+    val vacancyId: String? = null,
+    val vacancyTitle: String? = null,
 )
 
 data class HrInterviewPageDto(

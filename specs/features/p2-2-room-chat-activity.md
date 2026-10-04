@@ -1,35 +1,55 @@
-### P2.2 Чат и активность
+# P2.2 — внутренний чат и активность
 
-Цель: внутренний чат и активность не теряют сообщения, draft и position при reconnect/смене панели.
+Статус: реализована (MVP); результаты прежних проверок ниже. Актуализировано: 2026-10-02.
+Результат: интервьюеры продолжают внутреннюю переписку и чтение активности без
+дублей, потери черновика и скачков позиции при reconnect/смене панели.
 
-Готово:
+## Границы и права
 
-- pending/retryable/persisted состояния сообщения;
-- stable client message id;
-- dedupe ACK/SSE echo;
-- unread badge;
-- visible-only catch-up;
-- terminal cleanup при revoke/смене комнаты/account;
-- activity history без скачков scroll.
-- unit `roomChatDelivery.test.ts` — зелёный `7/7`;
-- frontend `npm run typecheck` — зелёный;
-- E2E `e2e-room-panel-continuity.mjs` — зелёный `4/4`:
-  - draft/panel/read position сохраняются при step changes и reconnect;
-  - новое сообщение не крадёт focus/scroll и даёт unread;
-  - activity history опрашивается только когда видима и делает один catch-up;
-  - потерянный ACK даёт ручной retry с тем же immutable intent;
-  - room/account change и terminal revoke очищают protected chat state, late ACK
-    не восстанавливает сообщение.
+Чат внутренний, не чат с кандидатом. Текущие manager роли задают
+[P1.5](p1-5-team-interview-creation.md) и [P2.3](p2-3-room-assignments.md);
+finished/frozen/archived — [P3.3](p3-3-interview-result.md).
+Кандидат и отозванная роль не читают/отправляют внутренние сообщения.
 
-Что сделать:
+## Требования
 
-- P2.2 MVP готов; дальнейшие доработки здесь считаются polish после следующих
-  пакетов комнаты.
+- **R-01. Доставка:** сообщение имеет стабильный client message ID и неизменный
+  intent (тот же текст/идентификатор при повторе). Серверное подтверждение ACK
+  и отражение того же сообщения в SSE сливаются в один экземпляр.
+- **R-02. Состояния:** отправка → pending; подтверждённое сохранение → persisted;
+  потерянный ACK/ошибка → retryable. Ручной retry использует тот же intent и
+  идемпотентный ключ, не создавая второго сообщения. UI не выдаёт pending за
+  подтверждённую историю. ACK ранее отправленного сообщения и повтор SSE/ACK
+  не очищают следующий черновик, даже если его текст идентичен; сравнение текста
+  точное, без потери пробелов или строк.
+- **R-03. Непрерывность:** черновик, выбранная панель и read position сохраняются
+  при смене шага/панели и reconnect в том же допустимом контексте. Новое сообщение
+  не забирает focus/scroll; unread badge сообщает о непрочитанном.
+- **R-04. История активности:** запросы выполняются только когда панель видима;
+  возврат к ней выполняет один catch-up. Чтение истории не прыгает по scroll.
+- **R-05. Отзыв/контекст:** смена room/account и terminal revoke очищают protected
+  chat state; поздний ACK не восстанавливает сообщение или прежнюю роль. Общие
+  revoke/scope/lock-wait инварианты — P1.5; прежнее недоступное соединение не
+  запрещает отдельный новый candidate admission.
+- **R-06. Сервер:** TEAM `note_message` использует актуальный eventToken и
+  текущую разрешённую роль. Допустимый interviewer получает ACK 200 через
+  `POST /api/realtime/rooms/{inviteCode}/events`; candidate получает
+  `403 ROOM_ACCESS_DENIED`. Повтор ключа не создаёт дубль; допустимая отправка
+  не маскируется `404 ROOM_NOT_FOUND`.
+- **R-07. Поле ввода:** начальные четыре строки (не ниже 100 px) растут максимум
+  до десяти; фокус и доступность сохраняются по UI.2.
 
-Acceptance:
+## Приёмка и проверка
 
-- потерянный ACK не создаёт дубль;
-- reconnect восстанавливает состояние;
-- новое сообщение не перехватывает focus;
-- draft сохраняется при переключении панели и шага;
-- terminal revoke очищает защищённое состояние.
+| ID | Требования | Сценарий → результат | Проверка |
+| --- | --- | --- | --- |
+| AC-01 | R-01–R-02 | ACK потерян, retry и SSE echo → один сохранённый текст; поздний ACK не очищает следующий draft, включая идентичный текст | Delivery unit + idempotency integration |
+| AC-02 | R-03–R-04 | Переключение/шаг/reconnect → прежний draft/position; новое сообщение → unread без кражи focus/scroll | Panel continuity E2E |
+| AC-03 | R-05–R-06 | Candidate/revoke/context change и late ACK → без private состояния/второй записи | Role integration + continuity E2E |
+| AC-04 | R-06–R-07 | Чат после создания TEAM комнаты → реальная отправка 200, поле нужной высоты | Creation/room E2E |
+
+Прежние результаты: delivery unit 7/7 и panel continuity E2E 4/4 записаны в
+[исторической редакции](../references/history/p2-2-room-chat-activity-before-2026-10-02.md);
+серверные concurrency/role проверки — [бизнес-evidence 28.09](../references/business-logic-verification-2026-09-28.md).
+Нормализация 02.10 не является новым запуском. Дальнейший scope — только
+согласованные изменения комнаты; email и чат с кандидатом здесь не вводятся.

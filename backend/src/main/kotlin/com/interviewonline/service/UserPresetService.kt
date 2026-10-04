@@ -15,7 +15,6 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 import java.time.temporal.ChronoUnit
-import java.util.Locale
 
 @Service
 @Transactional
@@ -26,10 +25,9 @@ class UserPresetService(
 
     // TODO: N+1 — listPresets loads items lazily per-preset; acceptable for MVP (<20 presets per user).
     //       Optimize with @EntityGraph or a single JOIN FETCH query when needed.
-    fun listPresets(user: User, rawStatus: String? = null): List<PresetSummaryDto> {
+    fun listPresets(user: User): List<PresetSummaryDto> {
         val userId = user.id!!
-        val status = parseStatus(rawStatus)
-        val presets = presetRepository.findAllByOwnerUserIdAndStatusOrderByCreatedAtDescIdAsc(userId, status)
+        val presets = presetRepository.findAllByOwnerUserIdOrderByCreatedAtDesc(userId)
         return presets.map { preset ->
             PresetSummaryDto(
                 id = preset.id!!,
@@ -149,10 +147,6 @@ class UserPresetService(
         return presetRepository.findByIdWithItems(saved.id!!, userId)!!.toDetailDto()
     }
 
-    fun archivePreset(user: User, presetId: String): PresetDetailDto = changeStatus(user, presetId, ARCHIVED)
-
-    fun restorePreset(user: User, presetId: String): PresetDetailDto = changeStatus(user, presetId, ACTIVE)
-
     fun deletePreset(user: User, presetId: String) {
         val userId = user.id!!
         val deleted = presetRepository.deleteByIdAndOwnerUserId(presetId, userId)
@@ -175,24 +169,6 @@ class UserPresetService(
         status = status,
         revision = revision,
     )
-
-    private fun changeStatus(user: User, presetId: String, status: String): PresetDetailDto {
-        val userId = user.id!!
-        val preset = presetRepository.findByIdAndOwnerUserId(presetId, userId)
-            ?: throw presetNotFound()
-        if (preset.status != status) {
-            preset.status = status
-            bump(preset)
-            presetRepository.save(preset)
-        }
-        return presetRepository.findByIdWithItems(presetId, userId)!!.toDetailDto()
-    }
-
-    private fun parseStatus(rawStatus: String?): String = when (rawStatus?.trim()?.lowercase(Locale.ROOT)) {
-        null, "", "active" -> ACTIVE
-        "archived" -> ARCHIVED
-        else -> throw ApiException(HttpStatus.BAD_REQUEST, "Фильтр пресетов должен быть active или archived", code = "INVALID_PRESET_FILTER")
-    }
 
     private fun bump(preset: TaskPreset) {
         preset.revision += 1
@@ -228,7 +204,6 @@ class UserPresetService(
 
     private companion object {
         const val ACTIVE = "ACTIVE"
-        const val ARCHIVED = "ARCHIVED"
         const val MAX_NAME_LENGTH = 255
     }
 }

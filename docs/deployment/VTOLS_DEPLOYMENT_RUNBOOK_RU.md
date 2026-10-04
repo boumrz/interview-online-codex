@@ -1,4 +1,4 @@
-# Деплой Interview Online на interview.vtools.tech (Docker)
+# Деплой InterHub на interview.vtools.tech (Docker)
 
 Домен: `https://interview.vtools.tech/`  
 Шлюз: `37.18.73.150` (порты 80, 443)  

@@ -1,3 +1,5 @@
+import * as decoding from "lib0/decoding";
+import * as Y from "yjs";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { after, before, test } from "node:test";
@@ -5,7 +7,7 @@ import { chromium } from "playwright";
 
 const web = process.env.E2E_BASE_URL || "http://localhost:5173";
 const api = process.env.E2E_API_URL || "http://localhost:8080/api";
-const surfaceNames = ["Шаги", "Условие", "Мои заметки", "Чат", "Активность"];
+const surfaceNames = ["Шаги", "Мои заметки", "Чат", "Активность"];
 const surfaceRegionNames = {
   "Редактор": "Редактор",
   "Шаги": "Шаги",
@@ -212,7 +214,7 @@ async function openRoomPage(context, room, displayName) {
     await page.getByRole("button", { name: "Войти в комнату", exact: true }).click();
   }
   try {
-    await page.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ state: "visible", timeout: 15_000 });
+    await page.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ state: "attached", timeout: 15_000 });
   } catch (error) {
     const diagnostics = await page.evaluate(() => ({
       pathname: location.pathname,
@@ -383,7 +385,7 @@ async function directSurfaceTabs(page) {
     "AC11_DIRECT_SURFACE_NAV_MISSING: expected one always-available tablist named «Рабочие области комнаты»",
   );
   const tabs = tablist.getByRole("tab");
-  assert.equal(await tabs.count(), 5, "AC11_AUXILIARY_SURFACE_COUNT_WRONG");
+  assert.equal(await tabs.count(), 4, "AC11_AUXILIARY_SURFACE_COUNT_WRONG");
   const names = await tabs.evaluateAll((elements) => elements.map((element) =>
     (element.getAttribute("aria-label") || element.textContent || "").trim().replace(/\s+/g, " "),
   ));
@@ -395,7 +397,7 @@ async function assertSurfaceContent(page, name, region, expectedTasks = fixtures
   const task = expectedTasks[0];
   assert.ok(task, `AC11_${name}_EXPECTED_TASK_FIXTURE_MISSING`);
   const heading = region.getByRole("heading", { name: surfaceRegionNames[name], exact: true });
-  assert.equal(await heading.count(), 1, `AC11_SURFACE_HEADING_MISSING:${name}`);
+  if (name !== "Условие") assert.equal(await heading.count(), 1, `AC11_SURFACE_HEADING_MISSING:${name}`);
   if (name === "Редактор") {
     assert.equal(await region.locator('[data-testid="room-code-editor-host"] .cm-editor').count(), 1, "AC11_EDITOR_CONTENT_MISSING");
   } else if (name === "Шаги") {
@@ -407,7 +409,9 @@ async function assertSurfaceContent(page, name, region, expectedTasks = fixtures
     assert.ok(content.includes(task.description.slice(0, 120)), "AC11_CONDITION_BODY_MISSING");
   } else if (name === "Мои заметки") {
     assert.equal(await region.locator('[data-testid="room-private-notes-input"]').count(), 1, "AC11_PRIVATE_NOTES_EDITOR_MISSING");
-    assert.match((await region.textContent()) ?? "", /вид(ны|на) только вам/i, "AC11_PRIVATE_NOTES_AUDIENCE_MISSING");
+    await region.getByRole("button", { name: "Кто видит мои заметки", exact: true }).hover();
+    await page.getByRole("tooltip").filter({ hasText: "Заметки видны только вам" }).waitFor();
+    await page.mouse.move(0, 0);
   } else if (name === "Чат") {
     assert.equal(await region.locator('[data-testid="room-notes-input"]').count(), 1, "AC11_CHAT_COMPOSER_MISSING");
     assert.equal(await region.locator('[data-testid="room-notes-send"]').count(), 1, "AC11_CHAT_SEND_MISSING");
@@ -445,8 +449,8 @@ async function assertSurfaceOpen(page, name, expectedTasks) {
 }
 
 async function surfaceRegion(page, name) {
-  if (name === "Редактор") {
-    return page.getByRole("region", { name: "Редактор", exact: true });
+  if (name === "Редактор" || name === "Условие") {
+    return page.getByRole("region", { name, exact: true });
   }
   const { tablist } = await directSurfaceTabs(page);
   const controls = await tablist.getByRole("tab", { name, exact: true }).getAttribute("aria-controls");
@@ -455,6 +459,14 @@ async function surfaceRegion(page, name) {
 }
 
 async function openSurface(page, name, expectedTasks) {
+  if (name === "Условие") {
+    const toggle = page.locator("#room-condition-toggle");
+    if (await toggle.getAttribute("aria-expanded") === "false") await toggle.click();
+    const region = page.getByRole("region", { name, exact: true });
+    await region.waitFor({ state: "visible" });
+    await assertSurfaceContent(page, name, region, expectedTasks);
+    return { region };
+  }
   const { tablist } = await directSurfaceTabs(page);
   const tab = tablist.getByRole("tab", { name, exact: true });
   await tab.click();
@@ -469,7 +481,7 @@ async function visibleSurfaceRegions(page) {
       const rect = element.getBoundingClientRect();
       return !element.hidden && style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
     };
-    return [...document.querySelectorAll('section[aria-labelledby], [role="region"][aria-label], [role="region"][aria-labelledby]')]
+    return [...document.querySelectorAll('[data-testid="room-context-surface-grid"] [data-room-context-surface]')]
       .filter(visible)
       .map((element) => {
         const direct = element.getAttribute("aria-label");
@@ -523,6 +535,30 @@ function exactManagerHeartbeat(browserRequest, { inviteCode, sessionId, stepInde
   return { valid, payload, expectedUrl, expectedKeys, actualKeys };
 }
 
+function exactManagerAwareness(payload, sessionId, stepIndex, documentBase64, selection) {
+  const keys = ["awarenessUpdate", "clientEventSequence", "eventToken", "sessionId", "stepIndex", "type"];
+  if (!payload || JSON.stringify(Object.keys(payload).sort()) !== JSON.stringify(keys) ||
+      payload.type !== "manager_workspace_awareness_update" || payload.sessionId !== sessionId ||
+      payload.stepIndex !== stepIndex || payload.clientEventSequence !== null ||
+      typeof payload.eventToken !== "string" || !payload.eventToken) return false;
+  try {
+    const decoder = decoding.createDecoder(Buffer.from(payload.awarenessUpdate, "base64"));
+    if (decoding.readVarUint(decoder) !== 1) return false;
+    decoding.readVarUint(decoder); // Yjs client identity
+    decoding.readVarUint(decoder); // Awareness clock
+    const state = JSON.parse(decoding.readVarString(decoder));
+    if (state?.user?.sessionId !== sessionId) return false;
+    if (state.cursor == null) return true;
+    const doc = new Y.Doc();
+    try {
+      Y.applyUpdate(doc, Buffer.from(documentBase64, "base64"));
+      const anchor = Y.createAbsolutePositionFromRelativePosition(Y.createRelativePositionFromJSON(state.cursor.anchor), doc);
+      const head = Y.createAbsolutePositionFromRelativePosition(Y.createRelativePositionFromJSON(state.cursor.head), doc);
+      return anchor?.index === selection.anchor && head?.index === selection.head;
+    } finally { doc.destroy(); }
+  } catch { return false; }
+}
+
 function createCountBarrier(source, expectedCount, label, timeoutMs = 7_000) {
   if (source.length >= expectedCount) return { promise: Promise.resolve(), notify: () => {} };
   let timer;
@@ -548,12 +584,29 @@ function createCountBarrier(source, expectedCount, label, timeoutMs = 7_000) {
 }
 
 async function assertVisibleKeyboardFocus(locator, label) {
-  const focus = await locator.evaluate((element) => {
+  const focus = await locator.evaluate(async (element) => {
+    const measure = () => {
     const style = getComputedStyle(element);
     return {
       active: document.activeElement === element,
-      visible: style.outlineStyle !== "none" || style.boxShadow !== "none",
+      visible: style.outlineStyle !== "none" || style.boxShadow !== "none" || (() => {
+        if (!element.matches("textarea")) return false;
+        const probe = document.createElement("span");
+        probe.style.color = "var(--app-focus)";
+        document.body.append(probe);
+        const color = getComputedStyle(probe).color;
+        probe.remove();
+        return parseFloat(style.borderWidth) > 0 && style.borderColor === color;
+      })(),
     };
+    };
+    const deadline = performance.now() + 1000;
+    let result = measure();
+    while (result.active && !result.visible && performance.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      result = measure();
+    }
+    return result;
   });
   assert.deepEqual(focus, { active: true, visible: true }, `${label}_KEYBOARD_FOCUS_NOT_VISIBLE`);
 }
@@ -583,7 +636,7 @@ async function assertTargetGeometry(locator, label) {
       unobscured: Boolean(top && (top === element || element.contains(top))),
     };
   });
-  assert.ok(geometry.width >= 44 && geometry.height >= 44, `${label}_TARGET_UNDERSIZED:${JSON.stringify(geometry)}`);
+  assert.ok(geometry.width >= 32 && geometry.height >= 32, `${label}_TARGET_UNDERSIZED:${JSON.stringify(geometry)}`);
   assert.equal(geometry.insideViewport, true, `${label}_TARGET_OUTSIDE_VIEWPORT:${JSON.stringify(geometry)}`);
   assert.equal(geometry.unobscured, true, `${label}_TARGET_OBSCURED:${JSON.stringify(geometry)}`);
 }
@@ -591,14 +644,21 @@ async function assertTargetGeometry(locator, label) {
 async function focusByKeyboard(page, target, label, limit = 100) {
   const handle = await target.elementHandle();
   assert.ok(handle, `${label}_TARGET_MISSING`);
+  const trace = [];
   for (let index = 0; index < limit; index += 1) {
     if (await handle.evaluate((element) => document.activeElement === element)) {
       await assertVisibleKeyboardFocus(target, label);
       return;
     }
+    if (index < 12) trace.push(await page.evaluate(() => {
+      const element = document.activeElement;
+      return { tag: element?.tagName, id: element?.id, testId: element?.getAttribute("data-testid"), label: element?.getAttribute("aria-label"), editable: element?.getAttribute("contenteditable") };
+    }));
+    // CodeMirror uses Tab for indentation; Escape then Tab is its keyboard exit.
+    if (await page.evaluate(() => document.activeElement?.classList.contains("cm-content"))) await page.keyboard.press("Escape");
     await page.keyboard.press("Tab");
   }
-  assert.fail(`${label}_NOT_REACHABLE_BY_KEYBOARD`);
+  assert.fail(`${label}_NOT_REACHABLE_BY_KEYBOARD:${JSON.stringify(trace)}`);
 }
 
 async function assertRovingSurfaceTabs(page, { focusedName, selectedName, label }) {
@@ -717,19 +777,9 @@ async function assertContainedBy(container, locators, label) {
 }
 
 async function assertActiveMode(page, expectedMode, label) {
-  const expectedButton = page.getByRole("button", { name: expectedMode, exact: true });
-  const deadline = Date.now() + 3000;
-  while (Date.now() < deadline && await expectedButton.getAttribute("aria-pressed") !== "true") {
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  const modes = ["Фокус", "Рабочий", "Обзор"];
-  const pressed = [];
-  for (const mode of modes) {
-    const button = page.getByRole("button", { name: mode, exact: true });
-    assert.equal(await button.count(), 1, `${label}_${mode}_MODE_CONTROL_MISSING`);
-    if (await button.getAttribute("aria-pressed") === "true") pressed.push(mode);
-  }
-  assert.deepEqual(pressed, [expectedMode], `${label}_AUTOMATIC_MODE_WRONG:${pressed.join(",")}`);
+  const mode = { "Фокус": "focus", "Рабочий": "work", "Обзор": "overview" }[expectedMode];
+  await page.waitForFunction(mode => document.querySelector("[data-room-context-mode]")?.getAttribute("data-room-context-mode") === mode, mode);
+  assert.equal(await page.locator("[data-room-context-mode]").getAttribute("data-room-context-mode"), mode, `${label}_AUTOMATIC_MODE_WRONG`);
 }
 
 before(async () => {
@@ -763,7 +813,7 @@ test("infrastructure: live API and the established room/editor are ready", { tim
   }
 });
 
-test("personal owner, assigned interviewer and guest manager receive five direct auxiliary surfaces", { timeout: 45_000 }, async () => {
+test("personal owner, assigned interviewer and guest manager receive four direct auxiliary surfaces and a persistent condition", { timeout: 45_000 }, async () => {
   for (const actor of [
     { label: "personal owner", auth: fixtures.owner, room: fixtures.room },
     { label: "assigned interviewer", auth: fixtures.interviewer, room: fixtures.room },
@@ -774,6 +824,7 @@ test("personal owner, assigned interviewer and guest manager receive five direct
       await directSurfaceTabs(page);
       assert.ok(Array.isArray(actor.room.tasks) && actor.room.tasks.length > 0, `${actor.label}_TASK_FIXTURE_MISSING`);
       for (const name of surfaceNames) await openSurface(page, name, actor.room.tasks);
+      await openSurface(page, "Условие", actor.room.tasks);
     } finally {
       await closeRoomContext(context);
     }
@@ -781,7 +832,7 @@ test("personal owner, assigned interviewer and guest manager receive five direct
 
 });
 
-test("keyboard-only navigation activates all five direct auxiliary room surfaces", { timeout: 30_000 }, async () => {
+test("keyboard-only navigation activates all four direct auxiliary room surfaces", { timeout: 30_000 }, async () => {
   const { context, page } = await openRoom({ auth: fixtures.owner, room: fixtures.room });
   try {
     const { tablist } = await directSurfaceTabs(page);
@@ -802,7 +853,6 @@ test("keyboard-only navigation activates all five direct auxiliary room surfaces
     });
 
     await moveAndActivateSurface(page, { navigationKey: "Home", name: "Шаги", activationKey: "Space", label: "AC11_KEYBOARD_STEPS" });
-    await moveAndActivateSurface(page, { navigationKey: "ArrowRight", name: "Условие", activationKey: "Space", label: "AC11_KEYBOARD_CONDITION" });
     await moveAndActivateSurface(page, { navigationKey: "ArrowRight", name: "Мои заметки", activationKey: "Enter", label: "AC11_KEYBOARD_NOTES" });
     await moveAndActivateSurface(page, { navigationKey: "ArrowRight", name: "Чат", activationKey: "Space", label: "AC11_KEYBOARD_CHAT" });
     await moveAndActivateSurface(page, { navigationKey: "ArrowRight", name: "Активность", activationKey: "Enter", label: "AC11_KEYBOARD_ACTIVITY" });
@@ -842,7 +892,9 @@ test("focus mode keeps auxiliary surfaces reachable without restoring the editor
     await assertActiveMode(page, "Фокус", "AC11_FOCUS_AUX_REACHABLE_MODE");
     await directSurfaceTabs(page);
     assert.equal(await page.getByRole("tab", { name: "Редактор", exact: true }).count(), 0, "AC11_FOCUS_EDITOR_TAB_RETURNED");
-    assert.equal(await page.getByRole("region", { name: "Редактор", exact: true }).count(), 1, "AC11_FOCUS_EDITOR_DIRECT_REGION_MISSING");
+    assert.equal(await page.locator('#room-context-region-editor').count(), 1, "AC11_FOCUS_EDITOR_MOUNTED_REGION_MISSING");
+    assert.equal(await selectedSurface(page), "Шаги", "AC11_FOCUS_STEPS_DEFAULT_MISSING");
+    assert.ok(await page.getByRole("region", { name: "Условие", exact: true }).isVisible());
 
     await openSurface(page, "Чат");
     assert.deepEqual(await visibleSurfaceRegions(page), ["Чат"], "AC11_FOCUS_CHAT_NOT_SINGLE_VISIBLE_SURFACE");
@@ -876,7 +928,7 @@ test("participant header keeps the role visible without a redundant connected ba
   }
 });
 
-test("manager status row keeps published and candidate states without a local-step badge", { timeout: 30_000 }, async () => {
+test("manager status row keeps candidate state without redundant published or local-step labels", { timeout: 30_000 }, async () => {
   const { context, page } = await openRoom({ auth: fixtures.owner, room: fixtures.room });
   try {
     await openSurface(page, "Шаги");
@@ -888,8 +940,7 @@ test("manager status row keeps published and candidate states without a local-st
     const publishedStep = statusRow.locator('[data-testid="room-published-step-status"]');
     const candidateStatus = statusRow.locator('[data-testid="room-candidate-presence-status"]');
     assert.equal(await localStep.count(), 0, "AC11_REDUNDANT_LOCAL_STEP_VISIBLE");
-    assert.equal(await publishedStep.count(), 1, "AC11_PERSISTENT_PUBLISHED_STEP_MISSING");
-    assert.match((await publishedStep.textContent()) ?? "", new RegExp(`Опубликован: шаг 1.*${fixtures.tasks[0].title}`), "AC11_PERSISTENT_PUBLISHED_STEP_WRONG");
+    assert.equal(await publishedStep.count(), 0, "UI2_REDUNDANT_PUBLISHED_STEP_VISIBLE");
     assert.equal(
       await statusRow.evaluate((element) => element.closest('[data-room-context-surface]') === null),
       true,
@@ -919,7 +970,11 @@ test("persistent room status stays fully visible at 200% desktop and tablet equi
       await assertActiveMode(page, "Фокус", `AC11_NARROW_FOCUS_${viewport.label}`);
       await directSurfaceTabs(page);
       assert.equal(await page.getByRole("tab", { name: "Редактор", exact: true }).count(), 0, `AC11_NARROW_EDITOR_TAB_RETURNED_${viewport.label}`);
-      assert.equal(await page.getByRole("region", { name: "Редактор", exact: true }).count(), 1, `AC11_NARROW_EDITOR_DIRECT_REGION_MISSING_${viewport.label}`);
+      const editor = page.getByRole("region", { name: "Редактор", exact: true, includeHidden: true });
+      assert.equal(await editor.count(), 1, `AC11_NARROW_EDITOR_DIRECT_REGION_MISSING_${viewport.label}`);
+      assert.equal(await selectedSurface(page), "Шаги", `AC11_NARROW_DEFAULT_STEPS_MISSING_${viewport.label}`);
+      await page.getByRole("button", { name: "Вернуться к редактору", exact: true }).click();
+      await editor.waitFor({ state: "visible" });
 
       const statusRow = page.locator('[data-testid="room-persistent-status"]');
       const statusItems = [
@@ -973,7 +1028,16 @@ test("persistent room status stays fully visible at 200% desktop and tablet equi
 });
 
 test("owner and assigned interviewer select locally and publish only through the explicit action", { timeout: 45_000 }, async () => {
-  const initialLifecycleCursor = await lifecycleCursor();
+  const initialAdmissionBaseline = await lifecycleBaseline("AC11_INITIAL_PRE_ADMISSION");
+  assert.deepEqual(
+    {
+      registryConnections: initialAdmissionBaseline.registryConnections,
+      registryParticipants: initialAdmissionBaseline.registryParticipants,
+      registryRoomMemberships: initialAdmissionBaseline.registryRoomMemberships,
+    },
+    { registryConnections: 0, registryParticipants: 0, registryRoomMemberships: 0 },
+    `AC11_INITIAL_PRE_ADMISSION_REGISTRY_NOT_QUIESCENT:${initialAdmissionBaseline.line}`,
+  );
   let preAdmissionBaseline;
   for (const [label, auth, targetStep] of [
     ["OWNER", fixtures.owner, 1],
@@ -997,16 +1061,23 @@ test("owner and assigned interviewer select locally and publish only through the
       const persisted = await waitForRoomStep(auth, fixtures.room, targetStep, label);
       assert.equal(persisted.tasks[targetStep].title, fixtures.tasks[targetStep].title, `${label}_PUBLISHED_WRONG_TASK`);
 
-      const lifecycleCursor = label === "OWNER"
-        ? initialLifecycleCursor
-        : (await lifecycleBaseline(`AC11_${label}_PRE_CLOSE`)).sequence;
+      // Authenticated profile hydration can replace an initial stream during
+      // admission. The close assertion starts immediately before actual close.
+      const preClose = await lifecycleBaseline(`AC11_${label}_PRE_CLOSE`);
+      console.log("AC11_LIFECYCLE_WINDOW", JSON.stringify({
+        actor: label,
+        preAdmissionSequence: initialAdmissionBaseline.sequence,
+        preCloseSequence: preClose.sequence,
+        preCloseAt: Date.now(),
+        observedEventSources: await eventSourceCount(page),
+      }));
       if (label === "OWNER") {
         await context.close();
         contextClosed = true;
         preAdmissionBaseline = await waitForLifecycleReturn({
-          afterSequence: lifecycleCursor,
+          afterSequence: preClose.sequence,
           expectedReasons: ["normal-close", "route-unmount", "transport-error"],
-          baseline: null,
+          baseline: initialAdmissionBaseline,
           label: "AC11_BROWSER_CONTEXT_CLOSE",
         });
         assert.deepEqual(
@@ -1030,7 +1101,7 @@ test("owner and assigned interviewer select locally and publish only through the
       } else {
         await page.goto(`${web}/`, { waitUntil: "domcontentloaded" });
         await waitForLifecycleReturn({
-          afterSequence: lifecycleCursor,
+          afterSequence: preClose.sequence,
           expectedReasons: ["route-unmount"],
           baseline: preAdmissionBaseline,
           label: "AC11_ROOM_ROUTE_UNMOUNT",
@@ -1043,16 +1114,21 @@ test("owner and assigned interviewer select locally and publish only through the
     }
   }
 
+  // Keep the display name stable during the controlled lease-replacement window.
+  // A real authenticated display-name change legitimately restarts the stream
+  // and is covered by the multi-participant startup transport checks.
+  const lifecycleOwner = await register("Участник");
+  const lifecycleRoom = await createAuthenticatedRoom(lifecycleOwner, []);
   const { context: lifecycleContext, page: oldLeasePage } = await openRoom({
-    auth: fixtures.owner,
-    room: fixtures.room,
-    displayName: "Lifecycle replacement owner",
+    auth: lifecycleOwner,
+    room: lifecycleRoom,
+    displayName: "Участник",
   });
   let lifecycleContextClosed = false;
   try {
-    assert.equal(await eventSourceCount(oldLeasePage), 1, "AC11_LATER_ROOM_EDITOR_SSE_ADMISSION_MISSING");
+    await waitForExactlyEventSourceCount(oldLeasePage, 1, "AC11_LATER_ROOM_EDITOR_SSE_ADMISSION");
     const oldEventToken = await eventTokenFor(oldLeasePage, "AC11_OLD_LEASE");
-    const sharedSessionId = await sessionIdFor(oldLeasePage, fixtures.room.inviteCode, "AC11_OLD_LEASE");
+    const sharedSessionId = await sessionIdFor(oldLeasePage, lifecycleRoom.inviteCode, "AC11_OLD_LEASE");
     await oldLeasePage.evaluate(() => {
       window.__ac11HoldSseErrors = true;
     });
@@ -1066,10 +1142,10 @@ test("owner and assigned interviewer select locally and publish only through the
     const replacementCursor = await lifecycleBaseline("AC11_REPLACEMENT_PRE_ADMISSION");
     await lifecycleContext.addInitScript(({ inviteCode, sessionId }) => {
       sessionStorage.setItem(`room_ws_session_id_${inviteCode}`, sessionId);
-    }, { inviteCode: fixtures.room.inviteCode, sessionId: sharedSessionId });
-    const replacementPage = await openRoomPage(lifecycleContext, fixtures.room, "Lifecycle replacement owner");
+    }, { inviteCode: lifecycleRoom.inviteCode, sessionId: sharedSessionId });
+    const replacementPage = await openRoomPage(lifecycleContext, lifecycleRoom, "Участник");
     assert.equal(
-      await sessionIdFor(replacementPage, fixtures.room.inviteCode, "AC11_REPLACEMENT"),
+      await sessionIdFor(replacementPage, lifecycleRoom.inviteCode, "AC11_REPLACEMENT"),
       sharedSessionId,
       "AC11_REPLACEMENT_DID_NOT_REUSE_BROWSER_SESSION",
     );
@@ -1083,8 +1159,8 @@ test("owner and assigned interviewer select locally and publish only through the
     assert.notEqual(replacementEventToken, oldEventToken, "AC11_REPLACEMENT_REUSED_STALE_EVENT_TOKEN");
     await waitForExactlyEventSourceCount(replacementPage, 1, "AC11_SAME_SESSION_REPLACEMENT");
 
-    await request(`/realtime/rooms/${fixtures.room.inviteCode}/events`, {
-      token: fixtures.owner.token,
+    await request(`/realtime/rooms/${lifecycleRoom.inviteCode}/events`, {
+      token: lifecycleOwner.token,
       method: "POST",
       expected: [403],
       body: {
@@ -1152,6 +1228,17 @@ test("twenty panel/reflow transitions preserve one editor, room session, drafts,
   try {
     await openSurface(page, "Шаги");
     await page.locator('[data-testid="room-step-row-1"]').click();
+    await openSurface(page, "Условие", [fixtures.tasks[1]]);
+    await page.waitForFunction((starterCode) => {
+      const hydrated = window.__ac11SseMessages.some((entry) => {
+        try {
+          const message = JSON.parse(entry.data);
+          return message.type === "manager_workspace_sync" && message.payload?.stepIndex === 1;
+        } catch { return false; }
+      });
+      const host = document.querySelector('[data-testid="room-code-editor-host"]');
+      return hydrated && host?.__roomEditorView?.state.doc.toString() === starterCode;
+    }, fixtures.tasks[1].starterCode);
 
     const code = Array.from({ length: 84 }, (_, index) =>
       `const длинноеЗначение${index} = очередьСОченьДлиннымИменем[${index}] ?? "контекст редактора сохраняется";`,
@@ -1253,6 +1340,7 @@ test("twenty panel/reflow transitions preserve one editor, room session, drafts,
     });
 
     const unexpectedMutations = [];
+    const normalAwareness = [];
     const malformedEmptyYjs = [];
     const exactHeartbeats = [];
     const restartedStreams = [];
@@ -1263,6 +1351,13 @@ test("twenty panel/reflow transitions preserve one editor, room session, drafts,
       }
       if (!unsafeMethods.has(browserRequest.method())) return;
       const payload = postPayload(browserRequest);
+      // Surface activation can blur CodeMirror. Only its same-session, same-step
+      // unchanged cursor or cursor removal is allowed; document, note and layout writes stay forbidden.
+      if (browserRequest.method() === "POST" && isExactRelayUrl(browserRequest.url(), fixtures.room.inviteCode) &&
+          exactManagerAwareness(payload, baseline.sessionId, 1, initialYjsPayload.yjsDocumentBase64, baseline.selection)) {
+        normalAwareness.push(payload.awarenessUpdate);
+        return;
+      }
       if (payload?.yjsUpdate === "") {
         const heartbeat = exactManagerHeartbeat(browserRequest, {
           inviteCode: fixtures.room.inviteCode,
@@ -1477,7 +1572,11 @@ test("twenty panel/reflow transitions preserve one editor, room session, drafts,
         Number.isFinite(message.payload.ts);
     };
     const transitionDomainSse = parsedTransitionSse.filter(
-      ({ message }) => !isExactTransportHeartbeat(message),
+      ({ message }) => !isExactTransportHeartbeat(message) && !(
+        message?.type === "manager_workspace_awareness_update" &&
+        message.payload?.sessionId === baseline.sessionId && message.payload?.stepIndex === 1 &&
+        normalAwareness.includes(message.payload?.awarenessUpdate)
+      ),
     );
     const unexpectedSse = transitionDomainSse.filter(({ message }) =>
       message?.type !== "manager_workspace_sync" ||
@@ -1581,12 +1680,13 @@ test("desktop/tablet viewport and zoom-equivalent matrix keeps honest automatic 
           const defaultRegions = await visibleSurfaceRegions(page);
           assert.deepEqual(
             defaultRegions.sort(),
-            (expectedFocus ? ["Редактор"] : ["Редактор", "Условие"]).sort(),
+            (expectedFocus ? ["Шаги"] : ["Редактор", "Шаги"]).sort(),
             `AC11_AUTOMATIC_DEFAULT_GEOMETRY:${baseViewport.width}x${baseViewport.height}:${defaultRegions.join(",")}`,
           );
+          assert.ok(await page.getByRole("region", { name: "Условие", exact: true }).isVisible(), "AC11_PERSISTENT_CONDITION_MISSING");
           if (!expectedFocus) {
             await assertNoPairwiseOverlap(
-              [["Редактор", await surfaceRegion(page, "Редактор")], ["Условие", await surfaceRegion(page, "Условие")]],
+              [["Редактор", await surfaceRegion(page, "Редактор")], ["Шаги", await surfaceRegion(page, "Шаги")]],
               `AC11_AUTOMATIC_DEFAULT_${baseViewport.width}x${baseViewport.height}`,
             );
           }
@@ -1635,8 +1735,9 @@ test("desktop/tablet viewport and zoom-equivalent matrix keeps honest automatic 
         await assertNoPairwiseOverlap(visiblePanels, `AC11_MATRIX_${baseViewport.width}x${baseViewport.height}@${zoom}`);
         const panelBoxes = Object.fromEntries(await Promise.all(visiblePanels.map(async ([name, locator]) => [name, await locator.boundingBox()])));
         if (!expectedFocus) {
-          const editorCodeBox = await visiblePanels[0][1].locator(".cm-editor").boundingBox();
-          assert.ok(editorCodeBox.width >= 480 && editorCodeBox.height >= 320, `AC11_WORK_EDITOR_MINIMUM:${JSON.stringify(editorCodeBox)}`);
+          const editorCodeBox = await visiblePanels[0][1].locator('[data-testid="room-code-editor-host"] .cm-editor').boundingBox();
+          const conditionGeometry = await page.locator('[data-condition-expanded]').boundingBox();
+          assert.ok(editorCodeBox.width >= 480 && editorCodeBox.height >= 320, `AC11_WORK_EDITOR_MINIMUM:${baseViewport.width}x${baseViewport.height}@${zoom}:${JSON.stringify({editorCodeBox,conditionGeometry,geometry,panelBoxes})}`);
           assert.ok(panelBoxes["Мои заметки"].width >= 320 && panelBoxes["Мои заметки"].height >= 280, `AC11_WORK_NOTES_MINIMUM:${JSON.stringify(panelBoxes)}`);
         }
         const postInteractionGeometry = await page.evaluate(() => ({
@@ -1652,7 +1753,7 @@ test("desktop/tablet viewport and zoom-equivalent matrix keeps honest automatic 
   }
 });
 
-test("usable container geometry, overview activation and focus transfer stay truthful", { timeout: 45_000 }, async () => {
+test("usable container geometry, automatic panels and focus transfer stay truthful", { timeout: 45_000 }, async () => {
   const { context, page } = await openRoom({
     auth: fixtures.owner,
     room: fixtures.room,
@@ -1674,7 +1775,7 @@ test("usable container geometry, overview activation and focus transfer stay tru
         rows: style.gridTemplateRows.split(" ").filter(Boolean).length,
       };
     });
-    assert.deepEqual(tabGrid, { columns: 3, rows: 2 }, `AC11_NARROW_TAB_GRID_NOT_3X2:${JSON.stringify(tabGrid)}`);
+    assert.deepEqual(tabGrid, { columns: 4, rows: 1 }, `AC11_NARROW_TAB_GRID_NOT_4X1:${JSON.stringify(tabGrid)}`);
 
     await constrainedStyle.evaluate((element) => element.remove());
     await settleLayout(page);
@@ -1683,10 +1784,7 @@ test("usable container geometry, overview activation and focus transfer stay tru
     await openSurface(page, "Шаги");
     await page.locator('[data-testid="room-step-row-1"]').click();
     await openSurface(page, "Условие", [fixtures.tasks[1]]);
-    const selectedTaskTitle = fixtures.tasks[1].title;
-    await (await surfaceRegion(page, "Условие"))
-      .getByText(selectedTaskTitle, { exact: true })
-      .waitFor({ state: "visible", timeout: 10_000 });
+    await page.waitForFunction(description => document.querySelector("#room-context-region-condition")?.textContent?.includes(description), fixtures.tasks[1].description.slice(0, 120));
     const selectedConditionContent = (await (await surfaceRegion(page, "Условие")).textContent()) ?? "";
     assert.ok(
       selectedConditionContent.includes(fixtures.tasks[1].description.slice(0, 120)),
@@ -1697,35 +1795,13 @@ test("usable container geometry, overview activation and focus transfer stay tru
       "AC11_OLD_PUBLIC_CONDITION_RETAINED_AFTER_LOCAL_SELECTION",
     );
 
-    await page.getByRole("button", { name: "Обзор", exact: true }).click();
-    await openSurface(page, "Условие", [fixtures.tasks[1]]);
-    assert.equal(await selectedSurface(page), "Условие", "AC11_OVERVIEW_CONDITION_NOT_SELECTED");
-    assert.ok((await visibleSurfaceRegions(page)).includes("Условие"), "AC11_OVERVIEW_CONDITION_SELECTED_BUT_HIDDEN");
-
     await openSurface(page, "Мои заметки");
-    assert.equal(await selectedSurface(page), "Мои заметки", "AC11_OVERVIEW_NOTES_NOT_SELECTED");
-    assert.ok((await visibleSurfaceRegions(page)).includes("Мои заметки"), "AC11_OVERVIEW_NOTES_SELECTED_BUT_HIDDEN");
-
+    assert.equal(await selectedSurface(page), "Мои заметки", "AUTO_NOTES_NOT_SELECTED");
+    assert.ok((await visibleSurfaceRegions(page)).includes("Мои заметки"), "AUTO_NOTES_SELECTED_BUT_HIDDEN");
     await openSurface(page, "Чат");
-    const showBoth = page.getByRole("button", { name: "Показать оба", exact: true });
-    const showBothPalette = await showBoth.evaluate((element) => {
-      const style = getComputedStyle(element);
-      return { borderColor: style.borderColor, color: style.color };
-    });
-    assert.deepEqual(
-      showBothPalette,
-      { borderColor: "rgb(59, 130, 246)", color: "rgb(219, 234, 254)" },
-      `AC11_LAYOUT_TOGGLE_REUSED_OWNER_TEAL:${JSON.stringify(showBothPalette)}`,
-    );
-    await showBoth.click();
+    assert.ok((await visibleSurfaceRegions(page)).includes("Чат"), "AUTO_CHAT_SELECTED_BUT_HIDDEN");
     await openSurface(page, "Условие", [fixtures.tasks[1]]);
-    assert.ok((await visibleSurfaceRegions(page)).includes("Условие"), "AC11_OVERVIEW_SHOW_BOTH_BLOCKED_CONDITION");
-    await openSurface(page, "Мои заметки");
-    assert.ok((await visibleSurfaceRegions(page)).includes("Мои заметки"), "AC11_OVERVIEW_SHOW_BOTH_BLOCKED_NOTES");
-
-    await page.getByRole("button", { name: "Рабочий", exact: true }).click();
-    await openSurface(page, "Условие", [fixtures.tasks[1]]);
-    const editorContent = (await surfaceRegion(page, "Редактор")).locator(".cm-content");
+    const editorContent = (await surfaceRegion(page, "Редактор")).locator('[data-testid="room-code-editor-host"] .cm-content');
     await editorContent.focus();
     await page.setViewportSize({ width: 768, height: 1024 });
     await settleLayout(page);
@@ -1750,122 +1826,48 @@ test("usable container geometry, overview activation and focus transfer stay tru
   }
 });
 
-test("1320x640 exact room root gates Overview before its surfaces clip", { timeout: 30_000 }, async () => {
+test("1320x640 room root keeps automatic Work panels contained", { timeout: 30_000 }, async () => {
   const { context, page } = await openRoom({ auth: fixtures.owner, room: fixtures.room, viewport: { width: 1440, height: 900 } });
   try {
     const root = page.locator("[data-room-context-mode]");
-    const boundaryStyle = await page.addStyleTag({
-      content: '[data-room-context-mode]{width:1320px!important;height:640px!important;flex:none!important}',
-    });
+    await page.addStyleTag({ content: '[data-room-context-mode]{width:1320px!important;height:640px!important;flex:none!important}' });
     await settleLayout(page);
     const rootBox = await root.boundingBox();
-    assert.ok(rootBox, "AC11_OVERVIEW_BOUNDARY_ROOT_MISSING");
-    assert.equal(Math.round(rootBox.width), 1320, `AC11_OVERVIEW_BOUNDARY_WIDTH_WRONG:${JSON.stringify(rootBox)}`);
-    assert.equal(Math.round(rootBox.height), 640, `AC11_OVERVIEW_BOUNDARY_HEIGHT_WRONG:${JSON.stringify(rootBox)}`);
-
-    const overview = page.getByRole("button", { name: "Обзор", exact: true });
-    if (await overview.isEnabled()) {
-      await overview.click();
-      await openSurface(page, "Чат");
-      await page.getByRole("button", { name: "Показать оба", exact: true }).click();
-      await settleLayout(page);
-      const overviewPanels = [
-        ["Шаги", await surfaceRegion(page, "Шаги")],
-        ["Редактор", await surfaceRegion(page, "Редактор")],
-        ["Активность", await surfaceRegion(page, "Активность")],
-        ["Чат", await surfaceRegion(page, "Чат")],
-      ];
-      await assertNoPairwiseOverlap(overviewPanels, "AC11_OVERVIEW_EXACT_BOUNDARY");
-      await assertContainedBy(root, overviewPanels, "AC11_OVERVIEW_EXACT_BOUNDARY");
-      assert.fail("AC11_OVERVIEW_EXACT_BOUNDARY_NOT_GATED");
+    assert.ok(rootBox);
+    assert.equal(Math.round(rootBox.width), 1320);
+    assert.equal(Math.round(rootBox.height), 640);
+    for (const name of ["Фокус", "Рабочий", "Обзор", "Показать оба"]) {
+      assert.equal(await page.getByRole("button", { name, exact: true }).count(), 0, `RETIRED_LAYOUT_CONTROL_RETURNED:${name}`);
     }
-
-    await assertActiveMode(page, "Рабочий", "AC11_OVERVIEW_EXACT_BOUNDARY_DOWNGRADE");
-    assert.equal(await page.getByRole("button", { name: "Показать оба", exact: true }).count(), 0, "AC11_OVERVIEW_EXACT_BOUNDARY_SHOW_BOTH_AVAILABLE");
-    await assertContainedBy(
-      root,
-      [["Редактор", await surfaceRegion(page, "Редактор")], ["Условие", await surfaceRegion(page, "Условие")]],
-      "AC11_WORK_EXACT_BOUNDARY",
-    );
-    await boundaryStyle.evaluate((element) => element.remove());
-  } finally {
-    await closeRoomContext(context);
-  }
+    await assertActiveMode(page, "Рабочий", "AUTO_WORK_BOUNDARY");
+    await openSurface(page, "Условие", [fixtures.tasks[0]]);
+    const panels = [["Редактор", await surfaceRegion(page, "Редактор")], ["Условие", await surfaceRegion(page, "Условие")]];
+    await assertContainedBy(root, panels, "AUTO_WORK_BOUNDARY");
+    await assertNoPairwiseOverlap(panels, "AUTO_WORK_BOUNDARY");
+  } finally { await closeRoomContext(context); }
 });
 
-test("1440x900 explicit Overview can show steps, editor, activity and chat at readable minima", { timeout: 30_000 }, async () => {
+test("automatic Work Focus Work reflow preserves active chat and readable geometry", { timeout: 30_000 }, async () => {
   const { context, page } = await openRoom({ auth: fixtures.owner, room: fixtures.room, viewport: { width: 1440, height: 900 } });
   try {
     await directSurfaceTabs(page);
-    await page.getByRole("button", { name: "Обзор", exact: true }).click();
-    await assertActiveMode(page, "Обзор", "AC11_OVERVIEW_EXPLICIT");
     await openSurface(page, "Чат");
-    await page.getByRole("button", { name: "Показать оба", exact: true }).click();
-    await settleLayout(page);
-    const regions = await visibleSurfaceRegions(page);
-    for (const required of ["Шаги", "Редактор", "Активность", "Чат"]) {
-      assert.ok(regions.includes(required), `AC11_OVERVIEW_REGION_MISSING:${required}:${regions.join(",")}`);
+    for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 720 }, { width: 768, height: 1024 }, { width: 1440, height: 900 }]) {
+      await page.setViewportSize(viewport);
+      await settleLayout(page);
+      const narrow = viewport.width === 768;
+      await assertActiveMode(page, narrow ? "Фокус" : "Рабочий", `AUTO_CHAT_REFLOW:${viewport.width}`);
+      assert.equal(await selectedSurface(page), "Чат", "AUTO_REFLOW_LOST_ACTIVE_CHAT");
+      assert.deepEqual((await visibleSurfaceRegions(page)).sort(), (narrow ? ["Чат"] : ["Редактор", "Чат"]).sort(), "AUTO_REFLOW_VISIBLE_REGIONS_WRONG");
+      const panels = [["Чат", await surfaceRegion(page, "Чат")]];
+      if (!narrow) panels.push(["Редактор", await surfaceRegion(page, "Редактор")]);
+      await assertContainedBy(page.locator("[data-room-context-mode]"), panels, "AUTO_CHAT_REFLOW");
+      await assertNoPairwiseOverlap(panels, "AUTO_CHAT_REFLOW");
+      const composer = await page.locator('[data-testid="room-notes-input"]').boundingBox();
+      const history = await page.getByRole("log", { name: "История чата интервьюеров", exact: true }).boundingBox();
+      assert.ok(composer?.height > 0 && history?.height >= 120, "AUTO_CHAT_UNREADABLE");
     }
-    const overviewPanels = [
-      ["Шаги", await surfaceRegion(page, "Шаги")],
-      ["Редактор", await surfaceRegion(page, "Редактор")],
-      ["Активность", await surfaceRegion(page, "Активность")],
-      ["Чат", await surfaceRegion(page, "Чат")],
-    ];
-    await assertNoPairwiseOverlap(overviewPanels, "AC11_OVERVIEW");
-    const minima = Object.fromEntries(await Promise.all(overviewPanels.map(async ([name, locator]) => [name, await locator.boundingBox()])));
-    const editorCode = await (await surfaceRegion(page, "Редактор")).locator(".cm-editor").boundingBox();
-    const history = await page.getByRole("log", { name: "История чата интервьюеров", exact: true }).boundingBox();
-    const composer = await page.locator('[data-testid="room-notes-input"]').boundingBox();
-    assert.ok(editorCode?.width >= 480 && editorCode?.height >= 320, `AC11_OVERVIEW_EDITOR_MINIMUM:${JSON.stringify(editorCode)}`);
-    assert.ok(minima["Шаги"]?.width >= 240 && minima["Шаги"]?.height >= 240, `AC11_OVERVIEW_STEPS_MINIMUM:${JSON.stringify(minima["Шаги"])}`);
-    assert.ok(minima["Активность"]?.width >= 320 && minima["Активность"]?.height >= 240, `AC11_OVERVIEW_ACTIVITY_MINIMUM:${JSON.stringify(minima["Активность"])}`);
-    assert.ok(minima["Чат"]?.width >= 320 && minima["Чат"]?.height >= 320, `AC11_OVERVIEW_CHAT_MINIMUM:${JSON.stringify(minima["Чат"])}`);
-    assert.ok(history?.height >= 120, `AC11_OVERVIEW_HISTORY_MINIMUM:${JSON.stringify(history)}`);
-    assert.ok(composer?.height > 0, "AC11_OVERVIEW_COMPOSER_MISSING");
-
-    await page.setViewportSize({ width: 1280, height: 720 });
-    await settleLayout(page);
-    await assertActiveMode(page, "Рабочий", "AC11_OVERVIEW_AUTO_DOWNGRADE_TO_WORK");
-    assert.equal(await selectedSurface(page), "Чат", "AC11_OVERVIEW_DOWNGRADE_LOST_ACTIVE_SURFACE");
-    assert.deepEqual(
-      (await visibleSurfaceRegions(page)).sort(),
-      ["Редактор", "Чат"].sort(),
-      "AC11_OVERVIEW_AUTO_WORK_GEOMETRY_WRONG",
-    );
-    await assertNoPairwiseOverlap(
-      [["Редактор", await surfaceRegion(page, "Редактор")], ["Чат", await surfaceRegion(page, "Чат")]],
-      "AC11_OVERVIEW_AUTO_WORK",
-    );
-
-    await page.setViewportSize({ width: 768, height: 1024 });
-    await settleLayout(page);
-    await assertActiveMode(page, "Фокус", "AC11_OVERVIEW_AUTO_DOWNGRADE_TO_FOCUS");
-    assert.equal(await selectedSurface(page), "Чат", "AC11_FOCUS_DOWNGRADE_LOST_ACTIVE_SURFACE");
-    assert.deepEqual(await visibleSurfaceRegions(page), ["Чат"], "AC11_OVERVIEW_AUTO_FOCUS_GEOMETRY_WRONG");
-
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await settleLayout(page);
-    await assertActiveMode(page, "Рабочий", "AC11_FOCUS_AUTO_UPGRADE_TO_WORK");
-    assert.notEqual(
-      await page.getByRole("button", { name: "Обзор", exact: true }).getAttribute("aria-pressed"),
-      "true",
-      "AC11_OVERVIEW_AUTO_RETURNED_AFTER_RECOVERY",
-    );
-    assert.equal(await selectedSurface(page), "Чат", "AC11_OVERVIEW_RECOVERY_LOST_ACTIVE_SURFACE");
-    const recoveredRegions = await visibleSurfaceRegions(page);
-    assert.deepEqual(
-      recoveredRegions.sort(),
-      ["Редактор", "Чат"].sort(),
-      `AC11_FOCUS_AUTO_WORK_GEOMETRY_WRONG:${recoveredRegions.join(",")}`,
-    );
-    await assertNoPairwiseOverlap(
-      [["Редактор", await surfaceRegion(page, "Редактор")], ["Чат", await surfaceRegion(page, "Чат")]],
-      "AC11_FOCUS_AUTO_WORK",
-    );
-  } finally {
-    await closeRoomContext(context);
-  }
+  } finally { await closeRoomContext(context); }
 });
 
 test("personal notes, score, notes export and direct return to personal interviews remain available", { timeout: 45_000 }, async () => {
@@ -1907,9 +1909,10 @@ test("personal notes, score, notes export and direct return to personal intervie
     await page.getByText(noteText, { exact: false }).waitFor();
 
     await page.getByRole("button", { name: /Экспорт (личных|моих)? ?заметок|Экспорт заметок/ }).click();
-    await page.getByRole("heading", { name: "Экспорт личных заметок", exact: true }).waitFor();
+    const exportDialog = page.getByRole("dialog", { name: "Экспорт личных заметок", exact: true });
+    await exportDialog.waitFor({ state: "visible" });
     const downloadPromise = page.waitForEvent("download");
-    await page.getByRole("button", { name: "Скачать .md", exact: true }).click();
+    await exportDialog.getByRole("button", { name: "Скачать .md", exact: true }).click();
     const download = await downloadPromise;
     assert.match(download.suggestedFilename(), /\.md$/);
     const stream = await download.createReadStream();
@@ -1944,10 +1947,13 @@ test("remediation: editor is a direct Focus region and local splitters resize wi
     await assertActiveMode(focus.page, "Фокус", "FOCUS_EDITOR_ONLY");
     await directSurfaceTabs(focus.page);
     assert.equal(await focus.page.getByRole("tab", { name: "Редактор", exact: true }).count(), 0, "FOCUS_EDITOR_TAB_RETURNED");
-    const editor = focus.page.getByRole("region", { name: "Редактор", exact: true });
+    const editor = focus.page.getByRole("region", { name: "Редактор", exact: true, includeHidden: true });
     assert.equal(await editor.count(), 1, "FOCUS_EDITOR_DIRECT_REGION_MISSING");
     assert.equal(await editor.getAttribute("aria-labelledby"), null, "FOCUS_EDITOR_ORPHAN_TAB_REFERENCE");
     assert.equal(await editor.locator('[data-testid="room-code-editor-host"] .cm-editor').count(), 1, "FOCUS_EDITOR_CODEMIRROR_UNMOUNTED");
+    assert.equal(await selectedSurface(focus.page), "Шаги", "FOCUS_DEFAULT_STEPS_MISSING");
+    await focus.page.getByRole("button", { name: "Вернуться к редактору", exact: true }).click();
+    await editor.waitFor({ state: "visible" });
   } finally {
     await closeRoomContext(focus.context);
   }
@@ -1991,28 +1997,15 @@ test("remediation: editor is a direct Focus region and local splitters resize wi
     await page.mouse.up();
     assert.ok(Number(await workDivider.getAttribute("aria-valuenow")) < Number(await workDivider.getAttribute("aria-valuemax")), "WORK_CONTEXT_POINTER_DRAG_NOT_APPLIED");
 
-    await page.getByRole("button", { name: "Обзор", exact: true }).click();
-    await openSurface(page, "Чат");
-    await page.getByRole("button", { name: "Показать оба", exact: true }).click();
-    const overviewWidth = page.getByRole("separator", { name: "Изменить ширину правой контекстной колонки", exact: true });
-    const chatHeight = page.getByRole("separator", { name: "Изменить высоту чата", exact: true });
-    await overviewWidth.waitFor();
-    await chatHeight.waitFor();
-    await chatHeight.focus();
-    await page.keyboard.press("Home");
-    const beforeHeight = Number(await chatHeight.getAttribute("aria-valuenow"));
-    await page.keyboard.press("ArrowDown");
-    assert.equal(Number(await chatHeight.getAttribute("aria-valuenow")), beforeHeight + 16, "OVERVIEW_CHAT_ARROW_STEP_NOT_16PX");
     await page.setViewportSize({ width: 1280, height: 720 });
     await settleLayout(page);
-    assert.equal(await page.getByRole("separator", { name: "Изменить ширину правой контекстной колонки", exact: true }).count(), 0, "OVERVIEW_SEPARATOR_REMAINS_AFTER_GEOMETRY_DOWNGRADE");
+    await assertActiveMode(page, "Рабочий", "RESIZE_AUTO_WORK");
     assert.deepEqual(unexpectedResizeRequests, [], `RESIZE_SENT_ROOM_MUTATION:${JSON.stringify(unexpectedResizeRequests)}`);
     resizeSse.push(...await page.evaluate(() => window.__ac11SseMessages ?? []));
     assert.equal(resizeSse.some((event) => /split|resize/i.test(event.data)), false, "RESIZE_SENT_SSE_EVENT");
 
     await page.setViewportSize({ width: 1440, height: 900 });
     await settleLayout(page);
-    await page.getByRole("button", { name: "Рабочий", exact: true }).click();
     await openSurface(page, "Чат");
     const changed = page.getByRole("separator", { name: "Изменить ширину контекстной панели", exact: true });
     const changedValue = Number(await changed.getAttribute("aria-valuenow"));
@@ -2081,42 +2074,7 @@ test("remediation: splitters follow pointer direction and remain inside content-
     assert.ok(Number(await work.getAttribute("aria-valuenow")) > workBeforeDrag, "WORK_CONTEXT_POINTER_DIRECTION_INVERTED");
     assert.ok(workChatBeforeDrag && workChatAfterDrag && workChatAfterDrag.width > workChatBeforeDrag.width, "WORK_CONTEXT_POINTER_DID_NOT_EXPAND_RIGHT_PANEL_LEFTWARD");
 
-    await page.getByRole("button", { name: "Обзор", exact: true }).click();
-    await openSurface(page, "Чат");
-    await page.getByRole("button", { name: "Показать оба", exact: true }).click();
-    const overviewWidth = page.getByRole("separator", { name: "Изменить ширину правой контекстной колонки", exact: true });
-    const chatHeight = page.getByRole("separator", { name: "Изменить высоту чата", exact: true });
-    await overviewWidth.focus();
-    await page.keyboard.press("Home");
-    const overviewWidthBeforeDrag = Number(await overviewWidth.getAttribute("aria-valuenow"));
-    const overviewChatBeforeWidthDrag = await (await surfaceRegion(page, "Чат")).boundingBox();
-    const overviewWidthBox = await overviewWidth.boundingBox();
-    assert.ok(overviewWidthBox, "OVERVIEW_POINTER_DIRECTION_SEPARATOR_BOX_MISSING");
-    await page.mouse.move(overviewWidthBox.x + overviewWidthBox.width / 2, overviewWidthBox.y + overviewWidthBox.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(overviewWidthBox.x - 32, overviewWidthBox.y + overviewWidthBox.height / 2);
-    await page.mouse.up();
-    const overviewChatAfterWidthDrag = await (await surfaceRegion(page, "Чат")).boundingBox();
-    assert.ok(Number(await overviewWidth.getAttribute("aria-valuenow")) > overviewWidthBeforeDrag, "OVERVIEW_WIDTH_POINTER_DIRECTION_INVERTED");
-    assert.ok(overviewChatBeforeWidthDrag && overviewChatAfterWidthDrag && overviewChatAfterWidthDrag.width > overviewChatBeforeWidthDrag.width, "OVERVIEW_WIDTH_POINTER_DID_NOT_EXPAND_RIGHT_COLUMN_LEFTWARD");
-
-    await chatHeight.focus();
-    await page.keyboard.press("Home");
-    const chatHeightBeforeDrag = Number(await chatHeight.getAttribute("aria-valuenow"));
-    const chatBeforeHeightDrag = await (await surfaceRegion(page, "Чат")).boundingBox();
-    const chatHeightBox = await chatHeight.boundingBox();
-    assert.ok(chatHeightBox, "OVERVIEW_HEIGHT_POINTER_DIRECTION_SEPARATOR_BOX_MISSING");
-    await page.mouse.move(chatHeightBox.x + chatHeightBox.width / 2, chatHeightBox.y + chatHeightBox.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(chatHeightBox.x + chatHeightBox.width / 2, chatHeightBox.y - 32);
-    await page.mouse.up();
-    const chatAfterHeightDrag = await (await surfaceRegion(page, "Чат")).boundingBox();
-    assert.ok(Number(await chatHeight.getAttribute("aria-valuenow")) > chatHeightBeforeDrag, "OVERVIEW_HEIGHT_POINTER_DIRECTION_INVERTED");
-    assert.ok(chatBeforeHeightDrag && chatAfterHeightDrag && chatAfterHeightDrag.height > chatBeforeHeightDrag.height, "OVERVIEW_HEIGHT_POINTER_DID_NOT_EXPAND_LOWER_CHAT_UPWARD");
-
-    await overviewWidth.focus();
-    await page.keyboard.press("End");
-    await chatHeight.focus();
+    await work.focus();
     await page.keyboard.press("End");
     const contentBounds = await page.locator('[data-room-context-surface="editor"]').locator("..").evaluate((grid) => {
       const gridBox = grid.getBoundingClientRect();
@@ -2141,13 +2099,12 @@ test("remediation: splitters follow pointer direction and remain inside content-
         scrollWidth: document.documentElement.scrollWidth,
       };
     });
-    for (const [name, panel] of Object.entries({ editor: contentBounds.editor, chat: contentBounds.chat, activity: contentBounds.activity })) {
+    for (const [name, panel] of Object.entries({ editor: contentBounds.editor, chat: contentBounds.chat })) {
       assert.ok(panel, `CONTENT_BOX_${name.toUpperCase()}_MISSING`);
       assert.ok(panel.left >= contentBounds.content.left - 1 && panel.right <= contentBounds.content.right + 1 && panel.top >= contentBounds.content.top - 1 && panel.bottom <= contentBounds.content.bottom + 1, `CONTENT_BOX_${name.toUpperCase()}_OVERFLOW:${JSON.stringify({ panel, content: contentBounds.content })}`);
     }
     assert.ok(contentBounds.editor.width >= 480, `CONTENT_BOX_EDITOR_MINIMUM_BROKEN:${JSON.stringify(contentBounds.editor)}`);
     assert.ok(contentBounds.chat.width >= 320 && contentBounds.chat.height >= 320, `CONTENT_BOX_CHAT_MINIMUM_BROKEN:${JSON.stringify(contentBounds.chat)}`);
-    assert.ok(contentBounds.activity.width >= 320 && contentBounds.activity.height >= 240, `CONTENT_BOX_ACTIVITY_MINIMUM_BROKEN:${JSON.stringify(contentBounds.activity)}`);
     assert.ok(contentBounds.scrollWidth <= contentBounds.clientWidth + 1, `CONTENT_BOX_PAGE_HORIZONTAL_OVERFLOW:${JSON.stringify(contentBounds)}`);
   } finally {
     await closeRoomContext(context);

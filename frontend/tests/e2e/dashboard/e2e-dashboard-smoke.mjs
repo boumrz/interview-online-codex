@@ -14,15 +14,18 @@ try {
   await page.getByLabel("Имя для комнаты").fill(nickname);
   await page.getByLabel("Пароль").fill("secret123");
   await page.getByRole("button", { name: "Создать аккаунт" }).click();
+  await page.waitForURL(/\/workspace\/personal\/interviews$/, { timeout: 15000 });
+  await page.getByRole("button", { name: "Создать интервью", exact: true }).click();
   await page.waitForURL(/\/workspace\/personal\/interviews\/new/, { timeout: 15000 });
   await page.getByRole("heading", { name: "Создать интервью", exact: true }).waitFor();
+  await page.getByRole("dialog", { name: "Создать интервью", exact: true }).getByRole("button", { name: "Отмена", exact: true }).click();
   await page.getByRole("link", { name: /Библиотека/ }).click();
   await page.waitForURL(/\/workspace\/personal\/library/, { timeout: 15000 });
   await page
     .waitForFunction(
       () => {
         const text = document.body?.innerText ?? "";
-        return text.includes("Задачи для комнаты") || text.includes("Создать задачу");
+        return text.includes("Библиотека") && text.includes("Создать задачу");
       },
       null,
       { timeout: 15000 }

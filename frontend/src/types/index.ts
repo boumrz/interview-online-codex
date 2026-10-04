@@ -258,6 +258,10 @@ export type TeamInterviewResponse = {
   readonly interview: TeamInterview;
 };
 
+export type TeamInterviewDetails = InterviewMetadata & {
+  readonly title: string;
+};
+
 export type TeamInterviewListTask = {
   readonly stepIndex: number;
   readonly title: string;
@@ -378,6 +382,7 @@ export type UpdateProfileRequest = {
 };
 
 export type RoomTask = {
+  id?: string | null;
   stepIndex: number;
   title: string;
   description: string;
@@ -425,6 +430,8 @@ export type RoomAccessMember = {
 };
 
 export type Room = {
+  status: "active" | "frozen" | "finished";
+  finishedAt?: string | null;
   id: string;
   teamId?: string | null;
   title: string;
@@ -435,6 +442,8 @@ export type Room = {
   notes: string;
   notesMessages: RoomNoteMessage[];
   briefingMarkdown: string;
+  roomEditorMode?: "code" | "markdown";
+  roomEditorModeRevision?: number;
   ownerToken: string | null;
   interviewerToken: string | null;
   role: "owner" | "interviewer" | "candidate" | string;
@@ -484,6 +493,10 @@ export type HrInterview = {
   inviteCode: string;
   candidateName: string | null;
   position: string | null;
+  trackId: string | null;
+  trackName: string | null;
+  vacancyId: string | null;
+  vacancyTitle: string | null;
   scheduledAt: string | null;
   createdAt: string;
   finishedAt: string | null;

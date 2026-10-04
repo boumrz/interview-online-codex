@@ -1,6 +1,6 @@
 ---
 name: openspec-explore
-description: Enter explore mode - a thinking partner for exploring ideas, investigating problems, and clarifying requirements. Use when the user wants to think through something before or during a change.
+description: Historical OpenSpec explore workflow. Use only for an explicit OpenSpec request; ordinary InterHub work follows SPEC.md and specs/features.
 license: MIT
 compatibility: Requires openspec CLI.
 metadata:
@@ -8,6 +8,12 @@ metadata:
   version: "1.0"
   generatedBy: "1.4.1"
 ---
+
+> InterHub uses editable Markdown contracts in `specs/features/`, indexed by
+> `SPEC.md`. Follow `AGENTS.md` and `specs/README.md` for ordinary work.
+> The workflow below applies only when the user explicitly requests OpenSpec;
+> do not select it merely because a feature needs a specification.
+
 
 Enter explore mode. Think deeply. Visualize freely. Follow the conversation wherever it goes.
 
