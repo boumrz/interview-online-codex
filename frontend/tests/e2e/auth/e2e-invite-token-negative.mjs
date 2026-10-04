@@ -1,3 +1,4 @@
+import "../support/require-isolated-api.mjs";
 import { randomUUID } from "node:crypto";
 import { chromium } from "playwright";
 

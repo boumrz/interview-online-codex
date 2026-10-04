@@ -14,7 +14,6 @@ import com.interviewonline.service.TeamInvitationService
 import com.interviewonline.service.ClientIpResolver
 import com.interviewonline.service.InvitationIssuanceGate
 import com.interviewonline.service.InvitationRateLimiter
-import com.interviewonline.service.TeamWorkspaceFeatureGate
 import com.interviewonline.service.secure
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.dao.DataAccessException
@@ -44,7 +43,6 @@ class TeamInvitationController(
     private val clientIpResolver: ClientIpResolver,
     private val issuanceGate: InvitationIssuanceGate,
     private val rateLimiter: InvitationRateLimiter,
-    private val featureGate: TeamWorkspaceFeatureGate,
 ) {
     private val jsonUtf8 = MediaType("application", "json", StandardCharsets.UTF_8)
 
@@ -89,7 +87,6 @@ class TeamInvitationController(
         @RequestBody request: InvitationTokenRequest,
         servletRequest: HttpServletRequest,
     ): ResponseEntity<TeamInvitationPreviewDto> {
-        featureGate.requireEnabled()
         val actorId = authService.resolveUserByToken(authorization?.removePrefix("Bearer ")?.trim())?.id
         val clientIp = clientIpResolver.resolve(
             servletRequest.remoteAddr.orEmpty(),
@@ -109,7 +106,6 @@ class TeamInvitationController(
     ): ResponseEntity<TeamInvitationAcceptDto> {
         val actor = requireUser(authorization)
         val key = requireIdempotencyKey(rawKey)
-        featureGate.requireEnabled()
         val clientIp = clientIpResolver.resolve(
             servletRequest.remoteAddr.orEmpty(),
             Collections.list(servletRequest.getHeaders("Forwarded")),

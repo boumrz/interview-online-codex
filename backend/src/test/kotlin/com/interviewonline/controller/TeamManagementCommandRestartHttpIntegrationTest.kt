@@ -107,7 +107,6 @@ class TeamManagementCommandRestartHttpIntegrationTest {
             .run(
                 *(postgres.applicationProperties() + mapOf(
                     "server.port" to 0,
-                    "app.features.team-workspaces-enabled" to true,
                     "app.team-invitation-link-encryption.active-key-id" to "integration-v1",
                     "app.team-invitation-link-encryption.keys.integration-v1" to "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
                     "spring.main.banner-mode" to "off",

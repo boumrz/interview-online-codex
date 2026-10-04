@@ -1,3 +1,4 @@
+import "../support/require-isolated-api.mjs";
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { mkdir, writeFile } from 'node:fs/promises';

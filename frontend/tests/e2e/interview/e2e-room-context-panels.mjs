@@ -1,3 +1,4 @@
+import "../support/require-isolated-api.mjs";
 import * as decoding from "lib0/decoding";
 import * as Y from "yjs";
 import assert from "node:assert/strict";

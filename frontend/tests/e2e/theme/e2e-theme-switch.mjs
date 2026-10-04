@@ -1,8 +1,9 @@
+import "../support/require-isolated-api.mjs";
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { chromium } from "playwright";
 
-const baseUrl = process.env.BASE_URL ?? "http://localhost:5173";
+const baseUrl = process.env.E2E_BASE_URL;
 const evidenceDirectory = process.env.EVIDENCE_DIR ?? ".run/ui1-evidence";
 await mkdir(evidenceDirectory, { recursive: true });
 

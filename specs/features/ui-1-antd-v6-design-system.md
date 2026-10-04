@@ -1,7 +1,7 @@
 # UI.1 — Ant Design v6 и единая визуальная система
 
 Статус: **реализована на S01–S16; техническая приёмка частичная, продуктовая ожидается**.
-Актуализировано: 2026-10-02. Подробности покрытия и ограничений — в §12.
+Актуализировано: 2026-10-04. Подробности покрытия и ограничений — в §12.
 
 ## 1. Назначение и порядок чтения
 
@@ -72,7 +72,7 @@ Mantine/Tabler удалены; это прежний результат, без 
 | S12 | Кандидаты/профиль: `HrCabinetSection.tsx`, `HrProfileSection.tsx`, `features/hr/CopyHrId.tsx`; personal/team profile | Фильтры/период/пагинация, детали/оценки/результат, XLSX pending/empty/access-changed, сохранение профиля |
 | S13 | `/room/:inviteCode`: RoomPage, `TopBar.tsx`, `RoomInterviewPanel.tsx`, `VerdictBadge.tsx` | Вход/роль/присутствие/приглашение/назначения, локальный и опубликованный шаг, завершение, denied/410/reconnect |
 | S14 | Рабочая область комнаты: `RoomContextPanels.tsx`, `RoomCodeEditor.tsx`, `BriefingBoard.tsx`, `ActivityTimeline.tsx` | Код/Markdown, условие, шаги, private notes, внутренний чат, активность, resize, focus/selection/scroll/draft continuity |
-| S15 | Остаточные `/dashboard/:section`: DashboardPage, `AdminUsersSection.tsx`, `AgentOpsSection.tsx` | Реально доступные admin/flagged операции, таблицы/формы/ошибки; не добавлять пункты навигации неавторизованным |
+| S15 | `/dashboard/admin`: отдельная AdminPage в общей личной оболочке, `AdminUsersSection.tsx`; остаточные DashboardPage/AgentOpsSection | Компактный каталог пользователей, обе темы, современная общая шапка и responsive controls по P0.2 R-12–R-13; реально доступные admin/flagged операции и ошибки; не добавлять пункты навигации неавторизованным |
 | S16 | `ThemeProvider.tsx` / context-bound Ant notification, `LegacyDomainNotice.tsx`, App lazy/chunk fallbacks | Общая тема, корректный слой, доступное сообщение, retry, отсутствие бесконечной перезагрузки |
 
 Compatibility redirects `/dashboard{,/rooms,/manage,/tasks,/presets,/hr}` и существующая переадресация старых team-merge ссылок сохраняют текущий смысл и параметры. `/profile` остаётся прямым маршрутом к PersonalWorkspacePage, командный `/workspace/teams/:teamId/profile` сохраняет командный контекст. Скрытые разделы не становятся видимыми из-за новой навигации.
@@ -441,6 +441,13 @@ Backend-код не меняется. Для сценариев permissions/pers
 Не записывать «всё готово» при оставшихся Mantine surfaces, отсутствующей candidate-проверке, неучтённых exceptions или проваленном AC. После технического gate отдельно провести продуктовый просмотр пользователем. Новая UI-миграция не изменяет статусы готовности прежних бизнес-фич.
 
 ## 12. Текущее состояние и доказательства
+
+S15 уточнён 04.10: отдельная AdminPage использует общую личную шапку и
+компактный каталог вместо устаревшей Dashboard-оболочки. Production admin
+проверки 3/3, deletion/profile 2/2, admin navigation 2/2, повтор с новым
+guarded runner 3/3 — PASS; обе темы 1366/390 и TypeScript/build подтверждены.
+Это scoped техническая проверка, а не приёмка всей визуальной системы.
+[Результаты и пределы](../references/2026-10-04-admin-modern-ui-test-data-isolation.md).
 
 По журналу 23–24.09.2026 S01–S16 переведены на Ant Design 6.6.5 и
 @ant-design/icons 6.3.4, Mantine/Tabler удалены. Подключены общий manifest,

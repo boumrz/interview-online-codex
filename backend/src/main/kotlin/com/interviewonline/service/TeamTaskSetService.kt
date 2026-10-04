@@ -38,7 +38,6 @@ class TeamTaskSetService(
     private val taskRepository: TeamTaskTemplateRepository,
     private val taskSetRepository: TeamTaskSetRepository,
     private val personalPresetRepository: TaskPresetRepository,
-    private val featureGate: TeamWorkspaceFeatureGate,
     private val entityManager: EntityManager,
 ) {
     @Transactional(readOnly = true)
@@ -189,7 +188,6 @@ class TeamTaskSetService(
     }
 
     private fun requireActiveMember(actor: User, teamId: String): TeamAccess {
-        featureGate.requireEnabled()
         val actorId = requireNotNull(actor.id)
         val team = if (TransactionSynchronizationManager.isCurrentTransactionReadOnly()) {
             teamRepository.findById(teamId).orElse(null)

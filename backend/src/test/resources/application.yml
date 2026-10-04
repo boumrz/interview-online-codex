@@ -17,6 +17,10 @@ spring:
     enabled: false
 
 app:
+  team-invitation-link-encryption:
+    active-key-id: test-v1
+    keys:
+      test-v1: AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8
   realtime:
     chat-receipt-hmac-secret: AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8
   cors:

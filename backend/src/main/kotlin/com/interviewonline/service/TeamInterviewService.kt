@@ -84,7 +84,6 @@ class TeamInterviewService(
     private val roomProductMetricsProjector: RoomProductMetricsProjector,
     private val collaborationService: CollaborationService,
     private val teamRoomLineageService: TeamRoomLineageService,
-    private val featureGate: TeamWorkspaceFeatureGate,
     private val jdbcTemplate: JdbcTemplate,
 ) {
     @Transactional(readOnly = true)
@@ -576,7 +575,6 @@ class TeamInterviewService(
     }
 
     private fun requireActiveMemberForMutation(actor: User, teamId: String): TeamAccess {
-        featureGate.requireEnabled()
         // Membership changes take the team lock before touching room grants.
         // Holding that same lock keeps authority valid across a room-row wait.
         teamRepository.lockById(teamId)?.also { entityManager.refresh(it) }?.takeIf { it.state == ACTIVE }
@@ -585,7 +583,6 @@ class TeamInterviewService(
     }
 
     private fun requireActiveMember(actor: User, teamId: String): TeamAccess {
-        featureGate.requireEnabled()
         val actorId = requireNotNull(actor.id)
         val team = teamRepository.findById(teamId).orElse(null)?.takeIf { it.state == ACTIVE }
             ?: throw teamNotFound()

@@ -8,11 +8,10 @@ import org.springframework.stereotype.Component
 @Profile("!test")
 class TeamInvitationExpiryScheduler(
     private val coordinator: InvitationExpiryCleanupCoordinator,
-    private val featureGate: TeamWorkspaceFeatureGate,
 ) {
     @Scheduled(fixedDelay = 60_000)
     fun cleanupExpiredRecoverableLinks() {
-        if (featureGate.isEnabled()) coordinator.cleanupCandidates(MAX_CANDIDATES)
+        coordinator.cleanupCandidates(MAX_CANDIDATES)
     }
 
     private companion object {

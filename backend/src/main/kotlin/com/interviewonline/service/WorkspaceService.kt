@@ -35,7 +35,6 @@ class WorkspaceService(
     private val membershipRepository: TeamMembershipRepository,
     private val teamAuditWriter: TeamAuditWriter,
     private val receiptRepository: CommandReceiptRepository,
-    private val featureGate: TeamWorkspaceFeatureGate,
 ) {
     companion object {
         private const val SCOPE_PERSONAL = "PERSONAL"
@@ -49,7 +48,6 @@ class WorkspaceService(
         val actorId = requireNotNull(actor.id)
         val storedActor = userRepository.lockById(actorId)
             ?: throw secure(HttpStatus.UNAUTHORIZED, "AUTHENTICATION_REQUIRED", "Требуется авторизация")
-        featureGate.requireEnabled()
 
         val name = canonicalName(rawName)
         val requestHash = requestHash(name)

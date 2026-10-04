@@ -19,11 +19,9 @@ class TeamProcessService(
     private val participantRepository: RoomParticipantRepository,
     private val trackRepository: TeamTrackRepository,
     private val vacancyRepository: TeamVacancyRepository,
-    private val featureGate: TeamWorkspaceFeatureGate,
 ) {
     @Transactional(readOnly = true)
     fun list(actor: User, teamId: String): TeamProcessListDto {
-        featureGate.requireEnabled()
         val actorId = requireNotNull(actor.id)
         val team = teamRepository.findById(teamId).orElse(null)
             ?.takeIf { it.state == "ACTIVE" } ?: throw teamNotFound()

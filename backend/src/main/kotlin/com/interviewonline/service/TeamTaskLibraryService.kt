@@ -33,7 +33,6 @@ class TeamTaskLibraryService(
     private val membershipRepository: TeamMembershipRepository,
     private val taskRepository: TeamTaskTemplateRepository,
     private val personalTaskRepository: UserTaskTemplateRepository,
-    private val featureGate: TeamWorkspaceFeatureGate,
     private val jdbcTemplate: JdbcTemplate,
     private val entityManager: EntityManager,
 ) {
@@ -147,7 +146,6 @@ class TeamTaskLibraryService(
     }
 
     private fun requireActiveMember(actor: User, teamId: String): TeamAccess {
-        featureGate.requireEnabled()
         val actorId = requireNotNull(actor.id)
         val team = if (TransactionSynchronizationManager.isCurrentTransactionReadOnly()) {
             teamRepository.findById(teamId).orElse(null)

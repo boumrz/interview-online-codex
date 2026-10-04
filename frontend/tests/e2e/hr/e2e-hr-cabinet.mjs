@@ -1,3 +1,4 @@
+import "../support/require-isolated-api.mjs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";

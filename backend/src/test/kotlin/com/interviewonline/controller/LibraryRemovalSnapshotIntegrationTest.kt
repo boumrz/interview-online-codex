@@ -24,7 +24,7 @@ import java.util.UUID
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
-@SpringBootTest(properties = ["app.features.team-workspaces-enabled=true", "app.team-invitation-link-encryption.active-key-id=integration-v1", "app.team-invitation-link-encryption.keys.integration-v1=AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8"])
+@SpringBootTest(properties = ["app.team-invitation-link-encryption.active-key-id=integration-v1", "app.team-invitation-link-encryption.keys.integration-v1=AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8"])
 @AutoConfigureMockMvc(print = MockMvcPrint.NONE)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class LibraryRemovalSnapshotIntegrationTest(

@@ -35,14 +35,12 @@ class TeamMergePlanService(
     private val planRepository: TeamMergePlanRepository,
     private val jdbc: JdbcTemplate,
     private val mapper: ObjectMapper,
-    private val featureGate: TeamWorkspaceFeatureGate,
     private val commitGate: TeamMergeCommitFeatureGate,
     private val collaborationService: CollaborationService,
     private val teamAuditWriter: TeamAuditWriter,
 ) {
     @Transactional
     fun create(actor: User, sourceTeamId: String, request: TeamMergePlanCreateRequest): TeamMergePlanResponse {
-        featureGate.requireEnabled()
         val actorId = requireNotNull(actor.id)
         val source = activeOwnedTeam(sourceTeamId, actorId)
         val targetId = request.targetTeamId.trim()
@@ -92,7 +90,6 @@ class TeamMergePlanService(
 
     @Transactional(readOnly = true)
     fun list(actor: User, teamId: String): TeamMergePlanListDto {
-        featureGate.requireEnabled()
         val actorId = requireNotNull(actor.id)
         activeOwnedTeam(teamId, actorId)
         return TeamMergePlanListDto(
@@ -103,7 +100,6 @@ class TeamMergePlanService(
 
     @Transactional(readOnly = true)
     fun detail(actor: User, teamId: String, planId: String): TeamMergePlanResponse {
-        featureGate.requireEnabled()
         val actorId = requireNotNull(actor.id)
         val plan = requirePlanForOwner(teamId, planId, actorId)
         return TeamMergePlanResponse(toDto(plan, actorId))
@@ -111,7 +107,6 @@ class TeamMergePlanService(
 
     @Transactional
     fun review(actor: User, teamId: String, planId: String): TeamMergePlanResponse {
-        featureGate.requireEnabled()
         val actorId = requireNotNull(actor.id)
         val plan = requireLockedPlanForOwner(teamId, planId, actorId)
         if (plan.state == STALE || plan.state == COMMITTED) throw secure(HttpStatus.CONFLICT, "TEAM_MERGE_PLAN_STALE", "План больше не действует")
@@ -128,7 +123,6 @@ class TeamMergePlanService(
 
     @Transactional
     fun approve(actor: User, teamId: String, planId: String): TeamMergePlanResponse {
-        featureGate.requireEnabled()
         val actorId = requireNotNull(actor.id)
         val plan = requireLockedPlanForOwner(teamId, planId, actorId)
         if (plan.state == STALE || plan.state == COMMITTED) throw secure(HttpStatus.CONFLICT, "TEAM_MERGE_PLAN_STALE", "План больше не действует")
@@ -147,7 +141,6 @@ class TeamMergePlanService(
 
     @Transactional
     fun commit(actor: User, destinationTeamId: String, planId: String, key: UUID): TeamMergeCommitResponse {
-        featureGate.requireEnabled()
         commitGate.requireEnabled()
         val actorId = requireNotNull(actor.id)
         val initialPlan = planRepository.findById(planId).orElse(null)
@@ -270,7 +263,6 @@ class TeamMergePlanService(
 
     @Transactional(readOnly = true)
     fun redirect(actor: User, sourceTeamId: String): TeamMergeRedirectDto {
-        featureGate.requireEnabled()
         val source = teamRepository.findById(sourceTeamId).orElse(null)
             ?.takeIf { it.state == COMMITTED_TEAM_STATE } ?: throw teamNotFound()
         val visited = mutableSetOf(source.id)

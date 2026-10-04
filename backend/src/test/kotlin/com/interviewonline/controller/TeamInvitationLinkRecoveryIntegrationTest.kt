@@ -39,9 +39,6 @@ import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
 import java.net.URI
-import java.net.http.HttpClient
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -63,7 +60,6 @@ import javax.sql.DataSource
  */
 @SpringBootTest(
     properties = [
-        "app.features.team-workspaces-enabled=true",
         "app.team-invitation-link-encryption.active-key-id=integration-v1",
         "app.team-invitation-link-encryption.keys.integration-v1=AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
     ],
@@ -866,105 +862,41 @@ class TeamInvitationLinkRecoveryIntegrationTest(
     }
 
     @Test
-    fun `feature on validates canonical AES keyring while feature off keeps revoke available without a key`() {
+    fun `startup always validates a canonical AES keyring regardless of legacy workspace configuration`() {
         val validProperties = mapOf(
             "app.team-invitation-link-encryption.active-key-id" to "valid-v1",
             "app.team-invitation-link-encryption.keys.valid-v1" to canonicalKey(32),
         )
-        val validContext = startStandalone(featureEnabled = true, validProperties)
-        validContext?.close()
-        val invalidFeatureOn = mapOf(
-            "missing" to emptyMap(),
-            "unknown-active-id" to mapOf(
-                "app.team-invitation-link-encryption.active-key-id" to "unknown",
-                "app.team-invitation-link-encryption.keys.present" to canonicalKey(32),
-            ),
-            "invalid-alphabet" to mapOf(
-                "app.team-invitation-link-encryption.active-key-id" to "bad-alphabet",
-                "app.team-invitation-link-encryption.keys.bad-alphabet" to "${"A".repeat(42)}+",
-            ),
-            "thirty-one-bytes" to mapOf(
-                "app.team-invitation-link-encryption.active-key-id" to "short",
-                "app.team-invitation-link-encryption.keys.short" to canonicalKey(31),
-            ),
-            "thirty-three-bytes" to mapOf(
-                "app.team-invitation-link-encryption.active-key-id" to "long",
-                "app.team-invitation-link-encryption.keys.long" to canonicalKey(33),
-            ),
-            "padded-thirty-two-bytes" to mapOf(
-                "app.team-invitation-link-encryption.active-key-id" to "padded",
-                "app.team-invitation-link-encryption.keys.padded" to "${canonicalKey(32)}=",
-            ),
+        val invalidConfigurations = listOf(
+            emptyMap(),
+            mapOf("app.team-invitation-link-encryption.active-key-id" to "unknown"),
+            mapOf("app.team-invitation-link-encryption.active-key-id" to "bad", "app.team-invitation-link-encryption.keys.bad" to "${"A".repeat(42)}+"),
+            mapOf("app.team-invitation-link-encryption.active-key-id" to "short", "app.team-invitation-link-encryption.keys.short" to canonicalKey(31)),
+            mapOf("app.team-invitation-link-encryption.active-key-id" to "long", "app.team-invitation-link-encryption.keys.long" to canonicalKey(33)),
+            mapOf("app.team-invitation-link-encryption.active-key-id" to "padded", "app.team-invitation-link-encryption.keys.padded" to "${canonicalKey(32)}="),
         )
-        val invalidContexts = invalidFeatureOn.mapValues { (_, encryptionProperties) ->
-            startStandalone(featureEnabled = true, encryptionProperties).also { it?.close() }
-        }
-
-        val featureOff = startFeatureOffHttpApplication()
-        try {
-            assertTrue(validContext != null, "feature ON accepts an unpadded base64url 32-byte key")
-            assertTrue(invalidContexts.values.all { it == null }, "feature ON fails closed for missing, unknown, malformed, padded, 31-byte and 33-byte keyrings")
-            assertTrue(featureOff != null, "feature OFF must not require an invitation recovery key")
-            val application = requireNotNull(featureOff)
-            val port = application.environment.getRequiredProperty("local.server.port").toInt()
-            val account = registerStandaloneAccount(port)
-            val standaloneJdbc = application.getBean(JdbcTemplate::class.java)
-            val teamId = UUID.randomUUID().toString()
-            standaloneJdbc.update(
-                """
-                INSERT INTO teams (id, name, normalized_name, owner_user_id, state, revision, security_revision, merge_revision, created_at, updated_at)
-                VALUES (?, 'Feature-off revoke', 'feature-off revoke', ?, 'ACTIVE', 0, 0, 0,
-                        CURRENT_TIMESTAMP AT TIME ZONE 'UTC', CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
-                """.trimIndent(),
-                teamId,
-                account.id,
-            )
-            standaloneJdbc.update(
-                """
-                INSERT INTO team_memberships (id, team_id, user_id, role, state, epoch, revision, created_at, updated_at)
-                VALUES (?, ?, ?, 'ADMIN', 'ACTIVE', 0, 0, CURRENT_TIMESTAMP AT TIME ZONE 'UTC', CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
-                """.trimIndent(),
-                UUID.randomUUID().toString(),
-                teamId,
-                account.id,
-            )
-            val invitationId = seedLegacyPending(teamId, account.id, standaloneJdbc)
-            val revoked = standalonePost(
-                port = port,
-                path = "/api/teams/$teamId/invitations/$invitationId/revoke",
-                body = "{\"revision\":0}",
-                bearer = account.token,
-                idempotencyKey = UUID.randomUUID().toString(),
-            )
-            assertEquals(200, revoked.statusCode(), "D9 revoke exception must remain available when the feature is off")
-            assertEquals("private, no-store", revoked.headers().firstValue("Cache-Control").orElse(null))
-            assertEquals("REVOKED", standaloneJdbc.queryForObject("SELECT state FROM team_invitations WHERE id=?", String::class.java, invitationId))
-        } finally {
-            featureOff?.close()
+        for (legacyValue in listOf(null, "false")) {
+            val validContext = startStandalone(legacyValue, validProperties)
+            validContext?.close()
+            assertTrue(validContext != null, "Default and legacy false configuration accept a stable canonical 32-byte key")
+            for (invalidConfiguration in invalidConfigurations) {
+                val invalidContext = startStandalone(legacyValue, invalidConfiguration)
+                invalidContext?.close()
+                assertNull(invalidContext, "Missing, unknown, malformed, padded and wrong-length keyrings fail startup")
+            }
         }
     }
 
-    private fun startStandalone(featureEnabled: Boolean, encryptionProperties: Map<String, String>): ConfigurableApplicationContext? =
+    private fun startStandalone(legacyValue: String?, encryptionProperties: Map<String, String>): ConfigurableApplicationContext? =
         runCatching {
             val properties = postgres.applicationProperties() + mapOf(
                 "spring.main.banner-mode" to "off",
-                "app.features.team-workspaces-enabled" to featureEnabled.toString(),
-            ) + encryptionProperties
+                "app.team-invitation-link-encryption.active-key-id" to "",
+            ) + (legacyValue?.let { mapOf("app.features.team-workspaces-enabled" to it) } ?: emptyMap()) + encryptionProperties
             SpringApplicationBuilder(InterviewOnlineApplication::class.java)
                 .web(WebApplicationType.NONE)
                 .run(*properties.map { (key, value) -> "--$key=$value" }.toTypedArray())
         }.getOrNull()
-
-    private fun startFeatureOffHttpApplication(): ConfigurableApplicationContext? = runCatching {
-        val properties = postgres.applicationProperties() + mapOf(
-            "spring.main.banner-mode" to "off",
-            "server.port" to "0",
-            "app.features.team-workspaces-enabled" to "false",
-        )
-        SpringApplicationBuilder(InterviewOnlineApplication::class.java)
-            .web(WebApplicationType.SERVLET)
-            .run(*properties.map { (key, value) -> "--$key=$value" }.toTypedArray())
-    }.getOrNull()
 
     private fun startH2RecoveryApplication(
         profile: String,
@@ -980,7 +912,6 @@ class TeamInvitationLinkRecoveryIntegrationTest(
             "spring.flyway.enabled" to "false",
             "spring.jpa.hibernate.ddl-auto" to "create-drop",
             "server.port" to "0",
-            "app.features.team-workspaces-enabled" to "true",
             "app.team-invitation-link-encryption.active-key-id" to "integration-v1",
             "app.team-invitation-link-encryption.keys.integration-v1" to canonicalKey(32),
         )
@@ -988,43 +919,6 @@ class TeamInvitationLinkRecoveryIntegrationTest(
             .profiles(profile)
             .web(webApplicationType)
             .run(*properties.map { (key, value) -> "--$key=$value" }.toTypedArray())
-    }
-
-    private fun registerStandaloneAccount(port: Int): StandaloneAccount {
-        val suffix = UUID.randomUUID().toString().replace("-", "").take(12)
-        val response = standalonePost(
-            port = port,
-            path = "/api/auth/register",
-            body = objectMapper.writeValueAsString(
-                mapOf(
-                    "nickname" to "feature-off-$suffix",
-                    "displayName" to "Feature off $suffix",
-                    "password" to "safe-test-password",
-                    "isHr" to false,
-                ),
-            ),
-        )
-        assertEquals(200, response.statusCode(), "feature-off fixture registration must work")
-        val payload = objectMapper.readTree(response.body())
-        return StandaloneAccount(payload.path("user").path("id").asText(), payload.path("token").asText())
-    }
-
-    private fun standalonePost(
-        port: Int,
-        path: String,
-        body: String,
-        bearer: String? = null,
-        idempotencyKey: String? = null,
-    ): HttpResponse<String> {
-        val request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:$port$path"))
-            .header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
-            .apply {
-                bearer?.let { header("Authorization", "Bearer $it") }
-                idempotencyKey?.let { header("Idempotency-Key", it) }
-            }
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build()
-        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString())
     }
 
     private fun account(prefix: String): HrTestAccount =
@@ -1474,7 +1368,6 @@ class TeamInvitationLinkRecoveryIntegrationTest(
     private data class InvitationRef(val id: String, val url: String, val token: String)
     private data class LegacyInvitationRef(val id: String, val token: String)
     private data class InvitationState(val state: String, val revision: Long)
-    private data class StandaloneAccount(val id: String, val token: String)
     private data class CapturedResult(val result: MvcResult, val events: List<ILoggingEvent>) {
         fun assertNoToken(token: String) {
             assertFalse(events.any { it.formattedMessage.contains(token) || throwableContains(it.throwableProxy, token) }, "invitation bearer must not appear in logs")

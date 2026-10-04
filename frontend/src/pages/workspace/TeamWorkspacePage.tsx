@@ -208,20 +208,21 @@ function idempotencyKey() {
     (Number(character) ^ Math.floor(Math.random() * 16) >> Number(character) / 4).toString(16));
 }
 
-function TeamNavigation({ teamId, authorized }: { teamId: string; authorized: boolean }) {
+function TeamNavigation({ teamId, authorized, isAdmin }: { teamId: string; authorized: boolean; isAdmin: boolean }) {
   const location = useLocation();
   const items = useMemo(() => [
     { label: "Интервью", to: `/workspace/teams/${teamId}/interviews` },
     { label: "Библиотека", to: `/workspace/teams/${teamId}/library` },
     { label: "Кандидаты", to: `/workspace/teams/${teamId}/candidates` },
     { label: "Треки и вакансии", to: `/workspace/teams/${teamId}/tracks` },
-  ], [teamId]);
+    ...(isAdmin ? [{ label: "Админка", to: "/dashboard/admin" }] : []),
+  ], [teamId, isAdmin]);
   const navRef = useRef<HTMLElement | null>(null);
   const linkRefs = useRef(new Map<string, HTMLSpanElement>());
   const [visibleCount, setVisibleCount] = useState<number | null>(null);
   const [overflowOpened, setOverflowOpened] = useState(false);
 
-  useEffect(() => { setOverflowOpened(false); }, [teamId, authorized]);
+  useEffect(() => { setOverflowOpened(false); }, [teamId, authorized, isAdmin]);
 
   useLayoutEffect(() => {
     const measure = () => {
@@ -3310,7 +3311,7 @@ export function TeamWorkspacePage() {
               )}
             </Tooltip>
           </div>
-          <TeamNavigation teamId={teamId} authorized={Boolean(team)} />
+          <TeamNavigation teamId={teamId} authorized={Boolean(team)} isAdmin={auth.user?.role === "admin"} />
           <Group className={styles.userControls} gap="sm" align="center" wrap="nowrap">
             <NavLink to={`/workspace/teams/${teamId}/profile`} className={`${styles.userName} app-header-control`} aria-label={`Открыть профиль @${auth.user?.nickname}`}>
               <IconUserCircle size={16} aria-hidden="true" />

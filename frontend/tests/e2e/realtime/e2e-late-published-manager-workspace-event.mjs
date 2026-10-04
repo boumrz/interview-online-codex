@@ -1,3 +1,4 @@
+import "../support/require-isolated-api.mjs";
 const apiBaseUrl = process.env.E2E_API_URL || "http://127.0.0.1:8080/api";
 
 function assert(condition, message) {

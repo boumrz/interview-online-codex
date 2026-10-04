@@ -8,11 +8,12 @@ CI/CD в проекте не используется.
 
 Скрипт `deploy/scripts/deploy_docker.sh` автоматически:
 
-1. Собирает Docker-образы (`backend`, `frontend` + nginx)
-2. Поднимает стек из `docker-compose.prod.yml` (`postgres`, `backend`, `web`)
-3. Ждёт health backend
-4. Проверяет `http://127.0.0.1/healthz` и главную страницу
-5. Если в `.env` включён SSL (`NGINX_SSL=true`) — проверяет `https://<DOMAIN>/`
+1. Проверяет постоянный ключ приглашений и конфигурацию Compose до изменения контейнеров
+2. Собирает Docker-образы (`backend`, `frontend` + nginx)
+3. Поднимает стек из `docker-compose.prod.yml` (`postgres`, `backend`, `web`)
+4. Ждёт health backend
+5. Проверяет `http://127.0.0.1/healthz` и главную страницу
+6. Если в `.env` включён SSL (`NGINX_SSL=true`) — проверяет `https://<DOMAIN>/`
 
 **На обычном обновлении SSL-скрипт (`init_ssl_docker.sh`) запускать не нужно.**
 
@@ -26,6 +27,20 @@ git push origin main
 ```
 
 Убедитесь, что на `main` попали нужные коммиты.
+
+Командные пространства доступны во всех сборках. Перед первым обновлением
+добавьте в существующий `/etc/interview-online/.env` на каждом сервере:
+
+```env
+TEAM_INVITATION_LINK_ENCRYPTION_ACTIVE_KEY_ID=primary
+TEAM_INVITATION_LINK_ENCRYPTION_KEY=<сохранённый_32-byte_Base64URL_ключ_без_padding>
+```
+
+Сохраняйте этот ключ при последующих релизах и во всех репликах. Если в БД
+уже есть приглашения, используйте прежний ключ и сохраняйте все версии,
+на которые они ссылаются. Основной Compose передаёт ключ `primary`; ротация
+требует override с полным набором ключей. Не заменяйте серверный `.env`
+примером целиком: в нём уже находятся параметры БД и постоянный ключ чата.
 
 ---
 
@@ -120,7 +135,8 @@ CORS_ORIGINS=https://interview.domiknote.ru
 NGINX_SSL=true
 ```
 
-При `git pull` этот файл **не перезаписывается**. Менять его нужно только если меняется домен или пароль БД.
+При `git pull` этот файл **не перезаписывается**. Новые обязательные параметры
+релиза добавляйте отдельно, сохраняя действующие параметры БД и ключи.
 
 Просмотр (без вывода пароля в лог):
 
@@ -193,6 +209,13 @@ sudo nano /etc/interview-online/.env
 ### Сборка frontend долго идёт
 
 Нормально: `npm ci` + `npm run build` внутри Docker. Первый build после больших изменений может занять несколько минут.
+
+### `TEAM_INVITATION_LINK_ENCRYPTION_KEY must be ...`
+
+В существующем серверном `.env` задайте постоянный 32-byte Base64URL ключ
+без padding для `primary`. Пустое значение, пример-заглушка, padding и
+неправильная длина останавливают деплой до сборки и изменения контейнеров.
+Подробности: [настройка environment](VTOLS_DEPLOYMENT_RUNBOOK_RU.md#3-environment).
 
 ### Health check failed после деплоя
 

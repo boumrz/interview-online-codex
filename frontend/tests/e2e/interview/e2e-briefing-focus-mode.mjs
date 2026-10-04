@@ -1,3 +1,4 @@
+import "../support/require-isolated-api.mjs";
 /**
  * E2E: Briefing «focus mode» + локальный fullscreen.
  *

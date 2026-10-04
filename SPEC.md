@@ -16,10 +16,10 @@
 
 | Приоритет | Фича | Статус по записанным проверкам |
 | --- | --- | --- |
-| UI.1 | [Ant Design v6 и единая визуальная система](specs/features/ui-1-antd-v6-design-system.md) | S01–S16 реализованы; техническая приёмка частичная, продуктовая ожидается |
+| UI.1 | [Ant Design v6 и единая визуальная система](specs/features/ui-1-antd-v6-design-system.md) | S01–S16 реализованы; современная S15 админка с общей оболочкой проверена 04.10; глобальная техническая приёмка частичная, продуктовая ожидается |
 | UI.2 | [Удобство форм, комнаты и согласованность тем](specs/features/ui-2-usability-theme-polish.md) | Комната, команды и формы технически проверены; геометрия условия, resize, keyboard tooltip и запуск со шрифтами исправлены; [полная проверка 04.10](specs/references/2026-10-04-full-project-verification.md); глобальная продуктовая приёмка ожидается |
-| P0.1 | [Приглашения и участники команды](specs/features/p0-1-team-invitations.md) | Реализована; одна многоразовая ссылка, ручные reissue/revoke |
-| P0.2 | [UX переключения пространства и навигации](specs/features/p0-2-workspace-navigation.md) | Реализована; вход ожидает свежий профиль, поздние ответы ограждены; стабильные переходы/кадры, единые настройки и ACTIVE candidates; просмотр последних UI ожидается |
+| P0.1 | [Приглашения и участники команды](specs/features/p0-1-team-invitations.md) | Выпуск без командного флага технически проверен; стабильный ключ обязателен, startup/recovery/права проверены; одна многоразовая ссылка, ручные reissue/revoke |
+| P0.2 | [UX переключения пространства и навигации](specs/features/p0-2-workspace-navigation.md) | Команды без flag и современная админка в общей оболочке проверены 04.10; admin 3/3 + deletion/profile 2/2 + navigation 2/2, новый isolated runner 3/3 — PASS; локальная база очищена до 12 аккаунтов; продуктовый просмотр ожидается |
 | P0.3 | [Комната: вкладки и изменение размеров панелей](specs/features/p0-3-room-panels.md) | Условие только в Code, четыре вкладки и ручная высота проверены 04.10; контекст/фокус сохраняются |
 | P0.4 | [Настройки команды](specs/features/p0-4-team-settings-audit.md) | Шестерёнка, верхние приглашения и управление в единой таблице технически проверены 03.10; восстановление и свежие права сохранены; публичного аудита нет |
 | P1.1 | [Каталог участников](specs/features/p1-1-team-members.md) | MVP реализован; каталог в настройках, legacy redirect сохранён |
@@ -39,7 +39,7 @@
 | P5.1 | [Проекции процессов](specs/features/p5-1-process-projections.md) | Реализована; API/каталог, повторная панель интервью снята |
 | P5.2 | [История: план объединения команд](specs/features/p5-2-team-merge-plan.md) | Снята с продукта |
 | P5.3 | [История: commit объединения](specs/features/p5-3-team-merge-commit.md) | Снята с продукта; legacy redirects сохранены |
-| P6 | [Финальный выпуск](specs/features/p6-release-gates.md) | [Полная проверка 04.10](specs/references/2026-10-04-full-project-verification.md): backend 401/401, frontend 91/91, build/types/audit PASS. Все 102 browser файла выполнены; два тестовых ожидания исправлены, целые файлы повторены. Актуальный реестр по файлам — без падений; raw 100/2 сохранён. Feature-off: 106 PASS / 3 intentional skip. Один Native AX skip, hidden lifecycle не подтверждён; остаток UI.1 и production topology ожидаются |
+| P6 | [Финальный выпуск](specs/features/p6-release-gates.md) | Команды без флага технически проверены; современная админка, очистка до 12 локальных аккаунтов и изоляция E2E — PASS, guard/lifecycle 11/11, PostgreSQL proof 2/2, production peer 2/2, scoped security/reliability approve. [Прежняя полная проверка 04.10](specs/references/2026-10-04-full-project-verification.md) сохранена; продуктовый просмотр, остаток UI.1 и production topology ожидаются |
 
 ## Очередь завершения
 

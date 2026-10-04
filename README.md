@@ -61,6 +61,21 @@ export CHAT_RECEIPT_HMAC_SECRET="$(openssl rand -base64 32 | tr '+/' '-_' | tr -
 больше 48 часов после последнего успешного chat ACK: вторые 24 часа хранят tombstone.
 Смешивать реплики с разными HMAC secrets нельзя; непрерывная ротация требует отдельной dual-key migration.
 
+Командные пространства доступны во всех сборках. Перед запуском backend также
+настройте постоянный 32-byte Base64URL ключ приглашений без padding, сохранённый
+вне репозитория. Для ключа `primary` передайте его через конфигурацию Spring:
+
+```bash
+export TEAM_INVITATION_LINK_ENCRYPTION_ACTIVE_KEY_ID=primary
+export APP_TEAMINVITATIONLINKENCRYPTION_KEYS_PRIMARY="${TEAM_INVITATION_LINK_ENCRYPTION_KEY:?Загрузите сохранённый ключ приглашений}"
+```
+
+Используйте один и тот же ключ после перезапуска и во всех репликах. Backend
+проверяет конфигурацию при запуске. Для нескольких версий ключей задайте
+`app.team-invitation-link-encryption.keys` через внешний конфигурационный файл
+или `SPRING_APPLICATION_JSON`; сохраняйте прежние ключи, пока есть ожидающие
+приглашения, которые на них ссылаются.
+
 ```bash
 cd backend
 JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home \
@@ -71,7 +86,7 @@ CHAT_RECEIPT_HMAC_SECRET="$CHAT_RECEIPT_HMAC_SECRET" \
 mvn spring-boot:run
 ```
 
-На Windows с Docker: `docker compose -f docker-compose.dev.yml up -d`, затем те же переменные `DB_*`, обязательный стабильный `CHAT_RECEIPT_HMAC_SECRET` и `mvn spring-boot:run`.
+На Windows с Docker: `docker compose -f docker-compose.dev.yml up -d`, затем те же переменные `DB_*`, обязательные стабильные ключи чата и приглашений и `mvn spring-boot:run`.
 
 **Вариант B — без PostgreSQL (встроенная H2, только для локальной разработки):**
 
@@ -105,6 +120,33 @@ npm run dev
 
 Frontend default URL: `http://localhost:5173`
 
+### Изолированные браузерные тесты
+
+Обычные `npm run e2e:<suite>` создают собственную временную схему в отдельной
+PostgreSQL 16 базе и поднимают свои backend/frontend на свободных портах.
+После завершения или ошибки процессы и схема удаляются. Рабочая база
+`interview_online` и запущенное приложение не используются для fixtures.
+
+```bash
+cd frontend
+# Укажите отдельную базу, принадлежащую тестовому PostgreSQL пользователю.
+TEAM_TEST_PG_DATABASE=interview_e2e npm run e2e:auth
+npm run test:e2e-fixture-safety
+```
+
+База должна существовать; без `TEAM_TEST_PG_DATABASE` runner выберет принадлежащую
+текущему пользователю базу `interview_*`, исключая `interview_online`. Для подключения
+поддерживаются `TEAM_TEST_PG_HOST` (только loopback), `TEAM_TEST_PG_PORT`, `TEAM_TEST_PG_USER`,
+`TEAM_TEST_PG_PASSWORD` и `PSQL_BIN`. Нужны PostgreSQL 16, Maven и Java 17.
+`E2E_PRODUCTION=true` проверяет production-сборку frontend. Можно выбрать конкретный
+файл через `node tests/e2e/run-isolated.mjs tests/e2e/account/e2e-auth-navigation.mjs`.
+
+Прямой запуск файла без runner завершается до регистрации и других fixtures:
+центральная проверка требует подтверждения временной схемы от API и его web proxy.
+Старые `E2E_API_URL`/`E2E_BASE_URL` переопределения и адреса `8080`/`5173` запрещены
+для fixture-прогонов. При необходимости задайте свободные `E2E_BACKEND_PORT` и
+`E2E_WEB_PORT`; сохраняются алиасы существующих командных runner.
+
 ### Локальная отладка командного сценария
 
 Для приглашений нужен постоянный 32-byte Base64URL ключ
@@ -120,21 +162,20 @@ chat_receipt_secret="$(<.run/chat-receipt.secret)"
 team_link_key="$(<.run/team-invitation-link-encryption.key)"
 spring_config_json="{\"app\":{\"team-invitation-link-encryption\":{\"active-key-id\":\"primary\",\"keys\":{\"primary\":\"$team_link_key\"}}}}"
 JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home \
-FEATURE_TEAM_WORKSPACES=true FEATURE_TEAM_MERGE_COMMIT=true \
+FEATURE_TEAM_MERGE_COMMIT=true \
 CHAT_RECEIPT_HMAC_SECRET="$chat_receipt_secret" \
 SPRING_APPLICATION_JSON="$spring_config_json" mvn spring-boot:run
 
 cd ../frontend
-FEATURE_TEAM_WORKSPACES=true FEATURE_TEAM_MERGE_COMMIT=true npm run dev
+FEATURE_TEAM_MERGE_COMMIT=true npm run dev
 ```
 
-Для совместного локального запуска backend и frontend с переключателем
-пространств используйте `FEATURE_TEAM_WORKSPACES=true scripts/dev-up.sh`.
-Командные пространства включатся только в этих локальных процессах; флаг по
-умолчанию остаётся выключенным.
+Для совместного локального запуска backend и frontend используйте
+`scripts/dev-up.sh`, предварительно передав те же стабильные ключи через
+окружение. Выбор и создание команд доступны без отдельного флага.
 
-Эти переменные включают весь командный путь и финальный запуск объединения
-только в выбранных процессах. По умолчанию флаг запуска объединения выключен;
+`FEATURE_TEAM_MERGE_COMMIT=true` в примере нужен только для отладки финального
+запуска объединения команд. По умолчанию этот флаг выключен;
 общая проверка активности комнат для нескольких процессов находится в
 PostgreSQL. Если порт `5173` уже занят, используйте для frontend
 `npm run dev -- --port 5174`. Codex не перезапускает уже работающий локальный

@@ -20,11 +20,9 @@ class TeamMemberDirectoryService(
     private val membershipRepository: TeamMembershipRepository,
     private val userRepository: UserRepository,
     private val processService: TeamProcessService,
-    private val featureGate: TeamWorkspaceFeatureGate,
 ) {
     @Transactional(readOnly = true)
     fun list(actor: User, teamId: String, pageRaw: String?, sizeRaw: String?, rawQuery: String?, stateRaw: String?): TeamMemberDirectoryDto {
-        featureGate.requireEnabled()
         val actorId = requireNotNull(actor.id)
         val query = parseQuery(pageRaw, sizeRaw, rawQuery, stateRaw)
         val team = teamRepository.findById(teamId).orElse(null)?.takeIf { it.state == "ACTIVE" } ?: throw teamNotFound()

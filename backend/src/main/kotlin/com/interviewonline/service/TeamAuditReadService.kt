@@ -33,11 +33,9 @@ class TeamAuditReadService(
     private val userRepository: UserRepository,
     private val auditRepository: TeamAuditEventRepository,
     private val invitationRepository: TeamInvitationRepository,
-    private val featureGate: TeamWorkspaceFeatureGate,
 ) {
     @Transactional(readOnly = true)
     fun list(actor: User, teamId: String, rawParams: MultiValueMap<String, String>): TeamAuditPageDto {
-        featureGate.requireEnabled()
         val actorId = requireNotNull(actor.id)
         val team = teamRepository.findById(teamId).orElse(null)
             ?.takeIf { it.state == ACTIVE }

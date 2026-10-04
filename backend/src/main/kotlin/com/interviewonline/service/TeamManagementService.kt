@@ -46,14 +46,12 @@ class TeamManagementService(
     private val roomParticipantRepository: RoomParticipantRepository,
     private val roomHrAssignmentRepository: RoomHrAssignmentRepository,
     private val teamAuditWriter: TeamAuditWriter,
-    private val featureGate: TeamWorkspaceFeatureGate,
     private val databaseTime: DatabaseTimeSource,
     private val transactionGuard: TeamManagementTransactionGuard,
     private val collaborationService: CollaborationService,
 ) {
     @Transactional
     fun rename(actor: User, teamId: String, rawName: String, revision: Long, key: UUID): TeamRenameResponse {
-        featureGate.requireEnabled()
         val name = canonicalName(rawName)
         val actorId = requireNotNull(actor.id)
         transactionGuard.applyLockTimeout()
@@ -85,7 +83,6 @@ class TeamManagementService(
 
     @Transactional
     fun updateRole(actor: User, teamId: String, targetUserId: String, role: String, revision: Long, key: UUID): TeamMemberRoleResponse {
-        featureGate.requireEnabled()
         requireStoredRole(role)
         val actorId = requireNotNull(actor.id)
         transactionGuard.applyLockTimeout()
@@ -130,7 +127,6 @@ class TeamManagementService(
         revision: Long,
         key: UUID,
     ): TeamOwnershipTransferResponse {
-        featureGate.requireEnabled()
         val actorId = requireNotNull(actor.id)
         transactionGuard.applyLockTimeout()
         val team = lockActiveTeam(teamId)
@@ -201,7 +197,6 @@ class TeamManagementService(
 
     @Transactional
     fun leave(actor: User, teamId: String, key: UUID): TeamMemberLifecycleResponse {
-        featureGate.requireEnabled()
         val actorId = requireNotNull(actor.id)
         transactionGuard.applyLockTimeout()
         val team = lockActiveTeam(teamId)
@@ -230,7 +225,6 @@ class TeamManagementService(
 
     @Transactional
     fun removeMember(actor: User, teamId: String, targetUserId: String, key: UUID): TeamMemberLifecycleResponse {
-        featureGate.requireEnabled()
         val actorId = requireNotNull(actor.id)
         transactionGuard.applyLockTimeout()
         val team = lockActiveTeam(teamId)
@@ -261,7 +255,6 @@ class TeamManagementService(
 
     @Transactional
     fun suspendMember(actor: User, teamId: String, targetUserId: String, key: UUID): TeamMemberLifecycleResponse {
-        featureGate.requireEnabled()
         val actorId = requireNotNull(actor.id)
         transactionGuard.applyLockTimeout()
         val team = lockActiveTeam(teamId)
@@ -292,7 +285,6 @@ class TeamManagementService(
 
     @Transactional
     fun resumeMember(actor: User, teamId: String, targetUserId: String, key: UUID): TeamMemberLifecycleResponse {
-        featureGate.requireEnabled()
         val actorId = requireNotNull(actor.id)
         transactionGuard.applyLockTimeout()
         val team = lockActiveTeam(teamId)

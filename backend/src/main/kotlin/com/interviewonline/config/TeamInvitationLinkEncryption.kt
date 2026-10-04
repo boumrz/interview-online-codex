@@ -1,6 +1,5 @@
 package com.interviewonline.config
 
-import com.interviewonline.service.TeamWorkspaceFeatureGate
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
@@ -24,8 +23,7 @@ class TeamInvitationLinkEncryptionConfiguration {
     @Bean
     fun teamInvitationLinkCipher(
         properties: TeamInvitationLinkEncryptionProperties,
-        featureGate: TeamWorkspaceFeatureGate,
-    ): TeamInvitationLinkCipher = TeamInvitationLinkCipher(properties, featureGate.isEnabled())
+    ): TeamInvitationLinkCipher = TeamInvitationLinkCipher(properties)
 }
 
 /**
@@ -35,28 +33,22 @@ class TeamInvitationLinkEncryptionConfiguration {
  */
 class TeamInvitationLinkCipher(
     properties: TeamInvitationLinkEncryptionProperties,
-    enabled: Boolean,
 ) {
-    private val activeKeyId: String?
+    private val activeKeyId: String
     private val keys: Map<String, SecretKeySpec>
 
     init {
-        if (!enabled) {
-            activeKeyId = null
-            keys = emptyMap()
-        } else {
-            val configuredKeys = properties.keys
-            val configuredActiveKeyId = properties.activeKeyId?.trim().orEmpty()
-            if (configuredActiveKeyId.isEmpty() || configuredKeys.isEmpty() || configuredActiveKeyId !in configuredKeys) {
-                throw IllegalStateException(INVALID_CONFIGURATION_MESSAGE)
-            }
-            val decoded = configuredKeys.mapValues { (_, value) -> SecretKeySpec(decodeCanonicalKey(value), "AES") }
-            activeKeyId = configuredActiveKeyId
-            keys = decoded
+        val configuredKeys = properties.keys
+        val configuredActiveKeyId = properties.activeKeyId?.trim().orEmpty()
+        if (configuredActiveKeyId.isEmpty() || configuredKeys.isEmpty() || configuredActiveKeyId !in configuredKeys) {
+            throw IllegalStateException(INVALID_CONFIGURATION_MESSAGE)
         }
+        val decoded = configuredKeys.mapValues { (_, value) -> SecretKeySpec(decodeCanonicalKey(value), "AES") }
+        activeKeyId = configuredActiveKeyId
+        keys = decoded
     }
 
-    fun activeKeyId(): String = requireNotNull(activeKeyId) { "Invitation link recovery is disabled" }
+    fun activeKeyId(): String = activeKeyId
 
     fun encrypt(token: String, aad: String): String {
         val nonce = ByteArray(NONCE_BYTES).also(secureRandom::nextBytes)
@@ -82,7 +74,8 @@ class TeamInvitationLinkCipher(
     private fun key(keyId: String): SecretKeySpec = keys[keyId] ?: throw IllegalArgumentException("Unknown invitation recovery key")
 
     private fun decodeCanonicalKey(value: String): ByteArray {
-        val decoded = decodeCanonicalValue(value)
+        val decoded = runCatching { decodeCanonicalValue(value) }
+            .getOrElse { throw IllegalStateException(INVALID_CONFIGURATION_MESSAGE) }
         if (decoded.size != KEY_BYTES) throw IllegalStateException(INVALID_CONFIGURATION_MESSAGE)
         return decoded
     }

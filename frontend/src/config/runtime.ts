@@ -12,5 +12,4 @@ function resolveApiBaseUrl(): string {
 
 export const API_BASE_URL = resolveApiBaseUrl();
 
-export const TEAM_WORKSPACES_ENABLED = process.env.FEATURE_TEAM_WORKSPACES === "true";
 export const TEAM_MERGE_COMMIT_ENABLED = process.env.FEATURE_TEAM_MERGE_COMMIT === "true";

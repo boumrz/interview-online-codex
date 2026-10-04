@@ -1,3 +1,4 @@
+import "../support/require-isolated-api.mjs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { execFile } from "node:child_process";

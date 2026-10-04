@@ -33,7 +33,6 @@ import java.util.UUID
  */
 @SpringBootTest(
     properties = [
-        "app.features.team-workspaces-enabled=true",
         "app.team-invitation-link-encryption.active-key-id=integration-v1",
         "app.team-invitation-link-encryption.keys.integration-v1=AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
     ],

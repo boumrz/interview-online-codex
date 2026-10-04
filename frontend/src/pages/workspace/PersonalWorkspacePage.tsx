@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState, type FormEvent } from "react";
 import { App, Button as AntButton, Table as AntTable, Tabs, type TableColumnsType } from "antd";
-import { IconMenu2, IconPencil, IconPlus, IconRefresh, IconUserCircle, IconTrash, IconCopy } from "components/antd-icons";
+import { IconPencil, IconPlus, IconRefresh, IconTrash, IconCopy } from "components/antd-icons";
 import {
   Alert,
   Badge,
@@ -10,7 +10,6 @@ import {
   Container,
   Group,
   Loader,
-  Menu,
   Modal,
   MultiSelect,
   Select,
@@ -20,12 +19,11 @@ import {
   Textarea,
   Title,
 } from "components/antd-compat";
-import { Navigate, NavLink, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { useClipboardNotification } from "../../components/useClipboardNotification";
-import { clearAuth, updateProfile as updateAuthProfile } from "../../features/auth/authSlice";
-import { WorkspaceSwitcher } from "../../features/workspace/WorkspaceSwitcher";
-import { ThemeToggleButton } from "../../features/theme/ThemeToggleButton";
+import { updateProfile as updateAuthProfile } from "../../features/auth/authSlice";
+import { PersonalWorkspaceHeader } from "./PersonalWorkspaceHeader";
 import { parseLibraryTransfer, serializeTask } from "../../features/workspace/libraryTransfer";
 import {
   api,
@@ -94,113 +92,6 @@ function roomAccessLabel(room: RoomSummary) {
   if (room.accessRole === "owner") return "Владелец";
   if (room.accessRole === "interviewer") return "Интервьюер";
   return "Кандидат";
-}
-
-function WorkspaceNavigation({ isHr }: { isHr: boolean }) {
-  const location = useLocation();
-  const items = useMemo(() => [
-    { label: "Интервью", to: "/workspace/personal/interviews" },
-    { label: "Библиотека", to: "/workspace/personal/library" },
-    ...(isHr ? [{ label: "Кандидаты", to: "/workspace/personal/candidates" }] : []),
-  ], [isHr]);
-  const navRef = useRef<HTMLElement | null>(null);
-  const linkRefs = useRef(new Map<string, HTMLSpanElement>());
-  const [visibleCount, setVisibleCount] = useState<number | null>(null);
-  const [overflowOpened, setOverflowOpened] = useState(false);
-
-  React.useLayoutEffect(() => {
-    const measure = () => {
-      const nav = navRef.current;
-      if (!nav) return;
-      const widths = items.map((item) => {
-        return linkRefs.current.get(item.to)?.getBoundingClientRect().width ?? 0;
-      });
-      if (widths.some((width) => width <= 0)) return;
-
-      const gap = 4;
-      const overflowWidth = 48;
-      let nextVisibleCount = 0;
-      let occupied = 0;
-      widths.forEach((width, index) => {
-        const nextOccupied = occupied + (nextVisibleCount > 0 ? gap : 0) + width;
-        const reserveOverflow = index < widths.length - 1 ? gap + overflowWidth : 0;
-        if (nextOccupied + reserveOverflow <= nav.clientWidth) {
-          nextVisibleCount += 1;
-          occupied = nextOccupied;
-        }
-      });
-      setVisibleCount((current) => current === nextVisibleCount ? current : nextVisibleCount);
-    };
-    measure();
-    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
-    if (navRef.current) observer?.observe(navRef.current);
-    window.addEventListener("resize", measure);
-    return () => {
-      observer?.disconnect();
-      window.removeEventListener("resize", measure);
-    };
-  }, [items]);
-
-  const directItems = items.slice(0, visibleCount ?? 0);
-  const overflowItems = items.slice(visibleCount ?? 0);
-  const activeOverflow = visibleCount === null ? undefined : overflowItems.find(item => location.pathname === item.to);
-  return (
-    <nav ref={navRef} className={styles.nav} aria-label="Разделы личного раздела">
-      <span className={styles.navMeasure} aria-hidden="true">
-        {items.map((item) => (
-          <span key={item.to} className={styles.navMeasureItem} ref={(node) => {
-            if (node) linkRefs.current.set(item.to, node);
-            else linkRefs.current.delete(item.to);
-          }}>{item.label}</span>
-        ))}
-      </span>
-      {directItems.map((item) => (
-        <NavLink
-          key={item.to}
-          to={item.to}
-          className={({ isActive }) => `${isActive ? styles.navActive : styles.navLink} app-header-control`}
-        >
-          {item.label}
-        </NavLink>
-      ))}
-      {overflowItems.length > 0 ? (
-        <Menu position="bottom-end" shadow="md" withinPortal opened={overflowOpened} onChange={setOverflowOpened}>
-          <Menu.Target>
-            <AntButton
-              htmlType="button"
-              type="text"
-              className={`${styles.navButton} app-header-control`}
-              aria-label={activeOverflow ? `Меню разделов: ${activeOverflow.label}` : "Меню разделов"}
-              data-active-section={activeOverflow ? "true" : undefined}
-              aria-haspopup="menu"
-              aria-expanded={overflowOpened}
-              onKeyDown={(event: React.KeyboardEvent<HTMLButtonElement>) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  setOverflowOpened(true);
-                }
-              }}
-            >
-              <IconMenu2 size={20} stroke={2} aria-hidden="true" />
-            </AntButton>
-          </Menu.Target>
-          <Menu.Dropdown aria-label="Дополнительные разделы">
-            {overflowItems.map((item) => (
-              <Menu.Item
-                key={item.to}
-                component={NavLink}
-                to={item.to}
-                className={location.pathname === item.to ? styles.overflowMenuItemActive : styles.overflowMenuItem}
-                aria-current={location.pathname === item.to ? "page" : undefined}
-              >
-                {item.label}
-              </Menu.Item>
-            ))}
-          </Menu.Dropdown>
-        </Menu>
-      ) : null}
-    </nav>
-  );
 }
 
 type InterviewRowContextValue = {
@@ -1172,8 +1063,6 @@ export function ProfilePage() {
 
 export function PersonalWorkspacePage() {
   const location = useLocation();
-  const navigate = useNavigate();
-  const dispatch = useAppDispatch();
   const auth = useAppSelector((state) => state.auth);
   const section = resolveSection(location.pathname);
   const roomsQuery = useMyRoomsQuery(undefined, { skip: !auth.token });
@@ -1206,39 +1095,7 @@ export function PersonalWorkspacePage() {
 
   return (
     <Box className={styles.page}>
-      <header className={styles.header}>
-        <Container size="xl" className={styles.headerInner}>
-          <div className={styles.brand}>
-            <span className={styles.brandMark} aria-hidden="true">IH</span>
-            <div className={styles.brandText}>
-              <Text className={styles.brandLabel} fw={800}>InterHub</Text>
-              <Text size="xs" c="gray.5">Личный раздел</Text>
-            </div>
-          </div>
-          <div className={styles.workspaceChoice}>
-            <WorkspaceSwitcher />
-          </div>
-          <WorkspaceNavigation isHr={auth.user?.isHr === true} />
-          <Group className={styles.userControls} gap="sm" align="center" wrap="nowrap">
-            <NavLink to="/profile" className={`${styles.userName} app-header-control`} aria-label={`Открыть профиль @${auth.user?.nickname}`}>
-              <IconUserCircle size={16} aria-hidden="true" />
-              <span className={styles.userNameText}>@{auth.user?.nickname}</span>
-            </NavLink>
-            <Button
-              variant="subtle"
-              className="app-header-control"
-              onClick={() => {
-                dispatch(clearAuth());
-                dispatch(api.util.resetApiState());
-                navigate("/");
-              }}
-            >
-              Выйти
-            </Button>
-            <ThemeToggleButton />
-          </Group>
-        </Container>
-      </header>
+      <PersonalWorkspaceHeader />
       <main aria-label={`Личный раздел: ${sectionTitle}`}>
         <Container size="xl" className={styles.content}>
           {section === "interviews" ? (

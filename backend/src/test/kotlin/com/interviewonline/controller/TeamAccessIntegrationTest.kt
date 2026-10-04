@@ -41,7 +41,6 @@ import java.util.concurrent.TimeUnit
 
 @SpringBootTest(
     properties = [
-        "app.features.team-workspaces-enabled=true",
         "app.team-invitation-link-encryption.active-key-id=integration-v1",
         "app.team-invitation-link-encryption.keys.integration-v1=AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
     ],
@@ -770,7 +769,7 @@ class TeamAccessIntegrationTest(
 @SpringBootTest(properties = ["app.features.team-workspaces-enabled=false"])
 @AutoConfigureMockMvc
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
-class TeamFeatureOffIntegrationTest(
+class TeamLegacyConfigurationIntegrationTest(
     @Autowired private val mockMvc: MockMvc,
     @Autowired private val objectMapper: ObjectMapper,
     @Autowired private val jdbcTemplate: JdbcTemplate,
@@ -788,21 +787,21 @@ class TeamFeatureOffIntegrationTest(
     }
 
     @Test
-    fun `explicitly disabled create writes nothing while authorized reads and personal predicates stay safe`() {
+    fun `legacy false configuration permits create while authorized reads and personal predicates stay safe`() {
         val actor = HrHttpFixtures.register(mockMvc, objectMapper, true, "team-disabled").first
-        val personalRoom = HrHttpFixtures.createRoom(mockMvc, objectMapper, actor, "Personal while team creation is disabled")
+        val personalRoom = HrHttpFixtures.createRoom(mockMvc, objectMapper, actor, "Personal alongside legacy configuration")
         val key = UUID.randomUUID().toString()
         val result = mockMvc.post("/api/teams") {
             authorize(actor)
             header("Idempotency-Key", key)
             contentType = MediaType.APPLICATION_JSON
             content = """{"name":"Atlas"}"""
-        }.andReturn().expectStatusAndCode(404, "FEATURE_DISABLED")
-        assertNonDisclosingDenial(result, listOf(actor.id, actor.token, key, "Atlas"))
-        assertFalse(result.response.contentAsString.contains("Atlas"))
-        assertEquals(0L, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM teams WHERE owner_user_id = ?", Long::class.java, actor.id) ?: -1L)
+        }.andReturn().expectStatus(201)
+        assertProtectedNoStore(result)
+        assertNoPrivateFields(result.response.contentAsString)
+        assertEquals(1L, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM teams WHERE owner_user_id = ?", Long::class.java, actor.id) ?: -1L)
         assertEquals(
-            0L,
+            1L,
             jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM command_receipts WHERE actor_user_id = ? AND idempotency_key = ?",
                 Long::class.java,
@@ -810,7 +809,7 @@ class TeamFeatureOffIntegrationTest(
                 key,
             ) ?: -1L,
         )
-        val teamId = seedExistingTeam(jdbcTemplate, actor.id, "Existing disabled Atlas")
+        val teamId = seedExistingTeam(jdbcTemplate, actor.id, "Existing legacy Atlas")
         val workspaces = mockMvc.get("/api/me/workspaces") { authorize(actor) }.andReturn().expectStatus(200)
         assertProtectedNoStore(workspaces)
         assertTrue(workspaces.response.contentAsString.contains(teamId))
@@ -821,7 +820,7 @@ class TeamFeatureOffIntegrationTest(
         val stranger = HrHttpFixtures.register(mockMvc, objectMapper, false, "flag-stranger").first
         val denied = mockMvc.get("/api/teams/$teamId") { authorize(stranger) }.andReturn()
             .expectStatusAndCode(404, "TEAM_NOT_FOUND")
-        assertNonDisclosingDenial(denied, listOf(teamId, actor.id, actor.token, "Existing disabled Atlas"))
+        assertNonDisclosingDenial(denied, listOf(teamId, actor.id, actor.token, "Existing legacy Atlas"))
         val personalRooms = mockMvc.get("/api/me/rooms") { authorize(actor) }.andReturn().expectStatus(200)
         assertTrue(personalRooms.response.contentAsString.contains(personalRoom.id))
         assertFalse(personalRooms.response.contentAsString.contains(teamId))
@@ -835,7 +834,7 @@ class TeamFeatureOffIntegrationTest(
 @SpringBootTest
 @AutoConfigureMockMvc
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
-class TeamFeatureDefaultIntegrationTest(
+class TeamDefaultConfigurationIntegrationTest(
     @Autowired private val mockMvc: MockMvc,
     @Autowired private val objectMapper: ObjectMapper,
     @Autowired private val jdbcTemplate: JdbcTemplate,
@@ -853,20 +852,21 @@ class TeamFeatureDefaultIntegrationTest(
     }
 
     @Test
-    fun `create defaults to disabled without hiding safe reads or weakening personal scope`() {
+    fun `create is available by default without weakening personal scope`() {
         val actor = HrHttpFixtures.register(mockMvc, objectMapper, true, "team-default").first
-        val personalRoom = HrHttpFixtures.createRoom(mockMvc, objectMapper, actor, "Personal under default flag")
+        val personalRoom = HrHttpFixtures.createRoom(mockMvc, objectMapper, actor, "Personal under default configuration")
         val key = UUID.randomUUID().toString()
         val result = mockMvc.post("/api/teams") {
             authorize(actor)
             header("Idempotency-Key", key)
             contentType = MediaType.APPLICATION_JSON
             content = """{"name":"Atlas"}"""
-        }.andReturn().expectStatusAndCode(404, "FEATURE_DISABLED")
-        assertNonDisclosingDenial(result, listOf(actor.id, actor.token, key, "Atlas"))
-        assertEquals(0L, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM teams WHERE owner_user_id = ?", Long::class.java, actor.id) ?: -1L)
+        }.andReturn().expectStatus(201)
+        assertProtectedNoStore(result)
+        assertNoPrivateFields(result.response.contentAsString)
+        assertEquals(1L, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM teams WHERE owner_user_id = ?", Long::class.java, actor.id) ?: -1L)
         assertEquals(
-            0L,
+            1L,
             jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM command_receipts WHERE actor_user_id = ? AND idempotency_key = ?",
                 Long::class.java,
@@ -1049,7 +1049,6 @@ class TeamCreateRestartHttpIntegrationTest {
             .run(
                 *(postgres.applicationProperties() + mapOf(
                     "server.port" to 0,
-                    "app.features.team-workspaces-enabled" to true,
                     "app.team-invitation-link-encryption.active-key-id" to "integration-v1",
                     "app.team-invitation-link-encryption.keys.integration-v1" to "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
                     "spring.main.banner-mode" to "off",

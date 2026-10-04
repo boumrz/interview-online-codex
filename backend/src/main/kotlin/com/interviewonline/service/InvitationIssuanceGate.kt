@@ -13,12 +13,10 @@ class InvitationIssuanceGate(
     private val teamRepository: TeamRepository,
     private val membershipRepository: TeamMembershipRepository,
     private val rateLimiter: InvitationRateLimiter,
-    private val featureGate: TeamWorkspaceFeatureGate,
     private val transactionGuard: InvitationTransactionGuard,
 ) {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     fun admit(actor: User, teamId: String) {
-        featureGate.requireEnabled()
         val actorId = requireNotNull(actor.id)
         transactionGuard.applyLockTimeout()
         val team = teamRepository.lockById(teamId)?.takeIf { it.state == "ACTIVE" }

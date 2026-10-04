@@ -1,3 +1,4 @@
+import "../support/require-isolated-api.mjs";
 import { chromium } from "playwright";
 
 const webBaseUrl = process.env.E2E_BASE_URL || "http://localhost:5173";

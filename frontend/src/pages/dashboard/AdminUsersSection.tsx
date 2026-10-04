@@ -1,20 +1,9 @@
-import React from "react";
-import {
-  Badge,
-  ActionIcon,
-  Button,
-  Card,
-  Group,
-  Select,
-  Stack,
-  Text,
-  ThemeIcon,
-  Title,
-} from "components/antd-compat";
-import { IconTrash, IconUsers } from "components/antd-icons";
+import React, { useEffect, useMemo, useState } from "react";
+import { ActionIcon, Alert, Badge, Button, Group, Loader, Pagination, Select, Text, TextInput, Title } from "components/antd-compat";
+import { IconRefresh, IconTrash } from "components/antd-icons";
 import type { AdminUser } from "../../types";
-import { darkSelectStyles } from "./dashboardFieldStyles";
 import { formatCreatedAt } from "./dashboardHelpers";
+import styles from "./AdminUsersSection.module.css";
 
 interface AdminUsersSectionProps {
   users: AdminUser[];
@@ -26,137 +15,85 @@ interface AdminUsersSectionProps {
   onRefresh: () => void;
   isUpdatingRole: boolean;
   isDeleting: boolean;
+  isLoading: boolean;
+  isFetching: boolean;
+  isError: boolean;
 }
 
-/**
- * Self-contained card for the dashboard "Админка" tab. Renders the list of
- * users, handles per-row role draft selection, and exposes
- * save/delete/refresh callbacks. Domain logic (mutations, error reporting)
- * stays in the parent so this component remains a presentational view.
- */
-export function AdminUsersSection({
-  users,
-  currentUserId,
-  roleDrafts,
-  onRoleDraftChange,
-  onSaveRole,
-  onDeleteUser,
-  onRefresh,
-  isUpdatingRole,
-  isDeleting,
-}: AdminUsersSectionProps) {
+const USERS_PER_PAGE = 25;
+
+export function AdminUsersSection({ users, currentUserId, roleDrafts, onRoleDraftChange, onSaveRole, onDeleteUser, onRefresh, isUpdatingRole, isDeleting, isLoading, isFetching, isError }: AdminUsersSectionProps) {
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const filteredUsers = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase();
+    return query ? users.filter((user) => user.nickname.toLocaleLowerCase().includes(query)) : users;
+  }, [users, search]);
+  const pageCount = Math.max(1, Math.ceil(filteredUsers.length / USERS_PER_PAGE));
+  const currentPage = Math.min(page, pageCount);
+  const visibleUsers = filteredUsers.slice((currentPage - 1) * USERS_PER_PAGE, currentPage * USERS_PER_PAGE);
+  useEffect(() => { setPage((current) => Math.min(current, pageCount)); }, [pageCount]);
+
   return (
-    <Card
-      withBorder
-      radius="lg"
-      padding="lg"
-      bg="var(--app-surface)"
-      c="gray.1"
-      style={{ borderColor: "var(--app-border)" }}
-    >
-      <Stack>
-        <Group justify="space-between" align="center">
-          <Group>
-            <ThemeIcon color="gray" variant="light">
-              <IconUsers size={15} />
-            </ThemeIcon>
-            <Title order={4}>Админка пользователей</Title>
-          </Group>
-          <Button variant="light" size="xs" onClick={onRefresh}>
-            Обновить
-          </Button>
+    <section className={styles.section}>
+      <div className={styles.heading}>
+        <Title order={1}>Админка пользователей</Title>
+        <Text c="var(--app-muted)">Управляйте доступом к приложению и ролями пользователей.</Text>
+      </div>
+      <div className={styles.toolbar}>
+        <TextInput
+          className={styles.search}
+          label="Поиск пользователей" placeholder="Никнейм пользователя" value={search}
+          onChange={(event: React.ChangeEvent<HTMLInputElement>) => { setSearch(event.currentTarget.value); setPage(1); }}
+        />
+        <Button variant="light" leftSection={<IconRefresh size={16} aria-hidden="true" />} onClick={onRefresh} loading={isFetching}>Обновить</Button>
+      </div>
+      {isLoading ? <Group role="status" aria-label="Загружаем пользователей"><Loader size="sm" /><Text>Загружаем пользователей…</Text></Group> : null}
+      {isFetching && !isLoading ? <Text role="status" c="var(--app-muted)">Обновляем пользователей…</Text> : null}
+      {isError ? (
+        <Alert color="red" role="alert" title="Не удалось загрузить пользователей">
+          <Button variant="light" size="xs" disabled={isFetching} onClick={onRefresh}>Повторить</Button>
+        </Alert>
+      ) : null}
+      <div className={styles.directory}>
+        <div className={styles.columnHeadings} aria-hidden="true"><span>Пользователь</span><span>Создан</span><span>Роль и действия</span></div>
+        {visibleUsers.map((user) => {
+          const draftRole = roleDrafts[user.id] ?? user.role;
+          const isCurrentUser = user.id === currentUserId;
+          const isProtected = user.isSystemAdmin;
+          return (
+            <div key={user.id} role="region" aria-label={`Пользователь @${user.nickname}`} className={styles.row}>
+              <div className={styles.identity}>
+                <Text fw={700} className={styles.nickname}>@{user.nickname}</Text>
+                <Group gap="xs" wrap="wrap">
+                  <Badge color={user.role === "admin" ? "orange" : "gray"} variant="light">{user.role === "admin" ? "Администратор" : "Пользователь"}</Badge>
+                  {isCurrentUser ? <Badge color="teal" variant="outline">Это вы</Badge> : null}
+                  {isProtected ? <Text size="xs" c="var(--app-muted)">Системный администратор</Text> : null}
+                </Group>
+              </div>
+              <Text size="sm" c="var(--app-muted)" className={styles.created}><span className={styles.mobileLabel}>Создан: </span>{formatCreatedAt(user.createdAt)}</Text>
+              <div className={styles.actions}>
+                <Select
+                  placeholder="Выберите роль участника" label="Роль" value={draftRole}
+                  labelProps={{ className: styles.srOnly }}
+                  onChange={(value) => { if (value) onRoleDraftChange(user.id, value); }}
+                  data={[{ value: "user", label: "Пользователь" }, { value: "admin", label: "Администратор" }]}
+                  disabled={isProtected}
+                />
+                <Button variant="light" loading={isUpdatingRole} disabled={isProtected || draftRole === user.role} onClick={() => onSaveRole(user)}>Сохранить роль</Button>
+                <ActionIcon color="red" variant="light" aria-label={`Удалить пользователя @${user.nickname}`} title="Удалить пользователя" loading={isDeleting} disabled={isCurrentUser || isProtected} onClick={() => onDeleteUser(user)}><IconTrash size={16} aria-hidden="true" /></ActionIcon>
+              </div>
+            </div>
+          );
+        })}
+        {!isLoading && !isFetching && !isError && filteredUsers.length === 0 ? <div className={styles.empty}><Text c="var(--app-muted)">{search.trim() ? "По этому никнейму пользователи не найдены" : "Пользователи пока не найдены"}</Text></div> : null}
+      </div>
+      {!isLoading && users.length > 0 ? (
+        <Group component="nav" aria-label="Пагинация пользователей" justify="space-between" wrap="wrap" className={styles.pagination}>
+          <Text size="sm" c="var(--app-muted)">Страница {currentPage} из {pageCount}. Найдено {filteredUsers.length} из {users.length} пользователей</Text>
+          {pageCount > 1 ? <Pagination total={pageCount} value={currentPage} onChange={setPage} aria-label="Страницы пользователей" /> : null}
         </Group>
-
-        <Text size="sm" c="gray.4">
-          Управляйте ролями и удаляйте пользователей. Системный администратор
-          защищен от изменения роли и удаления.
-        </Text>
-
-        <Stack gap="sm">
-          {users.map((user) => {
-            const draftRole = roleDrafts[user.id] ?? user.role;
-            const isCurrentUser = user.id === currentUserId;
-            const isProtected = user.isSystemAdmin;
-            return (
-              <Card
-                key={user.id}
-                withBorder
-                radius="md"
-                padding="sm"
-                bg="var(--app-surface-soft)"
-                style={{ borderColor: "var(--app-border)" }}
-              >
-                <Stack gap="sm">
-                  <Group justify="space-between" align="center">
-                    <Group gap="xs">
-                      <Text fw={700}>@{user.nickname}</Text>
-                      <Badge
-                        color={user.role === "admin" ? "orange" : "gray"}
-                        variant="light"
-                      >
-                        {user.role === "admin"
-                          ? "Администратор"
-                          : "Пользователь"}
-                      </Badge>
-                      {isCurrentUser && (
-                        <Badge color="teal" variant="outline">
-                          Это вы
-                        </Badge>
-                      )}
-                    </Group>
-                    <Text size="xs" c="gray.4">
-                      Создан: {formatCreatedAt(user.createdAt)}
-                    </Text>
-                  </Group>
-
-                  <Group align="end" wrap="wrap">
-                    <Select placeholder="Выберите роль участника"
-                      label="Роль"
-                      value={draftRole}
-                      onChange={(value) => {
-                        if (!value) return;
-                        onRoleDraftChange(user.id, value);
-                      }}
-                      data={[
-                        { value: "user", label: "Пользователь" },
-                        { value: "admin", label: "Администратор" },
-                      ]}
-                      styles={darkSelectStyles}
-                      w={220}
-                      disabled={isProtected}
-                      labelProps={{ onClick: (e: React.MouseEvent) => e.preventDefault() }}
-                    />
-                    <Button
-                      variant="light"
-                      loading={isUpdatingRole}
-                      disabled={draftRole === user.role}
-                      onClick={() => onSaveRole(user)}
-                    >
-                      Сохранить роль
-                    </Button>
-                    <ActionIcon
-                      color="red"
-                      variant="light"
-                      aria-label={`Удалить пользователя @${user.nickname}`}
-                      title="Удалить пользователя"
-                      loading={isDeleting}
-                      disabled={isCurrentUser || isProtected}
-                      onClick={() => onDeleteUser(user)}
-                    >
-                      <IconTrash size={16} aria-hidden="true" />
-                    </ActionIcon>
-                  </Group>
-                </Stack>
-              </Card>
-            );
-          })}
-          {users.length === 0 && (
-            <Text size="sm" c="gray.4">
-              Пользователи пока не найдены
-            </Text>
-          )}
-        </Stack>
-      </Stack>
-    </Card>
+      ) : null}
+    </section>
   );
 }

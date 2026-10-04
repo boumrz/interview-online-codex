@@ -1,3 +1,4 @@
+import "../support/require-isolated-api.mjs";
 /**
  * E2E: При создании задачи язык в модалке = язык активного таба.
  *

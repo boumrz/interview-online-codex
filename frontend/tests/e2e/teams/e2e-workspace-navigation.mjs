@@ -1,3 +1,4 @@
+import "../support/require-isolated-api.mjs";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
@@ -660,8 +661,7 @@ test("P1.4: personal task sets copy to clipboard and delete from the library UI"
   }
 });
 
-test("library clipboard data transfers a task and set between accounts and into a team", { timeout: 90_000 }, async (t) => {
-  if (process.env.E2E_EXPECT_TEAM_WORKSPACES !== "true") return t.skip("team workspaces are disabled in this runtime");
+test("library clipboard data transfers a task and set between accounts and into a team", { timeout: 90_000 }, async () => {
   const sender = await account({ displayName: "Автор материалов" });
   const receiver = await account({ displayName: "Получатель материалов" });
   const title = `Передаваемая задача ${unique()}`;
@@ -735,10 +735,6 @@ test("workspace switcher stays compact and interview search remains wide", async
     const switcher = page.getByRole("button", { name: /^Команды:/ });
     const searchBox = await page.getByLabel("Поиск интервью", { exact: true }).boundingBox();
     assert.ok(searchBox && searchBox.width >= 450, "INTERVIEW_SEARCH_TOO_NARROW");
-    if (process.env.E2E_EXPECT_TEAM_WORKSPACES !== "true") {
-      assert.equal(await switcher.count(), 0, "WORKSPACE_NAV_FEATURE_OFF_FALSE_SWITCHER");
-      return;
-    }
     const switcherBox = await switcher.boundingBox();
     assert.ok(switcherBox && switcherBox.width < 300, "WORKSPACE_SWITCHER_TOO_WIDE");
     await switcher.click();
@@ -765,8 +761,7 @@ test("profile is a standalone account settings route", async () => {
   }
 });
 
-test("profile link keeps the selected team workspace", async (t) => {
-  if (process.env.E2E_EXPECT_TEAM_WORKSPACES !== "true") return t.skip("team workspaces are disabled in this runtime");
+test("profile link keeps the selected team workspace", async () => {
   const auth = await account({ displayName: "Участник команды" });
   const team = await createTeamApi(auth, `Профиль команды ${unique()}`);
   const { context, page } = await openAccount(auth, `/workspace/teams/${team.id}/interviews`);
@@ -1120,11 +1115,7 @@ test("remediation: primary navigation keeps one row and exposes complete overflo
     await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label")?.startsWith("Меню разделов"));
     assert.equal(await overflow.evaluate((element) => document.activeElement === element), true, "WORKSPACE_NAV_OVERFLOW_ESCAPE_FOCUS_NOT_RETURNED");
     const switcherCount = await page.getByRole("button", { name: /^Команды:/ }).count();
-    if (process.env.E2E_EXPECT_TEAM_WORKSPACES === "true") {
-      assert.equal(switcherCount, 1, "WORKSPACE_NAV_FEATURE_ON_SWITCHER_MISSING");
-    } else {
-      assert.equal(switcherCount, 0, "WORKSPACE_NAV_FEATURE_OFF_FALSE_SWITCHER");
-    }
+    assert.equal(switcherCount, 1, "WORKSPACE_NAV_SWITCHER_MISSING");
     await constrained.evaluate((element) => element.remove());
   } finally {
     await context.close();
@@ -1299,13 +1290,11 @@ async function assertActiveOverflowNavigation({ auth, path, navigationName, acti
     await menu.waitFor({ state: "hidden" });
     assert.equal(await trigger.evaluate((element) => document.activeElement === element), true, "WORKSPACE_NAV_ACTIVE_OVERFLOW_ESCAPE_FOCUS_NOT_RETURNED");
     assertRoute(page, expectedRoute, "WORKSPACE_NAV_ACTIVE_OVERFLOW_ROUTE_CHANGED_AFTER_ESCAPE");
-    if (process.env.E2E_EXPECT_TEAM_WORKSPACES === "false") {
-      assert.equal(
-        await page.getByRole("button", { name: /^Команды:/ }).count(),
-        0,
-        "WORKSPACE_NAV_ACTIVE_OVERFLOW_FEATURE_OFF_FALSE_SWITCHER",
-      );
-    }
+    assert.equal(
+      await page.getByRole("button", { name: /^Команды:/ }).count(),
+      1,
+      "WORKSPACE_NAV_ACTIVE_OVERFLOW_SWITCHER_MISSING",
+    );
     await constrained.evaluate((element) => element.remove());
   } finally {
     await context.close();
@@ -1321,8 +1310,7 @@ test("remediation: active personal candidates section in overflow keeps its curr
   });
 });
 
-test("remediation: active team settings uses its own gear outside navigation overflow", { timeout: 30_000 }, async (t) => {
-  if (process.env.E2E_EXPECT_TEAM_WORKSPACES !== "true") return t.skip("team workspaces are disabled in this runtime");
+test("remediation: active team settings uses its own gear outside navigation overflow", { timeout: 30_000 }, async () => {
   const team = await createTeamApi(fixtures.hr, `Команда активного раздела ${unique()}`);
   const { context, page } = await openAccount(fixtures.hr, `/workspace/teams/${team.id}/settings`);
   try {

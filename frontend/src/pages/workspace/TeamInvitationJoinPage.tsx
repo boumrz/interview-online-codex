@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { Alert, Box, Button, Card, Group, Loader, Stack, Text, Title } from "components/antd-compat";
-import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { clearAuth } from "../../features/auth/authSlice";
 import {
@@ -19,7 +19,6 @@ import {
   currentTeamInvitationToken,
   preserveTeamInvitationForLogin,
 } from "../../features/workspace/teamInvitationToken";
-import { TEAM_WORKSPACES_ENABLED } from "../../config/runtime";
 import { ThemeToggleButton } from "../../features/theme/ThemeToggleButton";
 import styles from "./TeamInvitationJoinPage.module.css";
 
@@ -156,8 +155,6 @@ export function TeamInvitationJoinPage() {
     resumedRef.current = true;
     void accept();
   }, [accept, authToken, phase, resumeAccept]);
-
-  if (!TEAM_WORKSPACES_ENABLED) return <Navigate to="/workspace/personal/interviews" replace />;
 
   const leaveForAuth = () => {
     if (!preserveTeamInvitationForLogin()) makeUnavailable();

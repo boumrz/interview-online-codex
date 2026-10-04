@@ -118,9 +118,20 @@ DB_NAME=interview_online
 DB_USER=interview
 DB_PASSWORD=<надёжный_пароль>
 
+CHAT_RECEIPT_HMAC_SECRET=<сохранённый_32-byte_Base64URL_secret>
+TEAM_INVITATION_LINK_ENCRYPTION_ACTIVE_KEY_ID=primary
+TEAM_INVITATION_LINK_ENCRYPTION_KEY=<сохранённый_32-byte_Base64URL_ключ>
+
 CORS_ORIGINS=https://interview.domiknote.ru
 CERTBOT_EMAIL=<ваш_email>
 ```
+
+Ключи чата и приглашений обязательны и должны оставаться постоянными после
+перезапуска и обновления. Для приглашений используется ключ `primary`:
+32 байта в Base64URL без padding. Если переносите данные с существующими
+приглашениями, перенесите и соответствующие версии ключей во внешнюю
+конфигурацию backend. Правила настройки описаны в
+[runbook](VTOLS_DEPLOYMENT_RUNBOOK_RU.md#3-environment).
 
 ```bash
 chmod 600 /etc/interview-online/.env

@@ -1,3 +1,4 @@
+import "../support/require-isolated-api.mjs";
 /**
  * E2E: Plain text как полноценный «язык» комнаты.
  *

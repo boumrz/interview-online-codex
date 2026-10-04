@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
 set -euo pipefail
+# Environment files contain persistent secrets, including when invoked with bash -x.
+set +x
 
 APP_ROOT="${APP_ROOT:-/opt/interview-online}"
 REPO_DIR="${REPO_DIR:-${APP_ROOT}/repo}"
@@ -31,6 +33,14 @@ fi
 
 # shellcheck disable=SC1090
 source "${ENV_FILE}"
+
+# A canonical unpadded Base64URL encoding of 32 bytes has 43 characters;
+# the last character must contain two zero padding bits.
+if [[ ! "${TEAM_INVITATION_LINK_ENCRYPTION_KEY:-}" =~ ^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$ ]]; then
+  echo "TEAM_INVITATION_LINK_ENCRYPTION_KEY must be a stable 32-byte unpadded Base64URL key in ${ENV_FILE}." >&2
+  echo "Configure the invitation encryption key before deployment; preserve existing keys across releases." >&2
+  exit 1
+fi
 
 COMPOSE_FILE="${COMPOSE_FILE:-${REPO_DIR}/docker-compose.prod.yml}"
 COMPOSE_FILES="${COMPOSE_FILES:-${COMPOSE_FILE}}"
@@ -94,6 +104,15 @@ wait_for_host_url() {
   echo "Hint: docker compose with COMPOSE_FILES=${COMPOSE_FILES} --env-file ${ENV_FILE} logs --tail=120 backend web"
   return 1
 }
+
+echo "==> Validating deployment configuration"
+compose config --quiet
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "python3 is required to validate the backend invitation keyring before deployment." >&2
+  exit 1
+fi
+VALIDATOR_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+compose config --format json | python3 "${VALIDATOR_DIR}/validate_team_encryption.py"
 
 echo "==> Building images"
 compose build

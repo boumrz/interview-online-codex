@@ -19,8 +19,10 @@
   допустимые роли, ошибки/retry, отзыв прав и сохранение после reload. Нет
   ожиданий отменённых экранов/действий; готовность проверяется по текущим спекам.
 - **R-02. Данные:** миграции проверяются на fresh install и upgrade с существующими
-  TEAM rows на PostgreSQL. Default-off flags не ломают существующие данные;
-  включение только после принятого применимого gate.
+  TEAM rows на PostgreSQL. Командные пространства выпускаются без feature flag
+  по [P0.2 R-11](p0-2-workspace-navigation.md), с обязательными стабильными ключами
+  по [P0.1 R-08](p0-1-team-invitations.md). Существующие данные и права сохраняются.
+  Другие действующие flags не включаются автоматически этим решением.
 - **R-03. Безопасность:** нет открытых P0/P1 security blockers; существенные
   auth/authority/realtime/migration изменения проходят независимый обзор.
   Evidence использует синтетические данные и не содержит секретов/кандидатской PII.
@@ -50,25 +52,73 @@
   Диагностические сообщения dev-сервера не сохраняют токены и личные query
   параметры подключений, в том числе во время первичной компиляции или ошибки
   обработки пути; реальные ошибки компиляции остаются видимыми.
+- **R-08. Изоляция тестовых данных:** E2E, которые регистрируют аккаунты или
+  изменяют серверные данные, запускаются с собственным API и временной
+  PostgreSQL-схемой. Прямой запуск файла защищён тем же общим guard, что
+  запуск из package scripts. До fixtures и изменений проверяется идентичность
+  изолированного API и его frontend proxy; основная локальная БД, обычные
+  порты 8080/5173, удалённый адрес или отсутствующее подтверждение не допускаются.
+  Необходимо проверять фактическую схему, а не доверять одному флагу окружения.
+  Read-only подтверждение изоляции доступно только в test runtime, не в
+  production приложении; оно не раскрывает пароли, JDBC credentials и токены.
+  Обычные команды E2E запускают изолированное окружение. После успеха или ошибки
+  runner закрывает свои процессы и удаляет свою временную схему.
+  Проверки без изменения данных и под собственными fake HTTP fixtures
+  сохраняют возможность отдельного запуска без обращения к рабочей базе.
 
 | ID | Требования | Доказательство выпуска |
 | --- | --- | --- |
 | AC-01 | R-01 | Актуальная сквозная E2E и применимые flow/role проверки; отсутствие отменённого merge flow |
-| AC-02 | R-02 | PostgreSQL fresh/upgrade и default-off с существующими rows |
+| AC-02 | R-02 | PostgreSQL fresh/upgrade с существующими TEAM rows; production frontend/backend без командного флага и с устаревшим `false` сохраняют команды и права; key preflight/startup и восстановление ссылок подтверждены |
 | AC-03 | R-03 | Закрытые blocking findings и безопасное evidence |
 | AC-04 | R-04 | Выбранная production topology с проверенной доставкой/recovery и применимыми нагрузочными/конкурентными проверками |
 | AC-05 | R-05 | Применимые технические gates и требуемый продуктовый просмотр завершены |
 | AC-06 | R-06 | Loopback проверка подтверждает authenticated GET, отсутствие запроса без токена, отсутствие токена в stdout/stderr/argv; 401/503, malformed/missing/unknown status и FAIL завершаются ошибкой; PASS/WARN выводятся явно |
 | AC-07 | R-07 | Собственный тестовый dev-сервер отдаёт SPA/JS/API/SSE; закрытие SSE клиента закрывает upstream; служебные action paths, включая GET/HEAD, регистр, percent encoding, trailing slash и query, отклоняются; CORP и проверка Host действуют; запрос с синтетическими private query параметрами при незавершённой компиляции/ошибке пути не сохраняет их в журнале, а ошибка компиляции видима; обновлённая версия проходит TypeScript/build/unit/E2E и независимый обзор |
+| AC-08 | R-08 | Прямой E2E/обычная package команда с default/main/remote API или без подтверждения изоляции → отказ до регистрации и любых изменений; правильный test runtime + его web proxy → fixtures работают. Подмена API/web proxy и неправильная схема → отказ; успешный/неуспешный запуск удаляет только свою схему и процессы; production не имеет test endpoint | Guard contract tests на fake HTTP peers + реальный изолированный smoke + read-only production endpoint absence check |
 
 ## Записанные результаты и остаток
+
+Современная админка и изоляция тестов 04.10: R-08/AC-08 — технически проверены.
+Общие guard/process contract tests 11/11, backend read-only proof 2/2,
+реальный изолированный register/profile smoke 1/1, failure cleanup после
+создания fixture и production browser с унаследованными неверными адресами
+2/2 — PASS. Найденные обходы через production `VITE_API_BASE_URL` и `BASE_URL`
+теста темы устранены после воспроизведения RED; ложный peer не получил запросов.
+Admin production 3/3, deletion/profile 2/2, navigation 2/2 и повтор admin 3/3
+через новый runner — PASS; TypeScript/build/diff — PASS.
+Локальная база очищена по явному запросу: 8471 тестовый аккаунт удалён,
+12 сохранены вместе с их данными; backup восстановлен для rehearsal, main
+ROLLBACK и COMMIT прошли, fingerprints 33 сохраняемых таблиц совпали.
+Независимый security/reliability review очистки и test isolation — approve.
+Полный исторический suite не повторялся; process-group cleanup проверен на POSIX.
+[Подробный актуальный отчёт](../references/2026-10-04-admin-modern-ui-test-data-isolation.md).
+
+Выпуск команд без feature flag 04.10 технически проверен по P0.1/P0.2:
+backend 151/151, production E2E без переменной 5/5 и с устаревшим `false` 5/5,
+существующие navigation/admin regressions 8/8, deploy preflight 6/6,
+TypeScript/build/diff — PASS; независимый scoped security/reliability — approve.
+Проверена эффективная Compose-конфигурация active keyring; переменные canonical
+Spring environment и `SPRING_APPLICATION_JSON` поддержаны. Внешние mounted
+Spring config/JVM overrides не входят в эту автоматическую preflight-проверку.
+Локальные процессы запущены без командного флага с прежней БД/ключами;
+health и вход системного администратора подтверждены. Полный suite этой правкой
+заново не запускался; прежние результаты ниже относятся к прежнему состоянию.
+
+Дополнительное исправление зависания админки 04.10: каталог отображается по 25
+пользователей с поиском, loading/error/retry не вызывают цикл перерисовок.
+Production browser E2E большого каталога/ошибок — 2/2, существующие admin
+regressions — 2/2; read-only проверка реального локального каталога 8483
+пользователей и ширины 390 px — PASS; TypeScript/build/diff — PASS.
+Объём API-ответа остаётся пропорционален каталогу; серверный контракт не менялся.
+Подробная приёмка и ограничения — [P0.2 R-12 / AC-08](p0-2-workspace-navigation.md).
 
 Бизнес-правки 28.09 имеют целевые backend 159/159, browser 12/12, unit 2/2,
 typecheck/build PASS и security APPROVE в [отчёте](../references/business-logic-verification-2026-09-28.md).
 UI.2 проверки 30.09/01.10 связаны из SPEC.md; UI.1 техническая приёмка остаётся
 частичной. Продуктовый просмотр этих изменений ожидается.
 
-Последний полный запуск 04.10: backend clean verify — 401/401, 61 класс,
+Предыдущий полный запуск 04.10 до выпуска без флага: backend clean verify — 401/401, 61 класс,
 0 ошибок и пропусков; отдельный production JAR проверен с Hibernate validate
 и fresh PostgreSQL Flyway V1–V33. Frontend unit/contract — 91/91, TypeScript и
 production build — PASS; npm audit full/production — 0 advisories. Node scripts
@@ -88,7 +138,8 @@ Production 146 и backend 275 исходных файлов не изменен�
 frontend файла совпадают с candidate. Это последние whole-file результаты,
 не один зелёный полный запуск; raw 100/2 сохранён. Настоящий hidden lifecycle
 в окружении не подтверждён.
-Отдельный whole workspace-navigation с compiled frontend флагом команд false:
+Прежний запуск до решения выпускать команды без флага: whole workspace-navigation
+с compiled frontend флагом команд false:
 106 PASS / 3 intentional team-only skip / 0 FAIL. Диагностический backend
 оставался включённым; backend feature-off/default контракты проверены в 401
 тесте. OFF сценарии не суммируются с enabled реестром. Тестовые браузеры и

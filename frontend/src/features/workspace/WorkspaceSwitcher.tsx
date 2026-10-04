@@ -3,7 +3,6 @@ import { Alert, Button, Flex, Form, Input, Modal, Popover, Spin } from "antd";
 import { CheckOutlined, DownOutlined, AppstoreOutlined, PlusOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { useAppSelector } from "../../app/hooks";
-import { TEAM_WORKSPACES_ENABLED } from "../../config/runtime";
 import { useCreateTeamMutation, useLazyGetWorkspacesQuery } from "../../services/api";
 import type { WorkspaceCacheScope, WorkspaceSummary } from "../../types";
 import { rememberCreatedTeam } from "./transientWorkspaceIdentity";
@@ -134,7 +133,7 @@ export function WorkspaceSwitcher({ currentTeamId, currentTeamName }: WorkspaceS
     clearAuthorizedNames = false,
     reason: ActiveWorkspaceList["reason"] = "navigation",
   ) => {
-    if (!TEAM_WORKSPACES_ENABLED || !accountId) return;
+    if (!accountId) return;
 
     if (clearAuthorizedNames) authorizedNamesRef.current.clear();
     const currentRequest = activeWorkspaceListRef.current;
@@ -218,8 +217,6 @@ export function WorkspaceSwitcher({ currentTeamId, currentTeamName }: WorkspaceS
     });
     return () => window.cancelAnimationFrame(frame);
   }, [workspaceOpened]);
-
-  if (!TEAM_WORKSPACES_ENABLED) return null;
 
   const navigateMenu = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const buttons = Array.from(workspaceMenuRef.current?.querySelectorAll<HTMLButtonElement>(

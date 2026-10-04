@@ -36,7 +36,6 @@ class TeamInvitationService(
     private val invitationRepository: TeamInvitationRepository,
     private val teamAuditWriter: TeamAuditWriter,
     private val receiptRepository: CommandReceiptRepository,
-    private val featureGate: TeamWorkspaceFeatureGate,
     private val databaseTime: DatabaseTimeSource,
     private val transactionGuard: InvitationTransactionGuard,
     private val linkCipher: TeamInvitationLinkCipher,
@@ -61,7 +60,6 @@ class TeamInvitationService(
 
     @Transactional
     fun create(actor: User, teamId: String, key: UUID): InvitationCommandResult {
-        featureGate.requireEnabled()
         val actorId = requireNotNull(actor.id)
         transactionGuard.applyLockTimeout()
         val team = lockManagedTeam(actorId, teamId)
@@ -100,7 +98,6 @@ class TeamInvitationService(
 
     @Transactional
     fun preview(rawToken: String, clientIp: String, actorUserId: String? = null): TeamInvitationPreviewDto {
-        featureGate.requireEnabled()
         val tokenHash = tokenHash(rawToken)
         val teamId = invitationRepository.findTeamIdByTokenHash(tokenHash) ?: throw invitationUnavailable()
         transactionGuard.applyLockTimeout()
@@ -115,7 +112,6 @@ class TeamInvitationService(
 
     @Transactional
     fun accept(actor: User, rawToken: String, key: UUID, clientIp: String): TeamInvitationAcceptDto {
-        featureGate.requireEnabled()
         val actorId = requireNotNull(actor.id)
         val tokenHash = tokenHash(rawToken)
         val teamId = invitationRepository.findTeamIdByTokenHash(tokenHash) ?: throw invitationUnavailable()
@@ -218,7 +214,6 @@ class TeamInvitationService(
 
     @Transactional
     fun reissue(actor: User, teamId: String, invitationId: String, revision: Long, key: UUID): InvitationCommandResult {
-        featureGate.requireEnabled()
         val actorId = requireNotNull(actor.id)
         transactionGuard.applyLockTimeout()
         val team = lockManagedTeam(actorId, teamId)
@@ -250,7 +245,6 @@ class TeamInvitationService(
 
     @Transactional
     fun list(actor: User, teamId: String, pageRaw: String?, sizeRaw: String?): TeamInvitationListDto {
-        featureGate.requireEnabled()
         val (page, size) = parsePage(pageRaw, sizeRaw)
         val actorId = requireNotNull(actor.id)
         transactionGuard.applyLockTimeout()
@@ -278,7 +272,6 @@ class TeamInvitationService(
 
     @Transactional
     fun reveal(actor: User, teamId: String, invitationId: String): TeamInvitationLinkDto {
-        featureGate.requireEnabled()
         val actorId = requireNotNull(actor.id)
         transactionGuard.applyLockTimeout()
         val team = lockManagedTeam(actorId, teamId)

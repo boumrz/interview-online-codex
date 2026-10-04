@@ -6,7 +6,6 @@ import { api, useMeProfileQuery } from "../services/api";
 import { setVisitParams, trackPageView } from "../services/analytics";
 import { LegacyDomainNotice } from "../components/LegacyDomainNotice";
 import { normalizeLanguageKey } from "../pages/dashboard/dashboardHelpers";
-import { TEAM_WORKSPACES_ENABLED } from "../config/runtime";
 import { captureTeamInvitationFragment } from "../features/workspace/teamInvitationToken";
 
 captureTeamInvitationFragment();
@@ -14,6 +13,7 @@ captureTeamInvitationFragment();
 const LandingPage = lazy(() => import("../pages/LandingPage").then((module) => ({ default: module.LandingPage })));
 const LoginPage = lazy(() => import("../pages/LoginPage").then((module) => ({ default: module.LoginPage })));
 const DashboardPage = lazy(() => import("../pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
+const AdminPage = lazy(() => import("../pages/AdminPage").then((module) => ({ default: module.AdminPage })));
 const PersonalWorkspacePage = lazy(() => import("../pages/workspace/PersonalWorkspacePage").then((module) => ({ default: module.PersonalWorkspacePage })));
 const TeamWorkspacePage = lazy(() => import("../pages/workspace/TeamWorkspacePage").then((module) => ({ default: module.TeamWorkspacePage })));
 const TeamInvitationJoinPage = lazy(() => import("../pages/workspace/TeamInvitationJoinPage").then((module) => ({ default: module.TeamInvitationJoinPage })));
@@ -152,11 +152,12 @@ export function App() {
               <Route path="/dashboard/tasks" element={<LegacyPersonalRedirect />} />
               <Route path="/dashboard/presets" element={<LegacyPersonalRedirect />} />
               <Route path="/dashboard/hr" element={<LegacyPersonalRedirect />} />
+              <Route path="/dashboard/admin" element={<AdminPage />} />
               <Route path="/dashboard/:section" element={<DashboardPage />} />
               <Route path="/workspace/personal/*" element={<PersonalWorkspaceRoute />} />
               <Route
                 path="/workspace/teams/:teamId/*"
-                element={TEAM_WORKSPACES_ENABLED ? <TeamWorkspacePage /> : <Navigate to="/workspace/personal/interviews" replace />}
+                element={<TeamWorkspacePage />}
               />
               <Route path="/profile" element={<PersonalWorkspacePage />} />
               <Route path="/join/team/*" element={<TeamInvitationJoinPage />} />

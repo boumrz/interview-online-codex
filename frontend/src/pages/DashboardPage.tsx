@@ -70,7 +70,7 @@ import {
   usePreviewHiringManagerMutation,
 } from "../services/api";
 import { setVisitParams, trackEvent } from "../services/analytics";
-import type { AdminUser, RoomSummary, TaskTemplate } from "../types";
+import type { AdminUser, RoomSummary, TaskLanguageGroup, TaskTemplate } from "../types";
 import styles from "./DashboardPage.module.css";
 import {
   ADMIN_DASHBOARD_SECTION,
@@ -106,6 +106,10 @@ import type {
 } from "./dashboard/CreateRoomSection";
 
 declare const __FEATURE_AGENT_OPS__: string | undefined;
+
+const EMPTY_ROOMS: RoomSummary[] = [];
+const EMPTY_TASK_GROUPS: TaskLanguageGroup[] = [];
+const EMPTY_ADMIN_USERS: AdminUser[] = [];
 
 const CANONICAL_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -219,16 +223,16 @@ export function DashboardPage({
     setProfileDisplayName(auth.user?.displayName ?? "");
   }, [auth.user?.displayName]);
 
-  const { data: rooms = [] } = useMyRoomsQuery(undefined, {
-    skip: !auth.token,
+  const { data: rooms = EMPTY_ROOMS } = useMyRoomsQuery(undefined, {
+    skip: !auth.token || section === "admin",
     refetchOnMountOrArgChange: true,
   });
-  const { data: groupedTasks = [] } = useTasksGroupedQuery(undefined, {
-    skip: !auth.token,
+  const { data: groupedTasks = EMPTY_TASK_GROUPS } = useTasksGroupedQuery(undefined, {
+    skip: !auth.token || section === "admin",
   });
-  const { data: adminUsers = [], refetch: refetchAdminUsers } =
+  const { data: adminUsers = EMPTY_ADMIN_USERS, refetch: refetchAdminUsers, isLoading: adminUsersLoading, isFetching: adminUsersFetching, isError: adminUsersError } =
     useAdminUsersQuery(undefined, {
-      skip: !auth.token || !isAdmin,
+      skip: !auth.token || !isAdmin || section !== "admin",
     });
 
   const [createTask, createTaskState] = useCreateTaskTemplateMutation();
@@ -464,18 +468,15 @@ export function DashboardPage({
   }, [rooms]);
 
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!isAdmin) {
+      setAdminRoleDrafts((prev) => Object.keys(prev).length > 0 ? {} : prev);
+      return;
+    }
+    const currentRoles = new Map(adminUsers.map((user) => [user.id, user.role]));
     setAdminRoleDrafts((prev) => {
-      const allowedUserIds = new Set(adminUsers.map((user) => user.id));
-      const next = Object.fromEntries(
-        Object.entries(prev).filter(([userId]) => allowedUserIds.has(userId)),
-      ) as Record<string, string>;
-      adminUsers.forEach((user) => {
-        if (!next[user.id]) {
-          next[user.id] = user.role;
-        }
-      });
-      return next;
+      const entries = Object.entries(prev);
+      const retained = entries.filter(([userId, role]) => currentRoles.has(userId) && currentRoles.get(userId) !== role);
+      return retained.length === entries.length ? prev : Object.fromEntries(retained);
     });
   }, [adminUsers, isAdmin]);
 
@@ -1485,6 +1486,9 @@ export function DashboardPage({
                   onRefresh={() => refetchAdminUsers()}
                   isUpdatingRole={updateAdminUserRoleState.isLoading}
                   isDeleting={deleteAdminUserState.isLoading}
+                  isLoading={adminUsersLoading}
+                  isFetching={adminUsersFetching}
+                  isError={adminUsersError}
                 />
               )}
 

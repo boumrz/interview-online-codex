@@ -47,7 +47,6 @@ class TeamTrackService(
     private val vacancyRepository: TeamVacancyRepository,
     private val taskRepository: TeamTaskTemplateRepository,
     private val programmeRepository: TeamInterviewProgrammeRepository,
-    private val featureGate: TeamWorkspaceFeatureGate,
     private val jdbcTemplate: JdbcTemplate,
     private val entityManager: EntityManager,
 ) {
@@ -511,7 +510,6 @@ class TeamTrackService(
     }
 
     private fun requireActiveMember(actor: User, teamId: String): TeamAccess {
-        featureGate.requireEnabled()
         val actorId = requireNotNull(actor.id)
         val team = if (TransactionSynchronizationManager.isCurrentTransactionReadOnly()) {
             teamRepository.findById(teamId).orElse(null)

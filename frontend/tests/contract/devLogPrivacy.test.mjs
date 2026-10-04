@@ -102,7 +102,7 @@ export async function runPrivacyRegression({ frontendPath, outputDir, attempt, l
     fs.writeFileSync(wrapperPath, `import config from ${JSON.stringify(configUrl)};\nimport fs from 'node:fs';\nlet first = true;\nexport default { ...config, ${legacyLogging ? "infrastructureLogging: { level: 'info' }," : ''} plugins: [...config.plugins, { apply(compiler) { compiler.hooks.make.tapAsync('SyntheticColdCompilePrivacy', (compilation, done) => { if (!first) return done(); first = false; fs.writeFileSync(${JSON.stringify(heldPath)}, 'held'); setTimeout(() => { fs.writeFileSync(${JSON.stringify(completedPath)}, 'complete'); done(); }, 4000); }); } }] };\n`, { flag: 'wx' });
     child = spawn(process.execPath, [cli, 'serve', '--config', wrapperPath, '--host', '127.0.0.1', '--port', String(port)], {
       cwd, detached: true, stdio: ['ignore', fd, fd],
-      env: { ...process.env, DEV_API_PROXY_TARGET: `http://127.0.0.1:${api.address().port}`, FEATURE_TEAM_WORKSPACES: 'true' }
+      env: { ...process.env, DEV_API_PROXY_TARGET: `http://127.0.0.1:${api.address().port}` }
     });
     await check('cold-compile SSE query is private and stream remains usable', async () => {
       const limit = Date.now() + 12000;

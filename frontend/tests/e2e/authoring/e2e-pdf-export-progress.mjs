@@ -1,3 +1,4 @@
+import "../support/require-isolated-api.mjs";
 /**
  * E2E: PDF-экспорт приватных заметок больше не фризит UI.
  *

@@ -33,7 +33,6 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 @SpringBootTest(properties = [
-    "app.features.team-workspaces-enabled=true",
     "app.http.trusted-proxy-cidrs=127.0.0.1/32",
     "app.team-invitation-link-encryption.active-key-id=rate-test-v1",
     "app.team-invitation-link-encryption.keys.rate-test-v1=AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
@@ -144,7 +143,6 @@ class InvitationRateLimitPostgresIntegrationTest(
                 .web(WebApplicationType.SERVLET)
                 .run(*(postgres.applicationProperties() + mapOf(
                     "server.port" to 0,
-                    "app.features.team-workspaces-enabled" to "true",
                     "spring.main.banner-mode" to "off",
                     "app.team-invitation-link-encryption.active-key-id" to "rate-test-v1",
                     "app.team-invitation-link-encryption.keys.rate-test-v1" to "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",

@@ -1,3 +1,4 @@
+import "../support/require-isolated-api.mjs";
 import { randomUUID } from "node:crypto";
 
 const apiBaseUrl = process.env.E2E_API_URL || "http://localhost:8080/api";

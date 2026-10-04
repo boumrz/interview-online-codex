@@ -36,7 +36,6 @@ spring:
 
 app:
   features:
-    team-workspaces-enabled: ${FEATURE_TEAM_WORKSPACES:false}
     team-merge-commit-enabled: ${FEATURE_TEAM_MERGE_COMMIT:false}
   team-invitation-link-encryption:
     active-key-id: ${TEAM_INVITATION_LINK_ENCRYPTION_ACTIVE_KEY_ID:}
