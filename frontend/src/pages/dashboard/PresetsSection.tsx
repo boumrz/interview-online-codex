@@ -21,6 +21,7 @@ import { useDisclosure } from "components/antd-hooks";
 import { IconBookmark, IconCopy, IconEdit, IconPlus, IconTrash } from "components/antd-icons";
 import { useAppSelector } from "../../app/hooks";
 import { useClipboardNotification } from "../../components/useClipboardNotification";
+import { getApiErrorMessage } from "../../services/apiErrors";
 import {
   useListPresetsQuery,
   useCreatePresetMutation,
@@ -235,7 +236,7 @@ export function PresetsSection({ taskOptions, onError }: PresetsSectionProps) {
     try {
       transfer = parseLibraryTransfer(importData.trim(), "task-set");
     } catch (error) {
-      setImportError(error instanceof Error ? error.message : "Неверные данные набора.");
+      setImportError(getApiErrorMessage(error, "Неверные данные набора."));
       return;
     }
     if (transfer.kind !== "task-set") return;
@@ -374,7 +375,6 @@ export function PresetsSection({ taskOptions, onError }: PresetsSectionProps) {
 
       <Modal opened={importOpened} onClose={() => { if (!importing && !createTaskState.isLoading) closeImport(); }} title="Импортировать набор" centered size="lg" closeOnClickOutside={!importing && !createTaskState.isLoading} closeOnEscape={!importing && !createTaskState.isLoading}>
         <Stack>
-          <Text size="sm" c="gray.5">Вставьте данные, полученные кнопкой «Копировать» в другой библиотеке.</Text>
           <Textarea placeholder="Вставьте данные из кнопки «Копировать» у набора" label="Данные набора" value={importData} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setImportData(event.currentTarget.value)} minRows={6} error={importError || undefined} />
           <Group justify="flex-end"><Button variant="subtle" color="gray" disabled={importing || createTaskState.isLoading} onClick={closeImport}>Отмена</Button><Button onClick={() => void handleImport()} loading={importing || createTaskState.isLoading} disabled={!importData.trim()}>Импортировать набор</Button></Group>
         </Stack>
@@ -412,7 +412,7 @@ export function PresetsSection({ taskOptions, onError }: PresetsSectionProps) {
             <Stack gap="sm">
               {presets.length === 0 ? (
                 <Text size="sm" c="gray.4">
-                  Наборов пока нет. Создайте первый набор для быстрой загрузки задач в комнату.
+                  Наборов пока нет
                 </Text>
               ) : (
                 presets.map((preset) => (

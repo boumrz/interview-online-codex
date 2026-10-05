@@ -13,7 +13,23 @@ data class HrTaskRow(
     val score: Int?,
 )
 
+data class PersonalRoomTaskRow(
+    val roomId: String,
+    val stepIndex: Int,
+    val title: String,
+    val language: String,
+    val mandatory: Boolean,
+)
+
 interface RoomTaskRepository : JpaRepository<RoomTask, String> {
+    @Query("""
+        select new com.interviewonline.repository.PersonalRoomTaskRow(room.id, task.stepIndex, task.title, task.language, task.mandatory)
+        from RoomTask task join task.room room
+        where room.id in :roomIds
+        order by room.id asc, task.stepIndex asc, task.id asc
+    """)
+    fun findPersonalSummaryTaskRows(@Param("roomIds") roomIds: Collection<String>): List<PersonalRoomTaskRow>
+
     fun findAllByRoomIdInOrderByRoomIdAscStepIndexAsc(roomIds: Collection<String>): List<RoomTask>
 
     @Query(

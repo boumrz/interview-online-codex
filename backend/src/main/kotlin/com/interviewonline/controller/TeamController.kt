@@ -216,7 +216,8 @@ class TeamController(
     ): ResponseEntity<TeamInterviewDetailsDto> {
         val actor = requireUser(authorization)
         val keys = setOf("title", "candidateName", "position", "scheduledAt", "revision")
-        if (!body.isObject || body.fieldNames().asSequence().toSet() != keys) {
+        val fields = body.fieldNames().asSequence().toSet()
+        if (!body.isObject || !fields.containsAll(keys) || !keys.plus(setOf("context", "interviewerIds")).containsAll(fields)) {
             throw ApiException(HttpStatus.BAD_REQUEST, "Нужно передать название, все поля метаданных и ревизию")
         }
         val title = body.path("title")
@@ -231,12 +232,31 @@ class TeamController(
             if (!node.isTextual) throw ApiException(HttpStatus.BAD_REQUEST, "Поле $key должно быть строкой или null")
             return node.textValue()
         }
+        val context = body.get("context")?.let { selection ->
+            if (!selection.isObject || selection.fieldNames().asSequence().toSet() != setOf("trackId", "vacancyId")) {
+                throw ApiException(HttpStatus.BAD_REQUEST, "Нужно передать трек и вакансию")
+            }
+            fun nullableId(key: String): String? {
+                val value = selection.path(key)
+                if (value.isNull) return null
+                if (!value.isTextual) throw ApiException(HttpStatus.BAD_REQUEST, "Поле $key должно быть строкой или null")
+                return value.textValue()
+            }
+            com.interviewonline.dto.TeamInterviewContextSelection(nullableId("trackId"), nullableId("vacancyId"))
+        }
         val request = TeamInterviewDetailsUpdateRequest(
             title = title.textValue(),
             candidateName = nullableText("candidateName"),
             position = nullableText("position"),
             scheduledAt = nullableText("scheduledAt"),
             revision = revision.longValue(),
+            context = context,
+            interviewerIds = body.get("interviewerIds")?.let { ids ->
+                if (!ids.isArray || ids.any { !it.isTextual }) {
+                    throw ApiException(HttpStatus.BAD_REQUEST, "Интервьюеры должны быть списком участников")
+                }
+                ids.map { it.textValue() }
+            },
         )
         return ResponseEntity.ok()
             .header(HttpHeaders.CACHE_CONTROL, "private, no-store")

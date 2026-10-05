@@ -22,12 +22,12 @@ test('guest creation is modal and login fields explain expected input', async ()
     await page.goto(`${base}/login`, { waitUntil: 'networkidle' });
     for (const name of ['Ник', 'Пароль']) assert.ok(await page.getByLabel(name, { exact: true }).getAttribute('placeholder'), `${name} needs a useful placeholder`);
     await page.getByText('Регистрация', { exact: true }).click();
-    assert.ok(await page.getByLabel('Имя для комнаты').getAttribute('placeholder'));
+    assert.equal(await page.getByLabel('Имя', { exact: true }).getAttribute('placeholder'), null);
     assert.match(await page.getByLabel('Пароль', { exact: true }).getAttribute('placeholder'), /6/);
   } finally { await browser.close(); }
 });
 
-test('personal rename uses a modal, preserves failed draft and saves via Enter', async () => {
+test('personal unified edit uses a modal, preserves failed draft and saves via Enter', async () => {
   const register = await fetch(`${api}/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nickname: `ui2_${Date.now()}`, displayName: 'Проверка UI.2', password: 'ui2-password-123' }) });
   assert.equal(register.status, 200);
   const auth = await register.json();
@@ -39,13 +39,13 @@ test('personal rename uses a modal, preserves failed draft and saves via Enter',
     await context.addInitScript(({ token, user }) => { localStorage.setItem('auth_token', token); localStorage.setItem('auth_user', JSON.stringify(user)); }, auth);
     const page = await context.newPage();
     await page.goto(`${base}/workspace/personal/interviews`, { waitUntil: 'networkidle' });
-    await page.getByRole('button', { name: 'Переименовать интервью UI.2 личное интервью' }).click();
-    const dialog = page.getByRole('dialog', { name: 'Переименовать интервью', exact: true });
+    await page.getByRole('button', { name: 'Редактировать интервью UI.2 личное интервью' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Редактировать интервью', exact: true });
     await dialog.waitFor();
-    assert.equal(await dialog.locator('label').filter({ hasText: 'Название интервью' }).count(), 0);
+    assert.equal(await dialog.getByLabel('Название интервью', { exact: true }).count(), 1);
     const input = dialog.getByRole('textbox', { name: 'Название интервью' });
     assert.ok(await input.getAttribute('placeholder'));
-    const route = '**/api/me/rooms/*';
+    const route = '**/api/me/rooms/*/details';
     await page.route(route, request => request.request().method() === 'PATCH' ? request.fulfill({ status: 500, json: { error: 'test failure' } }) : request.continue());
     await input.fill('UI.2 новое название');
     await input.press('Enter');
@@ -53,6 +53,8 @@ test('personal rename uses a modal, preserves failed draft and saves via Enter',
     assert.equal(await input.inputValue(), 'UI.2 новое название');
     await page.unroute(route);
     await input.press('Enter');
+    await page.getByText('Интервью сохранено', { exact: true }).waitFor();
+    await dialog.getByRole('button', { name: 'Отмена', exact: true }).click();
     await dialog.waitFor({ state: 'hidden' });
     await page.getByText('UI.2 новое название', { exact: true }).waitFor();
     await page.goto(`${base}/profile`, { waitUntil: 'networkidle' });

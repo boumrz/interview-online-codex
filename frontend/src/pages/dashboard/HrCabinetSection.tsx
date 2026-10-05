@@ -347,11 +347,8 @@ export function HrCabinetSection({ user, token, teamId }: { user: User; token: s
         <Group justify="space-between" align="flex-start" gap="xl" wrap="wrap">
           <div>
             <Title order={2}>Кандидаты и интервью</Title>
-            <Text c="gray.5" size="sm" mt={4}>
-              {teamId ? "Кандидаты и интервью этой команды доступны всем её участникам." : "Ваши интервью и назначения нанимающим."}
-            </Text>
           </div>
-          {!teamId ? <CopyHrId id={user.id} compact /> : null}
+          {!teamId ? <CopyHrId nickname={user.nickname} compact /> : null}
         </Group>
 
         {teamId ? <TeamProcessFilters accountId={user.id} teamId={teamId} value={processFilter} onChange={value => { setProcessFilter(value); setPage(0); setDetailRoomId(null); }} /> : null}

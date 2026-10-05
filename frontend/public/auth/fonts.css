@@ -1,0 +1,7 @@
+@font-face {
+  font-family: "Google Sans Auth";
+  src: url("./google-sans.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}

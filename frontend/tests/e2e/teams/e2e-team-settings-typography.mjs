@@ -76,16 +76,13 @@ for (const theme of ['light', 'dark']) {
       assert.doesNotMatch(await page.getByRole('main').innerText(), /ID команды|УПРАВЛЕНИЕ ДОСТУПОМ/);
       const boxes = {
         name: await visibleTextBox(page.getByRole('main').getByText(team.name, { exact: true })),
-        role: await visibleTextBox(page.getByText('Ваша роль: Владелец', { exact: true })),
+        role: await visibleTextBox(page.getByRole('main').getByText('Владелец', { exact: true }).first()),
         invitationTitle: await visibleTextBox(page.getByRole('heading', { name: 'Приглашения', exact: true })),
-        invitationDescription: await visibleTextBox(page.getByText('Одна ссылка для всей команды. Её можно отправить нескольким людям.', { exact: true })),
         rosterTitle: await visibleTextBox(page.getByText('Состав команды', { exact: true })),
       };
       const pairs = [
-        ['name → role', boxes.name, boxes.role],
-        ['role → invitations', boxes.role, boxes.invitationTitle],
-        ['invitation title → description', boxes.invitationTitle, boxes.invitationDescription],
-        ['invitation description → roster', boxes.invitationDescription, boxes.rosterTitle],
+        ['identity → invitations', { bottom: Math.max(boxes.name.bottom, boxes.role.bottom) }, boxes.invitationTitle],
+        ['invitation title → roster', boxes.invitationTitle, boxes.rosterTitle],
       ];
       const gaps = pairs.map(([label, previous, next]) => ({ label, gap: next.y - previous.bottom }));
       await writeFile(`${evidence}/${theme}-measurements.json`, JSON.stringify({ theme, boxes, gaps }, null, 2));

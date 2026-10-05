@@ -114,6 +114,7 @@ export default defineConfig({
     : undefined,
   plugins: [
     new rspack.DefinePlugin({
+      __FEATURE_SOCIAL_AUTH_ENABLED__: JSON.stringify(process.env.FEATURE_SOCIAL_AUTH_ENABLED === "true"),
       __FEATURE_AGENT_OPS__: JSON.stringify(process.env.FEATURE_AGENT_OPS ?? "false"),
       "process.env.FEATURE_AGENT_OPS": JSON.stringify(process.env.FEATURE_AGENT_OPS ?? "false"),
       "process.env.FEATURE_TEAM_MERGE_COMMIT": JSON.stringify(process.env.FEATURE_TEAM_MERGE_COMMIT ?? "false"),

@@ -152,9 +152,6 @@ function AgentRunFormCard({
             </ThemeIcon>
             <Title order={4}>Запуск агентного процесса</Title>
           </Group>
-          <Text size="sm" c="gray.4">
-            Запуск процесса оркестрации доступен только внутри задачи Linear.
-          </Text>
           <TextInput
             label="Задача Linear"
             placeholder="LDT-76"
@@ -309,10 +306,6 @@ function RealtimeFaultsCard({
             </ThemeIcon>
             <Title order={4}>Инъекции сбоев realtime</Title>
           </Group>
-          <Text size="sm" c="gray.4">
-            Для тестов хаоса: искусственная задержка и периодический пропуск
-            broadcast по комнате.
-          </Text>
           <Group grow>
             <TextInput
               label="Код приглашения"
@@ -426,9 +419,6 @@ function AgentRunsCard({
                       повтор {run.retryCount}/{run.maxRetries}
                     </Badge>
                   </Group>
-                  <Text size="xs" c="gray.4">
-                    трасса: {run.traceId}
-                  </Text>
                 </Group>
                 <Text size="sm">Роль: {run.assignedRole || "—"}</Text>
                 <Group gap="xs" wrap="wrap">
@@ -466,7 +456,7 @@ function AgentRunsCard({
           ))}
           {isIssueValid && runs.length === 0 && (
             <Text size="sm" c="gray.4">
-              Для задачи пока нет запущенных процессов.
+              Запусков пока нет
             </Text>
           )}
         </Stack>
@@ -481,7 +471,7 @@ function AgentRunsCard({
           >
             <Stack gap="xs">
               <Group justify="space-between">
-                <Text fw={700}>Результат гейтов для {selectedPolicyRunId}</Text>
+                <Text fw={700}>Результат проверок</Text>
                 <Badge
                   color={selectedPolicyResult.passed ? "teal" : "red"}
                   variant="light"
@@ -495,7 +485,7 @@ function AgentRunsCard({
                   size="sm"
                   c={check.passed ? "teal.2" : "red.4"}
                 >
-                  {check.id}: {check.message}
+                  {check.message}
                 </Text>
               ))}
             </Stack>

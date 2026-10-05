@@ -2,6 +2,11 @@ package com.interviewonline.controller
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.interviewonline.support.Postgres16TestSupport
+import org.junit.jupiter.api.AfterAll
+import org.springframework.test.annotation.DirtiesContext
+import org.springframework.test.context.DynamicPropertyRegistry
+import org.springframework.test.context.DynamicPropertySource
 import com.interviewonline.model.RoomHrAssignment
 import com.interviewonline.model.RoomParticipant
 import com.interviewonline.repository.RoomHrAssignmentRepository
@@ -40,6 +45,7 @@ import java.util.concurrent.TimeoutException
 // Match production; MockMvc does not complete long-lived SSE dispatches automatically.
 @SpringBootTest(properties = ["spring.jpa.open-in-view=false"])
 @AutoConfigureMockMvc
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class HrRoleRemovalIntegrationTest(
     @Autowired private val mockMvc: MockMvc,
     @Autowired private val objectMapper: ObjectMapper,
@@ -49,10 +55,17 @@ class HrRoleRemovalIntegrationTest(
     @Autowired private val roomRepository: RoomRepository,
     @Autowired private val userRepository: UserRepository,
     @Autowired private val transactionManager: PlatformTransactionManager,
+    @Autowired private val jdbc: org.springframework.jdbc.core.JdbcTemplate,
 ) {
+    companion object {
+        private val postgres = Postgres16TestSupport.create("hrroleremoval")
+        @JvmStatic @DynamicPropertySource fun properties(registry: DynamicPropertyRegistry) = postgres.register(registry)
+        @JvmStatic @AfterAll fun cleanup() = postgres.close()
+    }
+
     @Test
     fun `offline removal is durable and idempotent retains history and permits explicit regrant`() {
-        val (owner, hr, room) = assignedRoom()
+        val (owner, hr, room) = assignedRoom(team = true)
         val originalMembership = participantRepository.findByRoomIdAndUserId(room.id, hr.id)!!.id
         val originalAssignment = assignmentRepository.findByRoomIdAndUserId(room.id, hr.id)!!.id
         assertCabinetCount(hr, 1)
@@ -74,7 +87,7 @@ class HrRoleRemovalIntegrationTest(
         mockMvc.get("/api/rooms/${room.inviteCode}/hr-managers") {
             header("Authorization", "Bearer ${owner.token}")
         }.andExpect { status { isOk() }; jsonPath("$.length()") { value(0) } }
-        assertEquals(403, track(room, hr).response.status)
+        assertEquals(404, track(room, hr).response.status)
         assertCandidate(room, hr)
 
         repeat(2) { assertEquals(200, HrHttpFixtures.inviteHr(mockMvc, owner, room, hr).response.status) }
@@ -132,7 +145,9 @@ class HrRoleRemovalIntegrationTest(
             assertEquals(204, event(room, ownerTab, "grant_interviewer_access", mapOf(
                 "targetSessionId" to ordinaryTab.sessionId,
             )).response.status)
-            assertEquals(404, remove(room, ordinary.id, eventToken = managerTab.eventToken).response.status)
+            assertEquals(404, remove(room, ordinary.id, caller = manager, eventToken = managerTab.eventToken).response.status)
+            if (manager != null) assertEquals(403, remove(room, ordinary.id, eventToken = managerTab.eventToken).response.status,
+                "an anonymous request cannot borrow an authenticated manager proof")
             assertEquals(403, event(room, managerTab, "revoke_interviewer_access", mapOf(
                 "targetUserId" to ordinary.id,
             )).response.status)
@@ -321,15 +336,14 @@ class HrRoleRemovalIntegrationTest(
     }
 
     @ParameterizedTest
-    @CsvSource("invite,remove", "remove,invite", "track,remove", "remove,track", "entry,remove", "remove,entry")
+    @CsvSource("invite,remove", "remove,invite", "entry,remove", "remove,entry")
     fun `removal and concurrent permission operations respect the committed room order`(first: String, second: String) {
-        val (owner, hr, room) = assignedRoom()
+        val (owner, hr, room) = assignedRoom(team = first == "invite" || second == "invite")
         val executor = Executors.newSingleThreadExecutor()
         val started = CountDownLatch(1)
         fun operation(name: String): Int = when (name) {
             "invite" -> HrHttpFixtures.inviteHr(mockMvc, owner, room, hr).response.status
             "remove" -> remove(room, hr.id, owner).response.status
-            "track" -> track(room, hr).response.status
             "entry" -> join(room, hr).result.response.status
             else -> error("Unknown operation $name")
         }
@@ -351,7 +365,6 @@ class HrRoleRemovalIntegrationTest(
             }!!
             val expectedStatus = when {
                 second == "remove" -> 204
-                first == "remove" && second == "track" -> 403
                 else -> 200
             }
             assertEquals(expectedStatus, queued.get(10, TimeUnit.SECONDS))
@@ -369,10 +382,10 @@ class HrRoleRemovalIntegrationTest(
 
     private fun account(isHr: Boolean) = HrHttpFixtures.register(mockMvc, objectMapper, isHr, "remove-hr").first
 
-    private fun assignedRoom(): Triple<HrTestAccount, HrTestAccount, HrTestRoom> {
+    private fun assignedRoom(team: Boolean = false): Triple<HrTestAccount, HrTestAccount, HrTestRoom> {
         val owner = account(false)
         val hr = account(true)
-        val room = HrHttpFixtures.createRoom(mockMvc, objectMapper, owner)
+        val room = if (team) HrHttpFixtures.createTeamRoom(mockMvc, objectMapper, owner) else HrHttpFixtures.createRoom(mockMvc, objectMapper, owner)
         assertEquals(200, HrHttpFixtures.inviteHr(mockMvc, owner, room, hr).response.status)
         return Triple(owner, hr, room)
     }

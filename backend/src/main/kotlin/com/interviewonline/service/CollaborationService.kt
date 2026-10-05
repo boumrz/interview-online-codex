@@ -2145,10 +2145,10 @@ class CollaborationService(
      * Returns null when the token is blank or no matching connection is found.
      */
     @Transactional(readOnly = true)
-    fun resolveRoleByEventToken(inviteCode: String, eventToken: String?): RoomAccessService.RoomRole? {
+    fun resolveRoleByEventToken(inviteCode: String, eventToken: String?, anonymousOnly: Boolean = false): RoomAccessService.RoomRole? {
         if (eventToken.isNullOrBlank()) return null
         val participant = participants.values
-            .firstOrNull { it.inviteCode == inviteCode && it.eventToken == eventToken }
+            .firstOrNull { it.inviteCode == inviteCode && it.eventToken == eventToken && (!anonymousOnly || it.userId == null) }
             ?: return null
         val room = roomRepository.findByInviteCode(inviteCode) ?: return null
         if (participant.admittedTeamId != room.teamId) return null

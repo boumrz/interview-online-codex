@@ -1,16 +1,21 @@
-import React, { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import React, { FormEvent, Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Button, Card, Checkbox, Input, Segmented, Space, Typography } from "antd";
 import { KeyOutlined, UserOutlined } from "@ant-design/icons";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../app/hooks";
 import { store } from "../app/store";
-import { API_BASE_URL } from "../config/runtime";
+import { API_BASE_URL, SOCIAL_AUTH_ENABLED } from "../config/runtime";
 import { clearAuth, setAuthToken, setCurrentUser } from "../features/auth/authSlice";
 import { api, useLoginMutation, useRegisterMutation } from "../services/api";
 import { setVisitParams, trackEvent } from "../services/analytics";
+import { getApiErrorMessage } from "../services/apiErrors";
 import { ThemeToggleButton } from "../features/theme/ThemeToggleButton";
 import type { User } from "../types";
 import styles from "./LoginPage.module.css";
+
+const SocialLoginButtons = SOCIAL_AUTH_ENABLED
+  ? lazy(() => import("../features/auth/SocialLoginButtons").then((module) => ({ default: module.SocialLoginButtons })))
+  : null;
 
 type AuthenticationAttempt = {
   initialToken: string | null;
@@ -44,19 +49,22 @@ export function LoginPage() {
   const [nickname, setNickname] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [isHr, setIsHr] = useState(false);
   const [error, setError] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [passwordConfirmationError, setPasswordConfirmationError] = useState("");
   const [login, loginState] = useLoginMutation();
   const [register, registerState] = useRegisterMutation();
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [isStartingSocial, setIsStartingSocial] = useState(false);
   const [hasProfileRetry, setHasProfileRetry] = useState(false);
   const mountedRef = useRef(false);
   const attemptRef = useRef<AuthenticationAttempt | null>(null);
   const profileRetryRef = useRef<ProfileRetry | null>(null);
-  const isLoading = isAuthenticating || loginState.isLoading || registerState.isLoading;
+  const isLoading = isAuthenticating || isStartingSocial || loginState.isLoading || registerState.isLoading;
   const isRegisterMode = mode === "register";
-  const credentialDraft = JSON.stringify([mode, nickname, displayName, password, isHr]);
+  const credentialDraft = JSON.stringify([mode, nickname, displayName, password, passwordConfirmation, isHr]);
   const nextPath = useMemo(() => {
     const locationState = location.state;
     if (
@@ -121,10 +129,26 @@ export function LoginPage() {
     try {
       setError("");
       setPasswordError("");
+      setPasswordConfirmationError("");
+      if (isRegisterMode && /[^\x20-\x7E]/.test(nickname)) {
+        setError("Ник может содержать только латинские буквы, цифры и символы");
+        trackEvent("mkt_register_validation_failed", { reason: "nickname_non_latin" });
+        return;
+      }
+      if (isRegisterMode && /[^\x20-\x7E]/.test(password)) {
+        setPasswordError("Пароль может содержать только латинские буквы, цифры и символы");
+        trackEvent("mkt_register_validation_failed", { reason: "password_non_latin" });
+        return;
+      }
       if (isRegisterMode && password.length < 6) {
         const message = "Пароль должен быть не короче 6 символов";
         setPasswordError(message);
         trackEvent("mkt_register_validation_failed", { reason: "password_too_short" });
+        return;
+      }
+      if (isRegisterMode && password !== passwordConfirmation) {
+        setPasswordConfirmationError("Пароли не совпадают");
+        trackEvent("mkt_register_validation_failed", { reason: "password_confirmation_mismatch" });
         return;
       }
       if (isRegisterMode && !displayName.trim()) {
@@ -213,7 +237,9 @@ export function LoginPage() {
       }
       dispatch(clearAuth());
       dispatch(api.util.resetApiState());
-      const apiMessage = extractApiErrorMessage(err);
+      const apiMessage = getApiErrorMessage(err, isRegisterMode
+        ? "Не удалось создать аккаунт. Попробуйте ещё раз."
+        : "Не удалось выполнить вход. Проверьте ник и пароль.");
       if (isRegisterMode) {
         const registerMessage = apiMessage || "Не удалось зарегистрироваться. Проверьте данные и попробуйте снова.";
         setError(registerMessage);
@@ -240,6 +266,8 @@ export function LoginPage() {
     setMode(value as "login" | "register");
     setError("");
     setPasswordError("");
+    setPasswordConfirmation("");
+    setPasswordConfirmationError("");
     trackEvent("mkt_auth_mode_changed", { mode: value });
   };
 
@@ -257,9 +285,6 @@ export function LoginPage() {
         <Card className={styles.card}>
           <Space orientation="vertical" size={8} className={styles.intro}>
             <Typography.Title level={2}>Личный кабинет</Typography.Title>
-            <Typography.Paragraph>
-              Вход по нику и паролю. При регистрации укажите ник и имя для комнаты.
-            </Typography.Paragraph>
           </Space>
 
           <Segmented
@@ -276,13 +301,11 @@ export function LoginPage() {
               <>
                 <label className={styles.field}>
                   <span>Ник</span>
-                  <Typography.Text className={styles.hint}>Используется для входа в аккаунт</Typography.Text>
                   <Input placeholder="Введите ник для входа" aria-label="Ник" autoComplete="username" disabled={isLoading} prefix={<UserOutlined />} value={nickname} onChange={(event) => setNickname(event.currentTarget.value)} required />
                 </label>
                 <label className={styles.field}>
-                  <span>Имя для комнаты</span>
-                  <Typography.Text className={styles.hint}>Это имя будет видно другим участникам комнаты</Typography.Text>
-                  <Input placeholder="Введите имя для отображения" aria-label="Имя для комнаты" autoComplete="name" disabled={isLoading} prefix={<UserOutlined />} value={displayName} onChange={(event) => setDisplayName(event.currentTarget.value)} required />
+                  <span>Имя</span>
+                  <Input aria-label="Имя" autoComplete="name" disabled={isLoading} prefix={<UserOutlined />} value={displayName} onChange={(event) => setDisplayName(event.currentTarget.value)} required />
                 </label>
               </>
             ) : (
@@ -293,7 +316,6 @@ export function LoginPage() {
             )}
             <label className={styles.field}>
               <span>Пароль</span>
-              {isRegisterMode && <Typography.Text className={styles.hint}>Минимум 6 символов</Typography.Text>}
               <Input.Password
                 placeholder={isRegisterMode ? "Придумайте пароль: минимум 6 символов" : "Введите пароль вашего аккаунта"}
                 autoComplete={isRegisterMode ? "new-password" : "current-password"}
@@ -304,18 +326,37 @@ export function LoginPage() {
                 onChange={(event) => {
                   const nextPassword = event.currentTarget.value;
                   setPassword(nextPassword);
-                  if (isRegisterMode && nextPassword.length >= 6) setPasswordError("");
+                  setPasswordError("");
+                  setPasswordConfirmationError("");
                 }}
                 required
               />
               {passwordError && <Typography.Text role="alert" type="danger">{passwordError}</Typography.Text>}
             </label>
             {isRegisterMode && (
+              <label className={styles.field}>
+                <span>Повторите пароль</span>
+                <Input.Password
+                  placeholder="Повторите пароль"
+                  autoComplete="new-password"
+                  aria-label="Повторите пароль"
+                  disabled={isLoading}
+                  prefix={<KeyOutlined />}
+                  value={passwordConfirmation}
+                  onChange={(event) => {
+                    setPasswordConfirmation(event.currentTarget.value);
+                    setPasswordConfirmationError("");
+                  }}
+                  required
+                />
+                {passwordConfirmationError && <Typography.Text role="alert" type="danger">{passwordConfirmationError}</Typography.Text>}
+              </label>
+            )}
+            {isRegisterMode && (
               <div className={styles.checkboxField}>
                 <Checkbox checked={isHr} disabled={isLoading} onChange={(event) => setIsHr(event.target.checked)}>
                   Я нанимающий
                 </Checkbox>
-                <Typography.Text className={styles.hint}>Для приглашений внешним нанимающим по личному ID. В команде кандидаты доступны всем участникам автоматически.</Typography.Text>
               </div>
             )}
             <Button block htmlType="submit" loading={isLoading} disabled={isLoading} aria-busy={isLoading} aria-label={hasProfileRetry ? "Повторить" : isRegisterMode ? "Создать аккаунт" : "Войти в кабинет"} size="large" type="primary">
@@ -326,18 +367,16 @@ export function LoginPage() {
             </div>
           </form>
 
+          {SocialLoginButtons && (
+            <Suspense fallback={null}>
+              <SocialLoginButtons disabled={isLoading} invitationReturn={nextPath === "/join/team?resume=accept"}
+                onError={setError} onBusyChange={setIsStartingSocial} />
+            </Suspense>
+          )}
+
           <Link className={styles.homeLink} to="/">На главную страницу</Link>
         </Card>
       </section>
     </main>
   );
-}
-
-function extractApiErrorMessage(error: unknown): string | null {
-  if (!error || typeof error !== "object") return null;
-  const maybeError = error as { data?: unknown; error?: string };
-  if (typeof maybeError.error === "string" && maybeError.error.trim()) return maybeError.error;
-  if (!maybeError.data || typeof maybeError.data !== "object") return null;
-  const data = maybeError.data as { error?: unknown };
-  return typeof data.error === "string" && data.error.trim() ? data.error : null;
 }

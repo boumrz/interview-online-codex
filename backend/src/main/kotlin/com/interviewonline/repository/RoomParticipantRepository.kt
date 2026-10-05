@@ -7,6 +7,14 @@ import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 
 interface RoomParticipantRepository : JpaRepository<RoomParticipant, String> {
+    @Query("""
+        select new com.interviewonline.repository.PersonalRoomManagerNameRow(room.id, manager.id, manager.displayName)
+        from RoomParticipant participant join participant.room room join participant.user manager
+        where room.id in :roomIds and lower(trim(participant.role)) in ('owner', 'interviewer')
+        order by room.id asc, participant.createdAt asc, participant.id asc
+    """)
+    fun findPersonalSummaryInterviewerNames(@Param("roomIds") roomIds: Collection<String>): List<PersonalRoomManagerNameRow>
+
     fun findAllByUserId(userId: String): List<RoomParticipant>
     fun findAllByRoomIdOrderByCreatedAtAsc(roomId: String): List<RoomParticipant>
     fun findAllByRoomIdIn(roomIds: Collection<String>): List<RoomParticipant>

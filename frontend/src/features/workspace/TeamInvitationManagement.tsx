@@ -364,7 +364,6 @@ export function TeamInvitationManagement({ accountId, authToken, teamId }: Props
       <Group className={styles.headingWithCreate} justify="space-between" align="flex-end" gap="md" wrap="wrap">
         <Stack gap="xs">
           <Title order={2}>Приглашения</Title>
-          <Text c="gray.5">Одна ссылка для всей команды. Её можно отправить нескольким людям.</Text>
         </Stack>
         <Button className={styles.primaryAction} loading={busyKey === "create"} onClick={() => void runCreate()}>
           {invitations.some((item) => item.state === "PENDING") ? "Перевыпустить ссылку" : "Выпустить ссылку"}
@@ -402,7 +401,6 @@ export function TeamInvitationManagement({ accountId, authToken, teamId }: Props
         <Card className={styles.panel} withBorder>
           <Stack gap="xs">
             <Text fw={700}>Ссылка ещё не выпущена</Text>
-            <Text size="sm" c="gray.5">Ожидающая ссылка не добавляет сотрудника до явного принятия.</Text>
           </Stack>
         </Card>
       ) : null}
@@ -418,7 +416,7 @@ export function TeamInvitationManagement({ accountId, authToken, teamId }: Props
             component="article"
             className={styles.panel}
             withBorder
-            aria-label={`Приглашение ${invitation.id}`}
+            aria-label="Приглашение в команду"
           >
             <Stack gap="sm">
               <Group justify="space-between" align="flex-start" wrap="wrap">

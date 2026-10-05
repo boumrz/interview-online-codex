@@ -72,7 +72,7 @@ async function matrix(page, name, verify) {
   }
 }
 
-async function metadataBesideContent(card, title, label, description = "", hasAuthor = false) {
+async function metadataBesideContent(card, title, label, description = "") {
   const titleBox = await card.getByText(title, { exact: true }).boundingBox();
   const metadata = card.getByText(label, { exact: true });
   const metadataBox = await metadata.boundingBox();
@@ -81,11 +81,7 @@ async function metadataBesideContent(card, title, label, description = "", hasAu
   const precedingBox = description ? await card.getByText(description, { exact: true }).boundingBox() : titleBox;
   assert.ok(metadataBox.y >= precedingBox.y + precedingBox.height + 6, "metadata follows the title or description with a readable gap");
   assert.ok(metadataBox.y <= precedingBox.y + precedingBox.height + 20, "metadata stays close to the related content");
-  if (hasAuthor) {
-    const authorBox = await card.getByText(/^Автор:/).boundingBox();
-    assert.ok(Math.abs(authorBox.y + authorBox.height / 2 - metadataBox.y - metadataBox.height / 2) <= 4, "author and metadata share a compact row");
-    assert.ok(authorBox.x >= metadataBox.x + metadataBox.width + 6 && authorBox.x <= metadataBox.x + metadataBox.width + 18, "author stays beside metadata");
-  }
+  assert.equal(await card.getByText(/^Автор:/).count(), 0, "internal author IDs are hidden");
   const bounds = await card.boundingBox();
   for (const button of await card.getByRole("button").all()) {
     const box = await button.boundingBox();
@@ -111,7 +107,7 @@ test("personal task languages follow their descriptions and stay beside the titl
   } finally { await f.close(); }
 });
 
-test("team task languages and authors form a left-aligned information row", async () => {
+test("team task languages stay left aligned without internal author IDs", async () => {
   const f = await fixture();
   try {
     const { team } = await request("/teams", f.auth.token, { name: "Метаданные задач" });
@@ -122,13 +118,13 @@ test("team task languages and authors form a left-aligned information row", asyn
     const card = title => f.page.getByRole("region", { name: `Командная задача ${title}`, exact: true });
     await card(longTitle).waitFor();
     await matrix(f.page, "team-tasks", async () => {
-      await metadataBesideContent(card("Короткая задача"), "Короткая задача", "Node JS", "", true);
-      await metadataBesideContent(card(longTitle), longTitle, "Node JS", description, true);
+      await metadataBesideContent(card("Короткая задача"), "Короткая задача", "Node JS");
+      await metadataBesideContent(card(longTitle), longTitle, "Node JS", description);
     });
   } finally { await f.close(); }
 });
 
-test("team set counts stay with their composition and author instead of occupying a middle column", async () => {
+test("team set counts stay with their composition without internal author IDs", async () => {
   const f = await fixture();
   try {
     const { team } = await request("/teams", f.auth.token, { name: "Метаданные наборов" });
@@ -142,8 +138,8 @@ test("team set counts stay with their composition and author instead of occupyin
     const card = value => f.page.getByRole("region", { name: `Командный набор ${value}`, exact: true });
     await card(name).waitFor();
     await matrix(f.page, "team-sets", async () => {
-      await metadataBesideContent(card(name), name, "2 задачи", "Первая задача → Вторая задача", true);
-      await metadataBesideContent(card("Одна задача"), "Одна задача", "1 задача", "Первая задача", true);
+      await metadataBesideContent(card(name), name, "2 задачи", "Первая задача → Вторая задача");
+      await metadataBesideContent(card("Одна задача"), "Одна задача", "1 задача", "Первая задача");
     });
   } finally { await f.close(); }
 });

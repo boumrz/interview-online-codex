@@ -6,7 +6,17 @@ import org.springframework.data.jpa.repository.EntityGraph
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 
+data class PersonalRoomManagerNameRow(val roomId: String, val userId: String, val displayName: String?)
+
 interface RoomRepository : JpaRepository<Room, String> {
+    @Query("""
+        select new com.interviewonline.repository.PersonalRoomManagerNameRow(room.id, owner.id, owner.displayName)
+        from Room room join room.ownerUser owner
+        where room.id in :roomIds
+        order by room.id asc
+    """)
+    fun findPersonalSummaryOwnerNames(@Param("roomIds") roomIds: Collection<String>): List<PersonalRoomManagerNameRow>
+
     fun findByInviteCode(inviteCode: String): Room?
     @EntityGraph(attributePaths = ["tasks"])
     fun findWithTasksByInviteCode(inviteCode: String): Room?

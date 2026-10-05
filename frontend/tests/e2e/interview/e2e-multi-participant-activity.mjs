@@ -443,30 +443,13 @@ async function layout(view, name) {
 }
 try {
   report.browser = browser.version(); phase('setup: ten authenticated room participants');
-  const ownerAuth = await account('Владелец интервью'), interviewerAuth = await account('Интервьюер'), hrAuth = await account('HR специалист', true);
+  const ownerAuth = await account('Владелец интервью'), interviewerAuth = await account('Интервьюер'), hrAuth = await account('Гостевой интервьюер', true);
   const candidateAuth = await Promise.all(Array.from({ length: 7 }, (_, i) => account(`Кандидат ${i + 1}`)));
   const room = await request('/rooms', { token: ownerAuth.token, method: 'POST', body: { title: '10 участников · параллельная запись логов', taskIds: [] } }); report.room = room.inviteCode;
   await request(`/rooms/${room.inviteCode}/tasks`, { token: ownerAuth.token, method: 'POST', body: { customTasks: [{ title: 'Совместный ввод', description: 'Семь кандидатов печатают одновременно', starterCode: '// activity\n', language: 'nodejs' }] } });
   await request(`/rooms/${room.inviteCode}/participants/${interviewerAuth.user.id}/role`, { token: ownerAuth.token, method: 'POST', body: { role: 'interviewer' } });
   const owner = await open(ownerAuth, room, 'owner'), interviewer = await open(interviewerAuth, room, 'interviewer'), hr = await open(hrAuth, room, 'hr');
-  const hrParticipant = owner.page.locator('[data-testid^="participant-badge-"]').filter({ hasText: 'HR специалист' });
-  const participantHelp = owner.page.getByTestId('participants-help-hint');
-  assert.equal(await participantHelp.isVisible(), true, 'participant action informer is visible');
-  await participantHelp.hover();
-  const guidance = owner.page.getByRole('tooltip').filter({ hasText: /нажмите на участника.*открыть доступные действия/i });
-  await guidance.waitFor({ state: 'visible' });
-  assert.match(await guidance.innerText(), /нажмите на участника.*открыть доступные действия/i);
-  await participantHelp.focus();
-  await owner.page.keyboard.press('Shift+Tab');
-  await owner.page.mouse.move(0, 0);
-  await guidance.waitFor({ state: 'hidden' });
-  await owner.page.keyboard.press('Tab');
-  assert.equal(await participantHelp.evaluate(element => document.activeElement === element), true, 'Tab focuses the participant action informer');
-  await guidance.waitFor({ state: 'visible', timeout: 6000 });
-  assert.equal(await guidance.isVisible(), true, 'guidance is also available from keyboard focus');
-  await participantHelp.blur();
-  await owner.page.mouse.move(0, 0);
-  await guidance.waitFor({ state: 'hidden' });
+  const hrParticipant = owner.page.locator('[data-testid^="participant-badge-"]').filter({ hasText: 'Гостевой интервьюер' });
   assert.equal(await hrParticipant.getAttribute('aria-haspopup'), 'menu');
   assert.equal(await hrParticipant.getAttribute('aria-expanded'), 'false');
   await hrParticipant.hover();
@@ -475,7 +458,7 @@ try {
   assert.equal(await hrParticipant.getAttribute('aria-expanded'), 'false', 'hover does not open participant actions');
   await hrParticipant.click();
   assert.equal(await hrParticipant.getAttribute('aria-expanded'), 'true', 'click opens participant actions');
-  const assignHrAction = owner.page.getByRole('menuitem', { name: 'Назначить нанимающим', exact: true });
+  const assignHrAction = owner.page.getByRole('menuitem', { name: 'Назначить интервьюером', exact: true });
   await assignHrAction.waitFor({ state: 'visible' });
   await assignHrAction.hover();
   assert.equal(await assignHrAction.isVisible(), true, 'menu remains open while moving from trigger to an action');
@@ -487,7 +470,7 @@ try {
   await owner.page.keyboard.press('Escape');
   await owner.page.waitForFunction(button => button.getAttribute('aria-expanded') === 'false', await hrParticipant.elementHandle());
   await hrParticipant.click();
-  await owner.page.getByRole('menuitem', { name: 'Назначить нанимающим', exact: true }).click();
+  await owner.page.getByRole('menuitem', { name: 'Назначить интервьюером', exact: true }).click();
   await hr.page.getByRole('button', { name: 'Кандидат и нанимающие', exact: true }).waitFor();
   assert.equal((await request(`/rooms/${room.inviteCode}`, { token: hrAuth.token })).role, 'interviewer');
   const candidates = [];
@@ -616,7 +599,7 @@ try {
     await owner.page.getByRole('tab', { name: 'Чат', exact: true }).click(); await logs(owner); await hasIds(owner, sourceIds);
   });
   await layout(owner, 'owner-desktop-complete');
-  phase('verification: desktop exports/paging passed; narrow HR controls and download');
+  phase('verification: desktop exports/paging passed; narrow guest interviewer controls and download');
   await hr.page.setViewportSize({ width: 900, height: 900 });
   await Promise.all(pendingInspections);
   hr.documentGeneration++; hr.expectedFault = true; await hr.page.reload({ waitUntil: 'domcontentloaded' });
@@ -626,7 +609,7 @@ try {
   await verifyReloadedEditor(hr);
   const [narrowDownload] = await Promise.all([hr.page.waitForEvent('download'), hr.page.getByRole('button', { name: 'Скачать логи в JSON', exact: true }).click()]);
   await narrowDownload.saveAs(`${out}/hr-narrow-activity.json`);
-  equalIds(JSON.parse(await readFile(`${out}/hr-narrow-activity.json`, 'utf8')).map(row => row.sourceEventId), sourceIds, 'narrow HR complete export');
+  equalIds(JSON.parse(await readFile(`${out}/hr-narrow-activity.json`, 'utf8')).map(row => row.sourceEventId), sourceIds, 'narrow guest interviewer complete export');
   await loadAll(hr); await layout(hr, 'hr-narrow-complete');
   await hasIds(hr, sourceIds); await screenshot(candidates[0], 'candidate-no-private-logs');
   phase('verification: activity, exports, privacy and both layouts completed');

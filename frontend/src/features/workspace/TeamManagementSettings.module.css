@@ -6,7 +6,6 @@
   padding-bottom: 4px;
 }
 
-.kicker,
 .identityLabel {
   color: var(--app-primary-text);
   font-size: 11px;

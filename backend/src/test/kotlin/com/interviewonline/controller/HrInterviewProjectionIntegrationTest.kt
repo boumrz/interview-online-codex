@@ -1,6 +1,13 @@
 package com.interviewonline.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.interviewonline.support.Postgres16TestSupport
+import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.BeforeAll
+import org.springframework.boot.test.autoconfigure.web.servlet.MockMvcPrint
+import org.springframework.test.annotation.DirtiesContext
+import org.springframework.test.context.DynamicPropertyRegistry
+import org.springframework.test.context.DynamicPropertySource
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
@@ -16,16 +23,27 @@ import java.util.concurrent.TimeUnit
 import org.junit.jupiter.api.Assertions.assertEquals
 
 @SpringBootTest
-@AutoConfigureMockMvc
+@AutoConfigureMockMvc(print = MockMvcPrint.NONE)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class HrInterviewProjectionIntegrationTest(
     @Autowired private val mockMvc: MockMvc,
     @Autowired private val objectMapper: ObjectMapper,
 ) {
+    companion object {
+        private val postgres = Postgres16TestSupport.create("hr_projection")
+        @JvmStatic @DynamicPropertySource
+        fun properties(registry: DynamicPropertyRegistry) = postgres.register(registry)
+        @JvmStatic @BeforeAll
+        fun verifyDatabase() = postgres.verifyPostgres16()
+        @JvmStatic @AfterAll
+        fun cleanup() = postgres.close()
+    }
+
     @Test
     fun `metadata revision protects concurrent saves and remains absent from shared room payload`() {
         val (owner, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "projection-owner")
         val (hr, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "projection-hr")
-        val room = HrHttpFixtures.createRoom(mockMvc, objectMapper, owner, "Backend Kotlin interview")
+        val room = HrHttpFixtures.createTeamRoom(mockMvc, objectMapper, owner, "Backend Kotlin interview")
         require(HrHttpFixtures.inviteHr(mockMvc, owner, room, hr).response.status == 200)
 
         mockMvc.put("/api/rooms/${room.inviteCode}/interview-metadata") {
@@ -59,11 +77,11 @@ class HrInterviewProjectionIntegrationTest(
     }
 
     @Test
-    fun `personal list is scoped ordered paginated and detail is isolated from another HR`() {
+    fun `account cabinet is scoped ordered paginated and detail is isolated from another external HR`() {
         val (owner, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "list-owner")
         val (hr, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "list-hr")
         val (otherHr, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "other-hr")
-        val room = HrHttpFixtures.createRoom(mockMvc, objectMapper, owner, "Cabinet row")
+        val room = HrHttpFixtures.createTeamRoom(mockMvc, objectMapper, owner, "Cabinet row")
         require(HrHttpFixtures.inviteHr(mockMvc, owner, room, hr).response.status == 200)
 
         mockMvc.get("/api/me/hr/rooms?page=0&size=20") {
@@ -146,7 +164,7 @@ class HrInterviewProjectionIntegrationTest(
     fun `first completion timestamp remains stable when verdict is corrected`() {
         val (owner, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "finished-owner")
         val (hr, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "finished-hr")
-        val room = HrHttpFixtures.createRoom(mockMvc, objectMapper, owner)
+        val room = HrHttpFixtures.createTeamRoom(mockMvc, objectMapper, owner)
         require(HrHttpFixtures.inviteHr(mockMvc, owner, room, hr).response.status == 200)
 
         mockMvc.post("/api/rooms/${room.inviteCode}/verdict") {
@@ -179,8 +197,8 @@ class HrInterviewProjectionIntegrationTest(
     fun `Moscow date boundaries use scheduled then finished then created fallback`() {
         val (owner, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "date-owner")
         val (hr, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "date-hr")
-        val inRange = HrHttpFixtures.createRoom(mockMvc, objectMapper, owner, "midnight Moscow")
-        val before = HrHttpFixtures.createRoom(mockMvc, objectMapper, owner, "before Moscow")
+        val inRange = HrHttpFixtures.createTeamRoom(mockMvc, objectMapper, owner, "midnight Moscow")
+        val before = HrHttpFixtures.createTeamRoom(mockMvc, objectMapper, owner, "before Moscow")
         require(HrHttpFixtures.inviteHr(mockMvc, owner, inRange, hr).response.status == 200)
         require(HrHttpFixtures.inviteHr(mockMvc, owner, before, hr).response.status == 200)
         listOf(inRange to "2026-09-04T21:00:00Z", before to "2026-09-04T20:59:59.999Z").forEach { (room, timestamp) ->

@@ -39,10 +39,11 @@ async function fill(page, credentials, mode = "login") {
   await page.goto(`${web}/login?next=/workspace/personal/library`);
   if (mode === "register") {
     await page.getByText("Регистрация", { exact: true }).click();
-    await page.getByRole("textbox", { name: "Имя для комнаты", exact: true }).fill(credentials.nickname);
+    await page.getByRole("textbox", { name: "Имя", exact: true }).fill(credentials.nickname);
   }
   await page.getByRole("textbox", { name: "Ник", exact: true }).fill(credentials.nickname);
   await page.getByLabel("Пароль", { exact: true }).fill(credentials.password);
+  if (mode === "register") await page.getByLabel("Повторите пароль", { exact: true }).fill(credentials.password);
 }
 
 function holdFirstProfile(page, { status = 200, expectedId, freshDisplayName } = {}) {
@@ -188,7 +189,7 @@ for (const [mode, status] of [["login", 401], ["login", 503], ["register", 503]]
       await page.getByLabel("Пароль", { exact: true }).press("Enter");
       await gate.ready();
       await gate.release();
-      await page.getByRole("alert").filter({ hasText: "Профиль временно недоступен" }).waitFor();
+      await page.getByRole("alert").filter({ hasText: status >= 500 ? "Ошибка сервера" : "Профиль временно недоступен" }).waitFor();
       await assertUnpublished(page);
       assert.equal(await page.getByRole("textbox", { name: "Ник", exact: true }).inputValue(), credentials.nickname);
       assert.ok(await page.getByLabel("Пароль", { exact: true }).inputValue() === credentials.password, "password draft remains in the form");

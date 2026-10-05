@@ -1,3 +1,2 @@
 .picker { min-width: 0; width: 100%; }
-.option { display: grid; min-width: 0; gap: 2px; line-height: 22px; }
-.optionId { color: var(--app-muted); font-size: 13px; overflow-wrap: anywhere; }
+.option { display: block; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 22px; }

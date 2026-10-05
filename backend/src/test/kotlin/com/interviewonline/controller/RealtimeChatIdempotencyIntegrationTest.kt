@@ -343,7 +343,7 @@ class RealtimeChatIdempotencyIntegrationTest(
         val owner = HrHttpFixtures.register(mockMvc, objectMapper, false, "chat-revoke-owner").first
         val manager = HrHttpFixtures.register(mockMvc, objectMapper, true, "chat-revoke-manager").first
         val room = HrHttpFixtures.createRoom(mockMvc, objectMapper, owner, "Revoke before receipt")
-        assertEquals(200, HrHttpFixtures.inviteHr(mockMvc, owner, room, manager).response.status)
+        HrHttpFixtures.seedLegacyPersonalHiringAssignment(jdbcTemplate, room, manager)
         val managerStream = join(mockMvc, room, authToken = manager.token, participantId = "revoked-manager")
         val clientMessageId = UUID.randomUUID().toString()
         val first = postChat(mockMvc, room, managerStream, clientMessageId, "До отзыва", 401)
@@ -1029,7 +1029,7 @@ class RealtimeChatIdempotencyIntegrationTest(
         val owner = HrHttpFixtures.register(mockMvc, objectMapper, false, "chat-archive-owner").first
         val manager = HrHttpFixtures.register(mockMvc, objectMapper, true, "chat-arch-mgr").first
         val room = HrHttpFixtures.createRoom(mockMvc, objectMapper, owner, "Archive authorization order")
-        assertEquals(200, HrHttpFixtures.inviteHr(mockMvc, owner, room, manager).response.status)
+        HrHttpFixtures.seedLegacyPersonalHiringAssignment(jdbcTemplate, room, manager)
         val ownerStream = join(mockMvc, room, authToken = owner.token)
         val managerStream = join(mockMvc, room, authToken = manager.token)
         val managerIntent = UUID.randomUUID().toString()
@@ -1128,7 +1128,7 @@ class RealtimeChatIdempotencyIntegrationTest(
         val owner = HrHttpFixtures.register(mockMvc, objectMapper, false, "legacy-rev-own").first
         val manager = HrHttpFixtures.register(mockMvc, objectMapper, true, "legacy-rev-mgr").first
         val room = HrHttpFixtures.createRoom(mockMvc, objectMapper, owner, "Revoked archived legacy chat")
-        assertEquals(200, HrHttpFixtures.inviteHr(mockMvc, owner, room, manager).response.status)
+        HrHttpFixtures.seedLegacyPersonalHiringAssignment(jdbcTemplate, room, manager)
         val managerStream = join(mockMvc, room, authToken = manager.token)
 
         mockMvc.post("/api/rooms/${room.inviteCode}/participants/${manager.id}/role") {

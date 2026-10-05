@@ -181,7 +181,7 @@ export function TeamInvitationJoinPage() {
 
           {(phase === "ready" || phase === "accept-error") && preview ? (
             <Stack gap="md">
-              <Text>Роль после вступления: Участник</Text>
+              <Text>Роль: Участник</Text>
               {error ? <Alert color="red" role="alert">{error}</Alert> : null}
               <Group className={styles.actions} gap="sm">
                 <Button className={styles.primaryAction} onClick={() => void accept()}>
@@ -219,7 +219,7 @@ export function TeamInvitationJoinPage() {
           {phase === "auth" ? (
             <Alert color="blue" title="Нужен аккаунт">
               <Stack gap="md">
-                <Text size="sm">Войдите в существующий аккаунт или зарегистрируйтесь. После этого приглашение будет принято автоматически.</Text>
+                <Text size="sm">После входа вы вступите в команду.</Text>
                 <Group className={styles.actions} gap="lg">
                   <Link className={styles.authLink} to="/login" state={{ teamInvitationReturn: true }} onClick={leaveForAuth}>Войти</Link>
                   <Link

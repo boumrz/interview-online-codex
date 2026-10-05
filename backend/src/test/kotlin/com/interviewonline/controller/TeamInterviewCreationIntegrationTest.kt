@@ -61,6 +61,131 @@ class TeamInterviewCreationIntegrationTest(
     @Autowired private val keystrokePersistenceService: KeystrokePersistenceService,
 ) {
     @Test
+    fun teamInterviewSelectedInterviewersSaveWithDetailsAndPreserveOtherAssignments() {
+        val owner = account("sel-owner")
+        val editor = account("sel-editor")
+        val first = account("sel-first")
+        val next = account("sel-next")
+        val hr = account("sel-hr")
+        val team = team(owner, "Selected interviewers")
+        listOf(editor, first, next).forEach { seedMembership(team.id, it.id, "MEMBER") }
+        jdbcTemplate.update("UPDATE users SET is_hr = true WHERE id IN (?, ?)", hr.id, first.id)
+        val room = body(createTeamInterview(owner, team.id, UUID.randomUUID().toString(), "Selected interview", null, null, null, interviewerIds = listOf(first.id))).path("interview")
+        val roomId = room.path("id").asText()
+        val invite = room.path("inviteCode").asText()
+        val path = "/api/teams/${team.id}/interviews/$roomId/details"
+        assertStatus(mockMvc.put("/api/rooms/$invite/hr-managers/${hr.id}") { authorize(owner) }.andReturn(), 200, "HR fixture")
+        fun get() = body(mockMvc.get(path) { authorize(editor) }.andReturn())
+        fun patch(revision: Long, ids: List<String>?) = mockMvc.patch(path) {
+            authorize(editor); contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(mapOf("title" to "Selected interview", "candidateName" to "Анна", "position" to null, "scheduledAt" to null, "revision" to revision) + if (ids == null) emptyMap() else mapOf("interviewerIds" to ids))
+        }.andReturn()
+        assertEquals(listOf(first.id), get().path("interviewerIds").map { it.asText() })
+        assertEquals(owner.id, get().path("ownerUserId").asText())
+        val added = patch(0, listOf(first.id, next.id, next.id))
+        assertStatus(added, 200, "ordinary HR-enabled colleague and duplicate canonical selection")
+        assertEquals(setOf(first.id, next.id), body(added).path("interviewerIds").map { it.asText() }.toSet())
+        val legacy = patch(1, null)
+        assertStatus(legacy, 200, "old clients preserve chosen interviewers")
+        assertEquals(setOf(first.id, next.id), body(legacy).path("interviewerIds").map { it.asText() }.toSet())
+        assertStatus(patch(2, listOf(editor.id)), 200, "editing colleague can select themselves")
+        assertEquals(listOf(editor.id), get().path("interviewerIds").map { it.asText() })
+        assertStatus(patch(3, emptyList()), 200, "empty list clears ordinary selected colleagues")
+        assertEquals(0, get().path("interviewerIds").size())
+        assertEquals(4L, get().path("revision").asLong())
+        assertEquals("Анна", get().path("candidateName").asText())
+        assertEquals("owner", jdbcTemplate.queryForObject("SELECT role FROM room_participants WHERE room_id = ? AND user_id = ?", String::class.java, roomId, owner.id))
+        assertEquals("interviewer", jdbcTemplate.queryForObject("SELECT role FROM room_participants WHERE room_id = ? AND user_id = ?", String::class.java, roomId, hr.id))
+        assertEquals(1L, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM room_hr_assignments WHERE room_id = ? AND user_id = ?", Long::class.java, roomId, hr.id))
+        assertStatus(mockMvc.get(path) { authorize(first) }.andReturn(), 200, "removing selection preserves general ACTIVE team access")
+        assertStatus(mockMvc.get("/api/rooms/$invite/interview-metadata") { authorize(next) }.andReturn(), 200, "unselected ACTIVE colleague retains manager HTTP authority")
+    }
+
+    @Test
+    fun teamInterviewSelectedInterviewersRejectInvalidTargetsAndTypesAtomically() {
+        val owner = account("selt-owner")
+        val first = account("selt-first")
+        val outsider = account("selt-outsider")
+        val former = account("selt-former")
+        val candidate = account("selt-candidate")
+        val team = team(owner, "Selection validation")
+        listOf(first, former, candidate).forEach { seedMembership(team.id, it.id, "MEMBER") }
+        jdbcTemplate.update("UPDATE team_memberships SET state = 'REMOVED' WHERE team_id = ? AND user_id = ?", team.id, former.id)
+        val roomId = body(createTeamInterview(owner, team.id, UUID.randomUUID().toString(), "Original selected", null, null, null, interviewerIds = listOf(first.id), candidateIds = listOf(candidate.id))).path("interview").path("id").asText()
+        val path = "/api/teams/${team.id}/interviews/$roomId/details"
+        val original = body(mockMvc.get(path) { authorize(owner) }.andReturn())
+        val baseline = mapOf("title" to "Must not save", "candidateName" to "Must not save", "position" to null, "scheduledAt" to null, "revision" to 0)
+        fun patch(value: Any?) = mockMvc.patch(path) {
+            authorize(owner); contentType = MediaType.APPLICATION_JSON; content = objectMapper.writeValueAsString(baseline + ("interviewerIds" to value))
+        }.andReturn()
+        listOf(owner.id, outsider.id, former.id, candidate.id, UUID.randomUUID().toString(), " ").forEach { invalid ->
+            assertStatus(patch(listOf(first.id, invalid)), 404, "owner, non-ACTIVE, foreign and incompatible role cannot become ordinary selected interviewer")
+            assertEquals(original, body(mockMvc.get(path) { authorize(owner) }.andReturn()), "invalid target leaves complete details unchanged")
+        }
+        listOf(null, "not a list", 1, emptyMap<String, String>(), listOf(1), listOf(null), listOf(true)).forEach { invalid ->
+            assertStatus(patch(invalid), 400, "interviewerIds must be an array of strings")
+            assertEquals(original, body(mockMvc.get(path) { authorize(owner) }.andReturn()))
+        }
+    }
+
+    @Test
+    fun teamInterviewSelectedInterviewersDoNotDeleteExternalCandidateOrInactiveRows() {
+        val owner = account("selp-owner")
+        val first = account("selp-first")
+        val external = account("selp-external")
+        val candidate = account("selp-candidate")
+        val former = account("selp-former")
+        val team = team(owner, "Protected participant rows")
+        listOf(first, candidate, former).forEach { seedMembership(team.id, it.id, "MEMBER") }
+        val roomId = body(createTeamInterview(owner, team.id, UUID.randomUUID().toString(), "Protected selected", null, null, null, interviewerIds = listOf(first.id, former.id), candidateIds = listOf(candidate.id))).path("interview").path("id").asText()
+        jdbcTemplate.update("UPDATE team_memberships SET state = 'SUSPENDED' WHERE team_id = ? AND user_id = ?", team.id, former.id)
+        jdbcTemplate.update("INSERT INTO room_participants (id, room_id, user_id, role, created_at) VALUES (?, ?, ?, 'interviewer', CURRENT_TIMESTAMP)", UUID.randomUUID().toString(), roomId, external.id)
+        val result = mockMvc.patch("/api/teams/${team.id}/interviews/$roomId/details") {
+            authorize(owner); contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(mapOf("title" to "Protected selected", "candidateName" to null, "position" to null, "scheduledAt" to null, "revision" to 0, "interviewerIds" to emptyList<String>()))
+        }.andReturn()
+        assertStatus(result, 200, "clear affects only selected ACTIVE ordinary colleagues")
+        assertEquals(0, body(result).path("interviewerIds").size())
+        listOf(external.id to "interviewer", former.id to "interviewer", candidate.id to "candidate", owner.id to "owner").forEach { (id, role) ->
+            assertEquals(role, jdbcTemplate.queryForObject("SELECT role FROM room_participants WHERE room_id = ? AND user_id = ?", String::class.java, roomId, id), "unrelated assignment preserved")
+        }
+        assertEquals(0L, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM room_participants WHERE room_id = ? AND user_id = ?", Long::class.java, roomId, first.id))
+    }
+
+    @Test
+    fun teamInterviewSelectedInterviewersRecheckTargetAfterRoomLockWaitAndCas() {
+        val owner = account("selr-owner")
+        val selected = account("selr-target")
+        val team = team(owner, "Selection lock race")
+        seedMembership(team.id, selected.id, "MEMBER")
+        val roomId = body(createTeamInterview(owner, team.id, UUID.randomUUID().toString(), "Original selected", null, null, null)).path("interview").path("id").asText()
+        val path = "/api/teams/${team.id}/interviews/$roomId/details"
+        fun patch() = mockMvc.patch(path) {
+            authorize(owner); contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(mapOf("title" to "Must not save", "candidateName" to "Must not save", "position" to null, "scheduledAt" to null, "revision" to 0, "interviewerIds" to listOf(selected.id)))
+        }.andReturn()
+        val executor = java.util.concurrent.Executors.newSingleThreadExecutor()
+        try {
+            dataSource.connection.use { connection ->
+                connection.autoCommit = false
+                connection.prepareStatement("SELECT id FROM rooms WHERE id = ? FOR UPDATE").use { statement -> statement.setString(1, roomId); statement.executeQuery().close() }
+                val request = executor.submit<MvcResult> { patch() }
+                waitForHiringLock("rooms")
+                connection.prepareStatement("UPDATE team_memberships SET state = 'REMOVED' WHERE team_id = ? AND user_id = ?").use { statement -> statement.setString(1, team.id); statement.setString(2, selected.id); statement.executeUpdate() }
+                connection.commit()
+                assertStatus(request.get(5, java.util.concurrent.TimeUnit.SECONDS), 404, "target must still be ACTIVE after room wait")
+            }
+            assertEquals("Original selected", jdbcTemplate.queryForObject("SELECT title FROM rooms WHERE id = ?", String::class.java, roomId))
+            assertEquals(0L, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM room_participants WHERE room_id = ? AND user_id = ?", Long::class.java, roomId, selected.id))
+            jdbcTemplate.update("UPDATE team_memberships SET state = 'ACTIVE' WHERE team_id = ? AND user_id = ?", team.id, selected.id)
+            jdbcTemplate.update("UPDATE rooms SET interview_metadata_revision = 1 WHERE id = ?", roomId)
+            assertStatus(patch(), 409, "stale selection shares the details CAS")
+            assertEquals("Original selected", jdbcTemplate.queryForObject("SELECT title FROM rooms WHERE id = ?", String::class.java, roomId))
+            assertEquals(0L, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM room_participants WHERE room_id = ? AND user_id = ?", Long::class.java, roomId, selected.id))
+        } finally { executor.shutdownNow() }
+    }
+
+    @Test
     fun teamCreationMetadataIsAtomicNormalizedPrivateAndIdempotent() {
         val owner = account("cm-owner")
         val team = team(owner, "Creation metadata")
@@ -111,6 +236,127 @@ class TeamInterviewCreationIntegrationTest(
         assertEquals(before, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM rooms WHERE team_id = ?", Long::class.java, team.id), "invalid metadata leaves no partial room")
         val boundary = create(mapOf("candidateName" to "😀".repeat(200), "position" to "😀".repeat(200)), UUID.randomUUID().toString())
         assertStatus(boundary, 201, "200 Unicode code points accepted")
+    }
+
+    @Test
+    fun teamInterviewContextCanBeAddedChangedAndClearedAtomicallyWithoutReplacingMaterials() {
+        val owner = account("ctx-owner")
+        val member = account("ctx-member")
+        val team = team(owner, "Editable context")
+        seedMembership(team.id, member.id, "MEMBER")
+        val track = body(createTrack(owner, team.id, "Backend")).path("track").path("id").asText()
+        val vacancy = body(createVacancy(owner, team.id, track, "Kotlin developer")).path("vacancy").path("id").asText()
+        val nextTrack = body(createTrack(owner, team.id, "Frontend")).path("track").path("id").asText()
+        val created = body(createTeamInterview(owner, team.id, UUID.randomUUID().toString(), "Context interview", null, null, null)).path("interview")
+        val roomId = created.path("id").asText()
+        val path = "/api/teams/${team.id}/interviews/$roomId/details"
+        fun patch(revision: Long, context: Map<String, Any?>?, title: String = "Context interview"): MvcResult = mockMvc.patch(path) {
+            authorize(member); contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(mapOf("title" to title, "candidateName" to "Анна", "position" to null, "scheduledAt" to null, "revision" to revision) + if (context == null) emptyMap() else mapOf("context" to context))
+        }.andReturn()
+        val first = patch(0, mapOf("trackId" to track, "vacancyId" to vacancy))
+        assertStatus(first, 200, "ACTIVE member adds context with metadata in one command")
+        assertEquals(track, body(first).path("trackId").asText())
+        assertEquals(vacancy, body(first).path("vacancyId").asText())
+        assertEquals("Backend", body(first).path("trackName").asText())
+        assertEquals("Kotlin developer", body(first).path("vacancyTitle").asText())
+        assertEquals(1L, body(first).path("revision").asLong())
+        assertEquals(body(first), body(mockMvc.get(path) { authorize(owner) }.andReturn()))
+        val legacy = patch(1, null, "Legacy client title")
+        assertStatus(legacy, 200, "legacy context-free editor preserves existing context")
+        assertEquals(vacancy, body(legacy).path("vacancyId").asText())
+        val stale = patch(1, mapOf("trackId" to nextTrack, "vacancyId" to null), "Stale context title")
+        assertStatus(stale, 409, "context shares the metadata CAS revision")
+        assertEquals(body(legacy), body(mockMvc.get(path) { authorize(owner) }.andReturn()))
+        val changed = patch(2, mapOf("trackId" to nextTrack, "vacancyId" to null))
+        assertStatus(changed, 200, "changing track clears previous vacancy")
+        assertEquals(nextTrack, body(changed).path("trackId").asText())
+        assertTrue(body(changed).path("vacancyId").isNull)
+        val cleared = patch(3, mapOf("trackId" to null, "vacancyId" to null))
+        assertStatus(cleared, 200, "explicit empty context removes both associations")
+        assertTrue(body(cleared).path("trackId").isNull)
+        assertTrue(body(cleared).path("vacancyId").isNull)
+        val after = body(listTeamInterviews(owner, team.id)).path("items").first { it.path("id").asText() == roomId }
+        assertEquals(created.path("tasks"), after.path("tasks"))
+        assertEquals(created.path("programmeId"), after.path("programmeId"))
+        assertEquals(created.path("programmeVersion"), after.path("programmeVersion"))
+        assertEquals(created.path("inviteCode"), after.path("inviteCode"))
+    }
+
+    @Test
+    fun teamInterviewContextRejectsForeignMismatchedAndNewArchivedSourcesWithoutPartialSave() {
+        val owner = account("ctx-val-owner")
+        val outsider = account("ctx-val-outsider")
+        val team = team(owner, "Context validation")
+        val foreignTeam = team(outsider, "Foreign context")
+        val track = body(createTrack(owner, team.id, "Retained track")).path("track").path("id").asText()
+        val otherTrack = body(createTrack(owner, team.id, "Other track")).path("track").path("id").asText()
+        val vacancy = body(createVacancy(owner, team.id, track, "Retained vacancy")).path("vacancy").path("id").asText()
+        val otherVacancy = body(createVacancy(owner, team.id, otherTrack, "Other vacancy")).path("vacancy").path("id").asText()
+        val foreignTrack = body(createTrack(outsider, foreignTeam.id, "Foreign track")).path("track").path("id").asText()
+        val roomId = body(createTeamInterview(owner, team.id, UUID.randomUUID().toString(), "Retained interview", null, track, vacancy)).path("interview").path("id").asText()
+        val path = "/api/teams/${team.id}/interviews/$roomId/details"
+        jdbcTemplate.update("UPDATE team_tracks SET status = 'ARCHIVED' WHERE id = ?", otherTrack)
+        jdbcTemplate.update("UPDATE team_vacancies SET status = 'ARCHIVED' WHERE id = ?", otherVacancy)
+        val original = body(mockMvc.get(path) { authorize(owner) }.andReturn())
+        listOf(
+            mapOf("trackId" to foreignTrack, "vacancyId" to null),
+            mapOf("trackId" to otherTrack, "vacancyId" to null),
+            mapOf("trackId" to track, "vacancyId" to otherVacancy),
+            mapOf("trackId" to null, "vacancyId" to vacancy),
+        ).forEach { context ->
+            val rejected = mockMvc.patch(path) { authorize(owner); contentType = MediaType.APPLICATION_JSON
+                content = objectMapper.writeValueAsString(mapOf("title" to "Must not save", "candidateName" to "Must not save", "position" to null, "scheduledAt" to null, "revision" to 0, "context" to context))
+            }.andReturn()
+            assertStatus(rejected, 404, "foreign, inactive and mismatched context is rejected")
+            assertEquals(original, body(mockMvc.get(path) { authorize(owner) }.andReturn()), "failed context validation is atomic")
+        }
+        jdbcTemplate.update("UPDATE team_tracks SET status = 'ARCHIVED' WHERE id = ?", track)
+        jdbcTemplate.update("UPDATE team_vacancies SET status = 'ARCHIVED' WHERE id = ?", vacancy)
+        val retained = mockMvc.patch(path) { authorize(owner); contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(mapOf("title" to "Historical context", "candidateName" to null, "position" to null, "scheduledAt" to null, "revision" to 0, "context" to mapOf("trackId" to track, "vacancyId" to vacancy)))
+        }.andReturn()
+        assertStatus(retained, 200, "unchanged archived historical associations stay editable")
+        assertEquals(track, body(retained).path("trackId").asText())
+        assertEquals(vacancy, body(retained).path("vacancyId").asText())
+    }
+
+    @Test
+    fun teamInterviewContextEditsPreservePublishedProgrammeAndTaskSnapshotsAndRejectMalformedSelection() {
+        val owner = account("ctx-programme")
+        val team = team(owner, "Context and snapshots")
+        val taskId = body(createTeamTask(owner, team.id, "Pinned programme task", "Pinned brief", "// pinned code", "nodejs")).path("task").path("id").asText()
+        val track = body(createTrack(owner, team.id, "Pinned source")).path("track").path("id").asText()
+        val programme = body(saveTrackProgrammeDraft(owner, team.id, track, listOf(taskId), null)).path("programme")
+        val published = publishTrackProgramme(owner, team.id, track, programme.path("revision").asLong())
+        assertStatus(published, 200, "published programme fixture")
+        val currentProgramme = body(published).path("programme")
+        val createdResponse = createTeamInterview(owner, team.id, UUID.randomUUID().toString(), "Pinned interview", null, track, null, expectedProgrammeId = currentProgramme.path("id").asText(), expectedProgrammeVersion = currentProgramme.path("version").asLong())
+        assertStatus(createdResponse, 201, "pinned materials fixture")
+        val created = body(createdResponse).path("interview")
+        val roomId = created.path("id").asText()
+        assertFalse(created.path("programmeId").isNull)
+        assertEquals(1, created.path("tasks").size())
+        val before = body(listTeamInterviews(owner, team.id)).path("items").first { it.path("id").asText() == roomId }
+        val path = "/api/teams/${team.id}/interviews/$roomId/details"
+        val valid = mapOf("title" to "Pinned interview", "candidateName" to null, "position" to null, "scheduledAt" to null, "revision" to 0)
+        listOf(
+            null, "not a context", emptyMap<String, Any?>(), mapOf("trackId" to null),
+            mapOf("trackId" to null, "vacancyId" to null, "extra" to true),
+            mapOf("trackId" to 42, "vacancyId" to null), mapOf("trackId" to track, "vacancyId" to false),
+        ).forEach { context ->
+            assertStatus(mockMvc.patch(path) { authorize(owner); contentType = MediaType.APPLICATION_JSON
+                content = objectMapper.writeValueAsString(valid + ("context" to context))
+            }.andReturn(), 400, "optional selection remains strict and typed when supplied")
+        }
+        val cleared = mockMvc.patch(path) { authorize(owner); contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(valid + ("context" to mapOf("trackId" to null, "vacancyId" to null)))
+        }.andReturn()
+        assertStatus(cleared, 200, "programme association context can be removed")
+        val after = body(listTeamInterviews(owner, team.id)).path("items").first { it.path("id").asText() == roomId }
+        listOf("tasks", "taskCount", "programmeId", "programmeOrigin", "programmeVersion", "inviteCode").forEach { field ->
+            assertEquals(before.path(field), after.path(field), "$field snapshot stays pinned after context removal")
+        }
     }
 
     @Test

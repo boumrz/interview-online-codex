@@ -111,3 +111,13 @@ Older files such as `openspec/project.md`, `openspec/specs/` and
 `openspec/changes/` can help reconstruct why a decision was made, but they are
 not the active workflow. Do not recreate new OpenSpec artifacts for ordinary
 development.
+
+## Deferred Google/VK Login
+
+Google/VK integration is postponed by the user. Keep `FEATURE_SOCIAL_AUTH_ENABLED=false`
+for backend and frontend; provider credentials/flags alone must not expose it.
+Users keep the current nickname/password flow. Resume only on a new explicit request.
+Contract: [AUTH.1](specs/features/auth-1-social-login.md).
+Console setup: [saved instruction](specs/references/2026-10-05-social-login-setup.md).
+Backend: `backend/src/main/kotlin/com/interviewonline/features/socialauth/`.
+Frontend: `SocialLoginButtons`, `SocialLoginPage`, `services/socialAuth.ts`.

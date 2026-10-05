@@ -31,14 +31,16 @@ async function gap(first,second,label) {
 async function textAxis(locator) {
   return locator.evaluate(el=>{const walker=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);let n;while(n=walker.nextNode()){if(n.textContent.trim()){const r=document.createRange();r.selectNodeContents(n);const box=r.getBoundingClientRect();if(box.width)return box.y+box.height/2;}}throw Error('visible text not found');});
 }
-test('team roster and invitation descriptions have explicit spacing, including empty and revoked states',async()=>{
+test('team roster and invitations stay concise and readable, including empty and revoked states',async()=>{
  const {auth,team,browser,page}=await fixture();
  try {
   await page.goto(`${web}/workspace/teams/${team.id}/members`);
   for(const width of [1366,1024,768]) for(const mode of ['light','dark']) {
    await settle(page,mode,width);
-   await gap(page.getByText('Состав команды',{exact:true}),page.getByText('Видны только активные участники этой команды.',{exact:true}),'roster title/description');
-   await gap(page.getByText('Ссылка ещё не выпущена',{exact:true}),page.getByText('Ожидающая ссылка не добавляет сотрудника до явного принятия.',{exact:true}),'empty invitation title/description');
+   assert.equal(await page.getByText('Видны только активные участники этой команды.',{exact:true}).count(),0);
+   assert.equal(await page.getByText('Ожидающая ссылка не добавляет сотрудника до явного принятия.',{exact:true}).count(),0);
+   await page.getByText('Состав команды',{exact:true}).waitFor();
+   await page.getByText('Ссылка ещё не выпущена',{exact:true}).waitFor();
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
   }
   const {invitation}=await request(`/teams/${team.id}/invitations`,auth.token,{});

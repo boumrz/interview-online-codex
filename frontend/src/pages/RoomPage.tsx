@@ -52,10 +52,11 @@ import {
   useDeleteRoomTaskMutation,
   useUpdateRoomTaskMutation,
   useGetRoomQuery,
+  useLazyGetRoomQuery,
+  useGetWorkspacesQuery,
   useGetRoomTaskWorkspaceQuery,
   useTasksGroupedQuery,
   useSetVerdictMutation,
-  useTrackHrRoomMutation,
   useAddHrManagerMutation,
   useRemoveHrManagerMutation,
 } from "../services/api";
@@ -119,7 +120,7 @@ import {
   type HrAction,
   type Participant,
 } from "../features/room/TopBar";
-import type { HrManager, RoomTask, RoomTaskWorkspace, TaskTemplate } from "../types";
+import type { HrManager, Room, RoomTask, RoomTaskWorkspace, TaskTemplate } from "../types";
 import { RoomInterviewPanel } from "../features/room/RoomInterviewPanel";
 import {
   RoomContextPanels,
@@ -658,6 +659,11 @@ function queryStatus(error: unknown): number | null {
   return typeof error.status === "number" ? error.status : null;
 }
 
+function isRoomUnavailableError(error: unknown): boolean {
+  const status = queryStatus(error);
+  return status === 404 || status === 410;
+}
+
 export function RoomPage() {
   const { notification } = AntDesignApp.useApp();
   const { inviteCode = "" } = useParams();
@@ -670,11 +676,22 @@ export function RoomPage() {
   const ownerToken = localStorage.getItem(`owner_token_${inviteCode}`);
   const interviewerToken = localStorage.getItem(`interviewer_token_${inviteCode}`);
 
-  const { data: room, isLoading, error: roomQueryError } = useGetRoomQuery({
+  const hrAssignmentGenerationRef = useRef(0);
+  const roomIdentity = `${inviteCode}:${authToken ?? ""}:${authUser?.id ?? ""}:${ownerToken ?? ""}:${interviewerToken ?? ""}`;
+  const [authorityRoom, setAuthorityRoom] = useState<{ identity: string; generation: number; room: Room } | null>(null);
+  const authorityRoomRequestRef = useRef<{ abort: () => void; unsubscribe: () => void } | null>(null);
+  const [getAuthorityRoom, { reset: resetAuthorityRoomQuery }] = useLazyGetRoomQuery();
+  const [roomScopeError, setRoomScopeError] = useState("");
+  const [roomScopeRetry, setRoomScopeRetry] = useState(0);
+  const { currentData: initialRoom, isLoading, error: roomQueryError } = useGetRoomQuery({
     inviteCode,
     ownerToken: ownerToken ?? undefined,
+    interviewerToken: interviewerToken ?? undefined,
+    accountId: authUser?.id ?? "anonymous",
   });
-  const initialRoomUnavailable = queryStatus(roomQueryError) === 410;
+  const room = authorityRoom?.identity === roomIdentity && authorityRoom.generation === hrAssignmentGenerationRef.current
+    ? authorityRoom.room : initialRoom;
+  const initialRoomUnavailable = isRoomUnavailableError(roomQueryError);
 
   const initialStoredName = authToken
     ? authUser?.displayName?.trim() || readStoredDisplayName(inviteCode)
@@ -759,12 +776,8 @@ export function RoomPage() {
   const [selectedVerdict, setSelectedVerdict] = useState<string>("HIRE");
   const [verdictComment, setVerdictComment] = useState("");
   const [setVerdict, { isLoading: isSettingVerdict }] = useSetVerdictMutation();
-  const [trackHrRoom, trackHrRoomState] = useTrackHrRoomMutation();
-  const [hrTrackingError, setHrTrackingError] = useState("");
-  const hrTrackedManagerKeyRef = useRef("");
   const [addHrManager] = useAddHrManagerMutation();
   const [removeHrManager] = useRemoveHrManagerMutation();
-  const hrAssignmentGenerationRef = useRef(0);
   const hrAssignmentRequestsRef = useRef(new Map<string, { abort: () => void }>());
   const [pendingHrActions, setPendingHrActions] = useState<ReadonlyMap<string, HrAction>>(new Map());
   const [hrAssignmentFeedback, setHrAssignmentFeedback] = useState<{
@@ -774,11 +787,17 @@ export function RoomPage() {
   } | null>(null);
   const invalidateHrAssignments = useCallback(() => {
     hrAssignmentGenerationRef.current += 1;
+    authorityRoomRequestRef.current?.abort();
+    authorityRoomRequestRef.current?.unsubscribe();
+    authorityRoomRequestRef.current = null;
+    resetAuthorityRoomQuery();
+    setAuthorityRoom(null);
+    setRoomScopeError("");
     hrAssignmentRequestsRef.current.forEach((request) => request.abort());
     hrAssignmentRequestsRef.current.clear();
     setPendingHrActions(new Map());
     setHrAssignmentFeedback(null);
-  }, []);
+  }, [resetAuthorityRoomQuery]);
   const [briefingDraft, setBriefingDraft] = useState("");
   const [briefingDirty, setBriefingDirty] = useState(false);
   const [stepChangeNotification, setStepChangeNotification] = useState<{
@@ -958,6 +977,17 @@ export function RoomPage() {
   const mergedNotes = merged?.notes ?? "";
   const mergedBriefingMarkdown = merged?.briefingMarkdown ?? "";
   const canManageRoom = merged?.canManageRoom ?? false;
+  const workspaceProof = useGetWorkspacesQuery({
+    accountId: authUser?.id ?? "anonymous",
+    kind: "TEAM", teamId: room?.teamId ?? "", query: "room-return",
+    generation: hrAssignmentGenerationRef.current,
+  }, { skip: !authToken || !authUser?.id || !canManageRoom || !room?.teamId, refetchOnMountOrArgChange: true });
+  const canReturnToTeam = !workspaceProof.isFetching && !workspaceProof.isError &&
+    workspaceProof.currentData?.some(workspace => workspace.id === room?.teamId);
+  const interviewListPath = room?.teamId && canManageRoom
+    ? canReturnToTeam ? `/workspace/teams/${room.teamId}/interviews`
+      : authUser?.isHr ? "/workspace/personal/candidates" : "/workspace/personal/interviews"
+    : "/workspace/personal/interviews";
   const roomReadOnly = isRoomReadOnly(merged);
   useEffect(() => {
     if (!merged || canManageRoom) return;
@@ -2047,6 +2077,35 @@ export function RoomPage() {
     localStorage.getItem("auth_token") === authToken,
   [authToken, inviteCode]);
 
+  useEffect(() => {
+    if (!state?.canManageRoom || !connected || initialRoomUnavailable || realtimeRoomUnavailable) return;
+    const generation = hrAssignmentGenerationRef.current;
+    const request = getAuthorityRoom({
+      inviteCode, ownerToken: ownerToken ?? undefined,
+      interviewerToken: interviewerToken ?? undefined,
+      eventToken: state.eventToken ?? undefined,
+      accountId: authUser?.id ?? "anonymous", requestGeneration: generation,
+    }, false);
+    authorityRoomRequestRef.current = request;
+    const current = () => authorityRoomRequestRef.current === request && isCurrentHrAuthority(generation);
+    void request.unwrap().then(nextRoom => {
+      if (!current()) return;
+      setAuthorityRoom({ identity: roomIdentity, generation, room: nextRoom });
+      setRoomScopeError("");
+    }).catch(caught => {
+      if (!current()) return;
+      if (isRoomUnavailableError(caught)) terminateRoomUnavailable();
+      else setRoomScopeError("Не удалось обновить сведения интервью");
+    });
+    return () => {
+      request.abort();
+      request.unsubscribe();
+      if (authorityRoomRequestRef.current === request) authorityRoomRequestRef.current = null;
+    };
+  }, [state?.canManageRoom, state?.role, state?.eventToken, connected, initialRoomUnavailable,
+    realtimeRoomUnavailable, authUser?.id, inviteCode, ownerToken, interviewerToken, roomIdentity,
+    roomScopeRetry, getAuthorityRoom, isCurrentHrAuthority, terminateRoomUnavailable]);
+
   const changeHrAssignment = useCallback(async (
     target: Pick<HrManager, "userId" | "displayName">,
     action: HrAction,
@@ -2320,53 +2379,6 @@ export function RoomPage() {
 
   const hasRealtimeState = Boolean(state);
   const participantsCount = state?.participants.length ?? 0;
-
-  const trackCurrentHrRoom = useCallback(async () => {
-    if (
-      !authToken ||
-      !authUser?.isHr ||
-      !room ||
-      room.teamId != null ||
-      !merged?.canManageRoom ||
-      !hasRealtimeState
-    ) {
-      return;
-    }
-    const trackingKey = `${inviteCode}:${authUser.id}`;
-    if (hrTrackedManagerKeyRef.current === trackingKey) return;
-    hrTrackedManagerKeyRef.current = trackingKey;
-    setHrTrackingError("");
-    try {
-      await trackHrRoom({
-        inviteCode,
-        ownerToken: ownerToken ?? undefined,
-        eventToken: merged.eventToken ?? undefined,
-      }).unwrap();
-    } catch {
-      hrTrackedManagerKeyRef.current = "";
-      setHrTrackingError("Не удалось добавить интервью в кабинет нанимающего");
-    }
-  }, [
-    authToken,
-    authUser?.id,
-    authUser?.isHr,
-    hasRealtimeState,
-    inviteCode,
-    merged?.canManageRoom,
-    merged?.eventToken,
-    ownerToken,
-    room,
-    trackHrRoom,
-  ]);
-
-  useEffect(() => {
-    if (!merged?.canManageRoom) {
-      hrTrackedManagerKeyRef.current = "";
-      setHrTrackingError("");
-      return;
-    }
-    void trackCurrentHrRoom();
-  }, [merged?.canManageRoom, trackCurrentHrRoom]);
 
   useEffect(() => {
     if (!merged || merged.role !== "candidate" || !connected || !hasRealtimeState) return;
@@ -3255,10 +3267,7 @@ export function RoomPage() {
         centered
       >
         <Stack gap="sm">
-          <Text size="sm" c="var(--app-muted)">
-            Это имя увидят участники интервью.
-          </Text>
-          <TextInput placeholder="Имя, которое увидят участники"
+          <TextInput placeholder="Введите имя"
             label="Ваше имя"
             value={draftName}
             error={candidateNameError || undefined}
@@ -3296,9 +3305,7 @@ export function RoomPage() {
         <h1 className="visually-hidden">{`Комната «${room?.title ?? "Live-coding"}»`}</h1>
         <TopBar
           roomTitle={room?.title ?? "Комната"}
-          interviewListPath={room?.teamId && canManageRoom
-            ? `/workspace/teams/${room.teamId}/interviews`
-            : "/workspace/personal/interviews"}
+          interviewListPath={interviewListPath}
           authToken={authToken}
           connected={connected}
           participants={merged.participants}
@@ -3315,7 +3322,8 @@ export function RoomPage() {
             sendLanguageUpdate(value);
           }}
           canGrantAccess={!roomReadOnly && Boolean(merged.canGrantAccess)}
-          canAssignHr={canManageRoom && !roomReadOnly}
+          isTeamRoom={room?.teamId != null}
+          canAssignHr={room?.teamId != null && canManageRoom && !roomReadOnly}
           pendingHrActions={pendingHrActions}
           onAssignHr={assignParticipantHr}
           onRemoveHr={removeParticipantHr}
@@ -3336,6 +3344,10 @@ export function RoomPage() {
             candidateStatus={canManageRoom ? candidatePresenceStatus : undefined}
           />
           <div className={styles.interviewPanelActions}>
+            {canManageRoom && roomScopeError ? <Alert color="red" role="alert">
+              {roomScopeError}
+              <Button type="button" size="compact-xs" variant="light" onClick={() => setRoomScopeRetry(value => value + 1)}>Повторить</Button>
+            </Alert> : null}
             {canManageRoom && hrAssignmentFeedback ? (
               <Alert
                 color={hrAssignmentFeedback.kind === "error" ? "red" : "teal"}
@@ -3349,7 +3361,7 @@ export function RoomPage() {
             <RoomInterviewPanel
               inviteCode={inviteCode}
               identityKey={authUser?.id ?? `guest:${participantId}`}
-              canManageRoom={canManageRoom}
+              canManageRoom={canManageRoom && Boolean(room?.canManageRoom)}
               isTeamRoom={room?.teamId != null}
               teamId={room?.teamId ?? undefined}
               authorityGeneration={hrAssignmentGenerationRef.current}
@@ -3362,22 +3374,6 @@ export function RoomPage() {
               interviewerToken={interviewerToken ?? undefined}
               eventToken={merged.eventToken ?? undefined}
             />
-            {hrTrackingError ? (
-              <Alert color="yellow" role="alert" className={styles.hrTrackingAlert}>
-                <Group gap="xs">
-                  <Text size="sm">{hrTrackingError}</Text>
-                  <Button
-                    type="button"
-                    size="compact-xs"
-                    variant="light"
-                    loading={trackHrRoomState.isLoading}
-                    onClick={() => void trackCurrentHrRoom()}
-                  >
-                    Повторить
-                  </Button>
-                </Group>
-              </Alert>
-            ) : null}
           </div>
         </div>
 
@@ -3393,7 +3389,7 @@ export function RoomPage() {
                 Активный шаг изменён
               </Text>
               <Text size="xs" c="var(--app-muted)">
-                {`В комнате активна задача «${stepChangeNotification.title}». Переключитесь на неё, чтобы продолжить вместе с кандидатом.`}
+                {`Активна задача «${stepChangeNotification.title}».`}
               </Text>
             </div>
             <Button
@@ -3432,9 +3428,6 @@ export function RoomPage() {
         ) : !hasRealtimeState ? (
           <section className={styles.realtimeAccessPending} data-testid="room-realtime-access-pending" role="status">
             <Text fw={700} size="lg">Подтверждаем доступ к комнате…</Text>
-            <Text c="var(--app-muted)" size="sm">
-              Рабочая область станет доступна после подключения к комнате.
-            </Text>
           </section>
         ) : canManageRoom ? (
           <OwnerLayout
@@ -4048,9 +4041,7 @@ function OwnerLayout({
     parsedPrivateNotesCommand.kind === "menu" ||
     parsedPrivateNotesCommand.kind === "block_prompt" ||
     parsedPrivateNotesCommand.kind === "block_apply";
-  const privateNotesInputPlaceholder = activePrivateBlockName
-    ? "Запишите наблюдение о решении. /block <название> — сменить блок"
-    : 'Введите заметку или "/" для команд';
+  const privateNotesInputPlaceholder = "Введите заметку";
   /**
    * Block name suggestions shown after `/block`. Suggestions mirror the room's
    * interview steps: 3 steps → `/block Шаг 1`, `Шаг 2`, `Шаг 3`. Кастомное имя,
@@ -4332,14 +4323,12 @@ function OwnerLayout({
               catalogTaskOptions.length === 0 ? (
                 <div className="app-task-catalog-empty">
                   <Text fw={600}>В банке нет доступных задач для добавления.</Text>
-                  <Text size="sm" c="dimmed">Создайте задачу прямо здесь: добавьте условие и заготовку решения.</Text>
                   <Button type="button" variant="light" onClick={() => setAddTaskMode("custom")}>
                     Создать новую задачу
                   </Button>
                 </div>
               ) : (
                 <section className="app-authoring-section">
-                  <Text size="sm" c="dimmed">Выберите задачи, которые ещё не добавлены в комнату.</Text>
                   <MultiSelect
                     label="Задачи из банка"
                     value={selectedCatalogTaskIds}
@@ -4428,10 +4417,6 @@ function OwnerLayout({
         closeOnEscape={false}
       >
         <Stack>
-          <Text size="sm" c="dimmed">
-            Изменения увидят все участники комнаты — название обновится в
-            списке шагов и в экспорте заметок.
-          </Text>
           <TextInput placeholder="Введите новое название задачи"
             aria-label="Название"
             value={renameTaskDraft}
@@ -4510,7 +4495,7 @@ function OwnerLayout({
       <Modal opened={roomModeConfirmation !== null} onClose={() => { if (!roomModeSubmitting) setRoomModeConfirmation(null); }} title="Изменить режим комнаты?" centered closeOnEscape={!roomModeSubmitting} closeOnClickOutside={!roomModeSubmitting}>
         <Stack gap={16}>
           <Text>Изменится редактор кандидата и всех интервьюеров.</Text>
-          <Text>Режим: {roomModeConfirmation?.mode === "markdown" ? "Markdown" : "Code"}. Код и текст сохранятся. Выбранные задачи останутся прежними.</Text>
+          <Text>Режим: {roomModeConfirmation?.mode === "markdown" ? "Markdown" : "Code"}.</Text>
           {roomModeError ? <Alert color="red" role="alert">{roomModeError}</Alert> : null}
           <Group justify="flex-end">
             <Button variant="default" disabled={roomModeSubmitting} onClick={() => setRoomModeConfirmation(null)}>Отмена</Button>
@@ -4545,7 +4530,7 @@ function OwnerLayout({
                 setRoomModeError(null);
               }}
             />
-            <Tooltip motion={{ motionName: "" }} classNames={{ root: styles.roomModeTooltip }} trigger={["hover", "focus"]} label="Общий редактор для кандидата и всех интервьюеров. Код и Markdown сохраняются при переключении.">
+            <Tooltip motion={{ motionName: "" }} classNames={{ root: styles.roomModeTooltip }} trigger={["hover", "focus"]} label="Общий редактор">
               <button type="button" className={styles.roomModeHelp} aria-label="Как работает режим комнаты"><IconHelpCircle size={18} aria-hidden="true" /></button>
             </Tooltip>
             <Button color="red" variant="light" size="sm" onClick={onOpenVerdictModal} disabled={roomReadOnly}>
@@ -4951,10 +4936,6 @@ function OwnerLayout({
                       Открыть блок заметок
                     </span>
                   </AntButton>
-                  <Text className={styles.privateNotesCommandHelper}>
-                    Введите своё название после <code>/block</code> — создастся
-                    новый блок. Или выберите ниже один из шагов интервью.
-                  </Text>
                   {customBlockCandidate ? (
                     <AntButton
                       type="text" htmlType="button"
@@ -5005,13 +4986,10 @@ function OwnerLayout({
                 </Text>
               ) : null}
               <Group
-                justify="space-between"
+                justify="flex-end"
                 align="center"
                 className={styles.notesComposerFooter}
               >
-                <Text className={styles.notesComposerHint}>
-                  Enter: добавить запись, Shift+Enter: новая строка
-                </Text>
                 <Button
                   type="button"
                   size="xs"
@@ -5038,7 +5016,7 @@ function OwnerLayout({
         <RoomContextSurface name="chat">
           <div className={styles.contextSurfaceScroll}>
             <Text size="sm" c="var(--app-muted)">
-              Виден интервьюерам этой комнаты. Кандидат не видит чат.
+              Чат виден только интервьюерам.
             </Text>
             {chatUnreadCount > 0 ? (
               <Group justify="space-between" gap="xs" role="status">
@@ -5183,10 +5161,6 @@ function OwnerLayout({
         closeOnEscape={false}
       >
         <Stack gap="sm">
-          <Text size="sm" c="dimmed">
-            Экспортирует фактуру по всем шагам, объединяя повторяющиеся блоки
-            в каждом шаге.
-          </Text>
           <Checkbox
             checked={exportIncludeTimestamps}
             onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
@@ -5603,10 +5577,6 @@ function OwnerLayout({
                       <Badge color="gray" variant="light">
                         Без блока
                       </Badge>
-                      <Text className={styles.privateNotesHint}>
-                        Записи — вне блока. Выберите блок через{" "}
-                        <code>/block</code> или смените шаг.
-                      </Text>
                     </div>
                   )}
 
@@ -5664,10 +5634,6 @@ function OwnerLayout({
                         <Text className={styles.notesEmptyTitle}>
                           Пока нет записей
                         </Text>
-                        <Text className={styles.notesEmptyText}>
-                          Добавьте первую заметку — она автоматически попадёт
-                          в блок текущего шага.
-                        </Text>
                       </div>
                     )}
                   </div>
@@ -5706,12 +5672,6 @@ function OwnerLayout({
                             Открыть блок заметок
                           </span>
                         </AntButton>
-
-                        <Text className={styles.privateNotesCommandHelper}>
-                          Введите своё название после <code>/block</code> —
-                          создастся новый блок. Или выберите ниже один из шагов
-                          интервью.
-                        </Text>
 
                         {customBlockCandidate ? (
                           <AntButton
@@ -5773,13 +5733,10 @@ function OwnerLayout({
                     ) : null}
 
                     <Group
-                      justify="space-between"
+                      justify="flex-end"
                       align="center"
                       className={styles.notesComposerFooter}
                     >
-                      <Text className={styles.notesComposerHint}>
-                        Enter: добавить запись, Shift+Enter: новая строка
-                      </Text>
                       <Button
                         type="button"
                         size="xs"
@@ -5849,10 +5806,6 @@ function OwnerLayout({
                   closeOnEscape={false}
                 >
                   <Stack gap="sm">
-                    <Text size="sm" c="dimmed">
-                      Экспортирует фактуру по всем шагам, объединяя
-                      повторяющиеся блоки в каждом шаге.
-                    </Text>
                     <Checkbox
                       checked={exportIncludeTimestamps}
                       onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
@@ -5907,11 +5860,7 @@ function OwnerLayout({
                             />
                           </div>
                         </Stack>
-                      ) : (
-                        <Text size="xs" c="gray.6">
-                          Выберите формат для экспорта заметок
-                        </Text>
-                      )}
+                      ) : null}
                     </div>
                     <Group justify="flex-end">
                       <Button
@@ -6088,9 +6037,6 @@ function OwnerLayout({
                           <div className={styles.notesEmpty}>
                             <Text className={styles.notesEmptyTitle}>
                               Пока пусто
-                            </Text>
-                            <Text className={styles.notesEmptyText}>
-                              Здесь появятся сообщения интервьюеров.
                             </Text>
                           </div>
                         )}

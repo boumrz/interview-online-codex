@@ -1,6 +1,11 @@
 package com.interviewonline.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.interviewonline.support.Postgres16TestSupport
+import org.junit.jupiter.api.AfterAll
+import org.springframework.test.annotation.DirtiesContext
+import org.springframework.test.context.DynamicPropertyRegistry
+import org.springframework.test.context.DynamicPropertySource
 import com.interviewonline.repository.UserRepository
 import com.interviewonline.service.CollaborationService
 import org.junit.jupiter.params.ParameterizedTest
@@ -19,9 +24,9 @@ import javax.sql.DataSource
 @SpringBootTest(properties = [
     "spring.datasource.hikari.maximum-pool-size=2",
     "spring.datasource.hikari.connection-timeout=1000",
-    "spring.datasource.url=jdbc:h2:mem:hr_permission_pool;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE",
 ])
 @AutoConfigureMockMvc
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class HrPermissionPoolIntegrationTest(
     @Autowired private val mockMvc: MockMvc,
     @Autowired private val objectMapper: ObjectMapper,
@@ -29,12 +34,18 @@ class HrPermissionPoolIntegrationTest(
     @Autowired private val collaborationService: CollaborationService,
     @Autowired private val userRepository: UserRepository,
 ) {
+    companion object {
+        private val postgres = Postgres16TestSupport.create("hrpermissionpool")
+        @JvmStatic @DynamicPropertySource fun properties(registry: DynamicPropertyRegistry) = postgres.register(registry)
+        @JvmStatic @AfterAll fun cleanup() = postgres.close()
+    }
+
     @ParameterizedTest
     @ValueSource(strings = ["invite", "track", "rest-role", "realtime-role"])
-    fun `permission publication succeeds with only one pool connection available`(operation: String) {
+    fun `permission changes and personal tracking complete with one pool connection available`(operation: String) {
         val (owner, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "pool-owner")
         val (hr, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "pool-hr")
-        val room = HrHttpFixtures.createRoom(mockMvc, objectMapper, owner)
+        val room = if (operation == "track") HrHttpFixtures.createRoom(mockMvc, objectMapper, owner) else HrHttpFixtures.createTeamRoom(mockMvc, objectMapper, owner)
         if (operation.endsWith("-role")) {
             require(HrHttpFixtures.inviteHr(mockMvc, owner, room, hr).response.status == 200)
         }

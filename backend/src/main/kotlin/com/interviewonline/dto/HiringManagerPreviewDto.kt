@@ -8,13 +8,14 @@ import com.fasterxml.jackson.databind.JsonMappingException
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 
 /**
- * The request accepts one target UUID and an optional team scope. It cannot
- * be used as a directory/search API.
+ * The request accepts one exact nickname (or a legacy UUID). Account endpoints use
+ * an optional team scope; room endpoints derive it from the room. It cannot be used as a directory/search API.
  */
 @JsonDeserialize(using = ResolveHiringManagerPreviewRequestDeserializer::class)
 data class ResolveHiringManagerPreviewRequest(
-    val invitationId: String,
+    val invitationId: String? = null,
     val teamId: String? = null,
+    val nickname: String? = null,
 )
 
 class ResolveHiringManagerPreviewRequestDeserializer : JsonDeserializer<ResolveHiringManagerPreviewRequest>() {
@@ -27,21 +28,27 @@ class ResolveHiringManagerPreviewRequestDeserializer : JsonDeserializer<ResolveH
 
         var invitationId: String? = null
         var teamId: String? = null
+        var nickname: String? = null
         val fields = mutableSetOf<String>()
         while (true) {
             val fieldToken = parser.nextToken() ?: throw malformed(parser)
             if (fieldToken == JsonToken.END_OBJECT) break
             val name = parser.currentName()
-            if (fieldToken != JsonToken.FIELD_NAME || name !in setOf("invitationId", "teamId") || !fields.add(name)) {
+            if (fieldToken != JsonToken.FIELD_NAME || name !in setOf("invitationId", "nickname", "teamId") || !fields.add(name)) {
                 throw malformed(parser)
             }
             val valueToken = parser.nextToken()
             if (valueToken == JsonToken.VALUE_NULL && name == "teamId") continue
             if (valueToken != JsonToken.VALUE_STRING) throw malformed(parser)
-            if (name == "invitationId") invitationId = parser.text else teamId = parser.text
+            when (name) {
+                "invitationId" -> invitationId = parser.text
+                "nickname" -> nickname = parser.text
+                else -> teamId = parser.text
+            }
         }
 
-        return ResolveHiringManagerPreviewRequest(invitationId ?: throw malformed(parser), teamId)
+        if ((invitationId == null) == (nickname == null)) throw malformed(parser)
+        return ResolveHiringManagerPreviewRequest(invitationId, teamId, nickname)
     }
 
     override fun getNullValue(context: DeserializationContext): ResolveHiringManagerPreviewRequest {
@@ -49,7 +56,7 @@ class ResolveHiringManagerPreviewRequestDeserializer : JsonDeserializer<ResolveH
     }
 
     private fun malformed(parser: JsonParser): JsonMappingException =
-        JsonMappingException.from(parser, "Ожидается строковое поле invitationId и необязательное поле teamId")
+        JsonMappingException.from(parser, "Ожидается один ник нанимающего и необязательная команда")
 }
 
 data class HiringManagerPreviewResponse(

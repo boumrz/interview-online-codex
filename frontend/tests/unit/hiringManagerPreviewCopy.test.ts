@@ -12,8 +12,8 @@ test("room creation exposes the explicit verified hiring picker contract", async
   ]);
 
   for (const copy of [
-    "ID нанимающего",
-    "Вставьте личный ID нанимающего",
+    "Нанимающий",
+    "Введите ник нанимающего",
     "Добавить",
     "Добавленные нанимающие",
     "Удалить",
@@ -21,14 +21,14 @@ test("room creation exposes the explicit verified hiring picker contract", async
     assert.match(component, new RegExp(copy.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
   assert.match(component, /aria-label=\{`Удалить нанимающего \$\{[^}]+\.displayName\}`\}/);
-  assert.match(component, /label="ID нанимающего"/);
-  assert.match(component, /placeholder="Вставьте личный ID нанимающего"/);
+  assert.match(component, /label="Нанимающий"/);
+  assert.match(component, /placeholder="Введите ник нанимающего"/);
   assert.match(component, /type="button"/);
   assert.match(component, /onKeyDown=/);
   for (const copy of [
     "Проверяем нанимающего…",
-    "Введите ID нанимающего",
-    "Введите полный UUID нанимающего",
+    "Введите ник нанимающего",
+    "Введите ник от 3 до 32 символов без пробелов",
     "Этот нанимающий уже добавлен",
     "Нанимающий не найден или недоступен",
     "Не удалось проверить нанимающего. Повторите попытку.",

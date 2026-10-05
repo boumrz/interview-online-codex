@@ -6,6 +6,7 @@ import { ActionIcon, Alert, Badge, Box, Button, Card, Container, Group, Loader, 
 import { Navigate, NavLink, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { useClipboardNotification } from "../../components/useClipboardNotification";
+import { getApiErrorMessage } from "../../services/apiErrors";
 import { WorkspaceSwitcher } from "../../features/workspace/WorkspaceSwitcher";
 import { ThemeToggleButton } from "../../features/theme/ThemeToggleButton";
 import { parseLibraryTransfer, serializeTask, serializeTaskSet } from "../../features/workspace/libraryTransfer";
@@ -65,6 +66,7 @@ import type { TeamDetail, TeamInterview, TeamInterviewAssignee, TeamInterviewLis
 import styles from "./TeamWorkspacePage.module.css";
 import { HrCabinetSection } from "../dashboard/HrCabinetSection";
 import { TeamInterviewEditAction } from "../../features/workspace/TeamInterviewEditAction";
+import { InterviewCard, taskCountLabel, formatInterviewDateTime as formatDateTime } from "../../features/workspace/InterviewCard";
 
 type TeamSection = "interviews" | "create" | "library" | "tracks" | "members" | "settings" | "profile" | "candidates";
 type DetailStatus = "loading" | "ready" | "unavailable";
@@ -100,14 +102,6 @@ function resolveSection(pathname: string, teamId: string): TeamSection | null {
   if (pathname === `${root}/profile`) return "profile";
   if (pathname === `${root}/candidates`) return "candidates";
   return null;
-}
-
-function taskCountLabel(count: number) {
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-  if (mod10 === 1 && mod100 !== 11) return `${count} задача`;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${count} задачи`;
-  return `${count} задач`;
 }
 
 function DeleteEntityButton({ label, description, onDelete }: { readonly label: string; readonly description?: string; readonly onDelete: () => Promise<void> }) {
@@ -189,17 +183,6 @@ function ProgrammeSummary({
       ) : null}
     </Box>
   );
-}
-
-function formatDateTime(value: string | null | undefined) {
-  if (!value || Number.isNaN(Date.parse(value))) return null;
-  return new Intl.DateTimeFormat("ru-RU", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
 }
 
 function idempotencyKey() {
@@ -578,9 +561,7 @@ function TeamInterviewList({
     <Stack gap="lg">
       <Group justify="space-between" align="flex-end" gap="md" wrap="wrap">
         <div>
-          <Text className={styles.eyebrow}>Командная лента</Text>
           <Title order={1}>Интервью</Title>
-          <Text c="gray.5" mt={6}>Здесь появятся только интервью, доступные вам в этой команде.</Text>
         </div>
         <Button className={styles.primaryAction} color="blue" onClick={() => navigate(`/workspace/teams/${teamId}/interviews/new`)}>
           Создать интервью
@@ -651,11 +632,6 @@ function TeamInterviewList({
       {!isLoading && !error && interviews.length === 0 ? (
         <Card className={styles.emptyState} withBorder>
           <Text component="div" fw={700}>{processFilter.trackId || processFilter.vacancyId ? "Интервью по выбранным фильтрам не найдены" : trimmedSearch ? "Интервью по этому поиску не найдены" : mineOnly ? "Вы пока не создали интервью" : "Доступных командных интервью пока нет"}</Text>
-          <Text c="gray.5" size="sm">
-            {processFilter.trackId || processFilter.vacancyId ? "Выберите другой трек или вакансию либо снимите фильтры." : trimmedSearch
-              ? "Попробуйте изменить запрос или очистить поиск."
-              : mineOnly ? "Выключите фильтр, чтобы увидеть остальные интервью команды." : "Создайте первое интервью."}
-          </Text>
         </Card>
       ) : null}
       {!error && interviews.length > 0 ? (
@@ -735,11 +711,7 @@ function TeamInterviewOwnerOfferInbox({
       <Stack gap="md">
         <Group justify="space-between" gap="sm" wrap="wrap">
           <div>
-            <Text className={styles.eyebrow}>Ожидает вашего решения</Text>
             <Title order={2}>Предложения владения интервью</Title>
-            <Text c="gray.5" mt={6} size="sm">
-              Примите предложение, если готовы стать новым владельцем зависшего интервью.
-            </Text>
           </div>
           <Badge color="cyan" variant="light">{offers.length}</Badge>
         </Group>
@@ -839,17 +811,13 @@ function TeamInterviewOwnerlessQueue({
       <Stack gap="md">
         <Group justify="space-between" gap="sm" wrap="wrap">
           <div>
-            <Text className={styles.eyebrow}>Требует назначения</Text>
             <Title order={2}>Интервью без владельца</Title>
-            <Text c="gray.5" mt={6} size="sm">
-              Эти интервью созданы участником, который больше не активен в команде. Можно предложить нового владельца или архивировать интервью без преемника.
-            </Text>
           </div>
           <Badge color="yellow" variant="light">{interviews.length}</Badge>
         </Group>
         <Stack gap="sm" role="list" aria-label="Список интервью без владельца">
           {interviews.map((interview) => {
-            const ownerName = interview.ownerDisplayName ?? interview.ownerUserId ?? "неизвестен";
+            const ownerName = interview.ownerDisplayName ?? "неизвестен";
             const isFrozen = interview.status === "frozen";
             const options = activeMembers
               .filter((member) => member.userId !== interview.ownerUserId)
@@ -965,27 +933,18 @@ function TeamInterviewCard({
   const statusLabel = isFinished ? "Завершено" : isFrozen ? "Заморожено" : "Активно";
   const statusColor = isFinished ? "gray" : isFrozen ? "orange" : "green";
   return (
-    <Card
-      className={styles.panel}
-      withBorder
-      role="region"
-      aria-label={`Командное интервью ${interview.title}`}
-    >
-      <Stack gap="sm" role="listitem">
-        <Group justify="space-between" gap="sm" wrap="wrap">
-          <div className={styles.interviewHeading}>
-            <Text fw={800}>{interview.title}</Text>
-            <Text c="gray.5" size="sm">{createdAt ? `Создано ${createdAt}` : "Командное интервью"}</Text>
-          </div>
-          <Group gap="xs" wrap="wrap">
+    <InterviewCard
+      title={interview.title}
+      subtitle={createdAt ? `Создано ${createdAt}` : "Командное интервью"}
+      ariaLabel={`Командное интервью ${interview.title}`}
+      badges={<>
             <Badge variant="light">{taskCountLabel(interview.taskCount)}</Badge>
             <Badge color={statusColor} variant={isFrozen ? "filled" : "light"}>
               {statusLabel}
             </Badge>
             {finishedAt ? <Badge variant="outline">Завершено: {finishedAt}</Badge> : null}
-          </Group>
-        </Group>
-        <Group gap="xs" wrap="wrap">
+      </>}
+      context={<>
           <Badge color={interview.trackName ? "blue" : "gray"} variant="light">
             {interview.trackName ? `Трек: ${interview.trackName}` : "Без трека"}
           </Badge>
@@ -995,7 +954,43 @@ function TeamInterviewCard({
           {interview.programmeVersion != null ? (
             <Badge color="blue" variant="light">Задачи по шаблону</Badge>
           ) : null}
-        </Group>
+      </>}
+      actions={<>
+            {canRename ? <TeamInterviewEditAction accountId={accountId} teamId={teamId} interview={interview} /> : null}
+            {!isFrozen ? (
+              <Button type="button" variant="light" size="compact-sm" onClick={async () => {
+                await copyToClipboard(`${window.location.origin}/room/${interview.inviteCode}`, {
+                  success: "Ссылка для кандидата готова к отправке.",
+                  failure: "Разрешите доступ к буферу обмена и повторите попытку.",
+                });
+              }}>Копировать ссылку для кандидата</Button>
+            ) : null}
+            {canResume ? (
+              <Button
+                type="button"
+                variant="filled"
+                color="green"
+                size="compact-sm"
+                loading={isResuming}
+                onClick={() => onResume(interview)}
+                aria-label={`Возобновить интервью ${interview.title}`}
+              >
+                Возобновить интервью
+              </Button>
+            ) : null}
+            <Button
+              component={NavLink}
+              to={`/room/${interview.inviteCode}`}
+              variant="filled"
+              color="blue"
+              size="compact-sm"
+              aria-label={`Открыть комнату ${interview.title}`}
+            >
+              Войти в комнату
+            </Button>
+            {onDelete ? <DeleteEntityButton label={`интервью ${interview.title}`} onDelete={onDelete} /> : null}
+      </>}
+    >
         {tasksLine ? (
           <Text c="gray.4" size="sm">{tasksLine}</Text>
         ) : (
@@ -1030,43 +1025,7 @@ function TeamInterviewCard({
             ) : null}
           </Stack>
         ) : null}
-        <Group justify="flex-end" align="center" wrap="wrap">
-            {canRename ? <TeamInterviewEditAction accountId={accountId} teamId={teamId} interview={interview} /> : null}
-            {!isFrozen ? (
-              <Button type="button" variant="light" size="compact-sm" onClick={async () => {
-                await copyToClipboard(`${window.location.origin}/room/${interview.inviteCode}`, {
-                  success: "Ссылка для кандидата готова к отправке.",
-                  failure: "Разрешите доступ к буферу обмена и повторите попытку.",
-                });
-              }}>Копировать ссылку для кандидата</Button>
-            ) : null}
-            {canResume ? (
-              <Button
-                type="button"
-                variant="filled"
-                color="green"
-                size="compact-sm"
-                loading={isResuming}
-                onClick={() => onResume(interview)}
-                aria-label={`Возобновить интервью ${interview.title}`}
-              >
-                Возобновить интервью
-              </Button>
-            ) : null}
-            <Button
-              component={NavLink}
-              to={`/room/${interview.inviteCode}`}
-              variant="filled"
-              color="blue"
-              size="compact-sm"
-              aria-label={`Открыть комнату ${interview.title}`}
-            >
-              Войти в комнату
-            </Button>
-            {onDelete ? <DeleteEntityButton label={`интервью ${interview.title}`} onDelete={onDelete} /> : null}
-        </Group>
-      </Stack>
-    </Card>
+    </InterviewCard>
   );
 }
 
@@ -1321,7 +1280,7 @@ function TeamCreateInterview({
         setProgrammeConflict(true);
         setCreateError("Задачи трека или вакансии изменились. Проверьте новую версию перед созданием интервью.");
       } else {
-        setCreateError("Не удалось создать интервью. Проверьте выбранные задачи, трек и доступ к команде.");
+        setCreateError(getApiErrorMessage(error, "Не удалось создать интервью. Проверьте выбранные задачи, трек и доступ к команде."));
       }
     }
   };
@@ -1524,7 +1483,7 @@ function TeamTaskLibrarySection({
       setPersonalSourceTaskId("");
       setImportTaskOpened(false);
     } catch (error) {
-      setImportError(error instanceof Error ? error.message : "Не удалось импортировать задачу. Проверьте данные и доступ к библиотеке.");
+      setImportError(getApiErrorMessage(error, "Не удалось импортировать задачу. Проверьте данные и доступ к библиотеке."));
     }
   };
 
@@ -1551,7 +1510,7 @@ function TeamTaskLibrarySection({
       setImportPresetOpened(false);
       setLibraryTab("sets");
     } catch (error) {
-      setPresetImportError(error instanceof Error ? error.message : "Не удалось импортировать набор. Проверьте данные и доступ к библиотеке.");
+      setPresetImportError(getApiErrorMessage(error, "Не удалось импортировать набор. Проверьте данные и доступ к библиотеке."));
     }
   };
 
@@ -1769,7 +1728,7 @@ function TeamTaskLibrarySection({
             </section>
             <section className="app-task-content-grid">
               <Textarea
-                label="Новое описание задачи" placeholder="Опишите условие, входные данные и ожидаемый результат. Поддерживается Markdown"
+                    label="Новое описание задачи" placeholder="Условие задачи (Markdown)"
                 value={taskEdits[task.id]?.description ?? ""}
                 onChange={(event: React.ChangeEvent<HTMLInputElement>) => setTaskEdits((current) => ({
                   ...current,
@@ -1809,7 +1768,6 @@ function TeamTaskLibrarySection({
             {task.description ? <Text c="gray.5" size="sm">{task.description}</Text> : null}
             <Group className={styles.libraryRowMetadata} gap="xs" align="center" wrap="wrap">
               <Badge variant="light">{labelForLanguage(task.language)}</Badge>
-              <Text size="xs" c="gray.5">Автор: {task.createdByUserId.slice(0, 8)}</Text>
             </Group>
           </div>
           <div className={styles.libraryRowControls} data-testid="team-library-row-controls">
@@ -1950,7 +1908,6 @@ function TeamTaskLibrarySection({
             </Text>
             <Group className={styles.libraryRowMetadata} gap="xs" align="center" wrap="wrap">
               <Badge variant="light">{taskCountLabel(taskSet.items.length)}</Badge>
-              <Text size="xs" c="gray.5">Автор: {taskSet.createdByUserId.slice(0, 8)}</Text>
             </Group>
           </div>
           <div className={styles.libraryRowControls} data-testid="team-library-row-controls">
@@ -1991,9 +1948,7 @@ function TeamTaskLibrarySection({
     <Stack gap="lg">
       <Group justify="space-between" align="flex-end" gap="md" wrap="wrap">
         <div>
-          <Text className={styles.eyebrow}>Командные материалы</Text>
           <Title order={1}>Библиотека</Title>
-          <Text c="gray.5" mt={6}>Задачи команды хранятся отдельно от личной библиотеки и доступны активным участникам.</Text>
         </div>
         <Button type="button" variant="light" leftSection={<IconRefresh size={16} />} onClick={() => void refetch()} loading={isFetching && !isLoading}>
           Обновить
@@ -2062,7 +2017,7 @@ function TeamTaskLibrarySection({
                 </section>
                 <section className="app-task-content-grid">
                   <Textarea
-                    label="Описание задачи" placeholder="Опишите условие, входные данные и ожидаемый результат. Поддерживается Markdown"
+                    label="Описание задачи" placeholder="Условие задачи (Markdown)"
                     value={taskDescription}
                     onChange={(event: React.ChangeEvent<HTMLInputElement>) => setTaskDescription(event.currentTarget.value)}
                     minRows={6}
@@ -2087,11 +2042,8 @@ function TeamTaskLibrarySection({
           <Modal opened={importTaskOpened} onClose={() => { if (!(importPersonalTaskState.isLoading || createTaskState.isLoading)) setImportTaskOpened(false); }} title="Импортировать задачу" centered size="lg">
             <form onSubmit={submitPersonalImport}>
               <Stack gap="sm">
-                <Text c="gray.5" size="sm">
-                  Вставьте данные, полученные кнопкой «Копировать» в другой библиотеке. Можно также указать ID своей личной задачи.
-                </Text>
                 <Textarea
-                  label="Данные задачи или ID личной задачи" placeholder="Вставьте скопированные данные задачи или её ID вида 123e4567-e89b-12d3-a456-426614174000"
+                  label="Данные задачи" placeholder="Вставьте данные из кнопки «Копировать» у задачи"
                   value={personalSourceTaskId}
                   onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
                     setPersonalSourceTaskId(event.currentTarget.value);
@@ -2112,11 +2064,8 @@ function TeamTaskLibrarySection({
           <Modal opened={importPresetOpened} onClose={() => { if (!(importPersonalPresetToTeamState.isLoading || createTaskSetState.isLoading)) setImportPresetOpened(false); }} title="Импортировать набор" centered size="lg">
             <form onSubmit={submitPersonalPresetImport}>
               <Stack gap="sm">
-                <Text c="gray.5" size="sm">
-                  Вставьте данные, полученные кнопкой «Копировать» в другой библиотеке. Можно также указать ID своего личного набора.
-                </Text>
                 <Textarea
-                  label="Данные набора или ID личного набора" placeholder="Вставьте скопированные данные набора или его ID вида 123e4567-e89b-12d3-a456-426614174000"
+                  label="Данные набора" placeholder="Вставьте данные из кнопки «Копировать» у набора"
                   value={personalSourcePresetId}
                   onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
                     setPersonalSourcePresetId(event.currentTarget.value);
@@ -2200,11 +2149,6 @@ function TeamTaskLibrarySection({
           {!isLoading && !error && tasks.length === 0 ? (
             <Card className={styles.emptyState} withBorder>
               <Text fw={700}>{emptyTitle}</Text>
-              <Text c="gray.5" size="sm">
-                {searchQuery || languageFilter
-                  ? "Попробуйте изменить поиск или фильтр языка."
-                  : "Создайте первую задачу команды — она не появится в личной библиотеке участников."}
-              </Text>
             </Card>
           ) : null}
           {!isLoading && !error && tasks.length > 0 ? (
@@ -2224,7 +2168,6 @@ function TeamTaskLibrarySection({
           <Group justify="space-between" align="center" gap="md" wrap="wrap">
             <Stack gap={4}>
               <Text fw={700}>Наборы задач</Text>
-              <Text c="gray.5" size="sm">Переиспользуемые подборки командных задач для будущих интервью.</Text>
             </Stack>
             <Button type="button" variant="light" leftSection={<IconRefresh size={16} />} onClick={() => void refetchTaskSets()} loading={isTaskSetFetching && !isTaskSetLoading}>
               Обновить наборы
@@ -2239,9 +2182,6 @@ function TeamTaskLibrarySection({
           {!isTaskSetLoading && !taskSetLoadError && taskSets.length === 0 ? (
             <Card className={styles.emptyState} withBorder>
               <Text component="div" fw={700}>Наборов пока нет</Text>
-              <Text c="gray.5" size="sm">
-                Нажмите «Создать набор» и выберите задачи для первого командного набора.
-              </Text>
             </Card>
           ) : null}
           {!isTaskSetLoading && !taskSetLoadError && taskSets.length > 0 ? (
@@ -2602,7 +2542,7 @@ function TeamTracksSection({
             </Alert>
           ) : null}
           {!isProgrammeTaskLoading && !programmeTaskError && programmeTasks.length === 0 ? (
-            <Text size="sm" c="gray.5">Сначала создайте активные командные задачи в библиотеке.</Text>
+            <Text size="sm" c="gray.5">Нет активных задач</Text>
           ) : null}
           {programmeTasks.length > 0 ? (
             <React.Fragment>
@@ -2668,9 +2608,7 @@ function TeamTracksSection({
     <Stack gap="lg">
       <Group justify="space-between" align="flex-end" gap="md" wrap="wrap">
         <div>
-          <Text className={styles.eyebrow}>Командный справочник</Text>
           <Title order={1}>Треки и вакансии</Title>
-          <Text c="gray.5" mt={6}>Трек объединяет вакансии. Задачи трека добавляются в интервью по умолчанию; задачи вакансии заменяют их, если настроены.</Text>
         </div>
       </Group>
 
@@ -2764,13 +2702,6 @@ function TeamTracksSection({
       {!isLoading && !error && tracks.length === 0 ? (
         <Card className={styles.emptyState} withBorder>
           <Text fw={700}>{searchQuery ? "Ничего не найдено" : mode === "active" ? "Треков пока нет" : "Архив пуст"}</Text>
-          <Text c="gray.5" size="sm">
-            {searchQuery
-              ? "Попробуйте изменить запрос или переключить активный/архивный фильтр."
-              : mode === "active"
-              ? "Создайте первый трек — затем добавьте вакансии, которые будут использоваться при подготовке командных интервью."
-              : "Здесь появятся архивированные треки и вакансии, которые можно восстановить вручную."}
-          </Text>
         </Card>
       ) : null}
 
@@ -2911,7 +2842,7 @@ function TeamTracksSection({
                 </Stack>
 
                 {track.vacancies.length === 0 ? (
-                  <Text c="gray.5" size="sm">В этом треке пока нет вакансий</Text>
+                  <Text c="gray.5" size="sm">Вакансий пока нет</Text>
                 ) : (
                   <Stack gap="sm" className={styles.trackVacancyList} aria-label={`Вакансии трека ${track.name}`}>
                     <Text fw={700} size="sm" c="blue.2">Вакансии трека</Text>
@@ -3069,7 +3000,7 @@ function TeamTracksSection({
               </Group>
             </Stack>
           </form>
-        ) : <Text size="sm" c="gray.5">Сначала выберите трек, к которому относится вакансия.</Text>}
+        ) : null}
         </Stack>
       </Modal>
     </Stack>
@@ -3083,7 +3014,6 @@ function StagedSection({ section }: { section: "library" }) {
       <Title order={1}>{title}</Title>
       <Card className={styles.emptyState} withBorder>
         <Text fw={700}>Раздел готовится</Text>
-        <Text c="gray.5" size="sm">Сейчас здесь нет подстановки данных из личного раздела.</Text>
       </Card>
     </Stack>
   );
@@ -3091,25 +3021,23 @@ function StagedSection({ section }: { section: "library" }) {
 
 function TeamWorkspaceLoading({ section }: { section: TeamSection }) {
   const intro = section === "library"
-    ? { eyebrow: "Командные материалы", title: "Библиотека", description: "Задачи команды хранятся отдельно от личной библиотеки и доступны активным участникам." }
+    ? { title: "Библиотека" }
     : section === "tracks"
-      ? { eyebrow: "Командный справочник", title: "Треки и вакансии", description: "Трек объединяет вакансии. Задачи трека добавляются в интервью по умолчанию; задачи вакансии заменяют их, если настроены." }
+      ? { title: "Треки и вакансии" }
       : section === "settings" || section === "members"
-        ? { eyebrow: "Команда", title: "Настройки команды", description: "Права и изменения подтверждаются сервером при каждом действии." }
+        ? { title: "Настройки команды" }
         : section === "profile"
-          ? { eyebrow: "Настройки аккаунта", title: "Профиль", description: "" }
+          ? { title: "Профиль" }
           : section === "candidates"
-            ? { eyebrow: "", title: "Кандидаты и интервью", description: "" }
-            : { eyebrow: "Командная лента", title: "Интервью", description: "Здесь появятся только интервью, доступные вам в этой команде." };
+            ? { title: "Кандидаты и интервью" }
+            : { title: "Интервью" };
 
   return (
     <Stack gap="lg" role="status" aria-label="Проверяем доступ к команде" aria-busy="true">
       <span className="visually-hidden">Проверяем доступ к команде…</span>
       <Group justify="space-between" align="flex-end" gap="md" wrap="wrap">
         <div>
-          {intro.eyebrow ? <Text className={styles.eyebrow}>{intro.eyebrow}</Text> : null}
           <Title order={section === "candidates" ? 2 : 1}>{intro.title}</Title>
-          {intro.description ? <Text c="gray.5" mt={6}>{intro.description}</Text> : null}
         </div>
       </Group>
       <div className={styles.loadingFields} aria-hidden="true">

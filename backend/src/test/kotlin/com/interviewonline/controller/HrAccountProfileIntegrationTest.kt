@@ -1,12 +1,20 @@
 package com.interviewonline.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.interviewonline.support.Postgres16TestSupport
+import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.BeforeAll
+import org.springframework.boot.test.autoconfigure.web.servlet.MockMvcPrint
+import org.springframework.test.annotation.DirtiesContext
+import org.springframework.test.context.DynamicPropertyRegistry
+import org.springframework.test.context.DynamicPropertySource
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.http.MediaType
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.patch
@@ -20,7 +28,8 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 
 @SpringBootTest
-@AutoConfigureMockMvc
+@AutoConfigureMockMvc(print = MockMvcPrint.NONE)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class HrAccountProfileIntegrationTest(
     @Autowired private val mockMvc: MockMvc,
     @Autowired private val objectMapper: ObjectMapper,
@@ -29,7 +38,18 @@ class HrAccountProfileIntegrationTest(
     @Autowired private val assignmentRepository: RoomHrAssignmentRepository,
     @Autowired private val participantRepository: RoomParticipantRepository,
     @Autowired private val adminUserService: AdminUserService,
+    @Autowired private val jdbc: JdbcTemplate,
 ) {
+    companion object {
+        private val postgres = Postgres16TestSupport.create("hr_profile")
+        @JvmStatic @DynamicPropertySource
+        fun properties(registry: DynamicPropertyRegistry) = postgres.register(registry)
+        @JvmStatic @BeforeAll
+        fun verifyDatabase() = postgres.verifyPostgres16()
+        @JvmStatic @AfterAll
+        fun cleanup() = postgres.close()
+    }
+
     @Test
     fun `enabling hiring role reveals existing personal interviews created by account`() {
         val (owner, _) = HrHttpFixtures.register(mockMvc, objectMapper, isHr = false, prefix = "owner-enable")
@@ -83,12 +103,12 @@ class HrAccountProfileIntegrationTest(
     }
 
     @Test
-    fun `profile self-disable is self-only persists after login and preserves room authority history`() {
+    fun `profile self-disable is self-only persists after login and preserves legacy personal authority history`() {
         val (owner, _) = HrHttpFixtures.register(mockMvc, objectMapper, isHr = false, prefix = "profile-owner")
         val (account, registration) = HrHttpFixtures.register(mockMvc, objectMapper, isHr = true, prefix = "profile-disable")
         val (unrelatedManager, _) = HrHttpFixtures.register(mockMvc, objectMapper, isHr = true, prefix = "profile-unrelated")
         val room = HrHttpFixtures.createRoom(mockMvc, objectMapper, owner)
-        require(HrHttpFixtures.inviteHr(mockMvc, owner, room, account).response.status == 200)
+        HrHttpFixtures.seedLegacyPersonalHiringAssignment(jdbc, room, account)
 
         val nickname = registration.path("user").path("nickname").asText()
         val password = "secret-${nickname.removePrefix("profile-disable-")}"
@@ -172,11 +192,9 @@ class HrAccountProfileIntegrationTest(
         val (target, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "delete-target")
         val (otherOwner, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "other-owner")
         val targetOwnedRoom = HrHttpFixtures.createRoom(mockMvc, objectMapper, target)
-        val otherRoom = HrHttpFixtures.createRoom(mockMvc, objectMapper, otherOwner)
+        val otherRoom = HrHttpFixtures.createTeamRoom(mockMvc, objectMapper, otherOwner)
         require(HrHttpFixtures.inviteHr(mockMvc, otherOwner, otherRoom, target).response.status == 200)
-        mockMvc.post("/api/rooms/${targetOwnedRoom.inviteCode}/hr-tracking") {
-            header("Authorization", "Bearer ${target.token}")
-        }.andExpect { status { isOk() } }
+        HrHttpFixtures.seedLegacyPersonalTracking(jdbc, targetOwnedRoom, target)
 
         adminUserService.deleteUser(admin, target.id)
 

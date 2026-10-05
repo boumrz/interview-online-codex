@@ -39,8 +39,7 @@ export function HrProfileSection({ user, isLoading, onSave, showIdentity = true 
       <Switch aria-label="Я участвую в найме" checked={user.isHr} loading={pending || isLoading}
         disabled={pending || isLoading} onChange={(value) => void save(value)} />
     </div>
-    <Text size="sm" c="var(--app-muted)">Включите, если вас приглашают внешним нанимающим к отдельному интервью по личному ID. Кандидаты и Excel в команде доступны всем её участникам независимо от этой настройки.</Text>
-    {user.isHr && showIdentity ? <CopyHrId id={user.id} /> : null}
+    {user.isHr && showIdentity ? <CopyHrId nickname={user.nickname} /> : null}
     {error ? <div role="alert" className={styles.error}>
       <Text size="sm" c="red.4">{error}</Text>
       {retryValue !== null ? <Button type="button" variant="subtle" size="compact-xs" disabled={pending || isLoading} onClick={() => void save(retryValue)}>Повторить</Button> : null}

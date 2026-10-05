@@ -22,9 +22,9 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.MvcResult
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
-import org.springframework.test.web.servlet.put
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
+import org.springframework.jdbc.core.JdbcTemplate
 import java.io.ByteArrayInputStream
 import java.util.UUID
 
@@ -36,6 +36,7 @@ class HrHostNotesWorkbookIntegrationTest(
     @Autowired private val mapper: ObjectMapper,
     @Autowired private val rooms: RoomRepository,
     @Autowired private val users: UserRepository,
+    @Autowired private val jdbc: JdbcTemplate,
 ) {
     companion object {
         private val postgres = Postgres16TestSupport.create("hr_host_notes")
@@ -51,7 +52,7 @@ class HrHostNotesWorkbookIntegrationTest(
         val owner = account("notes-owner", false)
         val hiring = account("notes-hiring", true)
         val stranger = account("notes-stranger", true)
-        val room = room(owner)
+        val room = teamRoom(owner)
         room.verdictComment = "@verdict stays text"
         room.notes = "Legacy shared note must not replace personal history"
         room.privateNotesJson = notes(
@@ -177,7 +178,7 @@ class HrHostNotesWorkbookIntegrationTest(
     }
 
     @Test
-    fun `external hiring export includes guest host notes but never peer entries or forged host flags`() {
+    fun `legacy personal hiring export includes guest host notes but never peer entries or forged host flags`() {
         val hiring = account("guest-host-hiring", true)
         val creation = mockMvc.post("/api/public/rooms") {
             contentType = MediaType.APPLICATION_JSON
@@ -205,9 +206,7 @@ class HrHostNotesWorkbookIntegrationTest(
         val reloaded = join(room, participantId, ownerToken)
         assertTrue(payload(reloaded.response).path("personalNotes").single { it.path("id").asText() == "host-first" }.path("writtenByHost").asBoolean())
 
-        assertEquals(200, mockMvc.put("/api/rooms/${room.inviteCode}/hr-managers/${hiring.id}") {
-            header("X-Room-Owner-Token", ownerToken)
-        }.andReturn().response.status)
+        HrHttpFixtures.seedLegacyPersonalHiringAssignment(jdbc, room, hiring)
         val response = export(hiring)
         assertEquals(200, response.status)
         assertEquals("1", response.getHeader("Interview-Count"))
@@ -227,7 +226,7 @@ class HrHostNotesWorkbookIntegrationTest(
             "p:guest-peer" to mapOf("entries" to listOf(entry("peer", "PRIVATE guest peer", 3) + ("writtenByHost" to false))),
         )))
         rooms.saveAndFlush(room)
-        assertEquals(200, mockMvc.put("/api/rooms/${room.inviteCode}/hr-managers/${hiring.id}") { header("X-Room-Owner-Token", room.ownerSessionToken) }.andReturn().response.status)
+        HrHttpFixtures.seedLegacyPersonalHiringAssignment(jdbc, HrTestRoom(requireNotNull(room.id), room.inviteCode), hiring)
         val response = export(hiring)
         assertEquals(200, response.status)
         WorkbookFactory.create(ByteArrayInputStream(response.contentAsByteArray)).use { workbook ->
@@ -304,6 +303,13 @@ class HrHostNotesWorkbookIntegrationTest(
             ownerSessionToken = "owner_${UUID.randomUUID()}",
             interviewerSessionToken = "interviewer_${UUID.randomUUID()}",
         )
+        room.tasks.add(RoomTask(room = room, stepIndex = 0, title = "Задача хоста"))
+        return rooms.saveAndFlush(room)
+    }
+
+    private fun teamRoom(owner: HrTestAccount): Room {
+        val created = HrHttpFixtures.createTeamRoom(mockMvc, mapper, owner, "Workbook notes ${UUID.randomUUID()}")
+        val room = requireNotNull(rooms.findWithTasksByInviteCode(created.inviteCode))
         room.tasks.add(RoomTask(room = room, stepIndex = 0, title = "Задача хоста"))
         return rooms.saveAndFlush(room)
     }

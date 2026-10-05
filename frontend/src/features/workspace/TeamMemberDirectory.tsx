@@ -75,7 +75,6 @@ export function TeamMemberDirectory({ accountId, teamId, renderActions, onMember
       <Group justify="space-between" align="flex-end" gap="md" wrap="wrap">
         <Stack gap="xs">
           <Text fw={700} size="lg">Состав команды</Text>
-          <Text c="gray.5" size="sm">Видны только активные участники этой команды.</Text>
         </Stack>
       </Group>
 

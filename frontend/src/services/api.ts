@@ -13,6 +13,7 @@ import type {
   HrManager,
   HiringManagerPreviewResponse,
   InterviewMetadata,
+  PersonalInterviewDetails,
   PresetDetail,
   PresetSummary,
   Room,
@@ -29,6 +30,7 @@ import type {
   TeamInterviewProgrammeResponse,
   TeamInterviewResponse,
   TeamInterviewDetails,
+  TeamInterviewDetailsUpdate,
   TeamMemberDirectoryPage,
   TeamMemberDirectoryQuery,
   TeamProcessListResponse,
@@ -49,6 +51,7 @@ import type {
 } from "../types";
 import type { RootState } from "../app/store";
 import { API_BASE_URL } from "../config/runtime";
+import { normalizeApiError } from "./apiErrors";
 
 const API_URL = API_BASE_URL;
 type TeamManagementScope = Pick<WorkspaceCacheScope, "accountId" | "kind" | "teamId" | "query">;
@@ -77,16 +80,21 @@ function teamTrackTags(scope: TeamManagementScope) {
   ];
 }
 
-export const api = createApi({
-  reducerPath: "api",
-  baseQuery: fetchBaseQuery({
+const rawBaseQuery = fetchBaseQuery({
     baseUrl: API_URL,
     prepareHeaders: (headers, { getState }) => {
       const token = (getState() as RootState).auth.token;
       if (token) headers.set("Authorization", `Bearer ${token}`);
       return headers;
     },
-  }),
+});
+
+export const api = createApi({
+  reducerPath: "api",
+  baseQuery: async (args, context, options) => {
+    const result = await rawBaseQuery(args, context, options);
+    return result.error ? { ...result, error: normalizeApiError(result.error) } : result;
+  },
   tagTypes: [
     "Room",
     "MyRooms",
@@ -819,7 +827,7 @@ export const api = createApi({
     getTeamInterviewDetails: builder.query<TeamInterviewDetails, TeamManagementScope & { interviewId: string; requestGeneration?: number }>({
       query: ({ teamId, interviewId }) => ({ url: `/teams/${teamId}/interviews/${interviewId}/details`, cache: "no-store" }),
     }),
-    updateTeamInterviewDetails: builder.mutation<TeamInterviewDetails, TeamManagementScope & { interviewId: string; details: TeamInterviewDetails }>({
+    updateTeamInterviewDetails: builder.mutation<TeamInterviewDetails, TeamManagementScope & { interviewId: string; details: TeamInterviewDetailsUpdate }>({
       query: ({ teamId, interviewId, details }) => ({ url: `/teams/${teamId}/interviews/${interviewId}/details`, method: "PATCH", body: details, cache: "no-store" }),
       invalidatesTags: (_result, _error, scope) => [
         { type: "TeamInterviews", id: `${scope.accountId}:${scope.teamId}` },
@@ -876,23 +884,36 @@ export const api = createApi({
     }),
     previewHiringManager: builder.mutation<
       HiringManagerPreviewResponse,
-      { invitationId: string; teamId?: string }
+      ({ nickname: string; invitationId?: never } | { invitationId: string; nickname?: never }) & {
+        teamId?: string;
+        room?: { inviteCode: string; ownerToken?: string; interviewerToken?: string; eventToken?: string };
+      }
     >({
-      query: (body) => ({
-        url: "/me/hiring-manager-preview",
+      query: ({ room, teamId, ...target }) => ({
+        url: room ? `/rooms/${room.inviteCode}/hiring-manager-preview` : "/me/hiring-manager-preview",
         method: "POST",
-        body,
+        body: { ...target, ...(!room && teamId ? { teamId } : {}) },
         cache: "no-store",
+        timeout: 8000,
+        ...(room ? { headers: {
+          ...(room.ownerToken ? { "X-Room-Owner-Token": room.ownerToken } : {}),
+          ...(room.interviewerToken ? { "X-Room-Interviewer-Token": room.interviewerToken } : {}),
+          ...(room.eventToken ? { "X-Room-Event-Token": room.eventToken } : {}),
+        } } : {}),
       }),
     }),
-    getRoom: builder.query<Room, { inviteCode: string; ownerToken?: string }>({
-      query: ({ inviteCode, ownerToken }) => ({
+    getRoom: builder.query<Room, { inviteCode: string; ownerToken?: string; interviewerToken?: string; eventToken?: string; accountId?: string; requestGeneration?: number }>({
+      query: ({ inviteCode, ownerToken, interviewerToken, eventToken }) => ({
         url: `/rooms/${inviteCode}`,
+        cache: "no-store",
         headers: {
           ...(ownerToken ? { "X-Room-Owner-Token": ownerToken } : {}),
+          ...(interviewerToken ? { "X-Room-Interviewer-Token": interviewerToken } : {}),
+          ...(eventToken ? { "X-Room-Event-Token": eventToken } : {}),
         },
       }),
       providesTags: ["Room"],
+      keepUnusedDataFor: 0,
     }),
     getRoomTaskWorkspace: builder.query<
       RoomTaskWorkspace,
@@ -1002,8 +1023,17 @@ export const api = createApi({
       invalidatesTags: ["Room"],
     }),
     myRooms: builder.query<RoomSummary[], void>({
-      query: () => "/me/rooms",
+      query: () => ({ url: "/me/rooms", cache: "no-store" }),
       providesTags: ["MyRooms"],
+    }),
+    getPersonalInterviewDetails: builder.query<PersonalInterviewDetails, { roomId: string; requestGeneration?: number }>({
+      query: ({ roomId }) => ({ url: `/me/rooms/${roomId}/details`, cache: "no-store" }),
+      providesTags: ["InterviewMetadata"],
+      keepUnusedDataFor: 0,
+    }),
+    updatePersonalInterviewDetails: builder.mutation<PersonalInterviewDetails, { roomId: string; details: PersonalInterviewDetails }>({
+      query: ({ roomId, details }) => ({ url: `/me/rooms/${roomId}/details`, method: "PATCH", body: details, cache: "no-store" }),
+      invalidatesTags: ["MyRooms", "Room", "InterviewMetadata", "HrInterviews"],
     }),
     updateRoom: builder.mutation<
       RoomSummary,
@@ -1120,7 +1150,7 @@ export const api = createApi({
           ...(eventToken ? { "X-Room-Event-Token": eventToken } : {}),
         },
       }),
-      invalidatesTags: ["HrManagers", "HrInterviews"],
+      invalidatesTags: ["HrManagers", "HrInterviews", "MyRooms"],
     }),
     removeHrManager: builder.mutation<
       void,
@@ -1141,7 +1171,7 @@ export const api = createApi({
           ...(eventToken ? { "X-Room-Event-Token": eventToken } : {}),
         },
       }),
-      invalidatesTags: ["HrManagers", "HrInterviews"],
+      invalidatesTags: ["HrManagers", "HrInterviews", "MyRooms"],
     }),
     trackHrRoom: builder.mutation<
       { roomId: string; tracked: true },
@@ -1381,6 +1411,7 @@ export const {
   useLazyGetWorkspacesQuery,
   useLazyGetTeamDetailQuery,
   useGetTeamMembersQuery,
+  useLazyGetTeamMembersQuery,
   useGetTeamInterviewsQuery,
   useGetTeamProcessesQuery,
   useGetTeamProcessInterviewsQuery,
@@ -1406,6 +1437,7 @@ export const {
   useCopyTeamTaskSetMutation,
   useDeleteTeamTaskSetMutation,
   useGetTeamTracksQuery,
+  useLazyGetTeamTracksQuery,
   useCreateTeamTrackMutation,
   useUpdateTeamTrackMutation,
   useArchiveTeamTrackMutation,
@@ -1439,12 +1471,15 @@ export const {
   useGetHiringManagerOptionsQuery,
   usePreviewHiringManagerMutation,
   useGetRoomQuery,
+  useLazyGetRoomQuery,
   useGetRoomTaskWorkspaceQuery,
   useUpdateRoomTaskWorkspaceMutation,
   useAddRoomTasksMutation,
   useUpdateRoomTaskMutation,
   useDeleteRoomTaskMutation,
   useMyRoomsQuery,
+  useLazyGetPersonalInterviewDetailsQuery,
+  useUpdatePersonalInterviewDetailsMutation,
   useUpdateRoomMutation,
   useDeleteRoomMutation,
   useUpdateProfileMutation,

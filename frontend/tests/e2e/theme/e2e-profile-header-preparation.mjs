@@ -37,7 +37,8 @@ test('profile capability changes directly, survives reload, and retries without 
     await page.waitForFunction(() => document.querySelector('[role="switch"]')?.getAttribute('aria-checked') === 'false');
     assert.equal(await page.getByRole('link', { name: 'Кандидаты', exact: true }).count(), 0);
     assert.equal(await page.getByRole('button', { name: 'Изменить настройки нанимающего', exact: true }).count(), 0);
-    assert.ok((await page.locator('main').innerText()).includes(auth.user.id));
+    assert.equal(await page.getByText(auth.user.id,{exact:true}).count(),0,'profile does not expose its technical identifier');
+    await page.getByText(`@${auth.user.nickname}`,{exact:true}).first().waitFor();
     await page.reload(); await toggle.waitFor(); assert.equal(await toggle.getAttribute('aria-checked'), 'false');
   } finally { await browser.close(); }
 });
@@ -76,13 +77,13 @@ test('interview search includes candidate, and deletion uses a last icon with ma
   const { browser, page } = await open(auth);
   try {
     await page.goto(`${web}/workspace/personal/interviews`);
-    const row = page.getByRole('row', { name: /Название без цифр/ });
-    await row.getByText('Кандидат 234', { exact: true }).waitFor({ timeout: 5000 });
+    const row = page.getByRole('region', { name: 'Личное интервью Название без цифр',exact:true });
+    await row.getByText('Кандидат: Кандидат 234', { exact: true }).waitFor({ timeout: 5000 });
     const search = page.getByRole('textbox', { name: 'Поиск интервью', exact: true });
     for (const q of ['234', '  КАНДИДАТ  ', 'название']) {
       await search.fill(q); await row.waitFor({ timeout: 5000 });
     }
-    const remove = row.getByRole('button', { name: 'Удалить Название без цифр', exact: true });
+    const remove = row.getByRole('button', { name: 'Удалить интервью Название без цифр', exact: true });
     assert.equal((await remove.innerText()).trim(), '', 'delete action is an icon');
     assert.equal(await remove.locator('svg').count(), 1);
     assert.equal(await remove.evaluate(el => el === [...el.parentElement.querySelectorAll('button')].at(-1)), true);

@@ -141,6 +141,33 @@ data class RoomSummaryDto(
     val interviewerToken: String?,
     val verdict: String? = null,
     val status: String = "active",
+    val taskCount: Int = 0,
+    val tasks: List<PersonalInterviewListTaskDto> = emptyList(),
+    val finishedAt: String? = null,
+    val interviewerDisplayNames: List<String> = emptyList(),
+)
+
+data class PersonalInterviewListTaskDto(
+    val stepIndex: Int,
+    val title: String,
+    val language: String,
+    val mandatory: Boolean,
+)
+
+data class PersonalInterviewDetailsDto(
+    val title: String,
+    val candidateName: String?,
+    val position: String?,
+    val scheduledAt: String?,
+    val revision: Long,
+)
+
+data class PersonalInterviewDetailsUpdateRequest(
+    val title: String,
+    val candidateName: String?,
+    val position: String?,
+    val scheduledAt: String?,
+    val revision: Long,
 )
 
 data class SetVerdictRequest(

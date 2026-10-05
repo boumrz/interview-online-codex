@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "../config/runtime";
+import { getApiErrorMessage } from "./apiErrors";
 
 export class HrExportError extends Error {
   constructor(
@@ -26,7 +27,7 @@ function fileNameFromDisposition(value: string | null): string | null {
 async function safeErrorMessage(response: Response): Promise<string | null> {
   try {
     const body = (await response.json()) as { error?: unknown };
-    return typeof body.error === "string" && body.error.trim() ? body.error : null;
+    return getApiErrorMessage({ status: response.status, data: body }, "Не удалось подготовить Excel");
   } catch {
     return null;
   }
@@ -56,6 +57,10 @@ export async function downloadHrWorkbook({
       throw new DOMException("Export aborted", "AbortError");
     }
   };
+  const networkFailure = (error: unknown): never => {
+    if (signal?.aborted || (error instanceof Error && error.name === "AbortError")) throw error;
+    throw new HrExportError(getApiErrorMessage(error, "Не удалось скачать Excel"), 0);
+  };
   const params = new URLSearchParams();
   if (teamId) params.set("teamId", teamId);
   if (trackId) params.set("trackId", trackId);
@@ -69,7 +74,7 @@ export async function downloadHrWorkbook({
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
     signal,
-  });
+  }).catch(networkFailure);
   if (!response.ok) {
     throw new HrExportError(
       (await safeErrorMessage(response)) ?? "Не удалось подготовить Excel",
@@ -80,7 +85,7 @@ export async function downloadHrWorkbook({
   if (!contentType.includes("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) {
     throw new HrExportError("Сервер вернул неверный формат файла", response.status);
   }
-  const bytes = await response.arrayBuffer();
+  const bytes = await response.arrayBuffer().catch(networkFailure);
   assertCurrentSession();
   const signature = new Uint8Array(bytes, 0, Math.min(2, bytes.byteLength));
   if (bytes.byteLength < 2 || signature[0] !== 0x50 || signature[1] !== 0x4b) {

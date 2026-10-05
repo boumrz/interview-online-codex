@@ -39,10 +39,11 @@ async function waitForModalGeometry(locator) {
   throw new Error('MODAL_ENTRY_GEOMETRY_DID_NOT_SETTLE');
  });
 }
-test('profile explains hiring through candidates and Excel without repeating switch state',async()=>{
+test('profile keeps hiring switch concise without repeating switch state',async()=>{
  const auth=await account();const{browser,page}=await open(auth,'/profile');try{
   await page.getByRole('switch',{name:'Я участвую в найме',exact:true}).waitFor();
-  await page.getByText('Включите, если вас приглашают внешним нанимающим к отдельному интервью по личному ID. Кандидаты и Excel в команде доступны всем её участникам независимо от этой настройки.',{exact:true}).waitFor();
+  assert.equal(await page.getByText(/личному ID/).count(),0);
+  assert.equal(await page.getByText(/Включите, если вас приглашают/).count(),0);
   assert.equal(await page.getByText(/Функции нанимающего/).count(),0);
   const toggle=page.getByRole('switch',{name:'Я участвую в найме',exact:true});await toggle.click();await page.getByText('Сохранено',{exact:true}).waitFor();assert.equal(await toggle.isChecked(),false);await page.reload();assert.equal(await toggle.isChecked(),false);
  }finally{await browser.close();}

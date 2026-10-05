@@ -15,6 +15,7 @@ import com.interviewonline.service.ApiException
 import com.interviewonline.service.RoomService
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
+import org.springframework.http.CacheControl
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
@@ -39,8 +40,8 @@ class RoomController(
         @RequestHeader("Authorization", required = false) authorization: String?,
         @RequestBody request: CreateGuestRoomRequest,
     ): RoomResponse {
-        if (request.hiringManagerIds != null) {
-            throw ApiException(HttpStatus.BAD_REQUEST, "Нанимающих можно добавить только из личного кабинета")
+        if (!request.hiringManagerIds.isNullOrEmpty()) {
+            throw ApiException(HttpStatus.BAD_REQUEST, "Нанимающих нельзя добавить при быстром создании комнаты")
         }
         // Quick room from the landing page. We accept an optional Bearer
         // token so an authenticated user creating a "quick" room still gets
@@ -66,11 +67,14 @@ class RoomController(
         @PathVariable inviteCode: String,
         @RequestHeader("X-Room-Owner-Token", required = false) ownerToken: String?,
         @RequestHeader("X-Room-Interviewer-Token", required = false) interviewerToken: String?,
+        @RequestHeader("X-Room-Event-Token", required = false) eventToken: String?,
         @RequestHeader("Authorization", required = false) authorization: String?,
-    ): RoomResponse {
+    ): ResponseEntity<RoomResponse> {
         val authToken = authorization?.removePrefix("Bearer ")?.trim()
         val user = authService.resolveUserByToken(authToken)
-        return roomService.getByInviteCode(inviteCode, ownerToken, interviewerToken, user)
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore().cachePrivate()).body(
+            roomService.getByInviteCode(inviteCode, ownerToken, interviewerToken, user, eventToken),
+        )
     }
 
     @GetMapping("/rooms/{inviteCode}/tasks/{stepIndex}/workspace")

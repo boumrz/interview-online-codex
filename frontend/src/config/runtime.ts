@@ -13,3 +13,9 @@ function resolveApiBaseUrl(): string {
 export const API_BASE_URL = resolveApiBaseUrl();
 
 export const TEAM_MERGE_COMMIT_ENABLED = process.env.FEATURE_TEAM_MERGE_COMMIT === "true";
+
+declare const __FEATURE_SOCIAL_AUTH_ENABLED__: boolean;
+
+// An already-running development server may not yet define this deferred feature.
+export const SOCIAL_AUTH_ENABLED = typeof __FEATURE_SOCIAL_AUTH_ENABLED__ !== "undefined"
+  && __FEATURE_SOCIAL_AUTH_ENABLED__;

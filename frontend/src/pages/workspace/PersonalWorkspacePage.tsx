@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState, type FormEvent } from "react";
-import { App, Button as AntButton, Table as AntTable, Tabs, type TableColumnsType } from "antd";
+import { App, Button as AntButton, Tabs } from "antd";
 import { IconPencil, IconPlus, IconRefresh, IconTrash, IconCopy } from "components/antd-icons";
 import {
   Alert,
@@ -19,9 +19,10 @@ import {
   Textarea,
   Title,
 } from "components/antd-compat";
-import { Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { NavLink, Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { useClipboardNotification } from "../../components/useClipboardNotification";
+import { getApiErrorMessage } from "../../services/apiErrors";
 import { updateProfile as updateAuthProfile } from "../../features/auth/authSlice";
 import { PersonalWorkspaceHeader } from "./PersonalWorkspaceHeader";
 import { parseLibraryTransfer, serializeTask } from "../../features/workspace/libraryTransfer";
@@ -40,14 +41,15 @@ import {
   useListPresetsQuery,
   useUpdateInterviewMetadataMutation,
   useUpdateProfileMutation,
-  useUpdateRoomMutation,
 } from "../../services/api";
 import type { HiringManagerPreviewResponse, InterviewMetadata, Room, RoomSummary, TaskTemplate } from "../../types";
 import { PresetsSection } from "../dashboard/PresetsSection";
 import { HrCabinetSection } from "../dashboard/HrCabinetSection";
-import { HiringManagerPicker } from "../../features/hr/HiringManagerPicker";
 import { HrProfileSection } from "../dashboard/HrProfileSection";
-import { InterviewListDetailsAction } from "../../features/room/InterviewListDetailsAction";
+import { HiringManagerPicker } from "../../features/hr/HiringManagerPicker";
+import { InterviewCard, formatInterviewDateTime, taskCountLabel } from "../../features/workspace/InterviewCard";
+import { InterviewEditAction } from "../../features/workspace/InterviewEditAction";
+import { VerdictBadge } from "../../features/room/VerdictBadge";
 import { LANGUAGE_OPTIONS } from "../dashboard/dashboardConstants";
 import { darkSelectStyles } from "../dashboard/dashboardFieldStyles";
 import { labelForLanguage, normalizeLanguageKey } from "../dashboard/dashboardHelpers";
@@ -65,14 +67,10 @@ type PendingMetadata = {
 };
 
 type RequestIdentity = { token: string; userId: string; generation: number };
-type HiringManagerSelection = HiringManagerPreviewResponse;
 
 
 function apiErrorMessage(error: unknown): string | null {
-  if (!error || typeof error !== "object" || !("data" in error)) return null;
-  const data = error.data;
-  if (!data || typeof data !== "object" || !("error" in data)) return null;
-  return typeof data.error === "string" ? data.error : null;
+  return getApiErrorMessage(error, "") || null;
 }
 
 function isNotFound(error: unknown) {
@@ -94,188 +92,86 @@ function roomAccessLabel(room: RoomSummary) {
   return "Кандидат";
 }
 
-type InterviewRowContextValue = {
-  room: RoomSummary;
-  originalTitle: string;
-  candidate: string;
-  dateLabel: string;
-  statusLabel: string;
-  displayTitle: string;
-  editing: boolean;
-  titleDraft: string;
-  setTitleDraft: (value: string) => void;
-  setEditing: (value: boolean) => void;
-  saveTitle: () => Promise<void>;
-  updatePending: boolean;
-  actionError: string;
-  deletePending: boolean;
-  setDeleteOpened: (value: boolean) => void;
-  deleteOpened: boolean;
-  remove: () => Promise<void>;
-  navigate: ReturnType<typeof useNavigate>;
-};
-
-const InterviewRowContext = React.createContext<InterviewRowContextValue | null>(null);
-const InterviewTableContext = React.createContext<ReadonlyMap<string, RoomSummary>>(new Map());
-const InterviewMetadataContext = React.createContext<Record<string, InterviewMetadata>>({});
-
-function InterviewMetadataLoader({ room, onResult }: { room: RoomSummary; onResult: (id: string, data: InterviewMetadata | undefined, failed: boolean) => void }) {
+function InterviewMetadataLoader({ room, onResult }: { room: RoomSummary; onResult: (id: string, data: InterviewMetadata | undefined, failed: boolean, authorityLost: boolean) => void }) {
+  const dispatch = useAppDispatch();
   const query = useGetInterviewMetadataQuery({ inviteCode: room.inviteCode,
     ownerToken: room.ownerToken ?? undefined, interviewerToken: room.interviewerToken ?? undefined }, { skip: room.accessRole === "candidate" });
   React.useEffect(() => {
-    if (query.data || query.isError) onResult(room.id, query.data, query.isError);
-  }, [onResult, room.id, query.data, query.isError]);
+    const status = query.error && "status" in query.error ? query.error.status : null;
+    const authorityLost = query.isError && (status === 401 || status === 403 || status === 404 || status === 410);
+    if (query.currentData || query.isError) onResult(room.id, authorityLost ? undefined : query.currentData, query.isError, authorityLost);
+    if (authorityLost) dispatch(api.util.invalidateTags(["MyRooms"]));
+  }, [dispatch, onResult, room.id, query.currentData, query.isError, query.error]);
   return null;
 }
 
-function InterviewTableRow(rowProps: Record<string, any>) {
-  const rooms = React.useContext(InterviewTableContext);
-  const room = rooms.get(String(rowProps["data-row-key"] ?? ""));
-  return room ? <InterviewRow room={room} rowProps={rowProps} /> : <tr {...rowProps}>{rowProps.children}</tr>;
-}
-
-function useInterviewRowContext() {
-  const value = React.useContext(InterviewRowContext);
-  if (!value) throw new Error("Interview row content must render inside its Ant Table row");
-  return value;
-}
-
-function InterviewRow({ room, rowProps }: { room: RoomSummary; rowProps: Record<string, any> }) {
-  const navigate = useNavigate();
-  const originalTitle = useRef(room.title);
-  const metadata = React.useContext(InterviewMetadataContext)[room.id];
-  const [updateRoom, updateState] = useUpdateRoomMutation();
+function PersonalInterviewCard({ room, metadata }: { room: RoomSummary; metadata?: InterviewMetadata }) {
+  const auth = useAppSelector(state => state.auth);
+  const copyToClipboard = useClipboardNotification();
   const [deleteRoom, deleteState] = useDeleteRoomMutation();
-  const [editing, setEditing] = useState(false);
-  const [titleDraft, setTitleDraft] = useState(room.title);
-  const [displayTitle, setDisplayTitle] = useState(room.title);
-  const [actionError, setActionError] = useState("");
   const [deleteOpened, setDeleteOpened] = useState(false);
-
-  const saveTitle = async () => {
-    const nextTitle = titleDraft.trim();
-    if (!nextTitle || updateState.isLoading) return;
-    setActionError("");
-    try {
-      await updateRoom({ roomId: room.id, title: nextTitle }).unwrap();
-      setDisplayTitle(nextTitle);
-      setEditing(false);
-    } catch {
-      setActionError("Не удалось переименовать интервью");
-    }
-  };
-
+  const [deleteError, setDeleteError] = useState("");
+  const canManage = room.accessRole !== "candidate";
+  const isOwner = room.accessRole === "owner";
+  const isFinished = room.status === "finished";
+  const createdAt = formatInterviewDateTime(room.createdAt);
+  const finishedAt = formatInterviewDateTime(room.finishedAt);
+  const tasksLine = (room.tasks ?? []).map(task => task.title).join(" → ");
+  const scheduledAt = canManage && metadata?.scheduledAt && !Number.isNaN(Date.parse(metadata.scheduledAt))
+    ? new Intl.DateTimeFormat("ru-RU", { timeZone: "Europe/Moscow", dateStyle: "short", timeStyle: "short" }).format(new Date(metadata.scheduledAt))
+    : null;
   const remove = async () => {
-    if (deleteState.isLoading) return;
-    setActionError("");
+    if (!isOwner || deleteState.isLoading) return;
+    setDeleteError("");
     try {
       await deleteRoom({ roomId: room.id }).unwrap();
       setDeleteOpened(false);
-    } catch {
-      setActionError("Не удалось удалить интервью");
+    } catch (caught) {
+      setDeleteError(getApiErrorMessage(caught, "Не удалось удалить интервью. Повторите попытку."));
     }
   };
-
-  const candidate = (room.accessRole !== "candidate" ? metadata?.candidateName?.trim() : null) || "Не указан";
-  const scheduledAt = room.accessRole !== "candidate" ? metadata?.scheduledAt : null;
-  const dateLabel = scheduledAt
-    ? new Date(scheduledAt).toLocaleDateString("ru-RU")
-    : "Без даты";
-  const statusLabel = room.status === "finished" ? "Завершено" : "Активно";
-
-  const contextValue: InterviewRowContextValue = {
-    room,
-    originalTitle: originalTitle.current,
-    candidate,
-    dateLabel,
-    statusLabel,
-    displayTitle,
-    editing,
-    titleDraft,
-    setTitleDraft,
-    setEditing,
-    saveTitle,
-    updatePending: updateState.isLoading,
-    actionError,
-    deletePending: deleteState.isLoading,
-    setDeleteOpened,
-    deleteOpened,
-    remove,
-    navigate,
-  };
-  const { children, ...domRowProps } = rowProps;
-
-  return (
-    <>
-      <tr {...domRowProps} aria-label={originalTitle.current}>
-        <InterviewRowContext.Provider value={contextValue}>{children}</InterviewRowContext.Provider>
-      </tr>
-      <Modal opened={editing} onClose={() => { if (!updateState.isLoading) { setEditing(false); setActionError(""); } }} title="Переименовать интервью" centered closeOnClickOutside={!updateState.isLoading} closeOnEscape={!updateState.isLoading}>
-        <form onSubmit={(event) => { event.preventDefault(); void saveTitle(); }}>
-          <Stack gap="md">
-            <TextInput aria-label="Название интервью" placeholder="Введите название" value={titleDraft} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setTitleDraft(event.currentTarget.value)} disabled={updateState.isLoading} autoFocus required />
-            {actionError ? <Text role="alert" c="red.4">{actionError}</Text> : null}
-            <Group justify="flex-end">
-              <Button type="button" variant="subtle" disabled={updateState.isLoading} onClick={() => { setEditing(false); setActionError(""); }}>Отмена</Button>
-              <Button type="submit" loading={updateState.isLoading} disabled={!titleDraft.trim()}>Сохранить</Button>
-            </Group>
-          </Stack>
-        </form>
-      </Modal>
-      <Modal opened={deleteOpened} onClose={() => setDeleteOpened(false)} title="Удалить интервью" centered>
-        <Stack>
-          <Text>Интервью «{displayTitle}» будет удалено без возможности восстановления.</Text>
-          <Group justify="flex-end">
-            <Button type="button" variant="subtle" disabled={deleteState.isLoading} onClick={() => setDeleteOpened(false)}>Отмена</Button>
-            <Button type="button" variant="light" color="red" loading={deleteState.isLoading} onClick={() => void remove()}>Удалить</Button>
-          </Group>
-        </Stack>
-      </Modal>
-    </>
-  );
-}
-
-function InterviewTitleCell() {
-  const row = useInterviewRowContext();
-  return (
-    <>
-        <div className={styles.interviewTitle}>
-          <Text className={styles.interviewTitleText} fw={700}>{row.displayTitle}</Text>
-          {row.room.accessRole === "owner" ? (
-            <AntButton
-              type="text"
-              className={styles.titleEditButton}
-              icon={<IconPencil size={16} aria-hidden="true" />}
-              aria-label={`Переименовать интервью ${row.room.title}`}
-              title="Переименовать интервью"
-              onClick={() => { row.setTitleDraft(row.displayTitle); row.setEditing(true); }}
-            />
-          ) : null}
-        </div>
-      {!row.editing && row.actionError ? <Text role="alert" size="xs" c="red.4">{row.actionError}</Text> : null}
-    </>
-  );
-}
-
-function InterviewCandidateCell() { return <>{useInterviewRowContext().candidate}</>; }
-function InterviewContextCell() { return <>Без трека и вакансии</>; }
-function InterviewDateCell() { return <>{useInterviewRowContext().dateLabel}</>; }
-function InterviewStatusCell() { return <>{useInterviewRowContext().statusLabel}</>; }
-
-function InterviewAccessCell() {
-  const { room } = useInterviewRowContext();
-  return <Badge tt="none" color={room.accessRole === "owner" ? "teal" : room.accessRole === "interviewer" ? "cyan" : "blue"} variant="light">{roomAccessLabel(room)}</Badge>;
-}
-
-function InterviewActionsCell() {
-  const row = useInterviewRowContext();
-  return (
-    <Group className={styles.actionButtons} gap="xs" justify="flex-end" wrap="nowrap">
-      {row.room.accessRole !== "candidate" ? <InterviewListDetailsAction inviteCode={row.room.inviteCode} title={row.room.title} canManage ownerToken={row.room.ownerToken ?? undefined} interviewerToken={row.room.interviewerToken ?? undefined} /> : null}
-      <Button type="button" size="compact-sm" variant="light" onClick={() => row.navigate(`/room/${row.room.inviteCode}`)}>Открыть интервью</Button>
-      {row.room.accessRole === "owner" ? <Button type="button" size="compact-sm" variant="light" color="red" loading={row.deletePending} aria-label={`Удалить ${row.room.title}`} title="Удалить интервью" onClick={() => row.setDeleteOpened(true)}><IconTrash size={16} aria-hidden="true" /></Button> : null}
-    </Group>
-  );
+  return <>
+    <InterviewCard title={room.title} ariaLabel={`Личное интервью ${room.title}`}
+      subtitle={createdAt ? `Создано ${createdAt}` : "Личное интервью"}
+      badges={<>
+        <Badge variant="light">{taskCountLabel(room.taskCount ?? room.tasks?.length ?? 0)}</Badge>
+        <Badge color={isFinished ? "gray" : "green"} variant="light">{isFinished ? "Завершено" : "Активно"}</Badge>
+        {finishedAt ? <Badge variant="outline">Завершено: {finishedAt}</Badge> : null}
+        {!isOwner ? <Badge color={canManage ? "cyan" : "blue"} variant="light">{roomAccessLabel(room)}</Badge> : null}
+      </>}
+      context={null}
+      actions={<>
+        {canManage ? <InterviewEditAction kind="PERSONAL" accountId={auth.user?.id ?? ""} interview={room}
+          canEditTitle={isOwner} ownerToken={room.ownerToken ?? undefined} interviewerToken={room.interviewerToken ?? undefined} /> : null}
+        {canManage ? <Button type="button" variant="light" size="compact-sm" onClick={() => void copyToClipboard(`${window.location.origin}/room/${room.inviteCode}`, {
+          success: "Ссылка для кандидата готова к отправке.", failure: "Разрешите доступ к буферу обмена и повторите попытку.",
+        })}>Копировать ссылку для кандидата</Button> : null}
+        <Button component={NavLink} to={`/room/${room.inviteCode}`} variant="filled" color="blue" size="compact-sm" aria-label={`Открыть комнату ${room.title}`}>Войти в комнату</Button>
+        {isOwner ? <Button type="button" size="compact-sm" variant="light" color="red" loading={deleteState.isLoading}
+          aria-label={`Удалить интервью ${room.title}`} title={`Удалить интервью ${room.title}`} onClick={() => { setDeleteError(""); setDeleteOpened(true); }}><IconTrash size={16} aria-hidden="true" /></Button> : null}
+      </>}
+    >
+      <Text c={tasksLine ? "gray.4" : "gray.5"} size="sm">{tasksLine || "Задачи не добавлены"}</Text>
+      {canManage ? <Text c="gray.5" size="sm">Интервьюеры: {room.interviewerDisplayNames?.join(", ") || "—"}</Text> : null}
+      {canManage && metadata && (metadata.candidateName || metadata.position || scheduledAt) ? <Group gap="sm" wrap="wrap">
+        {metadata.candidateName ? <Text c="gray.5" size="sm">Кандидат: {metadata.candidateName}</Text> : null}
+        {metadata.position ? <Text c="gray.5" size="sm">Позиция: {metadata.position}</Text> : null}
+        {scheduledAt ? <Text c="gray.5" size="sm">Дата: {scheduledAt} (МСК)</Text> : null}
+      </Group> : null}
+      {isFinished ? <Group gap="xs" wrap="wrap">{room.verdict ? <VerdictBadge verdict={room.verdict} size="xs" /> : <Badge color="gray" variant="outline">Без вердикта</Badge>}</Group> : null}
+    </InterviewCard>
+    <Modal opened={deleteOpened} onClose={() => { if (!deleteState.isLoading) setDeleteOpened(false); }} title="Удалить интервью" centered
+      closeOnClickOutside={!deleteState.isLoading} closeOnEscape={!deleteState.isLoading} withCloseButton={!deleteState.isLoading}>
+      <Stack>
+        <Text>Интервью «{room.title}» будет удалено без возможности восстановления.</Text>
+        {deleteError ? <Alert color="red" role="alert">{deleteError}</Alert> : null}
+        <Group justify="flex-end">
+          <Button type="button" variant="subtle" disabled={deleteState.isLoading} onClick={() => setDeleteOpened(false)}>Отмена</Button>
+          <Button type="button" variant="light" color="red" leftSection={<IconTrash size={16} />} loading={deleteState.isLoading} onClick={() => void remove()}>Удалить</Button>
+        </Group>
+      </Stack>
+    </Modal>
+  </>;
 }
 
 function InterviewList({
@@ -296,40 +192,26 @@ function InterviewList({
   const [search, setSearch] = useState("");
   const [metadata, setMetadata] = useState<Record<string, InterviewMetadata>>({});
   const [metadataErrors, setMetadataErrors] = useState<Record<string, boolean>>({});
-  const onMetadata = React.useCallback((id: string, data: InterviewMetadata | undefined, failed: boolean) => {
-    if (data) setMetadata(current => current[id] === data ? current : { ...current, [id]: data });
+  const onMetadata = React.useCallback((id: string, data: InterviewMetadata | undefined, failed: boolean, authorityLost: boolean) => {
+    if (authorityLost) setMetadata(current => {
+      if (!current[id]) return current;
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
+    else if (data) setMetadata(current => current[id] === data ? current : { ...current, [id]: data });
     setMetadataErrors(current => current[id] === failed ? current : { ...current, [id]: failed });
   }, []);
   const candidateLoading = rooms.some(room => room.accessRole !== "candidate" && !metadata[room.id] && !metadataErrors[room.id]);
   const candidateFailed = rooms.some(room => room.accessRole !== "candidate" && metadataErrors[room.id]);
   const query = search.trim().toLocaleLowerCase("ru-RU");
   const filteredRooms = rooms.filter(room => [room.title, room.accessRole !== "candidate" ? metadata[room.id]?.candidateName ?? "" : ""].some(value => value.toLocaleLowerCase("ru-RU").includes(query)));
-  const roomById = useMemo(() => new Map(filteredRooms.map((room) => [room.id, room])), [filteredRooms]);
-  const interviewColumns: TableColumnsType<RoomSummary> = [
-    { title: "Интервью", key: "title", render: () => <InterviewTitleCell /> },
-    { title: "Кандидат", key: "candidate", render: () => <InterviewCandidateCell /> },
-    { title: "Контекст", key: "context", render: () => <InterviewContextCell /> },
-    { title: "Дата", key: "date", render: () => <InterviewDateCell /> },
-    { title: "Статус", key: "status", render: () => <InterviewStatusCell /> },
-    { title: "Роль", key: "role", render: () => <InterviewAccessCell /> },
-    {
-      title: <span className="visually-hidden">Действие</span>,
-      key: "actions",
-      width: 400,
-      align: "right",
-      className: styles.actionCell,
-      render: () => <InterviewActionsCell />,
-    },
-  ];
-
   return (
     <Stack gap="lg">
       {rooms.map(room => <InterviewMetadataLoader key={room.id} room={room} onResult={onMetadata} />)}
       <Group justify="space-between" align="flex-end" gap="md" wrap="wrap">
         <div>
-          <Text className={styles.eyebrow}>Рабочая лента</Text>
           <Title order={1}>Интервью</Title>
-          <Text c="gray.5" mt={6}>Ваши комнаты и интервью, куда вас пригласили.</Text>
         </div>
         <Button className={styles.primaryAction} color="blue" onClick={() => navigate("/workspace/personal/interviews/new")}>
           Создать интервью
@@ -357,7 +239,6 @@ function InterviewList({
       {!isLoading && !error && rooms.length === 0 ? (
         <Card className={styles.emptyState} withBorder>
           <Text fw={700}>У вас пока нет интервью</Text>
-          <Text c="gray.5" size="sm">Создайте первое интервью — оно появится в этом списке.</Text>
         </Card>
       ) : null}
       {search && candidateLoading ? <Text role="status" size="sm">Загружаем данные кандидатов…</Text> : null}
@@ -369,24 +250,9 @@ function InterviewList({
         </Card>
       ) : null}
       {!isLoading && filteredRooms.length > 0 ? (
-        <Card className={styles.panel} withBorder padding={0}>
-          <div className={styles.tableScroll}>
-            <InterviewTableContext.Provider value={roomById}>
-            <InterviewMetadataContext.Provider value={metadata}>
-            <AntTable<RoomSummary>
-              rowKey="id"
-              size="middle"
-              columns={interviewColumns}
-              dataSource={filteredRooms}
-              pagination={false}
-              components={{ body: { row: InterviewTableRow } }}
-              tableLayout="fixed"
-              scroll={{ x: "max-content" }}
-            />
-            </InterviewMetadataContext.Provider>
-            </InterviewTableContext.Provider>
-          </div>
-        </Card>
+        <Stack gap="md" role="list" aria-label="Личные интервью">
+          {filteredRooms.map(room => <PersonalInterviewCard key={`${room.id}:${room.accessRole}`} room={room} metadata={room.accessRole !== "candidate" ? metadata[room.id] : undefined} />)}
+        </Stack>
       ) : null}
     </Stack>
   );
@@ -407,7 +273,7 @@ function CreateInterview({ tasks }: { tasks: TaskTemplate[] }) {
   const [candidateName, setCandidateName] = useState("");
   const [position, setPosition] = useState("");
   const [taskIds, setTaskIds] = useState<string[]>([]);
-  const [hiringManagerSelections, setHiringManagerSelections] = useState<HiringManagerSelection[]>([]);
+  const [hiringManagers, setHiringManagers] = useState<HiringManagerPreviewResponse[]>([]);
   const [pickerBusy, setPickerBusy] = useState(false);
   const [error, setError] = useState("");
   const [pendingMetadata, setPendingMetadata] = useState<PendingMetadata | null>(null);
@@ -454,7 +320,8 @@ function CreateInterview({ tasks }: { tasks: TaskTemplate[] }) {
     setCandidateName("");
     setPosition("");
     setTaskIds([]);
-    setHiringManagerSelections([]);
+    setHiringManagers([]);
+    setPickerBusy(false);
     setPendingMetadata(null);
     setRetryingMetadata(false);
     setError("");
@@ -507,7 +374,7 @@ function CreateInterview({ tasks }: { tasks: TaskTemplate[] }) {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (pickerBusy || createState.isLoading) return;
+    if (createState.isLoading || pickerBusy) return;
     const normalizedTitle = title.trim();
     if (!normalizedTitle) {
       setError("Название интервью обязательно");
@@ -521,13 +388,12 @@ function CreateInterview({ tasks }: { tasks: TaskTemplate[] }) {
       scheduledAt: null,
       revision: 0,
     };
-    const hiringManagerIds = hiringManagerSelections.map((selection) => selection.normalizedId);
     setError("");
     try {
       const room = await createRoom({
         title: normalizedTitle,
         taskIds,
-        ...(hiringManagerIds.length > 0 ? { hiringManagerIds } : {}),
+        ...(hiringManagers.length ? { hiringManagerIds: hiringManagers.map(person => person.normalizedId) } : {}),
       }).unwrap();
       if (!isCurrentIdentity(identity)) return;
       persistOwnerRoom(room, auth.user?.displayName?.trim() || "Интервьюер");
@@ -607,42 +473,32 @@ function CreateInterview({ tasks }: { tasks: TaskTemplate[] }) {
               />
             </section>
             <section className="app-authoring-section" aria-label="Нанимающие">
-              <HiringManagerPicker showSuccess={false} selectedIds={hiringManagerSelections.map(person => person.normalizedId)} disabled={createState.isLoading} onPendingChange={setPickerBusy}
-                onSelect={person => setHiringManagerSelections(current => current.some(item => item.normalizedId === person.normalizedId) ? current : [...current, person])} />
-              {hiringManagerSelections.length > 0 ? (
-                <Stack gap={6} data-testid="hiring-manager-selection-list">
-                  <Title order={5}>Добавленные нанимающие</Title>
-                  <Stack gap={4} role="list">
-                    {hiringManagerSelections.map((selection) => (
-                      <Group key={selection.normalizedId} justify="space-between" wrap="nowrap" role="listitem">
-                        <Text size="sm">{selection.displayName}</Text>
-                        <Button
-                          type="button"
-                          variant="light"
-                          color="red"
-                          size="xs"
-                          aria-label={`Удалить нанимающего ${selection.displayName}`}
-                          disabled={createState.isLoading}
-                          onClick={() => setHiringManagerSelections((previous) => previous.filter((item) => item.normalizedId !== selection.normalizedId))}
-                        >
-                          <IconTrash size={16} aria-hidden="true" />
-                        </Button>
-                      </Group>
-                    ))}
-                  </Stack>
-                </Stack>
-              ) : null}
+              <Stack gap="sm">
+                <HiringManagerPicker
+                  key={identityKey}
+                  showSuccess={false}
+                  selectedIds={hiringManagers.map(person => person.normalizedId)}
+                  disabled={createState.isLoading || Boolean(pendingMetadata)}
+                  onPendingChange={setPickerBusy}
+                  onSelect={person => {
+                    setHiringManagers(current => current.some(selected => selected.normalizedId === person.normalizedId) ? current : [...current, person]);
+                    return true;
+                  }}
+                />
+                {hiringManagers.map(person => <Group key={person.normalizedId} justify="space-between" gap="sm">
+                  <Text>{person.displayName}</Text>
+                  <Button type="button" variant="subtle" color="red" size="xs"
+                    disabled={createState.isLoading || Boolean(pendingMetadata)}
+                    aria-label={`Удалить нанимающего ${person.displayName}`}
+                    onClick={() => setHiringManagers(current => current.filter(selected => selected.normalizedId !== person.normalizedId))}>Убрать</Button>
+                </Group>)}
+              </Stack>
             </section>
             {error ? <Text role="alert" c="red.4">{error}</Text> : null}
-            {createState.isLoading && !error ? (
-              <Text role="alert" c="gray.4">Создаём интервью. Повторная отправка временно недоступна.</Text>
-            ) : null}
             {pendingMetadata ? (
               <Card withBorder className={styles.partialCreate}>
                 <Stack gap="xs">
                   <Text fw={700}>Созданная комната</Text>
-                  <Text className={styles.identityValue}>{pendingMetadata.room.inviteCode}</Text>
-                  <Text size="sm">После сохранения данных откроется созданная комната.</Text>
                   <Group gap="sm">
                     <Button
                       component="a"
@@ -754,7 +610,7 @@ function TaskLibrary({
     try {
       transfer = parseLibraryTransfer(importData.trim(), "task");
     } catch (error) {
-      setImportError(error instanceof Error ? error.message : "Неверные данные задачи.");
+      setImportError(getApiErrorMessage(error, "Неверные данные задачи."));
       return;
     }
     if (transfer.kind !== "task") return;
@@ -799,16 +655,13 @@ function TaskLibrary({
       <Modal opened={importOpened} onClose={() => { if (!createTaskState.isLoading) setImportOpened(false); }} title="Импортировать задачу" centered size="lg" closeOnClickOutside={!createTaskState.isLoading} closeOnEscape={!createTaskState.isLoading}>
         <form onSubmit={(event) => void importTask(event)}>
           <Stack>
-            <Text size="sm" c="gray.5">Вставьте данные, полученные кнопкой «Копировать» в другой библиотеке.</Text>
             <Textarea placeholder="Вставьте данные из кнопки «Копировать» у задачи" label="Данные задачи" value={importData} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setImportData(event.currentTarget.value)} minRows={6} error={importError || undefined} />
             <Group justify="flex-end"><Button type="button" variant="subtle" color="gray" disabled={createTaskState.isLoading} onClick={() => setImportOpened(false)}>Отмена</Button><Button type="submit" loading={createTaskState.isLoading} disabled={!importData.trim()}>Импортировать задачу</Button></Group>
           </Stack>
         </form>
       </Modal>
       <div>
-        <Text className={styles.eyebrow}>Переиспользуемые материалы</Text>
         <Title order={1}>Библиотека</Title>
-        <Text c="gray.5" mt={6}>Задачи и готовые наборы для ваших интервью.</Text>
       </div>
       <div className={styles.libraryToolbar}>
         <Tabs
@@ -1021,9 +874,7 @@ export function ProfilePage() {
   return (
     <Stack gap="lg">
       <div>
-        <Text className={styles.eyebrow}>Настройки аккаунта</Text>
         <Title order={1}>Профиль</Title>
-        <Text c="gray.5" mt={6}>Имя, личный ID и доступ к кандидатам.</Text>
       </div>
       <Card className={`${styles.panel} ${styles.profilePanel}`} withBorder>
         {auth.user ? (
@@ -1042,11 +893,11 @@ export function ProfilePage() {
               </form>
             </Modal>
             <Stack gap={4}>
-              <Text size="xs" c="gray.5">Личный ID</Text>
+              <Text size="xs" c="gray.5">Никнейм</Text>
               <Group gap="xs" align="center" wrap="wrap">
-                <Text className={styles.identityValue}>{auth.user.id}</Text>
-              <Button type="button" variant="subtle" aria-label="Скопировать личный ID" title="Скопировать личный ID" disabled={updateState.isLoading} onClick={() => void copyToClipboard(auth.user!.id, {
-                success: "Личный ID скопирован.",
+                <Text>@{auth.user.nickname}</Text>
+              <Button type="button" variant="subtle" aria-label="Скопировать никнейм" title="Скопировать никнейм" disabled={updateState.isLoading} onClick={() => void copyToClipboard(auth.user!.nickname, {
+                success: "Никнейм скопирован.",
                 failure: "Разрешите доступ к буферу обмена и повторите попытку.",
               })}>
                 <IconCopy size={16} aria-hidden="true" />
@@ -1130,9 +981,7 @@ export function PersonalWorkspacePage() {
           {section === "candidates" && auth.user?.isHr && auth.token ? (
             <Stack gap="lg">
               <div>
-                <Text className={styles.eyebrow}>Личный подбор</Text>
                 <Title order={1}>Кандидаты</Title>
-                <Text c="gray.5" mt={6}>Кандидаты по вашим интервью. Один кандидат может встречаться несколько раз</Text>
               </div>
               <HrCabinetSection user={auth.user} token={auth.token} />
             </Stack>

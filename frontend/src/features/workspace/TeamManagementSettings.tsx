@@ -362,9 +362,7 @@ export function TeamManagementSettings({ accountId, team, onTeamRefresh }: Props
   return (
     <Stack className={styles.settings} gap="lg">
       <header ref={settingsIntroRef} className={styles.intro}>
-        <Text className={styles.kicker}>Команда</Text>
         <Title order={1} tabIndex={-1}>Настройки команды</Title>
-        <Text c="gray.5" mt={6}>Права и изменения подтверждаются сервером при каждом действии.</Text>
       </header>
 
       <Card className={styles.identityCard} withBorder>
@@ -396,9 +394,6 @@ export function TeamManagementSettings({ accountId, team, onTeamRefresh }: Props
             {roleLabel(visibleTeam.role)}
           </Badge>
         </Group>
-        <Stack className={styles.identityHint} gap={4}>
-          <Text size="sm">Ваша роль: {roleLabel(visibleTeam.role)}</Text>
-        </Stack>
       </Card>
 
       {authorityRefreshPending ? (
@@ -408,7 +403,7 @@ export function TeamManagementSettings({ accountId, team, onTeamRefresh }: Props
       {authorityRefreshFailed ? (
         <Alert className={styles.alert} color="red" role="alert" title="Не удалось подтвердить актуальные права">
           <Stack gap="sm">
-            <Text size="sm">Действия с настройками временно недоступны, пока команда не подтвердит актуальные данные.</Text>
+            <Text size="sm">Действия недоступны до обновления прав.</Text>
             <Button className={styles.action} variant="light" onClick={() => void reconcileAuthority(true)}>
               Обновить данные
             </Button>
@@ -535,7 +530,7 @@ export function TeamManagementSettings({ accountId, team, onTeamRefresh }: Props
 
       <Modal opened={transferOpened && isOwner} onClose={closeTransfer} afterOpenChange={restoreCompletedActionFocus} title="Передать владение командой" centered returnFocus={false}>
         <Stack gap="md">
-          <Text>После подтверждения прежний владелец станет ADMIN, а выбранный участник получит роль владельца.</Text>
+          <Text>Вы станете администратором команды.</Text>
           {problem ? (
             <Alert className={styles.alert} color={problem.kind === "conflict" ? "yellow" : "red"} role="alert" title="Действие не выполнено">
               <Stack gap="sm">

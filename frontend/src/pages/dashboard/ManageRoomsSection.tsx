@@ -117,9 +117,6 @@ export function ManageRoomsSection({
                     )}
                   </Group>
                   <Group gap={6}>
-                    <Text size="xs" c="gray.4">
-                      Код: {room.inviteCode}
-                    </Text>
                     <ActionIcon
                       variant="light"
                       color="red"
@@ -142,10 +139,7 @@ export function ManageRoomsSection({
                   {isOwner ? <ActionIcon aria-label={`Переименовать интервью ${room.title}`} title="Переименовать интервью" variant="subtle" onClick={(event: React.MouseEvent<HTMLElement>) => { event.stopPropagation(); setEditingRoom(room); setTitleDraft(room.title); setSubmitted(false); }}><IconPencil size={16} aria-hidden="true" /></ActionIcon> : null}
                 </Group>
 
-                <Group justify="space-between">
-                  <Text size="xs" c="gray.4">
-                    Клик по карточке открывает комнату
-                  </Text>
+                <Group justify="flex-end">
                   <Group gap={4} c="gray.4">
                     <Text size="xs">Открыть</Text>
                     <IconChevronRight size={14} />

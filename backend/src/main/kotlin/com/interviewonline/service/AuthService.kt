@@ -42,6 +42,12 @@ class AuthService(
         if (nickname.any { it.isWhitespace() }) {
             throw ApiException(HttpStatus.BAD_REQUEST, "Ник не должен содержать пробелы")
         }
+        if (nickname.any { it.code !in 0x20..0x7E }) {
+            throw ApiException(HttpStatus.BAD_REQUEST, "Ник может содержать только латинские буквы, цифры и символы")
+        }
+        if (request.password.any { it.code !in 0x20..0x7E }) {
+            throw ApiException(HttpStatus.BAD_REQUEST, "Пароль может содержать только латинские буквы, цифры и символы")
+        }
         if (userRepository.findByNickname(nickname) != null) {
             throw ApiException(HttpStatus.CONFLICT, "Ник уже занят")
         }
@@ -60,12 +66,16 @@ class AuthService(
     }
 
     fun login(request: LoginRequest): AuthResponse {
-        val user = userRepository.findByNickname(request.nickname.trim())
+        return createSession(verifyLocalCredentials(request.nickname, request.password))
+    }
+
+    fun verifyLocalCredentials(nickname: String, password: String): User {
+        val user = userRepository.findByNickname(nickname.trim())
             ?: throw ApiException(HttpStatus.UNAUTHORIZED, "Неверный ник или пароль")
-        if (!passwordEncoder.matches(request.password, user.passwordHash)) {
+        if (user.passwordHash == null || !passwordEncoder.matches(password, user.passwordHash)) {
             throw ApiException(HttpStatus.UNAUTHORIZED, "Неверный ник или пароль")
         }
-        return createSession(user)
+        return user
     }
 
     fun requireUserByToken(token: String?): User {
@@ -101,7 +111,7 @@ class AuthService(
         return saved.toDto()
     }
 
-    private fun createSession(user: User): AuthResponse {
+    fun createSession(user: User): AuthResponse {
         val token = "usr_${UUID.randomUUID()}"
         userSessionRepository.save(UserSession(user = user, token = token))
         return AuthResponse(

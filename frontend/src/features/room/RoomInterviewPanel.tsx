@@ -15,7 +15,6 @@ import {
 } from "components/antd-compat";
 import { HiringManagerPicker } from "../hr/HiringManagerPicker";
 import { IconUsers } from "components/antd-icons";
-import { CopyHrId } from "../hr/CopyHrId";
 import { instantToMoscowInput, moscowInputToInstant } from "../hr/hrDate";
 import {
   useAddHrManagerMutation,
@@ -66,7 +65,7 @@ function isAbortError(error: unknown): boolean {
 }
 
 export function RoomInterviewPanel({
-  triggerLabel = "Кандидат и нанимающие",
+  triggerLabel,
   triggerAriaLabel,
   inviteCode,
   identityKey,
@@ -201,10 +200,10 @@ export function RoomInterviewPanel({
       const managersRequest = trackRequest(getManagers({
         ...credentials,
         requestGeneration: generation,
-      }, false));
+      }, false)).unwrap();
       const [nextMetadata, nextManagers] = await Promise.all([
         metadataRequest.unwrap(),
-        managersRequest.unwrap(),
+        managersRequest,
       ]);
       if (!isCurrentGeneration(generation)) return;
       if (replaceDraft || metadata === null) applyMetadata(nextMetadata);
@@ -216,7 +215,7 @@ export function RoomInterviewPanel({
         setArchived(true);
         setPanelError("Комната в архиве. Изменения недоступны.");
       } else {
-        setPanelError(messageOf(error, "Не удалось загрузить сведения кандидата и нанимающих"));
+        setPanelError(messageOf(error, "Не удалось загрузить сведения"));
       }
     } finally {
       if (isCurrentGeneration(generation)) setLoading(false);
@@ -295,7 +294,7 @@ export function RoomInterviewPanel({
         setArchived(true);
         setInviteError("Комната в архиве. Изменения недоступны.");
       } else if (statusOf(error) === 400 || statusOf(error) === 404) {
-        setInviteError("Нанимающий с таким ID не найден");
+        setInviteError("Нанимающий не найден или недоступен");
       } else {
         setInviteError(messageOf(error, "Не удалось добавить нанимающего"));
       }
@@ -323,7 +322,7 @@ export function RoomInterviewPanel({
           leftSection={<IconUsers size={16} />}
           onClick={open}
         >
-          {triggerLabel}
+          {triggerLabel ?? "Кандидат и нанимающие"}
         </Button>
       ) : null}
       <Text size="xs" c="yellow.4" aria-live="polite" className={styles.accessMessage}>
@@ -331,6 +330,7 @@ export function RoomInterviewPanel({
       </Text>
       <Modal
         opened={opened && canManageRoom}
+        destroyOnHidden
         onClose={close}
         title="Кандидат и нанимающие"
         size="lg"
@@ -341,9 +341,6 @@ export function RoomInterviewPanel({
         classNames={{ body: styles.modalBody, close: styles.modalClose }}
       >
         <Stack gap="lg">
-          <Text size="sm" c="gray.5">
-            {isTeamRoom ? "Сведения кандидата доступны всем участникам команды и приглашённым внешним нанимающим." : "Эти сведения доступны только менеджерам комнаты и назначенным нанимающим."}
-          </Text>
           {loading ? (
             <Group justify="center" py="xl" aria-busy="true"><Loader size="sm" /><Text>Загружаем сведения…</Text></Group>
           ) : (
@@ -384,7 +381,6 @@ export function RoomInterviewPanel({
                   <TextInput
                     type="datetime-local"
                     label="Дата и время интервью (МСК)"
-                    description="Время сохраняется и показывается в часовом поясе Москвы (МСК)."
                     value={scheduledAt}
                     onChange={(event: React.ChangeEvent<HTMLInputElement>) => setScheduledAt(event.currentTarget.value)}
                     disabled={pending || archived || metadata === null}
@@ -401,14 +397,12 @@ export function RoomInterviewPanel({
               <Stack gap="sm">
                 <Title order={4}>Нанимающие</Title>
                 {removalError ? <Alert color="red" role="alert">{removalError}</Alert> : null}
-                {managers.length === 0 ? <Text size="sm" c="gray.5">Нанимающие пока не добавлены</Text> : null}
                 {managers.map((manager) => (
                   <div key={manager.userId} className={styles.managerRow}>
                     <Group gap="xs">
                       <Text fw={600}>{manager.displayName}</Text>
                       {manager.isOwner ? <Badge color="gray">Владелец</Badge> : null}
                     </Group>
-                    <CopyHrId id={manager.userId} compact />
                     {!manager.isOwner ? (
                       <Button
                         type="button"
@@ -426,7 +420,7 @@ export function RoomInterviewPanel({
                     ) : null}
                   </div>
                 ))}
-                <HiringManagerPicker showSuccess={false} key={`${identityKey}:${authorityGeneration}`} teamId={teamId} selectedIds={managers.map(manager => manager.userId)} disabled={pending || archived} onSelect={person => invite(person.normalizedId)} />
+                {opened && canManageRoom ? <HiringManagerPicker room={{ inviteCode, ownerToken, interviewerToken, eventToken }} showSuccess={false} key={`${identityKey}:${authorityGeneration}`} teamId={isTeamRoom ? teamId : undefined} selectedIds={managers.map(manager => manager.userId)} disabled={pending || archived} onSelect={person => invite(person.normalizedId)} /> : null}
                 {inviteError ? <Text role="alert" c="red.4" size="sm">{inviteError}</Text> : null}
               </Stack>
 

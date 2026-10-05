@@ -1,11 +1,19 @@
 package com.interviewonline.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.interviewonline.support.Postgres16TestSupport
+import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.BeforeAll
+import org.springframework.boot.test.autoconfigure.web.servlet.MockMvcPrint
+import org.springframework.test.annotation.DirtiesContext
+import org.springframework.test.context.DynamicPropertyRegistry
+import org.springframework.test.context.DynamicPropertySource
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.http.MediaType
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.delete
 import org.springframework.test.web.servlet.get
@@ -22,21 +30,31 @@ import org.springframework.test.util.AopTestUtils
 import java.util.UUID
 
 @SpringBootTest
-@AutoConfigureMockMvc
+@AutoConfigureMockMvc(print = MockMvcPrint.NONE)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class HrRoomArchiveIntegrationTest(
     @Autowired private val mockMvc: MockMvc,
     @Autowired private val objectMapper: ObjectMapper,
     @Autowired private val collaborationService: CollaborationService,
     @Autowired private val roomRepository: RoomRepository,
     @Autowired private val userRepository: UserRepository,
+    @Autowired private val jdbc: JdbcTemplate,
 ) {
+    companion object {
+        private val postgres = Postgres16TestSupport.create("hr_archive")
+        @JvmStatic @DynamicPropertySource
+        fun properties(registry: DynamicPropertyRegistry) = postgres.register(registry)
+        @JvmStatic @BeforeAll
+        fun verifyDatabase() = postgres.verifyPostgres16()
+        @JvmStatic @AfterAll
+        fun cleanup() = postgres.close()
+    }
+
     @Test
-    fun `tracked room deletion archives idempotently and every live path becomes terminal`() {
+    fun `legacy personal tracked room deletion archives idempotently and every live path becomes terminal`() {
         val (owner, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "archive-owner")
         val room = HrHttpFixtures.createRoom(mockMvc, objectMapper, owner)
-        mockMvc.post("/api/rooms/${room.inviteCode}/hr-tracking") {
-            header("Authorization", "Bearer ${owner.token}")
-        }.andExpect { status { isOk() } }
+        HrHttpFixtures.seedLegacyPersonalTracking(jdbc, room, owner)
 
         repeat(2) {
             mockMvc.delete("/api/me/rooms/${room.id}") {
@@ -105,9 +123,7 @@ class HrRoomArchiveIntegrationTest(
         val body = objectMapper.readTree(creation.contentAsString)
         val room = HrTestRoom(body.path("id").asText(), body.path("inviteCode").asText())
         val initialCode = body.path("code").asText()
-        mockMvc.post("/api/rooms/${room.inviteCode}/hr-tracking") {
-            header("Authorization", "Bearer ${owner.token}")
-        }.andExpect { status { isOk() } }
+        HrHttpFixtures.seedLegacyPersonalTracking(jdbc, room, owner)
 
         val sessionId = "owner-${UUID.randomUUID()}"
         collaborationService.joinRoomSse(
@@ -158,11 +174,11 @@ class HrRoomArchiveIntegrationTest(
     }
 
     @Test
-    fun `invited interviewer cannot archive the owners tracked room`() {
+    fun `legacy personal external interviewer cannot archive the owners tracked room`() {
         val (owner, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "delete-owner2")
         val (hr, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "delete-hr")
         val room = HrHttpFixtures.createRoom(mockMvc, objectMapper, owner)
-        require(HrHttpFixtures.inviteHr(mockMvc, owner, room, hr).response.status == 200)
+        HrHttpFixtures.seedLegacyPersonalHiringAssignment(jdbc, room, hr)
 
         mockMvc.delete("/api/me/rooms/${room.id}") {
             header("Authorization", "Bearer ${hr.token}")

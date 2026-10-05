@@ -37,8 +37,9 @@ try {
   await page.goto(`${webBaseUrl}/login`, { waitUntil: "domcontentloaded" });
   await page.getByText("Регистрация", { exact: true }).click();
   await page.getByLabel("Ник").fill(nickname);
-  await page.getByLabel("Имя для комнаты").fill(nickname);
-  await page.getByLabel("Пароль").fill("secret123");
+  await page.getByLabel("Имя").fill(nickname);
+  await page.getByLabel("Пароль", { exact: true }).fill("secret123");
+  await page.getByLabel("Повторите пароль", { exact: true }).fill("secret123");
   await page.getByRole("button", { name: "Создать аккаунт" }).click();
   await page.waitForURL(/\/workspace\/personal\/interviews$/, { timeout: 15000 });
 

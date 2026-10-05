@@ -77,7 +77,6 @@
 .heroCopy { min-width: 0; padding: 20px 0; }
 .eyebrow { color: var(--app-primary-text); font-size: 12px; font-weight: 600; letter-spacing: 0.08em; }
 .heroTitle { max-width: 680px; margin: 14px 0 12px !important; font-size: clamp(32px, 3.2vw, 40px) !important; line-height: 1.2 !important; }
-.heroDescription { max-width: 620px; margin: 0 0 28px !important; color: var(--app-muted); font-size: 16px; line-height: 24px; }
 
 .featureGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .featureCard { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 14px !important; background: var(--app-surface); }

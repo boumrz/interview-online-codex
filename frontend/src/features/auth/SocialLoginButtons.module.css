@@ -1,0 +1,20 @@
+@import /* webpackIgnore: true */ url("/auth/fonts.css");
+
+.providerButton {
+  height: 40px;
+  gap: 10px;
+  padding-inline: 12px;
+  border-color: #747775;
+  color: #1f1f1f;
+  background: #fff;
+  box-shadow: none;
+}
+
+.providerButton:not(:disabled):hover {
+  color: #1f1f1f;
+  border-color: #747775;
+  background: #f8faff;
+}
+
+.providerButton img { flex: none; object-fit: contain; }
+.googleLabel { font-family: "Google Sans Auth", sans-serif; font-size: 14px; font-weight: 500; }

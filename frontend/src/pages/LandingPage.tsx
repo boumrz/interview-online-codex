@@ -94,23 +94,18 @@ export function LandingPage() {
             <Typography.Title id="landing-title" className={styles.heroTitle} level={1}>
               Запускайте интервью за 30 секунд.
             </Typography.Title>
-            <Typography.Paragraph className={styles.heroDescription}>
-              Общий редактор, шаги интервью и стабильная синхронизация участников без визуального шума.
-            </Typography.Paragraph>
 
             <div className={styles.featureGrid}>
               <Card className={styles.featureCard}>
                 <span className={styles.featureIcon}><TeamOutlined aria-hidden="true" /></span>
                 <span>
-                  <Typography.Text strong>Interviewer + Candidate</Typography.Text>
-                  <Typography.Text className={styles.secondaryText}>Участники и контроль ролей</Typography.Text>
+                  <Typography.Text strong>Совместный редактор</Typography.Text>
                 </span>
               </Card>
               <Card className={styles.featureCard}>
                 <span className={styles.featureIcon}><LaptopOutlined aria-hidden="true" /></span>
                 <span>
-                  <Typography.Text strong>Step-by-step flow</Typography.Text>
-                  <Typography.Text className={styles.secondaryText}>Задачи и публикация шагов</Typography.Text>
+                  <Typography.Text strong>Задачи и шаги</Typography.Text>
                 </span>
               </Card>
             </div>
@@ -125,7 +120,6 @@ export function LandingPage() {
             <Card className={styles.formCard}>
               <Space orientation="vertical" size={4}>
                 <Typography.Title level={2}>Создать комнату</Typography.Title>
-                <Typography.Text className={styles.secondaryText}>Быстрый вход для интервьюера без регистрации.</Typography.Text>
               </Space>
               <Button block type="primary" size="large" icon={<ArrowRightOutlined aria-hidden="true" />} onClick={() => { setError(""); setCreateOpened(true); }}>Создать комнату</Button>
             </Card>

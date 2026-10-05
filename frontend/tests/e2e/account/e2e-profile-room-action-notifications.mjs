@@ -12,12 +12,13 @@ async function request(path, { token, method = "GET", body } = {}) {
   const response = await fetch(`${api}${path}`, {
     method,
     headers: {
+      "Idempotency-Key": randomUUID(),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
-  assert.equal(response.status, 200, `${method} ${path}: ${await response.clone().text()}`);
+  assert.ok(response.ok, `${method} ${path}: ${response.status} ${await response.clone().text()}`);
   return response.json();
 }
 
@@ -116,10 +117,11 @@ async function dismissSuccess(page, message) {
 before(async () => { browser = await chromium.launch({ headless: true }); });
 after(async () => { await browser?.close(); });
 
-test("AC-18 room metadata and hiring assignment show one top result only after confirmation; failed save preserves draft and retry", { timeout: 90_000 }, async () => {
+test("AC-18 team room metadata and hiring assignment show one top result only after confirmation; failed save preserves draft and retry", { timeout: 90_000 }, async () => {
   const owner = await account();
   const hiring = await account(true);
-  const room = await request("/rooms", { token: owner.token, method: "POST", body: { title: "Проверка результатов действий", taskIds: [] } });
+  const { team } = await request("/teams", { token: owner.token, method: "POST", body: { name: "Команда результатов действий" } });
+  const { interview: room } = await request(`/teams/${team.id}/interviews`, { token: owner.token, method: "POST", body: { title: "Проверка результатов действий", selectedTaskIds: [] } });
   const { context, page } = await openAccount(owner, `/room/${room.inviteCode}`);
   let gate;
   try {
@@ -146,7 +148,7 @@ test("AC-18 room metadata and hiring assignment show one top result only after c
     const retryName = `Черновик повторной попытки ${randomUUID().slice(0, 8)}`;
     await name.fill(retryName);
     await panel.getByRole("button", { name: "Сохранить сведения", exact: true }).click();
-    await panel.getByRole("alert").filter({ hasText: "Временная ошибка проверки" }).waitFor();
+    await panel.getByRole("alert").filter({ hasText: "Ошибка сервера. Повторите попытку позже." }).waitFor();
     assert.equal(await name.inputValue(), retryName);
     await noSuccess(page, "Сведения сохранены");
     await removeRejection();
@@ -155,7 +157,7 @@ test("AC-18 room metadata and hiring assignment show one top result only after c
     await dismissSuccess(page, "Сведения сохранены");
 
     const picker = panel.getByRole("combobox", { name: "Нанимающий", exact: true });
-    await picker.fill(hiring.user.id);
+    await picker.fill(hiring.user.nickname);
     await page.getByRole("option", { name: hiring.user.displayName, exact: true }).waitFor({ state: "attached" });
     gate = await holdConfirmedResponse(page, `**/api/rooms/${room.inviteCode}/hr-managers/${hiring.user.id}`, "PUT");
     await picker.press("ArrowDown"); await picker.press("Enter");

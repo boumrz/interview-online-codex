@@ -1,6 +1,6 @@
 # InterHub — указатель спецификаций
 
-Актуализировано: 2026-10-04. Каждая фича имеет отдельную спецификацию в `specs/features/`. Этот файл содержит только порядок и статус работ. Исторические материалы в `openspec/` не являются рабочими спецификациями.
+Актуализировано: 2026-10-05. Каждая фича имеет отдельную спецификацию в `specs/features/`. Этот файл содержит только порядок и статус работ. Исторические материалы в `openspec/` не являются рабочими спецификациями.
 
 ## Правила работы
 
@@ -16,24 +16,25 @@
 
 | Приоритет | Фича | Статус по записанным проверкам |
 | --- | --- | --- |
+| AUTH.1 | [Вход через Google и VK](specs/features/auth-1-social-login.md) | Отложено пользователем; отключённая заготовка сохранена. `FEATURE_SOCIAL_AUTH_ENABLED=false`, пользовательский вход прежний. [Проверка заготовки](specs/references/2026-10-05-social-login-deferred.md), [будущее подключение](specs/references/2026-10-05-social-login-setup.md) |
 | UI.1 | [Ant Design v6 и единая визуальная система](specs/features/ui-1-antd-v6-design-system.md) | S01–S16 реализованы; современная S15 админка с общей оболочкой проверена 04.10; глобальная техническая приёмка частичная, продуктовая ожидается |
-| UI.2 | [Удобство форм, комнаты и согласованность тем](specs/features/ui-2-usability-theme-polish.md) | Комната, команды и формы технически проверены; геометрия условия, resize, keyboard tooltip и запуск со шрифтами исправлены; [полная проверка 04.10](specs/references/2026-10-04-full-project-verification.md); глобальная продуктовая приёмка ожидается |
+| UI.2 | [Удобство форм, комнаты и согласованность тем](specs/features/ui-2-usability-theme-polish.md) | TEAM участники создания/редактора согласованы; [проверки участников](specs/references/2026-10-05-interview-participants-editor.md): 14 PostgreSQL и 18 browser PASS, review approve. [Длинные названия селекторов](specs/references/2026-10-05-selector-overflow.md): ellipsis без горизонтальной прокрутки, 4 browser и frontend build PASS. PERSONAL нанимающие/TEAM контекст/короткие тексты сохранены; продуктовый просмотр ожидается |
 | P0.1 | [Приглашения и участники команды](specs/features/p0-1-team-invitations.md) | Выпуск без командного флага технически проверен; стабильный ключ обязателен, startup/recovery/права проверены; одна многоразовая ссылка, ручные reissue/revoke |
-| P0.2 | [UX переключения пространства и навигации](specs/features/p0-2-workspace-navigation.md) | Команды без flag и современная админка в общей оболочке проверены 04.10; admin 3/3 + deletion/profile 2/2 + navigation 2/2, новый isolated runner 3/3 — PASS; локальная база очищена до 12 аккаунтов; продуктовый просмотр ожидается |
+| P0.2 | [UX переключения пространства и навигации](specs/features/p0-2-workspace-navigation.md) | Команды без flag и современная админка в общей оболочке проверены 04.10. Возврат из TEAM комнаты требует свежего ACTIVE membership; внешний HR возвращается в личный кабинет. Scoped browser и независимый review PASS; [проверки 05.10](specs/references/2026-10-05-personal-team-scope-and-copy.md); продуктовый просмотр ожидается |
 | P0.3 | [Комната: вкладки и изменение размеров панелей](specs/features/p0-3-room-panels.md) | Условие только в Code, четыре вкладки и ручная высота проверены 04.10; контекст/фокус сохраняются |
 | P0.4 | [Настройки команды](specs/features/p0-4-team-settings-audit.md) | Шестерёнка, верхние приглашения и управление в единой таблице технически проверены 03.10; восстановление и свежие права сохранены; публичного аудита нет |
 | P1.1 | [Каталог участников](specs/features/p1-1-team-members.md) | MVP реализован; каталог в настройках, legacy redirect сохранён |
 | P1.2 | [Треки и вакансии](specs/features/p1-2-tracks-vacancies.md) | MVP реализован; серверные фильтры/Excel, архивные справочники для истории |
 | P1.3 | [Командная библиотека задач](specs/features/p1-3-team-task-library.md) | MVP реализован; повторное сохранение надёжно обновляет список, проверено 04.10; архивы сняты, удаление источника сохраняет snapshots, V32 применена локально |
 | P1.4 | [Наборы задач](specs/features/p1-4-task-sets.md) | MVP реализован; повторное сохранение надёжно обновляет состав/порядок, проверено 04.10; архивы сняты, удаление источника сохраняет snapshots, V32 применена локально |
-| P1.5 | [Создание командного интервью](specs/features/p1-5-team-interview-creation.md) | Объединённое редактирование и создание со сведениями проверены 04.10; актуальный локальный API запущен, shared/candidate права сохраняются |
+| P1.5 | [Создание командного интервью](specs/features/p1-5-team-interview-creation.md) | Выбранные интервьюеры и трек/вакансия сохраняются в редакторе с общей CAS проверкой; раздел «Участники» совпадает с созданием. Scoped 14 PostgreSQL и 14 TEAM browser PASS, review approve; ACTIVE/candidate доступ и безопасный повтор сохранены. [Проверки](specs/references/2026-10-05-interview-participants-editor.md), продуктовый просмотр ожидается |
 | P2.1 | [Общий режим, раскладка комнаты и надёжность Markdown](specs/features/p2-1-room-layout-modes.md) | Стабильное условие в Code, скрытие в Markdown, resize и матрица 100–200% проверены 04.10; доставка/состояние сохранены; [проверки](specs/references/2026-10-04-room-condition-refinement.md); продуктовый просмотр ожидается |
 | P2.2 | [Чат и активность](specs/features/p2-2-room-chat-activity.md) | MVP реализован; доставка/непрерывность/revoke заданы проверяемыми сценариями |
-| P2.3 | [Управление назначениями в интервью](specs/features/p2-3-room-assignments.md) | MVP реализован; назначения новых гостей и UUID picker проверены 02.10, общие ACTIVE права и отзыв |
+| P2.3 | [Управление назначениями в интервью](specs/features/p2-3-room-assignments.md) | PERSONAL нанимающие по нику доступны при создании и редактировании; актуальные права, создание/preview/отзыв/regrant проверены в PostgreSQL и браузере, scoped review approve. Обычная guest роль сама по себе не становится HR, TEAM права и терминальные ошибки сохраняются; [проверки](specs/references/2026-10-05-personal-hiring-and-team-interview-context.md) |
 | P3.1 | [Выход, удаление, повторное вступление](specs/features/p3-1-membership-lifecycle.md) | MVP реализован; rejoin возвращает ACTIVE shared access без старых explicit grants |
 | P3.2 | [Восстановление владельца и старых приостановок](specs/features/p3-2-suspension-owner-recovery.md) | Реализована; orphan recovery и старые suspend/resume, новые приостановки сняты |
 | P3.3 | [Завершение интервью и результат](specs/features/p3-3-interview-result.md) | Реализована; finished manager editing/candidate view и реальные exports |
-| P3.4 | [Hiring list и Excel export](specs/features/p3-4-hiring-export.md) | Реализована; TEAM права/фильтры, host history; ограничение legacy guest авторства в фиче |
+| P3.4 | [Hiring list и Excel export](specs/features/p3-4-hiring-export.md) | TEAM общие права и PERSONAL собственные/назначенные интервью по текущей authority; новые PERSONAL назначения по P2.3 реализованы. Кабинет/Excel/профиль/отзыв проверены, scoped review approve; [проверки](specs/references/2026-10-05-personal-hiring-and-team-interview-context.md), продуктовый просмотр ожидается |
 | P4.1 | [Стандарт трека/вакансии](specs/features/p4-1-interview-programme-standard.md) | Реализована; save публикует стандарт, выбор задач до создания свободный |
 | P4.2 | [Интервью процесса с обязательной основой](specs/features/p4-2-mandatory-programme-interview.md) | Реализована; pin/mandatory/solution и version conflict раскрыты; пределы покрытия в фиче |
 | P5.1 | [Проекции процессов](specs/features/p5-1-process-projections.md) | Реализована; API/каталог, повторная панель интервью снята |
@@ -43,13 +44,15 @@
 
 ## Очередь завершения
 
-1. Продуктовый просмотр доработок комнаты/команд и исправлений 04.10; завершить продуктовую приёмку UI.1 по текущему UI.2 контракту. [Проверка комнаты 04.10](specs/references/2026-10-04-room-condition-refinement.md), [проверка API](specs/references/2026-10-04-api-ui-validation.md).
+1. Продуктовый просмотр доработок регистрации/поиска/ошибок/текстов 05.10 и комнаты/команд 04.10; завершить продуктовую приёмку UI.1 по текущему UI.2 контракту. [Проверка комнаты 04.10](specs/references/2026-10-04-room-condition-refinement.md), [проверка API](specs/references/2026-10-04-api-ui-validation.md).
 2. При многопроцессной выкладке настроить маршрутизацию комнаты к одному realtime-хосту либо межпроцессную доставку событий в целевой инфраструктуре.
 
 ## Отложено отдельно
 
+- Google/VK вход: заготовка [AUTH.1](specs/features/auth-1-social-login.md) отключена
+  общим флагом по решению пользователя; продолжить только по новому запросу.
 - Native AX automation для проверки macOS/browser lifecycle.
 - Phone/mobile browser support; текущая матрица — desktop/tablet.
-- Внешние уведомления/email.
+- Регистрация/подтверждение email и восстановление пароля: [исследование 05.10](specs/references/2026-10-05-usability-auth-review.md), внедрение после выбора транспорта/отправителя и политики почты. Внешние уведомления отложены отдельно.
 - Глобальный каталог чужих команд.
 - Чат с кандидатом: текущий «Чат» — внутренний чат команды.

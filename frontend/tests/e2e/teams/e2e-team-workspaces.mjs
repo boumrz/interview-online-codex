@@ -812,7 +812,7 @@ test("P1.2: team tracks surface creates a track and vacancy instead of showing s
 
     const trackCard = page.getByRole("region", { name: "Трек Backend", exact: true });
     await trackCard.waitFor();
-    await trackCard.getByText("В этом треке пока нет вакансий", { exact: true }).waitFor();
+    await trackCard.getByText("Вакансий пока нет", { exact: true }).waitFor();
 
     await page.getByRole("button", { name: "Тёмная тема", exact: true }).click();
     await page.waitForFunction(() => document.documentElement.dataset.theme === "dark");
@@ -836,7 +836,7 @@ test("P1.2: team tracks surface creates a track and vacancy instead of showing s
     await createVacancyResponse;
 
     await trackCard.getByText("Kotlin разработчик", { exact: true }).waitFor();
-    assert.equal(await trackCard.getByText("В этом треке пока нет вакансий", { exact: true }).count(), 0, "TEAM_TRACKS_VACANCY_EMPTY_STATE_STUCK");
+    assert.equal(await trackCard.getByText("Вакансий пока нет", { exact: true }).count(), 0, "TEAM_TRACKS_VACANCY_EMPTY_STATE_STUCK");
     await trackCard.getByText("Вакансии трека", { exact: true }).waitFor();
     await trackCard.getByText("Вакансия · активна", { exact: true }).waitFor();
     const decorativeBorders = await trackCard.evaluate((card) => {
@@ -856,7 +856,7 @@ test("P1.2: team tracks surface creates a track and vacancy instead of showing s
     await trackCard.getByRole("button", { name: "Удалить вакансию Kotlin разработчик", exact: true }).click();
     await page.getByRole("dialog", { name: "Удалить вакансию Kotlin разработчик?" }).getByRole("button", { name: "Удалить", exact: true }).click();
     await deleteVacancyResponse;
-    await trackCard.getByText("В этом треке пока нет вакансий", { exact: true }).waitFor();
+    await trackCard.getByText("Вакансий пока нет", { exact: true }).waitFor();
     const deleteTrackResponse = page.waitForResponse((response) =>
       response.url().includes(`/teams/${team.id}/tracks/`) && response.request().method() === "DELETE" && response.status() === 204);
     await trackCard.getByRole("button", { name: "Удалить трек Backend", exact: true }).click();
@@ -1087,7 +1087,7 @@ test("P1.2: team track managers rename archive and restore tracks and vacancies 
       response.status() === 200);
     await archiveButton.click();
     await archiveVacancyResponse;
-    await trackCard.getByText("В этом треке пока нет вакансий", { exact: true }).waitFor();
+    await trackCard.getByText("Вакансий пока нет", { exact: true }).waitFor();
 
     await page.getByRole("tab", { name: "Архив", exact: true }).click();
     assert.equal(await page.getByRole("region", { name: "Трек Platform", exact: true }).count(), 0);
@@ -1614,7 +1614,7 @@ test("P1.3: team library creates a real team task instead of showing staged plac
       response.status() === 201);
     await page.getByRole("button", { name: "Импортировать", exact: true }).click();
     const importTaskDialog = page.getByRole("dialog", { name: "Импортировать задачу", exact: true });
-    await importTaskDialog.getByLabel("Данные задачи или ID личной задачи", { exact: true }).fill(personalTask.id);
+    await importTaskDialog.getByLabel("Данные задачи", { exact: true }).fill(personalTask.id);
     await importTaskDialog.getByRole("button", { name: "Импортировать задачу", exact: true }).click();
     await importResponse;
     await page.getByRole("region", { name: "Командная задача Personal-only task", exact: true }).waitFor();
@@ -1834,7 +1834,7 @@ test("P1.4: team library imports a personal task set into team library", { timeo
     await page.getByRole("tab", { name: "Наборы задач", exact: true }).click();
     await page.getByRole("button", { name: "Импортировать", exact: true }).click();
     const importSetDialog = page.getByRole("dialog", { name: "Импортировать набор", exact: true });
-    await importSetDialog.getByLabel("Данные набора или ID личного набора", { exact: true }).fill(preset.id);
+    await importSetDialog.getByLabel("Данные набора", { exact: true }).fill(preset.id);
     const importRequest = page.waitForRequest((requestCandidate) =>
       requestCandidate.url() === `${browserApi}/teams/${team.id}/task-sets/import-personal` &&
       requestCandidate.method() === "POST");

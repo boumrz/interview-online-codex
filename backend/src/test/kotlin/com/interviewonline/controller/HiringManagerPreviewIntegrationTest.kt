@@ -2,6 +2,12 @@ package com.interviewonline.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.interviewonline.dto.ResolveHiringManagerPreviewRequest
+import com.interviewonline.model.Team
+import com.interviewonline.model.TeamMembership
+import com.interviewonline.repository.TeamRepository
+import com.interviewonline.repository.TeamMembershipRepository
+import com.interviewonline.support.Postgres16TestSupport
+import org.junit.jupiter.api.AfterAll
 import com.interviewonline.repository.RoomHrAssignmentRepository
 import com.interviewonline.repository.RoomParticipantRepository
 import com.interviewonline.repository.RoomProductMetricRepository
@@ -25,9 +31,14 @@ import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.patch
 import org.springframework.test.web.servlet.post
 import org.mockito.Mockito.doThrow
+import org.springframework.test.annotation.DirtiesContext
+import org.springframework.test.context.DynamicPropertyRegistry
+import org.springframework.test.context.DynamicPropertySource
+import java.util.UUID
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class HiringManagerPreviewIntegrationTest(
     @Autowired private val mockMvc: MockMvc,
     @Autowired private val objectMapper: ObjectMapper,
@@ -38,18 +49,27 @@ class HiringManagerPreviewIntegrationTest(
     @Autowired private val participantRepository: RoomParticipantRepository,
     @Autowired private val assignmentRepository: RoomHrAssignmentRepository,
     @Autowired private val metricRepository: RoomProductMetricRepository,
+    @Autowired private val teamRepository: TeamRepository,
+    @Autowired private val membershipRepository: TeamMembershipRepository,
 ) {
+    companion object {
+        private val postgres = Postgres16TestSupport.create("hiring_preview")
+        @JvmStatic @DynamicPropertySource fun properties(registry: DynamicPropertyRegistry) = postgres.register(registry)
+        @JvmStatic @AfterAll fun cleanup() = postgres.close()
+    }
     @SpyBean
     private lateinit var hiringManagerPreviewService: HiringManagerPreviewService
 
     @Test
-    fun `any authenticated creator receives only a minimal eligible preview and it writes nothing`() {
+    fun `authenticated team creator receives only a minimal eligible preview and it writes nothing`() {
+        postgres.verifyPostgres16()
         val (creator, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "preview-creator")
+        val teamId = team(creator)
         val (target, targetRegistration) = HrHttpFixtures.register(mockMvc, objectMapper, true, "preview-eligible")
         val targetName = targetRegistration.path("user").path("displayName").asText()
         val before = persistenceCounts()
 
-        val result = postPreview(creator.token, mapOf("invitationId" to target.id.uppercase()))
+        val result = postPreview(creator.token, mapOf("invitationId" to target.id.uppercase(), "teamId" to teamId))
 
         assertEquals(200, result.response.status)
         assertPrivacyHeaders(result)
@@ -68,6 +88,7 @@ class HiringManagerPreviewIntegrationTest(
     @Test
     fun `preview rejects malformed and forged body fields without target data`() {
         val (creator, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "preview-malformed")
+        val teamId = team(creator)
         val (target, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "preview-mal-target")
         val before = persistenceCounts()
         val bodies = listOf(
@@ -82,7 +103,7 @@ class HiringManagerPreviewIntegrationTest(
         )
 
         for (body in bodies) {
-            val result = postPreview(creator.token, body)
+            val result = postPreview(creator.token, body + mapOf("teamId" to teamId))
             assertEquals(400, result.response.status)
             assertPrivacyHeaders(result)
             assertErrorOnly(result)
@@ -110,14 +131,15 @@ class HiringManagerPreviewIntegrationTest(
     @Test
     fun `preview masks data access failures with a private retryable response and no writes`() {
         val (creator, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "preview-data-access")
+        val teamId = team(creator)
         val (target, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "preview-data-target")
         val before = persistenceCounts()
-        val request = ResolveHiringManagerPreviewRequest(target.id)
+        val request = ResolveHiringManagerPreviewRequest(target.id, teamId)
         doThrow(DataAccessResourceFailureException("connection details must not escape"))
             .`when`(hiringManagerPreviewService)
             .resolve(org.mockito.ArgumentMatchers.eq(request) ?: request, org.mockito.ArgumentMatchers.any(com.interviewonline.model.User::class.java) ?: com.interviewonline.model.User())
 
-        val result = postPreview(creator.token, mapOf("invitationId" to target.id))
+        val result = postPreview(creator.token, mapOf("invitationId" to target.id, "teamId" to teamId))
 
         assertEquals(503, result.response.status)
         assertPrivacyHeaders(result)
@@ -130,14 +152,15 @@ class HiringManagerPreviewIntegrationTest(
     @Test
     fun `preview masks unexpected failures with a private error response and no writes`() {
         val (creator, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "preview-unexpected")
+        val teamId = team(creator)
         val (target, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "preview-unexp-tgt")
         val before = persistenceCounts()
-        val request = ResolveHiringManagerPreviewRequest(target.id)
+        val request = ResolveHiringManagerPreviewRequest(target.id, teamId)
         doThrow(IllegalStateException("internal target detail must not escape"))
             .`when`(hiringManagerPreviewService)
             .resolve(org.mockito.ArgumentMatchers.eq(request) ?: request, org.mockito.ArgumentMatchers.any(com.interviewonline.model.User::class.java) ?: com.interviewonline.model.User())
 
-        val result = postPreview(creator.token, mapOf("invitationId" to target.id))
+        val result = postPreview(creator.token, mapOf("invitationId" to target.id, "teamId" to teamId))
 
         assertEquals(500, result.response.status)
         assertPrivacyHeaders(result)
@@ -150,6 +173,7 @@ class HiringManagerPreviewIntegrationTest(
     @Test
     fun `unknown ordinary and opted-out targets share one opaque unavailable response`() {
         val (creator, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "preview-unavailable")
+        val teamId = team(creator)
         val (ordinary, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "preview-ordinary")
         val (optedOut, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "preview-opted-out")
         mockMvc.patch("/api/me/profile") {
@@ -159,9 +183,9 @@ class HiringManagerPreviewIntegrationTest(
         }.andExpect { status { isOk() } }
         val before = persistenceCounts()
         val results = listOf(
-            postPreview(creator.token, mapOf("invitationId" to "00000000-0000-0000-0000-000000000000")),
-            postPreview(creator.token, mapOf("invitationId" to ordinary.id)),
-            postPreview(creator.token, mapOf("invitationId" to optedOut.id)),
+            postPreview(creator.token, mapOf("invitationId" to "00000000-0000-0000-0000-000000000000", "teamId" to teamId)),
+            postPreview(creator.token, mapOf("invitationId" to ordinary.id, "teamId" to teamId)),
+            postPreview(creator.token, mapOf("invitationId" to optedOut.id, "teamId" to teamId)),
         )
 
         for (result in results) {
@@ -219,6 +243,13 @@ class HiringManagerPreviewIntegrationTest(
         val body = objectMapper.readTree(result.response.contentAsString)
         assertEquals(setOf("error"), body.fieldNames().asSequence().toSet())
         assertTrue(body.path("error").asText().isNotBlank())
+    }
+
+    private fun team(owner: HrTestAccount): String {
+        val id = UUID.randomUUID().toString()
+        teamRepository.saveAndFlush(Team(id = id, name = "Preview team $id", normalizedName = "preview-$id", ownerUserId = owner.id))
+        membershipRepository.saveAndFlush(TeamMembership(id = UUID.randomUUID().toString(), teamId = id, userId = owner.id, role = "ADMIN"))
+        return id
     }
 
     private fun persistenceCounts() = PreviewPersistenceCounts(

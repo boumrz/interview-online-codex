@@ -20,23 +20,21 @@ async function teamMember(owner,team,person) {
  const token=new URL(url,web).hash.slice('#token='.length);
  assert.ok(token, 'fixture invitation token'); await req('/team-invitations/accept',person.token,{token});
 }
-test('personal preparation uses a compact UUID selector and retains tasks only inside the selector',async()=>{
+test('personal preparation offers nickname hiring without TEAM context and retains tasks only inside the selector',async()=>{
  const auth=await account('Автор формы'); const task=await req('/me/tasks',auth.token,{title:'Выбранная задача',description:'Условие',starterCode:'',language:'nodejs'});
  const {browser,page}=await open(auth);
  try {
   await page.goto(`${web}/workspace/personal/interviews`);await page.getByRole('button',{name:'Создать интервью',exact:true}).click();
   const dialog=page.getByRole('dialog',{name:'Создать интервью',exact:true});await dialog.waitFor();await settleModal(page);
-  const input=dialog.getByRole('combobox',{name:'Нанимающий',exact:true});
-  await page.waitForFunction(el=>Math.abs(el.getBoundingClientRect().height-36)<1,await input.locator('xpath=ancestor::*[contains(concat(" ",normalize-space(@class)," ")," ant-select ")][1]').elementHandle());
-  const selector=await input.locator('xpath=ancestor::*[contains(concat(" ",normalize-space(@class)," ")," ant-select ")][1]').boundingBox();assert.equal(Math.round(selector.height),36,'UUID selector uses the ordinary compact control height');
-  assert.equal(await dialog.getByRole('button',{name:'Добавить',exact:true}).count(),0,'UUID preview is selected directly without a duplicate add button');
+  assert.equal(await dialog.getByRole('combobox',{name:'Нанимающий',exact:true}).count(),1,'personal preparation offers generic registered hiring lookup');
+  assert.equal(await dialog.getByRole('combobox',{name:/трек|ваканси|внешн/i}).count(),0,'personal preparation never offers TEAM context or external terminology');
   const tasks=dialog.getByRole('combobox',{name:/Задачи/});await tasks.click();await tasks.fill('Выбранная');await page.locator('.ant-select-item-option').filter({hasText:'Выбранная задача'}).click();
   assert.equal(await dialog.getByTestId('selected-task-preview').count(),0,'chosen task not duplicated beneath selector');
   assert.equal(await dialog.getByRole('combobox',{name:'Нанимающие из команды',exact:true}).count(),0);
   for(const mode of ['light','dark']) {await page.evaluate(mode=>{localStorage.setItem('interview-online:ui-theme',mode);window.dispatchEvent(new StorageEvent('storage',{key:'interview-online:ui-theme',newValue:mode}));},mode); assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);}
  } finally {await browser.close();}
 });
-test('team interview creation and existing room support external UUID hiring invitations',async()=>{
+test('team interview creation and existing room support external nickname hiring invitations',async()=>{
  const owner=await account('Владелец команды');const hr=await account('Нанимающий команды');const hr2=await account('Второй нанимающий');
  await req('/me/profile',hr.token,{displayName:hr.user.displayName,isHr:true},'PATCH');await req('/me/profile',hr2.token,{displayName:hr2.user.displayName,isHr:true},'PATCH');
  const {team}=await req('/teams',owner.token,{name:'Команда проверки нанимающих'});await teamMember(owner,team,hr);await teamMember(owner,team,hr2);
@@ -56,31 +54,54 @@ test('team interview creation and existing room support external UUID hiring inv
   await page.setViewportSize({width:1366,height:1000});
   await dialog.getByRole('textbox',{name:'Название интервью',exact:true}).fill('Интервью с нанимающими');
   assert.equal(await dialog.getByRole('combobox',{name:'Нанимающие из команды',exact:true}).count(),0);
-  await dialog.getByRole('combobox',{name:'Внешний нанимающий (необязательно)',exact:true}).fill(hr.user.id);
+  await dialog.getByRole('combobox',{name:'Внешний нанимающий (необязательно)',exact:true}).fill(hr.user.nickname);
   await dialog.getByRole('alert').filter({hasText:/не найден или недоступен/}).waitFor();
-  await dialog.getByRole('combobox',{name:'Внешний нанимающий (необязательно)',exact:true}).fill(external.user.id);await page.locator('.ant-select-item-option').filter({hasText:external.user.displayName}).click();await dialog.getByText(external.user.displayName,{exact:true}).waitFor();
+  await dialog.getByRole('combobox',{name:'Внешний нанимающий (необязательно)',exact:true}).fill(external.user.nickname);await page.locator('.ant-select-item-option').filter({hasText:external.user.displayName}).click();await dialog.getByText(external.user.displayName,{exact:true}).waitFor();
   const created=page.waitForResponse(r=>r.url().endsWith(`/api/teams/${team.id}/interviews`)&&r.request().method()==='POST');
   await dialog.getByRole('button',{name:'Создать интервью',exact:true}).click();const response=await created;assert.equal(response.status(),201);const room=(await response.json()).interview;await page.waitForURL(`**/room/${room.inviteCode}`);
   await page.goto(`${web}/workspace/teams/${team.id}/interviews`);await page.getByRole('button',{name:'Редактировать интервью Интервью с нанимающими',exact:true}).click();const info=page.getByRole('dialog',{name:'Редактировать интервью',exact:true});await info.waitFor();await info.getByText(external.user.displayName,{exact:true}).waitFor();
-  await info.getByRole('combobox',{name:'Внешний нанимающий (необязательно)',exact:true}).fill(external2.user.id);await page.locator('.ant-select-item-option').filter({hasText:external2.user.displayName}).click();await info.getByText(external2.user.displayName,{exact:true}).waitFor();
+  await info.getByRole('combobox',{name:'Внешний нанимающий (необязательно)',exact:true}).fill(external2.user.nickname);await page.locator('.ant-select-item-option').filter({hasText:external2.user.displayName}).click();await info.getByText(external2.user.displayName,{exact:true}).waitFor();
   assert.deepEqual((await req(`/rooms/${room.inviteCode}/hr-managers`,owner.token)).map(person=>person.userId).sort(),[external.user.id,external2.user.id].sort(),'TEAM external hiring additions persist before metadata save');
   await info.getByRole('textbox',{name:'Имя кандидата',exact:true}).fill('Кандидат 234');await info.getByRole('button',{name:'Сохранить',exact:true}).click();await page.getByText('Интервью сохранено',{exact:true}).waitFor();
   await info.getByRole('button',{name:'Отмена',exact:true}).click();await info.waitFor({state:'hidden'});
   await page.getByRole('textbox',{name:'Поиск интервью',exact:true}).fill('234');await page.getByText('Интервью с нанимающими',{exact:true}).waitFor();
-  const outsider=await account('Внешний нанимающий');await req('/me/profile',outsider.token,{displayName:outsider.user.displayName,isHr:true},'PATCH');
-  await page.goto(`${web}/workspace/personal/interviews`);await page.getByRole('button',{name:'Создать интервью',exact:true}).click();
-  const personal=page.getByRole('dialog',{name:'Создать интервью',exact:true});await personal.getByRole('textbox',{name:'Название интервью',exact:true}).fill('Личное интервью с нанимающими');
-  await personal.getByRole('combobox',{name:'Нанимающий',exact:true}).fill(hr2.user.id);await page.locator('.ant-select-item-option').filter({hasText:hr2.user.displayName}).click();await personal.getByText(hr2.user.displayName,{exact:true}).waitFor();
-  // Delayed preview must block room creation until the chosen identity is confirmed.
-  let releasePreview; const previewGate=new Promise(resolve=>{releasePreview=resolve});
-  await page.route('**/api/me/hiring-manager-preview',async route=>{await previewGate;await route.continue()},{times:1});
-  await personal.getByRole('combobox',{name:'Нанимающий',exact:true}).fill(outsider.user.id);
-  assert.equal(await personal.getByRole('button',{name:'Создать интервью',exact:true}).isDisabled(),true);
-  releasePreview();await page.locator('.ant-select-item-option').filter({hasText:'Внешний нанимающий'}).click();await personal.getByText('Внешний нанимающий',{exact:true}).waitFor();
-  const personalCreated=page.waitForResponse(r=>r.url().endsWith('/api/rooms')&&r.request().method()==='POST');
-  await personal.getByRole('button',{name:'Создать интервью',exact:true}).click();const personalResponse=await personalCreated;assert.ok(personalResponse.ok());const personalRoom=await personalResponse.json();await page.waitForURL(`**/room/${personalRoom.inviteCode}`);
-  const managers=await req(`/rooms/${personalRoom.inviteCode}/hr-managers`,owner.token);assert.deepEqual(managers.map(person=>person.userId).sort(),[hr2.user.id,outsider.user.id].sort());
-  await page.reload();await page.getByRole('button',{name:'Кандидат и нанимающие',exact:true}).click();const personalInfo=page.getByRole('dialog',{name:'Кандидат и нанимающие',exact:true});await personalInfo.getByText('Внешний нанимающий',{exact:true}).waitFor();
-
  }finally{await browser.close();}
+});
+
+
+test('closing room management aborts a pending nickname preview', async () => {
+ const auth=await account('Автор закрываемого поиска');
+ const {team}=await req('/teams',auth.token,{name:'Команда отмены поиска'});
+ const {interview:room}=await req(`/teams/${team.id}/interviews`,auth.token,{title:'Отмена поиска нанимающего',selectedTaskIds:[]});
+ const {browser,page}=await open(auth);
+ let release; const gate=new Promise(resolve=>{release=resolve});
+ let started; const began=new Promise(resolve=>{started=resolve});
+ await page.addInitScript(() => {
+  const originalFetch=window.fetch;
+  window.hiringPreviewAborts=0;
+  window.fetch=function(input,init) {
+   const url=input instanceof Request?input.url:String(input);
+   const signal=input instanceof Request?input.signal:init?.signal;
+   if(url.endsWith('/hiring-manager-preview')) signal?.addEventListener('abort',()=>{window.hiringPreviewAborts+=1;},{once:true});
+   return originalFetch.call(this,input,init);
+  };
+ });
+ try {
+  await page.goto(`${web}/room/${room.inviteCode}`);
+  await page.getByTestId('room-code-editor-host').waitFor();
+  await page.getByRole('button',{name:'Кандидат и нанимающие',exact:true}).click();
+  const panel=page.getByRole('dialog',{name:'Кандидат и нанимающие',exact:true});
+  await panel.getByRole('combobox',{name:'Нанимающий',exact:true}).waitFor();
+  await page.route('**/api/rooms/*/hiring-manager-preview',async route=>{started();await gate;try{await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({normalizedId:crypto.randomUUID(),displayName:'Поздний нанимающий'})});}catch{}});
+  await panel.getByRole('combobox',{name:'Нанимающий',exact:true}).fill('external.hiring');
+  await began;
+  await panel.getByRole('button',{name:'Закрыть',exact:true}).last().click();
+  await panel.waitFor({state:'hidden'});
+  await page.waitForFunction(()=>window.hiringPreviewAborts===1,undefined,{timeout:3000});
+  release();
+  await page.getByRole('button',{name:'Кандидат и нанимающие',exact:true}).click();
+  await panel.getByRole('combobox',{name:'Нанимающий',exact:true}).waitFor();
+  assert.equal(await panel.getByRole('combobox',{name:'Нанимающий',exact:true}).inputValue(),'');
+  assert.equal(await page.getByText('Поздний нанимающий',{exact:true}).count(),0);
+ } finally {release();await browser.close();}
 });

@@ -35,6 +35,7 @@ import com.interviewonline.model.TeamVacancy
 import com.interviewonline.model.User
 import com.interviewonline.repository.CommandReceiptRepository
 import com.interviewonline.repository.RoomParticipantRepository
+import com.interviewonline.repository.RoomHrAssignmentRepository
 import com.interviewonline.repository.RoomRepository
 import com.interviewonline.repository.lockById
 import com.interviewonline.repository.TeamInterviewProgrammeRepository
@@ -76,6 +77,7 @@ class TeamInterviewService(
     private val programmeRepository: TeamInterviewProgrammeRepository,
     private val roomRepository: RoomRepository,
     private val roomParticipantRepository: RoomParticipantRepository,
+    private val roomHrAssignmentRepository: RoomHrAssignmentRepository,
     private val roomHrTrackingService: RoomHrTrackingService,
     private val userRepository: UserRepository,
     private val ownerOfferRepository: TeamInterviewOwnerOfferRepository,
@@ -311,10 +313,24 @@ class TeamInterviewService(
         val candidateName = canonicalMetadataText(request.candidateName, "Имя кандидата")
         val position = canonicalMetadataText(request.position, "Позиция")
         val scheduledAt = canonicalScheduledAt(request.scheduledAt)
+        val context = request.context?.let { selection ->
+            val trackId = optionalId(selection.trackId)
+            val vacancyId = optionalId(selection.vacancyId)
+            if (trackId != room.teamTrackId) resolveTrack(teamId, trackId)
+            if (vacancyId != null && (vacancyId != room.teamVacancyId || trackId != room.teamTrackId)) {
+                val track = resolveTrack(teamId, trackId)
+                resolveVacancy(teamId, track, vacancyId)
+            }
+            // Even a retained vacancy cannot be attached to an absent/different track.
+            if (vacancyId != null && trackId == null) throw vacancyNotFound()
+            trackId to vacancyId
+        }
+        request.interviewerIds?.let { updateSelectedInterviewers(room, it) }
         room.title = title
         room.candidateName = candidateName
         room.position = position
         room.scheduledAt = scheduledAt
+        context?.let { (trackId, vacancyId) -> room.teamTrackId = trackId; room.teamVacancyId = vacancyId }
         room.interviewMetadataRevision += 1
         roomRepository.saveAndFlush(room)
         return detailsDto(room)
@@ -618,7 +634,45 @@ class TeamInterviewService(
         position = room.position,
         scheduledAt = room.scheduledAt?.toString(),
         revision = room.interviewMetadataRevision,
+        trackId = room.teamTrackId,
+        trackName = room.teamTrackId?.let { trackRepository.findByIdAndTeamId(it, requireNotNull(room.teamId))?.name },
+        vacancyId = room.teamVacancyId,
+        vacancyTitle = room.teamVacancyId?.let { id -> room.teamTrackId?.let { trackId -> vacancyRepository.findByIdAndTeamIdAndTrackId(id, requireNotNull(room.teamId), trackId)?.title } },
+        ownerUserId = room.ownerUser?.id,
+        interviewerIds = selectedInterviewerRows(room).map { requireNotNull(it.user?.id) },
     )
+
+    private fun selectedInterviewerRows(room: Room): List<RoomParticipant> {
+        val activeIds = membershipRepository.findByTeamIdAndState(requireNotNull(room.teamId), ACTIVE).map { it.userId }.toSet()
+        val hiringIds = roomHrAssignmentRepository.findAllByRoomIdOrderByCreatedAtAscIdAsc(requireNotNull(room.id)).mapNotNull { it.user?.id }.toSet()
+        return roomParticipantRepository.findAllByRoomIdOrderByCreatedAtAsc(requireNotNull(room.id)).filter { participant ->
+            participant.role == INTERVIEWER && participant.user?.id in activeIds &&
+                participant.user?.id != room.ownerUser?.id && participant.user?.id !in hiringIds
+        }
+    }
+
+    private fun updateSelectedInterviewers(room: Room, requestedIds: List<String>) {
+        val ids = canonicalIds(requestedIds)
+        val roomId = requireNotNull(room.id)
+        val teamId = requireNotNull(room.teamId)
+        val existing = roomParticipantRepository.findAllByRoomIdOrderByCreatedAtAsc(roomId).associateBy { requireNotNull(it.user?.id) }
+        val hiringIds = roomHrAssignmentRepository.findAllByRoomIdOrderByCreatedAtAscIdAsc(roomId).mapNotNull { it.user?.id }.toSet()
+        val targets = ids.sorted().map { id ->
+            val membership = activeMemberTarget(teamId, id)
+            entityManager.refresh(membership)
+            if (membership.state != ACTIVE || id == room.ownerUser?.id || id in hiringIds ||
+                existing[id]?.role?.let { it != INTERVIEWER } == true
+            ) throw teamMemberNotFound()
+            userRepository.findById(id).orElse(null) ?: throw teamMemberNotFound()
+        }
+        // Only ordinary selected ACTIVE colleagues are reconciled. Their team access
+        // remains membership-derived; external, candidate, owner and guest grants stay intact.
+        val removable = selectedInterviewerRows(room).filter { it.user?.id !in ids }
+        roomParticipantRepository.deleteAll(removable)
+        roomParticipantRepository.saveAllAndFlush(targets.filter { it.id !in existing }.map { user ->
+            RoomParticipant(room = room, user = user, role = INTERVIEWER, createdAt = now())
+        })
+    }
 
     private fun activeMemberTarget(teamId: String, userId: String): TeamMembership =
         membershipRepository.lockByTeamIdAndUserId(teamId, userId)

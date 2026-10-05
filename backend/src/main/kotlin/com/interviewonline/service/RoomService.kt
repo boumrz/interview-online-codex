@@ -37,7 +37,6 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.time.Instant
-import java.time.format.DateTimeFormatter
 import java.util.UUID
 
 @Service
@@ -52,8 +51,9 @@ class RoomService(
     private val collaborationService: CollaborationService,
     private val roomProductMetricsProjector: RoomProductMetricsProjector,
     private val userTaskService: UserTaskService,
-    private val roomHrTrackingService: RoomHrTrackingService,
     private val objectMapper: ObjectMapper,
+    private val personalInterviewSummaryProjector: PersonalInterviewSummaryProjector,
+    private val roomHrTrackingService: RoomHrTrackingService,
 ) {
     /**
      * Creates a "quick" room from the landing page.
@@ -103,8 +103,8 @@ class RoomService(
 
     @Transactional
     fun createUserRoom(request: CreateRoomRequest, user: User): RoomResponse {
+        val hiringManagers = roomHrTrackingService.resolvePersonalCreationManagers(request.hiringManagerIds.orEmpty(), requireNotNull(user.id))
         val selectedTasks = userTaskService.resolveTasksForRoom(user, request.taskIds)
-        val hiringManagers = resolveHiringManagersForCreation(request.hiringManagerIds)
         val initialRoomLanguage = normalizeLanguage(selectedTasks.firstOrNull()?.language ?: "nodejs")
         val room = Room(
             title = request.title,
@@ -141,37 +141,14 @@ class RoomService(
         )
     }
 
-    private fun resolveHiringManagersForCreation(rawIds: List<String>?): List<User> {
-        val targetIds = rawIds.orEmpty()
-            .map(::canonicalHiringManagerIdOrNotFound)
-            .distinct()
-            .sorted()
-        return targetIds.map { targetId ->
-            userRepository.lockById(targetId)
-                ?.takeIf { it.isHr }
-                ?: throw hiringManagerNotFound()
-        }
-    }
-
-    private fun canonicalHiringManagerIdOrNotFound(rawId: String): String {
-        val normalized = rawId.trim()
-        val parsed = runCatching { UUID.fromString(normalized) }.getOrNull()
-        if (parsed == null || !parsed.toString().equals(normalized, ignoreCase = true)) {
-            throw hiringManagerNotFound()
-        }
-        return parsed.toString()
-    }
-
-    private fun hiringManagerNotFound(): ApiException = ApiException(
-        HttpStatus.NOT_FOUND,
-        "Указанный нанимающий не найден или недоступен",
-    )
-
     @Transactional
-    fun getByInviteCode(inviteCode: String, ownerToken: String?, interviewerToken: String?, user: User?): RoomResponse {
-        val room = roomRepository.findByInviteCode(inviteCode)
+    fun getByInviteCode(inviteCode: String, ownerToken: String?, interviewerToken: String?, user: User?, eventToken: String? = null): RoomResponse {
+        val room = (if (eventToken.isNullOrBlank()) roomRepository.findByInviteCode(inviteCode) else roomRepository.lockByInviteCode(inviteCode))
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
-        val access = roomAccessService.resolveAccess(room, user, ownerToken, interviewerToken)
+        // An authenticated account never borrows another realtime identity's proof.
+        // TEAM policy keeps its existing HTTP surface boundaries independently of SSE roles.
+        val guestRole = if (user == null) collaborationService.resolveRoleByEventToken(inviteCode, eventToken, anonymousOnly = true) else null
+        val access = roomAccessService.resolveAccess(room, user, ownerToken, interviewerToken, guestRole)
         val exposeLegacyTokens = room.teamId == null && room.ownerUser == null
         return toRoomResponse(
             room = room,
@@ -545,22 +522,7 @@ class RoomService(
             }
         }
 
-        return merged.values
-            .sortedByDescending { (room) -> room.createdAt }
-            .map { (room, accessRole) ->
-                RoomSummaryDto(
-                    id = room.id!!,
-                    title = room.title,
-                    inviteCode = room.inviteCode,
-                    language = room.language,
-                    accessRole = accessRole,
-                    createdAt = DateTimeFormatter.ISO_INSTANT.format(room.createdAt),
-                    ownerToken = if (accessRole == "owner" && room.ownerUser == null) room.ownerSessionToken else null,
-                    interviewerToken = null,
-                    verdict = room.verdict,
-                    status = room.status ?: "active",
-                )
-            }
+        return personalInterviewSummaryProjector.project(merged.values.sortedByDescending { (room) -> room.createdAt })
     }
 
     @Transactional
@@ -574,20 +536,12 @@ class RoomService(
         if (title.isEmpty()) {
             throw ApiException(HttpStatus.BAD_REQUEST, "Название комнаты не может быть пустым")
         }
-        room.title = title
+        if (room.title != title) {
+            room.title = title
+            room.interviewMetadataRevision += 1
+        }
         val saved = roomRepository.save(room)
-        return RoomSummaryDto(
-            id = saved.id!!,
-            title = saved.title,
-            inviteCode = saved.inviteCode,
-            language = saved.language,
-            accessRole = "owner",
-            createdAt = DateTimeFormatter.ISO_INSTANT.format(saved.createdAt),
-            ownerToken = null,
-            interviewerToken = null,
-            verdict = saved.verdict,
-            status = saved.status ?: "active",
-        )
+        return personalInterviewSummaryProjector.project(listOf(saved to "owner")).single()
     }
 
     @Transactional

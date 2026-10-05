@@ -4,6 +4,15 @@ import test from "node:test";
 import ts from "typescript";
 import { triggerBrowserDownload } from "../../src/features/room/personalNotesPdfExport.ts";
 
+async function workbookModule() {
+  const source = await readFile(new URL("../../src/services/hrExport.ts", import.meta.url), "utf8");
+  const rewritten = source
+    .replace('import { API_BASE_URL } from "../config/runtime";', 'const API_BASE_URL = "/api";')
+    .replace('from "./apiErrors"', `from ${JSON.stringify(new URL("../../src/services/apiErrors.ts", import.meta.url).href)}`);
+  const compiled = ts.transpileModule(rewritten, { compilerOptions: { target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext } }).outputText;
+  return import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
+}
+
 function browserGlobals(t: { after: (callback: () => void) => void }, values: Record<string, unknown>) {
   const previous = Object.fromEntries(Object.keys(values).map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
   for (const [key, value] of Object.entries(values)) Object.defineProperty(globalThis, key, { value, configurable: true });
@@ -36,9 +45,7 @@ test("room download keeps the Blob URL usable until the browser has begun consum
 });
 
 test("candidate workbook request uses the same team, track, vacancy and date selection as its list", async (t) => {
-  const source = await readFile(new URL("../../src/services/hrExport.ts", import.meta.url), "utf8");
-  const compiled = ts.transpileModule(source.replace('import { API_BASE_URL } from "../config/runtime";', 'const API_BASE_URL = "/api";'), { compilerOptions: { target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext } }).outputText;
-  const { downloadHrWorkbook } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
+  const { downloadHrWorkbook } = await workbookModule();
   const requested: string[] = [];
   const anchor = { href: "", download: "", click: () => {}, remove: () => {} };
   t.mock.method(globalThis, "fetch", async (url: string) => {
@@ -55,4 +62,26 @@ test("candidate workbook request uses the same team, track, vacancy and date sel
   assert.equal(requested.length, 1);
   const params = new URL(requested[0], "http://localhost").searchParams;
   assert.deepEqual(Object.fromEntries(params), { teamId: "team", trackId: "track", vacancyId: "vacancy", from: "2026-09-20", to: "2026-09-28" });
+});
+
+test("candidate workbook network failures have readable connection feedback", async (t) => {
+  const { downloadHrWorkbook } = await workbookModule();
+  t.mock.method(globalThis, "fetch", async () => { throw new TypeError("Failed to fetch"); });
+  await assert.rejects(downloadHrWorkbook({ token: "test-token" }), { message: "Ошибка сети. Проверьте подключение и повторите попытку." });
+});
+
+test("an interrupted workbook response shows a readable connection error", async (t) => {
+  const { downloadHrWorkbook } = await workbookModule();
+  t.mock.method(globalThis, "fetch", async () => new Response(new ReadableStream({
+    start(controller) { controller.error(new TypeError("Failed to fetch")); },
+  }), { headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" } }));
+  await assert.rejects(downloadHrWorkbook({ token: "test-token" }), { message: "Ошибка сети. Проверьте подключение и повторите попытку." });
+});
+
+test("candidate workbook cancellation remains an abort and server internals remain hidden", async (t) => {
+  const { downloadHrWorkbook } = await workbookModule();
+  t.mock.method(globalThis, "fetch", async () => { throw new DOMException("aborted", "AbortError"); });
+  await assert.rejects(downloadHrWorkbook({ token: "test-token" }), { name: "AbortError" });
+  t.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify({ error: "SQL connection failed" }), { status: 503, headers: { "Content-Type": "application/json" } }));
+  await assert.rejects(downloadHrWorkbook({ token: "test-token" }), { message: "Ошибка сервера. Повторите попытку позже.", status: 503 });
 });

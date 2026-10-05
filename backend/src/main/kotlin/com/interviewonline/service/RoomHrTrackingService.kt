@@ -50,7 +50,7 @@ class RoomHrTrackingService(
             user,
             ownerToken,
             interviewerToken,
-            collaborationService.resolveRoleByEventToken(inviteCode, eventToken),
+            currentAnonymousRole(inviteCode, eventToken, user),
         )
         return room.toMetadataDto()
     }
@@ -72,7 +72,7 @@ class RoomHrTrackingService(
             user,
             ownerToken,
             interviewerToken,
-            collaborationService.resolveRoleByEventToken(inviteCode, eventToken),
+            currentAnonymousRole(inviteCode, eventToken, user),
         )
         if (room.interviewMetadataRevision != request.revision) {
             throw ApiException(HttpStatus.CONFLICT, "Метаданные уже изменены другим менеджером")
@@ -98,7 +98,7 @@ class RoomHrTrackingService(
             user,
             ownerToken,
             interviewerToken,
-            collaborationService.resolveRoleByEventToken(inviteCode, eventToken),
+            currentAnonymousRole(inviteCode, eventToken, user),
         )
         return currentManagers(room)
     }
@@ -132,7 +132,7 @@ class RoomHrTrackingService(
             user,
             ownerToken,
             interviewerToken,
-            collaborationService.resolveRoleByEventToken(inviteCode, eventToken),
+            currentAnonymousRole(inviteCode, eventToken, user),
         )
         val targetId = canonicalUuidOrNotFound(rawTargetUserId)
         val target = userRepository.lockById(targetId)
@@ -155,6 +155,17 @@ class RoomHrTrackingService(
         targets.forEach { target -> assignHiringManager(room, target) }
     }
 
+    /** Called inside the authenticated PERSONAL creation transaction, before room writes. */
+    fun resolvePersonalCreationManagers(rawIds: List<String>, actorId: String): List<User> {
+        val targetIds = rawIds.map(::canonicalUuidOrNotFound).distinct()
+        if (targetIds.isEmpty()) return emptyList()
+        // Include the owner to avoid reciprocal creations taking user FK locks in opposite order.
+        val lockedUsers = (targetIds + actorId).distinct().sorted().mapNotNull { id ->
+            userRepository.lockById(id)?.also { entityManager.refresh(it) }
+        }.associateBy { requireNotNull(it.id) }
+        return targetIds.map { id -> lockedUsers[id]?.takeIf { it.isHr } ?: throw hrNotFound() }
+    }
+
     fun remove(
         inviteCode: String,
         rawTargetUserId: String,
@@ -168,7 +179,7 @@ class RoomHrTrackingService(
             if (room.archivedAt != null) throw ApiException(HttpStatus.GONE, "Комната архивирована")
             roomAccessService.requireManager(
                 room, user, ownerToken, interviewerToken,
-                collaborationService.resolveRoleByEventToken(inviteCode, eventToken),
+                currentAnonymousRole(inviteCode, eventToken, user),
             )
             val targetId = canonicalUuidOrNotFound(rawTargetUserId)
             if (room.ownerUser?.id == targetId) {
@@ -216,12 +227,11 @@ class RoomHrTrackingService(
         interviewerToken: String?,
         eventToken: String?,
     ): RoomPermissionMutation<HrTrackingDto> {
-        val stored = userRepository.findById(requireNotNull(user.id)).orElseThrow {
-            ApiException(HttpStatus.UNAUTHORIZED, "Пользователь не найден")
-        }
-        val room = roomRepository.lockByInviteCode(inviteCode)
-            ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+        val room = lockRoomForManagement(inviteCode)
         roomAccessService.requirePersonalScope(room)
+        val stored = userRepository.lockById(requireNotNull(user.id))
+            ?.also { entityManager.refresh(it) }
+            ?: throw ApiException(HttpStatus.UNAUTHORIZED, "Пользователь не найден")
         if (!stored.isHr) throw ApiException(HttpStatus.FORBIDDEN, "Требуется профиль нанимающего")
         if (room.archivedAt != null) throw ApiException(HttpStatus.GONE, "Комната архивирована")
         val access = roomAccessService.requireManager(
@@ -229,7 +239,7 @@ class RoomHrTrackingService(
             stored,
             ownerToken,
             interviewerToken,
-            collaborationService.resolveRoleByEventToken(inviteCode, eventToken),
+            null,
         )
         val roomId = requireNotNull(room.id)
         val grantsMembership = !access.isOwner &&
@@ -326,6 +336,9 @@ class RoomHrTrackingService(
     private fun requireRoom(inviteCode: String): Room = roomRepository.findByInviteCode(inviteCode)
         ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
 
+    private fun currentAnonymousRole(inviteCode: String, eventToken: String?, user: User?) =
+        if (user == null) collaborationService.resolveRoleByEventToken(inviteCode, eventToken, anonymousOnly = true) else null
+
     private fun normalizeText(value: String?, label: String): String? {
         val normalized = value?.trim()?.ifBlank { null } ?: return null
         if (normalized.codePointCount(0, normalized.length) > 200) {
@@ -349,7 +362,7 @@ class RoomHrTrackingService(
         throw hrNotFound()
     }
 
-    private fun hrNotFound() = ApiException(HttpStatus.NOT_FOUND, "Нанимающий с таким ID не найден")
+    private fun hrNotFound() = ApiException(HttpStatus.NOT_FOUND, "Нанимающий не найден или недоступен")
 
     private fun Room.toMetadataDto() = InterviewMetadataDto(
         candidateName = candidateName,

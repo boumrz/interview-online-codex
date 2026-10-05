@@ -390,7 +390,15 @@ data class TeamInterviewDetailsDto(
     val position: String?,
     val scheduledAt: String?,
     val revision: Long,
+    val trackId: String?,
+    val trackName: String?,
+    val vacancyId: String?,
+    val vacancyTitle: String?,
+    val ownerUserId: String?,
+    val interviewerIds: List<String>,
 )
+
+data class TeamInterviewContextSelection(val trackId: String?, val vacancyId: String?)
 
 data class TeamInterviewDetailsUpdateRequest(
     val title: String,
@@ -398,6 +406,8 @@ data class TeamInterviewDetailsUpdateRequest(
     val position: String?,
     val scheduledAt: String?,
     val revision: Long,
+    val context: TeamInterviewContextSelection? = null,
+    val interviewerIds: List<String>? = null,
 )
 
 @JsonIgnoreProperties(ignoreUnknown = false)

@@ -162,18 +162,18 @@ test('a current section in overflow uses the theme selected background', async (
   } finally { await browser.close(); }
 });
 
-test('the profile copy icon aligns directly with the personal ID', async () => {
+test('the profile copy icon aligns directly with the nickname', async () => {
   const { auth, browser, page } = await fixture();
   try {
     for (const width of [1366, 768]) for (const mode of ['light', 'dark']) {
       await settledHeader(page, '/profile', width, mode);
       const main = page.locator('main');
-      const id = main.getByText(auth.user.id, { exact: true });
-      await id.waitFor();
-      const copy = main.getByRole('button', { name: 'Скопировать личный ID', exact: true });
-      const [a, b] = await Promise.all([id.boundingBox(), copy.boundingBox()]);
-      assert.ok(Math.abs(a.y + a.height / 2 - b.y - b.height / 2) <= 2, `${width}/${mode}: copy shares ID axis`);
-      assert.ok(b.x - a.x - a.width >= 0 && b.x - a.x - a.width <= 16, 'copy is adjacent to ID');
+      const nickname = main.getByText(`@${auth.user.nickname}`, { exact: true });
+      await nickname.waitFor();
+      const copy = main.getByRole('button', { name: 'Скопировать никнейм', exact: true });
+      const [a, b] = await Promise.all([nickname.boundingBox(), copy.boundingBox()]);
+      assert.ok(Math.abs(a.y + a.height / 2 - b.y - b.height / 2) <= 2, `${width}/${mode}: copy shares nickname axis`);
+      assert.ok(b.x - a.x - a.width >= 0 && b.x - a.x - a.width <= 16, 'copy is adjacent to nickname');
     }
   } finally { await browser.close(); }
 });

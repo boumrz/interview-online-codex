@@ -446,24 +446,18 @@ test("workspace follows the unified light palette and focus treatment", async (t
   }
 });
 
-test("owner role badge uses established teal mapping", async () => {
+test("personal owner card keeps the team presentation without a redundant role badge", async () => {
   const { context, page } = await openAccount(fixtures.unified, "/workspace/personal/interviews");
   try {
     await page.waitForURL("**/workspace/personal/interviews");
     const main = page.getByRole("main", { name: "Личный раздел: Интервью", exact: true });
-    assert.equal(await main.count(), 1, "OWNER_BADGE_CANONICAL_LANDMARK_MISSING");
-
-    const ownerRow = main.getByRole("row", { name: new RegExp(fixtures.ownedRoom.title) });
-    assert.equal(await ownerRow.count(), 1, "OWNER_BADGE_ROW_NOT_UNIQUE");
-    const ownerBadgeLabel = ownerRow.getByText("Владелец", { exact: true });
-    assert.equal(await ownerBadgeLabel.count(), 1, "OWNER_ROLE_BADGE_NOT_UNIQUE");
-    assert.deepEqual(await ownerBadgeLabel.evaluate((element) => {
-      const style = getComputedStyle(element);
-      return { color: style.color, backgroundColor: style.backgroundColor };
-    }), {
-      color: "rgb(6, 116, 58)",
-      backgroundColor: "rgb(238, 254, 240)",
-    }, "OWNER_ROLE_BADGE_PALETTE_CHANGED");
+    assert.equal(await main.count(), 1, "OWNER_CARD_CANONICAL_LANDMARK_MISSING");
+    const ownerCard = main.getByRole("region", { name: `Личное интервью ${fixtures.ownedRoom.title}`, exact: true });
+    await ownerCard.waitFor();
+    assert.equal(await ownerCard.count(), 1, "OWNER_CARD_NOT_UNIQUE");
+    assert.equal(await ownerCard.getByText("Владелец", { exact: true }).count(), 0, "OWNER_CARD_MUST_MATCH_TEAM_PRESENTATION");
+    await ownerCard.getByText("Активно", { exact: true }).waitFor();
+    await ownerCard.getByRole("button", { name: `Редактировать интервью ${fixtures.ownedRoom.title}`, exact: true }).waitFor();
   } finally {
     await context.close();
   }
@@ -476,10 +470,11 @@ test("personal interview list combines owner and candidate memberships without c
     assert.equal(await page.getByRole("heading", { name: "Интервью", exact: true }).count(), 1);
     assert.equal(await page.getByRole("button", { name: /Создать интервью/ }).count(), 1);
     assert.equal(await page.getByText(fixtures.ownedRoom.title, { exact: true }).count(), 1);
-    const candidateRow = page.getByRole("row", { name: new RegExp(fixtures.candidateRoom.title) });
-    assert.equal(await candidateRow.count(), 1);
-    assert.match(await candidateRow.innerText(), /Кандидат/);
-    assert.equal(await candidateRow.getByRole("button", { name: /Удалить|Архивировать|Переименовать/ }).count(), 0);
+    const candidateCard = page.getByRole("region", { name: `Личное интервью ${fixtures.candidateRoom.title}`, exact: true });
+    await candidateCard.waitFor();
+    assert.equal(await candidateCard.count(), 1);
+    assert.match(await candidateCard.innerText(), /Кандидат/);
+    assert.equal(await candidateCard.getByRole("button", { name: /Удалить|Архивировать|Переименовать|Редактировать|Копировать/ }).count(), 0);
   } finally {
     await context.close();
   }
@@ -530,41 +525,39 @@ test("personal library keeps tasks and presets under Tasks and Sets tabs", async
 });
 
 test("personal interview actions and library rows keep stable alignment", { timeout: 45_000 }, async () => {
-  const actionColumnWidths = [];
+  const cardWidths = [];
 
   for (const [auth, isOwner] of [[fixtures.rolesOwner, true], [fixtures.interviewer, false]]) {
     const { context, page } = await openAccount(auth, "/workspace/personal/interviews");
     try {
-      const row = page.getByRole("row", { name: new RegExp(fixtures.roleRoom.title) });
-      await row.waitFor();
-      const cells = row.locator("td");
-      const titleCell = cells.first();
-      const actionCell = cells.last();
-      const rename = titleCell.getByRole("button", { name: `Переименовать интервью ${fixtures.roleRoom.title}`, exact: true });
-
-      assert.equal(await rename.count(), isOwner ? 1 : 0, "RENAME_CONTROL_MUST_BE_NEXT_TO_TITLE");
-      assert.doesNotMatch(await actionCell.innerText(), /Переименовать/, "RENAME_TEXT_MUST_NOT_TAKE_ACTION_COLUMN_SPACE");
-      assert.equal(await actionCell.getByRole("button", { name: "Открыть интервью", exact: true }).count(), 1);
-
-      const alignment = await actionCell.evaluate((cell) => {
-        const rect = cell.getBoundingClientRect();
-        const style = getComputedStyle(cell);
-        const buttons = [...cell.querySelectorAll("button")];
-        const finalButton = buttons.at(-1);
-        const finalButtonRect = finalButton?.getBoundingClientRect();
+      const card = page.getByRole("region", { name: `Личное интервью ${fixtures.roleRoom.title}`, exact: true });
+      await card.waitFor();
+      const edit = card.getByRole("button", { name: `Редактировать интервью ${fixtures.roleRoom.title}`, exact: true });
+      assert.equal(await edit.count(), 1, "MANAGER_HAS_ONE_UNIFIED_EDIT_ACTION");
+      assert.equal(await card.getByRole("button", { name: /Переименовать/ }).count(), 0, "RENAME_IS_PART_OF_UNIFIED_EDITOR");
+      assert.equal(await card.getByRole("button", { name: /Удалить интервью/ }).count(), isOwner ? 1 : 0, "DELETE_REMAINS_OWNER_ONLY");
+      assert.equal(await card.getByRole("link", { name: `Открыть комнату ${fixtures.roleRoom.title}`, exact: true }).count(), 1);
+      const titleBox = await card.getByText(fixtures.roleRoom.title, { exact: true }).boundingBox();
+      const editBox = await edit.boundingBox();
+      assert.ok(titleBox && editBox && editBox.y >= titleBox.y + titleBox.height, "EDIT_ACTION_BELONGS_TO_CARD_FOOTER");
+      const alignment = await card.locator(":scope > .ant-card-body").evaluate((body) => {
+        const rect = body.getBoundingClientRect();
+        const style = getComputedStyle(body);
+        const controls = [...body.querySelectorAll("button, a[href]")];
+        const finalRight = Math.max(...controls.map(control => control.getBoundingClientRect().right));
         return {
           width: rect.width,
-          rightInset: finalButtonRect ? rect.right - Number.parseFloat(style.paddingRight) - finalButtonRect.right : null,
+          rightInset: rect.right - Number.parseFloat(style.paddingRight) - finalRight,
         };
       });
-      actionColumnWidths.push(alignment.width);
-      assert.ok(alignment.rightInset !== null && Math.abs(alignment.rightInset) <= 2, "ACTION_GROUP_MUST_ALIGN_TO_RIGHT_CONTENT_EDGE");
+      cardWidths.push(alignment.width);
+      assert.ok(Math.abs(alignment.rightInset) <= 2, "CARD_ACTION_GROUP_MUST_ALIGN_TO_RIGHT_CONTENT_EDGE");
     } finally {
       await context.close();
     }
   }
 
-  assert.ok(Math.abs(actionColumnWidths[0] - actionColumnWidths[1]) <= 1, "ACTION_COLUMN_WIDTH_MUST_NOT_CHANGE_WITH_ROW_ROLE");
+  assert.ok(Math.abs(cardWidths[0] - cardWidths[1]) <= 1, "CARD_WIDTH_MUST_NOT_CHANGE_WITH_USER_ROLE");
 
   const { context, page } = await openAccount(fixtures.unified, "/workspace/personal/library");
   try {
@@ -720,7 +713,7 @@ test("library clipboard data transfers a task and set between accounts and into 
     await teamView.page.getByRole("tab", { name: "Наборы задач", exact: true }).click();
     await teamView.page.getByRole("button", { name: "Импортировать", exact: true }).click();
     const dialog = teamView.page.getByRole("dialog", { name: "Импортировать набор", exact: true });
-    await dialog.getByLabel("Данные набора или ID личного набора", { exact: true }).fill(setData);
+    await dialog.getByLabel("Данные набора", { exact: true }).fill(setData);
     await dialog.getByRole("button", { name: "Импортировать набор", exact: true }).click();
     await dialog.waitFor({ state: "hidden" });
     await teamView.page.getByRole("region", { name: `Командный набор ${name}`, exact: true }).waitFor();
@@ -1335,30 +1328,31 @@ test("remediation: workspace create surface renders the current account identity
   }
 });
 
-test("remediation: distinct owner interviewer and candidate rows expose permitted actions and open safely", async () => {
+test("remediation: distinct owner interviewer and candidate cards expose permitted actions and open safely", async () => {
   const roleCases = [
     [fixtures.rolesOwner, "Владелец", true],
     [fixtures.interviewer, "Интервьюер", false],
     [fixtures.candidate, "Кандидат", false],
   ];
 
-  for (const [auth, roleLabel, canManage] of roleCases) {
+  for (const [auth, roleLabel, isOwner] of roleCases) {
     const { context, page } = await openAccount(auth, "/workspace/personal/interviews");
     try {
-      const row = page.getByRole("row", { name: new RegExp(fixtures.roleRoom.title) });
-      assert.equal(await row.count(), 1, `ROLE_ROW_MISSING: ${roleLabel}`);
-      assert.equal(await row.getByText(roleLabel, { exact: true }).count(), 1, `ROLE_LABEL_MISSING: ${roleLabel}`);
+      const card = page.getByRole("region", { name: `Личное интервью ${fixtures.roleRoom.title}`, exact: true });
+      await card.waitFor();
+      assert.equal(await card.count(), 1, `ROLE_CARD_MISSING: ${roleLabel}`);
+      assert.equal(await card.getByText(roleLabel, { exact: true }).count(), isOwner ? 0 : 1, `ROLE_LABEL_POLICY_WRONG: ${roleLabel}`);
       assert.equal(
-        await row.getByRole("button", { name: new RegExp(`Переименовать интервью ${fixtures.roleRoom.title}`) }).count(),
-        canManage ? 1 : 0,
-        `ROLE_RENAME_POLICY_WRONG: ${roleLabel}`,
+        await card.getByRole("button", { name: `Редактировать интервью ${fixtures.roleRoom.title}`, exact: true }).count(),
+        roleLabel === "Кандидат" ? 0 : 1,
+        `ROLE_EDIT_POLICY_WRONG: ${roleLabel}`,
       );
       assert.equal(
-        await row.getByRole("button", { name: new RegExp(`Удалить ${fixtures.roleRoom.title}`) }).count(),
-        canManage ? 1 : 0,
+        await card.getByRole("button", { name: `Удалить интервью ${fixtures.roleRoom.title}`, exact: true }).count(),
+        isOwner ? 1 : 0,
         `ROLE_DELETE_POLICY_WRONG: ${roleLabel}`,
       );
-      const open = row.getByRole("button", { name: "Открыть интервью", exact: true });
+      const open = card.getByRole("link", { name: `Открыть комнату ${fixtures.roleRoom.title}`, exact: true });
       assert.equal(await open.count(), 1, `ROLE_PRIMARY_ACTION_MISSING: ${roleLabel}`);
       await open.click();
       assertRoute(page, `/room/${fixtures.roleRoom.inviteCode}`, `ROLE_ROOM_DID_NOT_OPEN: ${roleLabel}`);
@@ -1372,22 +1366,27 @@ test("remediation: distinct owner interviewer and candidate rows expose permitte
   const { context, page } = await openAccount(fixtures.rolesOwner, "/workspace/personal/interviews", {
     onPage: (openedPage) => openedPage.on("request", (browserRequest) => {
       const requestUrl = new URL(browserRequest.url());
-      if (browserRequest.method() === "PATCH" && requestUrl.pathname === `/api/me/rooms/${fixtures.roleRoom.id}`) {
+      if (browserRequest.method() === "PATCH" && requestUrl.pathname === `/api/me/rooms/${fixtures.roleRoom.id}/details`) {
         renameMutations += 1;
       }
     }),
   });
   try {
-    const row = page.getByRole("row", { name: new RegExp(fixtures.roleRoom.title) });
-    await row.getByRole("button", { name: `Переименовать интервью ${fixtures.roleRoom.title}`, exact: true }).click();
-    const renameDialog = page.getByRole("dialog", { name: "Переименовать интервью", exact: true });
+    const card = page.getByRole("region", { name: `Личное интервью ${fixtures.roleRoom.title}`, exact: true });
+    await card.getByRole("button", { name: `Редактировать интервью ${fixtures.roleRoom.title}`, exact: true }).click();
+    const renameDialog = page.getByRole("dialog", { name: "Редактировать интервью", exact: true });
     const input = renameDialog.getByLabel("Название интервью", { exact: true });
-    assert.equal(await input.count(), 1, "OWNER_RENAME_INPUT_MISSING");
+    await input.waitFor();
     await input.fill(renamedTitle);
     await renameDialog.getByRole("button", { name: "Сохранить", exact: true }).click();
+    await page.getByText("Интервью сохранено", { exact: true }).waitFor();
+    assert.equal(await renameDialog.isVisible(), true, "CONFIRMED_EDIT_PRESERVES_TEAM_EDITOR_BEHAVIOR");
+    await renameDialog.getByRole("button", { name: "Отмена", exact: true }).click();
     await renameDialog.waitFor({ state: "hidden" });
     assert.equal(renameMutations, 1, `OWNER_RENAME_MUTATION_COUNT: ${renameMutations}`);
-    assert.equal(await row.getByText(renamedTitle, { exact: true }).count(), 1, "OWNER_RENAME_RESULT_MISSING");
+    const renamedCard = page.getByRole("region", { name: `Личное интервью ${renamedTitle}`, exact: true });
+    await renamedCard.waitFor();
+    assert.equal(await renamedCard.getByText(renamedTitle, { exact: true }).count(), 1, "OWNER_RENAME_RESULT_MISSING");
     fixtures.roleRoom.title = renamedTitle;
   } finally {
     await context.close();
@@ -1402,22 +1401,22 @@ test("remediation-2: owner deletion requires confirmation, cancel is inert, conf
     }),
   });
   try {
-    const row = page.getByRole("row", { name: new RegExp(fixtures.deletableRoom.title) });
-    await row.getByRole("button", { name: `Удалить ${fixtures.deletableRoom.title}`, exact: true }).click();
+    const card = page.getByRole("region", { name: `Личное интервью ${fixtures.deletableRoom.title}`, exact: true });
+    await card.getByRole("button", { name: `Удалить интервью ${fixtures.deletableRoom.title}`, exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Удалить интервью", exact: true });
     await dialog.waitFor();
     assert.equal(await dialog.count(), 1, "DELETE_CONFIRMATION_MISSING");
     await dialog.getByRole("button", { name: "Отмена", exact: true }).click();
     assert.equal(deletes, 0, "DELETE_CANCEL_SENT_MUTATION");
-    assert.equal(await row.count(), 1, "DELETE_CANCEL_REMOVED_ROW");
+    assert.equal(await card.count(), 1, "DELETE_CANCEL_REMOVED_CARD");
 
-    await row.getByRole("button", { name: `Удалить ${fixtures.deletableRoom.title}`, exact: true }).click();
+    await card.getByRole("button", { name: `Удалить интервью ${fixtures.deletableRoom.title}`, exact: true }).click();
     const deleted = page.waitForResponse((response) => response.request().method() === "DELETE" && response.url().endsWith(`/api/me/rooms/${fixtures.deletableRoom.id}`));
     await dialog.getByRole("button", { name: "Удалить", exact: true }).click();
     await deleted;
-    await row.waitFor({ state: "hidden" });
+    await card.waitFor({ state: "hidden" });
     assert.equal(deletes, 1, `OWNER_DELETE_MUTATION_COUNT: ${deletes}`);
-    assert.equal(await row.count(), 0, "DELETED_ROW_REMAINS_VISIBLE");
+    assert.equal(await card.count(), 0, "DELETED_CARD_REMAINS_VISIBLE");
     const snapshot = await rawRoomSnapshot(fixtures.rolesOwner.token);
     assert.equal(snapshot.rooms.some((room) => room.id === fixtures.deletableRoom.id), false, "DELETED_ROOM_REMAINS_IN_API");
   } finally {
@@ -1627,30 +1626,31 @@ test("remediation-2 identity fence: delayed metadata retry from account A cannot
   }
 });
 
-test("remediation: unified interview rows expose context date status role and primary action", async () => {
+test("remediation: unified interview cards expose context date status tasks and primary action", async () => {
   const { context, page } = await openAccount(fixtures.rolesOwner, "/workspace/personal/interviews");
   try {
-    await page.waitForTimeout(200);
-    const row = page.getByRole("row", { name: new RegExp(fixtures.roleRoom.title) });
-    assert.equal(await row.count(), 1, "UNIFIED_ROW_MISSING");
-    const text = await row.innerText();
+    const card = page.getByRole("region", { name: `Личное интервью ${fixtures.roleRoom.title}`, exact: true });
+    await card.getByText(/Мария Ролевая/).waitFor();
+    assert.equal(await card.count(), 1, "UNIFIED_CARD_MISSING");
+    const text = await card.innerText();
     for (const [expected, marker] of [
       [fixtures.roleRoom.title, "title"],
       ["Мария Ролевая", "candidate"],
-      ["Без трека и вакансии", "personal context"],
+      ["Без трека", "track context"],
+      ["Без вакансии", "vacancy context"],
       ["12.09.2030", "date"],
       ["Активно", "lifecycle status"],
-      ["Владелец", "current-user role"],
-      ["Открыть интервью", "primary action"],
+      ["0 задач", "task count"],
+      ["Войти в комнату", "primary action"],
     ]) {
-      assert.match(text, new RegExp(expected), `UNIFIED_ROW_MISSING_${marker.toUpperCase().replaceAll(" ", "_")}`);
+      assert.match(text, new RegExp(expected), `UNIFIED_CARD_MISSING_${marker.toUpperCase().replaceAll(" ", "_")}`);
     }
   } finally {
     await context.close();
   }
 });
 
-test("remediation: standalone profile saves display name handles retry and always exposes stable personal ID", async () => {
+test("remediation: standalone profile saves display name handles retry and exposes a shareable nickname", async () => {
   const { context, page } = await openAccount(fixtures.profile, "/profile", {
     permissions: ["clipboard-read", "clipboard-write"],
   });
@@ -1670,11 +1670,12 @@ test("remediation: standalone profile saves display name handles retry and alway
     await page.getByRole("button", { name: "Изменить имя", exact: true }).click();
     assert.equal(await page.getByLabel("Имя для отображения", { exact: true }).inputValue(), savedName, "PROFILE_NAME_DID_NOT_SURVIVE_RELOAD");
     await page.getByRole("dialog", { name: "Изменить имя", exact: true }).getByRole("button", { name: "Отмена", exact: true }).click();
-    assert.equal(await page.getByText(fixtures.profile.user.id, { exact: true }).count(), 1, "PERSONAL_ID_MISSING_WITHOUT_HR_OPT_IN");
-    const copy = page.getByRole("button", { name: "Скопировать личный ID", exact: true });
-    assert.equal(await copy.count(), 1, "PERSONAL_ID_COPY_MISSING");
+    assert.equal(await page.getByText(fixtures.profile.user.id, { exact: true }).count(), 0, "PERSONAL_ID_MUST_STAY_INTERNAL");
+    assert.equal(await page.getByRole("main").getByText(`@${fixtures.profile.user.nickname}`, { exact: true }).count(), 1, "PROFILE_NICKNAME_MISSING");
+    const copy = page.getByRole("button", { name: "Скопировать никнейм", exact: true });
+    assert.equal(await copy.count(), 1, "PROFILE_NICKNAME_COPY_MISSING");
     await copy.click();
-    assert.equal(await page.evaluate(() => navigator.clipboard.readText()), fixtures.profile.user.id, "PERSONAL_ID_COPY_WRONG");
+    assert.equal(await page.evaluate(() => navigator.clipboard.readText()), fixtures.profile.user.nickname, "PROFILE_NICKNAME_COPY_WRONG");
     assert.equal(await page.getByRole("switch", { name: "Я участвую в найме", exact: true }).count(), 1, "HIRING_SETTINGS_ACCESS_LOST");
 
     const failedDraft = `Черновик профиля ${unique()}`;
@@ -1955,10 +1956,10 @@ test("remediation: metadata partial failure retries only PUT and then opens the 
     assert.equal(await page.getByRole("alert").filter({ hasText: "Интервью создано, но данные кандидата не сохранены" }).count(), 1, "PARTIAL_METADATA_ALERT_MISSING");
     assert.equal(await page.getByLabel("Название интервью", { exact: true }).inputValue(), title, "PARTIAL_METADATA_LOST_TITLE");
     assert.equal(await page.getByLabel("Имя кандидата", { exact: true }).inputValue(), candidateName, "PARTIAL_METADATA_LOST_CANDIDATE");
-    assert.equal(await page.getByText("После сохранения данных откроется созданная комната.", { exact: true }).count(), 1, "PARTIAL_METADATA_ROOM_DESTINATION_MISSING");
+    assert.equal(await page.getByText("После сохранения данных откроется созданная комната.", { exact: true }).count(), 0, "PARTIAL_METADATA_REDUNDANT_EXPLANATION_VISIBLE");
     const created = (await rawRoomSnapshot(fixtures.creator.token)).rooms.find((room) => room.title === title);
     assert.ok(created, "PARTIAL_METADATA_CREATED_ROOM_IDENTITY_MISSING_FROM_API");
-    assert.equal(await page.getByText(created.inviteCode, { exact: true }).count(), 1, "PARTIAL_METADATA_CREATED_ROOM_CODE_MISSING");
+    assert.equal(await page.getByText(created.inviteCode, { exact: true }).count(), 0, "PARTIAL_METADATA_INTERNAL_ROOM_CODE_VISIBLE");
     assert.equal(await page.getByRole("link", { name: "Открыть созданное интервью", exact: true }).getAttribute("href"), `/room/${created.inviteCode}`);
     const retry = page.getByRole("button", { name: "Повторить сохранение", exact: true });
     assert.equal(await retry.count(), 1, "PARTIAL_METADATA_RETRY_MISSING");

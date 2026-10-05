@@ -1,0 +1,14 @@
+.panel {
+  border-color: var(--app-border);
+  color: var(--app-text);
+  background: var(--app-surface);
+  box-shadow: 0 2px 8px rgba(17, 20, 24, 0.06);
+}
+
+.heading {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}

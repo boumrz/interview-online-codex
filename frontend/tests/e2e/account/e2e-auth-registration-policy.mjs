@@ -1,0 +1,60 @@
+import "../support/require-isolated-api.mjs";
+import assert from "node:assert/strict";
+import { chromium } from "playwright";
+
+const web = process.env.E2E_BASE_URL;
+const browser = await chromium.launch({ headless: true });
+try {
+  const page = await browser.newPage();
+  let registrationRequests = 0;
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/auth/register") registrationRequests++;
+  });
+  await page.goto(`${web}/login`, { waitUntil: "domcontentloaded" });
+  await page.getByText("Регистрация", { exact: true }).click();
+  const name = page.getByRole("textbox", { name: "Имя", exact: true });
+  await name.waitFor();
+  assert.equal(await name.getAttribute("placeholder"), null, "Name needs only its label");
+  assert.equal(await page.getByText("Имя для комнаты", { exact: true }).count(), 0);
+  const repeat = page.getByLabel("Повторите пароль", { exact: true });
+  assert.equal(await repeat.getAttribute("required"), "");
+  assert.equal(await repeat.getAttribute("autocomplete"), "new-password");
+  const nickname = `registration${Date.now()}`;
+  await page.getByLabel("Ник", { exact: true }).fill(nickname);
+  await name.fill("Иван");
+  await page.getByLabel("Пароль", { exact: true }).fill("secret123");
+  await repeat.fill("secret124");
+  await page.getByRole("button", { name: "Создать аккаунт", exact: true }).click();
+  await page.getByText("Пароли не совпадают", { exact: true }).waitFor();
+  assert.equal(registrationRequests, 0);
+  await repeat.fill("secret123");
+  await page.getByLabel("Ник", { exact: true }).fill("новыйник");
+  await page.getByRole("button", { name: "Создать аккаунт", exact: true }).click();
+  await page.getByText("Ник может содержать только латинские буквы, цифры и символы", { exact: true }).waitFor();
+  assert.equal(registrationRequests, 0);
+  await page.getByLabel("Ник", { exact: true }).fill(nickname);
+  await page.getByLabel("Пароль", { exact: true }).fill("пароль123");
+  await repeat.fill("пароль123");
+  await page.getByRole("button", { name: "Создать аккаунт", exact: true }).click();
+  await page.getByText("Пароль может содержать только латинские буквы, цифры и символы", { exact: true }).waitFor();
+  assert.equal(registrationRequests, 0);
+  await page.getByLabel("Пароль", { exact: true }).fill("secret123");
+  await repeat.fill("secret123");
+  await page.route("**/api/auth/register", (route) => route.abort("internetdisconnected"));
+  await page.getByRole("button", { name: "Создать аккаунт", exact: true }).click();
+  await page.getByRole("alert").filter({ hasText: "Ошибка сети. Проверьте подключение и повторите попытку." }).waitFor();
+  assert.equal(await page.getByText(/failed to fetch/i).count(), 0);
+  assert.equal(await page.getByLabel("Ник", { exact: true }).inputValue(), nickname);
+  assert.equal(await name.inputValue(), "Иван");
+  assert.equal(await page.getByLabel("Пароль", { exact: true }).inputValue(), "secret123");
+  assert.equal(await repeat.inputValue(), "secret123");
+  assert.equal(await repeat.isEditable(), true);
+  assert.equal(await page.getByRole("button", { name: "Создать аккаунт", exact: true }).isEnabled(), true);
+  await page.unroute("**/api/auth/register");
+  await page.getByRole("button", { name: "Создать аккаунт", exact: true }).click();
+  await page.waitForURL(/\/workspace\/personal\/interviews$/, { timeout: 15000 });
+  assert.equal(registrationRequests, 2);
+  console.log("AUTH_REGISTRATION_POLICY_OK: name, confirmation, ASCII, Unicode display name and network retry");
+} finally {
+  await browser.close();
+}

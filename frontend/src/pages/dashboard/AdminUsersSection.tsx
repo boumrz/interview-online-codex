@@ -38,7 +38,6 @@ export function AdminUsersSection({ users, currentUserId, roleDrafts, onRoleDraf
     <section className={styles.section}>
       <div className={styles.heading}>
         <Title order={1}>Админка пользователей</Title>
-        <Text c="var(--app-muted)">Управляйте доступом к приложению и ролями пользователей.</Text>
       </div>
       <div className={styles.toolbar}>
         <TextInput

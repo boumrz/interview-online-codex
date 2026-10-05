@@ -343,6 +343,7 @@ test("AC-03: unauthenticated invitation returns through login and does not leave
     await assertSecretOnlyInInvitationSessionStorage(page, token, "AC03_LOGIN_RELOAD_DROPPED_OR_EXPOSED_INVITATION_TOKEN");
     await page.getByLabel(/^Ник(?:\s*\*)?$/).fill(existing.user.nickname);
     await page.getByLabel(/^Пароль(?:\s*\*)?$/).fill(password);
+    await page.getByLabel(/^Повторите пароль(?:\s*\*)?$/).fill(password);
     await page.getByRole("button", { name: "Войти в кабинет", exact: true }).click();
     await page.waitForURL(`**/workspace/teams/${team.id}/interviews`);
     await assertSecretClearedWithoutDiagnostics(page, token, "AC03_LOGIN_ACCEPT_LEFT_INVITATION_SECRET_RESIDUE");
@@ -375,8 +376,9 @@ test("AC-03: unauthenticated invitation returns through registration and succeed
     await assertSecretOnlyInInvitationSessionStorage(page, token, "AC03_REGISTRATION_RELOAD_DROPPED_OR_EXPOSED_INVITATION_TOKEN");
     await page.getByRole("radio", { name: "Регистрация", exact: true }).check();
     await page.getByLabel("Ник", { exact: true }).fill(`ac03_new_${suffix}`.slice(0, 32));
-    await page.getByLabel("Имя для комнаты", { exact: true }).fill(`New colleague ${suffix}`);
+    await page.getByLabel("Имя", { exact: true }).fill(`New colleague ${suffix}`);
     await page.getByLabel("Пароль", { exact: true }).fill(password);
+    await page.getByLabel("Повторите пароль", { exact: true }).fill(password);
     await page.getByRole("button", { name: "Создать аккаунт", exact: true }).click();
     await page.waitForURL(`**/workspace/teams/${team.id}/interviews`);
     await assertSecretClearedWithoutDiagnostics(page, token, "AC03_REGISTER_ACCEPT_LEFT_INVITATION_SECRET_RESIDUE");
@@ -482,6 +484,7 @@ test("AC-03: accept preserves one scoped intent across network, 429, 503, 401 an
       await assertSecretOnlyInInvitationSessionStorage(page, token, "AC03_ACCEPT_401_LOGIN_RELOAD_DROPPED_OR_EXPOSED_TOKEN");
       await page.getByLabel(/^Ник(?:\s*\*)?$/).fill(recipient.user.nickname);
       await page.getByLabel(/^Пароль(?:\s*\*)?$/).fill(password);
+      await page.getByLabel(/^Повторите пароль(?:\s*\*)?$/).fill(password);
       await page.getByRole("button", { name: "Войти в кабинет", exact: true }).click();
 
       await page.getByRole("button", { name: "Повторить принятие", exact: true }).waitFor();

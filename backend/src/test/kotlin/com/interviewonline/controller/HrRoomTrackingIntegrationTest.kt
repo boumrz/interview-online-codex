@@ -1,8 +1,14 @@
 package com.interviewonline.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.interviewonline.support.Postgres16TestSupport
+import org.junit.jupiter.api.AfterAll
+import org.springframework.test.annotation.DirtiesContext
+import org.springframework.test.context.DynamicPropertyRegistry
+import org.springframework.test.context.DynamicPropertySource
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -37,6 +43,7 @@ import java.util.concurrent.TimeUnit
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class HrRoomTrackingIntegrationTest(
     @Autowired private val mockMvc: MockMvc,
     @Autowired private val objectMapper: ObjectMapper,
@@ -48,9 +55,16 @@ class HrRoomTrackingIntegrationTest(
     @Autowired private val assignmentRepository: RoomHrAssignmentRepository,
     @Autowired private val transactionManager: PlatformTransactionManager,
 ) {
+    companion object {
+        private val postgres = Postgres16TestSupport.create("hrroomtracking")
+        @JvmStatic @DynamicPropertySource fun properties(registry: DynamicPropertyRegistry) = postgres.register(registry)
+        @JvmStatic @AfterAll fun cleanup() = postgres.close()
+    }
+
     @Test
     fun `authenticated creation assigns canonical hiring managers once and reconnect restores interviewer authority`() {
         val (owner, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "creation-owner")
+        val teamId = HrHttpFixtures.createTeam(mockMvc, objectMapper, owner)
         val (firstManager, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "creation-first")
         val (secondManager, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "creation-second")
 
@@ -64,12 +78,12 @@ class HrRoomTrackingIntegrationTest(
             ))
         }.andExpect { status { isOk() } }
 
-        val created = mockMvc.post("/api/rooms") {
+        val created = mockMvc.post("/api/teams/$teamId/interviews") {
+            header("Idempotency-Key", UUID.randomUUID().toString())
             header("Authorization", "Bearer ${owner.token}")
             contentType = MediaType.APPLICATION_JSON
             content = objectMapper.writeValueAsString(mapOf(
                 "title" to "Комната с нанимающими",
-                "language" to "nodejs",
                 "taskIds" to emptyList<String>(),
                 "hiringManagerIds" to listOf(
                     " ${firstManager.id.uppercase()} ",
@@ -77,8 +91,8 @@ class HrRoomTrackingIntegrationTest(
                     secondManager.id,
                 ),
             ))
-        }.andExpect { status { isOk() } }.andReturn()
-        val roomNode = objectMapper.readTree(created.response.contentAsString)
+        }.andExpect { status { isCreated() } }.andReturn()
+        val roomNode = objectMapper.readTree(created.response.contentAsString).path("interview")
         val room = HrTestRoom(roomNode.path("id").asText(), roomNode.path("inviteCode").asText())
 
         for (manager in listOf(firstManager, secondManager)) {
@@ -109,12 +123,11 @@ class HrRoomTrackingIntegrationTest(
                 "title" to "Комната владельца-менеджера",
                 "language" to "nodejs",
                 "taskIds" to emptyList<String>(),
-                "hiringManagerIds" to listOf(managerOwner.id),
             ))
         }.andExpect { status { isOk() } }.andReturn()
         val ownerTargetRoomId = objectMapper.readTree(ownerTargetCreated.response.contentAsString).path("id").asText()
-        assertTrue(assignmentRepository.existsByRoomIdAndUserId(ownerTargetRoomId, managerOwner.id),
-            "an owner supplied as a target retains the established tracked-assignment semantics")
+        assertFalse(assignmentRepository.existsByRoomIdAndUserId(ownerTargetRoomId, managerOwner.id),
+            "PERSONAL owner needs no hiring assignment to view their own results")
         assertNull(participantRepository.findByRoomIdAndUserId(ownerTargetRoomId, managerOwner.id),
             "owner targeting must not manufacture a duplicate room participant")
     }
@@ -122,9 +135,10 @@ class HrRoomTrackingIntegrationTest(
     @Test
     fun `creation rejects unsafe hiring manager targets atomically and rechecks a capability change`() {
         val (owner, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "reject-owner")
+        val teamId = HrHttpFixtures.createTeam(mockMvc, objectMapper, owner)
         val (eligible, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "reject-eligible")
         val (ineligible, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "reject-ineligible")
-        val reusableTask = mockMvc.post("/api/me/tasks") {
+        val reusableTask = mockMvc.post("/api/teams/$teamId/tasks") {
             header("Authorization", "Bearer ${owner.token}")
             contentType = MediaType.APPLICATION_JSON
             content = """{
@@ -133,20 +147,20 @@ class HrRoomTrackingIntegrationTest(
                 "starterCode":"const solve = () => 42;",
                 "language":"nodejs"
             }"""
-        }.andExpect { status { isOk() } }.andReturn()
-        val reusableTaskId = objectMapper.readTree(reusableTask.response.contentAsString).path("id").asText()
+        }.andExpect { status { isCreated() } }.andReturn()
+        val reusableTaskId = objectMapper.readTree(reusableTask.response.contentAsString).path("task").path("id").asText()
         val baselineRooms = roomRepository.findByOwnerUserId(owner.id).size
         val baselineRoomTasks = roomTaskRepository.count()
         val baselineParticipants = participantRepository.count()
         val baselineAssignments = assignmentRepository.count()
         fun createWithTargets(targets: Any?): org.springframework.test.web.servlet.MvcResult =
-            mockMvc.post("/api/rooms") {
+            mockMvc.post("/api/teams/$teamId/interviews") {
+                header("Idempotency-Key", UUID.randomUUID().toString())
                 header("Authorization", "Bearer ${owner.token}")
                 contentType = MediaType.APPLICATION_JSON
                 content = objectMapper.writeValueAsString(mapOf(
                     "title" to "Отклоняемая комната",
-                    "language" to "nodejs",
-                    "taskIds" to listOf(reusableTaskId),
+                        "taskIds" to listOf(reusableTaskId),
                     "hiringManagerIds" to targets,
                 ))
             }.andReturn()
@@ -164,7 +178,7 @@ class HrRoomTrackingIntegrationTest(
         val unavailable = createWithTargets(listOf(ineligible.id))
         for (result in listOf(malformed, unknown, unavailable)) {
             assertEquals(404, result.response.status)
-            assertEquals("Указанный нанимающий не найден или недоступен", objectMapper
+            assertEquals("Сотрудник команды не найден", objectMapper
                 .readTree(result.response.contentAsString).path("error").asText())
             assertNoPartialWrite()
         }
@@ -178,15 +192,14 @@ class HrRoomTrackingIntegrationTest(
             content = objectMapper.writeValueAsString(mapOf(
                 "title" to "Публичная комната",
                 "ownerDisplayName" to "Гость",
-                "language" to "nodejs",
                 "hiringManagerIds" to listOf(eligible.id),
             ))
         }.andReturn().response.status)
-        assertEquals(401, mockMvc.post("/api/rooms") {
+        assertEquals(401, mockMvc.post("/api/teams/$teamId/interviews") {
+                header("Idempotency-Key", UUID.randomUUID().toString())
             contentType = MediaType.APPLICATION_JSON
             content = objectMapper.writeValueAsString(mapOf(
                 "title" to "Без авторизации",
-                "language" to "nodejs",
                 "hiringManagerIds" to listOf(eligible.id),
             ))
         }.andReturn().response.status)
@@ -207,9 +220,10 @@ class HrRoomTrackingIntegrationTest(
     @Test
     fun `positive preview cannot authorize creation after target opts out`() {
         val (owner, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "preview-race-owner")
+        val teamId = HrHttpFixtures.createTeam(mockMvc, objectMapper, owner)
         val (manager, managerRegistration) = HrHttpFixtures.register(mockMvc, objectMapper, true, "preview-race-mgr")
         val previewedName = managerRegistration.path("user").path("displayName").asText()
-        val task = mockMvc.post("/api/me/tasks") {
+        val task = mockMvc.post("/api/teams/$teamId/tasks") {
             header("Authorization", "Bearer ${owner.token}")
             contentType = MediaType.APPLICATION_JSON
             content = """{
@@ -218,8 +232,8 @@ class HrRoomTrackingIntegrationTest(
                 "starterCode":"const solve = () => 42;",
                 "language":"nodejs"
             }"""
-        }.andExpect { status { isOk() } }.andReturn()
-        val taskId = objectMapper.readTree(task.response.contentAsString).path("id").asText()
+        }.andExpect { status { isCreated() } }.andReturn()
+        val taskId = objectMapper.readTree(task.response.contentAsString).path("task").path("id").asText()
         val baselineRooms = roomRepository.count()
         val baselineTasks = roomTaskRepository.count()
         val baselineParticipants = participantRepository.count()
@@ -228,7 +242,7 @@ class HrRoomTrackingIntegrationTest(
         mockMvc.post("/api/me/hiring-manager-preview") {
             header("Authorization", "Bearer ${owner.token}")
             contentType = MediaType.APPLICATION_JSON
-            content = objectMapper.writeValueAsString(mapOf("invitationId" to manager.id))
+            content = objectMapper.writeValueAsString(mapOf("invitationId" to manager.id, "teamId" to teamId))
         }.andExpect {
             status { isOk() }
             jsonPath("$.normalizedId") { value(manager.id) }
@@ -240,19 +254,19 @@ class HrRoomTrackingIntegrationTest(
             contentType = MediaType.APPLICATION_JSON
             content = """{"displayName":"Отключён после preview","isHr":false}"""
         }.andExpect { status { isOk() } }
-        val create = mockMvc.post("/api/rooms") {
+        val create = mockMvc.post("/api/teams/$teamId/interviews") {
+                header("Idempotency-Key", UUID.randomUUID().toString())
             header("Authorization", "Bearer ${owner.token}")
             contentType = MediaType.APPLICATION_JSON
             content = objectMapper.writeValueAsString(mapOf(
                 "title" to "Комната после устаревшего preview",
-                "language" to "nodejs",
                 "taskIds" to listOf(taskId),
                 "hiringManagerIds" to listOf(manager.id),
             ))
         }.andReturn()
 
         assertEquals(404, create.response.status)
-        assertEquals("Указанный нанимающий не найден или недоступен", objectMapper
+        assertEquals("Сотрудник команды не найден", objectMapper
             .readTree(create.response.contentAsString).path("error").asText())
         assertEquals(baselineRooms, roomRepository.count())
         assertEquals(baselineTasks, roomTaskRepository.count())
@@ -273,7 +287,6 @@ class HrRoomTrackingIntegrationTest(
                 "title" to "Комната с поддельным создателем",
                 "language" to "nodejs",
                 "taskIds" to emptyList<String>(),
-                "hiringManagerIds" to listOf(hiringManager.id),
                 // These untrusted fields must neither select the room owner nor
                 // confer the capability carried by the forged account.
                 "ownerUserId" to forgedCreator.id,
@@ -297,13 +310,14 @@ class HrRoomTrackingIntegrationTest(
             jsonPath("$.isOwner") { value(true) }
             jsonPath("$.role") { value("owner") }
         }
-        assertEquals("interviewer", participantRepository.findByRoomIdAndUserId(roomId, hiringManager.id)?.role)
-        assertTrue(assignmentRepository.existsByRoomIdAndUserId(roomId, hiringManager.id))
+        assertNull(participantRepository.findByRoomIdAndUserId(roomId, hiringManager.id))
+        assertFalse(assignmentRepository.existsByRoomIdAndUserId(roomId, hiringManager.id))
     }
 
     @Test
     fun `concurrent opt-out and creation leave either a durable assignment or no room`() {
         val (owner, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "race-owner")
+        val teamId = HrHttpFixtures.createTeam(mockMvc, objectMapper, owner)
         val (manager, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "race-manager")
         val ready = CountDownLatch(2)
         val start = CountDownLatch(1)
@@ -312,13 +326,13 @@ class HrRoomTrackingIntegrationTest(
             val create = executor.submit<org.springframework.test.web.servlet.MvcResult> {
                 ready.countDown()
                 check(start.await(5, TimeUnit.SECONDS))
-                mockMvc.post("/api/rooms") {
+                mockMvc.post("/api/teams/$teamId/interviews") {
+                header("Idempotency-Key", UUID.randomUUID().toString())
                     header("Authorization", "Bearer ${owner.token}")
                     contentType = MediaType.APPLICATION_JSON
                     content = objectMapper.writeValueAsString(mapOf(
                         "title" to "Комната гонки opt-out",
-                        "language" to "nodejs",
-                        "taskIds" to emptyList<String>(),
+                                "taskIds" to emptyList<String>(),
                         "hiringManagerIds" to listOf(manager.id),
                     ))
                 }.andReturn()
@@ -340,8 +354,8 @@ class HrRoomTrackingIntegrationTest(
             assertEquals(200, disableResult.response.status)
             assertEquals(false, userRepository.findById(manager.id).orElseThrow().isHr)
             when (createResult.response.status) {
-                200 -> {
-                    val roomId = objectMapper.readTree(createResult.response.contentAsString).path("id").asText()
+                201 -> {
+                    val roomId = objectMapper.readTree(createResult.response.contentAsString).path("interview").path("id").asText()
                     assertEquals("interviewer", participantRepository.findByRoomIdAndUserId(roomId, manager.id)?.role)
                     assertTrue(assignmentRepository.existsByRoomIdAndUserId(roomId, manager.id))
                 }
@@ -395,7 +409,7 @@ class HrRoomTrackingIntegrationTest(
             assertEquals(assignmentCount, assignmentRepository.count())
         }
 
-        for (targets in listOf(null, emptyList<String>(), listOf(manager.id))) {
+        for (targets in listOf(null, listOf(manager.id))) {
             val result = mockMvc.post("/api/public/rooms") {
                 contentType = MediaType.APPLICATION_JSON
                 content = objectMapper.writeValueAsString(mapOf(
@@ -411,13 +425,17 @@ class HrRoomTrackingIntegrationTest(
             assertEquals(participantCount, participantRepository.count())
             assertEquals(assignmentCount, assignmentRepository.count())
         }
+        assertEquals(200, mockMvc.post("/api/public/rooms") {
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(mapOf("title" to "No hiring", "hiringManagerIds" to emptyList<String>()))
+        }.andReturn().response.status)
     }
 
     @Test
     fun `disabled assigned hiring manager can be removed into a reconnect-safe candidate tombstone`() {
         val (owner, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "rm-off-owner")
         val (manager, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "rm-off-manager")
-        val room = HrHttpFixtures.createRoom(mockMvc, objectMapper, owner)
+        val room = HrHttpFixtures.createTeamRoom(mockMvc, objectMapper, owner)
         require(HrHttpFixtures.inviteHr(mockMvc, owner, room, manager).response.status == 200)
 
         mockMvc.patch("/api/me/profile") {
@@ -441,7 +459,7 @@ class HrRoomTrackingIntegrationTest(
     fun `rejected nested permission publication closes only the affected account connections`() {
         val (owner, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "queue-owner")
         val (hr, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "queue-hr")
-        val room = HrHttpFixtures.createRoom(mockMvc, objectMapper, owner)
+        val room = HrHttpFixtures.createTeamRoom(mockMvc, objectMapper, owner)
         require(HrHttpFixtures.inviteHr(mockMvc, owner, room, hr).response.status == 200)
         val ownerSession = "owner-${UUID.randomUUID()}"
         val hrSession = "hr-${UUID.randomUUID()}"
@@ -485,7 +503,7 @@ class HrRoomTrackingIntegrationTest(
     fun `delayed invitation callback cannot restore a role revoked by a later commit`() {
         val (owner, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "order-owner")
         val (hr, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "order-hr")
-        val room = HrHttpFixtures.createRoom(mockMvc, objectMapper, owner)
+        val room = HrHttpFixtures.createTeamRoom(mockMvc, objectMapper, owner)
         require(HrHttpFixtures.inviteHr(mockMvc, owner, room, hr).response.status == 200)
         val session = "hr-${UUID.randomUUID()}"
         joinAccount(room, hr, session)
@@ -524,7 +542,7 @@ class HrRoomTrackingIntegrationTest(
     fun `active permission changes publish only after successful commit`(channel: String) {
         val (owner, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "commit-owner")
         val (hr, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "commit-hr")
-        val room = HrHttpFixtures.createRoom(mockMvc, objectMapper, owner)
+        val room = HrHttpFixtures.createTeamRoom(mockMvc, objectMapper, owner)
         require(HrHttpFixtures.inviteHr(mockMvc, owner, room, hr).response.status == 200)
         val ownerSession = "owner-${UUID.randomUUID()}"
         val hrSession = "hr-${UUID.randomUUID()}"
@@ -591,7 +609,7 @@ class HrRoomTrackingIntegrationTest(
     fun `committed HR demotion overrides a stale active session before permission callback`(operation: String) {
         val (owner, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "stale-owner")
         val (hr, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "stale-hr")
-        val room = HrHttpFixtures.createRoom(mockMvc, objectMapper, owner)
+        val room = HrHttpFixtures.createTeamRoom(mockMvc, objectMapper, owner)
         require(HrHttpFixtures.inviteHr(mockMvc, owner, room, hr).response.status == 200)
         val hrSession = "hr-${UUID.randomUUID()}"
         joinAccount(room, hr, hrSession)
@@ -637,7 +655,7 @@ class HrRoomTrackingIntegrationTest(
     fun `manager invitation is idempotent and grants durable interviewer authority to an HR account`() {
         val (owner, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "owner")
         val (hr, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "manager")
-        val room = HrHttpFixtures.createRoom(mockMvc, objectMapper, owner)
+        val room = HrHttpFixtures.createTeamRoom(mockMvc, objectMapper, owner)
 
         repeat(2) {
             mockMvc.put("/api/rooms/${room.inviteCode}/hr-managers/${hr.id}") {
@@ -664,7 +682,7 @@ class HrRoomTrackingIntegrationTest(
     fun `concurrent invitations deduplicate the durable manager assignment`() {
         val (owner, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "concurrent-owner")
         val (hr, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "concurrent-manager")
-        val room = HrHttpFixtures.createRoom(mockMvc, objectMapper, owner)
+        val room = HrHttpFixtures.createTeamRoom(mockMvc, objectMapper, owner)
         val ready = CountDownLatch(6)
         val start = CountDownLatch(1)
         val executor = Executors.newFixedThreadPool(6)
@@ -696,7 +714,7 @@ class HrRoomTrackingIntegrationTest(
     fun `demotion removes cabinet authority but keeps candidate tombstone and reinvitation restores it once`() {
         val (owner, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "reinvite-owner")
         val (hr, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "reinvite-manager")
-        val room = HrHttpFixtures.createRoom(mockMvc, objectMapper, owner)
+        val room = HrHttpFixtures.createTeamRoom(mockMvc, objectMapper, owner)
         require(HrHttpFixtures.inviteHr(mockMvc, owner, room, hr).response.status == 200)
 
         mockMvc.post("/api/rooms/${room.inviteCode}/participants/${hr.id}/role") {
@@ -734,7 +752,7 @@ class HrRoomTrackingIntegrationTest(
         val (owner, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "target-owner")
         val (ordinary, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "target-ordinary")
         val (candidateHr, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "target-candidate")
-        val room = HrHttpFixtures.createRoom(mockMvc, objectMapper, owner)
+        val room = HrHttpFixtures.createTeamRoom(mockMvc, objectMapper, owner)
 
         val missingStatus = mockMvc.put("/api/rooms/${room.inviteCode}/hr-managers/00000000-0000-0000-0000-000000000000") {
             header("Authorization", "Bearer ${owner.token}")
@@ -753,7 +771,7 @@ class HrRoomTrackingIntegrationTest(
     }
 
     @Test
-    fun `authenticated manager tracking is idempotent and candidate tracking is forbidden`() {
+    fun `personal manager tracking is idempotent while candidate cannot create assignment`() {
         val (owner, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "tracking-owner")
         val (candidate, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "tracking-candidate")
         val room = HrHttpFixtures.createRoom(mockMvc, objectMapper, owner)
@@ -764,8 +782,6 @@ class HrRoomTrackingIntegrationTest(
                 contentType = MediaType.APPLICATION_JSON
             }.andExpect {
                 status { isOk() }
-                jsonPath("$.roomId") { value(room.id) }
-                jsonPath("$.tracked") { value(true) }
             }
         }
 
@@ -774,10 +790,12 @@ class HrRoomTrackingIntegrationTest(
         }.andExpect {
             status { isForbidden() }
         }
+        assertEquals(listOf(owner.id), assignmentRepository.findAllByRoomIdOrderByCreatedAtAscIdAsc(room.id).map { it.user?.id })
+        assertTrue(participantRepository.findAllByRoomIdOrderByCreatedAtAsc(room.id).isEmpty())
     }
 
     @Test
-    fun `promoted guest manager can invite an HR account with its event token`() {
+    fun `promoted personal guest keeps its role and can explicitly invite a hiring account`() {
         val (owner, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "guest-owner")
         val (hr, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "guest-target")
         val room = HrHttpFixtures.createRoom(mockMvc, objectMapper, owner)
@@ -815,15 +833,17 @@ class HrRoomTrackingIntegrationTest(
             header("X-Room-Event-Token", eventTokenFor(room.inviteCode, guestSession))
         }.andExpect {
             status { isOk() }
-            jsonPath("$[0].userId") { value(hr.id) }
         }
+        assertEquals(RoomRole.INTERVIEWER, activeRoleFor(room.inviteCode, guestSession))
+        assertTrue(assignmentRepository.existsByRoomIdAndUserId(room.id, hr.id))
+        assertEquals("interviewer", participantRepository.findByRoomIdAndUserId(room.id, hr.id)?.role)
     }
 
     @Test
     fun `realtime revocation also persists the durable HR candidate tombstone`() {
         val (owner, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "rt-owner")
         val (hr, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "rt-manager")
-        val room = HrHttpFixtures.createRoom(mockMvc, objectMapper, owner)
+        val room = HrHttpFixtures.createTeamRoom(mockMvc, objectMapper, owner)
         require(HrHttpFixtures.inviteHr(mockMvc, owner, room, hr).response.status == 200)
         val ownerSession = "owner-${UUID.randomUUID()}"
         collaborationService.joinRoomSse(

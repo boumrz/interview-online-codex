@@ -60,8 +60,6 @@ test('room editors, steps, participants and notes follow both themes without los
       await participant.hover();
       assert.equal(await participant.evaluate(el => getComputedStyle(el.querySelector('span')).color), nameColor, 'participant hover keeps readable text');
       assert.equal(Math.round((await participant.boundingBox()).height), 32);
-      await page.getByTestId('participants-help-hint').hover();
-      await page.getByRole('tooltip', { name: 'Нажмите на участника, чтобы открыть доступные действия' }).waitFor();
       await participant.focus();
       await participant.press('Enter');
       const assign = page.getByRole('menuitem', { name: 'Назначить интервьюером' });

@@ -71,7 +71,7 @@ class HiringManagerPreviewController(
     fun handleUnreadableBody(): ResponseEntity<Map<String, String>> = ResponseEntity.badRequest()
         .headers(privacyHeaders())
         .contentType(jsonUtf8)
-        .body(mapOf("error" to "Некорректный идентификатор нанимающего"))
+        .body(mapOf("error" to "Некорректный ник нанимающего"))
 
     private fun genericError(status: HttpStatus, message: String): ResponseEntity<Any> = ResponseEntity.status(status)
         .headers(privacyHeaders())

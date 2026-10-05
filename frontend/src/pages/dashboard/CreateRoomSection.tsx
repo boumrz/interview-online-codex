@@ -1,19 +1,19 @@
-import React, { useRef, useState, type FormEvent } from "react";
+import React, { useState, type FormEvent } from "react";
 import {
   Button,
   Group,
+  Stack,
+  Text,
   MultiSelect,
   Modal,
   Select,
   SimpleGrid,
-  Stack,
-  Text,
   TextInput,
-  ThemeIcon,
-  Title,
   Card,
 } from "components/antd-compat";
 import { IconPlus } from "components/antd-icons";
+import { HiringManagerPicker } from "../../features/hr/HiringManagerPicker";
+import type { HiringManagerPreviewResponse } from "../../types";
 import {
   useListPresetsQuery,
   useLazyGetPresetQuery,
@@ -37,16 +37,6 @@ export interface RoomTaskPreview {
   language: string;
 }
 
-export type HiringManagerSelection = {
-  normalizedId: string;
-  displayName: string;
-};
-
-export type HiringManagerPickerFeedback = {
-  kind: "idle" | "checking" | "error";
-  message: string;
-};
-
 interface CreateRoomSectionProps {
   title: string;
   onTitleChange: (value: string) => void;
@@ -54,12 +44,10 @@ interface CreateRoomSectionProps {
   selectedTasks: RoomTaskPreview[];
   selectedTaskIds: string[];
   onSelectedTaskIdsChange: (ids: string[]) => void;
-  hiringManagerDraftId: string;
-  onHiringManagerDraftIdChange: (value: string) => void;
-  onAddHiringManager: () => void;
-  hiringManagerSelections: HiringManagerSelection[];
-  hiringManagerPickerFeedback: HiringManagerPickerFeedback;
-  onRemoveHiringManager: (normalizedId: string) => void;
+  hiringManagers: HiringManagerPreviewResponse[];
+  onHiringManagersChange: (people: HiringManagerPreviewResponse[]) => void;
+  onHiringLookupPendingChange: (pending: boolean) => void;
+  hiringLookupPending: boolean;
   isSubmitting: boolean;
   onSubmit: (event: FormEvent) => void;
   onError?: (message: string) => void;
@@ -81,18 +69,15 @@ export function CreateRoomSection({
   selectedTasks,
   selectedTaskIds,
   onSelectedTaskIdsChange,
-  hiringManagerDraftId,
-  onHiringManagerDraftIdChange,
-  onAddHiringManager,
-  hiringManagerSelections,
-  hiringManagerPickerFeedback,
-  onRemoveHiringManager,
+  hiringManagers,
+  onHiringManagersChange,
+  onHiringLookupPendingChange,
+  hiringLookupPending,
   isSubmitting,
   onSubmit,
   onError,
 }: CreateRoomSectionProps) {
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
-  const hiringManagerInputRef = useRef<HTMLInputElement>(null);
 
   // RTK Query deduplicates this subscription against PresetsSection when both
   // are mounted — only one /me/presets request is issued.
@@ -134,7 +119,7 @@ export function CreateRoomSection({
         data-testid="create-room-card"
       >
         <Button onClick={() => setOpened(true)} leftSection={<IconPlus size={15} />}>Создать комнату</Button>
-        <Modal opened={opened} onClose={() => { if (!isSubmitting) setOpened(false); }} title="Создать комнату" centered size="lg" authoring>
+        <Modal opened={opened} destroyOnHidden onClose={() => { if (!isSubmitting) setOpened(false); }} title="Создать комнату" centered size="lg" authoring>
         <form onSubmit={onSubmit} className="app-authoring-form">
           <div className="app-authoring-fields">
             <section className="app-authoring-section">
@@ -145,6 +130,26 @@ export function CreateRoomSection({
               styles={darkFieldStyles}
               required
             />
+            </section>
+            <section className="app-authoring-section" aria-label="Нанимающие">
+              <Stack gap="sm">
+                <HiringManagerPicker
+                  showSuccess={false}
+                  selectedIds={hiringManagers.map(person => person.normalizedId)}
+                  disabled={isSubmitting}
+                  onPendingChange={onHiringLookupPendingChange}
+                  onSelect={person => {
+                    if (!hiringManagers.some(selected => selected.normalizedId === person.normalizedId)) onHiringManagersChange([...hiringManagers, person]);
+                    return true;
+                  }}
+                />
+                {hiringManagers.map(person => <Group key={person.normalizedId} justify="space-between" gap="sm">
+                  <Text>{person.displayName}</Text>
+                  <Button type="button" variant="subtle" color="red" size="xs" disabled={isSubmitting}
+                    aria-label={`Удалить нанимающего ${person.displayName}`}
+                    onClick={() => onHiringManagersChange(hiringManagers.filter(selected => selected.normalizedId !== person.normalizedId))}>Убрать</Button>
+                </Group>)}
+              </Stack>
             </section>
             <section className="app-authoring-section">
             {presetOptions.length > 0 && (
@@ -171,74 +176,10 @@ export function CreateRoomSection({
               labelProps={{ onClick: (e: React.MouseEvent) => e.preventDefault() }}
             />
             </section>
-            <section className="app-authoring-section">
-              <Group align="flex-end" gap="sm" wrap="nowrap">
-                <TextInput
-                  ref={hiringManagerInputRef}
-                  label="ID нанимающего"
-
-                  placeholder="Вставьте личный ID нанимающего"
-                  value={hiringManagerDraftId}
-                  onChange={(event: React.ChangeEvent<HTMLInputElement>) => onHiringManagerDraftIdChange(event.currentTarget.value)}
-                  onKeyDown={(event: React.KeyboardEvent<HTMLElement>) => {
-                    if (event.key !== "Enter") return;
-                    event.preventDefault();
-                    onAddHiringManager();
-                  }}
-                  disabled={isSubmitting || hiringManagerPickerFeedback.kind === "checking"}
-                  styles={darkFieldStyles}
-                  style={{ flex: 1 }}
-                />
-                <Button
-                  type="button"
-                  onClick={onAddHiringManager}
-                  loading={hiringManagerPickerFeedback.kind === "checking"}
-                  disabled={isSubmitting || hiringManagerPickerFeedback.kind === "checking"}
-                >
-                  Добавить
-                </Button>
-              </Group>
-              {hiringManagerPickerFeedback.kind !== "idle" ? (
-                <Text
-                  size="sm"
-                  c={hiringManagerPickerFeedback.kind === "error" ? "red.4" : "gray.3"}
-                  role={hiringManagerPickerFeedback.kind === "error" ? "alert" : "status"}
-                  aria-live={hiringManagerPickerFeedback.kind === "error" ? "assertive" : "polite"}
-                >
-                  {hiringManagerPickerFeedback.message}
-                </Text>
-              ) : null}
-              {hiringManagerSelections.length > 0 ? (
-                <Stack gap={6} data-testid="hiring-manager-selection-list">
-                  <Title order={5}>Добавленные нанимающие</Title>
-                  <Stack gap={4} role="list">
-                    {hiringManagerSelections.map((selection) => (
-                      <Group key={selection.normalizedId} justify="space-between" wrap="nowrap" role="listitem">
-                        <Text size="sm">{selection.displayName}</Text>
-                        <Button
-                          type="button"
-                          variant="subtle"
-                          color="red"
-                          size="xs"
-                          aria-label={`Удалить нанимающего ${selection.displayName}`}
-                          disabled={isSubmitting}
-                          onClick={() => {
-                            onRemoveHiringManager(selection.normalizedId);
-                            requestAnimationFrame(() => hiringManagerInputRef.current?.focus());
-                          }}
-                        >
-                          Удалить
-                        </Button>
-                      </Group>
-                    ))}
-                  </Stack>
-                </Stack>
-              ) : null}
-            </section>
           </div>
             <Group className="app-form-actions" justify="flex-end">
             <Button type="button" variant="subtle" disabled={isSubmitting} onClick={() => setOpened(false)}>Отмена</Button>
-            <Button type="submit" loading={isSubmitting} disabled={isSubmitting}>
+            <Button type="submit" loading={isSubmitting} disabled={isSubmitting || hiringLookupPending}>
               Создать и открыть
             </Button>
             </Group>

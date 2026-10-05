@@ -7,11 +7,15 @@ import { setVisitParams, trackPageView } from "../services/analytics";
 import { LegacyDomainNotice } from "../components/LegacyDomainNotice";
 import { normalizeLanguageKey } from "../pages/dashboard/dashboardHelpers";
 import { captureTeamInvitationFragment } from "../features/workspace/teamInvitationToken";
+import { SOCIAL_AUTH_ENABLED } from "../config/runtime";
 
 captureTeamInvitationFragment();
 
 const LandingPage = lazy(() => import("../pages/LandingPage").then((module) => ({ default: module.LandingPage })));
 const LoginPage = lazy(() => import("../pages/LoginPage").then((module) => ({ default: module.LoginPage })));
+const SocialLoginPage = SOCIAL_AUTH_ENABLED
+  ? lazy(() => import("../pages/SocialLoginPage").then((module) => ({ default: module.SocialLoginPage })))
+  : null;
 const DashboardPage = lazy(() => import("../pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
 const AdminPage = lazy(() => import("../pages/AdminPage").then((module) => ({ default: module.AdminPage })));
 const PersonalWorkspacePage = lazy(() => import("../pages/workspace/PersonalWorkspacePage").then((module) => ({ default: module.PersonalWorkspacePage })));
@@ -146,6 +150,7 @@ export function App() {
             <Routes>
               <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/login/social" element={SocialLoginPage ? <SocialLoginPage /> : <Navigate to="/login" replace />} />
               <Route path="/dashboard" element={<LegacyPersonalRedirect />} />
               <Route path="/dashboard/rooms" element={<LegacyPersonalRedirect />} />
               <Route path="/dashboard/manage" element={<LegacyPersonalRedirect />} />

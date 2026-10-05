@@ -6,6 +6,7 @@ import com.interviewonline.model.User
 import com.interviewonline.repository.TeamMembershipRepository
 import com.interviewonline.repository.TeamRepository
 import com.interviewonline.repository.UserRepository
+import com.interviewonline.repository.RoomRepository
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -16,23 +17,58 @@ class HiringManagerPreviewService(
     private val userRepository: UserRepository,
     private val membershipRepository: TeamMembershipRepository,
     private val teamRepository: TeamRepository,
+    private val roomRepository: RoomRepository,
+    private val roomAccessService: RoomAccessService,
+    private val collaborationService: CollaborationService,
 ) {
     @Transactional(readOnly = true)
     fun resolve(request: ResolveHiringManagerPreviewRequest, actor: User): HiringManagerPreviewResponse {
-        val normalizedId = canonicalInvitationId(request.invitationId)
-        request.teamId?.let { teamId ->
-            requireTeamScope(actor, teamId)
-            val membership = membershipRepository.findByTeamIdAndUserId(teamId, normalizedId)
+        request.teamId?.let { requireTeamScope(actor, it) }
+        return resolveTarget(request, request.teamId)
+    }
+
+    @Transactional(readOnly = true)
+    fun resolveInRoom(
+        inviteCode: String,
+        request: ResolveHiringManagerPreviewRequest,
+        actor: User?,
+        ownerToken: String?,
+        interviewerToken: String?,
+        eventToken: String?,
+    ): HiringManagerPreviewResponse {
+        if (request.teamId != null) throw ApiException(HttpStatus.BAD_REQUEST, "Команда определяется по интервью")
+        val room = roomRepository.findByInviteCode(inviteCode)
+            ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+        if (room.archivedAt != null) throw ApiException(HttpStatus.GONE, "Комната архивирована")
+        roomAccessService.requireManager(room, actor, ownerToken, interviewerToken,
+            if (actor == null) collaborationService.resolveRoleByEventToken(inviteCode, eventToken, anonymousOnly = true) else null)
+        return resolveTarget(request, room.teamId)
+    }
+
+    private fun resolveTarget(request: ResolveHiringManagerPreviewRequest, teamId: String?): HiringManagerPreviewResponse {
+        val user = if (request.nickname != null) {
+            userRepository.findByNickname(canonicalNickname(request.nickname))
+        } else {
+            userRepository.findById(canonicalInvitationId(request.invitationId.orEmpty())).orElse(null)
+        }?.takeIf { it.isHr } ?: throw unavailable()
+        val normalizedId = requireNotNull(user.id)
+        teamId?.let {
+            val membership = membershipRepository.findByTeamIdAndUserId(it, normalizedId)
             if (membership != null && membership.state !in setOf("LEFT", "REMOVED")) throw unavailable()
         }
-        val user = userRepository.findById(normalizedId).orElse(null)
-            ?.takeIf { it.isHr }
-            ?: throw unavailable()
 
         return HiringManagerPreviewResponse(
             normalizedId = normalizedId,
             displayName = user.displayName.orEmpty(),
         )
+    }
+
+    private fun canonicalNickname(rawNickname: String): String {
+        val nickname = rawNickname.trim()
+        if (nickname.length !in 3..32 || nickname.any { it.isWhitespace() }) {
+            throw ApiException(HttpStatus.BAD_REQUEST, "Введите ник от 3 до 32 символов без пробелов")
+        }
+        return nickname
     }
 
     @Transactional(readOnly = true)

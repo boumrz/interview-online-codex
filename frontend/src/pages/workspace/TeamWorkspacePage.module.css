@@ -271,29 +271,12 @@
   .loadingFields { grid-template-columns: 1fr; }
 }
 
-.eyebrow {
-  margin-bottom: 8px;
-  color: var(--app-primary-text);
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: .14em;
-  text-transform: uppercase;
-}
-
 .panel,
 .emptyState {
   border-color: var(--app-border);
   color: var(--app-text);
   background: var(--app-surface);
   box-shadow: 0 2px 8px rgba(17, 20, 24, 0.06);
-}
-
-.interviewHeading {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
-  max-width: 100%;
-  overflow-wrap: anywhere;
 }
 
 .trackPanel {
@@ -425,12 +408,15 @@
   align-items: center;
   gap: 8px 12px;
   width: 100%;
+  min-width: 0;
   min-height: 30px;
 }
 
 .interviewTaskOptionTitle {
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--app-text);
   font-weight: 600;
 }

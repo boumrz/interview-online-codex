@@ -11,7 +11,6 @@ import {
 import {
   IconChevronDown,
   IconCode,
-  IconHelpCircle,
   IconHome2,
   IconUserCircle,
 } from "components/antd-icons";
@@ -80,6 +79,7 @@ export type TopBarProps = {
   currentLanguage: string;
   onLanguageChange: (value: string | null) => void;
   canGrantAccess: boolean;
+  isTeamRoom: boolean;
   canAssignHr: boolean;
   pendingHrActions: ReadonlyMap<string, HrAction>;
   onAssignHr: (participant: Participant) => void;
@@ -107,6 +107,7 @@ export function TopBar({
   languageDisabled = false,
   onLanguageChange,
   canGrantAccess,
+  isTeamRoom,
   canAssignHr,
   pendingHrActions,
   onAssignHr,
@@ -114,14 +115,6 @@ export function TopBar({
   onToggleInterviewerRole,
 }: TopBarProps) {
   const [openParticipantMenus, setOpenParticipantMenus] = React.useState<Record<string, boolean>>({});
-  const hasHrControls = canAssignHr && participants.some(
-    (participant) => participant.role !== "owner" && isEligibleHrParticipant(participant),
-  );
-  const hasOrdinaryControls = canGrantAccess && participants.some(
-    (participant) => participant.role !== "owner" &&
-      (participant.canBeGrantedInterviewerAccess ?? true),
-  );
-  const participantHelp = "Нажмите на участника, чтобы открыть доступные действия";
   return (
     <header className={roomPageStyles.topBar}>
       <Box className={roomPageStyles.topInner}>
@@ -142,7 +135,7 @@ export function TopBar({
                 const presenceLabel = getParticipantPresenceLabel(
                   participant.presenceStatus,
                 );
-                const eligibleHr = isEligibleHrParticipant(participant);
+                const eligibleHr = isTeamRoom && isEligibleHrParticipant(participant);
                 const isInterviewer = participant.role === "interviewer";
                 const canChangeInterviewerRole =
                   canGrantAccess &&
@@ -268,19 +261,6 @@ export function TopBar({
                 );
               })}
 
-              {hasOrdinaryControls || hasHrControls ? (
-                <Tooltip label={participantHelp} trigger={["hover", "focus"]} position="bottom" withArrow styles={{ root: { pointerEvents: "none" }, container: { pointerEvents: "none" } }}>
-                <button
-                  type="button"
-                  className={`${roomPageStyles.participantsHelpHint} app-header-control`}
-                  style={{ "--header-control-color": "var(--app-muted)", "--header-control-border": "transparent" } as React.CSSProperties}
-                  aria-label="Действия участников"
-                  data-testid="participants-help-hint"
-                >
-                  <IconHelpCircle size={14} stroke={1.8} aria-hidden="true" />
-                </button>
-                </Tooltip>
-              ) : null}
             </div>
           </Box>
         ) : (

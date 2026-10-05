@@ -118,10 +118,7 @@ export function BriefingBoard({
    */
   const [isExpanded, setIsExpanded] = useState(false);
   const html = useMemo(() => markdownToHtml(value), [value]);
-  const emptyText =
-    mode === "interviewer"
-      ? "Напишите объяснение или подсказки для кандидата."
-      : "Интервьюер еще не добавил пояснение.";
+  const emptyText = "Условие не добавлено";
 
   // ESC закрывает локальный fullscreen, чтобы поведение совпадало с
   // другими «модалками» комнаты.
@@ -512,7 +509,7 @@ const MarkdownCodeMirrorEditor = forwardRef<
   const extensions = useMemo(
     () => [
       themeCompartmentRef.current.of(codeMirrorTheme(modeRef.current)),
-      placeholder("Опишите условие, примеры и ожидаемый результат. Поддерживается Markdown."),
+      placeholder("Условие задачи (Markdown)"),
       lineNumbers(),
       highlightActiveLine(),
       drawSelection(),

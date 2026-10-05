@@ -4,6 +4,7 @@ import { CheckOutlined, DownOutlined, AppstoreOutlined, PlusOutlined } from "@an
 import { useNavigate } from "react-router-dom";
 import { useAppSelector } from "../../app/hooks";
 import { useCreateTeamMutation, useLazyGetWorkspacesQuery } from "../../services/api";
+import { getApiErrorMessage } from "../../services/apiErrors";
 import type { WorkspaceCacheScope, WorkspaceSummary } from "../../types";
 import { rememberCreatedTeam } from "./transientWorkspaceIdentity";
 import { useEscapeLayer } from "../../components/useEscapeLayer";
@@ -46,12 +47,7 @@ function canonicalTeamName(value: string) {
 }
 
 function apiError(error: unknown) {
-  if (!error || typeof error !== "object" || !("data" in error)) return "Не удалось создать команду. Повторите попытку.";
-  const data = error.data;
-  if (!data || typeof data !== "object" || !("error" in data) || typeof data.error !== "string") {
-    return "Не удалось создать команду. Повторите попытку.";
-  }
-  return data.error;
+  return getApiErrorMessage(error, "Не удалось создать команду. Повторите попытку.");
 }
 
 export function WorkspaceSwitcher({ currentTeamId, currentTeamName }: WorkspaceSwitcherProps) {

@@ -1,6 +1,13 @@
 package com.interviewonline.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.interviewonline.support.Postgres16TestSupport
+import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.BeforeAll
+import org.springframework.boot.test.autoconfigure.web.servlet.MockMvcPrint
+import org.springframework.test.annotation.DirtiesContext
+import org.springframework.test.context.DynamicPropertyRegistry
+import org.springframework.test.context.DynamicPropertySource
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -16,6 +23,7 @@ import org.springframework.test.web.servlet.post
 import org.springframework.test.web.servlet.put
 import java.io.ByteArrayInputStream
 import com.interviewonline.model.Room
+import com.interviewonline.model.RoomTask
 import com.interviewonline.model.RoomHrAssignment
 import com.interviewonline.repository.RoomHrAssignmentRepository
 import com.interviewonline.repository.RoomRepository
@@ -37,7 +45,8 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 @SpringBootTest
-@AutoConfigureMockMvc
+@AutoConfigureMockMvc(print = MockMvcPrint.NONE)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class HrWorkbookIntegrationTest(
     @Autowired private val mockMvc: MockMvc,
     @Autowired private val objectMapper: ObjectMapper,
@@ -45,6 +54,16 @@ class HrWorkbookIntegrationTest(
     @Autowired private val assignmentRepository: RoomHrAssignmentRepository,
     @Autowired private val userRepository: UserRepository,
 ) {
+    companion object {
+        private val postgres = Postgres16TestSupport.create("hr_workbook")
+        @JvmStatic @DynamicPropertySource
+        fun properties(registry: DynamicPropertyRegistry) = postgres.register(registry)
+        @JvmStatic @BeforeAll
+        fun verifyDatabase() = postgres.verifyPostgres16()
+        @JvmStatic @AfterAll
+        fun cleanup() = postgres.close()
+    }
+
     @Test
     fun `export snapshot transaction is bounded to the renderer deadline`() {
         val method = HrInterviewService::class.java.getMethod(
@@ -63,13 +82,7 @@ class HrWorkbookIntegrationTest(
     fun `export returns a complete scoped OOXML workbook with safe download headers`() {
         val (owner, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "xlsx-owner")
         val (hr, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "xlsx-hr")
-        val creation = mockMvc.post("/api/public/rooms") {
-            header("Authorization", "Bearer ${owner.token}")
-            contentType = MediaType.APPLICATION_JSON
-            content = """{"title":"=FORMULA must be literal","language":"nodejs"}"""
-        }.andExpect { status { isOk() } }.andReturn().response
-        val created = objectMapper.readTree(creation.contentAsString)
-        val room = HrTestRoom(created.path("id").asText(), created.path("inviteCode").asText())
+        val room = HrHttpFixtures.createTeamRoom(mockMvc, objectMapper, owner, "=FORMULA must be literal")
         require(HrHttpFixtures.inviteHr(mockMvc, owner, room, hr).response.status == 200)
         mockMvc.put("/api/rooms/${room.inviteCode}/interview-metadata") {
             header("Authorization", "Bearer ${owner.token}")
@@ -82,6 +95,7 @@ class HrWorkbookIntegrationTest(
             content = """{"verdict":"HIRE","verdictComment":"@danger"}"""
         }.andExpect { status { isOk() } }
         val stored = roomRepository.findWithTasksByInviteCode(room.inviteCode)!!
+        stored.tasks.add(RoomTask(room = stored, stepIndex = 0, title = "Workbook task", language = "nodejs"))
         stored.tasks.first().score = 5
         roomRepository.saveAndFlush(stored)
 
@@ -149,7 +163,7 @@ class HrWorkbookIntegrationTest(
     fun `export is cancelled if HR access is revoked while workbook is rendering`() {
         val (owner, _) = HrHttpFixtures.register(mockMvc, objectMapper, false, "xlsx-revoke-owner")
         val (hr, _) = HrHttpFixtures.register(mockMvc, objectMapper, true, "xlsx-revoke-hr")
-        val room = HrHttpFixtures.createRoom(mockMvc, objectMapper, owner, title = "Revoked while exporting")
+        val room = HrHttpFixtures.createTeamRoom(mockMvc, objectMapper, owner, title = "Revoked while exporting")
         require(HrHttpFixtures.inviteHr(mockMvc, owner, room, hr).response.status == 200)
         val revoked = AtomicBoolean(false)
 
@@ -189,6 +203,7 @@ class HrWorkbookIntegrationTest(
             )
         }
         val savedRooms = roomRepository.saveAll(rooms)
+        // Persisted owner tracking predates the TEAM-only external hiring rule.
         assignmentRepository.saveAll(savedRooms.map { RoomHrAssignment(room = it, user = storedHr) })
         val ready = CountDownLatch(2)
         val start = CountDownLatch(1)

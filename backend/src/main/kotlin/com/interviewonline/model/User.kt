@@ -21,8 +21,8 @@ class User(
     @Column(name = "display_name")
     var displayName: String? = null,
 
-    @Column(name = "password_hash", nullable = false)
-    var passwordHash: String = "",
+    @Column(name = "password_hash")
+    var passwordHash: String? = null,
 
     @Column(name = "role", nullable = false, length = 32)
     var role: String = "user",

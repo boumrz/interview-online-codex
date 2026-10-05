@@ -35,6 +35,12 @@ New work should not create OpenSpec changes or require the OpenSpec CLI.
 
 ## Quick Start
 
+Вход через Google и VK ID сохранён как отключённая заготовка; интеграция отложена.
+Оставьте `FEATURE_SOCIAL_AUTH_ENABLED=false` на сервере и при сборке frontend:
+пользователи сохраняют обычный вход по нику и паролю. Место для возобновления:
+[AUTH.1](specs/features/auth-1-social-login.md),
+[инструкция будущего подключения](specs/references/2026-10-05-social-login-setup.md).
+
 ### 1. Запуск PostgreSQL
 
 ```bash

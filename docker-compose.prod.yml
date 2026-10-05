@@ -32,6 +32,15 @@ services:
       TEAM_INVITATION_LINK_ENCRYPTION_ACTIVE_KEY_ID: ${TEAM_INVITATION_LINK_ENCRYPTION_ACTIVE_KEY_ID:-primary}
       APP_TEAMINVITATIONLINKENCRYPTION_KEYS_PRIMARY: ${TEAM_INVITATION_LINK_ENCRYPTION_KEY:?TEAM_INVITATION_LINK_ENCRYPTION_KEY is required}
       CORS_ORIGINS: ${CORS_ORIGINS:-https://interview.vtools.tech}
+      FEATURE_SOCIAL_AUTH_ENABLED: ${FEATURE_SOCIAL_AUTH_ENABLED:-false}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://interview.vtools.tech}
+      SOCIAL_AUTH_FLOW_SECRET: ${SOCIAL_AUTH_FLOW_SECRET:-}
+      GOOGLE_AUTH_ENABLED: ${GOOGLE_AUTH_ENABLED:-false}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      VK_AUTH_ENABLED: ${VK_AUTH_ENABLED:-false}
+      VK_CLIENT_ID: ${VK_CLIENT_ID:-}
+      VK_SERVICE_TOKEN: ${VK_SERVICE_TOKEN:-}
       AGENT_LINEAR_SYNC_ENABLED: ${AGENT_LINEAR_SYNC_ENABLED:-false}
       LINEAR_API_KEY: ${LINEAR_API_KEY:-}
       LINEAR_API_URL: ${LINEAR_API_URL:-https://api.linear.app/graphql}
@@ -48,6 +57,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        FEATURE_SOCIAL_AUTH_ENABLED: ${FEATURE_SOCIAL_AUTH_ENABLED:-false}
     container_name: interview-online-web
     restart: unless-stopped
     ports:

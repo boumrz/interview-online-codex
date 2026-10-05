@@ -14,6 +14,7 @@ async function request(path, { token, method = "GET", body, status = 200, header
   const response = await fetch(`${api}${path}`, {
     method,
     headers: {
+      "Idempotency-Key": crypto.randomUUID(),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),
       ...headers,
@@ -39,6 +40,42 @@ async function createInterview(owner, title = `Интервью ${unique()}`) {
     body: { customTasks: [{ title: "Задача на массивы", description: "Объясните решение", starterCode: "const solve = () => 42;", language: "nodejs" }] },
   });
   return room;
+}
+
+async function createTeam(owner, name = `Команда найма ${unique()}`) {
+  return (await request("/teams", { token: owner.token, method: "POST", body: { name }, status: 201 })).team;
+}
+
+async function createTeamInterview(owner, title = `Интервью ${unique()}`, existingTeamId) {
+  const teamId = existingTeamId ?? (await createTeam(owner)).id;
+  const { interview: room } = await request(`/teams/${teamId}/interviews`, {
+    token: owner.token, method: "POST", body: { title, selectedTaskIds: [] }, status: 201,
+  });
+  await request(`/rooms/${room.inviteCode}/tasks`, {
+    token: owner.token, method: "POST",
+    body: { customTasks: [{ title: "Задача на массивы", description: "Объясните решение", starterCode: "const solve = () => 42;", language: "nodejs" }] },
+  });
+  return { ...room, teamId };
+}
+
+async function joinTeam(owner, room, colleague) {
+  const { invitation } = await request(`/teams/${room.teamId}/invitations`, { token: owner.token, method: "POST", body: {}, status: 201 });
+  const { url } = await request(`/teams/${room.teamId}/invitations/${invitation.id}/link`, { token: owner.token });
+  await request("/team-invitations/accept", { token: colleague.token, method: "POST", body: { token: new URL(url, web).hash.slice("#token=".length) } });
+}
+
+async function setTeamManagerRole(owner, room, target, role) {
+  if (target.user.isHr) {
+    await request(`/rooms/${room.inviteCode}/hr-managers/${target.user.id}`, {
+      token: owner.token, method: role === "interviewer" ? "PUT" : "DELETE", ...(role === "candidate" ? { status: 204 } : {}),
+    });
+  } else if (role === "interviewer") await joinTeam(owner, room, target);
+  else await request(`/teams/${room.teamId}/members/${target.user.id}`, { token: owner.token, method: "DELETE" });
+}
+
+async function openTeamCreation(browser, owner, options) {
+  const team = await createTeam(owner);
+  return { ...(await openAccount(browser, owner, `/workspace/teams/${team.id}/interviews/new`, options)), team };
 }
 
 async function createTaskTemplate(owner, title = `Задача ${unique()}`) {
@@ -97,7 +134,7 @@ async function downloadWorkbook(page) {
   }
 }
 
-test("cabinet pagination selects the requested page and keeps all tracked interviews reachable", { timeout: 60000 }, async () => {
+test("cabinet pagination selects the requested page and keeps all owned interviews reachable", { timeout: 60000 }, async () => {
   const browser = await chromium.launch();
   try {
     const hr = await account(true, "Нанимающий с двумя страницами интервью");
@@ -105,7 +142,7 @@ test("cabinet pagination selects the requested page and keeps all tracked interv
       const room = await request("/rooms", {
         token: hr.token, method: "POST", body: { title: `Страница ${index + 1} ${unique()}`, taskIds: [] },
       });
-      await request(`/rooms/${room.inviteCode}/hr-tracking`, { token: hr.token, method: "POST" });
+
     }
     const first = await request("/me/hr/rooms?page=0&size=20", { token: hr.token });
     const second = await request("/me/hr/rooms?page=1&size=20", { token: hr.token });
@@ -149,8 +186,9 @@ test("profile uses the hiring-manager term and confirmed opt-out removes only ca
     assert.equal(await capability.count(), 1, "Registration must expose the exact hiring-manager capability label");
     assert.equal(await capability.isChecked(), false);
     await page.getByLabel(/^Ник(?:\s*\*)?$/).fill(nickname);
-    await page.getByLabel(/^Имя для комнаты(?:\s*\*)?$/).fill("Менеджер найма");
+    await page.getByLabel(/^Имя(?:\s*\*)?$/).fill("Менеджер найма");
     await page.getByLabel(/^Пароль(?:\s*\*)?$/).fill("test-password-123");
+    await page.getByLabel(/^Повторите пароль(?:\s*\*)?$/).fill("test-password-123");
     await capability.check();
     await page.getByRole("button", { name: "Создать аккаунт", exact: true }).click();
     await page.waitForURL("**/workspace/personal/interviews");
@@ -159,7 +197,7 @@ test("profile uses the hiring-manager term and confirmed opt-out removes only ca
     const token = await page.evaluate(() => localStorage.getItem("auth_token"));
     const profile = await request("/me/profile", { token });
     const room = await createInterview({ token });
-    await request(`/rooms/${room.inviteCode}/hr-tracking`, { token, method: "POST" });
+
 
     await page.goto(`${web}/profile`);
     const profileToggle = page.getByRole("switch", { name: "Я участвую в найме", exact: true });
@@ -240,7 +278,7 @@ test("profile uses the hiring-manager term and confirmed opt-out removes only ca
     const reenabledProfile = await request("/me/profile", { token });
     assert.equal(reenabledProfile.isHr, true);
     assert.equal(reenabledProfile.id, profile.id, "Re-enabling must preserve the same invitation UUID");
-    await page.getByText(profile.id, { exact: true }).waitFor();
+    await page.getByText(`@${profile.nickname}`, { exact: true }).first().waitFor();
   } finally { await browser.close(); }
 });
 
@@ -283,13 +321,13 @@ test("authenticated creator adds verified hiring people one at a time and submit
     const owner = await account(false, "Создатель подборщика");
     const firstManager = await account(true, "Первый нанимающий");
     const secondManager = await account(true, "Второй нанимающий");
-    const { page, context } = await openAccount(browser, owner, "/dashboard/rooms");
+    const { page, context, team } = await openTeamCreation(browser, owner);
     try {
       const title = `Комната с подборщиком ${unique()}`;
       await page.getByLabel("Название интервью", { exact: true }).fill(title);
-      const input = page.getByRole("combobox", { name: "Нанимающий", exact: true });
+      const input = page.getByRole("combobox", { name: "Внешний нанимающий (необязательно)", exact: true });
       await input.waitFor();
-      await page.getByText("Вставьте ID нанимающего", { exact: true }).waitFor();
+      assert.equal(await input.getAttribute("aria-label"), "Внешний нанимающий (необязательно)");
       assert.equal(await page.getByRole("combobox", { name: "Нанимающие из команды", exact: true }).count(), 0);
       let previewRequests = 0;
       let releaseFirstPreview;
@@ -302,16 +340,16 @@ test("authenticated creator adds verified hiring people one at a time and submit
       const secondPreviewStarted = new Promise((resolve) => { signalSecondPreview = resolve; });
       await page.route("**/api/me/hiring-manager-preview", async (route) => {
         previewRequests += 1;
-        const { invitationId } = JSON.parse(route.request().postData() ?? "{}");
-        if (invitationId === firstManager.user.id) {
+        const { nickname } = JSON.parse(route.request().postData() ?? "{}");
+        if (nickname === firstManager.user.nickname) {
           signalFirstPreview();
           await firstPreviewRelease;
         }
-        if (invitationId === secondManager.user.id) {
+        if (nickname === secondManager.user.nickname) {
           signalSecondPreview();
           await secondPreviewRelease;
         }
-        const manager = invitationId === firstManager.user.id ? firstManager : secondManager;
+        const manager = nickname === firstManager.user.nickname ? firstManager : secondManager;
         await route.fulfill({
           status: 200,
           contentType: "application/json",
@@ -319,22 +357,22 @@ test("authenticated creator adds verified hiring people one at a time and submit
         });
       });
 
-      await input.fill(firstManager.user.id.toUpperCase());
+      await input.fill(firstManager.user.nickname);
       await firstPreviewStarted;
-      await page.getByRole("status").filter({ hasText: "Проверяем нанимающего…" }).waitFor();
+      await page.getByText("Проверяем нанимающего…", { exact: true }).waitFor();
       assert.equal(await input.isDisabled(), false, "Search remains editable while verification is pending");
       assert.equal(await page.getByRole("dialog").getByRole("button", { name: "Создать интервью", exact: true }).isDisabled(), true);
       releaseFirstPreview();
       await chooseHiring(page, input, firstManager.user.displayName);
       await page.getByRole("button", { name: `Удалить нанимающего ${firstManager.user.displayName}`, exact: true }).waitFor();
-      await page.getByRole("heading", { name: "Добавленные нанимающие", exact: true }).waitFor();
+      assert.equal(await page.getByRole("button", { name: `Удалить нанимающего ${firstManager.user.displayName}`, exact: true }).count(), 1);
       await page.getByText(firstManager.user.displayName, { exact: true }).waitFor();
       assert.equal(await input.inputValue(), "");
 
-      await input.fill(secondManager.user.id);
+      await input.fill(secondManager.user.nickname);
       await input.press("Enter");
       await secondPreviewStarted;
-      await page.getByRole("status").filter({ hasText: "Проверяем нанимающего…" }).waitFor();
+      await page.getByText("Проверяем нанимающего…", { exact: true }).waitFor();
       assert.equal(await input.isDisabled(), false, "A pending search can be corrected without selecting an unverified person");
       releaseSecondPreview();
       await chooseHiring(page, input, secondManager.user.displayName);
@@ -342,30 +380,30 @@ test("authenticated creator adds verified hiring people one at a time and submit
       assert.equal(previewRequests, 2, "Each search verifies once; selection must not submit the room");
       assert.equal(await page.getByText(secondManager.user.displayName, { exact: true }).count(), 1);
 
-      await input.fill(secondManager.user.id.toUpperCase());
+      await input.fill(secondManager.user.nickname);
       await page.getByRole("alert").filter({ hasText: "Нанимающий уже добавлен" }).waitFor();
-      assert.equal(await input.inputValue(), secondManager.user.id.toUpperCase());
-      assert.equal(previewRequests, 2, "A case-varied duplicate must not perform another lookup");
+      assert.equal(await input.inputValue(), secondManager.user.nickname);
+      assert.equal(previewRequests, 3, "Nickname duplicate is rejected after resolving the same person");
 
-      const typedButUnaddedId = "11111111-1111-4111-8111-111111111111";
+      const typedButUnaddedId = "typed.unadded";
       await input.fill(typedButUnaddedId);
       await input.press("Escape");
-      assert.equal(await input.inputValue(), typedButUnaddedId, "Escape must preserve the unadded UUID search");
+      assert.equal(await input.inputValue(), typedButUnaddedId, "Escape must preserve the unadded nickname search");
       await input.press("ControlOrMeta+A");
       await input.press("Backspace");
-      assert.equal(await input.inputValue(), "", "A real keyboard deletion must still clear the UUID search");
+      assert.equal(await input.inputValue(), "", "A real keyboard deletion must still clear the nickname search");
       await input.fill(typedButUnaddedId);
       await page.getByRole("button", { name: `Удалить нанимающего ${firstManager.user.displayName}`, exact: true }).click();
       assert.equal(await page.getByText(firstManager.user.displayName, { exact: true }).count(), 0);
-      assert.equal(await input.inputValue(), typedButUnaddedId, "Removal must not overwrite an unadded draft ID");
+      assert.equal(await input.inputValue(), typedButUnaddedId, "Removal must not overwrite an unadded draft nickname");
 
       const submitted = page.waitForRequest((request) =>
-        request.url().endsWith("/api/rooms") && request.method() === "POST",
+        new URL(request.url()).pathname === `/api/teams/${team.id}/interviews` && request.method() === "POST",
       );
       await page.getByRole("dialog").getByRole("button", { name: "Создать интервью", exact: true }).click();
       assert.deepEqual(JSON.parse((await submitted).postData() ?? "{}"), {
         title,
-        taskIds: [],
+        selectedTaskIds: [],
         hiringManagerIds: [secondManager.user.id],
       });
       await page.waitForURL(/\/room\//);
@@ -381,10 +419,10 @@ test("room creation waits for pending verification and excludes a failed hiring-
     const owner = await account(false, "Создатель с pending подборщика");
     const selectedManager = await account(true, "Добавленный нанимающий");
     const pendingManager = await account(true, "Проверяемый нанимающий");
-    const { page, context } = await openAccount(browser, owner, "/dashboard/rooms");
+    const { page, context, team } = await openTeamCreation(browser, owner);
     try {
       const title = `Комната с pending подборщиком ${unique()}`;
-      const input = page.getByRole("combobox", { name: "Нанимающий", exact: true });
+      const input = page.getByRole("combobox", { name: "Внешний нанимающий (необязательно)", exact: true });
       await page.getByLabel("Название интервью", { exact: true }).fill(title);
 
       let releasePendingPreview;
@@ -392,8 +430,8 @@ test("room creation waits for pending verification and excludes a failed hiring-
       let signalPendingPreview;
       const pendingPreviewStarted = new Promise((resolve) => { signalPendingPreview = resolve; });
       await page.route("**/api/me/hiring-manager-preview", async (route) => {
-        const { invitationId } = JSON.parse(route.request().postData() ?? "{}");
-        if (invitationId !== pendingManager.user.id) {
+        const { nickname } = JSON.parse(route.request().postData() ?? "{}");
+        if (nickname !== pendingManager.user.nickname) {
           await route.continue();
           return;
         }
@@ -410,26 +448,27 @@ test("room creation waits for pending verification and excludes a failed hiring-
         }
       });
 
-      await input.fill(selectedManager.user.id);
+      await input.fill(selectedManager.user.nickname);
       await chooseHiring(page, input, selectedManager.user.displayName);
       await page.getByRole("button", { name: `Удалить нанимающего ${selectedManager.user.displayName}`, exact: true }).waitFor();
 
-      await input.fill(pendingManager.user.id);
+      await input.fill(pendingManager.user.nickname);
       await pendingPreviewStarted;
-      await page.getByRole("status").filter({ hasText: "Проверяем нанимающего…" }).waitFor();
+      await page.getByText("Проверяем нанимающего…", { exact: true }).waitFor();
 
       const create = page.getByRole("dialog").getByRole("button", { name: "Создать интервью", exact: true });
       assert.equal(await create.isDisabled(), true, "Creation cannot send an unverified pending selection");
       releasePendingPreview();
-      await page.getByRole("alert").filter({ hasText: "Preview verification is unavailable" }).waitFor();
-      assert.equal(await input.inputValue(), pendingManager.user.id, "Failed verification retains the retryable ID draft");
+      await page.getByRole("alert").filter({ hasText: "Ошибка сервера" }).waitFor();
+      assert.equal(await input.inputValue(), pendingManager.user.nickname, "Failed verification retains the retryable nickname draft");
+      assert.equal(await page.getByLabel("Название интервью", { exact: true }).inputValue(), title, "The unsuccessful lookup does not reset the room draft");
       const submitted = page.waitForRequest((request) =>
-        request.url().endsWith("/api/rooms") && request.method() === "POST",
+        new URL(request.url()).pathname === `/api/teams/${team.id}/interviews` && request.method() === "POST",
       );
       await page.getByRole("dialog").getByRole("button", { name: "Создать интервью", exact: true }).click();
       assert.deepEqual(JSON.parse((await submitted).postData() ?? "{}"), {
         title,
-        taskIds: [],
+        selectedTaskIds: [],
         hiringManagerIds: [selectedManager.user.id],
       });
       await page.waitForURL(/\/room\//);
@@ -443,9 +482,9 @@ test("hiring picker retains local validation and unavailable feedback without re
   const browser = await chromium.launch();
   try {
     const owner = await account(false, "Создатель ошибок подборщика");
-    const { page, context } = await openAccount(browser, owner, "/dashboard/rooms");
+    const { page, context, team } = await openTeamCreation(browser, owner);
     try {
-      const input = page.getByRole("combobox", { name: "Нанимающий", exact: true });
+      const input = page.getByRole("combobox", { name: "Внешний нанимающий (необязательно)", exact: true });
       let previewRequests = 0;
       await page.route("**/api/me/hiring-manager-preview", async (route) => {
         previewRequests += 1;
@@ -459,13 +498,13 @@ test("hiring picker retains local validation and unavailable feedback without re
       await input.focus();
       assert.equal(await page.getByRole("option").count(), 0, "An empty search exposes no selectable person");
       assert.equal(previewRequests, 0);
-      await input.fill("not-a-uuid");
+      await input.fill("invalid nickname");
       await input.press("Enter");
-      await page.getByRole("alert").filter({ hasText: "Введите полный UUID нанимающего" }).waitFor();
-      assert.equal(await input.inputValue(), "not-a-uuid");
+      await page.getByRole("alert").filter({ hasText: "Введите ник от 3 до 32 символов без пробелов" }).waitFor();
+      assert.equal(await input.inputValue(), "invalid nickname");
       assert.equal(previewRequests, 0);
 
-      const unavailable = "00000000-0000-0000-0000-000000000000";
+      const unavailable = "missing.hiring";
       await input.fill(unavailable);
       await page.getByRole("alert").filter({ hasText: "Нанимающий не найден или недоступен" }).waitFor();
       assert.equal(await input.inputValue(), unavailable);
@@ -477,14 +516,14 @@ test("hiring picker retains local validation and unavailable feedback without re
   } finally { await browser.close(); }
 });
 
-test("hiring picker retains a retryable ID and accepts the corrected retry", { timeout: 90000 }, async () => {
+test("hiring picker retains a retryable nickname and accepts the corrected retry", { timeout: 90000 }, async () => {
   const browser = await chromium.launch();
   try {
     const owner = await account(false, "Создатель повтора подборщика");
     const manager = await account(true, "Нанимающий после повтора");
-    const { page, context } = await openAccount(browser, owner, "/dashboard/rooms");
+    const { page, context, team } = await openTeamCreation(browser, owner);
     try {
-      const input = page.getByRole("combobox", { name: "Нанимающий", exact: true });
+      const input = page.getByRole("combobox", { name: "Внешний нанимающий (необязательно)", exact: true });
       let requests = 0;
       await page.route("**/api/me/hiring-manager-preview", async (route) => {
         requests += 1;
@@ -503,10 +542,10 @@ test("hiring picker retains a retryable ID and accepts the corrected retry", { t
         });
       });
 
-      await input.fill(manager.user.id);
-      await page.getByRole("alert").filter({ hasText: "Временная ошибка проверки" }).waitFor();
-      assert.equal(await input.inputValue(), manager.user.id);
-      await input.fill(manager.user.id.toUpperCase());
+      await input.fill(manager.user.nickname);
+      await page.getByRole("alert").filter({ hasText: "Ошибка сервера" }).waitFor();
+      assert.equal(await input.inputValue(), manager.user.nickname);
+      await input.press("Enter");
       await chooseHiring(page, input, manager.user.displayName);
       await page.getByRole("button", { name: `Удалить нанимающего ${manager.user.displayName}`, exact: true }).waitFor();
       assert.equal(requests, 2);
@@ -523,7 +562,8 @@ test("an obsolete picker preview cannot restore a selection after an account swi
     const firstOwner = await account(false, "Первый создатель подборщика");
     const successor = await account(false, "Второй создатель подборщика");
     const manager = await account(true, "Устаревший нанимающий");
-    const { page, context } = await openAccount(browser, firstOwner, "/dashboard/rooms", { preserveAuthOnReload: true });
+    const { page, context, team } = await openTeamCreation(browser, firstOwner, { preserveAuthOnReload: true });
+    const successorTeam = await createTeam(successor);
     try {
       let releasePreview;
       const previewRelease = new Promise((resolve) => { releasePreview = resolve; });
@@ -542,22 +582,19 @@ test("an obsolete picker preview cannot restore a selection after an account swi
           // A page replacement may abort the route before it can be fulfilled.
         }
       });
-      await page.getByRole("combobox", { name: "Нанимающий", exact: true }).fill(manager.user.id);
+      await page.getByRole("combobox", { name: "Внешний нанимающий (необязательно)", exact: true }).fill(manager.user.nickname);
       await previewStarted;
       await page.evaluate(({ token, displayName }) => {
         localStorage.setItem("auth_token", token);
         localStorage.setItem("display_name", displayName);
       }, { token: successor.token, displayName: successor.user.displayName });
-      await page.reload({ waitUntil: "domcontentloaded" });
+      await page.goto(`${web}/workspace/teams/${successorTeam.id}/interviews/new`, { waitUntil: "domcontentloaded" });
       await page.getByText(`@${successor.user.nickname}`, { exact: true }).waitFor();
       releasePreview();
-      if (await page.getByRole("dialog", { name: "Создать интервью", exact: true }).count() === 0) {
-        await page.getByRole("button", { name: "Создать интервью", exact: true }).click();
-      }
       await page.getByRole("dialog", { name: "Создать интервью", exact: true }).waitFor();
       await page.waitForTimeout(150);
       assert.equal(await page.getByText(manager.user.displayName, { exact: true }).count(), 0);
-      assert.equal(await page.getByRole("combobox", { name: "Нанимающий", exact: true }).inputValue(), "");
+      assert.equal(await page.getByRole("combobox", { name: "Внешний нанимающий (необязательно)", exact: true }).inputValue(), "");
     } finally {
       await context.close();
     }
@@ -569,12 +606,12 @@ test("stale room validation retains selections and disables picker controls whil
   try {
     const owner = await account(false, "Создатель устаревшей проверки");
     const manager = await account(true, "Нанимающий для проверки комнаты");
-    const { page, context } = await openAccount(browser, owner, "/dashboard/rooms");
+    const { page, context, team } = await openTeamCreation(browser, owner);
     try {
       const title = `Комната с устаревшим нанимающим ${unique()}`;
       await page.getByLabel("Название интервью", { exact: true }).fill(title);
-      const input = page.getByRole("combobox", { name: "Нанимающий", exact: true });
-      await input.fill(manager.user.id);
+      const input = page.getByRole("combobox", { name: "Внешний нанимающий (необязательно)", exact: true });
+      await input.fill(manager.user.nickname);
       await chooseHiring(page, input, manager.user.displayName);
       await page.getByRole("button", { name: `Удалить нанимающего ${manager.user.displayName}`, exact: true }).waitFor();
 
@@ -582,7 +619,7 @@ test("stale room validation retains selections and disables picker controls whil
       const createRelease = new Promise((resolve) => { releaseCreate = resolve; });
       let signalCreate;
       const createStarted = new Promise((resolve) => { signalCreate = resolve; });
-      await page.route("**/api/rooms", async (route) => {
+      await page.route(`**/api/teams/${team.id}/interviews`, async (route) => {
         signalCreate();
         await createRelease;
         await route.fulfill({
@@ -596,7 +633,7 @@ test("stale room validation retains selections and disables picker controls whil
       assert.equal(await input.isDisabled(), true);
       assert.equal(await page.getByRole("button", { name: `Удалить нанимающего ${manager.user.displayName}`, exact: true }).isDisabled(), true);
       releaseCreate();
-      await page.getByTestId("create-room-card").getByText("Указанный нанимающий не найден или недоступен", { exact: true }).waitFor();
+      await page.getByRole("alert").filter({ hasText: "Указанный нанимающий не найден или недоступен" }).waitFor();
       assert.equal(await page.getByLabel("Название интервью", { exact: true }).inputValue(), title);
       await page.getByText(manager.user.displayName, { exact: true }).waitFor();
     } finally {
@@ -605,7 +642,7 @@ test("stale room validation retains selections and disables picker controls whil
   } finally { await browser.close(); }
 });
 
-test("authenticated creation with an empty hiring-manager field remains a normal room create", { timeout: 90000 }, async () => {
+test("personal authenticated creation offers optional generic hiring and keeps an empty selection as a normal room create", { timeout: 90000 }, async () => {
   const browser = await chromium.launch();
   try {
     const owner = await account(false, "Создатель без назначения");
@@ -615,16 +652,16 @@ test("authenticated creation with an empty hiring-manager field remains a normal
       await page.getByLabel("Название интервью", { exact: true }).fill(title);
       const targets = page.getByRole("combobox", { name: "Нанимающий", exact: true });
       await targets.waitFor();
-      assert.equal(await targets.inputValue(), "");
-      await page.getByText("Вставьте ID нанимающего", { exact: true }).waitFor();
+      assert.equal(await page.getByRole("dialog").getByText(/внешн|Без трека|Без вакансии/i).count(), 0, "Personal creation uses generic hiring without TEAM context");
       const submitted = page.waitForRequest((request) =>
         request.url().endsWith("/api/rooms") && request.method() === "POST",
       );
       await page.getByRole("dialog").getByRole("button", { name: "Создать интервью", exact: true }).click();
-      assert.deepEqual(JSON.parse((await submitted).postData() ?? "{}"), {
-        title,
-        taskIds: [],
-      });
+      const payload = JSON.parse((await submitted).postData() ?? "{}");
+      assert.equal(payload.title, title);
+      assert.deepEqual(payload.taskIds, []);
+      assert.equal((payload.hiringManagerIds ?? []).length, 0);
+      assert.ok(!Object.hasOwn(payload, "trackId") && !Object.hasOwn(payload, "vacancyId"));
       await page.waitForURL(/\/room\//);
       await page.getByTestId("room-code-editor-host").waitFor();
     } finally {
@@ -645,8 +682,9 @@ test("hiring-manager registration is only an optional checkbox; identity persist
     assert.equal(await checkbox.isChecked(), false);
     assert.equal(await page.getByRole("radio", { name: /Кандидат|Интервьюер/ }).count(), 0);
     await page.getByLabel(/^Ник(?:\s*\*)?$/).fill(`hr_ui_${unique()}`);
-    await page.getByLabel(/^Имя для комнаты(?:\s*\*)?$/).fill("Анна, нанимающий менеджер");
+    await page.getByLabel(/^Имя(?:\s*\*)?$/).fill("Анна, нанимающий менеджер");
     await page.getByLabel(/^Пароль(?:\s*\*)?$/).fill("test-password-123");
+    await page.getByLabel(/^Повторите пароль(?:\s*\*)?$/).fill("test-password-123");
     await checkbox.check();
     await page.getByRole("button", { name: "Создать аккаунт", exact: true }).click();
     await page.waitForURL("**/workspace/personal/interviews");
@@ -657,10 +695,10 @@ test("hiring-manager registration is only an optional checkbox; identity persist
     assert.equal(profile.isHr, true);
     assert.equal(profile.role, "user");
     await page.getByRole("link", { name: /^Открыть профиль @/ }).click();
-    await page.getByRole("button", { name: "Скопировать личный ID", exact: true }).click();
-    assert.equal(await page.evaluate(() => navigator.clipboard.readText()), profile.id);
+    await page.getByRole("button", { name: "Скопировать никнейм", exact: true }).click();
+    assert.equal(await page.evaluate(() => navigator.clipboard.readText()), profile.nickname);
     await page.reload();
-    await page.getByText(profile.id, { exact: true }).first().waitFor();
+    await page.getByText(`@${profile.nickname}`, { exact: true }).first().waitFor();
 
     const ordinary = await account(false, "Пользователь без роли менеджера");
     assert.equal(ordinary.user.isHr, false);
@@ -684,10 +722,8 @@ test("interviewer invites an offline hiring manager; metadata, refresh, results,
     const interviewer = await account(false, "Технический интервьюер");
     const hr = await account(true, "Мария, нанимающий менеджер");
     const otherHr = await account(true, "Другой нанимающий менеджер");
-    const room = await createInterview(owner);
-    await request(`/rooms/${room.inviteCode}/participants/${interviewer.user.id}/role`, {
-      token: owner.token, method: "POST", body: { role: "interviewer" },
-    });
+    const room = await createTeamInterview(owner);
+    await setTeamManagerRole(owner, room, interviewer, "interviewer");
     const hrView = await openAccount(browser, hr);
     await hrView.page.getByRole("heading", { name: "Кандидаты и интервью", exact: true }).waitFor();
     await hrView.page.getByText("Пока нет интервью", { exact: true }).waitFor();
@@ -718,12 +754,12 @@ test("interviewer invites an offline hiring manager; metadata, refresh, results,
     await panel.getByLabel("Позиция", { exact: true }).fill("Frontend developer");
     await panel.getByRole("button", { name: "Сохранить сведения", exact: true }).click();
     await managerView.page.locator(".ant-notification-notice").filter({ hasText: "Сведения сохранены" }).waitFor();
-    await panel.getByRole("combobox", { name: "Нанимающий", exact: true }).fill(owner.user.id);
-    await panel.getByRole("alert").filter({ hasText: /нанимающ.*(?:не найден|недоступен)/i }).waitFor();
-    await panel.getByRole("combobox", { name: "Нанимающий", exact: true }).fill(hr.user.id);
+    await panel.getByRole("combobox", { name: "Нанимающий", exact: true }).fill(owner.user.nickname);
+    await panel.getByRole("alert").filter({ hasText: /Нанимающий не найден или недоступен/ }).waitFor();
+    await panel.getByRole("combobox", { name: "Нанимающий", exact: true }).fill(hr.user.nickname);
     await chooseHiring(managerView.page, panel.getByRole("combobox", { name: "Нанимающий", exact: true }), hr.user.displayName);
     await panel.getByText(hr.user.displayName, { exact: true }).waitFor();
-    await panel.getByRole("combobox", { name: "Нанимающий", exact: true }).fill(hr.user.id);
+    await panel.getByRole("combobox", { name: "Нанимающий", exact: true }).fill(hr.user.nickname);
     await panel.getByRole("alert").filter({ hasText: "Нанимающий уже добавлен" }).waitFor();
 
     await hrView.page.getByRole("button", { name: "Обновить список", exact: true }).click();
@@ -737,7 +773,11 @@ test("interviewer invites an offline hiring manager; metadata, refresh, results,
     assert.equal(list.items[0].scheduledAt, "2030-10-12T11:30:00Z");
     assert.equal((await request("/me/hr/rooms", { token: otherHr.token })).totalElements, 0);
     await request(`/me/hr/rooms/${room.id}`, { token: otherHr.token, status: 404 });
-    await request("/me/hr/rooms/export", { token: interviewer.token, status: 403 });
+    const unauthorized = await account(false, "Посторонний без команды и роли нанимающего");
+    await request("/me/hr/rooms/export", { token: unauthorized.token, status: 403 });
+    const colleagueExport = await fetch(`${api}/me/hr/rooms/export`, { headers: { Authorization: `Bearer ${interviewer.token}` } });
+    assert.equal(colleagueExport.status, 200, "ACTIVE team colleague can export the currently authorized interview without the hiring flag");
+    assert.equal(Buffer.from(await colleagueExport.arrayBuffer()).subarray(0, 2).toString(), "PK");
 
     await request(`/rooms/${room.inviteCode}/verdict`, { token: interviewer.token, method: "POST", body: { verdict: "HIRE", verdictComment: "Уверенное решение\nПригласить на следующий этап" } });
     await hrView.page.getByRole("button", { name: "Обновить список", exact: true }).click();
@@ -775,17 +815,24 @@ test("interviewer invites an offline hiring manager; metadata, refresh, results,
     await hrView.page.getByRole("button", { name: "За всё время", exact: true }).click();
     await row.waitFor();
 
-    const hrRoom = await openAccount(browser, hr, `/room/${room.inviteCode}`);
+    const finishedArchive = await request(`/teams/${room.teamId}/interviews/${room.id}/archive`, { token: owner.token, method: "POST", status: 409 });
+    assert.equal(finishedArchive.code, "TEAM_INTERVIEW_FINISHED", "A finished result stays outside the orphan archive lifecycle");
+    const archiveRoom = await createTeamInterview(interviewer, `Архивное интервью ${unique()}`, room.teamId);
+    await request(`/rooms/${archiveRoom.inviteCode}/hr-managers/${hr.user.id}`, { token: owner.token, method: "PUT" });
+    await request(`/rooms/${archiveRoom.inviteCode}/interview-metadata`, {
+      token: interviewer.token, method: "PUT", body: { candidateName: "Архивный Антон Кандидатов", position: "Frontend developer", scheduledAt: "2030-10-12T11:30:00Z", revision: 0 },
+    });
+    const hrRoom = await openAccount(browser, hr, `/room/${archiveRoom.inviteCode}`);
     await hrRoom.page.getByRole("button", { name: "Кандидат и нанимающие", exact: true }).waitFor();
     await hrRoom.page.reload();
     await hrRoom.page.getByRole("button", { name: "Кандидат и нанимающие", exact: true }).waitFor();
-    assert.equal((await request("/me/hr/rooms", { token: hr.token })).totalElements, 1);
-    const removed = await request(`/me/rooms/${room.id}`, { token: owner.token, method: "DELETE" });
-    assert.equal(removed.archived, true);
+    assert.equal((await request("/me/hr/rooms", { token: hr.token })).totalElements, 2);
+    await request(`/teams/${archiveRoom.teamId}/leave`, { token: interviewer.token, method: "POST" });
+    await request(`/teams/${archiveRoom.teamId}/interviews/${archiveRoom.id}/archive`, { token: owner.token, method: "POST" });
     await hrRoom.page.getByTestId("room-realtime-unavailable").waitFor({ timeout: 20000 });
     const terminalRequests = [];
     const recordTerminalRequest = (req) => {
-      if (req.url().includes(`/api/realtime/rooms/${room.inviteCode}/`)) terminalRequests.push(req.url());
+      if (req.url().includes(`/api/realtime/rooms/${archiveRoom.inviteCode}/`)) terminalRequests.push(req.url());
     };
     hrRoom.page.on("request", recordTerminalRequest);
     await hrRoom.page.evaluate(() => {
@@ -794,10 +841,11 @@ test("interviewer invites an offline hiring manager; metadata, refresh, results,
       document.dispatchEvent(new Event("visibilitychange"));
     });
     await hrView.page.getByRole("button", { name: "Обновить список", exact: true }).click();
-    await row.getByText("Архив", { exact: true }).waitFor();
-    assert.equal(await row.getByRole("button", { name: "Открыть комнату", exact: true }).count(), 0);
-    await row.getByRole("button", { name: "Результаты", exact: true }).click();
-    await results.getByText(/Уверенное решение/).waitFor();
+    const archivedRow = hrView.page.getByRole("row").filter({ hasText: "Архивный Антон Кандидатов" });
+    await archivedRow.getByText("Архив", { exact: true }).waitFor();
+    assert.equal(await archivedRow.getByRole("button", { name: "Открыть комнату", exact: true }).count(), 0);
+    await archivedRow.getByRole("button", { name: "Результаты", exact: true }).click();
+    await results.getByText("Задача на массивы", { exact: false }).waitFor();
     assert.equal(await results.getByRole("textbox").count(), 0, "Archived review is read-only");
     await results.getByRole("button", { name: "Закрыть", exact: true }).filter({ hasText: /^Закрыть$/ }).click();
     await downloadWorkbook(hrView.page);
@@ -811,20 +859,20 @@ test("interviewer invites an offline hiring manager; metadata, refresh, results,
   } finally { await browser.close(); }
 });
 
-test("hiring-manager candidate admission does not track; manager entry tracks and failed refresh is recoverable", { timeout: 90000 }, async () => {
+test("TEAM candidate admission cannot track; explicit hiring assignment enables current cabinet rights and refresh recovery", { timeout: 90000 }, async () => {
   const browser = await chromium.launch();
   try {
     const owner = await account();
     const hr = await account(true, "Нанимающий менеджер на собеседовании");
-    const room = await createInterview(owner);
+    const room = await createTeamInterview(owner);
     const candidateView = await openAccount(browser, hr, `/room/${room.inviteCode}`);
     await candidateView.page.getByTestId("room-code-editor-host").waitFor();
     const candidate = await request(`/rooms/${room.inviteCode}`, { token: hr.token });
     assert.equal(candidate.role, "candidate");
     assert.equal(await candidateView.page.getByRole("button", { name: "Кандидат и нанимающие", exact: true }).count(), 0);
     assert.equal((await request("/me/hr/rooms", { token: hr.token })).totalElements, 0);
-    await request(`/rooms/${room.inviteCode}/hr-tracking`, { token: hr.token, method: "POST", status: 403 });
-    await request(`/rooms/${room.inviteCode}/participants/${hr.user.id}/role`, { token: owner.token, method: "POST", body: { role: "interviewer" } });
+    await request(`/rooms/${room.inviteCode}/hr-tracking`, { token: hr.token, method: "POST", status: 404 });
+    await setTeamManagerRole(owner, room, hr, "interviewer");
     await candidateView.page.getByRole("button", { name: "Кандидат и нанимающие", exact: true }).waitFor();
     const cabinet = await openAccount(browser, hr);
     await cabinet.page.getByRole("row").filter({ hasText: room.title }).waitFor();
@@ -836,7 +884,7 @@ test("hiring-manager candidate admission does not track; manager entry tracks an
     await cabinet.page.unroute("**/api/me/hr/rooms?**", failList);
     await cabinet.page.getByRole("button", { name: "Повторить", exact: true }).click();
     await cabinet.page.getByRole("row").filter({ hasText: room.title }).waitFor();
-    await request(`/rooms/${room.inviteCode}/participants/${hr.user.id}/role`, { token: owner.token, method: "POST", body: { role: "candidate" } });
+    await setTeamManagerRole(owner, room, hr, "candidate");
     await cabinet.page.getByRole("button", { name: "Обновить список", exact: true }).click();
     await cabinet.page.getByText("Пока нет интервью", { exact: true }).waitFor();
     await request(`/me/hr/rooms/${room.id}`, { token: hr.token, status: 404 });
@@ -846,40 +894,35 @@ test("hiring-manager candidate admission does not track; manager entry tracks an
   } finally { await browser.close(); }
 });
 
-test("owner and promoted guest interviewer can assign two hiring managers through the room controls", { timeout: 90000 }, async () => {
+test("owner and active team colleague can assign two external hiring managers through the room controls", { timeout: 90000 }, async () => {
   const browser = await chromium.launch();
   try {
     const owner = await account(false, "Владелец интервью");
     const firstHr = await account(true, "Первый нанимающий менеджер");
     const secondHr = await account(true, "Второй нанимающий менеджер");
-    const room = await createInterview(owner);
+    const room = await createTeamInterview(owner);
     const ownerView = await openAccount(browser, owner, `/room/${room.inviteCode}`);
-    const guestContext = await browser.newContext();
-    await guestContext.addInitScript((inviteCode) => {
-      localStorage.setItem(`guest_display_name_${inviteCode}`, "Гостевой интервьюер");
-    }, room.inviteCode);
-    const guest = await guestContext.newPage();
-    guest.setDefaultTimeout(10000);
+    const colleague = await account(false, "Коллега интервьюер");
+    const { page: guest } = await openAccount(browser, colleague, `/room/${room.inviteCode}`);
     const guestDiscoveryRequests = [];
     guest.on("request", request => {
       const path = new URL(request.url()).pathname;
       if (path === "/api/me/hiring-manager-preview" || path === "/api/me/hiring-manager-options") guestDiscoveryRequests.push(path);
     });
-    await guest.goto(`${web}/room/${room.inviteCode}`);
+
     await guest.getByTestId("room-code-editor-host").waitFor();
     assert.equal(await guest.getByRole("button", { name: "Кандидат и нанимающие", exact: true }).count(), 0);
-    await ownerView.page.getByRole("button", { name: /^Гостевой интервьюер,/ }).click();
-    await ownerView.page.getByRole("menuitem", { name: "Назначить интервьюером", exact: true }).click();
+    await joinTeam(owner, room, colleague);
     await guest.getByRole("button", { name: "Кандидат и нанимающие", exact: true }).click();
     const guestPanel = guest.getByRole("dialog", { name: "Кандидат и нанимающие", exact: true });
-    await guestPanel.getByRole("combobox", { name: "Нанимающий", exact: true }).fill(firstHr.user.id);
-    await chooseHiring(guest, guestPanel.getByRole("combobox", { name: "Нанимающий", exact: true }), firstHr.user.id);
+    await guestPanel.getByRole("combobox", { name: "Нанимающий", exact: true }).fill(firstHr.user.nickname);
+    await chooseHiring(guest, guestPanel.getByRole("combobox", { name: "Нанимающий", exact: true }), firstHr.user.displayName);
     await guestPanel.getByText(firstHr.user.displayName, { exact: true }).waitFor();
-    assert.deepEqual(guestDiscoveryRequests, [], "Guest interviewer assignment must use room authority without calling authenticated personal discovery endpoints");
+    assert.deepEqual(guestDiscoveryRequests, [], "Team colleague assignment uses the current room scope without a global hiring directory");
 
     await ownerView.page.getByRole("button", { name: "Кандидат и нанимающие", exact: true }).click();
     const ownerPanel = ownerView.page.getByRole("dialog", { name: "Кандидат и нанимающие", exact: true });
-    await ownerPanel.getByRole("combobox", { name: "Нанимающий", exact: true }).fill(secondHr.user.id);
+    await ownerPanel.getByRole("combobox", { name: "Нанимающий", exact: true }).fill(secondHr.user.nickname);
     await chooseHiring(ownerView.page, ownerPanel.getByRole("combobox", { name: "Нанимающий", exact: true }), secondHr.user.displayName);
     await ownerPanel.getByText(secondHr.user.displayName, { exact: true }).waitFor();
     await ownerPanel.getByText(firstHr.user.displayName, { exact: true }).waitFor();
@@ -899,7 +942,7 @@ test("switching hiring-manager accounts in one browser clears the previous cabin
     const firstHr = await account(true, "Нанимающий менеджер с интервью");
     const secondHr = await account(true, "Нанимающий менеджер без интервью");
     const room = await createInterview(firstHr);
-    await request(`/rooms/${room.inviteCode}/hr-tracking`, { token: firstHr.token, method: "POST" });
+
     const page = await browser.newPage();
     page.setDefaultTimeout(10000);
     const login = async (hr) => {
@@ -918,8 +961,9 @@ test("switching hiring-manager accounts in one browser clears the previous cabin
     await login(secondHr);
     await page.getByText("Пока нет интервью", { exact: true }).waitFor();
     assert.equal(await page.getByRole("row").filter({ hasText: room.title }).count(), 0);
-    assert.equal(await page.getByText(firstHr.user.id, { exact: true }).count(), 0);
-    await page.getByText(secondHr.user.id, { exact: true }).first().waitFor();
+    assert.equal(await page.getByText(`@${firstHr.user.nickname}`, { exact: true }).count(), 0);
+    await page.getByText(`@${secondHr.user.nickname}`, { exact: true }).first().waitFor();
+    assert.equal(await page.getByText(secondHr.user.id, { exact: true }).count(), 0, "The successor identity is shown without a technical identifier");
   } finally { await browser.close(); }
 });
 
@@ -929,7 +973,7 @@ test("cabinet loading and pending actions stay visible without false empty or du
   try {
     const hr = await account(true, "Нанимающий менеджер с медленным соединением");
     const room = await createInterview(hr);
-    await request(`/rooms/${room.inviteCode}/hr-tracking`, { token: hr.token, method: "POST" });
+
     const context = await browser.newContext();
     await context.addInitScript((token) => localStorage.setItem("auth_token", token), hr.token);
     const page = await context.newPage();
@@ -995,7 +1039,7 @@ test("leaving the account cancels a pending hiring-manager export before a previ
   try {
     const hr = await account(true, "Нанимающий менеджер с отложенным экспортом");
     const room = await createInterview(hr);
-    await request(`/rooms/${room.inviteCode}/hr-tracking`, { token: hr.token, method: "POST" });
+
     const exportResponse = await fetch(`${api}/me/hr/rooms/export`, { headers: { Authorization: `Bearer ${hr.token}` } });
     assert.equal(exportResponse.status, 200);
     const workbook = Buffer.from(await exportResponse.arrayBuffer());
@@ -1062,9 +1106,13 @@ test("a fresh anonymous visit to an archived room is terminal before entering a 
   const browser = await chromium.launch();
   try {
     const hr = await account(true);
-    const room = await createInterview(hr);
-    await request(`/rooms/${room.inviteCode}/hr-tracking`, { token: hr.token, method: "POST" });
-    await request(`/me/rooms/${room.id}`, { token: hr.token, method: "DELETE" });
+    const creator = await account(false, "Ушедший создатель архивной комнаты");
+    const team = await createTeam(hr);
+    await joinTeam(hr, { teamId: team.id }, creator);
+    const room = await createTeamInterview(creator, `Архивная комната ${unique()}`, team.id);
+    await request(`/teams/${room.teamId}/leave`, { token: creator.token, method: "POST" });
+    await request(`/teams/${room.teamId}/interviews/${room.id}/archive`, { token: hr.token, method: "POST" });
+    await request(`/rooms/${room.inviteCode}`, { status: 404 });
     const page = await browser.newPage();
     page.setDefaultTimeout(10000);
     await page.goto(`${web}/room/${room.inviteCode}`);
@@ -1079,7 +1127,7 @@ test("permission loss invalidates pending private-panel data before a manager ca
   try {
     const owner = await account();
     const hr = await account(true, "Нанимающий менеджер с изменяемым доступом");
-    const room = await createInterview(owner);
+    const room = await createTeamInterview(owner);
     await request(`/rooms/${room.inviteCode}/hr-managers/${hr.user.id}`, { token: owner.token, method: "PUT" });
     const oldMetadata = await request(`/rooms/${room.inviteCode}/interview-metadata`, {
       token: owner.token, method: "PUT", body: { candidateName: "Старое имя из задержанного запроса", position: null, scheduledAt: null, revision: 0 },
@@ -1101,13 +1149,13 @@ test("permission loss invalidates pending private-panel data before a manager ca
     const panel = page.getByRole("dialog", { name: "Кандидат и нанимающие", exact: true });
     await trigger.click();
     await intercepted;
-    await request(`/rooms/${room.inviteCode}/participants/${hr.user.id}/role`, { token: owner.token, method: "POST", body: { role: "candidate" } });
+    await setTeamManagerRole(owner, room, hr, "candidate");
     await panel.waitFor({ state: "hidden" });
     await trigger.waitFor({ state: "hidden" });
     await request(`/rooms/${room.inviteCode}/interview-metadata`, {
       token: owner.token, method: "PUT", body: { ...oldMetadata, candidateName: "Актуальное имя после изменения доступа" },
     });
-    await request(`/rooms/${room.inviteCode}/participants/${hr.user.id}/role`, { token: owner.token, method: "POST", body: { role: "interviewer" } });
+    await setTeamManagerRole(owner, room, hr, "interviewer");
     await trigger.click();
     release();
     await panel.getByLabel("Имя кандидата", { exact: true }).waitFor();
@@ -1122,7 +1170,7 @@ test("participant hiring-manager assignment works without ID entry, reports fail
     const owner = await account(false, "Владелец назначения");
     const hr = await account(true, "Пришедший нанимающий менеджер");
     const ordinary = await account(false, "Обычный участник");
-    const room = await createInterview(owner);
+    const room = await createTeamInterview(owner);
     const ownerView = await openAccount(browser, owner, `/room/${room.inviteCode}`);
     const hrView = await openAccount(browser, hr, `/room/${room.inviteCode}`);
     await hrView.page.getByTestId("room-code-editor-host").waitFor();
@@ -1145,7 +1193,7 @@ test("participant hiring-manager assignment works without ID entry, reports fail
     const endpoint = `**/api/rooms/${room.inviteCode}/hr-managers/${hr.user.id}`;
     await ownerPage.route(endpoint, (route) => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "Временная ошибка назначения нанимающего" }) }), { times: 1 });
     await ownerPage.getByRole("menuitem", { name: "Назначить нанимающим", exact: true }).click();
-    await ownerPage.getByRole("alert").filter({ hasText: /нанимающего/ }).waitFor();
+    await ownerPage.getByRole("alert").filter({ hasText: "Не удалось назначить нанимающего" }).waitFor();
     assert.equal((await request("/me/hr/rooms", { token: hr.token })).totalElements, 0);
     let requestCount = 0;
     let signalRequest;
@@ -1192,17 +1240,17 @@ test("participant hiring-manager assignment works without ID entry, reports fail
 });
 
 for (const actorKind of ["registered", "guest"]) {
-  test(`participant hiring-manager assignment is available to a ${actorKind} interviewer without general role control`, { timeout: 90000 }, async () => {
+  test(`nickname hiring follows current authority for a ${actorKind} room actor`, { timeout: 90000 }, async () => {
     const browser = await chromium.launch();
     try {
       const owner = await account(false, "Владелец комнаты");
       const hr = await account(true, "Нанимающий менеджер для интервьюера");
-      const room = await createInterview(owner);
+      const room = actorKind === "registered" ? await createTeamInterview(owner) : await createInterview(owner);
       const ownerView = await openAccount(browser, owner, `/room/${room.inviteCode}`);
       const actorName = "Приглашающий интервьюер";
-      let actorPage;
+      let actorPage, actor;
       if (actorKind === "registered") {
-        const actor = await account(false, actorName);
+        actor = await account(false, actorName);
         actorPage = (await openAccount(browser, actor, `/room/${room.inviteCode}`)).page;
       } else {
         const context = await browser.newContext();
@@ -1212,26 +1260,51 @@ for (const actorKind of ["registered", "guest"]) {
         await actorPage.goto(`${web}/room/${room.inviteCode}`);
       }
       await actorPage.getByTestId("room-code-editor-host").waitFor();
-      assert.equal(await actorPage.getByRole("button", { name: "Кандидат и нанимающие", exact: true }).count(), 0);
-      await ownerView.page.getByRole("button", { name: /Приглашающий интервьюер,/ }).click();
-      assert.equal(await ownerView.page.getByRole("menuitem", { name: "Назначить нанимающим", exact: true }).count(), 0,
-        "Ordinary accounts and anonymous participants cannot be assigned as hiring managers");
-      await ownerView.page.getByRole("menuitem", { name: "Назначить интервьюером", exact: true }).click();
-      await actorPage.getByRole("button", { name: "Кандидат и нанимающие", exact: true }).waitFor();
+      const panelLabel = "Кандидат и нанимающие";
+      assert.equal(await actorPage.getByRole("button", { name: panelLabel, exact: true }).count(), 0);
+      if (actorKind === "registered") await joinTeam(owner, room, actor);
+      else {
+        await ownerView.page.getByRole("button", { name: /Приглашающий интервьюер,/ }).click();
+        assert.equal(await ownerView.page.getByRole("menuitem", { name: "Назначить нанимающим", exact: true }).count(), 0);
+        await ownerView.page.getByRole("menuitem", { name: "Назначить интервьюером", exact: true }).click();
+      }
+      await actorPage.getByRole("button", { name: panelLabel, exact: true }).waitFor();
       const hrView = await openAccount(browser, hr, `/room/${room.inviteCode}`);
       await hrView.page.getByTestId("room-code-editor-host").waitFor();
-      await actorPage.getByRole("button", { name: /Нанимающий менеджер для интервьюера,/ }).click();
-      assert.equal(await actorPage.getByRole("menuitem", { name: "Назначить интервьюером", exact: true }).count(), 0,
-        "Hiring-manager shortcut must not expand owner-only ordinary promotion rights");
-      await actorPage.getByRole("menuitem", { name: "Назначить нанимающим", exact: true }).click();
-      await hrView.page.getByRole("button", { name: "Кандидат и нанимающие", exact: true }).waitFor();
-      assert.equal((await request("/me/hr/rooms", { token: hr.token })).totalElements, 1);
-      await actorPage.getByRole("button", { name: /Нанимающий менеджер для интервьюера,/ }).click();
-      await actorPage.getByRole("menuitem", { name: "Снять роль нанимающего", exact: true }).waitFor();
-      assert.equal(await actorPage.getByRole("menuitem", { name: "Снять роль интервьюера", exact: true }).count(), 0,
-        "Non-owner managers must not gain ordinary role revocation");
-      await actorPage.getByRole("menuitem", { name: "Снять роль нанимающего", exact: true }).click();
-      await hrView.page.getByRole("button", { name: "Кандидат и нанимающие", exact: true }).waitFor({ state: "hidden" });
+      if (actorKind === "guest") {
+        await actorPage.getByRole("button", { name: panelLabel, exact: true }).click();
+        const panel = actorPage.getByRole("dialog", { name: panelLabel, exact: true });
+        await panel.getByLabel("Имя кандидата", { exact: true }).waitFor();
+        const nickname = panel.getByRole("combobox", { name: "Нанимающий", exact: true });
+        await nickname.waitFor();
+        assert.equal(await panel.getByText(/внешн|Без трека|Без вакансии/i).count(), 0, "A PERSONAL guest uses current room proof with generic hiring and no TEAM context");
+        assert.equal(await actorPage.getByRole("button", { name: /Нанимающий менеджер для интервьюера,/ }).count(), 0, "A personal interviewer has no hiring participant shortcut");
+        assert.equal((await request("/me/hr/rooms", { token: hr.token })).totalElements, 0);
+        await nickname.fill(hr.user.nickname);
+        await chooseHiring(actorPage, nickname, hr.user.displayName);
+        const remove = panel.getByRole("button", { name: `Снять роль нанимающего у ${hr.user.displayName}`, exact: true });
+        await remove.waitFor();
+        await hrView.page.getByRole("button", { name: panelLabel, exact: true }).waitFor();
+        assert.equal((await request("/me/hr/rooms", { token: hr.token })).totalElements, 1);
+        await remove.click();
+        await hrView.page.getByRole("button", { name: panelLabel, exact: true }).waitFor({ state: "hidden" });
+        assert.equal((await request("/me/hr/rooms", { token: hr.token })).totalElements, 0);
+        await ownerView.page.getByRole("button", { name: /Приглашающий интервьюер,/ }).click();
+        await ownerView.page.getByRole("menuitem", { name: "Снять роль интервьюера", exact: true }).click();
+        await panel.waitFor({ state: "hidden" });
+        await actorPage.getByRole("button", { name: panelLabel, exact: true }).waitFor({ state: "hidden" });
+      } else {
+        await actorPage.getByRole("button", { name: /Нанимающий менеджер для интервьюера,/ }).click();
+        assert.equal(await actorPage.getByRole("menuitem", { name: "Назначить интервьюером", exact: true }).count(), 0, "Colleague authority does not grant ordinary owner promotion actions");
+        await actorPage.getByRole("menuitem", { name: "Назначить нанимающим", exact: true }).click();
+        await hrView.page.getByRole("button", { name: "Кандидат и нанимающие", exact: true }).waitFor();
+        assert.equal((await request("/me/hr/rooms", { token: hr.token })).totalElements, 1);
+        await actorPage.getByRole("button", { name: /Нанимающий менеджер для интервьюера,/ }).click();
+        await actorPage.getByRole("menuitem", { name: "Снять роль нанимающего", exact: true }).waitFor();
+        assert.equal(await actorPage.getByRole("menuitem", { name: "Снять роль интервьюера", exact: true }).count(), 0, "A colleague cannot revoke ordinary owner grants");
+        await actorPage.getByRole("menuitem", { name: "Снять роль нанимающего", exact: true }).click();
+        await hrView.page.getByRole("button", { name: "Кандидат и нанимающие", exact: true }).waitFor({ state: "hidden" });
+      }
       await hrView.page.reload();
       await hrView.page.getByTestId("room-code-editor-host").waitFor();
       assert.equal((await request(`/rooms/${room.inviteCode}`, { token: hr.token })).role, "candidate");
@@ -1244,7 +1317,7 @@ test("participant hiring-manager assignment handles current 410 as terminal with
   try {
     const owner = await account();
     const hr = await account(true, "Нанимающий менеджер архивной проверки");
-    const room = await createInterview(owner);
+    const room = await createTeamInterview(owner);
     const ownerView = await openAccount(browser, owner, `/room/${room.inviteCode}`);
     const hrView = await openAccount(browser, hr, `/room/${room.inviteCode}`);
     await hrView.page.getByTestId("room-code-editor-host").waitFor();
@@ -1264,8 +1337,8 @@ test("participant hiring-manager assignment ignores a stale 410 after inviter de
     const owner = await account();
     const actor = await account(false, "Меняющий роль интервьюер");
     const hr = await account(true, "Нанимающий менеджер отложенного запроса");
-    const room = await createInterview(owner);
-    await request(`/rooms/${room.inviteCode}/participants/${actor.user.id}/role`, { token: owner.token, method: "POST", body: { role: "interviewer" } });
+    const room = await createTeamInterview(owner);
+    await setTeamManagerRole(owner, room, actor, "interviewer");
     const actorView = await openAccount(browser, actor, `/room/${room.inviteCode}`);
     const hrView = await openAccount(browser, hr, `/room/${room.inviteCode}`);
     await hrView.page.getByTestId("room-code-editor-host").waitFor();
@@ -1284,9 +1357,9 @@ test("participant hiring-manager assignment ignores a stale 410 after inviter de
     await actorView.page.getByRole("button", { name: /Нанимающий менеджер отложенного запроса,/ }).click();
     await actorView.page.getByRole("menuitem", { name: "Назначить нанимающим", exact: true }).click();
     await requestArrived;
-    await request(`/rooms/${room.inviteCode}/participants/${actor.user.id}/role`, { token: owner.token, method: "POST", body: { role: "candidate" } });
+    await setTeamManagerRole(owner, room, actor, "candidate");
     await actorView.page.getByRole("button", { name: "Кандидат и нанимающие", exact: true }).waitFor({ state: "hidden" });
-    await request(`/rooms/${room.inviteCode}/participants/${actor.user.id}/role`, { token: owner.token, method: "POST", body: { role: "interviewer" } });
+    await setTeamManagerRole(owner, room, actor, "interviewer");
     await actorView.page.getByRole("button", { name: "Кандидат и нанимающие", exact: true }).waitFor();
     releaseAssignment();
     await deliveryCompleted;
@@ -1305,7 +1378,7 @@ test("hiring-manager removal from participant menu updates all tabs and cabinet 
   try {
     const owner = await account(false, "Владелец удаления");
     const hr = await account(true, "Кандидат с отметкой менеджера");
-    const room = await createInterview(owner);
+    const room = await createTeamInterview(owner);
     await request(`/rooms/${room.inviteCode}/hr-managers/${hr.user.id}`, { token: owner.token, method: "PUT" });
     const actor = await openAccount(browser, owner, `/room/${room.inviteCode}`);
     const target = await openAccount(browser, hr, `/room/${room.inviteCode}`);
@@ -1340,7 +1413,7 @@ test("hiring-manager removal from offline manager list supports pending failure 
   try {
     const owner = await account(true, "Нанимающий менеджер владелец");
     const hr = await account(true, "Нанимающий менеджер вне комнаты");
-    const room = await createInterview(owner);
+    const room = await createTeamInterview(owner);
     await request(`/rooms/${room.inviteCode}/hr-managers/${hr.user.id}`, { token: owner.token, method: "PUT" });
     const actor = await openAccount(browser, owner, `/room/${room.inviteCode}`);
     await actor.page.getByRole("button", { name: "Кандидат и нанимающие", exact: true }).click();
@@ -1363,7 +1436,7 @@ test("hiring-manager removal from offline manager list supports pending failure 
     assert.equal(count, 1);
     assert.equal((await request(`/rooms/${room.inviteCode}`, { token: hr.token })).role, "interviewer");
     release();
-    await dialog.getByText(/Не удалось снять роль нанимающего/).waitFor();
+    await dialog.getByText("Не удалось снять роль нанимающего. Проверьте доступ к комнате и повторите попытку.", { exact: true }).waitFor();
     await actor.page.unroute(endpoint);
     await remove.click();
     await remove.waitFor({ state: "hidden" });
@@ -1379,7 +1452,7 @@ test("hiring-manager removal allows self removal and closes manager panel", { ti
   try {
     const owner = await account();
     const hr = await account(true, "Нанимающий менеджер снимает свою роль");
-    const room = await createInterview(owner);
+    const room = await createTeamInterview(owner);
     await request(`/rooms/${room.inviteCode}/hr-managers/${hr.user.id}`, { token: owner.token, method: "PUT" });
     const target = await openAccount(browser, hr, `/room/${room.inviteCode}`);
     await target.page.getByRole("button", { name: "Кандидат и нанимающие", exact: true }).click();
@@ -1398,7 +1471,7 @@ for (const surface of ["participant", "panel"]) {
     try {
       const owner = await account();
       const hr = await account(true, "Нанимающий менеджер архивирования");
-      const room = await createInterview(owner);
+      const room = await createTeamInterview(owner);
       await request(`/rooms/${room.inviteCode}/hr-managers/${hr.user.id}`, { token: owner.token, method: "PUT" });
       const actor = await openAccount(browser, owner, `/room/${room.inviteCode}`);
       const target = await openAccount(browser, hr, `/room/${room.inviteCode}`);
@@ -1425,8 +1498,8 @@ for (const surface of ["participant", "panel"]) {
       const owner = await account();
       const actor = await account(false, "Менеджер отмены");
       const hr = await account(true, "Нанимающий менеджер задержанного удаления");
-      const room = await createInterview(owner);
-      await request(`/rooms/${room.inviteCode}/participants/${actor.user.id}/role`, { token: owner.token, method: "POST", body: { role: "interviewer" } });
+      const room = await createTeamInterview(owner);
+      await setTeamManagerRole(owner, room, actor, "interviewer");
       await request(`/rooms/${room.inviteCode}/hr-managers/${hr.user.id}`, { token: owner.token, method: "PUT" });
       const actorView = await openAccount(browser, actor, `/room/${room.inviteCode}`);
       const target = await openAccount(browser, hr, `/room/${room.inviteCode}`);
@@ -1449,9 +1522,9 @@ for (const surface of ["participant", "panel"]) {
         await actorView.page.getByRole("button", { name: "Снять роль нанимающего у Нанимающий менеджер задержанного удаления", exact: true }).click();
       }
       await arrived;
-      await request(`/rooms/${room.inviteCode}/participants/${actor.user.id}/role`, { token: owner.token, method: "POST", body: { role: "candidate" } });
+      await setTeamManagerRole(owner, room, actor, "candidate");
       await actorView.page.getByRole("button", { name: "Кандидат и нанимающие", exact: true }).waitFor({ state: "hidden" });
-      await request(`/rooms/${room.inviteCode}/participants/${actor.user.id}/role`, { token: owner.token, method: "POST", body: { role: "interviewer" } });
+      await setTeamManagerRole(owner, room, actor, "interviewer");
       await actorView.page.getByRole("button", { name: "Кандидат и нанимающие", exact: true }).waitFor();
       release(); await delivered;
       await actorView.page.getByRole("button", { name: "Кандидат и нанимающие", exact: true }).click();
@@ -1468,7 +1541,7 @@ test("hiring-manager removal participant pending failure preserves role and perm
   try {
     const owner = await account();
     const hr = await account(true, "Нанимающий менеджер повторной попытки");
-    const room = await createInterview(owner);
+    const room = await createTeamInterview(owner);
     await request(`/rooms/${room.inviteCode}/hr-managers/${hr.user.id}`, { token: owner.token, method: "PUT" });
     const actor = await openAccount(browser, owner, `/room/${room.inviteCode}`);
     const target = await openAccount(browser, hr, `/room/${room.inviteCode}`);
@@ -1493,7 +1566,7 @@ test("hiring-manager removal participant pending failure preserves role and perm
     assert.equal(count, 1);
     release();
     await actor.page.keyboard.press("Escape");
-    await actor.page.getByText(/Не удалось снять роль нанимающего/).waitFor();
+    await actor.page.getByText("Не удалось снять роль нанимающего. Проверьте доступ к комнате и повторите попытку.", { exact: true }).waitFor();
     assert.equal((await request(`/rooms/${room.inviteCode}`, { token: hr.token })).role, "interviewer");
     await actor.page.unroute(endpoint);
     await participant.click();

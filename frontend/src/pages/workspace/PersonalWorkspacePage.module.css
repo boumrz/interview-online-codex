@@ -198,15 +198,6 @@
   padding-block: clamp(28px, 5vw, 64px) 80px;
 }
 
-.eyebrow {
-  margin-bottom: 8px;
-  color: var(--app-primary-text);
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: .14em;
-  text-transform: uppercase;
-}
-
 .panel,
 .emptyState {
   border-color: var(--app-border);
@@ -227,47 +218,6 @@
 .tableScroll {
   max-width: 100%;
   overflow-x: auto;
-}
-
-.interviewTitle {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
-}
-
-.interviewTitleText {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.titleEditButton {
-  width: 32px;
-  min-width: 32px;
-  height: 32px;
-  flex: 0 0 auto;
-  padding: 0;
-  border-radius: 8px;
-  color: var(--app-muted);
-}
-
-.titleEditButton:hover {
-  color: var(--app-text) !important;
-  background: var(--app-neutral-hover) !important;
-}
-
-.actionCell {
-  width: 400px;
-  min-width: 400px;
-  max-width: 400px;
-  text-align: right;
-  white-space: nowrap;
-}
-
-.actionButtons {
-  width: 100%;
-  justify-content: flex-end;
-  flex-wrap: nowrap;
 }
 
 .formGrid {
@@ -348,11 +298,6 @@
   border-color: var(--app-warning-accent);
   color: var(--app-warning);
   background: var(--app-warning-bg);
-}
-
-.identityValue {
-  overflow-wrap: anywhere;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 .languageControl {

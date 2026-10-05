@@ -4,11 +4,11 @@ import { CopyOutlined } from "@ant-design/icons";
 import { useClipboardNotification } from "../../components/useClipboardNotification";
 
 type CopyHrIdProps = {
-  id: string;
+  nickname: string;
   compact?: boolean;
 };
 
-export function CopyHrId({ id, compact = false }: CopyHrIdProps) {
+export function CopyHrId({ nickname, compact = false }: CopyHrIdProps) {
   const valueRef = useRef<HTMLSpanElement | null>(null);
   const copyToClipboard = useClipboardNotification();
 
@@ -22,9 +22,9 @@ export function CopyHrId({ id, compact = false }: CopyHrIdProps) {
   };
 
   const copy = async () => {
-    const copied = await copyToClipboard(id, {
-      success: "ID нанимающего готов к вставке.",
-      failure: "ID выделен — скопируйте его вручную.",
+    const copied = await copyToClipboard(nickname, {
+      success: "Ник нанимающего готов к вставке.",
+      failure: "Ник выделен — скопируйте его вручную.",
     });
     if (!copied) selectValue();
   };
@@ -36,7 +36,7 @@ export function CopyHrId({ id, compact = false }: CopyHrIdProps) {
           ref={valueRef}
           style={{ overflowWrap: "anywhere", userSelect: "text", fontFamily: "var(--font-code)", fontSize: compact ? 12 : 14 }}
         >
-          {id}
+          @{nickname}
         </Typography.Text>
         <Button
           htmlType="button"
@@ -44,7 +44,7 @@ export function CopyHrId({ id, compact = false }: CopyHrIdProps) {
           icon={<CopyOutlined />}
           onClick={() => void copy()}
         >
-          Скопировать ID нанимающего
+          Скопировать ник нанимающего
         </Button>
       </Flex>
     </div>

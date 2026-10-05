@@ -68,8 +68,8 @@ async function fixture(path, { role = "MEMBER", isHr = false } = {}) {
       else if (url.pathname === "/api/me/hiring-manager-options") body = [{ normalizedId: userId, displayName: user.displayName }];
       else if (url.pathname === "/api/me/hiring-manager-preview") {
         const incoming = request.postDataJSON();
-        if (incoming.invitationId === userId && incoming.teamId === teamId) { status = 400; body = { error: "Участники команды уже имеют доступ ко всем кандидатам" }; }
-        else body = { normalizedId: incoming.invitationId, displayName: incoming.invitationId === userId ? user.displayName : "Внешний нанимающий" };
+        if (incoming.nickname === user.nickname && incoming.teamId === teamId) { status = 400; body = { error: "Участники команды уже имеют доступ ко всем кандидатам" }; }
+        else body = { normalizedId: incoming.nickname === user.nickname ? userId : externalId, displayName: incoming.nickname === user.nickname ? user.displayName : "Внешний нанимающий" };
       }
       else if (url.pathname === "/api/me/hr/rooms") body = { items: scoped, page: Number(url.searchParams.get("page")), size: 20, totalElements: scoped.length, totalPages: scoped.length ? 1 : 0, timezone: "Europe/Moscow", from: null, to: null };
       else if (url.pathname === "/api/me/hr/rooms/export") {
@@ -214,18 +214,18 @@ test("candidate track and vacancy filters are carried into Excel export", async 
   } finally { await browser.close(); }
 });
 
-test("team interview hiring invitations use only external UUID and reject a team member", async () => {
+test("team interview hiring invitations use only external nickname and reject a team member", async () => {
   const { browser, page, requests } = await fixture("interviews/new", { isHr: true });
   try {
     const dialog = page.getByRole("dialog", { name: "Создать интервью", exact: true });
     await dialog.waitFor();
     assert.equal(await dialog.getByRole("combobox", { name: "Нанимающие из команды", exact: true }).count(), 0);
     const idInput = dialog.getByRole("combobox", { name: "Внешний нанимающий (необязательно)", exact: true });
-    await idInput.fill(userId);
+    await idInput.fill("teammate");
 
     await dialog.getByRole("alert").filter({ hasText: "Участники команды уже имеют доступ" }).waitFor();
     assert.equal(requests.filter(entry => entry.url.pathname === "/api/me/hiring-manager-options").length, 0);
-    await idInput.fill(externalId);
+    await idInput.fill("external.hiring");
     await page.locator(".ant-select-item-option").filter({ hasText: "Внешний нанимающий" }).click();
     await dialog.getByText("Внешний нанимающий", { exact: true }).waitFor();
     assert.equal(requests.filter(entry => entry.url.pathname === "/api/me/hiring-manager-preview").at(-1).body.teamId, teamId);

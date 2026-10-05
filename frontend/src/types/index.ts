@@ -260,6 +260,18 @@ export type TeamInterviewResponse = {
 
 export type TeamInterviewDetails = InterviewMetadata & {
   readonly title: string;
+  readonly ownerUserId: string | null;
+  readonly interviewerIds: readonly string[];
+  readonly trackId: string | null;
+  readonly trackName: string | null;
+  readonly vacancyId: string | null;
+  readonly vacancyTitle: string | null;
+};
+
+export type TeamInterviewDetailsUpdate = InterviewMetadata & {
+  readonly title: string;
+  readonly interviewerIds?: readonly string[];
+  readonly context?: { readonly trackId: string | null; readonly vacancyId: string | null };
 };
 
 export type TeamInterviewListTask = {
@@ -465,6 +477,17 @@ export type RoomSummary = {
   interviewerToken: string | null;
   verdict?: string | null;
   status?: string;
+  taskCount: number;
+  tasks: readonly PersonalInterviewListTask[];
+  finishedAt: string | null;
+  interviewerDisplayNames: readonly string[];
+};
+
+export type PersonalInterviewListTask = {
+  readonly stepIndex: number;
+  readonly title: string;
+  readonly language: string;
+  readonly mandatory: boolean;
 };
 
 export type InterviewMetadata = {
@@ -472,6 +495,10 @@ export type InterviewMetadata = {
   position: string | null;
   scheduledAt: string | null;
   revision: number;
+};
+
+export type PersonalInterviewDetails = InterviewMetadata & {
+  readonly title: string;
 };
 
 export type HrManager = {

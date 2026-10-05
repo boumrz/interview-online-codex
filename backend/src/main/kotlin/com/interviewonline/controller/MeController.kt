@@ -1,6 +1,9 @@
 package com.interviewonline.controller
 
 import com.interviewonline.dto.RoomSummaryDto
+import com.interviewonline.dto.PersonalInterviewDetailsDto
+import com.interviewonline.dto.PersonalInterviewDetailsUpdateRequest
+import com.fasterxml.jackson.databind.JsonNode
 import com.interviewonline.dto.UpdateProfileRequest
 import com.interviewonline.dto.UpdateRoomRequest
 import com.interviewonline.dto.UserDto
@@ -9,6 +12,7 @@ import com.interviewonline.dto.CommandOutcomeDto
 import com.interviewonline.service.AuthService
 import com.interviewonline.service.ApiException
 import com.interviewonline.service.RoomService
+import com.interviewonline.service.PersonalInterviewDetailsService
 import com.interviewonline.service.WorkspaceService
 import com.interviewonline.service.secure
 import jakarta.validation.Valid
@@ -33,6 +37,7 @@ class MeController(
     private val authService: AuthService,
     private val roomService: RoomService,
     private val workspaceService: WorkspaceService,
+    private val personalInterviewDetailsService: PersonalInterviewDetailsService,
 ) {
     private val jsonUtf8 = MediaType("application", "json", StandardCharsets.UTF_8)
 
@@ -73,10 +78,36 @@ class MeController(
     @GetMapping("/rooms")
     fun getMyRooms(
         @RequestHeader("Authorization", required = false) authorization: String?,
-    ): List<RoomSummaryDto> {
+    ): ResponseEntity<List<RoomSummaryDto>> {
         val token = authorization?.removePrefix("Bearer ")?.trim()
         val user = authService.requireUserByToken(token)
-        return roomService.listRoomsForUser(user)
+        return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "private, no-store").contentType(jsonUtf8).body(roomService.listRoomsForUser(user))
+    }
+
+    @GetMapping("/rooms/{roomId}/details")
+    fun personalInterviewDetails(@RequestHeader("Authorization", required = false) authorization: String?, @PathVariable roomId: String): ResponseEntity<PersonalInterviewDetailsDto> =
+        ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "private, no-store").contentType(jsonUtf8)
+            .body(personalInterviewDetailsService.details(requireUser(authorization), roomId))
+
+    @PatchMapping("/rooms/{roomId}/details")
+    fun updatePersonalInterviewDetails(
+        @RequestHeader("Authorization", required = false) authorization: String?, @PathVariable roomId: String, @RequestBody body: JsonNode,
+    ): ResponseEntity<PersonalInterviewDetailsDto> {
+        val actor = requireUser(authorization)
+        val fields = setOf("title", "candidateName", "position", "scheduledAt", "revision")
+        if (!body.isObject || body.fieldNames().asSequence().toSet() != fields) throw ApiException(HttpStatus.BAD_REQUEST, "Нужно передать название, все сведения и ревизию")
+        val title = body.path("title")
+        val revision = body.path("revision")
+        if (!title.isTextual || !revision.isIntegralNumber || !revision.canConvertToLong()) throw ApiException(HttpStatus.BAD_REQUEST, "Некорректные название или ревизия")
+        fun nullableText(key: String): String? {
+            val value = body.path(key)
+            if (value.isNull) return null
+            if (!value.isTextual) throw ApiException(HttpStatus.BAD_REQUEST, "Поле $key должно быть строкой или null")
+            return value.textValue()
+        }
+        val request = PersonalInterviewDetailsUpdateRequest(title.textValue(), nullableText("candidateName"), nullableText("position"), nullableText("scheduledAt"), revision.longValue())
+        return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "private, no-store").contentType(jsonUtf8)
+            .body(personalInterviewDetailsService.update(actor, roomId, request))
     }
 
     @PatchMapping("/rooms/{roomId}")

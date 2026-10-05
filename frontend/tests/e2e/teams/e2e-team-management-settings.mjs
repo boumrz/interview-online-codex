@@ -1170,7 +1170,7 @@ for (const downgrade of ["rename", "role"]) {
       await dialog.getByRole("button", { name: "Обновить данные", exact: true }).click();
       await started;
       releaseDetail();
-      await session.page.getByText(`Ваша роль: ${downgrade === "rename" ? "Участник" : "Администратор"}`, { exact: true }).waitFor();
+      await session.page.getByRole("main").getByText(downgrade === "rename" ? "Участник" : "Администратор", { exact: true }).first().waitFor();
       await dialog.waitFor({ state: "hidden" });
       assert.equal(await session.page.getByRole("button", { name: downgrade === "rename" ? "Переименовать команду" : "Изменить роль участника", exact: true }).count(), 0,
         "CONFIRMED_DOWNGRADE_LEFT_PROTECTED_ACTION_VISIBLE");
@@ -1184,7 +1184,7 @@ for (const downgrade of ["rename", "role"]) {
         assert.equal((await raw(`/teams/${team.id}/ownership-transfer`, { token: admin.token, method: "POST", key: randomUUID(), body: { targetUserId: owner.user.id, revision: current.revision } })).status, 200);
       }
       await session.page.evaluate(() => { window.dispatchEvent(new Event("blur")); window.dispatchEvent(new Event("focus")); });
-      await session.page.getByText(`Ваша роль: ${downgrade === "rename" ? "Администратор" : "Владелец"}`, { exact: true }).waitFor();
+      await session.page.getByRole("main").getByText(downgrade === "rename" ? "Администратор" : "Владелец", { exact: true }).first().waitFor();
       await session.page.getByRole("button", { name: dialogName, exact: true }).first().waitFor();
       assert.equal(await dialog.count(), 0, "REGRANT_REOPENED_PREVIOUSLY_REVOKED_DIALOG");
       assert.doesNotMatch(await session.page.locator("body").innerText(), /Protected stale rename draft/);
