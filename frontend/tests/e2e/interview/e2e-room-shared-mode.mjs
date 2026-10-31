@@ -17,17 +17,41 @@ async function request(path, token, body, method = body ? "POST" : "GET") {
   assert.ok(response.ok, `${method} ${path}: HTTP ${response.status}`);
   return response.status === 204 ? null : response.json();
 }
-async function fixture() {
+async function fixture({ theme = "light", captureMarkdownWorker = false, taskMarkdown = markdown } = {}) {
   const auth = await request("/auth/register", null, { nickname: `ux_${crypto.randomUUID().slice(0, 12)}`, displayName: "Проверка редактора", password: "test-password-123" });
   const room = await request("/rooms", auth.token, { title: "Команды и вид редактора", taskIds: [] });
-  await request(`/rooms/${room.inviteCode}/tasks`, auth.token, { customTasks: [0, 1].map(index => ({ title: `Шаг ${index + 1}`, description: markdown, starterCode: code, language: "nodejs" })) });
+  await request(`/rooms/${room.inviteCode}/tasks`, auth.token, { customTasks: [0, 1].map(index => ({ title: `Шаг ${index + 1}`, description: taskMarkdown, starterCode: code, language: "nodejs" })) });
   const browser = await chromium.launch();
-  const context = await browser.newContext({ viewport: { width: 1366, height: 900 } });
-  await context.addInitScript(({ token, user }) => {
+  const context = await browser.newContext({ viewport: { width: 1366, height: 900 }, colorScheme: theme });
+  await context.addInitScript(({ token, user, theme, captureMarkdownWorker }) => {
     localStorage.setItem("auth_token", token);
     localStorage.setItem("auth_user", JSON.stringify(user));
     localStorage.setItem("display_name", user.displayName);
-  }, auth);
+    localStorage.setItem("interview-online:ui-theme", theme);
+    if (captureMarkdownWorker) {
+      const NativeWorker = window.Worker;
+      window.markdownReplyGate = { hold: false, held: [], created: 0 };
+      window.releaseMarkdownReplies = () => {
+        window.markdownReplyGate.hold = false;
+        window.markdownReplyGate.held.splice(0).forEach(deliver => deliver());
+      };
+      window.Worker = class extends NativeWorker {
+        constructor(url, options) {
+          super(url, options);
+          this.isMarkdownPreview = options?.name === "markdown-preview";
+          if (this.isMarkdownPreview) window.markdownReplyGate.created++;
+        }
+        set onmessage(handler) {
+          super.onmessage = event => {
+            const deliver = () => handler?.call(this, event);
+            if (this.isMarkdownPreview && window.markdownReplyGate.hold) window.markdownReplyGate.held.push(deliver);
+            else deliver();
+          };
+        }
+        get onmessage() { return super.onmessage; }
+      };
+    }
+  }, { ...auth, theme, captureMarkdownWorker });
   const page = await context.newPage();
   page.setDefaultTimeout(8000);
   await page.goto(`${web}/room/${room.inviteCode}`);
@@ -207,6 +231,94 @@ test("room mode uses concise choices, secondary mode text and a quiet finish act
     }
   } finally { await f.close(); }
 });
+
+for (const scope of ["public", "private"]) for (const theme of ["light", "dark"]) {
+  test(`${scope} Markdown preview remains painted while typing and accepting fresh Worker replies in ${theme}`, async () => {
+    const title = `Непрерывный предпросмотр ${scope} ${theme}`;
+    const initial = `# ${title}\n\n${Array.from({ length: 80 }, (_, index) => `Абзац ${index + 1}: исходный документ остаётся виден при следующем вводе.`).join("\n\n")}`;
+    const tail = `preview_${scope}_${theme}_abcdefghijklmnopqrstuvwxyz_0123456789_latest_keyboard_text`;
+    const expected = `${initial}\n\n${tail}`;
+    const f = await fixture({ theme, captureMarkdownWorker: true, taskMarkdown: initial });
+    try {
+      await choose(f.page, "Markdown");
+      await f.page.getByRole("dialog", { name: "Изменить режим комнаты?", exact: true }).getByRole("button", { name: "Изменить режим", exact: true }).click();
+      await f.page.waitForFunction(() => document.querySelector('[data-testid="room-editor-mode-switch"]')?.textContent.includes("Markdown"));
+      if (scope === "private") {
+        await Promise.all([
+          f.page.waitForResponse(response => new URL(response.url()).pathname === `/api/rooms/${f.room.inviteCode}/tasks/1/workspace` && response.status() === 200),
+          f.page.getByTestId("room-step-row-1").click(),
+        ]);
+        await f.page.waitForFunction(() => document.querySelector('#room-context-region-editor [data-testid="room-current-local-step-context"]')?.dataset.stepIndex === "1");
+      }
+      const editor = f.page.getByRole("region", { name: "Редактор", exact: true });
+      const preview = editor.getByTestId("room-markdown-preview");
+      await preview.getByRole("heading", { name: title, exact: true }).waitFor();
+      const guestContext = await f.browser.newContext({ colorScheme: theme });
+      await guestContext.addInitScript(invite => localStorage.setItem(`guest_display_name_${invite}`, "Кандидат непрерывного предпросмотра"), f.room.inviteCode);
+      const guest = await guestContext.newPage();
+      await guest.goto(`${web}/room/${f.room.inviteCode}`);
+      await guest.getByTestId("room-markdown-preview").getByRole("heading", { name: title, exact: true }).waitFor();
+      const source = editor.getByTestId("room-markdown-editor").locator(".cm-content");
+      await source.click();
+      await f.page.keyboard.press("ControlOrMeta+End");
+      await preview.evaluate(element => {
+        const content = element.firstElementChild;
+        if (!content?.textContent.trim()) throw new Error("PREVIEW_WAS_NOT_INITIALISED");
+        element.scrollTop = Math.min(120, element.scrollHeight - element.clientHeight);
+        window.previewPaintAudit = { frames: 0, mutations: 0, failures: [], scrollTop: element.scrollTop, running: true };
+        const sample = () => {
+          const audit = window.previewPaintAudit;
+          if (!element.isConnected || element.firstElementChild !== content || !content.textContent.trim()) audit.failures.push("preview wrapper or content disappeared");
+          if (/загруз.*предпросмотр/i.test(element.textContent)) audit.failures.push("loading status appeared");
+        };
+        const observer = new MutationObserver(() => { window.previewPaintAudit.mutations++; sample(); });
+        observer.observe(element, { childList: true, subtree: true, characterData: true });
+        const frame = () => {
+          if (!window.previewPaintAudit.running) return;
+          window.previewPaintAudit.frames++;
+          sample();
+          requestAnimationFrame(frame);
+        };
+        requestAnimationFrame(frame);
+        window.stopPreviewPaintAudit = () => { sample(); window.previewPaintAudit.running = false; observer.disconnect(); };
+        window.markdownReplyGate.hold = true;
+      });
+      await f.page.keyboard.press("Enter");
+      await f.page.keyboard.press("Enter");
+      await f.page.keyboard.type(tail, { delay: 8 });
+      await f.page.waitForFunction(() => window.markdownReplyGate.held.length > 0);
+      assert.equal(await preview.getByText(tail, { exact: true }).count(), 0, "a genuine native Worker reply is still held");
+      await preview.getByRole("heading", { name: title, exact: true }).waitFor();
+      await f.page.evaluate(() => window.releaseMarkdownReplies());
+      await preview.getByText(tail, { exact: true }).waitFor();
+      const paint = await preview.evaluate(element => {
+        window.stopPreviewPaintAudit();
+        return { ...window.previewPaintAudit, finalScrollTop: element.scrollTop, workers: window.markdownReplyGate.created };
+      });
+      assert.ok(paint.workers > 0 && paint.frames > 2 && paint.mutations > 0, `native Worker, painted frames and fresh DOM commits were observed: ${JSON.stringify(paint)}`);
+      assert.deepEqual(paint.failures, [], "preview stays nonempty in MutationObserver callbacks and every rendered frame, including the fresh reply commit");
+      assert.ok(paint.scrollTop > 0 && Math.abs(paint.finalScrollTop - paint.scrollTop) <= 1, "preview scroll position survives continuous typing and fresh HTML");
+      const path = scope === "private" ? `/rooms/${f.room.inviteCode}/tasks/1/workspace` : `/rooms/${f.room.inviteCode}`;
+      let saved;
+      const deadline = Date.now() + 10_000;
+      do {
+        saved = await request(path, f.auth.token);
+        if (clean(saved.briefingMarkdown) === expected) break;
+        await new Promise(resolve => setTimeout(resolve, 80));
+      } while (Date.now() < deadline);
+      assert.equal(clean(saved.briefingMarkdown), expected, "actual keyboard edits reach durable room/workspace storage");
+      const room = await request(`/rooms/${f.room.inviteCode}`, f.auth.token);
+      assert.equal(room.currentStep, 0, "editing a preview does not publish another step");
+      if (scope === "private") {
+        assert.equal(clean(room.briefingMarkdown), initial, "private draft does not alter the published Markdown");
+        assert.equal((await guest.getByTestId("room-markdown-preview").innerText()).includes(tail), false, "candidate cannot see private Markdown edits");
+      } else await guest.getByTestId("room-markdown-preview").getByText(tail, { exact: true }).waitFor();
+    } finally {
+      await f.page.evaluate(() => { window.releaseMarkdownReplies?.(); window.stopPreviewPaintAudit?.(); }).catch(() => {});
+      await f.close();
+    }
+  });
+}
 
 async function assertDialogSurface(dialog, theme) {
   await dialog.waitFor();

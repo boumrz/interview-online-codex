@@ -66,6 +66,8 @@ type MarkdownToolId =
 export type BriefingBoardProps = {
   mode: "interviewer" | "candidate";
   value: string;
+  /** Stable document/access identity; ordinary typing must not change it. */
+  previewDocumentKey?: string;
   onChange?: (value: string) => void;
   readOnly?: boolean;
   /**
@@ -108,6 +110,7 @@ type MarkdownCodeMirrorEditorProps = {
 export function BriefingBoard({
   mode,
   value,
+  previewDocumentKey,
   onChange,
   readOnly = false,
   focusMode = false,
@@ -122,7 +125,7 @@ export function BriefingBoard({
    * Не путать с `focusMode`, который синхронизируется между сторонами.
    */
   const [isExpanded, setIsExpanded] = useState(false);
-  const preview = useMarkdownPreview(value);
+  const preview = useMarkdownPreview(value, JSON.stringify([previewDocumentKey ?? "", mode]));
   const emptyText = "Условие не добавлено";
   const markdownLength = useMemo(
     () => value.includes("\u0000") ? value.replace(/\u0000/g, "").length : value.length,

@@ -36,12 +36,13 @@ before(async () => {
       const [documentKey, setDocumentKey] = useState('first');
       const [other, setOther] = useState('');
       const [readOnly, setReadOnly] = useState(false);
-      window.fixture = { setMarkdown, setVisible, setDocumentKey, setReadOnly, getMarkdown: () => markdown };
+      const [focusMode, setFocusMode] = useState(false);
+      window.fixture = { setMarkdown, setVisible, setDocumentKey, setReadOnly, setFocusMode, getMarkdown: () => markdown, getDocumentKey: () => documentKey };
       return <><label>Другой ввод<input aria-label="Другой ввод" value={other} onChange={e => setOther(e.target.value)} /></label>
         <button onClick={() => setVisible(v => !v)}>Переключить предпросмотр</button>
-        {visible && <section key={documentKey} style={{ height: 700 }}>
-          <BriefingBoard mode="interviewer" value={markdown} onChange={setMarkdown} readOnly={readOnly} />
-          <BriefingBoard mode="candidate" value={markdown} />
+        {visible && <section style={{ height: 700 }}>
+          <BriefingBoard mode="interviewer" value={markdown} onChange={setMarkdown} readOnly={readOnly} previewDocumentKey={documentKey} focusMode={focusMode} onFocusModeChange={setFocusMode} />
+          <BriefingBoard mode="candidate" value={markdown} previewDocumentKey={documentKey} />
         </section>}</>;
     }
     const content = <ThemeProvider><Fixture /></ThemeProvider>;
@@ -142,34 +143,230 @@ test("initial pending preview stays silent until the real Worker result arrives"
   } finally { await context.close(); }
 });
 
-test("continuous Markdown typing has no loading status and keeps preview panel geometry stable", async () => {
+test("clearing the actual source immediately clears retained preview and rejects a late reply", async () => {
   const { context, page } = await open();
   try {
     const preview = page.getByTestId("room-markdown-preview").first();
     await preview.getByRole("heading", { name: "Условие", exact: true }).waitFor();
-    const before = await preview.boundingBox();
-    await page.evaluate(() => { window.workerAudit.hold = true; window.previewStatusAudit = []; });
+    await page.evaluate(() => { window.workerAudit.hold = true; window.fixture.setMarkdown("# Поздний ответ после очистки"); });
+    await page.waitForFunction(() => window.workerAudit.pendingReplies.length > 0);
     const source = page.getByTestId("room-markdown-editor").locator(".cm-content");
     await source.click();
     await page.keyboard.press("ControlOrMeta+A");
-    await page.keyboard.insertText("# Набор");
-    await page.waitForFunction(() => window.workerAudit.pendingReplies.length > 0);
-    await page.keyboard.insertText(" продолжается");
-    await page.keyboard.insertText(" без статуса");
-    await page.waitForFunction(() => window.fixture.getMarkdown() === "# Набор продолжается без статуса");
-    const pending = await preview.boundingBox();
-    assert.ok(before && pending);
-    for (const dimension of ["x", "y", "width", "height"]) {
-      assert.ok(Math.abs(before[dimension] - pending[dimension]) <= 1, `pending preview preserves ${dimension}`);
-    }
-    assert.equal(await preview.getByRole("status").count(), 0);
-    assert.deepEqual(await page.evaluate(() => window.previewStatusAudit), [], "each edit stays silent even between browser observations");
+    await page.keyboard.press("Backspace");
+    await page.waitForFunction(() => window.fixture.getMarkdown() === "");
+    assert.equal(await preview.getByRole("heading").count(), 0);
+    assert.equal(await preview.getByText("Условие не добавлено", { exact: true }).count(), 1);
     await page.evaluate(() => window.releaseWorkerReplies());
-    await preview.getByRole("heading", { name: "Набор продолжается без статуса", exact: true }).waitFor();
-    assert.equal(await preview.getByRole("heading", { name: "Набор", exact: true }).count(), 0);
-    assert.deepEqual(await page.evaluate(() => window.previewStatusAudit), []);
+    await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
+    assert.equal(await preview.getByRole("heading").count(), 0, "late rendering cannot resurrect cleared source");
+    assert.equal(await preview.getByText("Условие не добавлено", { exact: true }).count(), 1);
   } finally { await context.close(); }
 });
+
+test("document identity changes clear foreign preview without remounting the Board or accepting its late reply", async () => {
+  const { context, page } = await open();
+  try {
+    const preview = page.getByTestId("room-markdown-preview").first();
+    await preview.getByRole("heading", { name: "Условие", exact: true }).waitFor();
+    const source = page.getByTestId("room-markdown-editor").locator(".cm-content");
+    const sourceNode = await source.elementHandle();
+    await page.evaluate(() => { window.workerAudit.hold = true; window.fixture.setMarkdown("# Поздний чужой документ"); });
+    await page.waitForFunction(() => window.workerAudit.pendingReplies.length > 0);
+    await preview.evaluate(element => {
+      window.foreignPreviewAudit = [];
+      const inspect = () => {
+        if (window.fixture.getDocumentKey() === "other-document" && /Условие|Поздний чужой документ/.test(element.textContent)) window.foreignPreviewAudit.push(element.textContent);
+      };
+      new MutationObserver(inspect).observe(element, { childList: true, subtree: true, characterData: true });
+      window.inspectForeignPreview = inspect;
+    });
+    await page.evaluate(() => { window.fixture.setDocumentKey("other-document"); window.fixture.setMarkdown("# Новый документ"); });
+    await page.waitForFunction(() => window.fixture.getDocumentKey() === "other-document" && document.querySelector(".cm-content")?.textContent.includes("Новый документ"));
+    await page.evaluate(() => new Promise(done => requestAnimationFrame(() => { window.inspectForeignPreview(); requestAnimationFrame(() => { window.inspectForeignPreview(); done(); }); })));
+    assert.equal(await sourceNode.evaluate(element => element === document.querySelector(".cm-content")), true, "only preview identity changed; the Board and editor were not remounted");
+    assert.equal(await preview.getByRole("heading").count(), 0, "foreign successful HTML is not retained while the new document loads");
+    assert.deepEqual(await page.evaluate(() => window.foreignPreviewAudit), []);
+    await page.evaluate(() => window.releaseWorkerReplies());
+    await preview.getByRole("heading", { name: "Новый документ", exact: true }).waitFor();
+    assert.equal(await page.getByRole("heading", { name: "Поздний чужой документ", exact: true }).count(), 0);
+    assert.deepEqual(await page.evaluate(() => window.foreignPreviewAudit), []);
+  } finally { await context.close(); }
+});
+
+test("committed A to pending B to pending A never resurrects retired successful HTML", async () => {
+  const { context, page } = await open();
+  try {
+    const preview = page.getByTestId("room-markdown-preview").first();
+    await preview.getByRole("heading", { name: "Условие", exact: true }).waitFor();
+    const source = await page.getByTestId("room-markdown-editor").locator(".cm-content").elementHandle();
+    await page.evaluate(() => { window.workerAudit.hold = true; window.fixture.setDocumentKey("document-B"); window.fixture.setMarkdown("# Приватный B"); });
+    await page.waitForFunction(() => window.fixture.getDocumentKey() === "document-B" && window.workerAudit.pendingReplies.length > 0);
+    await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
+    assert.equal(await preview.getByRole("heading").count(), 0, "B is genuinely committed and pending, so A has been retired");
+    await page.evaluate(() => { window.fixture.setDocumentKey("first"); window.fixture.setMarkdown("# Возвращённый A"); });
+    await page.waitForFunction(() => window.fixture.getDocumentKey() === "first" && document.querySelector(".cm-content")?.textContent.includes("Возвращённый A"));
+    await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
+    assert.equal(await preview.getByRole("heading").count(), 0, "returning to the old identity needs a fresh result instead of the retired A HTML");
+    assert.equal(await source.evaluate(element => element === document.querySelector(".cm-content")), true, "the editor was reused across both committed identity changes");
+    await page.evaluate(() => window.releaseWorkerReplies());
+    await preview.getByRole("heading", { name: "Возвращённый A", exact: true }).waitFor();
+    assert.equal(await page.getByRole("heading", { name: "Приватный B", exact: true }).count(), 0);
+    assert.equal(await page.getByRole("heading", { name: "Условие", exact: true }).count(), 0);
+  } finally { await context.close(); }
+});
+
+test("committed empty source followed by keyboard Undo waits for a fresh preview", async () => {
+  const { context, page } = await open();
+  try {
+    const preview = page.getByTestId("room-markdown-preview").first();
+    await preview.getByRole("heading", { name: "Условие", exact: true }).waitFor();
+    const source = page.getByTestId("room-markdown-editor").locator(".cm-content");
+    await source.click();
+    await page.keyboard.press("ControlOrMeta+A");
+    await page.keyboard.press("Backspace");
+    await page.waitForFunction(() => window.fixture.getMarkdown() === "");
+    await preview.getByText("Условие не добавлено", { exact: true }).waitFor();
+    await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
+    await page.evaluate(() => { window.workerAudit.hold = true; });
+    await page.keyboard.press("ControlOrMeta+z");
+    await page.waitForFunction(() => window.fixture.getMarkdown().startsWith("# Условие") && window.workerAudit.pendingReplies.length > 0);
+    await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
+    assert.equal(await preview.getByRole("heading").count(), 0, "Undo cannot resurrect HTML retired by the committed clear");
+    assert.equal(await preview.innerText(), "", "nonempty pending Undo source is not shown as an empty document");
+    await page.evaluate(() => window.releaseWorkerReplies());
+    await preview.getByRole("heading", { name: "Условие", exact: true }).waitFor();
+  } finally { await context.close(); }
+});
+
+test("a new document identity with identical Markdown still retires the previous DOM before fresh replies", async () => {
+  const { context, page } = await open();
+  try {
+    const preview = page.getByTestId("room-markdown-preview").first();
+    await preview.getByRole("heading", { name: "Условие", exact: true }).waitFor();
+    const previous = await preview.locator(":scope > div").elementHandle();
+    const posts = await page.evaluate(() => window.workerAudit.posts.length);
+    await page.evaluate(() => { window.workerAudit.hold = true; window.fixture.setDocumentKey("identical-markdown-other-document"); });
+    await page.waitForFunction(posts => window.workerAudit.posts.length > posts && window.workerAudit.pendingReplies.length > 0, posts);
+    await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
+    assert.equal(await previous.evaluate(element => element.isConnected), false, "matching source text does not authorize retaining the previous context's DOM");
+    assert.equal(await preview.getByRole("heading").count(), 0);
+    assert.equal(await page.evaluate(() => window.fixture.getMarkdown()), sample, "the source really is byte-for-byte unchanged");
+    await page.evaluate(() => window.releaseWorkerReplies());
+    await preview.getByRole("heading", { name: "Условие", exact: true }).waitFor();
+  } finally { await context.close(); }
+});
+
+test("a real Worker error after a successful preview stays visible and retries the current source", async () => {
+  const { context, page } = await open();
+  try {
+    const preview = page.getByTestId("room-markdown-preview").first();
+    await preview.getByRole("heading", { name: "Условие", exact: true }).waitFor();
+    await page.evaluate(() => { window.workerAudit.hold = true; window.fixture.setMarkdown("# Текущий документ после ошибки"); });
+    await page.waitForFunction(() => window.workerAudit.pendingReplies.length > 0);
+    await page.workers()[0].evaluate(() => { setTimeout(() => { throw new Error("Synthetic isolated Worker crash"); }, 0); });
+    await preview.getByRole("alert").waitFor();
+    assert.equal(await preview.getByRole("heading").count(), 0, "a retained successful preview cannot hide a current rendering error");
+    assert.equal(await preview.getByText("Не удалось подготовить предпросмотр.", { exact: true }).count(), 1);
+    await page.evaluate(() => window.releaseWorkerReplies());
+    await preview.getByRole("button", { name: "Повторить предпросмотр", exact: true }).click();
+    await preview.getByRole("heading", { name: "Текущий документ после ошибки", exact: true }).waitFor();
+    assert.equal(await preview.getByRole("alert").count(), 0);
+    assert.ok(await page.evaluate(() => window.workerAudit.created >= 2), "retry creates a healthy real Worker");
+  } finally { await context.close(); }
+});
+
+for (const colorScheme of ["light", "dark"]) for (const panelMode of ["compact", "expanded", "focus"]) {
+  test(`continuous Markdown typing preserves painted preview, node and scroll in ${panelMode} ${colorScheme}`, async () => {
+    const { context, page } = await open({ colorScheme, width: 1280 });
+    try {
+      const manager = page.getByTestId("briefing-board-interviewer");
+      const preview = manager.getByTestId("room-markdown-preview");
+      const largeMarkdown = "# Стабильный предпросмотр\n\n" + Array.from({ length: 1250 }, (_, index) => `Строка ${index}: **данные** для проверки прокрутки.`).join("\n\n") + "\n\nИсходный хвост";
+      await page.evaluate(markdown => window.fixture.setMarkdown(markdown), largeMarkdown);
+      await preview.getByRole("heading", { name: "Стабильный предпросмотр", exact: true }).waitFor();
+      if (panelMode === "compact") await manager.evaluate(element => { element.style.height = "280px"; element.style.width = "960px"; });
+      if (panelMode === "expanded") await manager.getByRole("button", { name: "Развернуть markdown", exact: true }).click();
+      if (panelMode === "focus") await page.evaluate(() => window.fixture.setFocusMode(true));
+      const source = manager.getByTestId("room-markdown-editor").locator(".cm-content");
+      await source.click();
+      await page.keyboard.press("ControlOrMeta+End");
+      await preview.evaluate(element => {
+        element.scrollTop = 120;
+        const content = element.firstElementChild;
+        window.pendingPreviewAudit = { content, scrollTop: element.scrollTop, frameGaps: [], hiddenFrames: [], removed: [], frames: 0, running: true };
+        const audit = window.pendingPreviewAudit;
+        new MutationObserver(records => {
+          for (const record of records) for (const node of record.removedNodes) {
+            if (node === content || node.contains?.(content)) audit.removed.push("preview content detached");
+          }
+        }).observe(element, { childList: true, subtree: true });
+        const sample = () => {
+          if (!audit.running) return;
+          audit.frames++;
+          if (element.firstElementChild !== content || !content?.isConnected || !element.textContent.includes("Стабильный предпросмотр")) audit.frameGaps.push("preview disappeared");
+          const bounds = element.getBoundingClientRect();
+          if (bounds.width <= 0 || bounds.height <= 0 || bounds.bottom <= 0 || bounds.top >= innerHeight) audit.hiddenFrames.push("preview has no visible area");
+          for (let node = content; node; node = node.parentElement) {
+            const style = getComputedStyle(node);
+            if (style.display === "none" || style.visibility !== "visible" || Number(style.opacity) === 0 || style.contentVisibility === "hidden") audit.hiddenFrames.push("preview hidden by CSS");
+          }
+          requestAnimationFrame(sample);
+        };
+        requestAnimationFrame(sample);
+        window.workerAudit.hold = true;
+        window.previewStatusAudit = [];
+      });
+      const before = await preview.boundingBox();
+      const originalScroll = await page.evaluate(() => window.pendingPreviewAudit.scrollTop);
+      assert.ok(originalScroll > 0, "large preview is genuinely scrolled before typing");
+      for (const text of [" новый", " ввод", " без мерцания"]) {
+        await page.keyboard.insertText(text);
+        await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
+      }
+      await page.waitForFunction(() => window.workerAudit.pendingReplies.length > 0);
+      await page.waitForFunction(() => window.fixture.getMarkdown().endsWith("Исходный хвост новый ввод без мерцания"));
+      const pending = await preview.boundingBox();
+      assert.ok(before && pending);
+      for (const dimension of ["x", "y", "width", "height"]) assert.ok(Math.abs(before[dimension] - pending[dimension]) <= 1, `pending preview preserves ${dimension}`);
+      const audit = await preview.evaluate(element => {
+        const audit = window.pendingPreviewAudit;
+        return { sameNode: element.firstElementChild === audit.content, connected: audit.content?.isConnected,
+          scrollTop: element.scrollTop, frameGaps: audit.frameGaps, hiddenFrames: audit.hiddenFrames, removed: audit.removed, frames: audit.frames };
+      });
+      assert.equal(audit.sameNode, true, "pending work keeps the last successful content DOM node");
+      assert.equal(audit.connected, true, "last successful preview remains attached while typing");
+      assert.ok(audit.frames >= 3, "painted frames were sampled across consecutive real keyboard edits");
+      assert.deepEqual(audit.frameGaps, [], "last successful preview never disappears in a rendered frame");
+      assert.deepEqual(audit.hiddenFrames, [], "the preview and its ancestors stay visually visible in every sampled frame");
+      assert.deepEqual(audit.removed, [], "last successful preview is never detached even between frame samples");
+      assert.equal(audit.scrollTop, originalScroll, "pending renders preserve preview scroll");
+      assert.equal(await preview.getByRole("status").count(), 0);
+      assert.deepEqual(await page.evaluate(() => window.previewStatusAudit), [], "each edit stays silent even between browser observations");
+      await page.evaluate(() => window.releaseWorkerReplies());
+      await preview.getByText("Исходный хвост новый ввод без мерцания", { exact: true }).waitFor();
+      await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
+      await page.evaluate(() => { window.workerAudit.hold = true; });
+      await page.keyboard.insertText(" ещё");
+      await page.waitForFunction(() => window.workerAudit.pendingReplies.length > 0 && window.fixture.getMarkdown().endsWith("без мерцания ещё"));
+      await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
+      await page.evaluate(() => window.releaseWorkerReplies());
+      await preview.getByText("Исходный хвост новый ввод без мерцания ещё", { exact: true }).waitFor();
+      await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
+      const completed = await preview.evaluate(element => {
+        const audit = window.pendingPreviewAudit;
+        audit.running = false;
+        return { sameNode: element.firstElementChild === audit.content, frameGaps: audit.frameGaps, hiddenFrames: audit.hiddenFrames, removed: audit.removed, scrollTop: element.scrollTop };
+      });
+      assert.equal(completed.sameNode, true, "completing successive renders preserves the same content wrapper");
+      assert.deepEqual(completed.frameGaps, [], "neither pending work nor fresh replies produce an empty painted frame");
+      assert.deepEqual(completed.hiddenFrames, [], "fresh replies never hide the preview through CSS");
+      assert.deepEqual(completed.removed, [], "content stays mounted through both complete render cycles");
+      assert.equal(completed.scrollTop, originalScroll, "fresh results also preserve preview scroll");
+      assert.equal(await preview.getByRole("heading", { name: "Стабильный предпросмотр", exact: true }).count(), 1);
+    } finally { await context.close(); }
+  });
+}
 
 test("real Worker preserves Markdown, shares pending previews and sanitizes before display", async () => {
   const { context, page } = await open();

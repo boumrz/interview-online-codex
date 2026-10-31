@@ -14,7 +14,7 @@ export function MarkdownPreviewContent({ preview, className, emptyText, emptyCon
     <p>Не удалось подготовить предпросмотр.</p>
     <Button type="link" htmlType="button" onClick={preview.retry}>Повторить предпросмотр</Button>
   </div>;
-  if (preview.loading) return null;
+  if (preview.loading && !preview.html) return null;
   if (!preview.html) return emptyContent ?? (emptyText ? <p>{emptyText}</p> : null);
   return <div className={className} dangerouslySetInnerHTML={{ __html: preview.html }} />;
 }

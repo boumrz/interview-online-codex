@@ -1,0 +1,212 @@
+{
+  "passed": true,
+  "results": {
+    "unit": {
+      "exitCode": 0,
+      "seconds": 1.79,
+      "command": [
+        "/Users/romanzheltov/.nvm/versions/node/v24.19.0/bin/node",
+        "--experimental-strip-types",
+        "--test",
+        "--test-reporter=tap",
+        "--test-concurrency=1",
+        "tests/unit/activityRetry.test.ts",
+        "tests/unit/activityTimeline.test.ts",
+        "tests/unit/apiErrorFeedback.test.ts",
+        "tests/unit/candidateActivityHistory.test.ts",
+        "tests/unit/exportDownloads.test.ts",
+        "tests/unit/hiringManagerPreviewCopy.test.ts",
+        "tests/unit/hiringManagerProductCopy.test.ts",
+        "tests/unit/libraryTransfer.test.ts",
+        "tests/unit/markdownDraftRecovery.test.ts",
+        "tests/unit/markdownWorkerClient.test.ts",
+        "tests/unit/roomChatDelivery.test.ts",
+        "tests/unit/roomContextPanelLayout.test.ts",
+        "tests/unit/roomEditPolicy.test.ts",
+        "tests/unit/roomRealtimeTransport.test.ts",
+        "tests/unit/teamInvitationMutationPolicy.test.ts",
+        "tests/unit/teamManagementIntent.test.ts",
+        "tests/unit/themeTokens.test.ts"
+      ],
+      "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-preview-no-flicker-20261031-pyfcvidc/repo/frontend",
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-preview-no-flicker-20261031-pyfcvidc/unit.log",
+      "tests": 89,
+      "pass": 89,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    "contract": {
+      "exitCode": 0,
+      "seconds": 36.26,
+      "command": [
+        "/Users/romanzheltov/.nvm/versions/node/v24.19.0/bin/node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-concurrency=1",
+        "tests/contract/analytics-contract.test.mjs",
+        "tests/contract/devLogPrivacy.test.mjs",
+        "tests/contract/devServerSecurity.test.mjs",
+        "tests/contract/e2e-fixture-safety.test.mjs",
+        "tests/contract/e2e-owned-runtime.test.mjs",
+        "tests/contract/fullRegressionRunner.test.mjs",
+        "tests/contract/markdown-worker-browser.test.mjs",
+        "tests/contract/observed-protocol-command.test.mjs",
+        "tests/contract/roomRealtimeTransportWiring.test.mjs",
+        "tests/contract/teamInvitationSecretLifecycle.test.mjs"
+      ],
+      "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-preview-no-flicker-20261031-pyfcvidc/repo/frontend",
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-preview-no-flicker-20261031-pyfcvidc/contract.log",
+      "tests": 69,
+      "pass": 69,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    "browser": {
+      "exitCode": 0,
+      "seconds": 54.53,
+      "command": [
+        "/Users/romanzheltov/.nvm/versions/node/v24.19.0/bin/node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-concurrency=1",
+        "tests/browser/editorSelection.test.mjs",
+        "tests/browser/instantThemeSwitch.test.mjs",
+        "tests/browser/managerYjsRecovery.test.mjs",
+        "tests/browser/roomEditorNavigation.test.mjs",
+        "tests/browser/workspaceCreationAndSelectors.test.mjs"
+      ],
+      "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-preview-no-flicker-20261031-pyfcvidc/repo/frontend",
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-preview-no-flicker-20261031-pyfcvidc/browser.log",
+      "tests": 47,
+      "pass": 47,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    "typecheck": {
+      "exitCode": 0,
+      "seconds": 2.78,
+      "command": [
+        "/Users/romanzheltov/.nvm/versions/node/v24.19.0/bin/node",
+        "node_modules/typescript/bin/tsc",
+        "--noEmit"
+      ],
+      "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-preview-no-flicker-20261031-pyfcvidc/repo/frontend",
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-preview-no-flicker-20261031-pyfcvidc/typecheck.log"
+    },
+    "production-build": {
+      "exitCode": 0,
+      "seconds": 5.816,
+      "command": [
+        "/Users/romanzheltov/.nvm/versions/node/v24.19.0/bin/node",
+        "/Users/romanzheltov/.nvm/versions/node/v24.19.0/lib/node_modules/npm/bin/npm-cli.js",
+        "run",
+        "build"
+      ],
+      "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-preview-no-flicker-20261031-pyfcvidc/repo/frontend",
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-preview-no-flicker-20261031-pyfcvidc/production-build.log"
+    },
+    "api-e2e": {
+      "exitCode": 0,
+      "seconds": 187.749,
+      "command": [
+        "/Users/romanzheltov/.nvm/versions/node/v24.19.0/bin/node",
+        "tests/e2e/run-isolated.mjs",
+        "tests/e2e/interview/e2e-room-shared-mode.mjs",
+        "tests/e2e/interview/e2e-room-context-panels.mjs",
+        "tests/e2e/authoring/e2e-markdown-explainer-smoke.mjs",
+        "tests/e2e/realtime/e2e-manager-workspace-integrity.mjs",
+        "tests/e2e/account/e2e-account-switch-fresh-data.mjs",
+        "tests/e2e/dashboard/e2e-dashboard-smoke.mjs"
+      ],
+      "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-preview-no-flicker-20261031-pyfcvidc/repo/frontend",
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-preview-no-flicker-20261031-pyfcvidc/api-e2e.log",
+      "counts": {
+        "tests": 31,
+        "pass": 31,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "suites": [
+        {
+          "suite": "tests/e2e/interview/e2e-room-shared-mode.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 23128
+        },
+        {
+          "suite": "tests/e2e/interview/e2e-room-context-panels.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 81360
+        },
+        {
+          "suite": "tests/e2e/authoring/e2e-markdown-explainer-smoke.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 1886
+        },
+        {
+          "suite": "tests/e2e/realtime/e2e-manager-workspace-integrity.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 42813
+        },
+        {
+          "suite": "tests/e2e/account/e2e-account-switch-fresh-data.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 2534
+        },
+        {
+          "suite": "tests/e2e/dashboard/e2e-dashboard-smoke.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 1208
+        }
+      ]
+    }
+  },
+  "sourceDrift": [],
+  "finishedAt": "2026-10-31T20:47:57.086630+00:00",
+  "cleanupAudit": {
+    "schemas": [
+      "interhub_e2e_77182991306148919782ef7a51360a61"
+    ],
+    "remainingSchemas": [],
+    "remainingOwnedProcessIds": [],
+    "readOnlyAudit": true
+  },
+  "total": {
+    "tests": 236,
+    "pass": 236,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0
+  },
+  "scope": "All frontend unit/contract/browser + typecheck and production build; six complete selected production API E2E files. Prior 1303 full run and 229 manual-review delta are historical.",
+  "independentReview": "APPROVE; security PASS, reliability PASS for P2.1 R-09/AC-15",
+  "redEvidence": {
+    "markdownBrowser": {
+      "tests": 18,
+      "pass": 12,
+      "fail": 6,
+      "skipped": 0,
+      "cancelled": 0,
+      "cause": "Last successful preview DOM detached during typing in all six compact/expanded/focus x light/dark scenarios on the previous implementation."
+    }
+  },
+  "changedInputHashes": {
+    "frontend/src/components/useMarkdownPreview.ts": "a02a54d1536216ca4a50c360174090c4202e49722ab493405c564a84a7339d58",
+    "frontend/src/components/MarkdownPreview.tsx": "3147723f5b3b6599ae4c84ecec209fba1efdb3283a9c65bea0ad2999fc943cf7",
+    "frontend/src/features/room/BriefingBoard.tsx": "19885cf520b84a445362c546440bba55d1ced0b73457d78c5e1fe82c55ea009f",
+    "frontend/src/pages/RoomPage.tsx": "992e23b72040c8efb3b776c4b6a3184f3e8e96859b4770d62abcda93a3b87d01",
+    "frontend/src/pages/DashboardPage.tsx": "a63b8757177cd4e5b11b8486f11600ab46484be42d31a1bf2b5c9327f1dcbb47",
+    "frontend/tests/contract/markdown-worker-browser.test.mjs": "7924d4e6a91498cc8c9dfcce94e817bae9fd4b371c4ebd4bf029e4fe3bcb8098",
+    "frontend/tests/e2e/interview/e2e-room-shared-mode.mjs": "f2434474feda39e0d806d91655fae3deca5b4e093fde32e8a75c94c39225f3d5"
+  },
+  "baseCommit": "577a66b88fdcb25d94d8c0ca02f60daed3ac37f7"
+}

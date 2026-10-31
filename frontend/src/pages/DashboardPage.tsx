@@ -129,6 +129,7 @@ export function DashboardPage({
   const section = forcedSection ?? routeSection;
   const [searchParams, setSearchParams] = useSearchParams();
   const auth = useAppSelector((s) => s.auth);
+  const markdownPreviewScope = useMemo(() => crypto.randomUUID(), [auth.token, auth.user?.id]);
   const authIdentityRef = useRef({ token: auth.token, userId: auth.user?.id ?? null });
   authIdentityRef.current = { token: auth.token, userId: auth.user?.id ?? null };
   const agentOpsEnabled =
@@ -900,7 +901,7 @@ export function DashboardPage({
                 minRows={8}
                 styles={markdownInputStyles}
               />
-              {editingTask && <EditTaskDescriptionPreview key={editingTask.id} markdown={editTaskDescription} />}
+              {editingTask && <EditTaskDescriptionPreview key={editingTask.id} previewDocumentKey={`${markdownPreviewScope}:edit:${editingTask.id}`} markdown={editTaskDescription} />}
             </div>
           </Stack>
           <Textarea placeholder="Добавьте заготовку решения для кандидата"
@@ -1258,7 +1259,7 @@ export function DashboardPage({
                                   {labelForLanguage(task.language)}
                                 </Badge>
                               </Group>
-                              <TaskDescriptionPreview markdown={task.description} />
+                              <TaskDescriptionPreview previewDocumentKey={`${markdownPreviewScope}:task:${task.id}`} markdown={task.description} />
                               <Group justify="flex-end">
                                 <ActionIcon
                                   size="sm"
@@ -1405,15 +1406,15 @@ export function DashboardPage({
   );
 }
 
-function TaskDescriptionPreview({ markdown }: { readonly markdown: string }) {
-  const preview = useMarkdownPreview(markdown);
+function TaskDescriptionPreview({ markdown, previewDocumentKey }: { readonly markdown: string; readonly previewDocumentKey: string }) {
+  const preview = useMarkdownPreview(markdown, previewDocumentKey);
   return <div aria-busy={preview.loading}>
     <MarkdownPreviewContent preview={preview} className={styles.taskDescriptionMarkdown} emptyText="" />
   </div>;
 }
 
-function EditTaskDescriptionPreview({ markdown }: { readonly markdown: string }) {
-  const preview = useMarkdownPreview(markdown);
+function EditTaskDescriptionPreview({ markdown, previewDocumentKey }: { readonly markdown: string; readonly previewDocumentKey: string }) {
+  const preview = useMarkdownPreview(markdown, previewDocumentKey);
   return <div className={styles.markdownPreview} aria-busy={preview.loading}>
     <MarkdownPreviewContent
       preview={preview}

@@ -678,6 +678,8 @@ export function RoomPage() {
 
   const hrAssignmentGenerationRef = useRef(0);
   const roomIdentity = `${inviteCode}:${authToken ?? ""}:${authUser?.id ?? ""}:${ownerToken ?? ""}:${interviewerToken ?? ""}`;
+  // The preview key must change with access context without containing tokens.
+  const markdownPreviewScope = useMemo(() => crypto.randomUUID(), [roomIdentity]);
   const [authorityRoom, setAuthorityRoom] = useState<{ identity: string; generation: number; room: Room } | null>(null);
   const authorityRoomRequestRef = useRef<{ abort: () => void; unsubscribe: () => void } | null>(null);
   const [getAuthorityRoom, { reset: resetAuthorityRoomQuery }] = useLazyGetRoomQuery();
@@ -3442,6 +3444,7 @@ export function RoomPage() {
         ) : canManageRoom ? (
           <OwnerLayout
             merged={merged}
+            markdownPreviewScope={markdownPreviewScope}
             tasks={mergedTasks}
             availableCatalogTasks={availableCatalogTasks}
             localSelectedStep={localSelectedStep}
@@ -3535,6 +3538,7 @@ export function RoomPage() {
         ) : (
           <CandidateLayout
             merged={merged}
+            markdownPreviewScope={markdownPreviewScope}
             stepTitle={step?.title ?? "-"}
             stepStarterCode={stepStarterCode}
             briefingMarkdown={candidateBriefingValue}
@@ -3575,6 +3579,7 @@ export function RoomPage() {
 
 function OwnerLayout({
   merged,
+  markdownPreviewScope,
   tasks,
   availableCatalogTasks,
   localSelectedStep,
@@ -3660,6 +3665,7 @@ function OwnerLayout({
   isSettingVerdict,
 }: {
   merged: RealtimeState;
+  markdownPreviewScope: string;
   tasks: Array<{
     stepIndex: number;
     title: string;
@@ -3808,6 +3814,13 @@ function OwnerLayout({
   const [activeMobileTab, setActiveMobileTab] =
     useState<MobileRoomTab>("editor");
   const roomReadOnly = isRoomReadOnly(merged);
+  const sharedMarkdownPreviewKey = JSON.stringify([
+    markdownPreviewScope, "shared",
+    merged.tasks?.find(task => task.stepIndex === merged.currentStep)?.id ?? merged.currentStep,
+  ]);
+  const conditionMarkdownPreviewKey = localWorkspacePreview
+    ? JSON.stringify([markdownPreviewScope, "manager", localWorkspacePreview.taskId ?? localWorkspacePreview.stepIndex])
+    : sharedMarkdownPreviewKey;
   const [addTaskModalOpened, setAddTaskModalOpened] = useState(false);
   const [addTaskMode, setAddTaskMode] = useState<"catalog" | "custom">(
     "catalog",
@@ -4561,6 +4574,7 @@ function OwnerLayout({
             {localWorkspacePreview ? (
               <ManagerWorkspaceEditor
                 error={error}
+                markdownPreviewScope={markdownPreviewScope}
                 workspace={localWorkspacePreview}
                 isRefreshing={isLocalWorkspaceSnapshotFetching}
                 readOnly={roomReadOnly}
@@ -4590,6 +4604,7 @@ function OwnerLayout({
                 <div className={styles.modeEditor} hidden={!briefingFocusMode}>
                   <BriefingBoard
                     mode="interviewer"
+                    previewDocumentKey={sharedMarkdownPreviewKey}
                     readOnly={roomReadOnly || Boolean(tasks.find((task) => task.stepIndex === merged.currentStep)?.mandatory)}
                     value={briefingMarkdown}
                     onChange={onBriefingChange}
@@ -4810,6 +4825,7 @@ function OwnerLayout({
           <div hidden={isLocalWorkspacePreview && !localWorkspacePreview} className={styles.modeEditor}>
           <BriefingBoard
             key={`context-briefing-${localSelectedStep}`}
+            previewDocumentKey={conditionMarkdownPreviewKey}
             mode="interviewer"
             readOnly={roomReadOnly || (isLocalWorkspacePreview && !localWorkspacePreview) || Boolean(tasks.find((task) => task.stepIndex === localSelectedStep)?.mandatory)}
             value={stripFocusMarker(
@@ -6148,6 +6164,7 @@ function OwnerLayout({
             {localWorkspacePreview ? (
               <ManagerWorkspaceEditor
                 error={error}
+                markdownPreviewScope={markdownPreviewScope}
                 workspace={localWorkspacePreview}
                 isRefreshing={isLocalWorkspaceSnapshotFetching}
                 readOnly={roomReadOnly}
@@ -6174,6 +6191,7 @@ function OwnerLayout({
               <Box className={styles.editorColumn}>
                 <BriefingBoard
                   key={`briefing-${merged.currentStep}`}
+                  previewDocumentKey={sharedMarkdownPreviewKey}
                   mode="interviewer"
                   readOnly={roomReadOnly || Boolean(tasks.find((task) => task.stepIndex === merged.currentStep)?.mandatory)}
                   value={briefingMarkdown}
@@ -6266,6 +6284,7 @@ function OwnerLayout({
  */
 function ManagerWorkspaceEditor({
   error,
+  markdownPreviewScope,
   workspace,
   isRefreshing,
   readOnly,
@@ -6281,6 +6300,7 @@ function ManagerWorkspaceEditor({
   onYjsSnapshotBridgeReady,
 }: {
   error?: string;
+  markdownPreviewScope: string;
   workspace: RoomTaskWorkspace;
   isRefreshing: boolean;
   readOnly: boolean;
@@ -6335,6 +6355,7 @@ function ManagerWorkspaceEditor({
       <div className={styles.modeEditor} hidden={!focusMode}>
         <BriefingBoard
           mode="interviewer"
+          previewDocumentKey={JSON.stringify([markdownPreviewScope, "manager", workspace.taskId ?? workspace.stepIndex])}
           readOnly={readOnly}
           value={workspace.briefingMarkdown}
           onChange={onBriefingChange}
@@ -6377,6 +6398,7 @@ function ManagerWorkspaceEditor({
 
 function CandidateLayout({
   merged,
+  markdownPreviewScope,
   stepTitle,
   stepStarterCode,
   briefingMarkdown,
@@ -6397,6 +6419,7 @@ function CandidateLayout({
   briefingFocusMode,
 }: {
   merged: RealtimeState;
+  markdownPreviewScope: string;
   stepTitle: string;
   stepStarterCode: string;
   briefingMarkdown: string;
@@ -6445,6 +6468,10 @@ function CandidateLayout({
 
       <BriefingBoard
         key={`briefing-${merged.currentStep}`}
+        previewDocumentKey={JSON.stringify([
+          markdownPreviewScope, "shared",
+          merged.tasks?.find(task => task.stepIndex === merged.currentStep)?.id ?? merged.currentStep,
+        ])}
         mode="candidate"
         value={briefingMarkdown}
         focusMode={briefingFocusMode}
