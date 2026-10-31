@@ -118,16 +118,33 @@ async function tableRowGeometry(row, size) {
   }
 }
 
-test("personal interview title, candidate, date and actions retain distinct padded table cells", async () => {
+test("personal interview title, candidate, date and actions retain distinct padded card sections", async () => {
   const f = await fixture();
   try {
     const room = await request("/rooms", f.auth, { title: titles[2], taskIds: [] });
     f.cleanup.push(`/me/rooms/${room.id}`);
     await request(`/rooms/${room.inviteCode}/interview-metadata`, f.auth, { candidateName, position, scheduledAt: "2030-10-12T11:30:00Z", revision: 0 }, "PUT");
     await f.page.goto(`${web}/workspace/personal/interviews`);
-    const row = f.page.getByRole("row", { name: titles[2], exact: true });
-    await row.getByText(candidateName, { exact: true }).waitFor();
-    await matrix(f.page, size => tableRowGeometry(row, size));
+    const card = f.page.getByRole("region", { name: `Личное интервью ${titles[2]}`, exact: true });
+    await card.getByText(`Кандидат: ${candidateName}`, { exact: true }).waitFor();
+    await matrix(f.page, async size => {
+      const name = await inside(card.getByText(titles[2], { exact: true }), card, `${size}: name`);
+      const date = await inside(card.getByText(/^Создано /), card, `${size}: creation date`);
+      assert.ok(date.y - name.y - name.height >= 7.5, `${size}: title and creation date need at least 8px between separate rows`);
+      assert.ok(date.y - name.y - name.height <= 20, `${size}: related date remains close to the name`);
+      const boxes = [name, date];
+      const contents = [
+        card.getByText(`Кандидат: ${candidateName}`, { exact: true }),
+        card.getByText(`Позиция: ${position}`, { exact: true }),
+        card.getByText(/^Дата: .*\(МСК\)$/),
+        ...await card.getByRole("button").or(card.getByRole("link")).all(),
+      ];
+      for (const content of contents) {
+        const box = await inside(content, card, `${size}: candidate metadata or action`);
+        for (const previous of boxes) assert.equal(overlaps(box, previous), false, `${size}: title, dates, candidate and actions do not overlap`);
+        boxes.push(box);
+      }
+    });
   } finally { await f.close(); }
 });
 

@@ -44,7 +44,8 @@ import {
   clearAuth,
   updateProfile as updateAuthProfile,
 } from "../features/auth/authSlice";
-import { markdownToHtml } from "../components/markdown";
+import { useMarkdownPreview } from "../components/useMarkdownPreview";
+import { MarkdownPreviewContent } from "../components/MarkdownPreview";
 import {
   api,
   useCreateRoomMutation,
@@ -196,11 +197,6 @@ export function DashboardPage({
   )
     .concat(isHr ? [HR_DASHBOARD_SECTION] : [])
     .concat(isAdmin ? [ADMIN_DASHBOARD_SECTION] : []);
-
-  const editTaskDescriptionHtml = useMemo(
-    () => markdownToHtml(editTaskDescription),
-    [editTaskDescription],
-  );
 
   useEffect(() => {
     setProfileDisplayName(auth.user?.displayName ?? "");
@@ -884,6 +880,7 @@ export function DashboardPage({
         title="Редактирование задачи"
         size="lg"
         centered
+        destroyOnHidden
       >
         <Stack>
           <TextInput placeholder="Введите название"
@@ -903,20 +900,7 @@ export function DashboardPage({
                 minRows={8}
                 styles={markdownInputStyles}
               />
-              <div className={styles.markdownPreview}>
-                {editTaskDescriptionHtml ? (
-                  <div
-                    className={styles.markdownPreviewContent}
-                    dangerouslySetInnerHTML={{
-                      __html: editTaskDescriptionHtml,
-                    }}
-                  />
-                ) : (
-                  <Text size="sm" c="dimmed">
-                    Предпросмотр markdown-описания
-                  </Text>
-                )}
-              </div>
+              {editingTask && <EditTaskDescriptionPreview key={editingTask.id} markdown={editTaskDescription} />}
             </div>
           </Stack>
           <Textarea placeholder="Добавьте заготовку решения для кандидата"
@@ -1274,12 +1258,7 @@ export function DashboardPage({
                                   {labelForLanguage(task.language)}
                                 </Badge>
                               </Group>
-                              <div
-                                className={styles.taskDescriptionMarkdown}
-                                dangerouslySetInnerHTML={{
-                                  __html: markdownToHtml(task.description),
-                                }}
-                              />
+                              <TaskDescriptionPreview markdown={task.description} />
                               <Group justify="flex-end">
                                 <ActionIcon
                                   size="sm"
@@ -1424,4 +1403,23 @@ export function DashboardPage({
       </AppShell>
     </>
   );
+}
+
+function TaskDescriptionPreview({ markdown }: { readonly markdown: string }) {
+  const preview = useMarkdownPreview(markdown);
+  return <div aria-busy={preview.loading}>
+    <MarkdownPreviewContent preview={preview} className={styles.taskDescriptionMarkdown} emptyText="" />
+  </div>;
+}
+
+function EditTaskDescriptionPreview({ markdown }: { readonly markdown: string }) {
+  const preview = useMarkdownPreview(markdown);
+  return <div className={styles.markdownPreview} aria-busy={preview.loading}>
+    <MarkdownPreviewContent
+      preview={preview}
+      className={styles.markdownPreviewContent}
+      emptyText="Предпросмотр markdown-описания"
+      emptyContent={<Text size="sm" c="dimmed">Предпросмотр markdown-описания</Text>}
+    />
+  </div>;
 }

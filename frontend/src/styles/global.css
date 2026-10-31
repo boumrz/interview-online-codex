@@ -131,6 +131,16 @@ select:focus-visible {
   outline-offset: 2px;
 }
 
+/* Theme tokens and Ant Design portals update together without intermediate
+   colors. Ordinary interaction motion resumes after the theme has painted. */
+html[data-theme-changing="true"],
+html[data-theme-changing="true"] *,
+html[data-theme-changing="true"] *::before,
+html[data-theme-changing="true"] *::after {
+  transition: none !important;
+  animation: none !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -1,7 +1,7 @@
 import { createServer } from "node:net";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { appendFileSync, cpSync, createWriteStream, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join, relative, delimiter } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -33,6 +33,8 @@ let productionDir;
 let runtimeDir;
 let scratchDatabase;
 let schemaCreated = false;
+let lifecycleLogPath;
+const backendLogs = [];
 
 function runPsql(database, sql) {
   return execFileSync(psql, ["-h", pgHost, "-p", pgPort, "-U", pgUser, "-d", database, "-v", "ON_ERROR_STOP=1", "-Atc", sql], {
@@ -115,6 +117,7 @@ try {
   // never share mutable class files. Add only explicitly selected HTTP fixtures,
   // rather than exposing every test configuration on the runtime classpath.
   runtimeDir = mkdtempSync(join(tmpdir(), "interhub-e2e-runtime-"));
+  lifecycleLogPath = join(runtimeDir, "backend.log");
   const isolatedBackend = join(runtimeDir, "backend");
   cpSync(fileURLToPath(backendDir), isolatedBackend, {
     recursive: true,
@@ -155,6 +158,7 @@ try {
     && !["JAVA_TOOL_OPTIONS", "JDK_JAVA_OPTIONS", "_JAVA_OPTIONS"].includes(name)));
   const backendEnv = {
     ...isolatedBackendEnv, SPRING_PROFILES_ACTIVE: "test", TRUSTED_PROXY_CIDRS: "127.0.0.1/32,::1/128",
+    ROOM_REALTIME_LIFECYCLE_DIAGNOSTICS: "true",
     CHAT_RECEIPT_HMAC_SECRET: publicFixtureKey,
     SPRING_APPLICATION_JSON: JSON.stringify({ app: {
       "team-invitation-link-encryption": { "active-key-id": "e2e-v1", keys: { "e2e-v1": publicFixtureKey } },
@@ -167,12 +171,18 @@ try {
     SPRING_JPA_HIBERNATE_DDL_AUTO: "validate", SPRING_JPA_PROPERTIES_HIBERNATE_DEFAULT_SCHEMA: schema,
   };
   function backend(port, merge) {
-    return start(join(javaHome, "bin", "java"), ["-cp", classpath, "com.interviewonline.InterviewOnlineApplicationKt",
+    const log = createWriteStream(port === backendPort ? lifecycleLogPath : join(runtimeDir, `backend-${port}.log`));
+    backendLogs.push(log);
+    const state = start(join(javaHome, "bin", "java"), ["-cp", classpath, "com.interviewonline.InterviewOnlineApplicationKt",
       `--server.port=${port}`, `--app.features.team-merge-commit-enabled=${merge}`,
       `--spring.datasource.url=${jdbcUrl}`, `--spring.datasource.hikari.schema=${schema}`,
       `--spring.flyway.schemas=${schema}`, `--spring.flyway.default-schema=${schema}`,
       `--spring.jpa.properties.hibernate.default_schema=${schema}`,
-      "--app.http.trusted-proxy-cidrs=127.0.0.1/32,::1/128"], { cwd: isolatedBackend, env: backendEnv });
+      "--app.http.trusted-proxy-cidrs=127.0.0.1/32,::1/128"], { cwd: isolatedBackend, env: backendEnv, stdio: ["ignore", "pipe", "pipe"] });
+    log.on("error", () => { cancelled = true; process.exitCode = 1; owned.interrupt(); });
+    state.child.stdout.on("data", data => { if (!log.writableEnded) log.write(data); process.stdout.write(data); });
+    state.child.stderr.on("data", data => { if (!log.writableEnded) log.write(data); process.stderr.write(data); });
+    return state;
   }
   const firstBackend = backend(backendPort, process.env.FEATURE_TEAM_MERGE_COMMIT === "true");
   const frontend = start(process.execPath, [fileURLToPath(new URL("node_modules/@rspack/cli/bin/rspack.js", frontendDir)),
@@ -188,24 +198,47 @@ try {
   const suiteEnv = {
     ...nodeEnv, E2E_API_URL: apiUrl, E2E_BASE_URL: webUrl, E2E_ISOLATED_RUN_ID: runId,
     E2E_ISOLATED_SCHEMA: schema, E2E_ISOLATED_DATABASE: scratchDatabase,
+    E2E_REALTIME_LIFECYCLE_LOG: lifecycleLogPath,
     ...(secondBackendPort === null ? {} : { E2E_SECOND_API_URL: `http://127.0.0.1:${secondBackendPort}/api` }),
   };
   for (const suiteFile of suites) {
     if (cancelled) throw new Error("E2E_RUN_CANCELLED");
-    const args = ["--test"];
+    const args = ["--test", "--test-timeout=180000"];
     const pattern = process.env.E2E_TEST_NAME_PATTERN ?? suitePatterns[suiteFile];
     if (pattern !== undefined) args.push("--test-name-pattern", pattern);
     args.push(suiteFile);
+    const startedAt = Date.now();
     const suite = start(process.execPath, args, { cwd: frontendDir, env: suiteEnv });
+    let timedOut = false;
+    let timeoutCleanup;
+    const deadline = setTimeout(() => {
+      timedOut = true;
+      timeoutCleanup = owned.terminate(suite).catch(error => {
+        suite.error = error;
+        process.stderr.write("E2E_OWNED_SUITE_TERMINATION_FAILED\n");
+      });
+    }, 600_000);
     const code = await new Promise((resolve) => {
       suite.child.once("exit", (value) => resolve(value ?? 1));
       suite.child.once("error", () => resolve(1));
     });
-    if (code !== 0) { if (!cancelled) process.exitCode = code; break; }
+    clearTimeout(deadline);
+    if (timeoutCleanup) await timeoutCleanup;
+    const result = { suite: suiteFile, exitCode: timedOut ? 1 : code, timedOut, durationMs: Date.now() - startedAt };
+    if (process.env.E2E_RESULTS_FILE) appendFileSync(process.env.E2E_RESULTS_FILE, `${JSON.stringify(result)}\n`);
+    console.log("E2E_SUITE_RESULT", JSON.stringify(result));
+    if (result.exitCode !== 0) {
+      if (!cancelled) process.exitCode = result.exitCode;
+      if (process.env.E2E_CONTINUE_ON_FAILURE !== "true") break;
+    }
   }
 } finally {
   try { await owned.stop(); }
   finally {
+    await Promise.all(backendLogs.map(log => log.closed ? Promise.resolve() : new Promise(resolve => {
+      log.once("close", resolve);
+      log.end();
+    })));
     try { if (schemaCreated) runPsql(scratchDatabase, `DROP SCHEMA ${schema} CASCADE`); }
     finally {
       if (productionDir) rmSync(productionDir, { recursive: true, force: true });

@@ -699,7 +699,9 @@ test("team interview does not auto-add itself to the personal hiring cabinet", {
     assert.equal(await room.page.getByText("Не удалось добавить интервью в кабинет нанимающего").count(), 0);
     await room.page.getByRole("button", { name: "Кандидат и нанимающие", exact: true }).click();
     const panel = room.page.getByRole("dialog", { name: "Кандидат и нанимающие", exact: true });
-    await panel.getByText("Нанимающие пока не добавлены", { exact: true }).waitFor();
+    await panel.getByRole("combobox", { name: "Нанимающий", exact: true }).waitFor();
+    const assignedManagers = await request(`/rooms/${interview.inviteCode}/hr-managers`, { token: hiringOwner.token });
+    assert.deepEqual(assignedManagers, [], "TEAM_ROOM_OWNER_MUST_NOT_BE_AUTOMATICALLY_ASSIGNED_AS_HIRING_MANAGER");
     assert.equal(await panel.getByText(hiringOwner.user.displayName, { exact: true }).count(), 0);
     assert.equal(await panel.getByRole("combobox", { name: "Нанимающий", exact: true }).count(), 1);
   } finally {

@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { App as AntDesignApp, ConfigProvider } from "antd";
 import ruRU from "antd/locale/ru_RU";
 import { getAntThemeConfig, resolveStoredTheme, THEME_STORAGE_KEY, type ThemeMode } from "./themeTokens";
@@ -24,9 +25,22 @@ function readSystemTheme(): ThemeMode {
   return typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
+let themeChangeRevision = 0;
+
 function applyDocumentTheme(mode: ThemeMode) {
-  document.documentElement.dataset.theme = mode;
-  document.documentElement.style.colorScheme = mode;
+  const root = document.documentElement;
+  if (root.dataset.theme !== mode) {
+    const revision = ++themeChangeRevision;
+    root.dataset.themeChanging = "true";
+    // Commit the transition override before changing both CSS tokens and Ant's
+    // React theme. The second frame includes child effects and body portals.
+    void root.offsetHeight;
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      if (revision === themeChangeRevision) delete root.dataset.themeChanging;
+    }));
+  }
+  root.dataset.theme = mode;
+  root.style.colorScheme = mode;
 }
 
 export function ThemeProvider({ children }: React.PropsWithChildren) {
@@ -35,8 +49,10 @@ export function ThemeProvider({ children }: React.PropsWithChildren) {
 
   const setMode = useCallback((nextMode: ThemeMode) => {
     preferenceRef.current = nextMode;
-    setModeState(nextMode);
-    applyDocumentTheme(nextMode);
+    flushSync(() => {
+      setModeState(nextMode);
+      applyDocumentTheme(nextMode);
+    });
     try {
       window.localStorage.setItem(THEME_STORAGE_KEY, nextMode);
     } catch {
@@ -50,18 +66,19 @@ export function ThemeProvider({ children }: React.PropsWithChildren) {
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const updateResolvedTheme = () => {
+    const applyResolvedTheme = () => {
       const nextMode = resolveStoredTheme(preferenceRef.current, media.matches ? "dark" : "light");
       setModeState(nextMode);
       applyDocumentTheme(nextMode);
     };
+    const updateResolvedTheme = () => flushSync(applyResolvedTheme);
     const onStorage = (event: StorageEvent) => {
       if (event.key !== THEME_STORAGE_KEY && event.key !== null) return;
       const saved = event.key === null ? null : event.newValue;
       preferenceRef.current = saved === "light" || saved === "dark" ? saved : null;
       updateResolvedTheme();
     };
-    updateResolvedTheme();
+    applyResolvedTheme();
     media.addEventListener("change", updateResolvedTheme);
     window.addEventListener("storage", onStorage);
     return () => {

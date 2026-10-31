@@ -251,17 +251,18 @@ test("revoking personal interviewer access while editing clears private drafts a
     await dialog.getByRole("button", { name: "Сохранить", exact: true }).click();
     assert.ok([403, 404].includes((await rejectedSave).status()), "The stale editor cannot bypass current server rights");
     await candidate.waitFor({ state: "hidden" });
+    // The denied mutation also refreshes the personal list. Wait for that
+    // revocation boundary instead of querying a Save button while its dialog
+    // is being removed with the inaccessible card.
+    await card.waitFor({ state: "hidden" });
+    await dialog.waitFor({ state: "hidden" });
     assert.equal(await page.getByLabel("Имя кандидата", { exact: true }).count(), 0, "Denied save removes private metadata and its draft from the form");
     assert.equal(await page.getByLabel("Позиция", { exact: true }).count(), 0);
-    if (await dialog.isVisible()) {
-      assert.equal(await dialog.getByRole("button", { name: "Сохранить", exact: true }).isDisabled(), true);
-    }
-    await card.waitFor({ state: "hidden" });
+    assert.equal(await page.getByRole("button", { name: "Сохранить", exact: true }).count(), 0, "Revoked interviewer has no remaining save action");
     assert.equal(await page.getByText(/Анна Карточка|Приватный черновик отозванного интервьюера/).count(), 0, "Denied metadata cannot remain on a stale card or in search results");
     const storage = await page.evaluate(() => [...Object.values(localStorage), ...Object.values(sessionStorage)].join(" "));
     assert.ok(!storage.includes("Приватный черновик отозванного интервьюера"), "Private draft must not enter browser recovery storage");
     assert.equal((await request(`/rooms/${f.room.inviteCode}/interview-metadata`, f.owner)).candidateName, "Анна Карточка");
-    if (await dialog.isVisible()) await dialog.getByRole("button", { name: "Отмена", exact: true }).click();
     const refreshedRooms = page.waitForResponse(response => response.request().method() === "GET" && new URL(response.url()).pathname === "/api/me/rooms");
     await page.reload({ waitUntil: "domcontentloaded" });
     await refreshedRooms;

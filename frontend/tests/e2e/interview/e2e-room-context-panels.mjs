@@ -278,6 +278,19 @@ async function lifecycleBaseline(label) {
   return latest;
 }
 
+async function waitForQuiescentLifecycleBaseline(label) {
+  const deadline = Date.now() + 12_000;
+  let latest;
+  do {
+    latest = await lifecycleBaseline(label);
+    if (latest.registryConnections === 0 && latest.registryParticipants === 0 && latest.registryRoomMemberships === 0) {
+      return latest;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  } while (Date.now() < deadline);
+  assert.fail(`${label}_REGISTRY_QUIESCENCE_TIMEOUT:${latest.line}`);
+}
+
 async function lifecycleCursor() {
   const records = await lifecycleRecords();
   return records.at(-1)?.sequence ?? 0;
@@ -416,7 +429,7 @@ async function assertSurfaceContent(page, name, region, expectedTasks = fixtures
   } else if (name === "Чат") {
     assert.equal(await region.locator('[data-testid="room-notes-input"]').count(), 1, "AC11_CHAT_COMPOSER_MISSING");
     assert.equal(await region.locator('[data-testid="room-notes-send"]').count(), 1, "AC11_CHAT_SEND_MISSING");
-    assert.match((await region.textContent()) ?? "", /Виден интервьюерам этой комнаты\. Кандидат не видит чат\./, "AC11_CHAT_AUDIENCE_MISSING");
+    assert.match((await region.textContent()) ?? "", /Чат виден только интервьюерам\./, "AC11_CHAT_AUDIENCE_MISSING");
   } else if (name === "Активность") {
     assert.equal(await region.getByLabel("История активности кандидата", { exact: true }).count(), 1, "AC11_ACTIVITY_HISTORY_MISSING");
   }
@@ -505,37 +518,6 @@ function postPayload(browserRequest) {
   }
 }
 
-function exactManagerHeartbeat(browserRequest, { inviteCode, sessionId, stepIndex, code }) {
-  const payload = postPayload(browserRequest);
-  const expectedUrl = `${new URL(api).pathname.replace(/\/$/, "")}/realtime/rooms/${inviteCode}/events`;
-  const expectedKeys = [
-    "baseServerYjsSequence",
-    "clientEventSequence",
-    "code",
-    "eventToken",
-    "operationId",
-    "sessionId",
-    "stepIndex",
-    "type",
-    "yjsDocumentBase64",
-    "yjsUpdate",
-  ];
-  const actualKeys = payload && typeof payload === "object" ? Object.keys(payload).sort() : [];
-  const valid = browserRequest.method() === "POST" && isExactRelayUrl(browserRequest.url(), inviteCode) &&
-    JSON.stringify(actualKeys) === JSON.stringify(expectedKeys) &&
-    payload.sessionId === sessionId &&
-    typeof payload.eventToken === "string" && payload.eventToken.length > 0 &&
-    Number.isInteger(payload.clientEventSequence) && payload.clientEventSequence > 0 &&
-    payload.type === "manager_workspace_yjs_update" &&
-    payload.stepIndex === stepIndex &&
-    payload.yjsUpdate === "" &&
-    payload.code === code &&
-    typeof payload.yjsDocumentBase64 === "string" && payload.yjsDocumentBase64.length > 0 &&
-    Number.isInteger(payload.baseServerYjsSequence) && payload.baseServerYjsSequence >= 0 &&
-    typeof payload.operationId === "string" && /^manager-yjs-op-[0-9a-f-]{36}$/i.test(payload.operationId);
-  return { valid, payload, expectedUrl, expectedKeys, actualKeys };
-}
-
 function exactManagerAwareness(payload, sessionId, stepIndex, documentBase64, selection) {
   const keys = ["awarenessUpdate", "clientEventSequence", "eventToken", "sessionId", "stepIndex", "type"];
   if (!payload || JSON.stringify(Object.keys(payload).sort()) !== JSON.stringify(keys) ||
@@ -560,28 +542,15 @@ function exactManagerAwareness(payload, sessionId, stepIndex, documentBase64, se
   } catch { return false; }
 }
 
-function createCountBarrier(source, expectedCount, label, timeoutMs = 7_000) {
-  if (source.length >= expectedCount) return { promise: Promise.resolve(), notify: () => {} };
-  let timer;
-  let resolveBarrier;
-  let rejectBarrier;
-  const promise = new Promise((resolve, reject) => {
-    resolveBarrier = resolve;
-    rejectBarrier = reject;
-    timer = setTimeout(() => reject(new Error(`${label}_NETWORK_BARRIER_TIMEOUT:${source.length}/${expectedCount}`)), timeoutMs);
+async function waitForTransportHeartbeats(page, count, label) {
+  // Server heartbeats arrive every 5s. Two real frames cover multiple 2.5s
+  // local snapshot ticks without requiring an obsolete no-op document write.
+  await page.waitForFunction(expected => window.__ac11SseMessages.filter(entry => {
+    try { return JSON.parse(entry.data)?.type === "heartbeat"; }
+    catch { return false; }
+  }).length >= expected, count, { timeout: 15_000 }).catch(error => {
+    throw new Error(`${label}_TRANSPORT_HEARTBEAT_BARRIER_TIMEOUT`, { cause: error });
   });
-  return {
-    promise,
-    notify: () => {
-      if (source.length < expectedCount) return;
-      clearTimeout(timer);
-      resolveBarrier();
-    },
-    reject: () => {
-      clearTimeout(timer);
-      rejectBarrier(new Error(`${label}_NETWORK_BARRIER_CANCELLED`));
-    },
-  };
 }
 
 async function assertVisibleKeyboardFocus(locator, label) {
@@ -894,7 +863,8 @@ test("focus mode keeps auxiliary surfaces reachable without restoring the editor
     await directSurfaceTabs(page);
     assert.equal(await page.getByRole("tab", { name: "Редактор", exact: true }).count(), 0, "AC11_FOCUS_EDITOR_TAB_RETURNED");
     assert.equal(await page.locator('#room-context-region-editor').count(), 1, "AC11_FOCUS_EDITOR_MOUNTED_REGION_MISSING");
-    assert.equal(await selectedSurface(page), "Шаги", "AC11_FOCUS_STEPS_DEFAULT_MISSING");
+    assert.deepEqual(await visibleSurfaceRegions(page), ["Редактор"], "AC11_FOCUS_DEFAULT_EDITOR_MISSING");
+    assert.equal(await page.getByRole("tab", { selected: true }).count(), 0, "AC11_FOCUS_AUXILIARY_OPENED_WITHOUT_ACTION");
     assert.ok(await page.getByRole("region", { name: "Условие", exact: true }).isVisible());
 
     await openSurface(page, "Чат");
@@ -973,8 +943,8 @@ test("persistent room status stays fully visible at 200% desktop and tablet equi
       assert.equal(await page.getByRole("tab", { name: "Редактор", exact: true }).count(), 0, `AC11_NARROW_EDITOR_TAB_RETURNED_${viewport.label}`);
       const editor = page.getByRole("region", { name: "Редактор", exact: true, includeHidden: true });
       assert.equal(await editor.count(), 1, `AC11_NARROW_EDITOR_DIRECT_REGION_MISSING_${viewport.label}`);
-      assert.equal(await selectedSurface(page), "Шаги", `AC11_NARROW_DEFAULT_STEPS_MISSING_${viewport.label}`);
-      await page.getByRole("button", { name: "Вернуться к редактору", exact: true }).click();
+      assert.equal(await page.getByRole("tab", { selected: true }).count(), 0, `AC11_NARROW_AUXILIARY_OPENED_WITHOUT_ACTION_${viewport.label}`);
+      assert.equal(await editor.getAttribute("data-room-context-visible"), "true", `AC11_NARROW_DEFAULT_EDITOR_MISSING_${viewport.label}`);
       await editor.waitFor({ state: "visible" });
 
       const statusRow = page.locator('[data-testid="room-persistent-status"]');
@@ -1029,7 +999,7 @@ test("persistent room status stays fully visible at 200% desktop and tablet equi
 });
 
 test("owner and assigned interviewer select locally and publish only through the explicit action", { timeout: 45_000 }, async () => {
-  const initialAdmissionBaseline = await lifecycleBaseline("AC11_INITIAL_PRE_ADMISSION");
+  const initialAdmissionBaseline = await waitForQuiescentLifecycleBaseline("AC11_INITIAL_PRE_ADMISSION");
   assert.deepEqual(
     {
       registryConnections: initialAdmissionBaseline.registryConnections,
@@ -1240,6 +1210,7 @@ test("twenty panel/reflow transitions preserve one editor, room session, drafts,
       const host = document.querySelector('[data-testid="room-code-editor-host"]');
       return hydrated && host?.__roomEditorView?.state.doc.toString() === starterCode;
     }, fixtures.tasks[1].starterCode);
+    const originalWorkspace = await request(`/rooms/${fixtures.room.inviteCode}/tasks/1/workspace`, { token: fixtures.owner.token });
 
     const code = Array.from({ length: 84 }, (_, index) =>
       `const длинноеЗначение${index} = очередьСОченьДлиннымИменем[${index}] ?? "контекст редактора сохраняется";`,
@@ -1271,6 +1242,8 @@ test("twenty panel/reflow transitions preserve one editor, room session, drafts,
     const initialYjsPayload = postPayload(initialYjsResponse.request());
     const initialAwarenessPayload = postPayload(initialAwarenessResponse.request());
     assert.equal(initialYjsPayload.stepIndex, 1, "AC11_INITIAL_YJS_WRONG_LOCAL_STEP");
+    assert.match(initialYjsPayload.taskId, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, "AC11_INITIAL_YJS_TASK_UUID_MISSING");
+    assert.equal(initialYjsPayload.taskId, originalWorkspace.taskId, "AC11_INITIAL_YJS_WRONG_TASK_UUID");
     assert.equal(initialAwarenessPayload.stepIndex, 1, "AC11_INITIAL_AWARENESS_WRONG_LOCAL_STEP");
 
     await openSurface(page, "Мои заметки");
@@ -1342,10 +1315,7 @@ test("twenty panel/reflow transitions preserve one editor, room session, drafts,
 
     const unexpectedMutations = [];
     const normalAwareness = [];
-    const malformedEmptyYjs = [];
-    const exactHeartbeats = [];
     const restartedStreams = [];
-    let activeHeartbeatBarrier = null;
     const onRequest = (browserRequest) => {
       if (browserRequest.method() === "GET" && browserRequest.url().includes(`/realtime/rooms/${fixtures.room.inviteCode}/stream?`)) {
         restartedStreams.push(browserRequest.url());
@@ -1359,63 +1329,13 @@ test("twenty panel/reflow transitions preserve one editor, room session, drafts,
         normalAwareness.push(payload.awarenessUpdate);
         return;
       }
-      if (payload?.yjsUpdate === "") {
-        const heartbeat = exactManagerHeartbeat(browserRequest, {
-          inviteCode: fixtures.room.inviteCode,
-          sessionId: baseline.sessionId,
-          stepIndex: 1,
-          code,
-        });
-        if (!heartbeat.valid) {
-          malformedEmptyYjs.push({
-            url: browserRequest.url(),
-            method: browserRequest.method(),
-            actualKeys: heartbeat.actualKeys,
-            payload,
-          });
-          return;
-        }
-        exactHeartbeats.push({
-          at: Date.now(),
-          operationId: payload.operationId,
-          clientEventSequence: payload.clientEventSequence,
-          eventToken: payload.eventToken,
-          sessionId: payload.sessionId,
-          stepIndex: payload.stepIndex,
-          document: payload.yjsDocumentBase64,
-        });
-        activeHeartbeatBarrier?.notify();
-        return;
-      }
       unexpectedMutations.push({ method: browserRequest.method(), url: browserRequest.url(), type: payload?.type ?? null });
     };
     page.on("request", onRequest);
 
     await page.evaluate(() => { window.__ac11SseMessages = []; });
-    activeHeartbeatBarrier = createCountBarrier(exactHeartbeats, 2, "AC11_HEARTBEAT_BASELINE");
-    await activeHeartbeatBarrier.promise;
-    activeHeartbeatBarrier = null;
-    await page.waitForFunction((expectedCode) => {
-      const syncs = window.__ac11SseMessages.filter((entry) => {
-        try {
-          const message = JSON.parse(entry.data);
-          return message?.type === "manager_workspace_sync" && message?.payload?.code === expectedCode;
-        } catch {
-          return false;
-        }
-      });
-      return syncs.length >= 2;
-    }, code);
-    assert.deepEqual(malformedEmptyYjs, [], `AC11_MALFORMED_EMPTY_YJS:${JSON.stringify(malformedEmptyYjs)}`);
-    const baselineHeartbeatCadenceMs = exactHeartbeats[1].at - exactHeartbeats[0].at;
-    assert.ok(
-      baselineHeartbeatCadenceMs >= 1_800 && baselineHeartbeatCadenceMs <= 3_500,
-      `AC11_HEARTBEAT_BASELINE_CADENCE_WRONG:${baselineHeartbeatCadenceMs}`,
-    );
-    assert.equal(exactHeartbeats[0].document, exactHeartbeats[1].document, "AC11_IDLE_HEARTBEAT_DOCUMENT_CHANGED");
-    const transitionHeartbeatOffset = exactHeartbeats.length;
-    const lastBaselineHeartbeatAt = exactHeartbeats.at(-1).at;
-    const transitionObservationStartedAt = Date.now();
+    await waitForTransportHeartbeats(page, 2, "AC11_IDLE_NOOP_BASELINE");
+    assert.deepEqual(unexpectedMutations, [], `AC11_IDLE_SNAPSHOT_WROTE_DOCUMENT:${JSON.stringify(unexpectedMutations)}`);
     await page.evaluate(() => { window.__ac11SseMessages = []; });
 
     const transitionSizes = [
@@ -1449,12 +1369,12 @@ test("twenty panel/reflow transitions preserve one editor, room session, drafts,
     await settleLayout(page);
     assert.equal(await focusedComposer.evaluate((element) => document.activeElement === element), true, "AC11_REFLOW_LOST_COMPOSER_FOCUS");
 
-    const quiescenceHeartbeatTarget = exactHeartbeats.length + 1;
-    activeHeartbeatBarrier = createCountBarrier(exactHeartbeats, quiescenceHeartbeatTarget, "AC11_REFLOW_QUIESCENCE");
-    await activeHeartbeatBarrier.promise;
-    activeHeartbeatBarrier = null;
+    const heartbeatCount = await page.evaluate(() => window.__ac11SseMessages.filter(entry => {
+      try { return JSON.parse(entry.data)?.type === "heartbeat"; }
+      catch { return false; }
+    }).length);
+    await waitForTransportHeartbeats(page, heartbeatCount + 1, "AC11_REFLOW_QUIESCENCE");
     await settleLayout(page);
-    const transitionObservationEndedAt = Date.now();
     const transitionSseMessages = await page.evaluate(() => window.__ac11SseMessages.map((entry) => ({ ...entry })));
     page.off("request", onRequest);
 
@@ -1504,55 +1424,7 @@ test("twenty panel/reflow transitions preserve one editor, room session, drafts,
     assert.equal(await page.locator('[data-testid="room-current-local-step-context"]').getAttribute("data-step-index"), "1", "AC11_REFLOW_LOST_LOCAL_STEP");
     assert.equal((await request(`/rooms/${fixtures.room.inviteCode}`, { token: fixtures.owner.token })).currentStep, publishedBefore, "AC11_REFLOW_PUBLISHED_STEP");
     assert.deepEqual(unexpectedMutations, [], `AC11_REFLOW_SENT_MUTATION:${JSON.stringify(unexpectedMutations)}`);
-    assert.deepEqual(malformedEmptyYjs, [], `AC11_REFLOW_MALFORMED_EMPTY_YJS:${JSON.stringify(malformedEmptyYjs)}`);
     assert.deepEqual(restartedStreams, [], "AC11_REFLOW_RESTARTED_SSE_STREAM");
-    const transitionHeartbeats = exactHeartbeats.slice(transitionHeartbeatOffset);
-    for (let index = 1; index < exactHeartbeats.length; index += 1) {
-      const interval = exactHeartbeats[index].at - exactHeartbeats[index - 1].at;
-      assert.ok(
-        interval >= Math.max(1_200, baselineHeartbeatCadenceMs * 0.65),
-        `AC11_REFLOW_EMITTED_EXTRA_EMPTY_YJS:${interval}:${baselineHeartbeatCadenceMs}`,
-      );
-    }
-    assert.ok(transitionHeartbeats.length >= 1, "AC11_REFLOW_QUIESCENCE_HEARTBEAT_MISSING");
-    const observationDurationMs = transitionObservationEndedAt - transitionObservationStartedAt;
-    const baselineExpectedDuringObservation = Math.floor(observationDurationMs / baselineHeartbeatCadenceMs);
-    const heartbeatBoundaryTolerance = 1;
-    assert.ok(
-      transitionHeartbeats.length <= baselineExpectedDuringObservation + heartbeatBoundaryTolerance,
-      `AC11_REFLOW_EMPTY_YJS_CARDINALITY_EXCEEDED:${transitionHeartbeats.length}/${baselineExpectedDuringObservation}+${heartbeatBoundaryTolerance}:${observationDurationMs}:${baselineHeartbeatCadenceMs}`,
-    );
-    const lastObservedHeartbeatAt = transitionHeartbeats.at(-1).at;
-    const heartbeatWindowMs = lastObservedHeartbeatAt - lastBaselineHeartbeatAt;
-    const baselineExpectedThroughLastHeartbeat = Math.floor(heartbeatWindowMs / baselineHeartbeatCadenceMs);
-    assert.ok(
-      transitionHeartbeats.length <= baselineExpectedThroughLastHeartbeat + heartbeatBoundaryTolerance,
-      `AC11_REFLOW_CORRELATED_EMPTY_YJS_CARDINALITY_EXCEEDED:${transitionHeartbeats.length}/${baselineExpectedThroughLastHeartbeat}+${heartbeatBoundaryTolerance}:${heartbeatWindowMs}:${baselineHeartbeatCadenceMs}`,
-    );
-    assert.ok(
-      transitionHeartbeats.every((heartbeat) => heartbeat.document === exactHeartbeats[0].document),
-      "AC11_REFLOW_CHANGED_IDLE_YJS_DOCUMENT",
-    );
-    assert.equal(
-      new Set(exactHeartbeats.map((heartbeat) => heartbeat.operationId)).size,
-      exactHeartbeats.length,
-      "AC11_REFLOW_EMPTY_YJS_OPERATION_ID_REUSED",
-    );
-    for (let index = 1; index < exactHeartbeats.length; index += 1) {
-      assert.ok(
-        exactHeartbeats[index].clientEventSequence > exactHeartbeats[index - 1].clientEventSequence,
-        `AC11_REFLOW_EMPTY_YJS_CLIENT_SEQUENCE_NOT_INCREASING:${exactHeartbeats[index - 1].clientEventSequence}->${exactHeartbeats[index].clientEventSequence}`,
-      );
-    }
-    assert.equal(
-      new Set(exactHeartbeats.map((heartbeat) => heartbeat.eventToken)).size,
-      1,
-      "AC11_REFLOW_EMPTY_YJS_EVENT_TOKEN_CHANGED",
-    );
-    assert.ok(
-      exactHeartbeats.every((heartbeat) => heartbeat.sessionId === baseline.sessionId && heartbeat.stepIndex === 1),
-      `AC11_REFLOW_EMPTY_YJS_MANAGER_CONTEXT_CHANGED:${JSON.stringify(exactHeartbeats.map(({ sessionId, stepIndex }) => ({ sessionId, stepIndex })))}`,
-    );
     const parsedTransitionSse = transitionSseMessages.map((entry) => {
       try {
         return { at: entry.at, message: JSON.parse(entry.data) };
@@ -1579,16 +1451,7 @@ test("twenty panel/reflow transitions preserve one editor, room session, drafts,
         normalAwareness.includes(message.payload?.awarenessUpdate)
       ),
     );
-    const unexpectedSse = transitionDomainSse.filter(({ message }) =>
-      message?.type !== "manager_workspace_sync" ||
-      message?.payload?.stepIndex !== 1 ||
-      message?.payload?.code !== code,
-    );
-    assert.deepEqual(unexpectedSse, [], `AC11_REFLOW_EMITTED_UNRELATED_SSE:${JSON.stringify(unexpectedSse)}`);
-    assert.ok(
-      transitionDomainSse.length <= transitionHeartbeats.length,
-      `AC11_REFLOW_EMITTED_EXTRA_SSE:${transitionDomainSse.length}/${transitionHeartbeats.length}`,
-    );
+    assert.deepEqual(transitionDomainSse, [], `AC11_REFLOW_EMITTED_DOMAIN_SSE:${JSON.stringify(transitionDomainSse)}`);
     const postLifecycleRequests = [];
     const recordPostLifecycle = (browserRequest) => {
       const payload = postPayload(browserRequest);
@@ -1622,15 +1485,22 @@ test("twenty panel/reflow transitions preserve one editor, room session, drafts,
     const postAwarenessPayload = postPayload(postAwarenessResponse.request());
     assert.equal(postYjsPayload.sessionId, baseline.sessionId, "AC11_POST_REFLOW_YJS_SESSION_CHANGED");
     assert.equal(postYjsPayload.stepIndex, 1, "AC11_POST_REFLOW_YJS_STEP_CHANGED");
+    assert.equal(postYjsPayload.taskId, initialYjsPayload.taskId, "AC11_POST_REFLOW_YJS_TASK_UUID_CHANGED");
+    assert.equal(postYjsPayload.eventToken, initialYjsPayload.eventToken, "AC11_POST_REFLOW_YJS_EVENT_TOKEN_CHANGED");
+    assert.notEqual(postYjsPayload.operationId, initialYjsPayload.operationId, "AC11_POST_REFLOW_YJS_OPERATION_ID_REUSED");
+    assert.ok(postYjsPayload.clientEventSequence > initialYjsPayload.clientEventSequence, "AC11_POST_REFLOW_YJS_SEQUENCE_NOT_INCREASING");
     assert.notEqual(postYjsPayload.yjsDocumentBase64, initialYjsPayload.yjsDocumentBase64, "AC11_POST_REFLOW_YJS_DOCUMENT_DID_NOT_ADVANCE");
     assert.equal(postAwarenessPayload.sessionId, baseline.sessionId, "AC11_POST_REFLOW_AWARENESS_SESSION_CHANGED");
     assert.equal(postAwarenessPayload.stepIndex, 1, "AC11_POST_REFLOW_AWARENESS_STEP_CHANGED");
     assert.equal(postLifecycleRequests.filter((payload) => payload.type === "manager_workspace_yjs_update" && payload.yjsUpdate).length, 1, "AC11_POST_REFLOW_YJS_LIFECYCLE_DUPLICATED");
     assert.equal(postLifecycleRequests.filter((payload) => payload.type === "manager_workspace_awareness_update").length, 1, "AC11_POST_REFLOW_AWARENESS_LIFECYCLE_DUPLICATED");
+    const persistedWorkspace = await request(`/rooms/${fixtures.room.inviteCode}/tasks/1/workspace`, { token: fixtures.owner.token });
+    assert.equal(persistedWorkspace.taskId, originalWorkspace.taskId, "AC11_POST_REFLOW_PERSISTED_WRONG_TASK_UUID");
+    assert.equal(persistedWorkspace.code, finalCode, "AC11_POST_REFLOW_EDIT_NOT_PERSISTED");
     // Y.Doc and Awareness are module-private and cannot be constructor-proxied
     // from an initScript without changing production. The unchanged host,
-    // EditorView/yCollab instance and room session, identical idle full-state
-    // snapshots/cadence, and exactly-one post-reflow document + awareness
+    // EditorView/yCollab instance and room session, zero document writes across
+    // real idle transport ticks, and exactly-one post-reflow document + awareness
     // lifecycle prove the strongest observable identity seam available.
   } finally {
     await closeRoomContext(context);
@@ -1681,7 +1551,7 @@ test("desktop/tablet viewport and zoom-equivalent matrix keeps honest automatic 
           const defaultRegions = await visibleSurfaceRegions(page);
           assert.deepEqual(
             defaultRegions.sort(),
-            (expectedFocus ? ["Шаги"] : ["Редактор", "Шаги"]).sort(),
+            (expectedFocus ? ["Редактор"] : ["Редактор", "Шаги"]).sort(),
             `AC11_AUTOMATIC_DEFAULT_GEOMETRY:${baseViewport.width}x${baseViewport.height}:${defaultRegions.join(",")}`,
           );
           assert.ok(await page.getByRole("region", { name: "Условие", exact: true }).isVisible(), "AC11_PERSISTENT_CONDITION_MISSING");
@@ -1952,8 +1822,8 @@ test("remediation: editor is a direct Focus region and local splitters resize wi
     assert.equal(await editor.count(), 1, "FOCUS_EDITOR_DIRECT_REGION_MISSING");
     assert.equal(await editor.getAttribute("aria-labelledby"), null, "FOCUS_EDITOR_ORPHAN_TAB_REFERENCE");
     assert.equal(await editor.locator('[data-testid="room-code-editor-host"] .cm-editor').count(), 1, "FOCUS_EDITOR_CODEMIRROR_UNMOUNTED");
-    assert.equal(await selectedSurface(focus.page), "Шаги", "FOCUS_DEFAULT_STEPS_MISSING");
-    await focus.page.getByRole("button", { name: "Вернуться к редактору", exact: true }).click();
+    assert.equal(await focus.page.getByRole("tab", { selected: true }).count(), 0, "FOCUS_AUXILIARY_OPENED_WITHOUT_ACTION");
+    assert.equal(await editor.getAttribute("data-room-context-visible"), "true", "FOCUS_DEFAULT_EDITOR_MISSING");
     await editor.waitFor({ state: "visible" });
   } finally {
     await closeRoomContext(focus.context);

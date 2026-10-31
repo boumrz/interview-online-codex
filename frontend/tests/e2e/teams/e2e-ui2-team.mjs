@@ -52,11 +52,13 @@ try {
     await page.goto(`${web}/workspace/teams/${team.id}/${scenario.route}`);
     if (scenario.tab) {
       await page.getByRole("tab", { name: scenario.tab, exact: true }).click();
-      const [titleBox, descriptionBox] = await Promise.all([
+      const [titleBox, refreshBox] = await Promise.all([
         page.getByText("Наборы задач", { exact: true }).last().boundingBox(),
-        page.getByText("Переиспользуемые подборки командных задач для будущих интервью.", { exact: true }).boundingBox(),
+        page.getByRole("button", { name: "Обновить наборы", exact: true }).boundingBox(),
       ]);
-      if (!(descriptionBox.y >= titleBox.y + titleBox.height + 2)) failures.push("task set heading and description must occupy separate aligned lines");
+      assert.ok(titleBox && refreshBox, "task set title and refresh action remain visible");
+      assert.equal(await page.getByText("Переиспользуемые подборки командных задач для будущих интервью.", { exact: true }).count(), 0, "task set heading has no redundant introductory description");
+      if (!(refreshBox.x >= titleBox.x + titleBox.width && Math.abs(titleBox.y + titleBox.height / 2 - refreshBox.y - refreshBox.height / 2) <= 2)) failures.push("task set title and refresh action must share an axis without overlap");
     }
     await page.getByRole("button", { name: scenario.trigger, exact: true }).click();
     const dialog = page.getByRole("dialog", { name: scenario.title, exact: true });

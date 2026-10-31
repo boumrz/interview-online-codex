@@ -24,7 +24,7 @@ async function installSseCapture(context, inviteCode, displayName, key) {
     ({ roomInviteCode, roomDisplayName, captureKey }) => {
       localStorage.setItem(`guest_display_name_${roomInviteCode}`, roomDisplayName);
       const NativeEventSource = window.EventSource;
-      window[captureKey] = { created: 0, opened: 0, errors: 0, stateSyncs: 0, sourceUrl: null };
+      window[captureKey] = { created: 0, opened: 0, errors: 0, stateSyncs: 0, usableStateSyncs: 0, sourceUrl: null };
       window.EventSource = class MissingRoomCaptureEventSource extends NativeEventSource {
         constructor(...args) {
           super(...args);
@@ -54,7 +54,12 @@ async function installSseCapture(context, inviteCode, displayName, key) {
         set onmessage(handler) {
           super.onmessage = (event) => {
             try {
-              if (JSON.parse(event.data)?.type === "state_sync") window[captureKey].stateSyncs += 1;
+              const message = JSON.parse(event.data);
+              if (message?.type === "state_sync") {
+                window[captureKey].stateSyncs += 1;
+                if (typeof message.payload?.eventToken === "string" && message.payload.eventToken.length > 0)
+                  window[captureKey].usableStateSyncs += 1;
+              }
             } catch {
               // The application is responsible for handling malformed messages.
             }
@@ -82,22 +87,25 @@ async function runDelayedStatusProbe(browser) {
     await installSseCapture(context, room.inviteCode, "Delayed probe candidate", captureKey);
     const page = await context.newPage();
     const ledger = createTrafficLedger(page, room.inviteCode);
-    let markProbeStarted;
-    const probeStarted = new Promise((resolve) => { markProbeStarted = resolve; });
+    let delayProbe = false;
     let statusRequests = 0;
     await page.route(`**/api/realtime/rooms/${room.inviteCode}/stream-status*`, async (route) => {
+      if (!delayProbe) { await route.continue(); return; }
       statusRequests += 1;
       if (statusRequests !== 1) {
         await route.continue();
         return;
       }
-      markProbeStarted();
       await new Promise((resolve) => setTimeout(resolve, 2_500));
       await route.fulfill({ status: 204 }).catch(() => {});
     });
     await page.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
     await waitForSynchronizedEditor(page, captureKey);
     const baselineStateSyncs = await page.evaluate((key) => window[key]?.stateSyncs ?? 0, captureKey);
+    const statusBeforeFault = ledger.status;
+    const probeStarted = page.waitForRequest(request => request.method() === "GET" &&
+      new URL(request.url()).pathname === `/api/realtime/rooms/${room.inviteCode}/stream-status`, { timeout: 8_000 });
+    delayProbe = true;
     await page.evaluate((key) => window[key].forceCurrentError(), captureKey);
     await probeStarted;
     const eventsBeforeFocus = ledger.events;
@@ -117,6 +125,8 @@ async function runDelayedStatusProbe(browser) {
     );
     const unavailableVisible = await page.getByTestId("room-realtime-unavailable").isVisible().catch(() => false);
     if (unavailableVisible) throw new Error("DELAYED_STATUS_PROBE_FALSE_TERMINAL");
+    if (statusRequests !== 1 || ledger.status - statusBeforeFault !== 1)
+      throw new Error(`DELAYED_STATUS_PROBE_COUNT injected=${statusRequests} actual=${ledger.status - statusBeforeFault}`);
   } finally {
     await context.close();
   }
@@ -124,17 +134,18 @@ async function runDelayedStatusProbe(browser) {
 
 async function waitForSynchronizedEditor(page, captureKey) {
   await page.locator('[data-testid="room-code-editor-host"] .cm-content').waitFor({ timeout: 15_000 });
-  await page.waitForFunction((key) => window[key]?.stateSyncs > 0, captureKey, { timeout: 15_000 });
+  await page.waitForFunction((key) => window[key]?.stateSyncs > 0 && window[key]?.usableStateSyncs > 0,
+    captureKey, { timeout: 15_000 });
 }
 
 function createTrafficLedger(page, inviteCode) {
   const ledger = { stream: 0, events: 0, status: 0 };
   page.on("request", (request) => {
-    const url = request.url();
-    if (!url.includes(`/api/realtime/rooms/${inviteCode}/`)) return;
-    if (url.includes("/stream-status")) ledger.status += 1;
-    else if (url.includes("/stream")) ledger.stream += 1;
-    else if (url.includes("/events")) ledger.events += 1;
+    const path = new URL(request.url()).pathname;
+    const root = `/api/realtime/rooms/${inviteCode}/`;
+    if (path === `${root}stream-status`) ledger.status += 1;
+    else if (path === `${root}stream`) ledger.stream += 1;
+    else if (path === `${root}events`) ledger.events += 1;
   });
   return ledger;
 }
@@ -186,44 +197,65 @@ async function runMissingRoomAfterLiveSync(browser) {
     });
     await page.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
     await waitForSynchronizedEditor(page, captureKey);
+    const statusBeforeFault = ledger.status;
     classifyAsMissing = true;
     await page.evaluate((key) => window[key].replaceCurrentStream(), captureKey);
     await expectTerminalUnavailable(page, ledger, "MISSING_ROOM_AFTER_LIVE_SYNC");
-    if (ledger.status !== 1) throw new Error(`MISSING_ROOM_STATUS_PROBE_COUNT ${ledger.status}`);
+    if (ledger.status - statusBeforeFault !== 1)
+      throw new Error(`MISSING_ROOM_STATUS_PROBE_COUNT ${ledger.status - statusBeforeFault}`);
   } finally {
     await context.close();
   }
 }
 
-async function runInitiallyMissingRoom(browser) {
+async function runInitiallyMissingRoom(browser, order) {
   const inviteCode = `initially-missing-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const directResponse = await fetch(`${apiBaseUrl}/rooms/${inviteCode}`);
+  if (directResponse.status !== 404) throw new Error(`INITIALLY_MISSING_DIRECT_STATUS ${directResponse.status}`);
   const context = await browser.newContext();
   const captureKey = "__initiallyMissingRoom";
+  let releaseDeferredResponse;
+  const deferredResponse = new Promise(resolve => { releaseDeferredResponse = resolve; });
   try {
     await installSseCapture(context, inviteCode, "Initially missing candidate", captureKey);
     const page = await context.newPage();
     const ledger = createTrafficLedger(page, inviteCode);
-    await page.route(`**/api/realtime/rooms/${inviteCode}/stream-status*`, async (route) => {
-      await route.fulfill({
-        status: 404,
-        contentType: "application/json",
-        body: JSON.stringify({ error: "missing-room-test-sentinel" }),
-      });
+    const realtimePath = `/api/realtime/rooms/${inviteCode}/`;
+    const primaryPath = `/api/rooms/${inviteCode}`;
+    const waitForActualResponse = path => page.waitForResponse(response => response.request().method() === "GET" &&
+      new URL(response.url()).pathname === path, { timeout: 12_000 });
+    // Delay only delivery order. The actual backend classifies all three reads.
+    // In SSE-first, primary REST remains held until fallback has reached terminal.
+    await page.route(url => url.pathname === (order === "rest-first" ? `${realtimePath}stream` : primaryPath), async route => {
+      await deferredResponse;
+      await route.continue().catch(() => {}); // The terminal transition can have canceled this request.
     });
+    const firstResponse = waitForActualResponse(order === "rest-first" ? primaryPath : `${realtimePath}stream`);
+    const fallbackResponse = order === "sse-first" ? waitForActualResponse(`${realtimePath}stream-status`) : null;
     await page.goto(`${webBaseUrl}/room/${inviteCode}`, { waitUntil: "domcontentloaded" });
-    try {
-      await expectTerminalUnavailable(page, ledger, "INITIALLY_MISSING_ROOM");
-    } catch (error) {
-      const diagnostic = await page.evaluate((key) => ({
-        capture: window[key],
-        text: document.body?.innerText?.slice(0, 500) ?? "",
-      }), captureKey);
-      throw new Error(`${error instanceof Error ? error.message : String(error)} INITIAL_MISSING_DIAGNOSTIC=${JSON.stringify({ ledger, diagnostic })}`);
+    const firstStatus = (await firstResponse).status();
+    if (firstStatus !== 404) throw new Error(`INITIALLY_MISSING_${order}_FIRST_STATUS ${firstStatus}`);
+    if (fallbackResponse) {
+      const fallbackStatus = (await fallbackResponse).status();
+      if (fallbackStatus !== 404) throw new Error(`INITIALLY_MISSING_FALLBACK_STATUS ${fallbackStatus}`);
+      await page.waitForFunction(key => window[key]?.errors > 0, captureKey, { timeout: 12_000 });
     }
-    const stateSyncs = await page.evaluate((key) => window[key]?.stateSyncs ?? 0, captureKey);
-    if (stateSyncs !== 0) throw new Error(`INITIALLY_MISSING_ROOM_STATE_SYNC_COUNT ${stateSyncs}`);
-    if (ledger.status !== 1) throw new Error(`INITIALLY_MISSING_ROOM_STATUS_PROBE_COUNT ${ledger.status}`);
+    await page.getByTestId("room-realtime-unavailable").waitFor({ timeout: 12_000 });
+    releaseDeferredResponse();
+    await expectTerminalUnavailable(page, ledger, `INITIALLY_MISSING_${order}`);
+    const capture = await page.evaluate(key => ({
+      stateSyncs: window[key]?.stateSyncs ?? 0, usableStateSyncs: window[key]?.usableStateSyncs ?? 0,
+      opened: window[key]?.opened ?? 0, errors: window[key]?.errors ?? 0, created: window[key]?.created ?? 0,
+    }), captureKey);
+    if (capture.stateSyncs !== 0 || capture.usableStateSyncs !== 0 || capture.opened !== 0)
+      throw new Error(`INITIALLY_MISSING_ROOM_ADMISSION ${JSON.stringify(capture)}`);
+    if (capture.created > 10 || capture.errors > 10) throw new Error(`INITIALLY_MISSING_RETRY_STORM ${JSON.stringify(capture)}`);
+    const expectedProbeCount = order === "sse-first" ? 1 : 0;
+    if (ledger.status !== expectedProbeCount)
+      throw new Error(`INITIALLY_MISSING_ROOM_STATUS_PROBE_COUNT expected=${expectedProbeCount} actual=${ledger.status}`);
+    if (ledger.events !== 0) throw new Error(`INITIALLY_MISSING_ROOM_RELAY_COUNT ${ledger.events}`);
   } finally {
+    releaseDeferredResponse();
     await context.close();
   }
 }
@@ -265,6 +297,7 @@ async function runStaleTokenRace(browser) {
 
     await page.goto(`${webBaseUrl}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
     await waitForSynchronizedEditor(page, captureKey);
+    const statusBeforeFault = ledger.status;
     rejectNextYjs = true;
     await page.locator('[data-testid="room-code-editor-host"] .cm-content').click({ force: true });
     await page.keyboard.type(`stale-token-${Date.now()}`);
@@ -272,13 +305,14 @@ async function runStaleTokenRace(browser) {
       await expectTerminalUnavailable(page, ledger, "STALE_TOKEN_MISSING_ROOM_RACE");
     } catch (error) {
       const diagnostic = await page.evaluate((key) => ({
-        capture: window[key],
-        text: document.body?.innerText?.slice(0, 800) ?? "",
+        capture: { created: window[key]?.created, opened: window[key]?.opened, errors: window[key]?.errors,
+          stateSyncs: window[key]?.stateSyncs, usableStateSyncs: window[key]?.usableStateSyncs },
       }), captureKey);
       throw new Error(`${error instanceof Error ? error.message : String(error)} STALE_TOKEN_DIAGNOSTIC=${JSON.stringify({ ledger, rejectedYjs, returnMissingFromStatusProbe, diagnostic })}`);
     }
     if (rejectedYjs !== 1) throw new Error(`STALE_TOKEN_YJS_403_COUNT ${rejectedYjs}`);
-    if (ledger.status !== 1) throw new Error(`STALE_TOKEN_STATUS_PROBE_COUNT ${ledger.status}`);
+    if (ledger.status - statusBeforeFault !== 1)
+      throw new Error(`STALE_TOKEN_STATUS_PROBE_COUNT ${ledger.status - statusBeforeFault}`);
   } finally {
     await context.close();
   }
@@ -287,10 +321,19 @@ async function runStaleTokenRace(browser) {
 const browser = await chromium.launch({ headless: true });
 try {
   const scenario = process.env.MISSING_ROOM_SCENARIO || "all";
-  if (scenario === "all" || scenario === "initial") await runInitiallyMissingRoom(browser);
-  if (scenario === "all" || scenario === "live") await runMissingRoomAfterLiveSync(browser);
-  if (scenario === "all" || scenario === "race") await runStaleTokenRace(browser);
-  if (scenario === "all" || scenario === "delayed") await runDelayedStatusProbe(browser);
+  if (!["all", "initial", "rest-first", "sse-first", "live", "race", "delayed"].includes(scenario))
+    throw new Error("UNKNOWN_MISSING_ROOM_SCENARIO");
+  for (const [key, run] of [
+    ["rest-first", () => runInitiallyMissingRoom(browser, "rest-first")],
+    ["sse-first", () => runInitiallyMissingRoom(browser, "sse-first")],
+    ["live", () => runMissingRoomAfterLiveSync(browser)],
+    ["race", () => runStaleTokenRace(browser)],
+    ["delayed", () => runDelayedStatusProbe(browser)],
+  ]) {
+    if (scenario !== "all" && scenario !== key && !(scenario === "initial" && ["rest-first", "sse-first"].includes(key))) continue;
+    await run();
+    console.log(`MISSING_ROOM_SSE_RECOVERY_SCENARIO_OK ${key}`);
+  }
   console.log("MISSING_ROOM_SSE_RECOVERY_OK");
 } catch (error) {
   console.error("MISSING_ROOM_SSE_RECOVERY_FAIL", error);

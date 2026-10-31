@@ -56,3 +56,40 @@ test("runtime teardown closes owned descendants after their suite parent has exi
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("terminating a stuck owned suite preserves unrelated owned runtime processes", {
+  skip: process.platform === "win32" ? "POSIX process-group lifecycle" : false,
+}, async () => {
+  const directory = await mkdtemp(join(tmpdir(), "interhub-owned-timeout-test-"));
+  const owned = createOwnedRuntime();
+  const serverCode = `
+    const { createServer } = require("node:net");
+    const { writeFileSync } = require("node:fs");
+    process.on("SIGTERM", () => {});
+    createServer().listen(0, "127.0.0.1", function () {
+      writeFileSync(process.env.OWNED_RECORD, JSON.stringify({ port: this.address().port }));
+    });
+  `;
+  const stuckRecord = join(directory, "stuck.json");
+  const siblingRecord = join(directory, "sibling.json");
+  const stuck = owned.start(process.execPath, ["-e", serverCode], { env: { ...process.env, OWNED_RECORD: stuckRecord }, stdio: "ignore" });
+  owned.start(process.execPath, ["-e", serverCode], { env: { ...process.env, OWNED_RECORD: siblingRecord }, stdio: "ignore" });
+  try {
+    async function ready(record) {
+      for (let attempt = 0; attempt < 100; attempt++) {
+        try { return JSON.parse(await readFile(record, "utf8")); } catch { await delay(20); }
+      }
+      assert.fail("the owned fixture must start before exercising termination");
+    }
+    const [first, second] = await Promise.all([ready(stuckRecord), ready(siblingRecord)]);
+    assert.equal(typeof owned.terminate, "function", "a timed-out suite needs scoped termination");
+    await assert.rejects(owned.terminate({ child: { pid: 2_147_483_647 } }), /OWNED_PROCESS_REQUIRED/);
+    await assert.rejects(owned.terminate(stuck, { graceMs: -1 }), /OWNED_PROCESS_GRACE_INVALID/);
+    await owned.terminate(stuck, { graceMs: 50 });
+    assert.equal(await listening(first.port), false, "the stuck owned process must be stopped");
+    assert.equal(await listening(second.port), true, "the backend/frontend sibling must remain available for later suites");
+  } finally {
+    await owned.stop();
+    await rm(directory, { recursive: true, force: true });
+  }
+});

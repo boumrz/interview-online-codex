@@ -17,21 +17,15 @@ async function account(isHr = false, displayName = "Проверка уведо�
   return response.json();
 }
 
-async function openLegacy(browser, auth) {
+async function openProfile(browser, auth) {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   await context.addInitScript(({ token }) => localStorage.setItem("auth_token", token), auth);
-  // Personal legacy routes redirect; the existing administrative route still
-  // owns the dashboard. A controlled display-role fixture exposes that screen
-  // for this UI check; profile saves use the real isolated account API.
-  await context.route("**/api/me/profile", async route => {
-    if (route.request().method() !== "GET") return route.continue();
-    const response = await route.fetch();
-    await route.fulfill({ response, json: { ...await response.json(), role: "admin" } });
-  });
-  await context.route("**/api/admin/users", route => route.fulfill({ json: [] }));
   const page = await context.newPage();
   page.setDefaultTimeout(10000);
-  await page.goto(`${web}/dashboard/admin`, { waitUntil: "domcontentloaded" });
+  await page.goto(`${web}/workspace/personal/interviews`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("link", { name: `Открыть профиль @${auth.user.nickname}`, exact: true }).click();
+  await page.waitForURL("**/profile");
+  await page.getByRole("heading", { name: "Профиль", exact: true }).waitFor();
   await page.getByRole("switch", { name: "Я участвую в найме", exact: true }).waitFor();
   await page.getByRole("button", { name: "Изменить имя", exact: true }).waitFor();
   assert.equal(await page.locator(".ant-notification-notice-success").count(), 0, "Loading a screen is not an action result");
@@ -53,12 +47,12 @@ async function closeBrowser(browser) {
   await browser.close();
 }
 
-test("legacy profile save announces one top popup only after confirmation and returns focus", { timeout: 45000 }, async () => {
+test("profile save announces one top popup only after confirmation and returns focus", { timeout: 45000 }, async () => {
   const browser = await chromium.launch({ headless: true });
   const release = Promise.withResolvers();
   try {
     const auth = await account();
-    const { page, context } = await openLegacy(browser, auth);
+    const { page, context } = await openProfile(browser, auth);
     const started = Promise.withResolvers();
     await page.route("**/api/me/profile", async route => {
       if (route.request().method() !== "PATCH") return route.fallback();
@@ -86,26 +80,40 @@ test("legacy profile save announces one top popup only after confirmation and re
   }
 });
 
-test("legacy hiring capability callback has one popup and no saved label in the profile", { timeout: 45000 }, async () => {
-  const browser = await chromium.launch({ headless: true });
-  try {
-    const auth = await account();
-    const { page, context } = await openLegacy(browser, auth);
-    await page.getByRole("switch", { name: "Я участвую в найме", exact: true }).click();
-    await assertSingleTopSuccess(page, "Функции нанимающего включены");
-    assert.equal(await page.getByText("Сохранено", { exact: true }).count(), 0,
-      "The profile does not duplicate its caller's confirmed success");
-  } finally {
-    await closeBrowser(browser);
-  }
-});
-
-test("a legacy profile response cannot announce success after navigation unmounts its owner", { timeout: 45000 }, async () => {
+test("hiring capability callback has one popup and no saved label in the profile", { timeout: 45000 }, async () => {
   const browser = await chromium.launch({ headless: true });
   const release = Promise.withResolvers();
   try {
     const auth = await account();
-    const { page, context } = await openLegacy(browser, auth);
+    const { page, context } = await openProfile(browser, auth);
+    const started = Promise.withResolvers();
+    await page.route("**/api/me/profile", async route => {
+      if (route.request().method() !== "PATCH") return route.fallback();
+      const response = await route.fetch();
+      started.resolve();
+      await release.promise;
+      await route.fulfill({ response });
+    });
+    await page.getByRole("switch", { name: "Я участвую в найме", exact: true }).click();
+    await started.promise;
+    assert.equal(await page.getByText("Сохранено", { exact: true }).count(), 0, "An unconfirmed capability change cannot announce success");
+    release.resolve();
+    await assertSingleTopSuccess(page, "Сохранено");
+    assert.equal(await page.getByRole("switch", { name: "Я участвую в найме", exact: true }).isChecked(), true);
+    assert.equal(await page.getByRole("main", { name: "Личный раздел: Профиль", exact: true }).getByText("Сохранено", { exact: true }).count(), 0,
+      "The profile does not duplicate its caller's confirmed success");
+  } finally {
+    release.resolve();
+    await closeBrowser(browser);
+  }
+});
+
+test("a profile response cannot announce success after navigation unmounts its owner", { timeout: 45000 }, async () => {
+  const browser = await chromium.launch({ headless: true });
+  const release = Promise.withResolvers();
+  try {
+    const auth = await account();
+    const { page, context } = await openProfile(browser, auth);
     const started = Promise.withResolvers();
     const finished = Promise.withResolvers();
     await page.route("**/api/me/profile", async route => {
@@ -121,12 +129,10 @@ test("a legacy profile response cannot announce success after navigation unmount
     await dialog.getByLabel("Имя для отображения", { exact: true }).fill(`Позднее имя ${unique()}`);
     await dialog.getByRole("button", { name: "Сохранить имя", exact: true }).click();
     await started.promise;
-    // A same-document navigation keeps the global notification context alive
-    // while replacing the dashboard component that owns this request.
-    await page.evaluate(() => {
-      history.pushState({}, "", "/workspace/personal/interviews");
-      window.dispatchEvent(new PopStateEvent("popstate"));
-    });
+    // Browser Back remains a real user navigation while the pending dialog
+    // cannot be cancelled; the notification provider survives that transition.
+    await page.goBack();
+    await page.waitForURL("**/workspace/personal/interviews");
     await page.getByRole("button", { name: "Создать интервью", exact: true }).waitFor();
     release.resolve();
     await finished.promise;

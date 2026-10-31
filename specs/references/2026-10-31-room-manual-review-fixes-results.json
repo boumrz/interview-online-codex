@@ -1,0 +1,226 @@
+{
+  "passed": true,
+  "results": {
+    "unit": {
+      "exitCode": 0,
+      "seconds": 1.824,
+      "command": [
+        "/Users/romanzheltov/.nvm/versions/node/v24.19.0/bin/node",
+        "--experimental-strip-types",
+        "--test",
+        "--test-reporter=tap",
+        "--test-concurrency=1",
+        "tests/unit/activityRetry.test.ts",
+        "tests/unit/activityTimeline.test.ts",
+        "tests/unit/apiErrorFeedback.test.ts",
+        "tests/unit/candidateActivityHistory.test.ts",
+        "tests/unit/exportDownloads.test.ts",
+        "tests/unit/hiringManagerPreviewCopy.test.ts",
+        "tests/unit/hiringManagerProductCopy.test.ts",
+        "tests/unit/libraryTransfer.test.ts",
+        "tests/unit/markdownDraftRecovery.test.ts",
+        "tests/unit/markdownWorkerClient.test.ts",
+        "tests/unit/roomChatDelivery.test.ts",
+        "tests/unit/roomContextPanelLayout.test.ts",
+        "tests/unit/roomEditPolicy.test.ts",
+        "tests/unit/roomRealtimeTransport.test.ts",
+        "tests/unit/teamInvitationMutationPolicy.test.ts",
+        "tests/unit/teamManagementIntent.test.ts",
+        "tests/unit/themeTokens.test.ts"
+      ],
+      "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-ui-acceptance-20261031-fmts2r8b/repo/frontend",
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-ui-acceptance-20261031-fmts2r8b/unit.log",
+      "tests": 89,
+      "pass": 89,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    "contract": {
+      "exitCode": 0,
+      "seconds": 31.86,
+      "command": [
+        "/Users/romanzheltov/.nvm/versions/node/v24.19.0/bin/node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-concurrency=1",
+        "tests/contract/analytics-contract.test.mjs",
+        "tests/contract/devLogPrivacy.test.mjs",
+        "tests/contract/devServerSecurity.test.mjs",
+        "tests/contract/e2e-fixture-safety.test.mjs",
+        "tests/contract/e2e-owned-runtime.test.mjs",
+        "tests/contract/fullRegressionRunner.test.mjs",
+        "tests/contract/markdown-worker-browser.test.mjs",
+        "tests/contract/observed-protocol-command.test.mjs",
+        "tests/contract/roomRealtimeTransportWiring.test.mjs",
+        "tests/contract/teamInvitationSecretLifecycle.test.mjs"
+      ],
+      "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-ui-acceptance-20261031-fmts2r8b/repo/frontend",
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-ui-acceptance-20261031-fmts2r8b/contract.log",
+      "tests": 58,
+      "pass": 58,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    "browser": {
+      "exitCode": 0,
+      "seconds": 54.407,
+      "command": [
+        "/Users/romanzheltov/.nvm/versions/node/v24.19.0/bin/node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-concurrency=1",
+        "tests/browser/editorSelection.test.mjs",
+        "tests/browser/instantThemeSwitch.test.mjs",
+        "tests/browser/managerYjsRecovery.test.mjs",
+        "tests/browser/roomEditorNavigation.test.mjs",
+        "tests/browser/workspaceCreationAndSelectors.test.mjs"
+      ],
+      "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-ui-acceptance-20261031-fmts2r8b/repo/frontend",
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-ui-acceptance-20261031-fmts2r8b/browser.log",
+      "tests": 47,
+      "pass": 47,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    "typecheck": {
+      "exitCode": 0,
+      "seconds": 2.916,
+      "command": [
+        "/Users/romanzheltov/.nvm/versions/node/v24.19.0/bin/node",
+        "node_modules/typescript/bin/tsc",
+        "--noEmit"
+      ],
+      "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-ui-acceptance-20261031-fmts2r8b/repo/frontend",
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-ui-acceptance-20261031-fmts2r8b/typecheck.log"
+    },
+    "production-build": {
+      "exitCode": 0,
+      "seconds": 5.921,
+      "command": [
+        "/Users/romanzheltov/.nvm/versions/node/v24.19.0/bin/node",
+        "/Users/romanzheltov/.nvm/versions/node/v24.19.0/lib/node_modules/npm/bin/npm-cli.js",
+        "run",
+        "build"
+      ],
+      "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-ui-acceptance-20261031-fmts2r8b/repo/frontend",
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-ui-acceptance-20261031-fmts2r8b/production-build.log"
+    },
+    "api-e2e": {
+      "exitCode": 0,
+      "seconds": 195.888,
+      "command": [
+        "/Users/romanzheltov/.nvm/versions/node/v24.19.0/bin/node",
+        "tests/e2e/run-isolated.mjs",
+        "tests/e2e/theme/e2e-theme-switch.mjs",
+        "tests/e2e/theme/e2e-system-theme.mjs",
+        "tests/e2e/interview/e2e-room-context-panels.mjs",
+        "tests/e2e/interview/e2e-room-command-editor-ux.mjs",
+        "tests/e2e/interview/e2e-room-shared-mode.mjs",
+        "tests/e2e/authoring/e2e-markdown-explainer-smoke.mjs",
+        "tests/e2e/realtime/e2e-manager-workspace-integrity.mjs",
+        "tests/e2e/realtime/e2e-yjs-delivery-reliability.mjs"
+      ],
+      "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-ui-acceptance-20261031-fmts2r8b/repo/frontend",
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-ui-acceptance-20261031-fmts2r8b/api-e2e.log",
+      "counts": {
+        "tests": 35,
+        "pass": 35,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "suites": [
+        {
+          "suite": "tests/e2e/theme/e2e-theme-switch.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 3585
+        },
+        {
+          "suite": "tests/e2e/theme/e2e-system-theme.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 3963
+        },
+        {
+          "suite": "tests/e2e/interview/e2e-room-context-panels.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 76965
+        },
+        {
+          "suite": "tests/e2e/interview/e2e-room-command-editor-ux.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 6893
+        },
+        {
+          "suite": "tests/e2e/interview/e2e-room-shared-mode.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 12619
+        },
+        {
+          "suite": "tests/e2e/authoring/e2e-markdown-explainer-smoke.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 1375
+        },
+        {
+          "suite": "tests/e2e/realtime/e2e-manager-workspace-integrity.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 42677
+        },
+        {
+          "suite": "tests/e2e/realtime/e2e-yjs-delivery-reliability.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 11402
+        }
+      ]
+    }
+  },
+  "sourceDrift": [],
+  "finishedAt": "2026-10-31T20:04:33.812162+00:00",
+  "cleanupAudit": {
+    "schemas": [
+      "interhub_e2e_4e55942b23c54810b406fc2105f0fe91"
+    ],
+    "remainingSchemas": [],
+    "remainingOwnedProcessIds": [],
+    "readOnlyAudit": true
+  },
+  "total": {
+    "tests": 229,
+    "pass": 229,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0
+  },
+  "scope": "Frontend unit/contract/browser, typecheck, production build/compression and eight selected complete production API E2E files; previous 1303-test full run is historical.",
+  "independentReview": "APPROVE; readOnly editor focus finding fixed with RED/GREEN test",
+  "redEvidence": {
+    "selection": "separate old-source copy: 12 pass / 4 fail; last code line invisible in light/dark with/without trailing newline",
+    "markdown": "two new cases fail on visible loading status",
+    "navigation": "seven cases fail on default steps/short label/missing editor focus; added readOnly case also reproduced RED",
+    "theme": "initial two cases fail on real running CSS color transitions"
+  },
+  "changedInputHashes": {
+    "frontend/src/features/room/RoomContextPanels.tsx": "1cc6284fd112d628d3255c47a0b93390af810c3a72e44a3d1b92b1ce5189f49f",
+    "frontend/src/features/room/RoomContextPanels.module.css": "b2714781eb3afa34b1ebf1e9f66a7dddddf69716c49c279f63570cfcf4aef974",
+    "frontend/src/features/room/codeMirrorTheme.ts": "7275eac11cf1ff1d06c067480dff5812bfc35f741a6e009d65f7edf91e4231b7",
+    "frontend/src/components/MarkdownPreview.tsx": "d3c197c084df4e6858d92612f583821274eed29f5d045e93bfa2318d6333e133",
+    "frontend/src/features/theme/ThemeProvider.tsx": "d4a7829f6f486a7b71e16ae3111988f8561691a5ea315ddf3b7adaaea1f077fb",
+    "frontend/src/features/theme/ThemeToggleButton.tsx": "64b6b385863c28ff3d0377d485c5582bf8233cf13260b95dc466355ae7621536",
+    "frontend/src/styles/global.css": "5c353e73355e7b01c4d8d7837217c97a747377f62b3f218ce58a5b92ae5d9e9c",
+    "frontend/tests/browser/roomEditorNavigation.test.mjs": "dc928af414d93d917b4845ea294d525aa230b110691f01d27a4143b22f6b9ea0",
+    "frontend/tests/browser/editorSelection.test.mjs": "e9c25a6750ec983964c4712b63b5fca1ded6019246b6a64722d8ee7173ced197",
+    "frontend/tests/browser/instantThemeSwitch.test.mjs": "d259c0dd4ac9023b22dcfb9d71bfa999413f7a88f44b6b43fd5fe6dff9e3c7bd",
+    "frontend/tests/contract/markdown-worker-browser.test.mjs": "7f08cec11ebd8f47e32b2bb152dd7983134eeb3ad92bbf123626e7c2af4b480b",
+    "frontend/tests/e2e/interview/e2e-room-context-panels.mjs": "c264ac4256f2b1d57864d0a454e65da4f0a312d739f50a6fbf79eea727e18844"
+  }
+}

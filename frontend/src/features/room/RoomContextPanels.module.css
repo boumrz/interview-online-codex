@@ -32,6 +32,20 @@
   justify-content: flex-end;
 }
 
+.root[data-room-context-mode="focus"] .controls {
+  flex-wrap: wrap;
+}
+
+.editorReturn {
+  width: 100%;
+  flex: 0 0 auto;
+}
+
+.editorReturnButton.editorReturnButton {
+  min-height: 40px;
+  font-weight: 600;
+}
+
 .tabList {
   min-width: 0;
 }

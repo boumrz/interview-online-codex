@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { chromium } from "playwright";
+import { readFile } from "node:fs/promises";
 
 test("isolated API fixtures belong to the runner schema and authenticate normally", async () => {
   const api = process.env.E2E_API_URL;
@@ -49,4 +50,13 @@ test("browser API requests stay in the proved frontend proxy", async () => {
   } finally {
     await browser.close();
   }
+});
+
+test("the isolated runner supplies its own readable backend lifecycle log", async () => {
+  const path = process.env.E2E_REALTIME_LIFECYCLE_LOG;
+  assert.equal(typeof path, "string", "lifecycle checks must not depend on manually configured external logs");
+  assert.match(path, /interhub-e2e-runtime-[^/\\]+[/\\]backend\.log$/);
+  const log = await readFile(path, "utf8");
+  assert.match(log, /Started InterviewOnlineApplicationKt/, "the supplied file belongs to the running test backend");
+  assert.doesNotMatch(path, /interview_online/);
 });

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { mergeUpdates } from "yjs";
+import { applyUpdate, Doc, encodeStateAsUpdate, mergeUpdates } from "yjs";
 import { API_BASE_URL } from "../../config/runtime";
 import { activityRetryDelay, ACTIVITY_REQUEST_TIMEOUT_MS } from "./activityRetry";
 import { base64ToBytes, bytesToBase64 } from "./yjsCodec";
@@ -177,6 +177,7 @@ type Options = {
   /** Manager-only inactive-task workspace; never delivered to candidate connections. */
   onManagerWorkspaceSync?: (payload: ManagerWorkspaceRealtimeState) => void;
   onManagerWorkspaceYjsUpdate?: (payload: {
+    taskId?: string | null;
     stepIndex: number;
     sessionId: string;
     yjsUpdate: string;
@@ -296,6 +297,7 @@ type ClientMessage =
   | {
       type: "manager_workspace_yjs_update";
       stepIndex: number;
+      taskId?: string | null;
       yjsUpdate: string;
       code?: string | null;
       yjsDocumentBase64?: string | null;
@@ -353,10 +355,14 @@ type QueuedClientMessage = {
   payload: ClientMessage;
   queuedAtEpochMs: number;
   clientEventSequence: number | null;
+  /** Explicit retries (e.g. a chat receipt) retain the caller's original envelope. */
+  preserveClientEventSequence?: boolean;
   /** Once attempted, the entire delivery envelope is immutable for retries. */
   attempted?: boolean;
   /** A CAS rejection and its SSE snapshot may arrive in either order. */
   awaitingManagerSnapshot?: boolean;
+  /** Local source before merging canonical history, for unchanged failed-save suppression. */
+  managerSourceDocument?: string;
 };
 
 type ActivityClientMessage = Extract<ClientMessage, { type: "key_press" }> & {
@@ -504,10 +510,13 @@ export function useRoomSocket({
   const managerMetadataDraftRef = useRef(new Map<number, { language?: string; focusMode?: boolean }>());
   const managerDraftTaskIdsRef = useRef(new Map<number, string>());
   const managerSubscriptionsRef = useRef(new Set<number>());
+  const managerSaveFailuresRef = useRef(new Set<number>());
+  const managerFailedDocumentsRef = useRef(new Map<number, string>());
   const cursorSequenceRef = useRef(0);
   const codeSequenceRef = useRef(0);
   const yjsSequenceRef = useRef(0);
   const eventSequenceRef = useRef(0);
+  const lastAttemptedEventSequenceRef = useRef(0);
   const eventTokenRef = useRef<string | null>(null);
   const roomReadOnlyRef = useRef(false);
   const roomCanManageRef = useRef(false);
@@ -551,6 +560,8 @@ export function useRoomSocket({
     if (terminalAccessFailureRef.current || terminalRoomUnavailableRef.current ||
         (roomAuthorityConfirmedRef.current && !roomCanManageRef.current && managerOnlyMutationTypes.has(payload.type)) ||
         (roomReadOnlyRef.current && liveMutationTypes.has(payload.type))) return null;
+    if (payload.type === "manager_workspace_yjs_update" && payload.yjsDocumentBase64 &&
+        managerFailedDocumentsRef.current.get(payload.stepIndex) === payload.yjsDocumentBase64) return null;
     if (options.dedupeSameType) {
       pendingMessagesRef.current = pendingMessagesRef.current.filter((queued) => {
         // A token-free recovery request can be in flight away from index zero.
@@ -560,6 +571,10 @@ export function useRoomSocket({
         if (queued.payload.type !== payload.type) return true;
         if (payload.type === "briefing_markdown_update" && queued.payload.type === "briefing_markdown_update") {
           return payload.taskId !== queued.payload.taskId || payload.syncKey !== queued.payload.syncKey;
+        }
+        if (payload.type === "manager_workspace_yjs_update" && queued.payload.type === "manager_workspace_yjs_update") {
+          return payload.stepIndex !== queued.payload.stepIndex || payload.taskId !== queued.payload.taskId ||
+            payload.yjsUpdate !== "" || queued.payload.yjsUpdate !== "";
         }
         if ("stepIndex" in payload && "stepIndex" in queued.payload) {
           return payload.stepIndex !== queued.payload.stepIndex;
@@ -581,6 +596,7 @@ export function useRoomSocket({
       queuedAtEpochMs: Date.now(),
       clientEventSequence: options.clientEventSequence ??
         (requiresEventSequence(payload) ? nextClientEventSequence() : null),
+      preserveClientEventSequence: options.clientEventSequence != null,
     };
     pendingMessagesRef.current.push(queued);
     // Keep valid mutations until acknowledged or an explicit context/access
@@ -608,6 +624,7 @@ export function useRoomSocket({
     codeSequenceRef.current = getInitialCodeSequence(inviteCode);
     yjsSequenceRef.current = getInitialYjsSequence(inviteCode);
     eventSequenceRef.current = getInitialEventSequence(inviteCode);
+    lastAttemptedEventSequenceRef.current = 0;
   }, [inviteCode]);
 
   useEffect(() => {
@@ -673,6 +690,7 @@ export function useRoomSocket({
     let statusProbeController: AbortController | null = null;
     let statusProbeTimeoutId: number | null = null;
     let initialConnectTimerId: number | null = null;
+    let managerRecoveryTimerId: number | null = null;
     let authorizationRecoveryAttempted = false;
     let leaveNotified = false;
     lastPresenceRef.current = null;
@@ -723,12 +741,16 @@ export function useRoomSocket({
     };
 
     const dropPendingQueue = () => {
+      if (managerRecoveryTimerId != null) window.clearTimeout(managerRecoveryTimerId);
+      managerRecoveryTimerId = null;
       pendingMessagesRef.current = [];
       managerCanonicalRef.current.clear();
       managerBriefingDraftRef.current.clear();
       managerMetadataDraftRef.current.clear();
       managerDraftTaskIdsRef.current.clear();
       managerSubscriptionsRef.current.clear();
+      managerSaveFailuresRef.current.clear();
+      managerFailedDocumentsRef.current.clear();
       publicSyncKeyRef.current = null;
       publicTaskIdRef.current = null;
       roomTaskIdsRef.current.clear();
@@ -919,8 +941,133 @@ export function useRoomSocket({
       }
     };
 
-    const prepareQueuedMessage = (index: number): QueuedClientMessage => {
-      const head = pendingMessagesRef.current[index];
+    const resumeManagerSnapshot = (queued: QueuedClientMessage, canonical: ManagerWorkspaceRealtimeState) => {
+      if (queued.payload.type !== "manager_workspace_yjs_update" ||
+          (canonical.yjsSequence ?? 0) === queued.payload.baseServerYjsSequence) return false;
+      queued.awaitingManagerSnapshot = false;
+      queued.attempted = false;
+      queued.clientEventSequence = null;
+      queued.payload = { ...queued.payload, operationId: `manager-yjs-op-${crypto.randomUUID()}` };
+      return true;
+    };
+
+    const requestManagerSnapshot = (stepIndex: number) => {
+      // Subscription reads do not consume the document sequence and must be
+      // able to pass the write that is waiting for their SSE response.
+      pendingMessagesRef.current.unshift({
+        payload: { type: "manager_workspace_open", stepIndex },
+        queuedAtEpochMs: Date.now(), clientEventSequence: null,
+      });
+      if (managerRecoveryTimerId != null) window.clearTimeout(managerRecoveryTimerId);
+      managerRecoveryTimerId = window.setTimeout(() => {
+        managerRecoveryTimerId = null;
+        if (pendingMessagesRef.current.some(queued => queued.awaitingManagerSnapshot)) scheduleReconnect();
+      }, STREAM_STATUS_PROBE_TIMEOUT_MS);
+    };
+
+    const cancelManagerPublication = (stepIndex: number) => {
+      pendingMessagesRef.current = pendingMessagesRef.current.filter(queued =>
+        queued.payload.type !== "set_step" || queued.payload.stepIndex !== stepIndex);
+    };
+
+    const prepareQueuedMessage = (index: number): QueuedClientMessage | null => {
+      let head = pendingMessagesRef.current[index];
+      if (!head.attempted && head.payload.type === "manager_workspace_yjs_update" && head.payload.yjsDocumentBase64) {
+        const first = head.payload;
+        const documents: Uint8Array[] = [];
+        const deltas: Uint8Array[] = [];
+        let latest = head;
+        let count = 1;
+        // Full manager snapshots carry all causal history. Merge a contiguous
+        // unsent run without crossing another command or losing any delta.
+        try {
+          if (first.yjsDocumentBase64) documents.push(base64ToBytes(first.yjsDocumentBase64));
+          if (first.yjsUpdate) deltas.push(base64ToBytes(first.yjsUpdate));
+          for (let next = index + 1; next < pendingMessagesRef.current.length; next++) {
+            const queued = pendingMessagesRef.current[next];
+            const payload = queued.payload;
+            if (queued.attempted || queued.awaitingManagerSnapshot || payload.type !== "manager_workspace_yjs_update" ||
+                payload.stepIndex !== first.stepIndex || payload.taskId !== first.taskId || !payload.yjsDocumentBase64) break;
+            documents.push(base64ToBytes(payload.yjsDocumentBase64));
+            if (payload.yjsUpdate) deltas.push(base64ToBytes(payload.yjsUpdate));
+            latest = queued;
+            count++;
+          }
+          if (count > 1 && latest.payload.type === "manager_workspace_yjs_update") {
+            head = { ...latest, queuedAtEpochMs: head.queuedAtEpochMs,
+              managerSourceDocument: latest.payload.yjsDocumentBase64 ?? undefined,
+              payload: { ...latest.payload, yjsDocumentBase64: bytesToBase64(mergeUpdates(documents)),
+                yjsUpdate: deltas.length ? bytesToBase64(mergeUpdates(deltas)) : "" } };
+            pendingMessagesRef.current.splice(index, count, head);
+          }
+        } catch {
+          // Leave original envelopes intact. Preparation below handles a bad
+          // source with visible failure rather than dropping adjacent edits.
+        }
+      }
+      if (!head.attempted && head.payload.type === "set_step") {
+        // Input can continue while a rejected pre-publication snapshot waits
+        // for SSE. Save that input too before publishing this workspace.
+        const stepIndex = head.payload.stepIndex;
+        const pendingIndex = pendingMessagesRef.current.findIndex((queued, i) => i > index &&
+          queued.payload.type === "manager_workspace_yjs_update" && queued.payload.stepIndex === stepIndex);
+        if (pendingIndex > index) {
+          const [snapshot] = pendingMessagesRef.current.splice(pendingIndex, 1);
+          pendingMessagesRef.current.splice(index, 0, snapshot);
+          return prepareQueuedMessage(index);
+        }
+        if (managerSaveFailuresRef.current.has(stepIndex)) {
+          pendingMessagesRef.current.splice(index, 1);
+          onError("Документ шага не сохранён. Шаг не опубликован.");
+          return null;
+        }
+      }
+      if (!head.attempted && head.payload.type === "manager_workspace_yjs_update") {
+        const payload = head.payload;
+        if (payload.yjsDocumentBase64 && managerFailedDocumentsRef.current.get(payload.stepIndex) === payload.yjsDocumentBase64) {
+          pendingMessagesRef.current.splice(index, 1);
+          return null;
+        }
+        head.managerSourceDocument ??= payload.yjsDocumentBase64 ?? undefined;
+        const canonical = managerCanonicalRef.current.get(payload.stepIndex);
+        if (payload.taskId && canonical?.taskId && payload.taskId !== canonical.taskId) {
+          pendingMessagesRef.current.splice(index, 1);
+          managerSaveFailuresRef.current.add(payload.stepIndex);
+          cancelManagerPublication(payload.stepIndex);
+          onError("Исходная задача изменилась. Черновик не перенесён в другой шаг.");
+          return null;
+        }
+        if (canonical && payload.yjsDocumentBase64) {
+          const doc = new Doc();
+          try {
+            if (canonical.yjsDocumentBase64) applyUpdate(doc, base64ToBytes(canonical.yjsDocumentBase64));
+            applyUpdate(doc, base64ToBytes(payload.yjsDocumentBase64));
+            const document = bytesToBase64(encodeStateAsUpdate(doc));
+            if (document === canonical.yjsDocumentBase64) {
+              // The last accepted snapshot already contains this entire Yjs
+              // history. In particular, idle heartbeats do not write again.
+              pendingMessagesRef.current.splice(index, 1);
+              managerSaveFailuresRef.current.delete(payload.stepIndex);
+              managerFailedDocumentsRef.current.delete(payload.stepIndex);
+              return null;
+            }
+            head.payload = { ...payload, taskId: payload.taskId ?? canonical.taskId,
+              code: doc.getText("room-code").toString(), yjsDocumentBase64: document,
+              baseServerYjsSequence: canonical.yjsSequence ?? 0 };
+          } catch {
+            // A broken snapshot must not spin the drain in microtasks or let
+            // publication bypass the failed save. The editor retains its text.
+            pendingMessagesRef.current.splice(index, 1);
+            managerSaveFailuresRef.current.add(payload.stepIndex);
+            managerFailedDocumentsRef.current.set(payload.stepIndex, payload.yjsDocumentBase64);
+            cancelManagerPublication(payload.stepIndex);
+            onError("Не удалось восстановить документ шага. Текст остался в редакторе; шаг не опубликован.");
+            return null;
+          } finally {
+            doc.destroy();
+          }
+        }
+      }
       if (!head.attempted && (
         head.payload.type === "manager_workspace_briefing_update" ||
         head.payload.type === "manager_workspace_language_update" ||
@@ -989,6 +1136,7 @@ export function useRoomSocket({
             const nextIndex = findNextProcessableQueueIndex();
             if (nextIndex < 0) break;
             const head = prepareQueuedMessage(nextIndex);
+            if (!head) continue;
             if (head.awaitingManagerSnapshot) break;
             if (roomReadOnlyRef.current && liveMutationTypes.has(head.payload.type)) {
               pendingMessagesRef.current.splice(nextIndex, 1);
@@ -1002,6 +1150,16 @@ export function useRoomSocket({
                 onPrivateNoteFailure?.({ privateNoteId: head.payload.privateNoteId });
               }
               continue;
+            }
+            if (!head.attempted && requiresEventSequence(head.payload) &&
+                (head.clientEventSequence != null || head.payload.type === "manager_workspace_yjs_update")) {
+              // A rejected head can retry ahead of messages whose sequences
+              // were reserved earlier. Only unattempted envelopes may change.
+              if (!head.preserveClientEventSequence &&
+                  (head.clientEventSequence == null || head.clientEventSequence <= lastAttemptedEventSequenceRef.current)) {
+                head.clientEventSequence = nextClientEventSequence();
+              }
+              lastAttemptedEventSequenceRef.current = Math.max(lastAttemptedEventSequenceRef.current, head.clientEventSequence ?? 0);
             }
             head.attempted = true;
             const lease = streamLease;
@@ -1066,6 +1224,21 @@ export function useRoomSocket({
             if (isTerminal() || lease !== streamLease) break;
 
             if (response.ok) {
+              if (head.payload.type === "manager_workspace_yjs_update") {
+                managerSaveFailuresRef.current.delete(head.payload.stepIndex);
+                managerFailedDocumentsRef.current.delete(head.payload.stepIndex);
+                const canonical = managerCanonicalRef.current.get(head.payload.stepIndex);
+                const base = head.payload.baseServerYjsSequence;
+                if (canonical && typeof base === "number" && (canonical.yjsSequence ?? 0) <= base + 1 &&
+                    (!head.payload.taskId || canonical.taskId === head.payload.taskId)) {
+                  // HTTP acknowledges this exact CAS even if its SSE echo is
+                  // delayed. The next write merges against the accepted doc.
+                  managerCanonicalRef.current.set(head.payload.stepIndex, { ...canonical,
+                    code: head.payload.code ?? canonical.code,
+                    yjsDocumentBase64: head.payload.yjsDocumentBase64 ?? canonical.yjsDocumentBase64,
+                    yjsSequence: base + 1 });
+                }
+              }
               if (head.payload.type === "note_message") {
                 const ack = (await response.json().catch(() => null)) as NoteMessageAckPayload | null;
                 if (
@@ -1139,8 +1312,20 @@ export function useRoomSocket({
             }
             if (response.status === 409) {
               if (data.code === "WORKSPACE_TASK_CHANGED" || data.code === "MARKDOWN_TASK_CHANGED") {
+                if (head.payload.type === "manager_workspace_yjs_update") {
+                  managerSaveFailuresRef.current.add(head.payload.stepIndex);
+                  cancelManagerPublication(head.payload.stepIndex);
+                }
                 removeSettledMessage();
                 onError(data.error || "Исходная задача изменилась. Черновик не перенесён в другой шаг.");
+                continue;
+              }
+              if (head.payload.type === "manager_workspace_yjs_update" &&
+                  (data.code === "WORKSPACE_YJS_RESYNC_REQUIRED" ||
+                    data.error === "Manager workspace Yjs snapshot requires resynchronisation")) {
+                head.awaitingManagerSnapshot = true;
+                const canonical = managerCanonicalRef.current.get(head.payload.stepIndex);
+                if (!canonical || !resumeManagerSnapshot(head, canonical)) requestManagerSnapshot(head.payload.stepIndex);
                 continue;
               }
               if (
@@ -1178,6 +1363,12 @@ export function useRoomSocket({
                 { status_code: 409, payload_type: head.payload.type },
                 { minIntervalMs: 2000, dedupeKey: `post_rejected_409_${head.payload.type}` }
               );
+              if (head.payload.type === "manager_workspace_yjs_update") {
+                managerSaveFailuresRef.current.add(head.payload.stepIndex);
+                if (head.payload.yjsDocumentBase64) managerFailedDocumentsRef.current.set(head.payload.stepIndex, head.managerSourceDocument ?? head.payload.yjsDocumentBase64);
+                cancelManagerPublication(head.payload.stepIndex);
+                onError(data.error || "Документ шага не сохранён. Шаг не опубликован.");
+              }
               removeSettledMessage();
               continue;
             }
@@ -1188,6 +1379,11 @@ export function useRoomSocket({
                 { status_code: response.status, payload_type: head.payload.type },
                 { minIntervalMs: 2000, dedupeKey: `post_rejected_${response.status}_${head.payload.type}` }
               );
+              if (head.payload.type === "manager_workspace_yjs_update") {
+                managerSaveFailuresRef.current.add(head.payload.stepIndex);
+                if (head.payload.yjsDocumentBase64) managerFailedDocumentsRef.current.set(head.payload.stepIndex, head.managerSourceDocument ?? head.payload.yjsDocumentBase64);
+                cancelManagerPublication(head.payload.stepIndex);
+              }
               removeSettledMessage();
             } else {
               emitMetric(
@@ -1583,6 +1779,13 @@ export function useRoomSocket({
           publicSyncKeyRef.current = `${payload.inviteCode}:${payload.currentStep}:${payload.language}`;
           publicTaskIdRef.current = payload.tasks?.find(task => task.stepIndex === payload.currentStep)?.id ?? null;
           roomTaskIdsRef.current = new Map((payload.tasks ?? []).flatMap(task => task.id ? [[task.stepIndex, task.id] as const] : []));
+          pendingMessagesRef.current = pendingMessagesRef.current.filter(queued => {
+            if (queued.payload.type !== "manager_workspace_yjs_update" || !queued.payload.taskId ||
+                roomTaskIdsRef.current.get(queued.payload.stepIndex) === queued.payload.taskId) return true;
+            managerSaveFailuresRef.current.add(queued.payload.stepIndex);
+            return false;
+          });
+          for (const stepIndex of managerSaveFailuresRef.current) cancelManagerPublication(stepIndex);
           const lostManagerAccess = roomCanManageRef.current && !payload.canManageRoom;
           const becameReadOnly = !roomReadOnlyRef.current && isRoomReadOnly(payload);
           roomCanManageRef.current = Boolean(payload.canManageRoom);
@@ -1613,6 +1816,8 @@ export function useRoomSocket({
             managerMetadataDraftRef.current.clear();
             managerDraftTaskIdsRef.current.clear();
             managerSubscriptionsRef.current.clear();
+            managerSaveFailuresRef.current.clear();
+            managerFailedDocumentsRef.current.clear();
           }
           roomReadOnlyRef.current = isRoomReadOnly(payload);
           if (roomReadOnlyRef.current) stopReadOnlyActivity();
@@ -1640,7 +1845,11 @@ export function useRoomSocket({
             // Reconnect creates a new server connection without its private
             // workspace subscriptions. Restore them before retrying old edits,
             // without consuming the sequence ahead of those pending edits.
-            for (const stepIndex of managerSubscriptionsRef.current) {
+            const recoverySteps = new Set(managerSubscriptionsRef.current);
+            for (const queued of pendingMessagesRef.current) {
+              if (queued.payload.type === "manager_workspace_yjs_update") recoverySteps.add(queued.payload.stepIndex);
+            }
+            for (const stepIndex of recoverySteps) {
               if (stepIndex === payload.currentStep || !payload.canManageRoom || roomReadOnlyRef.current) continue;
               pendingMessagesRef.current.unshift({
                 payload: { type: "manager_workspace_open", stepIndex },
@@ -1667,6 +1876,9 @@ export function useRoomSocket({
         if (message.type === "manager_workspace_sync") {
           if (!roomCanManageRef.current) return;
           const payload = message.payload as Partial<ManagerWorkspaceRealtimeState>;
+          const taskId = typeof payload.taskId === "string" ? payload.taskId : null;
+          const currentTaskId = typeof payload.stepIndex === "number" ? roomTaskIdsRef.current.get(payload.stepIndex) : null;
+          if (taskId && currentTaskId && taskId !== currentTaskId) return;
           if (
             typeof payload?.stepIndex === "number" &&
             typeof payload.language === "string" &&
@@ -1698,13 +1910,17 @@ export function useRoomSocket({
             const previous = managerCanonicalRef.current.get(canonical.stepIndex);
             const previousTaskId = managerDraftTaskIdsRef.current.get(canonical.stepIndex) ?? previous?.taskId;
             if (previousTaskId && canonical.taskId && previousTaskId !== canonical.taskId) {
+              cancelManagerPublication(canonical.stepIndex);
+              managerFailedDocumentsRef.current.delete(canonical.stepIndex);
               managerBriefingDraftRef.current.delete(canonical.stepIndex);
               managerMetadataDraftRef.current.delete(canonical.stepIndex);
               pendingMessagesRef.current = pendingMessagesRef.current.filter(queued =>
                 !("taskId" in queued.payload && queued.payload.taskId === previousTaskId));
             }
             if (canonical.taskId) managerDraftTaskIdsRef.current.set(canonical.stepIndex, canonical.taskId);
-            if (previous && previous.taskId === canonical.taskId && canonical.revision < previous.revision) return;
+            if (previous && previous.taskId === canonical.taskId &&
+                (canonical.revision < previous.revision ||
+                  (canonical.revision === previous.revision && (canonical.yjsSequence ?? 0) < (previous.yjsSequence ?? 0)))) return;
             managerCanonicalRef.current.set(canonical.stepIndex, canonical);
             const draft = managerBriefingDraftRef.current.get(canonical.stepIndex);
             if (draft) {
@@ -1721,7 +1937,16 @@ export function useRoomSocket({
               ...managerMetadataDraftRef.current.get(canonical.stepIndex),
               briefingMarkdown: managerBriefingDraftRef.current.get(canonical.stepIndex)?.value ?? canonical.briefingMarkdown,
             });
+            for (const queued of pendingMessagesRef.current) {
+              if (queued.awaitingManagerSnapshot && queued.payload.type === "manager_workspace_yjs_update" &&
+                  queued.payload.stepIndex === canonical.stepIndex) resumeManagerSnapshot(queued, canonical);
+            }
+            if (!pendingMessagesRef.current.some(queued => queued.awaitingManagerSnapshot) && managerRecoveryTimerId != null) {
+              window.clearTimeout(managerRecoveryTimerId);
+              managerRecoveryTimerId = null;
+            }
             const rejected = pendingMessagesRef.current.filter(queued => queued.awaitingManagerSnapshot &&
+              queued.payload.type !== "manager_workspace_yjs_update" &&
               "stepIndex" in queued.payload && queued.payload.stepIndex === canonical.stepIndex);
             pendingMessagesRef.current = pendingMessagesRef.current.filter(queued => !rejected.includes(queued));
             for (const queued of rejected) {
@@ -1738,7 +1963,9 @@ export function useRoomSocket({
           return;
         }
         if (message.type === "manager_workspace_yjs_update") {
+          if (!roomCanManageRef.current) return;
           const payload = message.payload as {
+            taskId?: string | null;
             stepIndex?: number;
             sessionId?: string;
             yjsUpdate?: string;
@@ -1749,7 +1976,11 @@ export function useRoomSocket({
             typeof payload.sessionId === "string" &&
             typeof payload.yjsUpdate === "string"
           ) {
+            const taskId = typeof payload.taskId === "string" ? payload.taskId : null;
+            const currentTaskId = roomTaskIdsRef.current.get(payload.stepIndex);
+            if (taskId && currentTaskId && taskId !== currentTaskId) return;
             onManagerWorkspaceYjsUpdate?.({
+              taskId,
               stepIndex: payload.stepIndex,
               sessionId: payload.sessionId,
               yjsUpdate: payload.yjsUpdate,
@@ -1877,7 +2108,8 @@ export function useRoomSocket({
 
     sendRef.current = (payload: ClientMessage, options = {}) => {
       const coalesce = payload.type === "briefing_markdown_update" || payload.type === "manager_workspace_briefing_update" ||
-        payload.type === "manager_workspace_language_update" || payload.type === "manager_workspace_focus_mode_update";
+        payload.type === "manager_workspace_language_update" || payload.type === "manager_workspace_focus_mode_update" ||
+        (payload.type === "manager_workspace_yjs_update" && payload.yjsUpdate === "");
       const queued = queuePayload(payload, { ...options, dedupeSameType: coalesce });
       tryDrainQueueRef.current?.();
       return queued?.clientEventSequence ?? null;
@@ -2185,6 +2417,7 @@ export function useRoomSocket({
     send({
       type: "manager_workspace_yjs_update",
       stepIndex,
+      taskId: managerCanonicalRef.current.get(stepIndex)?.taskId ?? roomTaskIdsRef.current.get(stepIndex),
       yjsUpdate: yjsUpdate.trim(),
       code: code ?? null,
       yjsDocumentBase64: yjsDocumentBase64?.trim() || null,

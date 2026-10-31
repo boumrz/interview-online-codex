@@ -33,6 +33,30 @@ async function request(path, { token, method = "GET", body, status = 200 } = {})
   return text ? JSON.parse(text) : null;
 }
 
+async function openPicker(picker) {
+  const inputId = await picker.getAttribute("id");
+  assert.ok(inputId, "PICKER_INPUT_ID_MISSING");
+  await picker.click();
+  // The popup shell can appear before its virtual options, and another modal's
+  // closing popup can still match :visible. Read this input's own rendered list.
+  const rendered = await page.waitForFunction((id) => {
+    const input = document.getElementById(id);
+    const listboxId = input?.getAttribute("aria-controls");
+    const dropdown = listboxId && document.getElementById(listboxId)?.closest(".ant-select-dropdown");
+    if (input?.getAttribute("aria-expanded") !== "true" || !dropdown) return null;
+    const style = getComputedStyle(dropdown);
+    if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return null;
+    const labels = Array.from(dropdown.querySelectorAll(".ant-select-item-option"), (option) => option.textContent);
+    return labels.length ? { listboxId, labels } : null;
+  }, inputId, { timeout: 5_000 });
+  const { listboxId, labels } = await rendered.jsonValue();
+  await rendered.dispose();
+  return {
+    labels,
+    dropdown: page.locator(".ant-select-dropdown").filter({ has: page.locator(`[id=${JSON.stringify(listboxId)}]`) }),
+  };
+}
+
 try {
   const auth = await request("/auth/register", {
     method: "POST",
@@ -62,26 +86,19 @@ try {
   await page.goto(`${webBaseUrl}/workspace/personal/library`, { waitUntil: "domcontentloaded" });
   await page.getByTestId("open-create-task-modal").waitFor({ state: "visible", timeout: 15_000 });
 
-  await page.getByRole("combobox", { name: "Язык задач", exact: true }).click();
-  const filterDropdown = page.locator(".ant-select-dropdown:visible").last();
-  await filterDropdown.waitFor({ state: "visible" });
-  const filterLabels = await filterDropdown.locator(".ant-select-item-option").allTextContents();
-  assert.deepEqual(filterLabels, expectedLanguages.map(([, label]) => label), "PERSONAL_LIBRARY_LANGUAGE_FILTER_REGRESSION");
   const languageFilter = page.getByRole("combobox", { name: "Язык задач", exact: true });
+  const { dropdown: filterDropdown, labels: filterLabels } = await openPicker(languageFilter);
+  assert.deepEqual(filterLabels, expectedLanguages.map(([, label]) => label), "PERSONAL_LIBRARY_LANGUAGE_FILTER_REGRESSION");
+  let activeDropdown = filterDropdown;
   for (const [index, [value]] of expectedLanguages.entries()) {
-    if (index > 0) await languageFilter.click();
-    const activeDropdown = page.locator(".ant-select-dropdown:visible").last();
-    await activeDropdown.waitFor({ state: "visible" });
+    if (index > 0) ({ dropdown: activeDropdown } = await openPicker(languageFilter));
     await activeDropdown.locator(".ant-select-item-option").nth(index).click();
     await page.waitForFunction((expectedValue) => new URL(location.href).searchParams.get("language") === expectedValue, value);
   }
 
   await page.getByTestId("open-create-task-modal").click();
   const languageSelect = page.getByRole("combobox", { name: "Язык", exact: true });
-  await languageSelect.click();
-  const creationDropdown = page.locator(".ant-select-dropdown:visible").last();
-  await creationDropdown.waitFor({ state: "visible" });
-  const creationLabels = await creationDropdown.locator(".ant-select-item-option").allTextContents();
+  const { labels: creationLabels } = await openPicker(languageSelect);
   assert.deepEqual(creationLabels, expectedLanguages.map(([, label]) => label), "PERSONAL_TASK_CREATE_LANGUAGE_REGRESSION");
 
   await page.keyboard.press("Escape");
@@ -101,10 +118,7 @@ try {
   const createPreset = page.getByRole("button", { name: "Создать набор", exact: true });
   await createPreset.click({ timeout: 5_000 });
   const taskPicker = page.getByRole("combobox", { name: "Задачи", exact: true });
-  await taskPicker.click();
-  const taskPickerDropdown = page.locator(".ant-select-dropdown:visible").last();
-  await taskPickerDropdown.waitFor({ state: "visible" });
-  const taskOptions = await taskPickerDropdown.locator(".ant-select-item-option").allTextContents();
+  const { labels: taskOptions } = await openPicker(taskPicker);
   assert.deepEqual(
     taskOptions.toSorted(),
     ["Две суммы — Node JS", "Очередь событий — Node JS", "Группировка данных — Python"].toSorted(),
@@ -118,11 +132,15 @@ try {
   await page.getByRole("dialog", { name: "Создать набор", exact: true }).waitFor({ state: "hidden" });
   await presetCard.getByRole("button", { name: `Редактировать набор ${preset.name}`, exact: true }).click();
   const editPicker = page.getByRole("combobox", { name: "Задачи", exact: true });
-  await editPicker.click();
-  const editDropdown = page.locator(".ant-select-dropdown:visible").last();
-  await editDropdown.waitFor({ state: "visible" });
-  const editOptions = await editDropdown.locator(".ant-select-item-option").allTextContents();
+  const { labels: editOptions } = await openPicker(editPicker);
   assert.deepEqual(editOptions, taskOptions, "PRESET_EDIT_TASK_OPTION_LANGUAGE_MISSING");
+  const selectedLabels = await editPicker.evaluate((input) => Array.from(
+    input.closest(".ant-select").querySelectorAll(".ant-select-selection-item-content"),
+    (chip) => chip.textContent,
+  ));
+  assert.deepEqual(selectedLabels, [
+    "Две суммы — Node JS", "Очередь событий — Node JS", "Группировка данных — Python",
+  ], "PRESET_EDIT_SELECTED_TASK_LANGUAGE_MISSING");
 
   console.log("PERSONAL_LIBRARY_LANGUAGE_METADATA_OK");
 } finally {

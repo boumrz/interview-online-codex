@@ -343,7 +343,7 @@ test("AC-03: unauthenticated invitation returns through login and does not leave
     await assertSecretOnlyInInvitationSessionStorage(page, token, "AC03_LOGIN_RELOAD_DROPPED_OR_EXPOSED_INVITATION_TOKEN");
     await page.getByLabel(/^Ник(?:\s*\*)?$/).fill(existing.user.nickname);
     await page.getByLabel(/^Пароль(?:\s*\*)?$/).fill(password);
-    await page.getByLabel(/^Повторите пароль(?:\s*\*)?$/).fill(password);
+    assert.equal(await page.getByLabel(/^Повторите пароль(?:\s*\*)?$/).count(), 0, "LOGIN_MUST_NOT_REQUIRE_REGISTRATION_CONFIRMATION");
     await page.getByRole("button", { name: "Войти в кабинет", exact: true }).click();
     await page.waitForURL(`**/workspace/teams/${team.id}/interviews`);
     await assertSecretClearedWithoutDiagnostics(page, token, "AC03_LOGIN_ACCEPT_LEFT_INVITATION_SECRET_RESIDUE");
@@ -484,7 +484,7 @@ test("AC-03: accept preserves one scoped intent across network, 429, 503, 401 an
       await assertSecretOnlyInInvitationSessionStorage(page, token, "AC03_ACCEPT_401_LOGIN_RELOAD_DROPPED_OR_EXPOSED_TOKEN");
       await page.getByLabel(/^Ник(?:\s*\*)?$/).fill(recipient.user.nickname);
       await page.getByLabel(/^Пароль(?:\s*\*)?$/).fill(password);
-      await page.getByLabel(/^Повторите пароль(?:\s*\*)?$/).fill(password);
+      assert.equal(await page.getByLabel(/^Повторите пароль(?:\s*\*)?$/).count(), 0, "LOGIN_MUST_NOT_REQUIRE_REGISTRATION_CONFIRMATION");
       await page.getByRole("button", { name: "Войти в кабинет", exact: true }).click();
 
       await page.getByRole("button", { name: "Повторить принятие", exact: true }).waitFor();

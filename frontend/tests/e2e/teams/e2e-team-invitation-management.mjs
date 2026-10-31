@@ -476,7 +476,12 @@ async function waitForRosterResponse(page, teamId) {
 }
 
 function invitationCard(page, invitationId) {
-  return page.locator(`[aria-label="Приглашение ${invitationId}"]`);
+  assert.match(invitationId, /^[0-9a-f-]{36}$/i, "INVITATION_METADATA_ID_MISSING");
+  // P0.1 exposes one active link without technical IDs in its accessible name.
+  // revealInvitationUrl checks this card's value against the exact ID's API URL.
+  return page.locator('[aria-label="Приглашение в команду"]').filter({
+    has: page.getByRole("button", { name: "Отозвать приглашение", exact: true }),
+  });
 }
 
 function invitationControl(page, invitationId, name) {

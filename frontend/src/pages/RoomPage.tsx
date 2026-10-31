@@ -819,6 +819,7 @@ export function RoomPage() {
     sentAt: number;
   } | null>(null);
   const managerYjsPendingUpdatesRef = useRef<Array<{
+    taskId?: string | null;
     stepIndex: number;
     update: string;
     yjsSequence?: number | null;
@@ -1829,10 +1830,13 @@ export function RoomPage() {
 
   const onManagerWorkspaceSync = useCallback(
     (payload: ManagerWorkspaceRealtimeState) => {
+      const taskId = stateRef.current?.tasks?.find(task => task.stepIndex === payload.stepIndex)?.id;
+      if (payload.taskId && taskId && payload.taskId !== taskId) return;
       const current = managerWorkspaceRef.current;
       if (
         !payload.recovery &&
         current?.stepIndex === payload.stepIndex &&
+        current.taskId === payload.taskId &&
         ((payload.revision ?? 0) < (current.revision ?? 0) ||
           ((payload.revision ?? 0) === (current.revision ?? 0) &&
             (payload.yjsSequence ?? 0) < (current.yjsSequence ?? 0)))
@@ -1840,6 +1844,7 @@ export function RoomPage() {
         return;
       }
       const next: RoomTaskWorkspace = {
+        taskId: payload.taskId ?? null,
         stepIndex: payload.stepIndex,
         title: payload.title,
         language: normalizeRoomLanguage(payload.language),
@@ -1856,24 +1861,21 @@ export function RoomPage() {
         ? payload.yjsDocumentBase64?.trim()
         : "";
       if (!recoverySnapshot || !managerYjsApplyRef.current) return;
+      if (current?.taskId !== next.taskId) return;
       const recoveryKey = `${payload.stepIndex}:${payload.yjsSequence ?? 0}:${recoverySnapshot}`;
       if (lastManagerYjsRecoveryKeyRef.current === recoveryKey) return;
       lastManagerYjsRecoveryKeyRef.current = recoveryKey;
-      // Applying the canonical snapshot with the `remote` origin merges it
-      // into the local Y.Doc without re-emitting an intermediate update. The
-      // queued full snapshot below then rebases any local concurrent edit.
+      // The transport retains and rebases the rejected write before publication.
+      // Merge the same state into the visible editor without adding a second
+      // recovery write after an already queued `set_step`.
       managerYjsApplyRef.current(recoverySnapshot, payload.yjsSequence);
-      window.setTimeout(() => {
-        if (managerWorkspaceRef.current?.stepIndex === payload.stepIndex) {
-          managerYjsSnapshotRef.current?.();
-        }
-      }, 0);
     },
     [],
   );
 
   const onManagerWorkspaceYjsUpdate = useCallback(
     (payload: {
+      taskId?: string | null;
       stepIndex: number;
       sessionId: string;
       yjsUpdate: string;
@@ -1884,6 +1886,7 @@ export function RoomPage() {
       if (!update) return;
       const current = managerWorkspaceRef.current;
       if (current?.stepIndex !== payload.stepIndex) return;
+      if (payload.taskId && current.taskId && payload.taskId !== current.taskId) return;
       const incomingSequence =
         typeof payload.yjsSequence === "number" && Number.isFinite(payload.yjsSequence)
           ? Math.max(0, Math.floor(payload.yjsSequence))
@@ -1898,6 +1901,7 @@ export function RoomPage() {
         return;
       }
       managerYjsPendingUpdatesRef.current.push({
+        taskId: payload.taskId,
         stepIndex: payload.stepIndex,
         update,
         yjsSequence: incomingSequence,
@@ -2225,6 +2229,7 @@ export function RoomPage() {
     roomReadOnly,
     isLocalWorkspacePreview,
     selectedManagerStep,
+    localPreviewTask?.id,
     localPreviewTask?.title,
     refetchLocalWorkspaceSnapshot,
   ]);
@@ -2234,12 +2239,14 @@ export function RoomPage() {
     const current = managerWorkspaceRef.current;
     if (
       current?.stepIndex === localWorkspaceSnapshot.stepIndex &&
+      current.taskId === localWorkspaceSnapshot.taskId &&
       (localWorkspaceSnapshot.revision ?? 0) <= (current.revision ?? 0) &&
       (localWorkspaceSnapshot.yjsSequence ?? 0) <= (current.yjsSequence ?? 0)
     ) {
       return;
     }
     onManagerWorkspaceSync({
+      taskId: localWorkspaceSnapshot.taskId ?? localPreviewTask?.id,
       stepIndex: localWorkspaceSnapshot.stepIndex,
       title: localWorkspaceSnapshot.title,
       language: localWorkspaceSnapshot.language,
@@ -2250,7 +2257,7 @@ export function RoomPage() {
       yjsSequence: localWorkspaceSnapshot.yjsSequence ?? 0,
       focusMode: localWorkspaceSnapshot.focusMode === true,
     });
-  }, [isLocalWorkspacePreview, localWorkspaceSnapshot, onManagerWorkspaceSync]);
+  }, [isLocalWorkspacePreview, localWorkspaceSnapshot, localPreviewTask?.id, onManagerWorkspaceSync]);
 
   /**
    * Choosing a task is a manager-private preview. Only the explicit publish
@@ -2271,8 +2278,8 @@ export function RoomPage() {
       setStepChangeNotification(null);
       if (managerWorkspaceRef.current?.stepIndex === stepIndex) {
         // Queue the currently merged manager document before `set_step`.
-        // useRoomSocket serialises both events, so publication cannot read a
-        // previously persisted Yjs snapshot from another manager session.
+        // The transport retains this save through version recovery, keeping
+        // publication behind its successful acknowledgement.
         managerYjsSnapshotRef.current?.();
       }
       sendSetStep(stepIndex);
@@ -3072,6 +3079,7 @@ export function RoomPage() {
   const localWorkspacePreview: RoomTaskWorkspace | null =
     isLocalWorkspacePreview && localPreviewTask
       ? (managerWorkspace?.stepIndex === selectedManagerStep &&
+          (!managerWorkspace.taskId || managerWorkspace.taskId === localPreviewTask.id) &&
           managerWorkspace.title === localPreviewTask.title
           ? managerWorkspace
           : null)
@@ -3184,13 +3192,14 @@ export function RoomPage() {
 
   const handleManagerWorkspaceYjsUpdate = (
     yjsUpdate: string,
-    _syncKey?: string | null,
+    sourceSyncKey?: string | null,
     codeSnapshot?: string | null,
     yjsDocumentBase64?: string | null,
     baseServerYjsSequence?: number | null,
   ) => {
     const workspace = selectedManagerWorkspace();
     if (!workspace) return;
+    if (sourceSyncKey && sourceSyncKey !== `manager:${workspace.taskId ?? ""}:${workspace.stepIndex}:${normalizeRoomLanguage(workspace.language)}`) return;
     const documentSnapshot = yjsDocumentBase64?.trim() || null;
     if (codeSnapshot != null || documentSnapshot != null) {
       applyManagerWorkspacePatch({
@@ -3214,7 +3223,8 @@ export function RoomPage() {
     if (stepIndex == null) return;
     const pending = managerYjsPendingUpdatesRef.current.splice(0);
     pending
-      .filter((item) => item.stepIndex === stepIndex)
+      .filter((item) => item.stepIndex === stepIndex &&
+        (!item.taskId || item.taskId === managerWorkspaceRef.current?.taskId))
       .forEach((item) => applyUpdate(item.update, item.yjsSequence));
   };
 
@@ -4550,6 +4560,7 @@ function OwnerLayout({
             <Box className={styles.contextEditorBody}>
             {localWorkspacePreview ? (
               <ManagerWorkspaceEditor
+                error={error}
                 workspace={localWorkspacePreview}
                 isRefreshing={isLocalWorkspaceSnapshotFetching}
                 readOnly={roomReadOnly}
@@ -6136,6 +6147,7 @@ function OwnerLayout({
           >
             {localWorkspacePreview ? (
               <ManagerWorkspaceEditor
+                error={error}
                 workspace={localWorkspacePreview}
                 isRefreshing={isLocalWorkspaceSnapshotFetching}
                 readOnly={roomReadOnly}
@@ -6253,6 +6265,7 @@ function OwnerLayout({
  * candidate-visible room document.
  */
 function ManagerWorkspaceEditor({
+  error,
   workspace,
   isRefreshing,
   readOnly,
@@ -6267,6 +6280,7 @@ function ManagerWorkspaceEditor({
   onYjsBridgeReady,
   onYjsSnapshotBridgeReady,
 }: {
+  error?: string;
   workspace: RoomTaskWorkspace;
   isRefreshing: boolean;
   readOnly: boolean;
@@ -6281,7 +6295,7 @@ function ManagerWorkspaceEditor({
   onYjsBridgeReady: (applyUpdate: YjsRemoteUpdateApplier | null) => void;
   onYjsSnapshotBridgeReady: (emitSnapshot: YjsSnapshotEmitter | null) => void;
 }) {
-  const syncKey = `manager:${workspace.stepIndex}:${normalizeRoomLanguage(workspace.language)}`;
+  const syncKey = `manager:${workspace.taskId ?? ""}:${workspace.stepIndex}:${normalizeRoomLanguage(workspace.language)}`;
   // RoomCodeEditor owns a Y.Doc. Keep its bridge callbacks stable across
   // parent workspace updates; otherwise its cleanup destroys the document
   // after every manager sync and can drop an in-flight edit.
@@ -6317,6 +6331,7 @@ function ManagerWorkspaceEditor({
       className={styles.editorColumn}
       aria-busy={isRefreshing || undefined}
     >
+      {error && <Text className={styles.error} role="alert">{error}</Text>}
       <div className={styles.modeEditor} hidden={!focusMode}>
         <BriefingBoard
           mode="interviewer"
@@ -6349,6 +6364,7 @@ function ManagerWorkspaceEditor({
               onYjsUpdate={onYjsUpdate}
               onYjsBridgeReady={forwardYjsBridgeReady}
               onYjsSnapshotBridgeReady={forwardYjsSnapshotBridgeReady}
+              renewAwarenessIndependently
               onEditorValueChange={() => {}}
               onKeyPress={() => {}}
             />

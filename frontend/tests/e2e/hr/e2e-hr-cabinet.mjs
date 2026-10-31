@@ -462,11 +462,16 @@ test("room creation waits for pending verification and excludes a failed hiring-
       await page.getByRole("alert").filter({ hasText: "Ошибка сервера" }).waitFor();
       assert.equal(await input.inputValue(), pendingManager.user.nickname, "Failed verification retains the retryable nickname draft");
       assert.equal(await page.getByLabel("Название интервью", { exact: true }).inputValue(), title, "The unsuccessful lookup does not reset the room draft");
-      const submitted = page.waitForRequest((request) =>
-        new URL(request.url()).pathname === `/api/teams/${team.id}/interviews` && request.method() === "POST",
-      );
-      await page.getByRole("dialog").getByRole("button", { name: "Создать интервью", exact: true }).click();
-      assert.deepEqual(JSON.parse((await submitted).postData() ?? "{}"), {
+      assert.equal(await create.isDisabled(), false, "A failed lookup must release creation");
+      assert.equal(await create.evaluate(button => {
+        const box = button.getBoundingClientRect();
+        return button.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
+      }), true, "A failed lookup popup must not cover the creation action");
+      const [submitted] = await Promise.all([
+        page.waitForRequest(request => new URL(request.url()).pathname === `/api/teams/${team.id}/interviews` && request.method() === "POST"),
+        create.click(),
+      ]);
+      assert.deepEqual(JSON.parse(submitted.postData() ?? "{}"), {
         title,
         selectedTaskIds: [],
         hiringManagerIds: [selectedManager.user.id],

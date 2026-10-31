@@ -70,6 +70,7 @@ data class RoomTaskWorkspaceDto(
     val yjsDocumentBase64: String? = null,
     val yjsSequence: Long = 0,
     val focusMode: Boolean = false,
+    val taskId: String? = null,
 )
 
 /**

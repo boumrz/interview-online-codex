@@ -264,11 +264,11 @@ function persistOwnerRoom(room: Room, displayName: string) {
   localStorage.setItem(`guest_display_name_${room.inviteCode}`, displayName);
 }
 
-function CreateInterview({ tasks }: { tasks: TaskTemplate[] }) {
+function CreateInterview({ tasks, isTaskLoading }: { tasks: TaskTemplate[]; isTaskLoading: boolean }) {
   const navigate = useNavigate();
   const auth = useAppSelector((state) => state.auth);
   const [createRoom, createState] = useCreateRoomMutation();
-  const [updateMetadata] = useUpdateInterviewMetadataMutation();
+  const [updateMetadata, metadataState] = useUpdateInterviewMetadataMutation();
   const [title, setTitle] = useState("");
   const [candidateName, setCandidateName] = useState("");
   const [position, setPosition] = useState("");
@@ -278,6 +278,9 @@ function CreateInterview({ tasks }: { tasks: TaskTemplate[] }) {
   const [error, setError] = useState("");
   const [pendingMetadata, setPendingMetadata] = useState<PendingMetadata | null>(null);
   const [retryingMetadata, setRetryingMetadata] = useState(false);
+  const isCreatingInterview = createState.isLoading || metadataState.isLoading;
+  const canCreateInterview = title.trim().length > 0 && !isTaskLoading &&
+    !isCreatingInterview && !pickerBusy && !pendingMetadata;
   const generationRef = useRef(0);
   const pendingOwnerInviteRef = useRef<string | null>(null);
   const identityKey = `${auth.token ?? ""}:${auth.user?.id ?? ""}`;
@@ -374,13 +377,13 @@ function CreateInterview({ tasks }: { tasks: TaskTemplate[] }) {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (createState.isLoading || pickerBusy) return;
+    if (isCreatingInterview || pickerBusy || isTaskLoading) return;
     const normalizedTitle = title.trim();
     if (!normalizedTitle) {
       setError("Название интервью обязательно");
       return;
     }
-    if (createState.isLoading || pendingMetadata) return;
+    if (pendingMetadata) return;
     const identity = captureIdentity();
     const metadataDraft: PendingMetadata["metadata"] = {
       candidateName: candidateName.trim() || null,
@@ -431,14 +434,14 @@ function CreateInterview({ tasks }: { tasks: TaskTemplate[] }) {
   return (
     <Modal
       opened
-      onClose={() => { if (!createState.isLoading && !pendingMetadata) navigate("/workspace/personal/interviews"); }}
-      title={<Title order={3} style={{ margin: 0 }}>Создать интервью</Title>}
+      onClose={() => { if (!isCreatingInterview && !pendingMetadata) navigate("/workspace/personal/interviews"); }}
+      title="Создать интервью"
       centered
-      size="xl"
+      size="lg"
       authoring
-      closeOnClickOutside={!createState.isLoading && !pendingMetadata}
-      closeOnEscape={!createState.isLoading && !pendingMetadata}
-      withCloseButton={!createState.isLoading && !pendingMetadata}
+      closeOnClickOutside={!isCreatingInterview && !pendingMetadata}
+      closeOnEscape={!isCreatingInterview && !pendingMetadata}
+      withCloseButton={!isCreatingInterview && !pendingMetadata}
     >
         <form onSubmit={submit} noValidate className="app-authoring-form" data-testid="create-room-card">
           <div className="app-authoring-fields">
@@ -447,17 +450,20 @@ function CreateInterview({ tasks }: { tasks: TaskTemplate[] }) {
                 label="Название интервью"
                 value={title}
                 onChange={(event: React.ChangeEvent<HTMLInputElement>) => setTitle(event.currentTarget.value)}
+                disabled={isCreatingInterview || Boolean(pendingMetadata)}
               />
               <div className="app-authoring-grid">
               <TextInput placeholder="Введите имя кандидата"
                 label="Имя кандидата"
                 value={candidateName}
                 onChange={(event: React.ChangeEvent<HTMLInputElement>) => setCandidateName(event.currentTarget.value)}
+                disabled={isCreatingInterview || Boolean(pendingMetadata)}
               />
               <TextInput placeholder="Введите название должности"
                 label="Позиция"
                 value={position}
                 onChange={(event: React.ChangeEvent<HTMLInputElement>) => setPosition(event.currentTarget.value)}
+                disabled={isCreatingInterview || Boolean(pendingMetadata)}
               />
               </div>
             </section>
@@ -468,6 +474,7 @@ function CreateInterview({ tasks }: { tasks: TaskTemplate[] }) {
                 data={taskOptions}
                 value={taskIds}
                 onChange={setTaskIds}
+                disabled={isTaskLoading || isCreatingInterview || Boolean(pendingMetadata)}
                 searchable
                 styles={darkSelectStyles}
               />
@@ -478,7 +485,7 @@ function CreateInterview({ tasks }: { tasks: TaskTemplate[] }) {
                   key={identityKey}
                   showSuccess={false}
                   selectedIds={hiringManagers.map(person => person.normalizedId)}
-                  disabled={createState.isLoading || Boolean(pendingMetadata)}
+                  disabled={isCreatingInterview || Boolean(pendingMetadata)}
                   onPendingChange={setPickerBusy}
                   onSelect={person => {
                     setHiringManagers(current => current.some(selected => selected.normalizedId === person.normalizedId) ? current : [...current, person]);
@@ -488,7 +495,7 @@ function CreateInterview({ tasks }: { tasks: TaskTemplate[] }) {
                 {hiringManagers.map(person => <Group key={person.normalizedId} justify="space-between" gap="sm">
                   <Text>{person.displayName}</Text>
                   <Button type="button" variant="subtle" color="red" size="xs"
-                    disabled={createState.isLoading || Boolean(pendingMetadata)}
+                    disabled={isCreatingInterview || Boolean(pendingMetadata)}
                     aria-label={`Удалить нанимающего ${person.displayName}`}
                     onClick={() => setHiringManagers(current => current.filter(selected => selected.normalizedId !== person.normalizedId))}>Убрать</Button>
                 </Group>)}
@@ -515,19 +522,16 @@ function CreateInterview({ tasks }: { tasks: TaskTemplate[] }) {
               </Card>
             ) : null}
           </div>
-            <Group className="app-form-actions" justify="flex-end" wrap="wrap">
-              <Button type="button" variant="subtle" disabled={createState.isLoading || Boolean(pendingMetadata)} onClick={() => navigate("/workspace/personal/interviews")}>Отмена</Button>
+            <div className="app-form-actions">
+              <Button type="button" variant="subtle" disabled={isCreatingInterview || Boolean(pendingMetadata)} onClick={() => navigate("/workspace/personal/interviews")}>Отмена</Button>
               <Button
                 type="submit"
-                className={styles.primaryAction}
-                style={{ minHeight: 44 }}
-                color="blue"
-                loading={createState.isLoading}
-                disabled={createState.isLoading || pickerBusy || Boolean(pendingMetadata)}
+                loading={isCreatingInterview}
+                disabled={!canCreateInterview}
               >
                 Создать интервью
               </Button>
-            </Group>
+            </div>
         </form>
     </Modal>
   );
@@ -967,7 +971,7 @@ export function PersonalWorkspacePage() {
                 error={roomsQuery.error}
                 onRefresh={() => { void roomsQuery.refetch(); }}
               />
-              <CreateInterview tasks={tasks} />
+              <CreateInterview tasks={tasks} isTaskLoading={taskQuery.isLoading} />
             </React.Fragment>
           ) : null}
           {section === "library" ? (

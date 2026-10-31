@@ -35,9 +35,32 @@ async function fixture() {
   await page.waitForFunction(expected => document.querySelector('[data-testid="room-code-editor-host"]')?.__roomEditorView?.state.doc.toString() === expected, code);
   return { auth, room, browser, page, async close() { await browser.close(); await request(`/me/rooms/${room.id}`, auth.token, null, "DELETE").catch(() => {}); } };
 }
+async function openModeMenu(page) {
+  const control = page.getByTestId("room-editor-mode-switch");
+  const inputId = await control.getByRole("combobox").getAttribute("id");
+  assert.ok(inputId, "ROOM_MODE_INPUT_ID_MISSING");
+  await control.click();
+  const rendered = await page.waitForFunction((id) => {
+    const input = document.getElementById(id);
+    const listboxId = input?.getAttribute("aria-controls");
+    const dropdown = listboxId && document.getElementById(listboxId)?.closest(".ant-select-dropdown");
+    if (input?.getAttribute("aria-expanded") !== "true" || !dropdown) return null;
+    const style = getComputedStyle(dropdown);
+    if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return null;
+    const labels = Array.from(dropdown.querySelectorAll(".ant-select-item-option-content"), (option) => option.textContent.trim());
+    return labels.length ? { listboxId, labels } : null;
+  }, inputId, { timeout: 5_000 });
+  const { listboxId, labels } = await rendered.jsonValue();
+  await rendered.dispose();
+  assert.deepEqual(labels, ["Code", "Markdown"]);
+  return {
+    labels,
+    dropdown: page.locator(".ant-select-dropdown").filter({ has: page.locator(`[id=${JSON.stringify(listboxId)}]`) }),
+  };
+}
 async function choose(page, mode) {
-  await page.getByTestId("room-editor-mode-switch").click();
-  await page.locator(".ant-select-dropdown:visible").getByText(mode, { exact: true }).click();
+  const { dropdown } = await openModeMenu(page);
+  await dropdown.getByText(mode, { exact: true }).click();
 }
 test("room mode requires explicit confirmation and cancellation sends no mutation", async () => {
   const f = await fixture();
@@ -105,8 +128,8 @@ test("selector choices align left and help stays stable in both themes and compa
    await f.page.waitForFunction(theme=>document.documentElement.dataset.theme===theme,theme);
    const control=f.page.getByTestId("room-editor-mode-switch");
    const bounds=await control.boundingBox();assert.ok(bounds.x>=0&&bounds.x+bounds.width<=width+1);
-   await control.click();
-   for(const choice of await f.page.locator(".ant-select-dropdown:visible .ant-select-item-option-content").all()) {
+   const { dropdown } = await openModeMenu(f.page);
+   for(const choice of await dropdown.locator(".ant-select-item-option-content").all()) {
     assert.equal(await choice.evaluate(el=>getComputedStyle(el).textAlign),"left");
     const aligned=await choice.evaluate(el=>{const r=document.createRange();r.selectNodeContents(el);const box=el.getBoundingClientRect();return Math.abs(r.getBoundingClientRect().left-box.left)<=2;});assert.ok(aligned);
    }
@@ -154,14 +177,12 @@ test("room mode uses concise choices, secondary mode text and a quiet finish act
       const evidence = process.env.EVIDENCE_DIR ?? "../.run/oct04-api-ui-validation/screenshots";
       await mkdir(evidence, { recursive: true });
       await f.page.screenshot({ path: `${evidence}/room-header-${theme}.png` });
-      await control.click();
-      const options = f.page.locator(".ant-select-dropdown:visible .ant-select-item-option-content");
-      await options.first().waitFor();
-      assert.deepEqual((await options.allTextContents()).map(value => value.trim()), ["Code", "Markdown"]);
-      await f.page.locator(".ant-select-dropdown:visible").evaluate(el => Promise.all(el.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => {}))));
+      const { dropdown, labels } = await openModeMenu(f.page);
+      assert.deepEqual(labels, ["Code", "Markdown"]);
+      await dropdown.evaluate(el => Promise.all(el.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => {}))));
       await f.page.screenshot({ path: `${evidence}/room-mode-${theme}.png` });
       await f.page.keyboard.press("Escape");
-      await f.page.locator(".ant-select-dropdown:visible").waitFor({ state: "hidden" });
+      await dropdown.waitFor({ state: "hidden" });
       const finish = f.page.getByRole("button", { name: "Завершить интервью", exact: true });
       const surface = await finish.evaluate(el => {
         const color = document.createElement("span");
@@ -178,8 +199,7 @@ test("room mode uses concise choices, secondary mode text and a quiet finish act
       await f.page.getByRole("dialog", { name: "Завершить интервью", exact: true }).screenshot({ path: `${evidence}/finish-dialog-${theme}.png` });
       await f.page.keyboard.press("Escape");
       await f.page.getByRole("dialog", { name: "Завершить интервью", exact: true }).waitFor({ state: "hidden" });
-      await control.click();
-      await f.page.locator(".ant-select-dropdown:visible").getByText("Markdown", { exact: true }).click();
+      await choose(f.page, "Markdown");
       const confirmation = f.page.getByRole("dialog", { name: "Изменить режим комнаты?", exact: true });
       await assertDialogSurface(confirmation, theme);
       await confirmation.getByRole("button", { name: "Отмена", exact: true }).click();

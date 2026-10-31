@@ -1126,6 +1126,7 @@ class CollaborationService(
                     yjsDocumentBase64 = request.yjsDocumentBase64,
                     baseServerYjsSequence = request.baseServerYjsSequence,
                     operationId = request.operationId,
+                    taskId = request.taskId,
                 )
             }
             "manager_workspace_briefing_update" -> if (!shouldIgnoreLatePublishedManagerWorkspaceEvent(connectionId, request.stepIndex)) {
@@ -1746,9 +1747,10 @@ class CollaborationService(
         yjsDocumentBase64: String?,
         baseServerYjsSequence: Long?,
         operationId: String?,
+        taskId: String?,
     ) {
         val participant = participants[connectionId] ?: return
-        val (key, workspace) = requireManagerWorkspaceSubscription(connectionId, stepIndex)
+        val (key, workspace) = requireManagerWorkspaceSubscription(connectionId, stepIndex, taskId)
         val trimmedUpdate = yjsUpdate.trim()
         val document = yjsDocumentBase64?.trim()?.takeIf { it.isNotEmpty() }
         if (document != null && document.length > maxYjsDocumentBase64Chars) {
@@ -1771,6 +1773,7 @@ class CollaborationService(
                     throw ApiException(
                         HttpStatus.CONFLICT,
                         "Manager workspace Yjs snapshot requires resynchronisation",
+                        code = "WORKSPACE_YJS_RESYNC_REQUIRED",
                     )
                 }
                 if (!markOperationApplied(workspace.appliedOperationIds, operationId)) return
@@ -1790,6 +1793,7 @@ class CollaborationService(
             type = "manager_workspace_yjs_update",
             payload = mapOf(
                 "stepIndex" to workspace.stepIndex,
+                "taskId" to key.taskId,
                 "sessionId" to participant.sessionId,
                 "yjsUpdate" to yjsUpdate,
                 "yjsSequence" to yjsSequence,

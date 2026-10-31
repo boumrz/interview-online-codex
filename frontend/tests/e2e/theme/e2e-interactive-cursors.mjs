@@ -67,8 +67,8 @@ test('native period and interview calendars have a pointer while ordinary typing
     await actionsUsePointer(page);
 
     await page.goto(`${web}/workspace/personal/interviews`);
-    await page.getByRole('button', { name: `Редактировать сведения интервью ${room.title}`, exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: 'Кандидат и нанимающие', exact: true });
+    await page.getByRole('button', { name: `Редактировать интервью ${room.title}`, exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Редактировать интервью', exact: true });
     const scheduledAt = dialog.getByLabel('Дата и время интервью (МСК)', { exact: true });
     await cursor(scheduledAt, 'pointer', 'interview date-time opens a calendar');
     await scheduledAt.fill('2030-10-12T14:30');

@@ -82,7 +82,7 @@ try {
     { id: 'team-set', path: `/workspace/teams/${team.id}/library`, tab: 'Наборы задач', title: 'Название набора', trigger: 'Редактировать набор Название набора', completeEditor: true },
     { id: 'team-track', path: `/workspace/teams/${team.id}/tracks`, title: track.name, trigger: `Переименовать трек ${track.name}` },
     { id: 'team-vacancy', path: `/workspace/teams/${team.id}/tracks`, title: 'Название вакансии', trigger: 'Переименовать вакансию Название вакансии' },
-    { id: 'personal-interview', path: '/workspace/personal/interviews', title: 'Название личного интервью', trigger: 'Переименовать интервью Название личного интервью' },
+    { id: 'personal-interview', path: '/workspace/personal/interviews', title: 'Название личного интервью', trigger: 'Редактировать интервью Название личного интервью', completeEditor: true },
     { id: 'personal-set', path: '/workspace/personal/library', tab: 'Наборы задач', title: 'Название личного набора', trigger: 'Редактировать набор Название личного набора', completeEditor: true },
     { id: 'profile-name', path: '/profile', title: auth.user.displayName, trigger: 'Изменить имя' },
     { id: 'room-step', path: `/room/${room.inviteCode}`, tab: 'Шаги', testId: 'room-task-rename-0' },

@@ -30,6 +30,7 @@ export function HiringManagerPicker({ label = "Нанимающий", teamId, ro
   const [pending, setPending] = useState(false);
   const [choosing, setChoosing] = useState(false);
   const [candidate, setCandidate] = useState<HiringManagerPreviewResponse | null>(null);
+  const [opened, setOpened] = useState(false);
   const requestGeneration = useRef(0);
   const requestRef = useRef<ReturnType<typeof preview> | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -43,7 +44,7 @@ export function HiringManagerPicker({ label = "Нанимающий", teamId, ro
   };
   useEffect(() => {
     cancelSearch(); inFlight.current = false;
-    setDraft(""); setError(""); setPending(false); setChoosing(false); setCandidate(null);
+    setDraft(""); setError(""); setPending(false); setChoosing(false); setCandidate(null); setOpened(false);
     onPendingChange?.(false);
     return () => { cancelSearch(); onPendingChange?.(false); };
   }, [accountId, token, teamId, room?.inviteCode, room?.ownerToken, room?.interviewerToken, room?.eventToken]);
@@ -55,9 +56,11 @@ export function HiringManagerPicker({ label = "Нанимающий", teamId, ro
     setDraft(value); setCandidate(null); setError("");
     setPending(false); onPendingChange?.(false);
     if (!validNickname(nickname)) {
+      setOpened(false);
       if (immediate && nickname) setError("Введите ник от 3 до 32 символов без пробелов");
       return;
     }
+    setOpened(true);
     setPending(true); onPendingChange?.(true);
     const resolve = async () => {
       debounceRef.current = null;
@@ -66,10 +69,13 @@ export function HiringManagerPicker({ label = "Нанимающий", teamId, ro
       try {
         const person = await request.unwrap();
         if (requestGeneration.current !== generation) return;
-        if (selectedIds.includes(person.normalizedId)) setError("Нанимающий уже добавлен");
+        if (selectedIds.includes(person.normalizedId)) { setError("Нанимающий уже добавлен"); setOpened(false); }
         else setCandidate(person);
       } catch (caught) {
-        if (requestGeneration.current === generation) setError(getApiErrorMessage(caught, "Не удалось найти нанимающего. Повторите попытку."));
+        if (requestGeneration.current === generation) {
+          setError(getApiErrorMessage(caught, "Не удалось найти нанимающего. Повторите попытку."));
+          setOpened(false);
+        }
       } finally {
         if (requestGeneration.current === generation) {
           requestRef.current = null;
@@ -87,7 +93,7 @@ export function HiringManagerPicker({ label = "Нанимающий", teamId, ro
     inFlight.current = true; setChoosing(true); setPending(true); onPendingChange?.(true); setError("");
     try {
       if (await onSelect(candidate) !== false && requestGeneration.current === generation) {
-        setDraft(""); setCandidate(null);
+        setDraft(""); setCandidate(null); setOpened(false);
         if (showSuccess) notification.success({
           title: `Нанимающий добавлен: ${candidate.displayName || "Нанимающий"}`,
           placement: "top",
@@ -106,6 +112,8 @@ export function HiringManagerPicker({ label = "Нанимающий", teamId, ro
       aria-label={label}
       placeholder="Введите ник нанимающего"
       value={null}
+      open={opened && !error}
+      onOpenChange={setOpened}
       searchValue={draft}
       searchable
       filterOption={false}

@@ -52,12 +52,12 @@ for(const kind of ['personal','team'])test(`${kind} interview list edits applica
   await page.route(kind==='team'?`**/api/teams/${team.id}/interviews/${room.id}/details`:`**/api/me/rooms/${room.id}/details`,route=>route.request().method()==='PATCH'?route.fulfill({status:503,json:{error:'Ошибка проверки'}}):route.continue(),{times:1});
   await name.fill('Черновик после ошибки');await dialog.getByRole('button',{name:'Сохранить',exact:true}).click();await dialog.getByRole('alert').waitFor();assert.equal(await name.inputValue(),'Черновик после ошибки');
   await dialog.getByRole('button',{name:'Сохранить',exact:true}).click();await page.getByText('Интервью сохранено',{exact:true}).waitFor();
-  if(kind==='team') {
-   const hr=await req('/auth/register',null,{nickname:`edit_hr_${crypto.randomUUID().slice(0,10)}`,displayName:'Дополнительный нанимающий',password:'test-password-123',isHr:true});
-   await dialog.getByRole('combobox',{name:'Внешний нанимающий (необязательно)',exact:true}).fill(hr.user.nickname);await page.locator('.ant-select-item-option').filter({hasText:hr.user.displayName}).click();
-   const remove=dialog.getByRole('button',{name:`Снять роль нанимающего у ${hr.user.displayName}`,exact:true});await remove.waitFor();assert.ok((await req(`/rooms/${room.inviteCode}/hr-managers`,auth.token)).some(x=>x.userId===hr.user.id));await remove.click();await remove.waitFor({state:'hidden'});assert.ok(!(await req(`/rooms/${room.inviteCode}/hr-managers`,auth.token)).some(x=>x.userId===hr.user.id));
-  } else {
-   assert.equal(await dialog.getByRole('combobox',{name:/нанимающ/i}).count(),0,'personal edit has no external hiring assignment');
+  const hr=await req('/auth/register',null,{nickname:`edit_hr_${crypto.randomUUID().slice(0,10)}`,displayName:'Дополнительный нанимающий',password:'test-password-123',isHr:true});
+  const hiringLabel=kind==='team'?'Внешний нанимающий (необязательно)':'Нанимающий';
+  await dialog.getByRole('combobox',{name:hiringLabel,exact:true}).fill(hr.user.nickname);await page.locator('.ant-select-item-option').filter({hasText:hr.user.displayName}).click();
+  const remove=dialog.getByRole('button',{name:`Снять роль нанимающего у ${hr.user.displayName}`,exact:true});await remove.waitFor();assert.ok((await req(`/rooms/${room.inviteCode}/hr-managers`,auth.token)).some(x=>x.userId===hr.user.id));await remove.click();await remove.waitFor({state:'hidden'});assert.ok(!(await req(`/rooms/${room.inviteCode}/hr-managers`,auth.token)).some(x=>x.userId===hr.user.id));
+  if(kind==='personal') {
+   assert.equal(await dialog.getByRole('combobox',{name:/Внешний нанимающий|Другие интервьюеры|Трек|Вакансия/i}).count(),0,'personal edit has no TEAM-only fields or external hiring label');
   }
 
   // A stale revision must not replace the candidate draft or silently overwrite another manager.

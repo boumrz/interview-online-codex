@@ -425,7 +425,7 @@ test("P1 settings: transfer needs a named confirmation and restores keyboard foc
     const cancel = dialog.getByRole("button", { name: /отмена/i });
     await tabTo(session.page, cancel, "P1_TRANSFER_CANCEL");
     await dialog.getByText(member.user.displayName, { exact: true }).waitFor();
-    assert.match(await dialog.innerText(), /прежн.*ADMIN/i, "P1_TRANSFER_OLD_OWNER_CONSEQUENCE_MISSING");
+    assert.ok((await dialog.innerText()).includes("Вы станете администратором команды."), "P1_TRANSFER_OLD_OWNER_CONSEQUENCE_MISSING");
     await session.page.keyboard.press("Enter");
     await transfer.waitFor();
     assert.equal(await transfer.evaluate((node) => document.activeElement === node), true, "P1_TRANSFER_CANCEL_FOCUS_NOT_RESTORED");

@@ -4,39 +4,40 @@ import { test } from "node:test";
 
 const previewComponent = new URL("../../src/pages/dashboard/CreateRoomSection.tsx", import.meta.url);
 const dashboardPage = new URL("../../src/pages/DashboardPage.tsx", import.meta.url);
+const sharedPicker = new URL("../../src/features/hr/HiringManagerPicker.tsx", import.meta.url);
 
-test("room creation exposes the explicit verified hiring picker contract", async () => {
-  const [component, dashboard] = await Promise.all([
+// Interaction, validation, recovery and authority are exercised by the HR E2E.
+// This source audit guards delegation to that shared verified control, rather
+// than requiring its labels and request logic to be duplicated by each parent.
+test("room creation delegates verified identity selection to the shared hiring picker", async () => {
+  const [component, dashboard, picker] = await Promise.all([
     readFile(previewComponent, "utf8"),
     readFile(dashboardPage, "utf8"),
+    readFile(sharedPicker, "utf8"),
   ]);
 
+  assert.match(component, /<HiringManagerPicker\b/);
+  assert.match(component, /onPendingChange=\{onHiringLookupPendingChange\}/);
+  assert.match(component, /selectedIds=\{hiringManagers\.map\(person => person\.normalizedId\)\}/);
+  assert.match(component, /aria-label=\{`Удалить нанимающего \$\{[^}]+\.displayName\}`\}/);
+  assert.match(component, /type="button"/);
+  assert.match(component, /disabled=\{isSubmitting \|\| hiringLookupPending\}/);
   for (const copy of [
     "Нанимающий",
     "Введите ник нанимающего",
-    "Добавить",
-    "Добавленные нанимающие",
-    "Удалить",
-  ]) {
-    assert.match(component, new RegExp(copy.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-  }
-  assert.match(component, /aria-label=\{`Удалить нанимающего \$\{[^}]+\.displayName\}`\}/);
-  assert.match(component, /label="Нанимающий"/);
-  assert.match(component, /placeholder="Введите ник нанимающего"/);
-  assert.match(component, /type="button"/);
-  assert.match(component, /onKeyDown=/);
-  for (const copy of [
     "Проверяем нанимающего…",
-    "Введите ник нанимающего",
     "Введите ник от 3 до 32 символов без пробелов",
-    "Этот нанимающий уже добавлен",
-    "Нанимающий не найден или недоступен",
-    "Не удалось проверить нанимающего. Повторите попытку.",
+    "Нанимающий уже добавлен",
+    "Не удалось найти нанимающего. Повторите попытку.",
     "Нанимающий добавлен:",
   ]) {
-    assert.match(dashboard, new RegExp(copy.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.match(picker, new RegExp(copy.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
-  assert.match(dashboard, /hiringManagerSelections\.map\(\s*\(selection\) => selection\.normalizedId,?\s*\)/);
+  assert.match(picker, /usePreviewHiringManagerMutation/);
+  assert.match(picker, /label=\{label\}/);
+  assert.match(picker, /placeholder="Введите ник нанимающего"/);
+  assert.match(picker, /onInputKeyDown=/);
+  assert.match(dashboard, /hiringManagerIds: roomHiringManagers\.map\(person => person\.normalizedId\)/);
 
   assert.doesNotMatch(
     component,

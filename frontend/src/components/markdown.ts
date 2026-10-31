@@ -1,4 +1,3 @@
-import DOMPurify from "dompurify";
 import hljs from "highlight.js/lib/core";
 import bash from "highlight.js/lib/languages/bash";
 import csharp from "highlight.js/lib/languages/csharp";
@@ -101,16 +100,11 @@ markdownRenderer.use({
   },
 });
 
-export function markdownToHtml(markdown: string): string {
+/** Worker-only parser output. Must be sanitized on the main thread before DOM insertion. */
+export function renderMarkdownUnsafeHtml(markdown: string): string {
   if (!markdown.trim()) return "";
 
-  const html = markdownRenderer.parse(markdown.replaceAll("\r\n", "\n"), {
+  return markdownRenderer.parse(markdown.replaceAll("\r\n", "\n"), {
     async: false,
-  });
-
-  return DOMPurify.sanitize(html, {
-    ADD_ATTR: ["target", "rel"],
-    FORBID_ATTR: ["style"],
-    USE_PROFILES: { html: true },
   });
 }

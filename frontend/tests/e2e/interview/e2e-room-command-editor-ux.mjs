@@ -11,15 +11,18 @@ const markdown = "# Условие\nТекст задания сохраняет
 async function request(path, token, body, method = body ? "POST" : "GET") {
   const response = await fetch(`${api}${path}`, {
     method,
-    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID(), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
   assert.ok(response.ok, `${method} ${path}: HTTP ${response.status}`);
   return response.status === 204 ? null : response.json();
 }
-async function fixture() {
+async function fixture(scope = "PERSONAL") {
   const auth = await request("/auth/register", null, { nickname: `ux_${crypto.randomUUID().slice(0, 12)}`, displayName: "Проверка редактора", password: "test-password-123" });
-  const room = await request("/rooms", auth.token, { title: "Команды и вид редактора", taskIds: [] });
+  const team = scope === "TEAM" ? (await request("/teams", auth.token, { name: "Уведомления комнаты" })).team : null;
+  const room = team
+    ? (await request(`/teams/${team.id}/interviews`, auth.token, { title: "Команды и вид редактора", taskIds: [] })).interview
+    : await request("/rooms", auth.token, { title: "Команды и вид редактора", taskIds: [] });
   await request(`/rooms/${room.inviteCode}/tasks`, auth.token, { customTasks: [0, 1].map(index => ({ title: `Шаг ${index + 1}`, description: markdown, starterCode: code, language: "nodejs" })) });
   const browser = await chromium.launch();
   const context = await browser.newContext({ viewport: { width: 1366, height: 900 } });
@@ -33,7 +36,7 @@ async function fixture() {
   await page.goto(`${web}/room/${room.inviteCode}`);
   await page.getByTestId("room-code-editor-host").waitFor();
   await page.waitForFunction(expected => document.querySelector('[data-testid="room-code-editor-host"]')?.__roomEditorView?.state.doc.toString() === expected, code);
-  return { auth, room, browser, page, async close() { await browser.close(); await request(`/me/rooms/${room.id}`, auth.token, null, "DELETE").catch(() => {}); } };
+  return { auth, room, browser, page, async close() { await browser.close(); await request(team ? `/teams/${team.id}/interviews/${room.id}` : `/me/rooms/${room.id}`, auth.token, null, "DELETE").catch(() => {}); } };
 }
 async function theme(page, mode) {
   await page.evaluate(mode => {
@@ -178,8 +181,8 @@ test("completed notes export uses one top notification instead of an inline resu
   } finally { await f.close(); }
 });
 
-test("participant hiring assignment confirms once at the top after the server response", async () => {
-  const f = await fixture();
+test("team participant hiring assignment confirms once at the top after the server response", async () => {
+  const f = await fixture("TEAM");
   let release;
   try {
     const hr = await request("/auth/register", null, { nickname: `ux_hr_${crypto.randomUUID().slice(0, 10)}`, displayName: "Нанимающий уведомлений", password: "test-password-123", isHr: true });
@@ -222,6 +225,26 @@ test("participant hiring assignment confirms once at the top after the server re
     await notice.locator(".ant-notification-notice-close").click();
     await notice.waitFor({ state: "hidden" });
   } finally { release?.(); await f.close(); }
+});
+
+test("personal participant menu keeps registered hiring capability separate from assignment", async () => {
+  const f = await fixture();
+  try {
+    const hr = await request("/auth/register", null, { nickname: `ux_hr_${crypto.randomUUID().slice(0, 10)}`, displayName: "Нанимающий личного участника", password: "test-password-123", isHr: true });
+    const context = await f.browser.newContext();
+    await context.addInitScript(auth => {
+      localStorage.setItem("auth_token", auth.token);
+      localStorage.setItem("auth_user", JSON.stringify(auth.user));
+      localStorage.setItem("display_name", auth.user.displayName);
+    }, hr);
+    const participant = await context.newPage();
+    await participant.goto(`${web}/room/${f.room.inviteCode}`);
+    await participant.getByTestId("room-code-editor-host").waitFor();
+    await f.page.getByRole("button", { name: /Нанимающий личного участника/ }).click();
+    await f.page.getByRole("menuitem", { name: "Назначить интервьюером", exact: true }).waitFor();
+    assert.equal(await f.page.getByRole("menuitem", { name: /нанимающ/i }).count(), 0, "a PERSONAL participant menu does not infer a hiring assignment from account capability");
+    assert.equal((await request(`/rooms/${f.room.inviteCode}/hr-managers`, f.auth.token)).some(item => item.userId === hr.user.id), false);
+  } finally { await f.close(); }
 });
 
 test("a late PDF failure from a replaced session does not restore old feedback", async () => {

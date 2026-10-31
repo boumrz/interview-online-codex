@@ -1,6 +1,6 @@
 # P2.3 — назначения нанимающих и сведения кандидата
 
-Статус: реализована по уточнению пользователя; PERSONAL назначения по нику, атомарное создание, текущие права и отзыв технически проверены на PostgreSQL 16 и в браузере. TEAM ограничения и гостевая HTTP-проекция сохраняются. Независимый security/reliability review — approve; пользовательская приёмка ожидается. Актуализировано: 2026-10-05.
+Статус: реализована по уточнению пользователя; PERSONAL назначения по нику, атомарное создание, текущие права и отзыв технически проверены на PostgreSQL 16 и в браузере. TEAM ограничения и гостевая HTTP-проекция сохраняются. Независимый security/reliability review — approve; пользовательская приёмка ожидается. Актуализировано: 2026-10-31.
 Результат: управляющий приглашает нанимающего к конкретному PERSONAL или TEAM интервью
 и назначает роль присутствующему гостю без расширения членства или раскрытия
 других кандидатов.
@@ -45,7 +45,10 @@ hiring без назначения не даёт доступ к чужому и
   Автопоиск после 300 мс ввода имеет предел ожидания 8 секунд; изменение ввода,
   смена контекста и закрытие отменяют старый запрос. Отказ/timeout освобождает
   submit; поздний ответ не заменяет текущий результат. Ошибка/отсутствие человека
-  показываются по-русски, без требований ввести UUID.
+  показываются по-русски, без требований ввести UUID. Пустой popup при отказе
+  поиска закрывается и не перекрывает submit; набранный ник и inline ошибка
+  сохраняются. Новое изменение ника или Enter повторяют поиск. Поздний ответ
+  прежнего контекста не открывает popup заново.
 - **R-03. Область:** выбранному нанимающему доступны только назначенные интервью/
   кандидаты в личном кабинете. Назначение не даёт team membership и доступ к
   остальным кандидатам. Явный внешний interviewer сохраняет назначенную роль
@@ -173,10 +176,22 @@ hiring без назначения не даёт доступ к чужому и
 | AC-05 | R-06–R-07 | Диалог из списка → сохранение/reload; 409/network → черновик/retry; Ник → blur/Escape/удаление другой роли сохраняет текст; Backspace очищает; context change → закрытие | Candidate modal + HR picker E2E |
 | AC-06 | R-08, R-11 | Guest interviewer PERSONAL → текущий preview/назначение доступны; после revoke или conversion → отказ; candidate → без private управления | Role/scope integration + guest flow |
 | AC-07 | R-09 | Новый TEAM гость → host grant → interviewer/private запись/reconnect; revoke → candidate/403; явный повторный grant в живой PERSONAL сессии разрешён; PERSONAL capability после переноса → candidate без private данных | PostgreSQL `GuestRoomRoleIntegrationTest` + browser |
-| AC-08 | R-02, R-05 | Несуществующий ник → 404; зависший запрос → timeout за 8 секунд/повтор. Edit/context/закрытие отменяет lookup до deadline, clean reopen без позднего выбора; guest revoke и converted scope отклоняются | Browser transport AbortSignal + PostgreSQL negative authority |
+| AC-08 | R-02, R-05 | Несуществующий ник → 404; зависший запрос → timeout за 8 секунд/повтор. Отказ/503 закрывает пустой popup, сохраняет ник/ошибку и позволяет обычным click создать интервью только с ранее выбранными нанимающими; typing/Enter повторяют поиск. Edit/context/закрытие отменяет lookup до deadline, clean reopen без позднего выбора; guest revoke и converted scope отклоняются | Browser transport AbortSignal, plain click/hit-test и PostgreSQL negative authority |
 | AC-09 | R-10 | Owner title+metadata сохраняются вместе; interviewer metadata-only, candidate/outsider/TEAM/archive отказаны; stale/конкурентные saves и legacy rename → 409 без частичной записи; компактная проекция не раскрывает private fields или code/notes | PostgreSQL personal details/projection integration + UI.2 AC-24 |
 | AC-10 | R-02, R-11 | PERSONAL точный ник → атомарное создание/назначение и свой кабинет; unknown/disabled → одинаковый 404 без записей; duplicate → одно назначение; remove/regrant → отзыв/восстановление только явным действием. Guest proof, кандидат/чужой/archive и TEAM ограничения сохраняются | PostgreSQL `PersonalInterviewScopeIntegrationTest`, nickname/preview regression и `GuestRoomRoleIntegrationTest` + UI.2 scope E2E |
 | AC-11 | R-05, R-09, R-12 | Анонимный PERSONAL guest grant → свежий proof GET interviewer/private scope; TEAM guest → SSE interviewer/code/notes, но candidate HTTP DTO и отказ metadata/HR. Revoke/чужая комната/подделка/смена аккаунта или scope → без manager DTO; обычный owner/account GET неизменен. Начальный Room GET с 404/410 → нейтральный terminal до имени, без редактора/бесконечной загрузки; текущий relay 410 сохраняет terminal | PostgreSQL `GuestRoomRoleIntegrationTest`, personal details/scope regression + guest UI freshness/unavailable browser |
+
+R-02/AC-08 технически проверены 30–31.10: полный HR E2E 33/33, включая отказ
+поиска, закрытие пустого popup, обычный click создания с ранее подтвержденными
+IDs и retry. Полный backend 478/478 и все 111 E2E на финальном снимке — PASS;
+[общий отчет](../references/2026-10-31-full-regression-green.md). Права и scope
+не расширялись; scoped review approve, продуктовый просмотр ожидается.
+
+R-05/R-12 и AC-11 дополнительно проверены 30–31.10: реальные REST-first/SSE-first
+404 дают terminal без редактора/state/token и лишнего трафика; поздний ответ
+не восстанавливает вход. Missing-room recovery сохраняет строгий один fallback
+probe при SSE-first и проверяет live disappearance, stale 403 и timeout/reconnect.
+Оба целых файла и финальный полный E2E — PASS; ссылки/evidence в общем отчете.
 
 Источники прежних проверок: [бизнес-проверка 28.09](../references/business-logic-verification-2026-09-28.md),
 [назначения и диалоги](../references/ui-2-profile-hiring-verification-2026-09-27.md),

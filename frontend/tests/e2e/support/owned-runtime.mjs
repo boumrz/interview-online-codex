@@ -24,6 +24,17 @@ export function createOwnedRuntime() {
 
   function interrupt() { for (const state of processes) signal(state, "SIGTERM"); }
 
+  async function terminate(state, { graceMs = 5_000 } = {}) {
+    if (!processes.includes(state)) throw new Error("OWNED_PROCESS_REQUIRED");
+    if (!Number.isFinite(graceMs) || graceMs < 0 || graceMs > 30_000) throw new Error("OWNED_PROCESS_GRACE_INVALID");
+    signal(state, "SIGTERM");
+    const deadline = Date.now() + graceMs;
+    while (!state.finished && Date.now() < deadline) await delay(20);
+    // The parent may have exited while its browser descendants remain alive.
+    signal(state, "SIGKILL");
+    if (!state.finished) await new Promise(resolve => state.child.once("exit", resolve));
+  }
+
   async function stop() {
     interrupt();
     const deadline = Date.now() + 5_000;
@@ -32,5 +43,5 @@ export function createOwnedRuntime() {
     await Promise.all(processes.filter((state) => !state.finished).map((state) =>
       new Promise((resolve) => state.child.once("exit", resolve))));
   }
-  return { start, interrupt, stop };
+  return { start, interrupt, terminate, stop };
 }

@@ -94,6 +94,8 @@ export type RoomCodeEditorProps = {
   onYjsUpdate: YjsUpdateHandler;
   onYjsBridgeReady: (applyUpdate: YjsRemoteUpdateApplier | null) => void;
   onYjsSnapshotBridgeReady?: (emitSnapshot: YjsSnapshotEmitter | null) => void;
+  /** Renew presence when unchanged document snapshots do not produce server echoes. */
+  renewAwarenessIndependently?: boolean;
   onEditorValueChange: (value: string) => void;
   onKeyPress: (payload: KeyPressPayload) => void;
   onPaste?: (payload: PastePayload) => void;
@@ -132,6 +134,7 @@ export function RoomCodeEditor({
   onYjsUpdate,
   onYjsBridgeReady,
   onYjsSnapshotBridgeReady,
+  renewAwarenessIndependently = false,
   onEditorValueChange,
   onKeyPress,
   onPaste,
@@ -369,7 +372,6 @@ export function RoomCodeEditor({
       awarenessFlushTimer = window.setTimeout(flushAwareness, 48);
     };
     awareness.on("update", onAwarenessChanged);
-
     onAwarenessBridgeReady((b64) => {
       try {
         if (!b64) return;
@@ -592,6 +594,18 @@ export function RoomCodeEditor({
     // never re-attached the listener, so outbound Yjs updates stopped after the first remote sync.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onYjsBridgeReady, syncKey]);
+
+  useEffect(() => {
+    if (!renewAwarenessIndependently) return;
+    // Private snapshots can be local no-ops. Keep their presence lease without
+    // adding this traffic to the public editor's existing renewal path.
+    const heartbeatId = window.setInterval(() => {
+      const awareness = awarenessRef.current;
+      const localState = awareness?.getLocalState();
+      if (localState) awareness?.setLocalState(localState);
+    }, 10_000);
+    return () => window.clearInterval(heartbeatId);
+  }, [renewAwarenessIndependently, syncKey]);
 
   useEffect(() => {
     viewRef.current?.dispatch({ effects: themeCompartmentRef.current.reconfigure(codeMirrorTheme(mode)) });

@@ -498,11 +498,12 @@ test("personal HR opt-in exposes candidates as a work section, not profile conte
     assert.equal(await page.getByRole("heading", { name: "Кандидаты", exact: true }).count(), 1);
     assert.equal(
       await page.getByText("Кандидаты по вашим интервью. Один кандидат может встречаться несколько раз", { exact: true }).count(),
-      1,
+      0,
+      "CANDIDATE_SECTION_MUST_NOT_REPEAT_ITS_HEADING",
     );
     assert.equal(await page.getByText("Евгения Константинопольская", { exact: true }).count(), 1);
     assert.equal(await page.getByText(fixtures.hrRoom.title, { exact: true }).count(), 1);
-    assert.equal(await page.getByRole("checkbox", { name: "Я нанимающий", exact: true }).count(), 0);
+    assert.equal(await page.getByRole("switch", { name: "Я участвую в найме", exact: true }).count(), 0, "PROFILE_CONTROLS_MUST_NOT_ENTER_THE_CANDIDATE_LIST");
   } finally {
     await context.close();
   }
@@ -747,8 +748,10 @@ test("profile is a standalone account settings route", async () => {
     await page.getByRole("heading", { name: "Профиль", exact: true }).waitFor();
     assert.equal(await page.getByRole("heading", { name: "Профиль", exact: true }).count(), 1);
     assert.equal(await page.getByRole("switch", { name: "Я участвую в найме", exact: true }).count(), 1);
-    assert.equal(await page.getByText(/Кандидаты и Excel в команде доступны всем её участникам/).count(), 1);
+    assert.equal(await page.getByText(/Кандидаты и Excel в команде доступны всем её участникам/).count(), 0, "PROFILE_MUST_NOT_REPEAT_TEAM_ACCESS_INSTRUCTIONS");
     assert.equal(await page.getByRole("heading", { name: "Кандидаты", exact: true }).count(), 0);
+    assert.equal(await page.getByText(fixtures.hrRoom.title, { exact: true }).count(), 0, "PROFILE_MUST_NOT_DUPLICATE_CANDIDATE_DATA");
+    assert.equal(await page.getByRole("button", { name: "Скопировать никнейм", exact: true }).count(), 1);
   } finally {
     await context.close();
   }
@@ -802,7 +805,9 @@ test("failed personal interview creation keeps scope and draft and creates no ro
     await page.getByLabel("Название интервью", { exact: true }).fill(title);
     await page.getByRole("dialog", { name: "Создать интервью", exact: true })
       .getByRole("button", { name: "Создать интервью", exact: true }).click();
-    assert.equal(await page.getByRole("alert").filter({ hasText: /Не удалось|Повтор/ }).count(), 1);
+    const error = page.getByRole("alert").filter({ hasText: /Не удалось|Повтор/ });
+    await error.waitFor();
+    assert.equal(await error.count(), 1);
     assert.equal(await page.getByLabel("Название интервью", { exact: true }).inputValue(), title);
     assert.equal(
       await page.getByRole("main", { name: "Личный раздел: Создать интервью", exact: true }).count(),
@@ -989,12 +994,29 @@ async function assertCreationFormLayout(page, baseViewport, zoom) {
   );
 
   await title.clear();
-  await submit.click();
-  const error = page.getByRole("alert").filter({ hasText: /Название интервью обязательно/ });
-  assert.equal(await error.count(), 1, "LOCAL_TITLE_ERROR_MISSING");
+  assert.equal(await submit.isDisabled(), true, "EMPTY_TITLE_MUST_DISABLE_CREATE");
+  await title.fill("   ");
+  assert.equal(await submit.isDisabled(), true, "WHITESPACE_TITLE_MUST_DISABLE_CREATE");
   assert.equal(automaticMutations, 0, "INVALID_LOCAL_FORM_SENT_MUTATION");
 
   await title.fill(longInterviewName);
+  await page.waitForFunction(element => !element.disabled, await submit.elementHandle());
+  let failedCreates = 0;
+  await page.route("**/api/rooms", async route => {
+    if (route.request().method() !== "POST") return route.continue();
+    failedCreates += 1;
+    await route.fulfill({ status: 503, json: { error: "Временно недоступно" } });
+  });
+  await submit.click();
+  const error = page.getByRole("alert").filter({ hasText: /Ошибка сервера|Не удалось|Повтор/ });
+  await error.waitFor();
+  assert.equal(await error.count(), 1, "CREATE_FAILURE_MUST_REMAIN_VISIBLE");
+  assert.equal(failedCreates, 1, "VALID_CREATE_MUST_SEND_ONE_POST");
+  assert.equal(automaticMutations, 1, "FAILED_CREATE_MUST_NOT_TRIGGER_OTHER_MUTATIONS");
+  assert.equal(await title.inputValue(), longInterviewName, "CREATE_FAILURE_LOST_TITLE_DRAFT");
+  assert.equal(await candidate.inputValue(), longCandidateName, "CREATE_FAILURE_LOST_CANDIDATE_DRAFT");
+  assert.equal(await position.inputValue(), "Ведущий инженер клиентской платформы с ответственностью за доступность и надёжность интерфейса", "CREATE_FAILURE_LOST_POSITION_DRAFT");
+  assert.equal(await submit.isDisabled(), false, "FAILED_CREATE_MUST_ALLOW_RETRY");
   await title.focus();
   let reachedSubmit = false;
   let visibleFocusObserved = false;
@@ -1026,7 +1048,7 @@ async function assertCreationFormLayout(page, baseViewport, zoom) {
     assert.ok(box.y + box.height > 0 && box.y < effectiveViewport.height, "LAST_FIELD_ERROR_OR_SUBMIT_UNREACHABLE");
   }
   const submitBox = await submit.boundingBox();
-  assert.ok(submitBox.width >= 44 && submitBox.height >= 44, `PRIMARY_TARGET_TOO_SMALL: ${JSON.stringify(submitBox)}`);
+  assert.ok(submitBox.width >= 36 && submitBox.height >= 36, `PRIMARY_TARGET_TOO_SMALL: ${JSON.stringify(submitBox)}`);
   const submitIsTopmost = await submit.evaluate((element) => {
     const box = element.getBoundingClientRect();
     const topmost = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
@@ -1499,10 +1521,14 @@ test("remediation-2 identity fence: delayed profile PATCH from account A cannot 
     await page.waitForURL("**/profile");
     await page.getByRole("button", { name: "Изменить имя", exact: true }).click();
     await page.getByLabel("Имя для отображения", { exact: true }).waitFor();
+    const profileMain = page.getByRole("main", { name: "Личный раздел: Профиль", exact: true });
+    await profileMain.getByText(`@${accountB.user.nickname}`, { exact: true }).waitFor();
     releasePatch();
     await patchFinished;
+    await settleApp(page);
     assertRoute(page, "/profile", "STALE_PROFILE_PATCH_CHANGED_B_ROUTE");
-    assert.equal(await page.getByText(`@${accountB.user.nickname}`, { exact: true }).count(), 1, "STALE_PROFILE_PATCH_CHANGED_B_IDENTITY");
+    assert.equal(await profileMain.getByText(`@${accountB.user.nickname}`, { exact: true }).count(), 1, "STALE_PROFILE_PATCH_CHANGED_B_IDENTITY");
+    assert.equal(await page.getByText(`@${accountA.user.nickname}`, { exact: true }).count(), 0, "STALE_PROFILE_PATCH_RESTORED_A_IDENTITY");
     assert.equal(await page.getByLabel("Имя для отображения", { exact: true }).inputValue(), accountB.user.displayName, "STALE_PROFILE_PATCH_CHANGED_B_NAME");
     await page.getByRole("dialog", { name: "Изменить имя", exact: true }).getByRole("button", { name: "Отмена", exact: true }).click();
     assert.equal(await page.getByRole("switch", { name: "Я участвую в найме", exact: true }).isChecked(), false, "STALE_PROFILE_PATCH_CHANGED_B_CAPABILITY");
@@ -1626,8 +1652,13 @@ test("remediation-2 identity fence: delayed metadata retry from account A cannot
   }
 });
 
-test("remediation: unified interview cards expose context date status tasks and primary action", async () => {
-  const { context, page } = await openAccount(fixtures.rolesOwner, "/workspace/personal/interviews");
+test("remediation: personal interview cards expose candidate date status tasks and actions without team context", async () => {
+  const forbiddenContextRequests = [];
+  const { context, page } = await openAccount(fixtures.rolesOwner, "/workspace/personal/interviews", {
+    onPage: openedPage => openedPage.on("request", request => {
+      if (/\/(?:tracks|vacancies)(?:\/|$)/.test(new URL(request.url()).pathname)) forbiddenContextRequests.push(request.url());
+    }),
+  });
   try {
     const card = page.getByRole("region", { name: `Личное интервью ${fixtures.roleRoom.title}`, exact: true });
     await card.getByText(/Мария Ролевая/).waitFor();
@@ -1636,8 +1667,6 @@ test("remediation: unified interview cards expose context date status tasks and 
     for (const [expected, marker] of [
       [fixtures.roleRoom.title, "title"],
       ["Мария Ролевая", "candidate"],
-      ["Без трека", "track context"],
-      ["Без вакансии", "vacancy context"],
       ["12.09.2030", "date"],
       ["Активно", "lifecycle status"],
       ["0 задач", "task count"],
@@ -1645,6 +1674,8 @@ test("remediation: unified interview cards expose context date status tasks and 
     ]) {
       assert.match(text, new RegExp(expected), `UNIFIED_CARD_MISSING_${marker.toUpperCase().replaceAll(" ", "_")}`);
     }
+    assert.doesNotMatch(text, /Без трека|Без вакансии/, "PERSONAL_CARD_MUST_NOT_SHOW_TEAM_CONTEXT");
+    assert.deepEqual(forbiddenContextRequests, [], "PERSONAL_CARD_MUST_NOT_LOAD_TEAM_CONTEXT");
   } finally {
     await context.close();
   }

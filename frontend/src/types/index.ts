@@ -412,6 +412,7 @@ export type RoomTask = {
  * candidate and inactive SSE subscribers must not receive other task answers.
  */
 export type RoomTaskWorkspace = {
+  taskId?: string | null;
   stepIndex: number;
   title: string;
   language: string;

@@ -42,8 +42,13 @@ import {
   placeholder,
 } from "@codemirror/view";
 
-import { markdownToHtml } from "../../components/markdown";
+import { useMarkdownPreview } from "../../components/useMarkdownPreview";
+import { MarkdownPreviewContent } from "../../components/MarkdownPreview";
 import roomPageStyles from "../../pages/RoomPage.module.css";
+
+// Public and private room events both remove NUL and keep 120,000 UTF-16 units.
+const ROOM_MARKDOWN_LIMIT = 120_000;
+const markdownLengthFormatter = new Intl.NumberFormat("ru-RU");
 
 type MarkdownToolId =
   | "bold"
@@ -117,8 +122,13 @@ export function BriefingBoard({
    * Не путать с `focusMode`, который синхронизируется между сторонами.
    */
   const [isExpanded, setIsExpanded] = useState(false);
-  const html = useMemo(() => markdownToHtml(value), [value]);
+  const preview = useMarkdownPreview(value);
   const emptyText = "Условие не добавлено";
+  const markdownLength = useMemo(
+    () => value.includes("\u0000") ? value.replace(/\u0000/g, "").length : value.length,
+    [value],
+  );
+  const excessLength = Math.max(0, markdownLength - ROOM_MARKDOWN_LIMIT);
 
   // ESC закрывает локальный fullscreen, чтобы поведение совпадало с
   // другими «модалками» комнаты.
@@ -403,6 +413,26 @@ export function BriefingBoard({
               </Button>
             </Tooltip>
           </div>
+          <div
+            className={roomPageStyles.briefingLimit}
+            data-state={excessLength > 0 ? "exceeded" : markdownLength === ROOM_MARKDOWN_LIMIT ? "reached" : "normal"}
+          >
+            <span
+              className={roomPageStyles.briefingLimitCount}
+              aria-label="Объём Markdown"
+              title="Лимит сохранения исходного Markdown. Эмодзи могут занимать два символа."
+            >
+              {markdownLengthFormatter.format(markdownLength)} / {markdownLengthFormatter.format(ROOM_MARKDOWN_LIMIT)} символов
+            </span>
+            {excessLength > 0 ? (
+              <p className={roomPageStyles.briefingLimitWarning} role="status" data-testid="markdown-limit-warning">
+                Сохраняются первые {markdownLengthFormatter.format(ROOM_MARKDOWN_LIMIT)} символов.
+                {" "}Будет обрезано: {markdownLengthFormatter.format(excessLength)}.
+              </p>
+            ) : (
+              <span>{markdownLength === ROOM_MARKDOWN_LIMIT ? "Лимит достигнут" : "Лимит сохранения"}</span>
+            )}
+          </div>
           <div className={roomPageStyles.briefingSplit}>
             <MarkdownCodeMirrorEditor
               ref={editorRef}
@@ -412,17 +442,9 @@ export function BriefingBoard({
             <div
               className={roomPageStyles.briefingPreviewPane}
               data-testid="room-markdown-preview"
+              aria-busy={preview.loading}
             >
-              {html ? (
-                <div
-                  className={roomPageStyles.briefingMarkdown}
-                  dangerouslySetInnerHTML={{ __html: html }}
-                />
-              ) : (
-                <Text className={roomPageStyles.briefingEmpty}>
-                  {emptyText}
-                </Text>
-              )}
+              <MarkdownPreviewContent preview={preview} className={roomPageStyles.briefingMarkdown} emptyText={emptyText} emptyContent={<Text className={roomPageStyles.briefingEmpty}>{emptyText}</Text>} />
             </div>
           </div>
         </>
@@ -465,15 +487,9 @@ export function BriefingBoard({
           <div
             className={roomPageStyles.briefingPreviewPane}
             data-testid="room-markdown-preview"
+            aria-busy={preview.loading}
           >
-            {html ? (
-              <div
-                className={roomPageStyles.briefingMarkdown}
-                dangerouslySetInnerHTML={{ __html: html }}
-              />
-            ) : (
-              <Text className={roomPageStyles.briefingEmpty}>{emptyText}</Text>
-            )}
+            <MarkdownPreviewContent preview={preview} className={roomPageStyles.briefingMarkdown} emptyText={emptyText} emptyContent={<Text className={roomPageStyles.briefingEmpty}>{emptyText}</Text>} />
           </div>
         </>
       )}

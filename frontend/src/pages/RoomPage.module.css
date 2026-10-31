@@ -439,6 +439,8 @@
 
 .contextScoreOptions button {
   min-height: 44px;
+  justify-content: flex-start;
+  text-align: left;
   border: 0;
   border-radius: 8px;
   background: transparent;
@@ -1070,6 +1072,39 @@
   background: var(--app-selected-bg) !important;
   border-color: var(--app-primary) !important;
   color: var(--app-selected-text) !important;
+}
+
+.briefingLimit {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
+  min-width: 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--app-surface-soft);
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.briefingLimit[data-state="reached"],
+.briefingLimit[data-state="exceeded"] {
+  background: var(--app-warning-bg);
+  color: var(--app-warning);
+  box-shadow: inset 3px 0 var(--app-warning-accent);
+}
+
+.briefingLimitCount {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.briefingLimitWarning {
+  flex-basis: 100%;
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .briefingSplit {
@@ -2652,7 +2687,11 @@
   padding: 12px;
 }
 
-.contextConditionContent .modeEditor { flex: 1 1 0; min-height: 120px; }
+.contextConditionContent .modeEditor {
+  flex: 1 0 auto;
+  min-height: 120px;
+  overflow: visible;
+}
 
 .contextConditionTitle {
   flex: 0 0 auto;
@@ -2667,7 +2706,7 @@
 }
 
 .contextConditionContent .briefingPanel:not([data-expanded="on"]) {
-  flex: 1 1 0;
+  flex: 1 0 auto;
   min-height: 0;
   height: auto;
   max-height: none;
@@ -2675,6 +2714,13 @@
   border: 0;
   border-radius: 0;
   resize: none;
+  overflow: visible;
+}
+
+.contextConditionContent .briefingSplit {
+  /* Keep at least 60px inside the source editor's border. */
+  flex: 1 0 64px;
+  min-height: 64px;
 }
 
 .contextConditionContent .briefingToolbar {

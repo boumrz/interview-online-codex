@@ -1,0 +1,3669 @@
+{
+  "date": "2026-10-30",
+  "head": "616112b50dfec154a29a6b4ee3723e4e28a158b4",
+  "remoteHeadAfterFetch": "616112b50dfec154a29a6b4ee3723e4e28a158b4",
+  "unpushedCommits": 0,
+  "behindCommits": 0,
+  "iterationAtStart": {
+    "trackedModified": [
+      "SPEC.md",
+      "backend/src/main/kotlin/com/interviewonline/dto/RoomDto.kt",
+      "backend/src/main/kotlin/com/interviewonline/service/CollaborationService.kt",
+      "backend/src/main/kotlin/com/interviewonline/service/RoomService.kt",
+      "frontend/src/components/markdown.ts",
+      "frontend/src/features/room/BriefingBoard.tsx",
+      "frontend/src/features/room/RoomCodeEditor.tsx",
+      "frontend/src/features/room/useRoomSocket.ts",
+      "frontend/src/pages/DashboardPage.tsx",
+      "frontend/src/pages/RoomPage.module.css",
+      "frontend/src/pages/RoomPage.tsx",
+      "frontend/src/pages/dashboard/CreateRoomSection.tsx",
+      "frontend/src/pages/workspace/PersonalWorkspacePage.tsx",
+      "frontend/src/types/index.ts",
+      "specs/features/p2-1-room-layout-modes.md",
+      "specs/features/ui-2-usability-theme-polish.md"
+    ],
+    "untracked": [
+      "backend/src/test/kotlin/com/interviewonline/controller/ManagerWorkspaceYjsRecoveryIntegrationTest.kt",
+      "frontend/src/components/MarkdownPreview.tsx",
+      "frontend/src/components/markdown.worker.ts",
+      "frontend/src/components/markdownPreviewService.ts",
+      "frontend/src/components/markdownWorkerClient.ts",
+      "frontend/src/components/markdownWorkerProtocol.ts",
+      "frontend/src/components/useMarkdownPreview.ts",
+      "frontend/tests/browser/managerYjsRecovery.test.mjs",
+      "frontend/tests/browser/workspaceCreationAndSelectors.test.mjs",
+      "frontend/tests/contract/markdown-worker-browser.test.mjs",
+      "frontend/tests/unit/markdownWorkerClient.test.ts"
+    ],
+    "files": 27
+  },
+  "addedDuringRegression": [
+    "frontend/tests/e2e/teams/e2e-workspace-navigation.mjs",
+    "specs/references/2026-10-30-local-iteration-regression.md",
+    "specs/references/2026-10-30-local-iteration-regression-results.json"
+  ],
+  "postSnapshotSourceChanges": [
+    "frontend/src/pages/RoomPage.module.css",
+    "frontend/src/pages/RoomPage.tsx",
+    "frontend/src/features/room/RoomCodeEditor.tsx",
+    "frontend/tests/e2e/teams/e2e-workspace-navigation.mjs"
+  ],
+  "backend": {
+    "metadata": {
+      "command": [
+        "mvn",
+        "test"
+      ],
+      "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend",
+      "java_home": "/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home",
+      "scratch_database": "interview_hr_1788631751397",
+      "removed_environment_keys": [],
+      "started_utc": "2026-10-30T09:19:54Z",
+      "exit_code": 1,
+      "duration_seconds": 211.022,
+      "finished_utc": "2026-10-30T09:23:25Z"
+    },
+    "totals": {
+      "suites": 71,
+      "tests": 478,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 477
+    },
+    "failures": [
+      {
+        "suite": "com.interviewonline.controller.TeamMergeMigrationTest",
+        "test": "P6 upgrading a populated version 24 team schema preserves rows and installs merge storage",
+        "kind": "failure",
+        "message": "expected: <33> but was: <34>"
+      }
+    ],
+    "suites": [
+      {
+        "name": "com.interviewonline.SmokeTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 3.975,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.SmokeTest.xml"
+      },
+      {
+        "name": "com.interviewonline.agent.WorkflowStateMachineTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.001,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.agent.WorkflowStateMachineTest.xml"
+      },
+      {
+        "name": "com.interviewonline.config.ChatReceiptHmacConfigurationTest",
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.024,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.config.ChatReceiptHmacConfigurationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.config.TeamInvitationLinkEncryptionEnvironmentTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.039,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.config.TeamInvitationLinkEncryptionEnvironmentTest.xml"
+      },
+      {
+        "name": "com.interviewonline.config.WebConfigCorsTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.27,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.config.WebConfigCorsTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.AuthCredentialPolicyIntegrationTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.905,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.AuthCredentialPolicyIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.CandidateActivityHistoryIntegrationTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 2.359,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.CandidateActivityHistoryIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.CandidateActivityPoolIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.443,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.CandidateActivityPoolIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.DurableCandidateActivityIntegrationTest",
+        "tests": 13,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.5,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.DurableCandidateActivityIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.E2eFixtureIsolationIntegrationTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.609,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.E2eFixtureIsolationIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.GuestRoomRoleIntegrationTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.439,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.GuestRoomRoleIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.HiringManagerNicknameIntegrationTest",
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.758,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.HiringManagerNicknameIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.HiringManagerPreviewIntegrationTest",
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.492,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.HiringManagerPreviewIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.HrAccountProfileIntegrationTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.228,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.HrAccountProfileIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.HrHostNotesWorkbookIntegrationTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.502,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.HrHostNotesWorkbookIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.HrInterviewProjectionIntegrationTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.385,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.HrInterviewProjectionIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.HrParticipantProjectionIntegrationTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.338,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.HrParticipantProjectionIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.HrPermissionPoolIntegrationTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.162,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.HrPermissionPoolIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.HrRoleRemovalIntegrationTest",
+        "tests": 19,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 5.826,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.HrRoleRemovalIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.HrRoomArchiveIntegrationTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.869,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.HrRoomArchiveIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.HrRoomTrackingIntegrationTest",
+        "tests": 21,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 3.995,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.HrRoomTrackingIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.HrTeamWorkspaceExportIntegrationTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.888,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.HrTeamWorkspaceExportIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.HrWorkbookIntegrationTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.182,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.HrWorkbookIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.InvitationRateLimitPostgresIntegrationTest",
+        "tests": 11,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 11.782,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.InvitationRateLimitPostgresIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.LibraryArchiveRetirementMigrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.198,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.LibraryArchiveRetirementMigrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.LibraryRemovalSnapshotIntegrationTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.338,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.LibraryRemovalSnapshotIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.ManagerWorkspaceYjsRecoveryIntegrationTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.613,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.ManagerWorkspaceYjsRecoveryIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.MarkdownTaskDeliveryIntegrationTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.572,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.MarkdownTaskDeliveryIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.PersonalInterviewDetailsIntegrationTest",
+        "tests": 9,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 2.416,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.PersonalInterviewDetailsIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.PersonalInterviewScopeIntegrationTest",
+        "tests": 12,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 3.121,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.PersonalInterviewScopeIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.ProductMetricsControllerTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.089,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.ProductMetricsControllerTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.RealtimeChatIdempotencyIntegrationTest",
+        "tests": 31,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 6.477,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.RealtimeChatIdempotencyIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.RealtimeStreamStatusIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.355,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.RealtimeStreamStatusIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.RoomEditorModeIntegrationTest",
+        "tests": 11,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.076,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.RoomEditorModeIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.RoomEditorModeMigrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.191,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.RoomEditorModeMigrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.RoomMetadataYjsDeliveryIntegrationTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 2.208,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.RoomMetadataYjsDeliveryIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.RoomPersistenceIsolationIntegrationTest",
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 16.739,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.RoomPersistenceIsolationIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.RoomWorkspaceSnapshotControllerTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.022,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.RoomWorkspaceSnapshotControllerTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.SocialAuthConfigurationTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.071,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.SocialAuthConfigurationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.SocialAuthDisabledIntegrationTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.942,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.SocialAuthDisabledIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.SocialAuthIntegrationTest",
+        "tests": 14,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 3.2,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.SocialAuthIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.SocialAuthMigrationIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.761,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.SocialAuthMigrationIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamAccessIntegrationTest",
+        "tests": 17,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 3.254,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamAccessIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamCreateRestartHttpIntegrationTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 3.844,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamCreateRestartHttpIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamDefaultConfigurationIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.799,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamDefaultConfigurationIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamInterviewCreationIntegrationTest",
+        "tests": 60,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 22.83,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamInterviewCreationIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamInvitationLinkRecoveryIntegrationTest",
+        "tests": 25,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 20.206,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamInvitationLinkRecoveryIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamLegacyConfigurationIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.799,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamLegacyConfigurationIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamManagementCommandIntegrationTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 12.958,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamManagementCommandIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamManagementCommandRestartHttpIntegrationTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 2.04,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamManagementCommandRestartHttpIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamMemberDirectoryIntegrationTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 2.284,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamMemberDirectoryIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamMergeMigrationTest",
+        "tests": 1,
+        "failures": 1,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.196,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamMergeMigrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamOwnershipTransferIntegrationTest",
+        "tests": 11,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 9.213,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamOwnershipTransferIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamSharedInterviewAccessIntegrationTest",
+        "tests": 15,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 4.388,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamSharedInterviewAccessIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamTaskLibraryIntegrationTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.887,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamTaskLibraryIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamTaskSetIntegrationTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.139,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamTaskSetIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamTrackVacancyIntegrationTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.519,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamTrackVacancyIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamWorkspaceDefaultConfigurationIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.899,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamWorkspaceDefaultConfigurationIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamWorkspaceLegacyConfigurationIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.853,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamWorkspaceLegacyConfigurationIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.UserPresetLifecycleIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.812,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.controller.UserPresetLifecycleIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.migration.TeamSchemaMigrationIntegrationTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.758,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.migration.TeamSchemaMigrationIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.service.ClientIpResolverTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.006,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.service.ClientIpResolverTest.xml"
+      },
+      {
+        "name": "com.interviewonline.service.CollaborationServiceYjsRelayPolicyTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.0,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.service.CollaborationServiceYjsRelayPolicyTest.xml"
+      },
+      {
+        "name": "com.interviewonline.service.HostNotesStorageCompatibilityTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.005,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.service.HostNotesStorageCompatibilityTest.xml"
+      },
+      {
+        "name": "com.interviewonline.service.HrWorkbookCleanupTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.145,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.service.HrWorkbookCleanupTest.xml"
+      },
+      {
+        "name": "com.interviewonline.service.RealtimeConnectionLifecycleDiagnosticsIntegrationTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.806,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.service.RealtimeConnectionLifecycleDiagnosticsIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.service.RealtimeConnectionLifecycleIntegrationTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 7.072,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.service.RealtimeConnectionLifecycleIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.service.RoomAccessServiceTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.274,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.service.RoomAccessServiceTest.xml"
+      },
+      {
+        "name": "com.interviewonline.service.RoomRealtimeActivityLoadIntegrationTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.597,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.service.RoomRealtimeActivityLoadIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.service.RoomRealtimeLifecycleDiagnosticsTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.264,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.service.RoomRealtimeLifecycleDiagnosticsTest.xml"
+      },
+      {
+        "name": "com.interviewonline.service.RoomStreamAdmissionSendBoundaryIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.555,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-regression-20261030-33x1c78y/backend/target/surefire-reports/TEST-com.interviewonline.service.RoomStreamAdmissionSendBoundaryIntegrationTest.xml"
+      }
+    ],
+    "isolation": {
+      "source_changes_since_snapshot": [],
+      "postgres_schemas_migrated": 52,
+      "remaining_run_schemas": []
+    },
+    "head_baseline": {
+      "source": "616112b50dfec154a29a6b4ee3723e4e28a158b4",
+      "metadata": {
+        "command": [
+          "mvn",
+          "-Dtest=TeamMergeMigrationTest",
+          "test"
+        ],
+        "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-head-baseline-20261030-r6a5kj9s/backend",
+        "java_home": "/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home",
+        "scratch_database": "interview_hr_1788631751397",
+        "removed_environment_keys": [],
+        "started_utc": "2026-10-30T09:24:38Z",
+        "exit_code": 1,
+        "duration_seconds": 26.382,
+        "finished_utc": "2026-10-30T09:25:04Z"
+      },
+      "totals": {
+        "tests": 1,
+        "failures": 1,
+        "errors": 0,
+        "skipped": 0
+      },
+      "same_failure": "TeamMergeMigrationTest.kt:63 expected 33 actual 34",
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-head-baseline-20261030-r6a5kj9s/maven-head-baseline.log",
+      "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-head-baseline-20261030-r6a5kj9s/backend/target/surefire-reports/com.interviewonline.controller.TeamMergeMigrationTest.txt",
+      "migrated_schemas": [
+        "team_merge_upgrade_77d66dd0abc944b69abf1d28e55954ea"
+      ],
+      "remaining_schemas": []
+    },
+    "finding": {
+      "classification": "pre-existing on exact HEAD",
+      "file": "backend/src/test/kotlin/com/interviewonline/controller/TeamMergeMigrationTest.kt",
+      "line": 63,
+      "description": "Final Flyway version assertion expects33 while committed V34__social_auth.sql advances schema to34. Table/data preservation assertions before this line passed.",
+      "production_changes_made_during_regression": false,
+      "tests_changed_or_skipped": false
+    },
+    "log_limitations": [
+      "Closed Spring test contexts leave existing background task attempts against closed Hikari pools; these produce log exceptions but not additional Surefire failures. No lifecycle fix included.",
+      "mvn test compiles production and tests and exercises startup inside test harness; it does not verify production deployment topology or user active room."
+    ]
+  },
+  "frontend": {
+    "unit": {
+      "exit": 1,
+      "seconds": 1.983,
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-frontend-full-vbnwdi5q/logs/unit.log",
+      "command": [
+        "/Users/romanzheltov/.nvm/versions/node/v24.19.0/bin/node",
+        "--experimental-strip-types",
+        "--test",
+        "--test-concurrency=1",
+        "tests/unit/activityRetry.test.ts",
+        "tests/unit/activityTimeline.test.ts",
+        "tests/unit/apiErrorFeedback.test.ts",
+        "tests/unit/candidateActivityHistory.test.ts",
+        "tests/unit/exportDownloads.test.ts",
+        "tests/unit/hiringManagerPreviewCopy.test.ts",
+        "tests/unit/hiringManagerProductCopy.test.ts",
+        "tests/unit/libraryTransfer.test.ts",
+        "tests/unit/markdownDraftRecovery.test.ts",
+        "tests/unit/markdownWorkerClient.test.ts",
+        "tests/unit/roomChatDelivery.test.ts",
+        "tests/unit/roomContextPanelLayout.test.ts",
+        "tests/unit/roomEditPolicy.test.ts",
+        "tests/unit/roomRealtimeTransport.test.ts",
+        "tests/unit/teamInvitationMutationPolicy.test.ts",
+        "tests/unit/teamManagementIntent.test.ts",
+        "tests/unit/themeTokens.test.ts"
+      ],
+      "tests": 89,
+      "pass": 88,
+      "fail": 1,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0,
+      "baseline_failure": {
+        "file": "tests/unit/hiringManagerPreviewCopy.test.ts",
+        "assertion_line": 21,
+        "reason": "Old source-text contract expects singular Нанимающий and former inline-picker implementation inside CreateRoomSection; current HEAD uses shared HiringManagerPicker.",
+        "exact_HEAD_reproduction": {
+          "tests": 1,
+          "pass": 0,
+          "fail": 1,
+          "exit": 1,
+          "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-frontend-full-vbnwdi5q/logs/head-hiring-copy-baseline.log"
+        }
+      }
+    },
+    "typecheck": {
+      "exit": 0,
+      "seconds": 3.058,
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-frontend-full-vbnwdi5q/logs/typecheck.log",
+      "command": [
+        "/Users/romanzheltov/.nvm/versions/node/v24.19.0/bin/node",
+        "node_modules/typescript/bin/tsc",
+        "--noEmit"
+      ]
+    },
+    "contract": {
+      "exit": 1,
+      "seconds": 25.374,
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-frontend-full-vbnwdi5q/logs/contract.log",
+      "command": [
+        "/Users/romanzheltov/.nvm/versions/node/v24.19.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "tests/contract/analytics-contract.test.mjs",
+        "tests/contract/devLogPrivacy.test.mjs",
+        "tests/contract/devServerSecurity.test.mjs",
+        "tests/contract/e2e-fixture-safety.test.mjs",
+        "tests/contract/e2e-owned-runtime.test.mjs",
+        "tests/contract/markdown-worker-browser.test.mjs",
+        "tests/contract/roomRealtimeTransportWiring.test.mjs",
+        "tests/contract/teamInvitationSecretLifecycle.test.mjs"
+      ],
+      "tests": 44,
+      "pass": 43,
+      "fail": 1,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0,
+      "files": {
+        "analytics-contract.test.mjs": {
+          "tests": 2,
+          "pass": 2,
+          "fail": 0
+        },
+        "devLogPrivacy.test.mjs": {
+          "tests": 6,
+          "pass": 6,
+          "fail": 0
+        },
+        "devServerSecurity.test.mjs": {
+          "tests": 8,
+          "pass": 8,
+          "fail": 0
+        },
+        "e2e-fixture-safety.test.mjs": {
+          "tests": 10,
+          "pass": 9,
+          "fail": 1
+        },
+        "e2e-owned-runtime.test.mjs": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0
+        },
+        "markdown-worker-browser.test.mjs": {
+          "tests": 9,
+          "pass": 9,
+          "fail": 0
+        },
+        "roomRealtimeTransportWiring.test.mjs": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0
+        },
+        "teamInvitationSecretLifecycle.test.mjs": {
+          "tests": 5,
+          "pass": 5,
+          "fail": 0
+        }
+      },
+      "baseline_failure": {
+        "file": "tests/contract/e2e-fixture-safety.test.mjs",
+        "assertion_line": 184,
+        "reason": "Requires guard on first physical line; social-login suite has two comments followed by existing guard import on line3 in exactHEAD and current source.",
+        "exact_HEAD_reproduction": {
+          "tests": 10,
+          "pass": 9,
+          "fail": 1,
+          "exit": 1,
+          "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-frontend-full-vbnwdi5q/logs/head-fixture-safety-baseline.log"
+        }
+      }
+    },
+    "native-contract": {
+      "exit": 0,
+      "seconds": 0.144,
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-frontend-full-vbnwdi5q/logs/native-contract.log",
+      "command": [
+        "/Users/romanzheltov/.nvm/versions/node/v24.19.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "tests/e2e/native-ax/native-ax-admission-contract.test.mjs",
+        "tests/e2e/native-ax/native-ax-bootstrap-contract.test.mjs",
+        "tests/e2e/native-ax/native-ax-receipt-contract.test.mjs"
+      ],
+      "tests": 14,
+      "pass": 14,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "browser": {
+      "exit": 0,
+      "seconds": 42.09,
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-frontend-full-vbnwdi5q/logs/browser.log",
+      "command": [
+        "/Users/romanzheltov/.nvm/versions/node/v24.19.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "tests/browser/managerYjsRecovery.test.mjs",
+        "tests/browser/workspaceCreationAndSelectors.test.mjs"
+      ],
+      "tests": 20,
+      "pass": 20,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0,
+      "files": {
+        "managerYjsRecovery.test.mjs": {
+          "tests": 11,
+          "pass": 11,
+          "fail": 0
+        },
+        "workspaceCreationAndSelectors.test.mjs": {
+          "tests": 9,
+          "pass": 9,
+          "fail": 0
+        }
+      }
+    },
+    "production-build": {
+      "exit": 0,
+      "seconds": 5.986,
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-frontend-full-vbnwdi5q/logs/production-build.log",
+      "command": [
+        "/Users/romanzheltov/.nvm/versions/node/v24.19.0/bin/node",
+        "/Users/romanzheltov/.nvm/versions/node/v24.19.0/lib/node_modules/npm/bin/npm-cli.js",
+        "run",
+        "build"
+      ]
+    },
+    "native-swift": {
+      "exit": 0,
+      "seconds": 11.343,
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-frontend-full-vbnwdi5q/logs/native-swift.log",
+      "command": [
+        "swift",
+        "test",
+        "--package-path",
+        "tests/e2e/native-ax"
+      ],
+      "tests": 14,
+      "fail": 0,
+      "pass_count": 14
+    }
+  },
+  "scripts": {
+    "tests": 37,
+    "pass": 37,
+    "fail": 0,
+    "log": "/tmp/interhub-full-regression-scripts-20261030.log"
+  },
+  "initialE2E": {
+    "mode": "production",
+    "files": 111,
+    "passedFiles": 91,
+    "nonzeroFiles": 20,
+    "rawNodeCounts": {
+      "tests": 587,
+      "pass": 513,
+      "fail": 72,
+      "cancelled": 1,
+      "skipped": 1,
+      "todo": 0
+    },
+    "run": {
+      "startedAt": "2026-10-30T09:22:46.940755+00:00",
+      "node": "/Users/romanzheltov/.nvm/versions/node/v24.19.0/bin/node",
+      "suites": 111,
+      "productionBuild": true,
+      "featureSocialAuth": false
+    },
+    "exit": {
+      "exitCode": 1,
+      "finishedAt": "2026-10-30T10:00:43.071414+00:00"
+    },
+    "suites": [
+      {
+        "suite": "tests/e2e/account/e2e-account-room-binding.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:23:30.820Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/account/e2e-account-switch-fresh-data.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:23:33.647Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/account/e2e-auth-navigation.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:23:34.529Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/account/e2e-auth-registration-policy.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:23:35.391Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/account/e2e-candidate-modal-smoke.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:23:37.006Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/account/e2e-interviewer-role-notes-lock.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:23:39.007Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/account/e2e-login-profile-hydration.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:23:45.030Z",
+        "counts": {
+          "tests": 10,
+          "pass": 10,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/account/e2e-participants-presence.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:23:48.454Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/account/e2e-personal-hiring-manager.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:23:58.431Z",
+        "counts": {
+          "tests": 4,
+          "pass": 4,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/account/e2e-personal-interview-cards.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:24:04.849Z",
+        "counts": {
+          "tests": 7,
+          "pass": 7,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/account/e2e-personal-team-scope.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:24:15.591Z",
+        "counts": {
+          "tests": 9,
+          "pass": 9,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/account/e2e-profile-room-action-notifications.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:24:23.784Z",
+        "counts": {
+          "tests": 7,
+          "pass": 7,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/account/e2e-social-login-disabled.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:24:25.547Z",
+        "counts": {
+          "tests": 2,
+          "pass": 2,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/auth/e2e-invite-token-negative.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:24:29.106Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/authoring/e2e-markdown-explainer-smoke.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:24:30.629Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/authoring/e2e-pdf-export-progress.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:24:37.457Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/authoring/e2e-personal-library-language-metadata.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:24:41.309Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/authoring/e2e-plaintext-language.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:24:43.673Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/authoring/e2e-private-notes-slash-export.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:24:45.431Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/authoring/e2e-room-notes-download.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:24:46.904Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/authoring/e2e-task-create-language-default.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:24:48.109Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/chaos/e2e-chaos-fault-injection.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:24:52.050Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/chaos/e2e-chaos-harness.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:24:55.840Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/dashboard/e2e-admin-users-pagination.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:25:01.949Z",
+        "counts": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/dashboard/e2e-dashboard-action-notifications.mjs",
+        "exitCode": 1,
+        "finishedAt": "2026-10-30T09:25:33.498Z",
+        "counts": {
+          "tests": 3,
+          "pass": 0,
+          "fail": 3,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": [
+          "legacy profile save announces one top popup only after confirmation and returns focus",
+          "legacy hiring capability callback has one popup and no saved label in the profile",
+          "a legacy profile response cannot announce success after navigation unmounts its owner"
+        ]
+      },
+      {
+        "suite": "tests/e2e/dashboard/e2e-dashboard-redesign.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:25:35.129Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/dashboard/e2e-dashboard-smoke.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:25:36.260Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/hr/e2e-hr-cabinet.mjs",
+        "exitCode": 1,
+        "finishedAt": "2026-10-30T09:26:37.688Z",
+        "counts": {
+          "tests": 33,
+          "pass": 32,
+          "fail": 1,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": [
+          "room creation waits for pending verification and excludes a failed hiring-manager lookup"
+        ]
+      },
+      {
+        "suite": "tests/e2e/interview/e2e-activity-history-recovery.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:27:43.555Z",
+        "counts": {
+          "tests": 10,
+          "pass": 10,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/interview/e2e-activity-timeline-grouping.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:27:58.680Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/interview/e2e-briefing-focus-mode.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:28:01.837Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/interview/e2e-demo-interview-scenario.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:28:20.525Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/interview/e2e-interviewer-step-publication.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:28:27.371Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/interview/e2e-join-race-sync.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:28:32.720Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/interview/e2e-multi-participant-activity.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:29:15.446Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/interview/e2e-room-command-editor-ux.mjs",
+        "exitCode": 1,
+        "finishedAt": "2026-10-30T09:29:30.401Z",
+        "counts": {
+          "tests": 6,
+          "pass": 5,
+          "fail": 1,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": [
+          "participant hiring assignment confirms once at the top after the server response"
+        ]
+      },
+      {
+        "suite": "tests/e2e/interview/e2e-room-condition-layout.mjs",
+        "exitCode": 1,
+        "finishedAt": "2026-10-30T09:29:42.528Z",
+        "counts": {
+          "tests": 9,
+          "pass": 8,
+          "fail": 1,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": [
+          "condition title and tools have clear insets and compact source stays usable through its local scroll"
+        ]
+      },
+      {
+        "suite": "tests/e2e/interview/e2e-room-context-panels.mjs",
+        "exitCode": 1,
+        "finishedAt": "2026-10-30T09:29:53.899Z",
+        "counts": {
+          "tests": 19,
+          "pass": 7,
+          "fail": 12,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": [
+          "personal owner, assigned interviewer and guest manager receive four direct auxiliary surfaces and a persistent condition",
+          "keyboard-only navigation activates all four direct auxiliary room surfaces",
+          "focus mode keeps auxiliary surfaces reachable without restoring the editor tab",
+          "manager status row keeps candidate state without redundant published or local-step labels",
+          "owner and assigned interviewer select locally and publish only through the explicit action",
+          "twenty panel/reflow transitions preserve one editor, room session, drafts, selection, scroll and focus without mutations",
+          "desktop/tablet viewport and zoom-equivalent matrix keeps honest automatic Focus/Work geometry",
+          "usable container geometry, automatic panels and focus transfer stay truthful",
+          "automatic Work Focus Work reflow preserves active chat and readable geometry",
+          "remediation: editor is a direct Focus region and local splitters resize without room side effects",
+          "remediation: splitters follow pointer direction and remain inside content-box bounds",
+          "remediation: room layout values reset when only the invite code changes"
+        ]
+      },
+      {
+        "suite": "tests/e2e/interview/e2e-room-language-behavior-api.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:29:54.189Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/interview/e2e-room-panel-continuity.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:30:15.646Z",
+        "counts": {
+          "tests": 4,
+          "pass": 4,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/interview/e2e-room-review-regressions.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:30:18.264Z",
+        "counts": {
+          "tests": 4,
+          "pass": 4,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/interview/e2e-room-shared-mode.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:30:30.629Z",
+        "counts": {
+          "tests": 4,
+          "pass": 4,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/interview/e2e-room-step-smoke.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:30:33.455Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/interview/e2e-smoke.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:30:34.726Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/platform/e2e-fixture-lifecycle.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:30:35.404Z",
+        "counts": {
+          "tests": 2,
+          "pass": 2,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/platform/e2e-legacy-domain-notice.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:30:36.049Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/platform/e2e-local-runtime-chunk-recovery.mjs",
+        "exitCode": 1,
+        "finishedAt": "2026-10-30T09:30:51.801Z",
+        "counts": {
+          "tests": 1,
+          "pass": 0,
+          "fail": 1,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": [
+          "tests/e2e/platform/e2e-local-runtime-chunk-recovery.mjs"
+        ]
+      },
+      {
+        "suite": "tests/e2e/platform/e2e-metrika-hosts.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:30:54.955Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/realtime/e2e-code-sync-regression.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:30:57.112Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/realtime/e2e-cursor-no-dot.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:30:59.091Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/realtime/e2e-finished-actions.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:31:04.482Z",
+        "counts": {
+          "tests": 4,
+          "pass": 4,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/realtime/e2e-finished-role-access.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:31:14.552Z",
+        "counts": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/realtime/e2e-five-participant-collaboration.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:31:19.415Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/realtime/e2e-hidden-tab-sync.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:31:32.241Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/realtime/e2e-late-published-manager-workspace-event.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:31:32.420Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/realtime/e2e-manager-workspace-integrity.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:32:15.003Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/realtime/e2e-markdown-delivery-reliability.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:32:46.907Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/realtime/e2e-missing-room-sse-recovery.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:32:53.040Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/realtime/e2e-public-step-publication-preserves-edits.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:33:00.311Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/realtime/e2e-queued-notes-finish.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:33:09.182Z",
+        "counts": {
+          "tests": 4,
+          "pass": 4,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/realtime/e2e-realtime-authorization-recovery.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:33:11.080Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/realtime/e2e-refresh-server-source-sync.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:33:13.070Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/realtime/e2e-room-lifecycle-editing.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:33:52.276Z",
+        "counts": {
+          "tests": 10,
+          "pass": 10,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/realtime/e2e-slow-network-sync.mjs",
+        "exitCode": 1,
+        "finishedAt": "2026-10-30T09:35:02.367Z",
+        "counts": {
+          "tests": 1,
+          "pass": 0,
+          "fail": 1,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": [
+          "tests/e2e/realtime/e2e-slow-network-sync.mjs"
+        ]
+      },
+      {
+        "suite": "tests/e2e/realtime/e2e-sse-reconnect-sync.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:35:12.282Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/realtime/e2e-yjs-abc-refresh-join-api.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:35:12.538Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/realtime/e2e-yjs-delivery-reliability.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:35:24.045Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/realtime/e2e-yjs-multi-participant-sync.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:35:55.728Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/realtime/e2e-yjs-queue-boundaries.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:35:58.444Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/realtime/e2e-yjs-refresh-stale-snapshot-api.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:35:58.689Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/teams/e2e-team-action-notifications.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:36:08.188Z",
+        "counts": {
+          "tests": 16,
+          "pass": 16,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/teams/e2e-team-availability.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:36:11.752Z",
+        "counts": {
+          "tests": 5,
+          "pass": 5,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/teams/e2e-team-interview-edit.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:36:33.400Z",
+        "counts": {
+          "tests": 14,
+          "pass": 14,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/teams/e2e-team-invitation-management.mjs",
+        "exitCode": 1,
+        "finishedAt": "2026-10-30T09:38:32.097Z",
+        "counts": {
+          "tests": 15,
+          "pass": 2,
+          "fail": 12,
+          "cancelled": 0,
+          "skipped": 1,
+          "todo": 0
+        },
+        "failedCases": [
+          "AC-03 management: OWNER recovers lost create metadata with the same key, then explicitly reissues",
+          "AC-03 management: committed reissue response recovers the same replacement without a second mutation",
+          "AC-03 management: committed revoke response replays the same revoked outcome",
+          "AC-03 management: committed accept response replays the same key and creates one membership",
+          "P0.1 management: OWNER and ADMIN actions and MEMBER boundary use current themes and settings",
+          "AC-03 management: copy failure allows retry, success preserves the view, while revoke/team/account changes clear it",
+          "P0.1 continuity: copy and reload automatically restore the same active link without browser persistence",
+          "P0.1 continuity: manual rotations retain one invitation ID and invalidate both earlier tokens",
+          "P0.1 continuity: team switch and logout remove the old transient view; returning authorizes the same link",
+          "AC-06 participant roster: accepted second account is visible to owner and sees its own safe roster without invitation controls",
+          "BUG-AC03-QA-001: invitation management remains keyboard-operable at 1280x720 → 640x360",
+          "BUG-AC03-QA-002: invitation management remains keyboard-operable at 768x1024 → 384x512"
+        ]
+      },
+      {
+        "suite": "tests/e2e/teams/e2e-team-management-settings.mjs",
+        "exitCode": 1,
+        "finishedAt": "2026-10-30T09:38:57.503Z",
+        "counts": {
+          "tests": 23,
+          "pass": 22,
+          "fail": 1,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": [
+          "P1 settings: transfer needs a named confirmation and restores keyboard focus without an optimistic owner claim"
+        ]
+      },
+      {
+        "suite": "tests/e2e/teams/e2e-team-membership.mjs",
+        "exitCode": 1,
+        "finishedAt": "2026-10-30T09:39:20.789Z",
+        "counts": {
+          "tests": 8,
+          "pass": 6,
+          "fail": 2,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": [
+          "AC-03: unauthenticated invitation returns through login and does not leave its secret in URL or session after cancellation",
+          "AC-03: accept preserves one scoped intent across network, 429, 503, 401 and a committed response loss"
+        ]
+      },
+      {
+        "suite": "tests/e2e/teams/e2e-team-room-public-access.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:39:23.029Z",
+        "counts": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/teams/e2e-team-settings-roster.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:39:30.667Z",
+        "counts": {
+          "tests": 14,
+          "pass": 14,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/teams/e2e-team-settings-typography.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:39:31.729Z",
+        "counts": {
+          "tests": 2,
+          "pass": 2,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/teams/e2e-team-workspace-business.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:39:43.505Z",
+        "counts": {
+          "tests": 13,
+          "pass": 13,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/teams/e2e-team-workspaces.mjs",
+        "exitCode": 1,
+        "finishedAt": "2026-10-30T09:40:55.570Z",
+        "counts": {
+          "tests": 49,
+          "pass": 48,
+          "fail": 1,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": [
+          "team interview does not auto-add itself to the personal hiring cabinet"
+        ]
+      },
+      {
+        "suite": "tests/e2e/teams/e2e-ui2-followup-workspace.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:40:58.272Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/teams/e2e-ui2-team.mjs",
+        "exitCode": 1,
+        "finishedAt": "2026-10-30T09:41:30.191Z",
+        "counts": {
+          "tests": 1,
+          "pass": 0,
+          "fail": 1,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": [
+          "tests/e2e/teams/e2e-ui2-team.mjs"
+        ]
+      },
+      {
+        "suite": "tests/e2e/teams/e2e-workspace-navigation.mjs",
+        "exitCode": 1,
+        "finishedAt": "2026-10-30T09:46:11.419Z",
+        "counts": {
+          "tests": 109,
+          "pass": 80,
+          "fail": 29,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": [
+          "personal HR opt-in exposes candidates as a work section, not profile content",
+          "profile is a standalone account settings route",
+          "failed personal interview creation keeps scope and draft and creates no room",
+          "create form layout 1440x900 at 100% zoom",
+          "create form layout 1440x900 at 125% zoom",
+          "create form layout 1440x900 at 150% zoom",
+          "create form layout 1440x900 at 200% zoom",
+          "create form layout 768x1024 at 100% zoom",
+          "create form layout 768x1024 at 125% zoom",
+          "create form layout 768x1024 at 150% zoom",
+          "create form layout 768x1024 at 200% zoom",
+          "create form layout 1024x600 at 100% zoom",
+          "create form layout 1024x600 at 125% zoom",
+          "create form layout 1024x600 at 150% zoom",
+          "create form layout 1024x600 at 200% zoom",
+          "create form layout 1024x768 at 100% zoom",
+          "create form layout 1024x768 at 125% zoom",
+          "create form layout 1024x768 at 150% zoom",
+          "create form layout 1024x768 at 200% zoom",
+          "create form layout 1280x720 at 100% zoom",
+          "create form layout 1280x720 at 125% zoom",
+          "create form layout 1280x720 at 150% zoom",
+          "create form layout 1280x720 at 200% zoom",
+          "create form layout 1366x768 at 100% zoom",
+          "create form layout 1366x768 at 125% zoom",
+          "create form layout 1366x768 at 150% zoom",
+          "create form layout 1366x768 at 200% zoom",
+          "remediation-2 identity fence: delayed profile PATCH from account A cannot alter account B",
+          "remediation: unified interview cards expose context date status tasks and primary action"
+        ]
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-card-spacing.mjs",
+        "exitCode": 1,
+        "finishedAt": "2026-10-30T09:46:24.770Z",
+        "counts": {
+          "tests": 4,
+          "pass": 3,
+          "fail": 1,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": [
+          "personal interview title, candidate, date and actions retain distinct padded table cells"
+        ]
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-header-ux-review.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:46:30.349Z",
+        "counts": {
+          "tests": 8,
+          "pass": 8,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-header-workspace-selector.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:46:35.862Z",
+        "counts": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-hiring-manager-selector.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:46:55.791Z",
+        "counts": {
+          "tests": 6,
+          "pass": 6,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-hiring-preparation.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:47:02.457Z",
+        "counts": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-interactive-cursors.mjs",
+        "exitCode": 1,
+        "finishedAt": "2026-10-30T09:47:12.828Z",
+        "counts": {
+          "tests": 4,
+          "pass": 3,
+          "fail": 1,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": [
+          "native period and interview calendars have a pointer while ordinary typing fields stay text"
+        ]
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-interhub-branding.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:47:14.376Z",
+        "counts": {
+          "tests": 4,
+          "pass": 4,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-library-delete-only.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:47:22.167Z",
+        "counts": {
+          "tests": 6,
+          "pass": 6,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-library-metadata-placement.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:47:27.204Z",
+        "counts": {
+          "tests": 5,
+          "pass": 5,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-personal-authoring-polish.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:47:32.509Z",
+        "counts": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-profile-header-preparation.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:47:35.335Z",
+        "counts": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-rename-alignment.mjs",
+        "exitCode": 1,
+        "finishedAt": "2026-10-30T09:48:06.969Z",
+        "counts": {
+          "tests": 1,
+          "pass": 0,
+          "fail": 1,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": [
+          "tests/e2e/theme/e2e-rename-alignment.mjs"
+        ]
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-room-authoring-geometry.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:48:15.164Z",
+        "counts": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-selector-overflow.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:48:22.975Z",
+        "counts": {
+          "tests": 4,
+          "pass": 4,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-system-theme.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:48:26.940Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-theme-switch.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:48:30.726Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-track-vacancy-hierarchy.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:48:33.032Z",
+        "counts": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-ui2-controls.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:48:35.793Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-ui2-delete-actions.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:48:47.576Z",
+        "counts": {
+          "tests": 5,
+          "pass": 5,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-ui2-followup.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:48:53.661Z",
+        "counts": {
+          "tests": 4,
+          "pass": 4,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-ui2-hiring-clarity.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:49:00.642Z",
+        "counts": {
+          "tests": 6,
+          "pass": 6,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-ui2-layout-followup.mjs",
+        "exitCode": 1,
+        "finishedAt": "2026-10-30T09:49:40.134Z",
+        "counts": {
+          "tests": 9,
+          "pass": 8,
+          "fail": 1,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": [
+          "empty interview and archived track or vacancy title pairs have readable separated lines"
+        ]
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-ui2-period-room-edit.mjs",
+        "exitCode": 1,
+        "finishedAt": "2026-10-30T09:50:31.169Z",
+        "counts": {
+          "tests": 7,
+          "pass": 6,
+          "fail": 1,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": [
+          "personal interview list edits applicable candidate and team hiring data without entering the room"
+        ]
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-ui2-personal.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:50:37.791Z",
+        "counts": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-ui2-room.mjs",
+        "exitCode": 0,
+        "finishedAt": "2026-10-30T09:50:40.276Z",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": []
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-workspace-burger-frames.mjs",
+        "exitCode": 1,
+        "finishedAt": "2026-10-30T09:57:57.598Z",
+        "counts": {
+          "tests": 9,
+          "pass": 8,
+          "fail": 0,
+          "cancelled": 1,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": [
+          "first lazy team chunk preserves the visible source header until the destination can render"
+        ]
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-workspace-switch-stability.mjs",
+        "exitCode": 1,
+        "finishedAt": "2026-10-30T10:00:40.105Z",
+        "counts": {
+          "tests": 1,
+          "pass": 0,
+          "fail": 1,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "failedCases": [
+          "tests/e2e/theme/e2e-workspace-switch-stability.mjs"
+        ]
+      }
+    ],
+    "harnessCorrections": [
+      {
+        "suite": "tests/e2e/theme/e2e-workspace-burger-frames.mjs",
+        "reason": "Development named TeamWorkspacePage chunk matcher cannot match numeric production assets; test timeout300000ms observed, owned worker kept browser open",
+        "action": "terminate owned timed-out Node test worker78224; rerun development mode",
+        "at": "2026-10-30T09:57:57.532155+00:00"
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-workspace-switch-stability.mjs",
+        "reason": "Same development named TeamWorkspacePage chunk gate; production cannot emit that filename",
+        "action": "abort incompatible production-mode worker80318; execute full suite in development mode",
+        "at": "2026-10-30T09:58:18.924483+00:00",
+        "followUp": "SIGTERM left the unresolved chunk gate active; force-stop owned worker80318 after grace period; full development rerun7/7 passed"
+      }
+    ],
+    "cleanup": {
+      "schemasObserved": [
+        "interhub_e2e_cac4cc4067ad4e6fb977d452b56d5ea2"
+      ],
+      "remainingSchemas": [],
+      "runnerExited": true
+    }
+  },
+  "baselineClassifications": {
+    "head": "616112b50dfec154a29a6b4ee3723e4e28a158b4",
+    "mode": "production",
+    "node": "24.19.0",
+    "socialAuthEnabled": false,
+    "runs": [
+      "run-result.json",
+      "run-result-2.json",
+      "run-result-3.json",
+      "run-result-4.json"
+    ],
+    "suites": [
+      {
+        "suite": "tests/e2e/dashboard/e2e-dashboard-action-notifications.mjs",
+        "classification": "pre-existing-runtime-verified",
+        "head": {
+          "pass": 0,
+          "fail": 3
+        },
+        "current": {
+          "pass": 0,
+          "fail": 3
+        },
+        "cause": "Fixture expects legacy DashboardPage profile controls at /dashboard/admin, but this path routes to AdminPage in HEAD and current. Failure is before tested actions.",
+        "references": [
+          "frontend/tests/e2e/dashboard/e2e-dashboard-action-notifications.mjs:35",
+          "frontend/src/app/App.tsx:160"
+        ]
+      },
+      {
+        "suite": "tests/e2e/hr/e2e-hr-cabinet.mjs",
+        "classification": "pre-existing-runtime-verified",
+        "head": {
+          "pass": 32,
+          "fail": 1
+        },
+        "current": {
+          "pass": 32,
+          "fail": 1
+        },
+        "cause": "Same pending-preview failure scenario has no observed team interview POST after pressing Create. Root cause beyond request timeout not isolated; do not label merely flaky.",
+        "references": [
+          "frontend/tests/e2e/hr/e2e-hr-cabinet.mjs:465"
+        ]
+      },
+      {
+        "suite": "tests/e2e/interview/e2e-room-command-editor-ux.mjs",
+        "classification": "pre-existing-runtime-verified",
+        "head": {
+          "pass": 5,
+          "fail": 1
+        },
+        "current": {
+          "pass": 5,
+          "fail": 1
+        },
+        "cause": "Personal-room fixture expects a team-only hiring assignment menu.",
+        "references": [
+          "frontend/tests/e2e/interview/e2e-room-command-editor-ux.mjs:20",
+          "frontend/tests/e2e/interview/e2e-room-command-editor-ux.mjs:202",
+          "frontend/src/features/room/TopBar.tsx:138"
+        ]
+      },
+      {
+        "suite": "tests/e2e/interview/e2e-room-condition-layout.mjs",
+        "classification": "new-iteration-regression-runtime-verified",
+        "head": {
+          "pass": 9,
+          "fail": 0
+        },
+        "current": {
+          "pass": 8,
+          "fail": 1
+        },
+        "cause": "After collapsing the condition region, Markdown source editor height is 50px at 1366x768 instead of required minimum60px. New counter row consumes vertical space.",
+        "references": [
+          "frontend/tests/e2e/interview/e2e-room-condition-layout.mjs:214",
+          "frontend/src/features/room/BriefingBoard.tsx:416",
+          "frontend/src/pages/RoomPage.module.css:1077"
+        ],
+        "resolution": {
+          "status": "fixed",
+          "evidence": "followUps.layoutFix"
+        }
+      },
+      {
+        "suite": "tests/e2e/interview/e2e-room-context-panels.mjs",
+        "classification": "pre-existing-runtime-verified-with-harness-limitations",
+        "head": {
+          "pass": 7,
+          "fail": 12
+        },
+        "current": {
+          "pass": 7,
+          "fail": 12
+        },
+        "cause": "Most cases stop at an obsolete exact chat audience string; one lifecycle test lacks E2E_REALTIME_LIFECYCLE_LOG. The twenty-transition HEAD case times out earlier waiting for Yjs acknowledgement, current reaches stale chat-copy assertion. These blockers prevent full downstream flow verification.",
+        "references": [
+          "frontend/tests/e2e/interview/e2e-room-context-panels.mjs:419",
+          "frontend/tests/e2e/interview/e2e-room-context-panels.mjs:250",
+          "frontend/tests/e2e/interview/e2e-room-context-panels.mjs:1247"
+        ]
+      },
+      {
+        "suite": "tests/e2e/platform/e2e-local-runtime-chunk-recovery.mjs",
+        "classification": "pre-existing-runtime-verified-production-fixture-mismatch",
+        "head": {
+          "pass": 0,
+          "fail": 1
+        },
+        "current": {
+          "pass": 0,
+          "fail": 1
+        },
+        "cause": "The simulated stale chunk intercept requires script URL to contain RoomPage. Production assets use numeric/hash names, so injection never occurs and test fails ROOM_CHUNK_WAS_NOT_REQUESTED.",
+        "references": [
+          "frontend/tests/e2e/platform/e2e-local-runtime-chunk-recovery.mjs:43"
+        ]
+      },
+      {
+        "suite": "tests/e2e/realtime/e2e-slow-network-sync.mjs",
+        "classification": "new-iteration-regression-reproduced-on-fresh-current-runtime",
+        "head": {
+          "pass": 1,
+          "fail": 0,
+          "exit": 0,
+          "runtimeSeconds": 84.396,
+          "scenario1": "watcher received marker after20s",
+          "scenario2": "watcher received marker2420ms after typing",
+          "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-head-e2e-baseline-f8uf04yu/baseline-e2e-3.log"
+        },
+        "currentFullRun": {
+          "pass": 0,
+          "fail": 1,
+          "cause": "Scenario1 watcher did not receive candidate marker within30s"
+        },
+        "currentFreshIsolated": {
+          "pass": 0,
+          "fail": 1,
+          "exit": 1,
+          "runtimeSeconds": 103.372,
+          "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-current-slow-isolated-mac0u_d4/current-slow.log"
+        },
+        "cause": "The additional independent10s awareness renewal was applied to public editors. Restricting it to private manager editors restores both slow-network scenarios while private awareness integrity and recovery11/11 remain passing.",
+        "references": [
+          "frontend/tests/e2e/realtime/e2e-slow-network-sync.mjs:263",
+          "frontend/src/features/room/RoomCodeEditor.tsx:375",
+          "backend/src/main/kotlin/com/interviewonline/service/CollaborationService.kt:2648",
+          "backend/src/main/kotlin/com/interviewonline/service/CollaborationService.kt:2730"
+        ],
+        "initialObservation": "Unresolved. New public-editor10sawareness renewal is a focused hypothesis. Current runtime also exhausted Hikari10-connection pool under injected3sper-broadcast latency. Separate current isolation reproduces failure, so accumulated original-run state is not required.",
+        "resolution": {
+          "status": "fixed",
+          "evidence": "followUps.privateAwarenessFix"
+        }
+      },
+      {
+        "suite": "tests/e2e/teams/e2e-workspace-navigation.mjs",
+        "classification": "five-pre-existing-failures-plus24-tests-out-of-sync-with-accepted-contract",
+        "currentFullRun": {
+          "tests": 109,
+          "pass": 80,
+          "fail": 29
+        },
+        "headTargeted": {
+          "tests": 29,
+          "pass": 24,
+          "fail": 5,
+          "patternsFile": "suites-4.json"
+        },
+        "cause": "24layout cases click an empty-title submit button. Current UI2AC26 intentionally disables empty/whitespace title and uses36pxordinarybuttons matchingTEAM, so old test actions/assertion need maintenance. The other5failing cases reproduce onHEAD: old candidate/profilecopy, immediate creation-error count, nickname exact-count fence and no-track labels onPERSONALcards.",
+        "limitations": "Fivebaseline cases remain untouched; nickname count differs HEAD2/current0 and blocks deeper identity assertions. Initialfullrun could not reach post-empty-click geometry, now24CURRENTmatrixcases verify that geometry after an intentional503.",
+        "references": [
+          "frontend/tests/e2e/teams/e2e-workspace-navigation.mjs:499",
+          "frontend/tests/e2e/teams/e2e-workspace-navigation.mjs:750",
+          "frontend/tests/e2e/teams/e2e-workspace-navigation.mjs:805",
+          "frontend/tests/e2e/teams/e2e-workspace-navigation.mjs:991",
+          "frontend/tests/e2e/teams/e2e-workspace-navigation.mjs:1505",
+          "frontend/tests/e2e/teams/e2e-workspace-navigation.mjs:1646",
+          "specs/features/ui-2-usability-theme-polish.md:431"
+        ],
+        "testContractMaintenance": {
+          "file": "frontend/tests/e2e/teams/e2e-workspace-navigation.mjs",
+          "scope": "assertCreationFormLayout helper only; no product edits or other5stale cases changed",
+          "currentFreshResult": {
+            "exit": 0,
+            "seconds": 46.249,
+            "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-current-create-layout-z7h66dl0/create-layout.log",
+            "tests": 24,
+            "pass": 24,
+            "fail": 0,
+            "skipped": 0,
+            "cancelled": 0,
+            "duration_ms": 15841.897583
+          },
+          "metadata": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-current-create-layout-z7h66dl0/metadata.json",
+          "behavior": "empty/whitespace disabled+zeroPOST; valid503 shows error and preserves all typed fields; retry remains enabled; keyboard/scroll/overlap/36pxTEAMsizedactions retained"
+        }
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-card-spacing.mjs",
+        "classification": "pre-existing-runtime-verified-obsolete-locator",
+        "currentFullRun": {
+          "pass": 3,
+          "fail": 1
+        },
+        "headTargeted": {
+          "pass": 0,
+          "fail": 1
+        },
+        "cause": "Personal interviews are cards/regions inHEADandcurrent; failedcase requires a tablerow. Candidate/date cell geometry in that case never runs.",
+        "references": [
+          "frontend/tests/e2e/theme/e2e-card-spacing.mjs:129"
+        ]
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-interactive-cursors.mjs",
+        "classification": "pre-existing-runtime-verified-obsolete-action-locator",
+        "currentFullRun": {
+          "pass": 3,
+          "fail": 1
+        },
+        "headTargeted": {
+          "pass": 0,
+          "fail": 1
+        },
+        "cause": "Failedcase selects removed separate Edit interview details action, whileHEADandcurrent use combined Edit interview action. Periodcalendar initial checks pass; interviewdatetime checks after selector are blocked.",
+        "references": [
+          "frontend/tests/e2e/theme/e2e-interactive-cursors.mjs:70"
+        ]
+      },
+      {
+        "suite": "tests/e2e/theme/e2e-rename-alignment.mjs",
+        "classification": "pre-existing-runtime-verified-obsolete-action-locator",
+        "currentFullRun": {
+          "pass": 0,
+          "fail": 1
+        },
+        "headTargeted": {
+          "pass": 0,
+          "fail": 1
+        },
+        "cause": "Top-level scenario stalls on old personal Rename interview button instead of combined Edit interview action, inHEADandcurrent. First6TEAMsurfaces are reached; remainingPERSONALanddarkmode surfaces are blocked, so no blanket alignment claim.",
+        "references": [
+          "frontend/tests/e2e/theme/e2e-rename-alignment.mjs:98"
+        ]
+      }
+    ],
+    "stage": "Initial source snapshot and baseline controls; final resolutions linked below"
+  },
+  "teamBaselineComparisons": {
+    "source": {
+      "git_head": "616112b50dfec154a29a6b4ee3723e4e28a158b4",
+      "source_command": [
+        "git",
+        "archive",
+        "--format=tar",
+        "HEAD",
+        "backend",
+        "frontend"
+      ]
+    },
+    "suite_results": [
+      {
+        "metadata": {
+          "command": [
+            "node",
+            "tests/e2e/run-isolated.mjs",
+            "tests/e2e/teams/e2e-team-invitation-management.mjs"
+          ],
+          "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-team-e2e-head-20261030-0t9w23hs/frontend",
+          "mode": "production",
+          "baseline_head": "616112b50dfec154a29a6b4ee3723e4e28a158b4",
+          "scratch_database": "interview_hr_1788631751397",
+          "started_utc": "2026-10-30T09:41:22Z",
+          "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-team-e2e-head-20261030-0t9w23hs/e2e-team-invitation-management.log",
+          "exit_code": 1,
+          "duration_seconds": 148.076,
+          "finished_utc": "2026-10-30T09:43:50Z"
+        },
+        "targeted_failed_case_only": false,
+        "totals": {
+          "tests": 15,
+          "pass": 2,
+          "fail": 12,
+          "skipped": 1,
+          "cancelled": 0
+        },
+        "failed_case_names": [
+          "AC-03 management: OWNER recovers lost create metadata with the same key, then explicitly reissues",
+          "AC-03 management: committed reissue response recovers the same replacement without a second mutation",
+          "AC-03 management: committed revoke response replays the same revoked outcome",
+          "AC-03 management: committed accept response replays the same key and creates one membership",
+          "P0.1 management: OWNER and ADMIN actions and MEMBER boundary use current themes and settings",
+          "AC-03 management: copy failure allows retry, success preserves the view, while revoke/team/account changes clear it",
+          "P0.1 continuity: copy and reload automatically restore the same active link without browser persistence",
+          "P0.1 continuity: manual rotations retain one invitation ID and invalidate both earlier tokens",
+          "P0.1 continuity: team switch and logout remove the old transient view; returning authorizes the same link",
+          "AC-06 participant roster: accepted second account is visible to owner and sees its own safe roster without invitation controls",
+          "BUG-AC03-QA-001: invitation management remains keyboard-operable at 1280x720 → 640x360",
+          "BUG-AC03-QA-002: invitation management remains keyboard-operable at 768x1024 → 384x512"
+        ],
+        "current_result": {
+          "result": {
+            "suite": "tests/e2e/teams/e2e-team-invitation-management.mjs",
+            "exitCode": 1,
+            "finishedAt": "2026-10-30T09:38:32.097Z"
+          },
+          "totals": {
+            "tests": 15,
+            "pass": 2,
+            "fail": 12,
+            "skipped": 1,
+            "cancelled": 0
+          },
+          "failed_case_names": [
+            "AC-03 management: OWNER recovers lost create metadata with the same key, then explicitly reissues",
+            "AC-03 management: committed reissue response recovers the same replacement without a second mutation",
+            "AC-03 management: committed revoke response replays the same revoked outcome",
+            "AC-03 management: committed accept response replays the same key and creates one membership",
+            "P0.1 management: OWNER and ADMIN actions and MEMBER boundary use current themes and settings",
+            "AC-03 management: copy failure allows retry, success preserves the view, while revoke/team/account changes clear it",
+            "P0.1 continuity: copy and reload automatically restore the same active link without browser persistence",
+            "P0.1 continuity: manual rotations retain one invitation ID and invalidate both earlier tokens",
+            "P0.1 continuity: team switch and logout remove the old transient view; returning authorizes the same link",
+            "AC-06 participant roster: accepted second account is visible to owner and sees its own safe roster without invitation controls",
+            "BUG-AC03-QA-001: invitation management remains keyboard-operable at 1280x720 → 640x360",
+            "BUG-AC03-QA-002: invitation management remains keyboard-operable at 768x1024 → 384x512"
+          ]
+        },
+        "same_counts_as_current": true,
+        "same_failed_cases_as_current": true
+      },
+      {
+        "metadata": {
+          "command": [
+            "node",
+            "tests/e2e/run-isolated.mjs",
+            "tests/e2e/teams/e2e-team-management-settings.mjs"
+          ],
+          "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-team-e2e-head-20261030-0t9w23hs/frontend",
+          "mode": "production",
+          "baseline_head": "616112b50dfec154a29a6b4ee3723e4e28a158b4",
+          "scratch_database": "interview_hr_1788631751397",
+          "started_utc": "2026-10-30T09:43:50Z",
+          "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-team-e2e-head-20261030-0t9w23hs/e2e-team-management-settings.log",
+          "exit_code": 1,
+          "duration_seconds": 60.888,
+          "finished_utc": "2026-10-30T09:44:51Z"
+        },
+        "targeted_failed_case_only": false,
+        "totals": {
+          "tests": 23,
+          "pass": 22,
+          "fail": 1,
+          "skipped": 0,
+          "cancelled": 0
+        },
+        "failed_case_names": [
+          "P1 settings: transfer needs a named confirmation and restores keyboard focus without an optimistic owner claim"
+        ],
+        "current_result": {
+          "result": {
+            "suite": "tests/e2e/teams/e2e-team-management-settings.mjs",
+            "exitCode": 1,
+            "finishedAt": "2026-10-30T09:38:57.503Z"
+          },
+          "totals": {
+            "tests": 23,
+            "pass": 22,
+            "fail": 1,
+            "skipped": 0,
+            "cancelled": 0
+          },
+          "failed_case_names": [
+            "P1 settings: transfer needs a named confirmation and restores keyboard focus without an optimistic owner claim"
+          ]
+        },
+        "same_counts_as_current": true,
+        "same_failed_cases_as_current": true
+      },
+      {
+        "metadata": {
+          "command": [
+            "node",
+            "tests/e2e/run-isolated.mjs",
+            "tests/e2e/teams/e2e-team-membership.mjs"
+          ],
+          "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-team-e2e-head-20261030-0t9w23hs/frontend",
+          "mode": "production",
+          "baseline_head": "616112b50dfec154a29a6b4ee3723e4e28a158b4",
+          "scratch_database": "interview_hr_1788631751397",
+          "started_utc": "2026-10-30T09:44:51Z",
+          "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-team-e2e-head-20261030-0t9w23hs/e2e-team-membership.log",
+          "exit_code": 1,
+          "duration_seconds": 53.675,
+          "finished_utc": "2026-10-30T09:45:44Z"
+        },
+        "targeted_failed_case_only": false,
+        "totals": {
+          "tests": 8,
+          "pass": 6,
+          "fail": 2,
+          "skipped": 0,
+          "cancelled": 0
+        },
+        "failed_case_names": [
+          "AC-03: unauthenticated invitation returns through login and does not leave its secret in URL or session after cancellation",
+          "AC-03: accept preserves one scoped intent across network, 429, 503, 401 and a committed response loss"
+        ],
+        "current_result": {
+          "result": {
+            "suite": "tests/e2e/teams/e2e-team-membership.mjs",
+            "exitCode": 1,
+            "finishedAt": "2026-10-30T09:39:20.789Z"
+          },
+          "totals": {
+            "tests": 8,
+            "pass": 6,
+            "fail": 2,
+            "skipped": 0,
+            "cancelled": 0
+          },
+          "failed_case_names": [
+            "AC-03: unauthenticated invitation returns through login and does not leave its secret in URL or session after cancellation",
+            "AC-03: accept preserves one scoped intent across network, 429, 503, 401 and a committed response loss"
+          ]
+        },
+        "same_counts_as_current": true,
+        "same_failed_cases_as_current": true
+      },
+      {
+        "metadata": {
+          "command": [
+            "node",
+            "tests/e2e/run-isolated.mjs",
+            "tests/e2e/teams/e2e-team-workspaces.mjs"
+          ],
+          "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-team-e2e-head-20261030-0t9w23hs/frontend",
+          "mode": "production",
+          "baseline_head": "616112b50dfec154a29a6b4ee3723e4e28a158b4",
+          "scratch_database": "interview_hr_1788631751397",
+          "started_utc": "2026-10-30T09:45:49Z",
+          "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-team-e2e-head-20261030-0t9w23hs/e2e-team-workspaces.log",
+          "exit_code": 1,
+          "duration_seconds": 103.643,
+          "finished_utc": "2026-10-30T09:47:32Z"
+        },
+        "targeted_failed_case_only": false,
+        "totals": {
+          "tests": 49,
+          "pass": 48,
+          "fail": 1,
+          "skipped": 0,
+          "cancelled": 0
+        },
+        "failed_case_names": [
+          "team interview does not auto-add itself to the personal hiring cabinet"
+        ],
+        "current_result": {
+          "result": {
+            "suite": "tests/e2e/teams/e2e-team-workspaces.mjs",
+            "exitCode": 1,
+            "finishedAt": "2026-10-30T09:40:55.570Z"
+          },
+          "totals": {
+            "tests": 49,
+            "pass": 48,
+            "fail": 1,
+            "skipped": 0,
+            "cancelled": 0
+          },
+          "failed_case_names": [
+            "team interview does not auto-add itself to the personal hiring cabinet"
+          ]
+        },
+        "same_counts_as_current": true,
+        "same_failed_cases_as_current": true
+      },
+      {
+        "metadata": {
+          "command": [
+            "node",
+            "tests/e2e/run-isolated.mjs",
+            "tests/e2e/theme/e2e-ui2-layout-followup.mjs"
+          ],
+          "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-team-e2e-head-20261030-0t9w23hs/frontend",
+          "mode": "production",
+          "baseline_head": "616112b50dfec154a29a6b4ee3723e4e28a158b4",
+          "scratch_database": "interview_hr_1788631751397",
+          "started_utc": "2026-10-30T09:53:34Z",
+          "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-team-e2e-head-20261030-0t9w23hs/e2e-ui2-layout-followup.log",
+          "test_name_pattern": "^empty interview and archived track or vacancy title pairs have readable separated lines$",
+          "exit_code": 1,
+          "duration_seconds": 59.153,
+          "finished_utc": "2026-10-30T09:54:33Z"
+        },
+        "targeted_failed_case_only": true,
+        "totals": {
+          "tests": 1,
+          "pass": 0,
+          "fail": 1,
+          "skipped": 0,
+          "cancelled": 0
+        },
+        "failed_case_names": [
+          "empty interview and archived track or vacancy title pairs have readable separated lines"
+        ],
+        "current_result": {
+          "result": {
+            "suite": "tests/e2e/theme/e2e-ui2-layout-followup.mjs",
+            "exitCode": 1,
+            "finishedAt": "2026-10-30T09:49:40.134Z"
+          },
+          "totals": {
+            "tests": 9,
+            "pass": 8,
+            "fail": 1,
+            "skipped": 0,
+            "cancelled": 0
+          },
+          "failed_case_names": [
+            "empty interview and archived track or vacancy title pairs have readable separated lines"
+          ]
+        },
+        "same_counts_as_current": false,
+        "same_failed_cases_as_current": true
+      },
+      {
+        "metadata": {
+          "command": [
+            "node",
+            "tests/e2e/run-isolated.mjs",
+            "tests/e2e/theme/e2e-ui2-period-room-edit.mjs"
+          ],
+          "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-team-e2e-head-20261030-0t9w23hs/frontend",
+          "mode": "production",
+          "baseline_head": "616112b50dfec154a29a6b4ee3723e4e28a158b4",
+          "scratch_database": "interview_hr_1788631751397",
+          "started_utc": "2026-10-30T09:54:33Z",
+          "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-team-e2e-head-20261030-0t9w23hs/e2e-ui2-period-room-edit.log",
+          "test_name_pattern": "^personal interview list edits applicable candidate and team hiring data without entering the room$",
+          "exit_code": 1,
+          "duration_seconds": 33.263,
+          "finished_utc": "2026-10-30T09:55:06Z"
+        },
+        "targeted_failed_case_only": true,
+        "totals": {
+          "tests": 1,
+          "pass": 0,
+          "fail": 1,
+          "skipped": 0,
+          "cancelled": 0
+        },
+        "failed_case_names": [
+          "personal interview list edits applicable candidate and team hiring data without entering the room"
+        ],
+        "current_result": {
+          "result": {
+            "suite": "tests/e2e/theme/e2e-ui2-period-room-edit.mjs",
+            "exitCode": 1,
+            "finishedAt": "2026-10-30T09:50:31.169Z"
+          },
+          "totals": {
+            "tests": 7,
+            "pass": 6,
+            "fail": 1,
+            "skipped": 0,
+            "cancelled": 0
+          },
+          "failed_case_names": [
+            "personal interview list edits applicable candidate and team hiring data without entering the room"
+          ]
+        },
+        "same_counts_as_current": false,
+        "same_failed_cases_as_current": true
+      },
+      {
+        "metadata": {
+          "command": [
+            "node",
+            "tests/e2e/run-isolated.mjs",
+            "tests/e2e/teams/e2e-ui2-team.mjs"
+          ],
+          "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-team-e2e-head-20261030-0t9w23hs/frontend",
+          "mode": "production",
+          "baseline_head": "616112b50dfec154a29a6b4ee3723e4e28a158b4",
+          "scratch_database": "interview_hr_1788631751397",
+          "started_utc": "2026-10-30T09:47:32Z",
+          "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-team-e2e-head-20261030-0t9w23hs/e2e-ui2-team.log",
+          "exit_code": 1,
+          "duration_seconds": 60.833,
+          "finished_utc": "2026-10-30T09:48:33Z"
+        },
+        "targeted_failed_case_only": false,
+        "totals": {
+          "tests": 1,
+          "pass": 0,
+          "fail": 1,
+          "skipped": 0,
+          "cancelled": 0
+        },
+        "failed_case_names": [
+          "tests/e2e/teams/e2e-ui2-team.mjs"
+        ],
+        "current_result": {
+          "result": {
+            "suite": "tests/e2e/teams/e2e-ui2-team.mjs",
+            "exitCode": 1,
+            "finishedAt": "2026-10-30T09:41:30.191Z"
+          },
+          "totals": {
+            "tests": 1,
+            "pass": 0,
+            "fail": 1,
+            "skipped": 0,
+            "cancelled": 0
+          },
+          "failed_case_names": [
+            "tests/e2e/teams/e2e-ui2-team.mjs"
+          ]
+        },
+        "same_counts_as_current": true,
+        "same_failed_cases_as_current": true
+      }
+    ],
+    "tests_or_product_edited": false,
+    "current_full_log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-full-e2e-20261030-lvob5cv_/full-e2e.log",
+    "remaining_owned_schemas": [],
+    "classification": "All seven suites reproduce the same failed cases on exact HEAD in fresh owned runtimes. First five rerun in full; last two select only already-failed independent cases. Failures predate current uncommitted changes."
+  },
+  "followUps": {
+    "createLayout24": {
+      "exit": 0,
+      "seconds": 46.249,
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-current-create-layout-z7h66dl0/create-layout.log",
+      "tests": 24,
+      "pass": 24,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "duration_ms": 15841.897583
+    },
+    "developmentChunk": {
+      "metadata": {
+        "command": [
+          "node",
+          "tests/e2e/run-isolated.mjs",
+          "tests/e2e/platform/e2e-local-runtime-chunk-recovery.mjs"
+        ],
+        "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-e2e-chunk-dev-20261030-wkxqvbl9/frontend",
+        "mode": "development",
+        "java_home": "/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home",
+        "scratch_database": "interview_hr_1788631751397",
+        "started_utc": "2026-10-30T09:35:18Z",
+        "exit_code": 0,
+        "duration_seconds": 36.668,
+        "finished_utc": "2026-10-30T09:35:55Z"
+      },
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-e2e-chunk-dev-20261030-wkxqvbl9/combined.log",
+      "cases": [
+        {
+          "status": "passed",
+          "description": "tests/e2e/platform/e2e-local-runtime-chunk-recovery.mjs (1146.552834ms)",
+          "failure": null
+        }
+      ],
+      "totals": {
+        "tests": 1,
+        "pass": 1,
+        "fail": 0,
+        "skipped": 0,
+        "cancelled": 0
+      },
+      "local_runtime_chunk_recovery_ok": true,
+      "lifecycle_diagnostic_records": 0,
+      "lifecycle_windows": [],
+      "remaining_schemas": [],
+      "room_page_css_sha256": "b165565857bed0d15325cdc5184a49fbae8e7fd8688186abb5c5617fc2cc9c40",
+      "tests_edited": false
+    },
+    "configuredLifecycle": {
+      "metadata": {
+        "command": [
+          "node",
+          "tests/e2e/run-isolated.mjs",
+          "tests/e2e/interview/e2e-room-context-panels.mjs"
+        ],
+        "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-e2e-context-diag-20261030-7kaiget_/frontend",
+        "mode": "production",
+        "room_realtime_lifecycle_diagnostics": true,
+        "lifecycle_log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-e2e-context-diag-20261030-7kaiget_/combined.log",
+        "java_home": "/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home",
+        "scratch_database": "interview_hr_1788631751397",
+        "started_utc": "2026-10-30T09:36:38Z",
+        "exit_code": 1,
+        "duration_seconds": 70.035,
+        "finished_utc": "2026-10-30T09:37:48Z"
+      },
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-e2e-context-diag-20261030-7kaiget_/combined.log",
+      "cases": [
+        {
+          "status": "passed",
+          "description": "infrastructure: live API and the established room/editor are ready (1212.324292ms)",
+          "failure": null
+        },
+        {
+          "status": "failed",
+          "description": "personal owner, assigned interviewer and guest manager receive four direct auxiliary surfaces and a persistent condition (840.050834ms)",
+          "failure": "AssertionError [ERR_ASSERTION]: AC11_CHAT_AUDIENCE_MISSING"
+        },
+        {
+          "status": "failed",
+          "description": "keyboard-only navigation activates all four direct auxiliary room surfaces (1007.406042ms)",
+          "failure": "AssertionError [ERR_ASSERTION]: AC11_CHAT_AUDIENCE_MISSING"
+        },
+        {
+          "status": "passed",
+          "description": "candidate receives no manager surfaces, personal notes or publish action (273.442458ms)",
+          "failure": null
+        },
+        {
+          "status": "failed",
+          "description": "focus mode keeps auxiliary surfaces reachable without restoring the editor tab (504.997375ms)",
+          "failure": "AssertionError [ERR_ASSERTION]: AC11_CHAT_AUDIENCE_MISSING"
+        },
+        {
+          "status": "passed",
+          "description": "participant header keeps the role visible without a redundant connected badge (1081.025916ms)",
+          "failure": null
+        },
+        {
+          "status": "failed",
+          "description": "manager status row keeps candidate state without redundant published or local-step labels (659.918042ms)",
+          "failure": "AssertionError [ERR_ASSERTION]: AC11_CHAT_AUDIENCE_MISSING"
+        },
+        {
+          "status": "passed",
+          "description": "persistent room status stays fully visible at 200% desktop and tablet equivalents (957.942375ms)",
+          "failure": null
+        },
+        {
+          "status": "passed",
+          "description": "owner and assigned interviewer select locally and publish only through the explicit action (21749.42425ms)",
+          "failure": null
+        },
+        {
+          "status": "failed",
+          "description": "twenty panel/reflow transitions preserve one editor, room session, drafts, selection, scroll and focus without mutations (913.265792ms)",
+          "failure": "AssertionError [ERR_ASSERTION]: AC11_CHAT_AUDIENCE_MISSING"
+        },
+        {
+          "status": "failed",
+          "description": "desktop/tablet viewport and zoom-equivalent matrix keeps honest automatic Focus/Work geometry (460.966917ms)",
+          "failure": "AssertionError [ERR_ASSERTION]: AC11_CHAT_AUDIENCE_MISSING"
+        },
+        {
+          "status": "failed",
+          "description": "usable container geometry, automatic panels and focus transfer stay truthful (823.883666ms)",
+          "failure": "AssertionError [ERR_ASSERTION]: AC11_CHAT_AUDIENCE_MISSING"
+        },
+        {
+          "status": "passed",
+          "description": "1320x640 room root keeps automatic Work panels contained (432.656833ms)",
+          "failure": null
+        },
+        {
+          "status": "failed",
+          "description": "automatic Work Focus Work reflow preserves active chat and readable geometry (482.251417ms)",
+          "failure": "AssertionError [ERR_ASSERTION]: AC11_CHAT_AUDIENCE_MISSING"
+        },
+        {
+          "status": "passed",
+          "description": "personal notes, score, notes export and direct return to personal interviews remain available (1704.114542ms)",
+          "failure": null
+        },
+        {
+          "status": "failed",
+          "description": "remediation: editor is a direct Focus region and local splitters resize without room side effects (804.909541ms)",
+          "failure": "AssertionError [ERR_ASSERTION]: AC11_CHAT_AUDIENCE_MISSING"
+        },
+        {
+          "status": "passed",
+          "description": "remediation: Focus leaves no unresolved room surface ARIA references (355.66225ms)",
+          "failure": null
+        },
+        {
+          "status": "failed",
+          "description": "remediation: splitters follow pointer direction and remain inside content-box bounds (402.02825ms)",
+          "failure": "AssertionError [ERR_ASSERTION]: AC11_CHAT_AUDIENCE_MISSING"
+        },
+        {
+          "status": "failed",
+          "description": "remediation: room layout values reset when only the invite code changes (396.312834ms)",
+          "failure": "AssertionError [ERR_ASSERTION]: AC11_CHAT_AUDIENCE_MISSING"
+        }
+      ],
+      "totals": {
+        "tests": 19,
+        "pass": 8,
+        "fail": 11,
+        "skipped": 0,
+        "cancelled": 0
+      },
+      "local_runtime_chunk_recovery_ok": false,
+      "lifecycle_diagnostic_records": 40,
+      "lifecycle_windows": [
+        "{\"actor\":\"OWNER\",\"preAdmissionSequence\":12,\"preCloseSequence\":12,\"preCloseAt\":1793353038707,\"observedEventSources\":1}",
+        "{\"actor\":\"INTERVIEWER\",\"preAdmissionSequence\":12,\"preCloseSequence\":14,\"preCloseAt\":1793353045395,\"observedEventSources\":2}"
+      ],
+      "remaining_schemas": [],
+      "room_page_css_sha256": "b165565857bed0d15325cdc5184a49fbae8e7fd8688186abb5c5617fc2cc9c40",
+      "tests_edited": false
+    },
+    "developmentWorkspace": {
+      "mode": "development",
+      "source": "fresh current source including latest iteration fixes",
+      "tests_or_product_edited": false,
+      "suites": [
+        {
+          "metadata": {
+            "command": [
+              "node",
+              "tests/e2e/run-isolated.mjs",
+              "tests/e2e/theme/e2e-workspace-burger-frames.mjs"
+            ],
+            "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-final-workspace-dev-20261030-u7dmtgao/frontend",
+            "mode": "development",
+            "scratch_database": "interview_hr_1788631751397",
+            "started_utc": "2026-10-30T09:58:09Z",
+            "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-final-workspace-dev-20261030-u7dmtgao/e2e-workspace-burger-frames.log",
+            "exit_code": 0,
+            "duration_seconds": 59.183,
+            "finished_utc": "2026-10-30T09:59:08Z"
+          },
+          "totals": {
+            "tests": 9,
+            "pass": 9,
+            "fail": 0,
+            "skipped": 0,
+            "cancelled": 0
+          },
+          "case_results": [
+            "✔ burger has no transient highlight during workspace switches (1366px, light) (4633.558958ms)",
+            "✔ burger has no transient highlight during workspace switches (1366px, dark) (4111.637666ms)",
+            "✔ burger has no transient highlight during workspace switches (1024px, light) (4143.872041ms)",
+            "✔ burger has no transient highlight during workspace switches (1024px, dark) (4117.275125ms)",
+            "✔ burger has no transient highlight during workspace switches (768px, light) (4088.268ms)",
+            "✔ burger has no transient highlight during workspace switches (768px, dark) (4117.130625ms)",
+            "✔ burger keeps intentional hover, keyboard focus and active overflow indication (light) (2647.352833ms)",
+            "✔ burger keeps intentional hover, keyboard focus and active overflow indication (dark) (2638.867791ms)",
+            "✔ first lazy team chunk preserves the visible source header until the destination can render (1177.810041ms)"
+          ]
+        },
+        {
+          "metadata": {
+            "command": [
+              "node",
+              "tests/e2e/run-isolated.mjs",
+              "tests/e2e/theme/e2e-workspace-switch-stability.mjs"
+            ],
+            "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-final-workspace-dev-20261030-u7dmtgao/frontend",
+            "mode": "development",
+            "scratch_database": "interview_hr_1788631751397",
+            "started_utc": "2026-10-30T09:59:08Z",
+            "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-final-workspace-dev-20261030-u7dmtgao/e2e-workspace-switch-stability.log",
+            "exit_code": 0,
+            "duration_seconds": 38.6,
+            "finished_utc": "2026-10-30T09:59:46Z"
+          },
+          "totals": {
+            "tests": 7,
+            "pass": 7,
+            "fail": 0,
+            "skipped": 0,
+            "cancelled": 0
+          },
+          "case_results": [
+            "✔ first lazy workspace navigation keeps the current shell visible while the destination chunk loads (1312.297041ms)",
+            "✔ workspace shell remains stable during access checks and repeated switches at 1366px (2146.699958ms)",
+            "✔ workspace shell remains stable during access checks and repeated switches at 1024px (2150.163625ms)",
+            "✔ workspace shell remains stable during access checks and repeated switches at 768px (2132.7425ms)",
+            "✔ a delayed former team response cannot replace the current team after a rapid switch (1357.954542ms)",
+            "✔ logout remains immediate and returns to the public landing page (1025.06575ms)",
+            "✔ leaving a long library keeps the content width while the destination is short (1408.005125ms)"
+          ]
+        }
+      ],
+      "remaining_owned_schemas": [],
+      "important_source_hashes": {
+        "frontend/src/features/room/useRoomSocket.ts": "c9302da0ce303197f443fecc768ad4f45a5fb4807b3e38ee6fb587f23449bbe1",
+        "frontend/src/pages/RoomPage.module.css": "2852d21c28a98cebb587182b7593bccd6d3348789adf7e49cf092b3ee76ea95a",
+        "frontend/tests/e2e/theme/e2e-workspace-burger-frames.mjs": "18925d9b94eeb77b2acc8aa4cb05622812c14d6f53b139a712772a9f899bc7d1",
+        "frontend/tests/e2e/theme/e2e-workspace-switch-stability.mjs": "e33cdff62a1d8bdf12238c237674f1dfe735a80a7609253674a46460812dca7f"
+      },
+      "important_sources_match_current": {
+        "frontend/src/features/room/useRoomSocket.ts": true,
+        "frontend/src/pages/RoomPage.module.css": true,
+        "frontend/tests/e2e/theme/e2e-workspace-burger-frames.mjs": true,
+        "frontend/tests/e2e/theme/e2e-workspace-switch-stability.mjs": true
+      }
+    },
+    "layoutFix": {
+      "productionCondition": {
+        "tests": 9,
+        "pass": 9,
+        "fail": 0,
+        "log": "/tmp/interhub-layout-fix-final-20261030.log"
+      },
+      "relatedBrowser": {
+        "tests": 18,
+        "pass": 18,
+        "fail": 0,
+        "log": "/tmp/interhub-layout-worker-browser-final-20261030.log"
+      }
+    },
+    "privateAwarenessFix": {
+      "production": [
+        "slow-network both scenarios PASS",
+        "manager-workspace-integrity PASS"
+      ],
+      "browser": {
+        "tests": 11,
+        "pass": 11,
+        "fail": 0
+      },
+      "typecheck": "PASS",
+      "logs": [
+        "/tmp/interhub-awareness-scope-final-20261030.log",
+        "/tmp/interhub-awareness-manager-browser-20261030.log"
+      ]
+    }
+  },
+  "exclusions": {
+    "tests/e2e/account/e2e-social-login.mjs": "Google/VK deferred; feature remains disabled by user decision"
+  },
+  "limits": [
+    "No production operations",
+    "Native AX live witness not performed, automatic contracts covered",
+    "Production Linux containers/topology not tested",
+    "Full initial111 suite snapshot followed by scoped verification of4 changed source/test files; full111 not repeated after fixes",
+    "Old assertions block deeper verification in several baseline cases"
+  ],
+  "fullGreen": false,
+  "confirmedNewProductRegressions": 2,
+  "confirmedNewProductRegressionsFixed": 2,
+  "remainingPreexistingFailingE2EFiles": 15,
+  "finalIterationFiles": {
+    "trackedModified": [
+      "SPEC.md",
+      "backend/src/main/kotlin/com/interviewonline/dto/RoomDto.kt",
+      "backend/src/main/kotlin/com/interviewonline/service/CollaborationService.kt",
+      "backend/src/main/kotlin/com/interviewonline/service/RoomService.kt",
+      "frontend/src/components/markdown.ts",
+      "frontend/src/features/room/BriefingBoard.tsx",
+      "frontend/src/features/room/RoomCodeEditor.tsx",
+      "frontend/src/features/room/useRoomSocket.ts",
+      "frontend/src/pages/DashboardPage.tsx",
+      "frontend/src/pages/RoomPage.module.css",
+      "frontend/src/pages/RoomPage.tsx",
+      "frontend/src/pages/dashboard/CreateRoomSection.tsx",
+      "frontend/src/pages/workspace/PersonalWorkspacePage.tsx",
+      "frontend/src/types/index.ts",
+      "frontend/tests/e2e/teams/e2e-workspace-navigation.mjs",
+      "specs/features/p2-1-room-layout-modes.md",
+      "specs/features/ui-2-usability-theme-polish.md"
+    ],
+    "untracked": [
+      "backend/src/test/kotlin/com/interviewonline/controller/ManagerWorkspaceYjsRecoveryIntegrationTest.kt",
+      "frontend/src/components/MarkdownPreview.tsx",
+      "frontend/src/components/markdown.worker.ts",
+      "frontend/src/components/markdownPreviewService.ts",
+      "frontend/src/components/markdownWorkerClient.ts",
+      "frontend/src/components/markdownWorkerProtocol.ts",
+      "frontend/src/components/useMarkdownPreview.ts",
+      "frontend/tests/browser/managerYjsRecovery.test.mjs",
+      "frontend/tests/browser/workspaceCreationAndSelectors.test.mjs",
+      "frontend/tests/contract/markdown-worker-browser.test.mjs",
+      "frontend/tests/unit/markdownWorkerClient.test.ts",
+      "specs/references/2026-10-30-local-iteration-regression-results.json",
+      "specs/references/2026-10-30-local-iteration-regression.md"
+    ],
+    "count": 30
+  }
+}

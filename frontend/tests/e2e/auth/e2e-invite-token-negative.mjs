@@ -121,24 +121,57 @@ async function seedOwnerSession(context, inviteCode, ownerToken) {
   );
 }
 
-async function runInvalidInviteScenario(browser) {
+async function runInvalidInviteScenario(browser, order) {
   const invalidInviteCode = `r-missing-${randomUUID()}`;
   const roomResponse = await fetch(`${apiBaseUrl}/rooms/${encodeURIComponent(invalidInviteCode)}`);
   assertCondition(roomResponse.status === 404, `INVALID_INVITE_API_STATUS expected=404 actual=${roomResponse.status}`);
 
   const context = await browser.newContext();
+  let releaseDeferredResponse;
+  const deferredResponse = new Promise(resolve => { releaseDeferredResponse = resolve; });
   try {
     await installSseCapture(context, false);
     await seedGuestName(context, invalidInviteCode, "Invalid invite candidate");
     const page = await context.newPage();
-
+    const ledger = { stream: 0, status: 0, events: 0 };
+    const realtimePath = `/api/realtime/rooms/${invalidInviteCode}/`;
+    page.on("request", request => {
+      const path = new URL(request.url()).pathname;
+      if (path === `${realtimePath}stream`) ledger.stream += 1;
+      else if (path === `${realtimePath}stream-status`) ledger.status += 1;
+      else if (path === `${realtimePath}events`) ledger.events += 1;
+    });
+    const waitForActualStatus = path => page.waitForResponse(response => response.request().method() === "GET" &&
+      new URL(response.url()).pathname === path, { timeout: timeoutMs });
+    // Keep real backend responses and control only their order. A terminal REST
+    // response can close the EventSource before it emits any native error.
+    const deferredPath = order === "rest-first" ? `${realtimePath}stream` : `/api/rooms/${invalidInviteCode}`;
+    await page.route(url => url.pathname === deferredPath, async route => {
+      await deferredResponse;
+      // Terminal recovery can already have canceled this held request.
+      await route.continue().catch(() => {});
+    });
+    const firstResponse = waitForActualStatus(order === "rest-first" ? `/api/rooms/${invalidInviteCode}` : `${realtimePath}stream`);
     await page.goto(`${webBaseUrl}/room/${invalidInviteCode}`, { waitUntil: "domcontentloaded" });
-    await page.waitForFunction(
-      () => (window.__negativeAuthSseTransport?.errorCount ?? 0) > 0,
-      { timeout: timeoutMs },
-    );
+    const firstStatus = (await firstResponse).status();
+    assertCondition(firstStatus === 404, `INVALID_INVITE_${order}_STATUS expected=404 actual=${firstStatus}`);
+    if (order === "sse-first") {
+      await page.waitForFunction(() => (window.__negativeAuthSseTransport?.errorCount ?? 0) > 0,
+        null, { timeout: timeoutMs });
+      releaseDeferredResponse();
+    }
+    await page.getByTestId("room-realtime-unavailable").waitFor({ timeout: timeoutMs });
+    releaseDeferredResponse();
+    const trafficAtTerminal = { ...ledger };
+    const connectionsAtTerminal = await page.evaluate(() => window.__negativeAuthSseTransport?.connectionCount ?? 0);
+    await page.bringToFront();
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event("focus"));
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
     await page.waitForTimeout(invalidInviteObservationMs);
 
+    assertCondition(await page.getByTestId("room-realtime-unavailable").isVisible(), "INVALID_INVITE_TERMINAL_UI_LOST");
     const editableWorkspaceVisible = await page
       .locator('[data-testid="room-code-editor-host"] .cm-editor')
       .isVisible()
@@ -147,21 +180,27 @@ async function runInvalidInviteScenario(browser) {
 
     const usableRealtimeStateObserved = await page.evaluate(() => {
       return (window.__negativeAuthSseTransport?.stateSyncs ?? []).some(
-        (stateSync) => stateSync?.hasEventToken === true,
+        stateSync => stateSync?.hasEventToken === true,
       );
     });
     assertCondition(!usableRealtimeStateObserved, "INVALID_INVITE_USABLE_REALTIME_STATE_OBSERVED");
-    const invalidInviteStateSyncCount = await page.evaluate(
-      () => window.__negativeAuthSseTransport?.stateSyncs?.length ?? 0,
-    );
+    const invalidInviteStateSyncCount = await page.evaluate(() => window.__negativeAuthSseTransport?.stateSyncs?.length ?? 0);
     assertCondition(invalidInviteStateSyncCount === 0, `INVALID_INVITE_STATE_SYNC_OBSERVED count=${invalidInviteStateSyncCount}`);
-
-    const invalidInviteErrorCount = await page.evaluate(() => window.__negativeAuthSseTransport?.errorCount ?? 0);
-    assertCondition(
-      invalidInviteErrorCount <= maximumInvalidInviteSseErrors,
-      `INVALID_INVITE_RETRY_STORM errors=${invalidInviteErrorCount} limit=${maximumInvalidInviteSseErrors}`,
-    );
+    const transport = await page.evaluate(() => ({
+      connectionCount: window.__negativeAuthSseTransport?.connectionCount ?? 0,
+      openCount: window.__negativeAuthSseTransport?.openCount ?? 0,
+      errorCount: window.__negativeAuthSseTransport?.errorCount ?? 0,
+    }));
+    assertCondition(transport.openCount === 0, `INVALID_INVITE_STREAM_ADMITTED count=${transport.openCount}`);
+    assertCondition(transport.errorCount <= maximumInvalidInviteSseErrors,
+      `INVALID_INVITE_RETRY_STORM errors=${transport.errorCount} limit=${maximumInvalidInviteSseErrors}`);
+    assertCondition(transport.connectionCount <= maximumInvalidInviteSseErrors,
+      `INVALID_INVITE_CONNECTION_STORM connections=${transport.connectionCount} limit=${maximumInvalidInviteSseErrors}`);
+    assertCondition(transport.connectionCount === connectionsAtTerminal, "INVALID_INVITE_CONNECTION_AFTER_TERMINAL");
+    assertCondition(JSON.stringify(ledger) === JSON.stringify(trafficAtTerminal), "INVALID_INVITE_TRAFFIC_AFTER_TERMINAL");
+    assertCondition(ledger.events === 0, `INVALID_INVITE_EVENT_RELAY_REQUESTS count=${ledger.events}`);
   } finally {
+    releaseDeferredResponse();
     await context.close();
   }
 }
@@ -194,6 +233,7 @@ async function runStaleEventTokenScenario(browser) {
             stateSync.eventToken.length > 0,
         );
       },
+      null,
       { timeout: timeoutMs },
     );
     const initialSession = await candidatePage.evaluate(() => {
@@ -332,11 +372,13 @@ const browser = await chromium.launch({ headless: true });
 try {
   const failures = [];
   for (const [label, scenario] of [
-    ["INVALID_INVITE", () => runInvalidInviteScenario(browser)],
+    ["INVALID_INVITE_REST_FIRST", () => runInvalidInviteScenario(browser, "rest-first")],
+    ["INVALID_INVITE_SSE_FIRST", () => runInvalidInviteScenario(browser, "sse-first")],
     ["STALE_EVENT_TOKEN", () => runStaleEventTokenScenario(browser)],
   ]) {
     try {
       await scenario();
+      console.log(`AUTH_INVITE_TOKEN_NEGATIVE_SCENARIO_OK ${label}`);
     } catch (error) {
       failures.push(`${label}:${error instanceof Error ? error.message : String(error)}`);
     }

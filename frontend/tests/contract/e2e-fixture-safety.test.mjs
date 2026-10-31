@@ -3,8 +3,23 @@ import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { readdir, readFile } from "node:fs/promises";
 import { test } from "node:test";
+import ts from "typescript";
 
 const frontendDir = new URL("../../", import.meta.url);
+
+function importsFixtureGuardFirst(source) {
+  const first = ts.createSourceFile("suite.mjs", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS).statements[0];
+  return Boolean(first && ts.isImportDeclaration(first) && !first.importClause &&
+    ts.isStringLiteral(first.moduleSpecifier) && /(?:^|\/)require-isolated-api\.mjs$/.test(first.moduleSpecifier.text));
+}
+
+test("fixture source policy permits comments but requires a real guard import before executable statements", () => {
+  assert.equal(importsFixtureGuardFirst('// suite prerequisites\n/* documentation */\nimport "../support/require-isolated-api.mjs";\nawait register();'), true);
+  assert.equal(importsFixtureGuardFirst('// import "../support/require-isolated-api.mjs";\nawait register();'), false);
+  assert.equal(importsFixtureGuardFirst('await register();\nimport "../support/require-isolated-api.mjs";'), false);
+  assert.equal(importsFixtureGuardFirst('import "../support/not-require-isolated-api.mjs";'), false);
+  assert.equal(importsFixtureGuardFirst('import { ignored } from "../support/require-isolated-api.mjs";'), false);
+});
 
 async function peer(handler) {
   const requests = [];
@@ -181,7 +196,7 @@ test("every directly executable browser E2E imports the central fixture guard", 
   const files = await collect(new URL("../e2e/", import.meta.url));
   assert.ok(files.length > 0);
   for (const file of files) {
-    assert.match((await readFile(file, "utf8")).split("\n")[0], /import .*require-isolated-api\.mjs/,
+    assert.equal(importsFixtureGuardFirst(await readFile(file, "utf8")), true,
       `${file.pathname} must reject unverified targets before test bodies execute`);
   }
 });
@@ -191,7 +206,7 @@ test("package E2E entrypoints use the isolated runner rather than the developmen
   for (const [name, command] of Object.entries(scripts)) {
     if (!name.startsWith("e2e:") && !name.startsWith("chaos:")) continue;
     if (name === "e2e:team-invitations:native-ax") continue; // No application fixtures: native evidence utility.
-    assert.match(command, /^node tests\/e2e\/(?:run-isolated\.mjs|teams\/run-team-[a-z-]+\.mjs)/,
+    assert.match(command, /^node tests\/e2e\/(?:run-(?:isolated|all)\.mjs|teams\/run-team-[a-z-]+\.mjs)/,
       `${name} must create and tear down its own temporary PostgreSQL schema`);
   }
 });

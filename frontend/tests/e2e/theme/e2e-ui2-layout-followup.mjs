@@ -90,11 +90,17 @@ test('landing and room themes appear after navigation in visual and DOM order',a
   }
  }finally{await browser.close();}
 });
-test('empty interview and archived track or vacancy title pairs have readable separated lines',async()=>{
+test('concise empty interview state stays padded and archived track or vacancy title pairs have readable separated lines',async()=>{
  const {auth,team,browser,page}=await fixture();
  try {
   await page.goto(`${web}/workspace/personal/interviews`);await page.getByText('У вас пока нет интервью',{exact:true}).waitFor();
-  for(const mode of ['light','dark']) {await settle(page,mode,1366);await gap(page.getByText('У вас пока нет интервью',{exact:true}),page.getByText('Создайте первое интервью — оно появится в этом списке.',{exact:true}),'empty personal interview');}
+  for(const mode of ['light','dark']) {
+   await settle(page,mode,1366);
+   const empty=page.getByText('У вас пока нет интервью',{exact:true});
+   const padding=await empty.evaluate(el=>{const text=el.getBoundingClientRect(),card=el.parentElement.getBoundingClientRect();return{left:text.left-card.left,right:card.right-text.right,top:text.top-card.top,bottom:card.bottom-text.bottom};});
+   assert.ok(Object.values(padding).every(value=>value>=12),`empty interview state keeps comfortable insets: ${JSON.stringify(padding)}`);
+   assert.equal(await page.getByText('Создайте первое интервью — оно появится в этом списке.',{exact:true}).count(),0,'empty state stays concise without duplicating the create action');
+  }
   const {track}=await request(`/teams/${team.id}/tracks`,auth.token,{name:'Архивный трек для отступов'});
   const {vacancy}=await request(`/teams/${team.id}/tracks/${track.id}/vacancies`,auth.token,{title:'Архивная вакансия для отступов'});
   await request(`/teams/${team.id}/tracks/${track.id}/vacancies/${vacancy.id}/archive`,auth.token,{});

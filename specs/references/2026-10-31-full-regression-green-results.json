@@ -1,0 +1,4578 @@
+{
+  "result": "PASS",
+  "createdAt": "2026-10-30T21:21:51.094184+00:00",
+  "createdAtLocal": "2026-10-31T00:21:51.094393+03:00",
+  "reportTimezone": "Europe/Moscow",
+  "scope": "All active automated checks on frozen local source; no commits/push/deployment/user-app actions",
+  "git": {
+    "head": "616112b50dfec154a29a6b4ee3723e4e28a158b4",
+    "originMain": "616112b50dfec154a29a6b4ee3723e4e28a158b4",
+    "remoteMainVerifiedByLsRemote": "616112b50dfec154a29a6b4ee3723e4e28a158b4",
+    "ahead": 0,
+    "behind": 0,
+    "unpushedCommits": 0,
+    "trackedModified": 49,
+    "newFiles": 19,
+    "changedFiles": [
+      {
+        "file": "SPEC.md",
+        "status": "modified",
+        "kind": "documentation",
+        "sha256": "6cddd6dbb8a40de4c6d9de109dd34dea2aaecfc901325b79ab884a5aea6b3802"
+      },
+      {
+        "file": "backend/src/main/kotlin/com/interviewonline/dto/RoomDto.kt",
+        "status": "modified",
+        "kind": "product",
+        "sha256": "dfa28e669abe02337945208f848186cf39f6f0e15f57cff018b4d63794d9067f"
+      },
+      {
+        "file": "backend/src/main/kotlin/com/interviewonline/service/CollaborationService.kt",
+        "status": "modified",
+        "kind": "product",
+        "sha256": "6142fc3ab99f985aae8462dc04e5c2b452108a2f0f9b703f3c70344e551cd7be"
+      },
+      {
+        "file": "backend/src/main/kotlin/com/interviewonline/service/RoomService.kt",
+        "status": "modified",
+        "kind": "product",
+        "sha256": "e192509e4f21777de3137a582169d43ab8df37dbe8f3627db82f4226764eac4d"
+      },
+      {
+        "file": "backend/src/test/kotlin/com/interviewonline/controller/TeamMergeMigrationTest.kt",
+        "status": "modified",
+        "kind": "tests-and-runner",
+        "sha256": "901797a41f8ee6b65e1abc08aec013f64a15efa96b0d232b7ccc4f7d4d7b7e9e"
+      },
+      {
+        "file": "frontend/package.json",
+        "status": "modified",
+        "kind": "package-script",
+        "sha256": "d61ad72818261ac27b63e84e2e2ab3dcaad41fee1e0110e575db489784688dc5"
+      },
+      {
+        "file": "frontend/src/components/markdown.ts",
+        "status": "modified",
+        "kind": "product",
+        "sha256": "bdbf6092cb85384f095cac532697d9c5f46267458ba3797164f0ae25451c3a83"
+      },
+      {
+        "file": "frontend/src/features/hr/HiringManagerPicker.tsx",
+        "status": "modified",
+        "kind": "product",
+        "sha256": "f4b843c0565d668257d445932ada47f52dcb6300c14b9d99dbef4cff83ae1bb9"
+      },
+      {
+        "file": "frontend/src/features/room/BriefingBoard.tsx",
+        "status": "modified",
+        "kind": "product",
+        "sha256": "437c30e3c385d37e536d5fe4ee4ceed9c049b43450a925a4122f2e8277cb5c86"
+      },
+      {
+        "file": "frontend/src/features/room/RoomCodeEditor.tsx",
+        "status": "modified",
+        "kind": "product",
+        "sha256": "d60ab235661b0599da9280b66e3b605e7160de72d7dc4dd61ee6d90d14adcb48"
+      },
+      {
+        "file": "frontend/src/features/room/useRoomSocket.ts",
+        "status": "modified",
+        "kind": "product",
+        "sha256": "c9302da0ce303197f443fecc768ad4f45a5fb4807b3e38ee6fb587f23449bbe1"
+      },
+      {
+        "file": "frontend/src/pages/DashboardPage.tsx",
+        "status": "modified",
+        "kind": "product",
+        "sha256": "cd4e4308c7378ae665e93b8eed80cfb8e935ddde5c10ceb72e9ebc8df4ba3836"
+      },
+      {
+        "file": "frontend/src/pages/RoomPage.module.css",
+        "status": "modified",
+        "kind": "product",
+        "sha256": "2852d21c28a98cebb587182b7593bccd6d3348789adf7e49cf092b3ee76ea95a"
+      },
+      {
+        "file": "frontend/src/pages/RoomPage.tsx",
+        "status": "modified",
+        "kind": "product",
+        "sha256": "7b4fca88e06c3b8b123a86aea0e179f4293badb1bc0bd2d783fb6bd3d7e05a2d"
+      },
+      {
+        "file": "frontend/src/pages/dashboard/CreateRoomSection.tsx",
+        "status": "modified",
+        "kind": "product",
+        "sha256": "f56937b8eb47e391854ecf96bbcca01c099dfcd3aac3b495c26cc47929bbf544"
+      },
+      {
+        "file": "frontend/src/pages/workspace/PersonalWorkspacePage.tsx",
+        "status": "modified",
+        "kind": "product",
+        "sha256": "9eaaae044bc36e6e5a96df62ff52588c76c5ee690ff59b1eb9e2bb41f26fc665"
+      },
+      {
+        "file": "frontend/src/types/index.ts",
+        "status": "modified",
+        "kind": "product",
+        "sha256": "69a5ed59c6f54498002be1ff81e308239d697b99039e26cdaf1b01e6d4478cc0"
+      },
+      {
+        "file": "frontend/tests/contract/e2e-fixture-safety.test.mjs",
+        "status": "modified",
+        "kind": "tests-and-runner",
+        "sha256": "986089e4923dc8fcc01f91468f61bc4c781340dcd04870e8a40d2f37646064b8"
+      },
+      {
+        "file": "frontend/tests/contract/e2e-owned-runtime.test.mjs",
+        "status": "modified",
+        "kind": "tests-and-runner",
+        "sha256": "6fa43bb828accb8b1711d8911838e18d182689d480e57ffce02fa0ed90308326"
+      },
+      {
+        "file": "frontend/tests/e2e/account/e2e-personal-interview-cards.mjs",
+        "status": "modified",
+        "kind": "tests-and-runner",
+        "sha256": "f17923fc8dcaf7f3418737ba8cfd8a814120a3af94384c28b0ca7d728bcb1482"
+      },
+      {
+        "file": "frontend/tests/e2e/auth/e2e-invite-token-negative.mjs",
+        "status": "modified",
+        "kind": "tests-and-runner",
+        "sha256": "e8e923d026e1506bb8982d7e2427906998485f668efe3ba54569778c9311d32a"
+      },
+      {
+        "file": "frontend/tests/e2e/authoring/e2e-personal-library-language-metadata.mjs",
+        "status": "modified",
+        "kind": "tests-and-runner",
+        "sha256": "6a34e320d177439ee64a24c57f332d3923c37148e8b7593919c2399ff10e00f2"
+      },
+      {
+        "file": "frontend/tests/e2e/dashboard/e2e-dashboard-action-notifications.mjs",
+        "status": "modified",
+        "kind": "tests-and-runner",
+        "sha256": "8cffda8b7622f0d5666b4daa9cb17af77b083b957933274ff76c635d7d0053ff"
+      },
+      {
+        "file": "frontend/tests/e2e/hr/e2e-hr-cabinet.mjs",
+        "status": "modified",
+        "kind": "tests-and-runner",
+        "sha256": "75ca73064a77e0fbe984012b699a5b16dc3a124b4afe4d8929510ec41dbfd7ac"
+      },
+      {
+        "file": "frontend/tests/e2e/interview/e2e-multi-participant-activity.mjs",
+        "status": "modified",
+        "kind": "tests-and-runner",
+        "sha256": "6654de7c09ebbc779d2fc98906c98a0cc1cff3264a140aee128edf6f9f22fe60"
+      },
+      {
+        "file": "frontend/tests/e2e/interview/e2e-room-command-editor-ux.mjs",
+        "status": "modified",
+        "kind": "tests-and-runner",
+        "sha256": "3c38315d789c1c6460bb84b9de9588943d5ed73065b568dd87baf6f7c142a70e"
+      },
+      {
+        "file": "frontend/tests/e2e/interview/e2e-room-context-panels.mjs",
+        "status": "modified",
+        "kind": "tests-and-runner",
+        "sha256": "5129d0ee2cb806a5bc8631aac01cb56cd754b3f46a893b7ade355769ff869c9d"
+      },
+      {
+        "file": "frontend/tests/e2e/interview/e2e-room-shared-mode.mjs",
+        "status": "modified",
+        "kind": "tests-and-runner",
+        "sha256": "7e73f4f20e861c16fc289501e29b1807fa9e9a02f3c7584029a78e268349d6d7"
+      },
+      {
+        "file": "frontend/tests/e2e/platform/e2e-fixture-lifecycle.mjs",
+        "status": "modified",
+        "kind": "tests-and-runner",
+        "sha256": "7e67cab574ee08cbc569131d64b01ee099ed37bc607ff7eb58054b649204aba8"
+      },
+      {
+        "file": "frontend/tests/e2e/realtime/e2e-missing-room-sse-recovery.mjs",
+        "status": "modified",
+        "kind": "tests-and-runner",
+        "sha256": "1aa7efb241fddfeb72291a252cda1df80ad6d9f30ac11b5f638de9003e358d8c"
+      },
+      {
+        "file": "frontend/tests/e2e/run-isolated.mjs",
+        "status": "modified",
+        "kind": "tests-and-runner",
+        "sha256": "8a437241012eed01202ad664e9314cdfd2207074f76ee01473f354c2778f46ed"
+      },
+      {
+        "file": "frontend/tests/e2e/support/owned-runtime.mjs",
+        "status": "modified",
+        "kind": "tests-and-runner",
+        "sha256": "594a3cf7c5922ac7770bbe674638cfb4882a4691d0cd7ee8eeaa2da52046af2b"
+      },
+      {
+        "file": "frontend/tests/e2e/teams/e2e-team-invitation-management.mjs",
+        "status": "modified",
+        "kind": "tests-and-runner",
+        "sha256": "a226303bdde98e7fdb0fa23fdbc8d1753df3fadc48253e4b78cadfcf4b9380fd"
+      },
+      {
+        "file": "frontend/tests/e2e/teams/e2e-team-management-settings.mjs",
+        "status": "modified",
+        "kind": "tests-and-runner",
+        "sha256": "ad524096130ac7c8dbb46af3d088417446c9f0426645dd53fb858abf6b0b5008"
+      },
+      {
+        "file": "frontend/tests/e2e/teams/e2e-team-membership.mjs",
+        "status": "modified",
+        "kind": "tests-and-runner",
+        "sha256": "7464d85c628727d10c0f43397a87c43d5eac70102b7476f8b697e8eb79c70ae1"
+      },
+      {
+        "file": "frontend/tests/e2e/teams/e2e-team-workspaces.mjs",
+        "status": "modified",
+        "kind": "tests-and-runner",
+        "sha256": "f0d11577b834d25a75b77f64ab9b5c06695d7ce4bb06fad8097a49764d559720"
+      },
+      {
+        "file": "frontend/tests/e2e/teams/e2e-ui2-team.mjs",
+        "status": "modified",
+        "kind": "tests-and-runner",
+        "sha256": "da205c754fe92a4c29702346e81cb9a7d70312e4f246b425b81bf5756c4b555d"
+      },
+      {
+        "file": "frontend/tests/e2e/teams/e2e-workspace-navigation.mjs",
+        "status": "modified",
+        "kind": "tests-and-runner",
+        "sha256": "2d58154fa4b7a36ee573a8e60316800f097ff3d15fb25f76018836fd07f83a53"
+      },
+      {
+        "file": "frontend/tests/e2e/theme/e2e-card-spacing.mjs",
+        "status": "modified",
+        "kind": "tests-and-runner",
+        "sha256": "9bfc5ca40bcf7e7966e1fd6df262a3243ee6b127c62bbec770b74412ec924087"
+      },
+      {
+        "file": "frontend/tests/e2e/theme/e2e-header-workspace-selector.mjs",
+        "status": "modified",
+        "kind": "tests-and-runner",
+        "sha256": "085c2d2514cb8c9b0bea07036fec8b9d5df593eaa948d88faef0e862b386a1c3"
+      },
+      {
+        "file": "frontend/tests/e2e/theme/e2e-interactive-cursors.mjs",
+        "status": "modified",
+        "kind": "tests-and-runner",
+        "sha256": "70ca6aaeec697a369feff149cc2a6897371a1cb4fab2091034702ace42b3146e"
+      },
+      {
+        "file": "frontend/tests/e2e/theme/e2e-rename-alignment.mjs",
+        "status": "modified",
+        "kind": "tests-and-runner",
+        "sha256": "dce2303af6eaad268a93bb40a6e21895c947a7b5950e6070e600e22bc7771a98"
+      },
+      {
+        "file": "frontend/tests/e2e/theme/e2e-ui2-layout-followup.mjs",
+        "status": "modified",
+        "kind": "tests-and-runner",
+        "sha256": "42aafc1531c0808d0e6b682b62a34d9521371a4f93573069652142c563e78e27"
+      },
+      {
+        "file": "frontend/tests/e2e/theme/e2e-ui2-period-room-edit.mjs",
+        "status": "modified",
+        "kind": "tests-and-runner",
+        "sha256": "0f0c7d48b24cf07c1a632e6e0654517a3e17dbae21e1bee816deb36fd04f16aa"
+      },
+      {
+        "file": "frontend/tests/unit/hiringManagerPreviewCopy.test.ts",
+        "status": "modified",
+        "kind": "tests-and-runner",
+        "sha256": "2cd89e30799f9d4f96c2be879bc535c6180069d44582a4cd8bcb0c9ac7faac59"
+      },
+      {
+        "file": "specs/features/p2-1-room-layout-modes.md",
+        "status": "modified",
+        "kind": "documentation",
+        "sha256": "0ee3e453d9a1d053bddd234b51f3483feabdc3e5c407574bb4f385082784de5a"
+      },
+      {
+        "file": "specs/features/p2-3-room-assignments.md",
+        "status": "modified",
+        "kind": "documentation",
+        "sha256": "b60f99397224fb46be5f79411edf01804c07772d18fa66c92878cddd0376ad67"
+      },
+      {
+        "file": "specs/features/p6-release-gates.md",
+        "status": "modified",
+        "kind": "documentation",
+        "sha256": "8c35064a0ddefc3c5de3c9c2c79766cde0ab14f98d4525f4196eaa9698d60c35"
+      },
+      {
+        "file": "specs/features/ui-2-usability-theme-polish.md",
+        "status": "modified",
+        "kind": "documentation",
+        "sha256": "05ef26edb920e6cb4f1c24c48eb78476fc41359a6670baa456b19b0e7b283528"
+      },
+      {
+        "file": "backend/src/test/kotlin/com/interviewonline/controller/ManagerWorkspaceYjsRecoveryIntegrationTest.kt",
+        "status": "new",
+        "kind": "tests-and-runner",
+        "sha256": "d2da9e446aaf35c704b82b862a62c50bfb6695189f4759195cf9182891e7d450"
+      },
+      {
+        "file": "frontend/src/components/MarkdownPreview.tsx",
+        "status": "new",
+        "kind": "product",
+        "sha256": "eec038f47f39e7b83155585cc20a178509c56613446422c30c02004c8ae23d01"
+      },
+      {
+        "file": "frontend/src/components/markdown.worker.ts",
+        "status": "new",
+        "kind": "product",
+        "sha256": "aa234e82d84815095775c28e8a25dea83e61a2acd9563d06453de06d6e6b65e5"
+      },
+      {
+        "file": "frontend/src/components/markdownPreviewService.ts",
+        "status": "new",
+        "kind": "product",
+        "sha256": "cc18b5843a2faa87aeb37a73e756a58dfe95a80e191337c6d82ab696001f4a9a"
+      },
+      {
+        "file": "frontend/src/components/markdownWorkerClient.ts",
+        "status": "new",
+        "kind": "product",
+        "sha256": "bb352130d7c96c02736415fb346e79b633884fc0f213196e2ee671d428ade4ef"
+      },
+      {
+        "file": "frontend/src/components/markdownWorkerProtocol.ts",
+        "status": "new",
+        "kind": "product",
+        "sha256": "7c4389402edbe82418c05097b5fe103d0f2590b46ac099ece7e25e220ce4f527"
+      },
+      {
+        "file": "frontend/src/components/useMarkdownPreview.ts",
+        "status": "new",
+        "kind": "product",
+        "sha256": "430385b370925adc033421b460ac9131ce1846f803c1807398bd19b2585600c4"
+      },
+      {
+        "file": "frontend/tests/browser/managerYjsRecovery.test.mjs",
+        "status": "new",
+        "kind": "tests-and-runner",
+        "sha256": "c090655df9bfd6b3aa277f529a53fc750bd081f775c10f9947b2984305c80f19"
+      },
+      {
+        "file": "frontend/tests/browser/workspaceCreationAndSelectors.test.mjs",
+        "status": "new",
+        "kind": "tests-and-runner",
+        "sha256": "4b5e38b546377f8b9ab81081ec93a521e6c508f41c07e2c7c46bc26bf4e645ed"
+      },
+      {
+        "file": "frontend/tests/contract/fullRegressionRunner.test.mjs",
+        "status": "new",
+        "kind": "tests-and-runner",
+        "sha256": "5fdf1f957b96f68ccf593a30bb0b61f3b3a2e501f7f93920e50333c1bf53b996"
+      },
+      {
+        "file": "frontend/tests/contract/markdown-worker-browser.test.mjs",
+        "status": "new",
+        "kind": "tests-and-runner",
+        "sha256": "7b746e2a269bbd595e761010bfcd712ea7545fadb1edb01e32fc56afea8bb077"
+      },
+      {
+        "file": "frontend/tests/contract/observed-protocol-command.test.mjs",
+        "status": "new",
+        "kind": "tests-and-runner",
+        "sha256": "fc6f94fe15873d34a38173bd1e6fdb901d9856fa8287486ec4a4f0ac6a8bccc5"
+      },
+      {
+        "file": "frontend/tests/e2e/run-all.mjs",
+        "status": "new",
+        "kind": "tests-and-runner",
+        "sha256": "3f2ab728de8e59e77cb6cd29224bb2c9ac94a8380c59dd04ee1759c53a433ca7"
+      },
+      {
+        "file": "frontend/tests/e2e/support/observed-protocol-command.mjs",
+        "status": "new",
+        "kind": "tests-and-runner",
+        "sha256": "32dcaafd60ed2690b5ae46dd5e2a831031064175a7d4e9a5d2e2d6aee9176bb2"
+      },
+      {
+        "file": "frontend/tests/unit/markdownWorkerClient.test.ts",
+        "status": "new",
+        "kind": "tests-and-runner",
+        "sha256": "b8f41f0fb7266d1583dd6e70a8604148f9aed4b41bfbb2373a055de4ab8e7765"
+      },
+      {
+        "file": "specs/references/2026-10-30-local-iteration-regression-results.json",
+        "status": "new",
+        "kind": "documentation",
+        "sha256": "dbef039edf21b955938af1425be1caad31e250b034c0df9b456364be9626a908"
+      },
+      {
+        "file": "specs/references/2026-10-30-local-iteration-regression.md",
+        "status": "new",
+        "kind": "documentation",
+        "sha256": "57bf5bf4153c0990b13a6633f526d3185fdcc5137eec6e22167fbd1a2966433c"
+      },
+      {
+        "file": "specs/references/2026-10-31-full-regression-green-results.json",
+        "status": "new",
+        "kind": "documentation",
+        "sha256": null
+      },
+      {
+        "file": "specs/references/2026-10-31-full-regression-green.md",
+        "status": "new",
+        "kind": "documentation",
+        "sha256": null
+      }
+    ],
+    "kinds": {
+      "documentation": 9,
+      "product": 20,
+      "tests-and-runner": 38,
+      "package-script": 1
+    }
+  },
+  "environment": {
+    "node": "24.19.0",
+    "java": "17",
+    "postgresql": "16.13",
+    "socialAuthEnabled": false,
+    "ownedScratchRuntimesOnly": true
+  },
+  "backendInputComparison": {
+    "files": 297,
+    "differences": []
+  },
+  "backend": {
+    "metadata": {
+      "command": [
+        "mvn",
+        "test"
+      ],
+      "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend",
+      "java_home": "/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home",
+      "scratch_database": "interview_hr_1788631751397",
+      "removed_environment_keys": [],
+      "started_utc": "2026-10-30T18:45:02Z",
+      "exit_code": 0,
+      "duration_seconds": 222.935,
+      "finished_utc": "2026-10-30T18:48:45Z"
+    },
+    "totals": {
+      "suites": 71,
+      "tests": 478,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 478
+    },
+    "suites": [
+      {
+        "name": "com.interviewonline.SmokeTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 4.676,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.SmokeTest.xml"
+      },
+      {
+        "name": "com.interviewonline.agent.WorkflowStateMachineTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.002,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.agent.WorkflowStateMachineTest.xml"
+      },
+      {
+        "name": "com.interviewonline.config.ChatReceiptHmacConfigurationTest",
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.026,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.config.ChatReceiptHmacConfigurationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.config.TeamInvitationLinkEncryptionEnvironmentTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.039,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.config.TeamInvitationLinkEncryptionEnvironmentTest.xml"
+      },
+      {
+        "name": "com.interviewonline.config.WebConfigCorsTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.289,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.config.WebConfigCorsTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.AuthCredentialPolicyIntegrationTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.967,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.AuthCredentialPolicyIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.CandidateActivityHistoryIntegrationTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 2.301,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.CandidateActivityHistoryIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.CandidateActivityPoolIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.481,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.CandidateActivityPoolIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.DurableCandidateActivityIntegrationTest",
+        "tests": 13,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.513,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.DurableCandidateActivityIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.E2eFixtureIsolationIntegrationTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.61,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.E2eFixtureIsolationIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.GuestRoomRoleIntegrationTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.477,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.GuestRoomRoleIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.HiringManagerNicknameIntegrationTest",
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.878,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.HiringManagerNicknameIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.HiringManagerPreviewIntegrationTest",
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.528,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.HiringManagerPreviewIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.HrAccountProfileIntegrationTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.266,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.HrAccountProfileIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.HrHostNotesWorkbookIntegrationTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.581,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.HrHostNotesWorkbookIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.HrInterviewProjectionIntegrationTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.449,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.HrInterviewProjectionIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.HrParticipantProjectionIntegrationTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.351,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.HrParticipantProjectionIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.HrPermissionPoolIntegrationTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.265,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.HrPermissionPoolIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.HrRoleRemovalIntegrationTest",
+        "tests": 19,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 6.077,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.HrRoleRemovalIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.HrRoomArchiveIntegrationTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.955,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.HrRoomArchiveIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.HrRoomTrackingIntegrationTest",
+        "tests": 21,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 4.236,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.HrRoomTrackingIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.HrTeamWorkspaceExportIntegrationTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.93,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.HrTeamWorkspaceExportIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.HrWorkbookIntegrationTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.207,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.HrWorkbookIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.InvitationRateLimitPostgresIntegrationTest",
+        "tests": 11,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 11.76,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.InvitationRateLimitPostgresIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.LibraryArchiveRetirementMigrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.198,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.LibraryArchiveRetirementMigrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.LibraryRemovalSnapshotIntegrationTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.51,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.LibraryRemovalSnapshotIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.ManagerWorkspaceYjsRecoveryIntegrationTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.793,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.ManagerWorkspaceYjsRecoveryIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.MarkdownTaskDeliveryIntegrationTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.603,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.MarkdownTaskDeliveryIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.PersonalInterviewDetailsIntegrationTest",
+        "tests": 9,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 2.633,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.PersonalInterviewDetailsIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.PersonalInterviewScopeIntegrationTest",
+        "tests": 12,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 3.315,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.PersonalInterviewScopeIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.ProductMetricsControllerTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.083,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.ProductMetricsControllerTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.RealtimeChatIdempotencyIntegrationTest",
+        "tests": 31,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 6.137,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.RealtimeChatIdempotencyIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.RealtimeStreamStatusIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.479,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.RealtimeStreamStatusIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.RoomEditorModeIntegrationTest",
+        "tests": 11,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.273,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.RoomEditorModeIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.RoomEditorModeMigrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.179,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.RoomEditorModeMigrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.RoomMetadataYjsDeliveryIntegrationTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 2.247,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.RoomMetadataYjsDeliveryIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.RoomPersistenceIsolationIntegrationTest",
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 16.794,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.RoomPersistenceIsolationIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.RoomWorkspaceSnapshotControllerTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.032,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.RoomWorkspaceSnapshotControllerTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.SocialAuthConfigurationTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.077,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.SocialAuthConfigurationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.SocialAuthDisabledIntegrationTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.724,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.SocialAuthDisabledIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.SocialAuthIntegrationTest",
+        "tests": 14,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 3.99,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.SocialAuthIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.SocialAuthMigrationIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.808,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.SocialAuthMigrationIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamAccessIntegrationTest",
+        "tests": 17,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 3.305,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamAccessIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamCreateRestartHttpIntegrationTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 3.791,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamCreateRestartHttpIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamDefaultConfigurationIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.901,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamDefaultConfigurationIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamInterviewCreationIntegrationTest",
+        "tests": 60,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 24.104,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamInterviewCreationIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamInvitationLinkRecoveryIntegrationTest",
+        "tests": 25,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 20.636,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamInvitationLinkRecoveryIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamLegacyConfigurationIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.914,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamLegacyConfigurationIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamManagementCommandIntegrationTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 12.855,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamManagementCommandIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamManagementCommandRestartHttpIntegrationTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 2.259,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamManagementCommandRestartHttpIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamMemberDirectoryIntegrationTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 2.417,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamMemberDirectoryIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamMergeMigrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.22,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamMergeMigrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamOwnershipTransferIntegrationTest",
+        "tests": 11,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 9.615,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamOwnershipTransferIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamSharedInterviewAccessIntegrationTest",
+        "tests": 15,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 4.767,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamSharedInterviewAccessIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamTaskLibraryIntegrationTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.985,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamTaskLibraryIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamTaskSetIntegrationTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.168,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamTaskSetIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamTrackVacancyIntegrationTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.72,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamTrackVacancyIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamWorkspaceDefaultConfigurationIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.966,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamWorkspaceDefaultConfigurationIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamWorkspaceLegacyConfigurationIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.873,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamWorkspaceLegacyConfigurationIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.UserPresetLifecycleIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.833,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.UserPresetLifecycleIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.migration.TeamSchemaMigrationIntegrationTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.746,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.migration.TeamSchemaMigrationIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.service.ClientIpResolverTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.003,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.service.ClientIpResolverTest.xml"
+      },
+      {
+        "name": "com.interviewonline.service.CollaborationServiceYjsRelayPolicyTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.0,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.service.CollaborationServiceYjsRelayPolicyTest.xml"
+      },
+      {
+        "name": "com.interviewonline.service.HostNotesStorageCompatibilityTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.004,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.service.HostNotesStorageCompatibilityTest.xml"
+      },
+      {
+        "name": "com.interviewonline.service.HrWorkbookCleanupTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.159,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.service.HrWorkbookCleanupTest.xml"
+      },
+      {
+        "name": "com.interviewonline.service.RealtimeConnectionLifecycleDiagnosticsIntegrationTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.719,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.service.RealtimeConnectionLifecycleDiagnosticsIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.service.RealtimeConnectionLifecycleIntegrationTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 7.313,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.service.RealtimeConnectionLifecycleIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.service.RoomAccessServiceTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.271,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.service.RoomAccessServiceTest.xml"
+      },
+      {
+        "name": "com.interviewonline.service.RoomRealtimeActivityLoadIntegrationTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.678,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.service.RoomRealtimeActivityLoadIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.service.RoomRealtimeLifecycleDiagnosticsTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.259,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.service.RoomRealtimeLifecycleDiagnosticsTest.xml"
+      },
+      {
+        "name": "com.interviewonline.service.RoomStreamAdmissionSendBoundaryIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.548,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.service.RoomStreamAdmissionSendBoundaryIntegrationTest.xml"
+      }
+    ],
+    "source_snapshot_files": 315,
+    "source_files_changed_since_snapshot": [],
+    "source_files_added_since_snapshot": [],
+    "delta_since_previous_full_run": [
+      "src/test/kotlin/com/interviewonline/controller/TeamMergeMigrationTest.kt"
+    ],
+    "migrated_schemas": 52,
+    "remaining_owned_schemas": [],
+    "production_changes_made_during_run": false,
+    "command_has_test_filters_or_skip_flags": false,
+    "migration_suites": [
+      {
+        "name": "com.interviewonline.controller.LibraryArchiveRetirementMigrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.198,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.LibraryArchiveRetirementMigrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.RoomEditorModeMigrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.179,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.RoomEditorModeMigrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.SocialAuthMigrationIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.808,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.SocialAuthMigrationIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamMergeMigrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.22,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamMergeMigrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.migration.TeamSchemaMigrationIntegrationTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.746,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.migration.TeamSchemaMigrationIntegrationTest.xml"
+      }
+    ],
+    "startup_and_reconnect_suites": [
+      {
+        "name": "com.interviewonline.SmokeTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 4.676,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.SmokeTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamCreateRestartHttpIntegrationTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 3.791,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamCreateRestartHttpIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.controller.TeamManagementCommandRestartHttpIntegrationTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 2.259,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.controller.TeamManagementCommandRestartHttpIntegrationTest.xml"
+      },
+      {
+        "name": "com.interviewonline.service.RealtimeConnectionLifecycleIntegrationTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 7.313,
+        "report": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/surefire-reports/TEST-com.interviewonline.service.RealtimeConnectionLifecycleIntegrationTest.xml"
+      }
+    ]
+  },
+  "backendPackagingOnly": {
+    "metadata": {
+      "command": [
+        "mvn",
+        "-DskipTests",
+        "package"
+      ],
+      "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend",
+      "java_home": "/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home",
+      "purpose": "additional executable production JAR packaging only; prior unfiltered478-test result is separate evidence",
+      "tests_executed": false,
+      "started_utc": "2026-10-30T18:56:31Z",
+      "exit_code": 0,
+      "duration_seconds": 38.408,
+      "finished_utc": "2026-10-30T18:57:10Z"
+    },
+    "artifact": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n/backend/target/interhub-backend-0.0.1-SNAPSHOT.jar",
+    "artifact_size_bytes": 79401216,
+    "artifact_sha256": "d0a7781ea84df42d8b3fbb3e80ade430c36e04d5878a464e320c954a428128b0",
+    "spring_boot_jar_checks": {
+      "main_class": "org.springframework.boot.loader.launch.JarLauncher",
+      "start_class": "com.interviewonline.InterviewOnlineApplicationKt",
+      "loader_class_present": true,
+      "application_main_present": true,
+      "nested_dependency_jars": 88,
+      "migration_v34_present": true,
+      "zip_integrity_failure": null
+    },
+    "snapshot_source_changes_after_packaging": [],
+    "working_copy_source_changes_after_packaging": [],
+    "source_files_verified": 315,
+    "application_started": false,
+    "database_accessed_by_packaging": false,
+    "prior_unfiltered_tests": {
+      "suites": 71,
+      "tests": 478,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 478
+    }
+  },
+  "frontend": {
+    "unit": {
+      "exit": 0,
+      "seconds": 1.689,
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-frontend-final-missing-jngvjial/logs/unit.log",
+      "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-frontend-final-missing-jngvjial/source/frontend",
+      "command": [
+        "/Users/romanzheltov/.nvm/versions/node/v24.19.0/bin/node",
+        "--experimental-strip-types",
+        "--test",
+        "--test-reporter=tap",
+        "--test-concurrency=1",
+        "tests/unit/activityRetry.test.ts",
+        "tests/unit/activityTimeline.test.ts",
+        "tests/unit/apiErrorFeedback.test.ts",
+        "tests/unit/candidateActivityHistory.test.ts",
+        "tests/unit/exportDownloads.test.ts",
+        "tests/unit/hiringManagerPreviewCopy.test.ts",
+        "tests/unit/hiringManagerProductCopy.test.ts",
+        "tests/unit/libraryTransfer.test.ts",
+        "tests/unit/markdownDraftRecovery.test.ts",
+        "tests/unit/markdownWorkerClient.test.ts",
+        "tests/unit/roomChatDelivery.test.ts",
+        "tests/unit/roomContextPanelLayout.test.ts",
+        "tests/unit/roomEditPolicy.test.ts",
+        "tests/unit/roomRealtimeTransport.test.ts",
+        "tests/unit/teamInvitationMutationPolicy.test.ts",
+        "tests/unit/teamManagementIntent.test.ts",
+        "tests/unit/themeTokens.test.ts"
+      ],
+      "tests": 89,
+      "suites": 0,
+      "pass": 89,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "typecheck": {
+      "exit": 0,
+      "seconds": 2.816,
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-frontend-final-missing-jngvjial/logs/typecheck.log",
+      "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-frontend-final-missing-jngvjial/source/frontend",
+      "command": [
+        "/Users/romanzheltov/.nvm/versions/node/v24.19.0/bin/node",
+        "node_modules/typescript/bin/tsc",
+        "--noEmit"
+      ]
+    },
+    "scripts": {
+      "exit": 0,
+      "seconds": 2.612,
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-frontend-final-missing-jngvjial/logs/scripts.log",
+      "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-frontend-final-missing-jngvjial/source",
+      "command": [
+        "/Users/romanzheltov/.nvm/versions/node/v24.19.0/bin/node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-concurrency=1",
+        "scripts/tests/deploy-team-encryption.test.mjs",
+        "scripts/tests/environment-doctor.test.mjs",
+        "scripts/tests/metrika-dashboard-core.test.mjs",
+        "scripts/tests/sync-metrika-product-goals.test.mjs"
+      ],
+      "tests": 37,
+      "suites": 0,
+      "pass": 37,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "contract": {
+      "exit": 0,
+      "seconds": 30.801,
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-frontend-final-missing-jngvjial/logs/contract.log",
+      "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-frontend-final-missing-jngvjial/source/frontend",
+      "command": [
+        "/Users/romanzheltov/.nvm/versions/node/v24.19.0/bin/node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-concurrency=1",
+        "tests/contract/analytics-contract.test.mjs",
+        "tests/contract/devLogPrivacy.test.mjs",
+        "tests/contract/devServerSecurity.test.mjs",
+        "tests/contract/e2e-fixture-safety.test.mjs",
+        "tests/contract/e2e-owned-runtime.test.mjs",
+        "tests/contract/fullRegressionRunner.test.mjs",
+        "tests/contract/markdown-worker-browser.test.mjs",
+        "tests/contract/observed-protocol-command.test.mjs",
+        "tests/contract/roomRealtimeTransportWiring.test.mjs",
+        "tests/contract/teamInvitationSecretLifecycle.test.mjs"
+      ],
+      "tests": 56,
+      "suites": 0,
+      "pass": 56,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "native-contract": {
+      "exit": 0,
+      "seconds": 0.143,
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-frontend-final-missing-jngvjial/logs/native-contract.log",
+      "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-frontend-final-missing-jngvjial/source/frontend",
+      "command": [
+        "/Users/romanzheltov/.nvm/versions/node/v24.19.0/bin/node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-concurrency=1",
+        "tests/e2e/native-ax/native-ax-admission-contract.test.mjs",
+        "tests/e2e/native-ax/native-ax-bootstrap-contract.test.mjs",
+        "tests/e2e/native-ax/native-ax-receipt-contract.test.mjs"
+      ],
+      "tests": 14,
+      "suites": 0,
+      "pass": 14,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "browser": {
+      "exit": 0,
+      "seconds": 41.41,
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-frontend-final-missing-jngvjial/logs/browser.log",
+      "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-frontend-final-missing-jngvjial/source/frontend",
+      "command": [
+        "/Users/romanzheltov/.nvm/versions/node/v24.19.0/bin/node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-concurrency=1",
+        "tests/browser/managerYjsRecovery.test.mjs",
+        "tests/browser/workspaceCreationAndSelectors.test.mjs"
+      ],
+      "tests": 20,
+      "suites": 0,
+      "pass": 20,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "production-build": {
+      "exit": 0,
+      "seconds": 5.635,
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-frontend-final-missing-jngvjial/logs/production-build.log",
+      "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-frontend-final-missing-jngvjial/source/frontend",
+      "command": [
+        "/Users/romanzheltov/.nvm/versions/node/v24.19.0/bin/node",
+        "/Users/romanzheltov/.nvm/versions/node/v24.19.0/lib/node_modules/npm/bin/npm-cli.js",
+        "run",
+        "build"
+      ]
+    },
+    "native-swift": {
+      "exit": 0,
+      "seconds": 8.175,
+      "log": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-frontend-final-missing-jngvjial/logs/native-swift.log",
+      "cwd": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-frontend-final-missing-jngvjial/source/frontend",
+      "command": [
+        "/usr/bin/swift",
+        "test",
+        "--package-path",
+        "tests/e2e/native-ax"
+      ],
+      "tests": 14,
+      "fail": 0,
+      "pass": 14
+    }
+  },
+  "frontendAudit": {
+    "tests": 230,
+    "pass": 230,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "groups": 8,
+    "all_commands_exit_zero": true,
+    "workspace_changed_inputs": [],
+    "copy_changed_inputs": [],
+    "frontend_current_manifest_differences": [],
+    "source_manifest_sha256": "b3862369d5aaacfd29d00b5dd4d7938970946d61b2fdc9c3f2a6b3cdf6164b03",
+    "frontend_manifest_sha256": "0d2c43cffe99a85bf31fab000f160279b1da3ca1d669f84c24e4508eb6b75200",
+    "verified_freeze_hashes": {
+      "frontend/tests/e2e/auth/e2e-invite-token-negative.mjs": "e8e923d026e1506bb8982d7e2427906998485f668efe3ba54569778c9311d32a",
+      "frontend/tests/e2e/interview/e2e-room-context-panels.mjs": "5129d0ee2cb806a5bc8631aac01cb56cd754b3f46a893b7ade355769ff869c9d",
+      "frontend/tests/e2e/interview/e2e-room-shared-mode.mjs": "7e73f4f20e861c16fc289501e29b1807fa9e9a02f3c7584029a78e268349d6d7",
+      "frontend/tests/e2e/interview/e2e-multi-participant-activity.mjs": "6654de7c09ebbc779d2fc98906c98a0cc1cff3264a140aee128edf6f9f22fe60",
+      "frontend/tests/e2e/theme/e2e-header-workspace-selector.mjs": "085c2d2514cb8c9b0bea07036fec8b9d5df593eaa948d88faef0e862b386a1c3",
+      "frontend/tests/e2e/realtime/e2e-missing-room-sse-recovery.mjs": "1aa7efb241fddfeb72291a252cda1df80ad6d9f30ac11b5f638de9003e358d8c"
+    },
+    "owned_processes_with_snapshot_path": [],
+    "processes_with_snapshot_cwd": [],
+    "logs_sha256": {
+      "browser.log": "f2a73751f425285cf71bc5a38dae1fa3e803a48b7b59a9c78973518bdc726f9a",
+      "contract.log": "ba975e48bddc3d1f169ee0b58f95647eb243f109eb7dcd4aa9c230fd56efe400",
+      "native-contract.log": "d56472b9cc72b5568d7c13700630ba69189c69a711160bffc0f6f4d6257e8c37",
+      "native-swift.log": "f191299d1065b6cf9bef5272b4253b132a39525a557086e254465caaa4dc772f",
+      "production-build.log": "8cc770ca84be5bb0fcac96a1be78582c27a1ca456feb536cc9ba773c60053117",
+      "scripts.log": "4143668ac3e85461a09698557ce62fc3fc9b3ba6d5d8574ef0317860b4c6de14",
+      "typecheck.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "unit.log": "7fbf0d3e41a35509195b755aad70690ca13fdb56f77174ddf5c3bf90d1e9a8c9"
+    },
+    "test_discovery_audit": {
+      "auto_discovered_files": 36,
+      "other_test_files": [],
+      "missing_files": []
+    }
+  },
+  "e2e": {
+    "command": [
+      "/Users/romanzheltov/.nvm/versions/node/v24.19.0/bin/node",
+      "/Users/romanzheltov/.nvm/versions/node/v24.19.0/lib/node_modules/npm/bin/npm-cli.js",
+      "run",
+      "e2e:all"
+    ],
+    "additionalEnvironment": {
+      "E2E_TEAM_INVITATIONS_NATIVE_AX": "1",
+      "E2E_NATIVE_AX_LOCAL_ONLY": "1",
+      "E2E_NATIVE_AX_ALLOW_OS_FOCUS": "1",
+      "E2E_NATIVE_AX_TEST_ID": "teams/invitation-native-ax-lifecycle"
+    },
+    "sourceManifestSha256": "b8503fd18c6cdcb6cd109546fec237088f8f2b3a7fe69ea4822de67feb87ec9f",
+    "sourceInputFiles": 3052,
+    "sourceInputDrift": [],
+    "summary": {
+      "plan": {
+        "production": [
+          "tests/e2e/account/e2e-account-room-binding.mjs",
+          "tests/e2e/account/e2e-account-switch-fresh-data.mjs",
+          "tests/e2e/account/e2e-auth-navigation.mjs",
+          "tests/e2e/account/e2e-auth-registration-policy.mjs",
+          "tests/e2e/account/e2e-candidate-modal-smoke.mjs",
+          "tests/e2e/account/e2e-interviewer-role-notes-lock.mjs",
+          "tests/e2e/account/e2e-login-profile-hydration.mjs",
+          "tests/e2e/account/e2e-participants-presence.mjs",
+          "tests/e2e/account/e2e-personal-hiring-manager.mjs",
+          "tests/e2e/account/e2e-personal-interview-cards.mjs",
+          "tests/e2e/account/e2e-personal-team-scope.mjs",
+          "tests/e2e/account/e2e-profile-room-action-notifications.mjs",
+          "tests/e2e/account/e2e-social-login-disabled.mjs",
+          "tests/e2e/auth/e2e-invite-token-negative.mjs",
+          "tests/e2e/authoring/e2e-markdown-explainer-smoke.mjs",
+          "tests/e2e/authoring/e2e-pdf-export-progress.mjs",
+          "tests/e2e/authoring/e2e-personal-library-language-metadata.mjs",
+          "tests/e2e/authoring/e2e-plaintext-language.mjs",
+          "tests/e2e/authoring/e2e-private-notes-slash-export.mjs",
+          "tests/e2e/authoring/e2e-room-notes-download.mjs",
+          "tests/e2e/authoring/e2e-task-create-language-default.mjs",
+          "tests/e2e/chaos/e2e-chaos-fault-injection.mjs",
+          "tests/e2e/chaos/e2e-chaos-harness.mjs",
+          "tests/e2e/dashboard/e2e-admin-users-pagination.mjs",
+          "tests/e2e/dashboard/e2e-dashboard-action-notifications.mjs",
+          "tests/e2e/dashboard/e2e-dashboard-redesign.mjs",
+          "tests/e2e/dashboard/e2e-dashboard-smoke.mjs",
+          "tests/e2e/hr/e2e-hr-cabinet.mjs",
+          "tests/e2e/interview/e2e-activity-history-recovery.mjs",
+          "tests/e2e/interview/e2e-activity-timeline-grouping.mjs",
+          "tests/e2e/interview/e2e-briefing-focus-mode.mjs",
+          "tests/e2e/interview/e2e-demo-interview-scenario.mjs",
+          "tests/e2e/interview/e2e-interviewer-step-publication.mjs",
+          "tests/e2e/interview/e2e-join-race-sync.mjs",
+          "tests/e2e/interview/e2e-multi-participant-activity.mjs",
+          "tests/e2e/interview/e2e-room-command-editor-ux.mjs",
+          "tests/e2e/interview/e2e-room-condition-layout.mjs",
+          "tests/e2e/interview/e2e-room-context-panels.mjs",
+          "tests/e2e/interview/e2e-room-language-behavior-api.mjs",
+          "tests/e2e/interview/e2e-room-panel-continuity.mjs",
+          "tests/e2e/interview/e2e-room-review-regressions.mjs",
+          "tests/e2e/interview/e2e-room-shared-mode.mjs",
+          "tests/e2e/interview/e2e-room-step-smoke.mjs",
+          "tests/e2e/interview/e2e-smoke.mjs",
+          "tests/e2e/platform/e2e-fixture-lifecycle.mjs",
+          "tests/e2e/platform/e2e-legacy-domain-notice.mjs",
+          "tests/e2e/platform/e2e-metrika-hosts.mjs",
+          "tests/e2e/realtime/e2e-code-sync-regression.mjs",
+          "tests/e2e/realtime/e2e-cursor-no-dot.mjs",
+          "tests/e2e/realtime/e2e-finished-actions.mjs",
+          "tests/e2e/realtime/e2e-finished-role-access.mjs",
+          "tests/e2e/realtime/e2e-five-participant-collaboration.mjs",
+          "tests/e2e/realtime/e2e-hidden-tab-sync.mjs",
+          "tests/e2e/realtime/e2e-late-published-manager-workspace-event.mjs",
+          "tests/e2e/realtime/e2e-manager-workspace-integrity.mjs",
+          "tests/e2e/realtime/e2e-markdown-delivery-reliability.mjs",
+          "tests/e2e/realtime/e2e-missing-room-sse-recovery.mjs",
+          "tests/e2e/realtime/e2e-public-step-publication-preserves-edits.mjs",
+          "tests/e2e/realtime/e2e-queued-notes-finish.mjs",
+          "tests/e2e/realtime/e2e-realtime-authorization-recovery.mjs",
+          "tests/e2e/realtime/e2e-refresh-server-source-sync.mjs",
+          "tests/e2e/realtime/e2e-room-lifecycle-editing.mjs",
+          "tests/e2e/realtime/e2e-slow-network-sync.mjs",
+          "tests/e2e/realtime/e2e-sse-reconnect-sync.mjs",
+          "tests/e2e/realtime/e2e-yjs-abc-refresh-join-api.mjs",
+          "tests/e2e/realtime/e2e-yjs-delivery-reliability.mjs",
+          "tests/e2e/realtime/e2e-yjs-multi-participant-sync.mjs",
+          "tests/e2e/realtime/e2e-yjs-queue-boundaries.mjs",
+          "tests/e2e/realtime/e2e-yjs-refresh-stale-snapshot-api.mjs",
+          "tests/e2e/teams/e2e-team-action-notifications.mjs",
+          "tests/e2e/teams/e2e-team-availability.mjs",
+          "tests/e2e/teams/e2e-team-interview-edit.mjs",
+          "tests/e2e/teams/e2e-team-invitation-management.mjs",
+          "tests/e2e/teams/e2e-team-management-settings.mjs",
+          "tests/e2e/teams/e2e-team-membership.mjs",
+          "tests/e2e/teams/e2e-team-room-public-access.mjs",
+          "tests/e2e/teams/e2e-team-settings-roster.mjs",
+          "tests/e2e/teams/e2e-team-settings-typography.mjs",
+          "tests/e2e/teams/e2e-team-workspace-business.mjs",
+          "tests/e2e/teams/e2e-team-workspaces.mjs",
+          "tests/e2e/teams/e2e-ui2-followup-workspace.mjs",
+          "tests/e2e/teams/e2e-ui2-team.mjs",
+          "tests/e2e/teams/e2e-workspace-navigation.mjs",
+          "tests/e2e/theme/e2e-card-spacing.mjs",
+          "tests/e2e/theme/e2e-header-ux-review.mjs",
+          "tests/e2e/theme/e2e-header-workspace-selector.mjs",
+          "tests/e2e/theme/e2e-hiring-manager-selector.mjs",
+          "tests/e2e/theme/e2e-hiring-preparation.mjs",
+          "tests/e2e/theme/e2e-interactive-cursors.mjs",
+          "tests/e2e/theme/e2e-interhub-branding.mjs",
+          "tests/e2e/theme/e2e-library-delete-only.mjs",
+          "tests/e2e/theme/e2e-library-metadata-placement.mjs",
+          "tests/e2e/theme/e2e-personal-authoring-polish.mjs",
+          "tests/e2e/theme/e2e-profile-header-preparation.mjs",
+          "tests/e2e/theme/e2e-rename-alignment.mjs",
+          "tests/e2e/theme/e2e-room-authoring-geometry.mjs",
+          "tests/e2e/theme/e2e-selector-overflow.mjs",
+          "tests/e2e/theme/e2e-system-theme.mjs",
+          "tests/e2e/theme/e2e-theme-switch.mjs",
+          "tests/e2e/theme/e2e-track-vacancy-hierarchy.mjs",
+          "tests/e2e/theme/e2e-ui2-controls.mjs",
+          "tests/e2e/theme/e2e-ui2-delete-actions.mjs",
+          "tests/e2e/theme/e2e-ui2-followup.mjs",
+          "tests/e2e/theme/e2e-ui2-hiring-clarity.mjs",
+          "tests/e2e/theme/e2e-ui2-layout-followup.mjs",
+          "tests/e2e/theme/e2e-ui2-period-room-edit.mjs",
+          "tests/e2e/theme/e2e-ui2-personal.mjs",
+          "tests/e2e/theme/e2e-ui2-room.mjs"
+        ],
+        "development": [
+          "tests/e2e/platform/e2e-local-runtime-chunk-recovery.mjs",
+          "tests/e2e/theme/e2e-workspace-burger-frames.mjs",
+          "tests/e2e/theme/e2e-workspace-switch-stability.mjs"
+        ],
+        "excluded": [
+          {
+            "file": "tests/e2e/account/e2e-social-login.mjs",
+            "reason": "Google/VK integration is deferred by the user; FEATURE_SOCIAL_AUTH_ENABLED remains false"
+          }
+        ]
+      },
+      "results": [
+        {
+          "mode": "production",
+          "exitCode": 0,
+          "startedAt": "2026-10-30T20:56:52.974Z",
+          "finishedAt": "2026-10-30T21:17:42.195Z"
+        },
+        {
+          "mode": "development",
+          "exitCode": 0,
+          "startedAt": "2026-10-30T21:17:42.195Z",
+          "finishedAt": "2026-10-30T21:18:55.766Z"
+        }
+      ],
+      "suites": [
+        {
+          "mode": "production",
+          "suite": "tests/e2e/account/e2e-account-room-binding.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 9816
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/account/e2e-account-switch-fresh-data.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 2471
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/account/e2e-auth-navigation.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 971
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/account/e2e-auth-registration-policy.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 827
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/account/e2e-candidate-modal-smoke.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 1411
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/account/e2e-interviewer-role-notes-lock.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 1666
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/account/e2e-login-profile-hydration.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 5624
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/account/e2e-participants-presence.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 3341
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/account/e2e-personal-hiring-manager.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 10360
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/account/e2e-personal-interview-cards.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 6157
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/account/e2e-personal-team-scope.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 11173
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/account/e2e-profile-room-action-notifications.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 8113
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/account/e2e-social-login-disabled.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 1829
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/auth/e2e-invite-token-negative.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 4977
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/authoring/e2e-markdown-explainer-smoke.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 1444
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/authoring/e2e-pdf-export-progress.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 6895
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/authoring/e2e-personal-library-language-metadata.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 4035
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/authoring/e2e-plaintext-language.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 2293
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/authoring/e2e-private-notes-slash-export.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 1825
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/authoring/e2e-room-notes-download.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 1475
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/authoring/e2e-task-create-language-default.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 1140
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/chaos/e2e-chaos-fault-injection.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 3901
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/chaos/e2e-chaos-harness.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 3359
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/dashboard/e2e-admin-users-pagination.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 6201
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/dashboard/e2e-dashboard-action-notifications.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 2152
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/dashboard/e2e-dashboard-redesign.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 1503
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/dashboard/e2e-dashboard-smoke.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 901
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/hr/e2e-hr-cabinet.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 52552
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/interview/e2e-activity-history-recovery.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 66305
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/interview/e2e-activity-timeline-grouping.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 15033
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/interview/e2e-briefing-focus-mode.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 2616
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/interview/e2e-demo-interview-scenario.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 18824
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/interview/e2e-interviewer-step-publication.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 6740
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/interview/e2e-join-race-sync.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 5895
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/interview/e2e-multi-participant-activity.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 40348
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/interview/e2e-room-command-editor-ux.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 7223
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/interview/e2e-room-condition-layout.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 11953
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/interview/e2e-room-context-panels.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 81726
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/interview/e2e-room-language-behavior-api.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 285
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/interview/e2e-room-panel-continuity.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 21445
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/interview/e2e-room-review-regressions.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 2646
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/interview/e2e-room-shared-mode.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 13027
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/interview/e2e-room-step-smoke.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 2782
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/interview/e2e-smoke.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 1162
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/platform/e2e-fixture-lifecycle.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 631
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/platform/e2e-legacy-domain-notice.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 601
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/platform/e2e-metrika-hosts.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 3114
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/realtime/e2e-code-sync-regression.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 2142
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/realtime/e2e-cursor-no-dot.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 1550
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/realtime/e2e-finished-actions.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 5057
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/realtime/e2e-finished-role-access.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 10119
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/realtime/e2e-five-participant-collaboration.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 4664
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/realtime/e2e-hidden-tab-sync.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 12889
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/realtime/e2e-late-published-manager-workspace-event.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 190
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/realtime/e2e-manager-workspace-integrity.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 42580
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/realtime/e2e-markdown-delivery-reliability.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 30378
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/realtime/e2e-missing-room-sse-recovery.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 7197
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/realtime/e2e-public-step-publication-preserves-edits.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 7170
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/realtime/e2e-queued-notes-finish.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 8935
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/realtime/e2e-realtime-authorization-recovery.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 1865
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/realtime/e2e-refresh-server-source-sync.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 1563
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/realtime/e2e-room-lifecycle-editing.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 39199
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/realtime/e2e-slow-network-sync.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 44970
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/realtime/e2e-sse-reconnect-sync.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 9940
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/realtime/e2e-yjs-abc-refresh-join-api.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 245
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/realtime/e2e-yjs-delivery-reliability.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 11233
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/realtime/e2e-yjs-multi-participant-sync.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 30660
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/realtime/e2e-yjs-queue-boundaries.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 2659
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/realtime/e2e-yjs-refresh-stale-snapshot-api.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 255
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/teams/e2e-team-action-notifications.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 9527
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/teams/e2e-team-availability.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 3565
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/teams/e2e-team-interview-edit.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 21343
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/teams/e2e-team-invitation-management.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 83644
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/teams/e2e-team-management-settings.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 26076
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/teams/e2e-team-membership.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 3538
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/teams/e2e-team-room-public-access.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 2161
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/teams/e2e-team-settings-roster.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 7630
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/teams/e2e-team-settings-typography.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 1056
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/teams/e2e-team-workspace-business.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 11609
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/teams/e2e-team-workspaces.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 58154
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/teams/e2e-ui2-followup-workspace.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 2994
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/teams/e2e-ui2-team.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 7253
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/teams/e2e-workspace-navigation.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 46781
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/theme/e2e-card-spacing.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 5381
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/theme/e2e-header-ux-review.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 5477
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/theme/e2e-header-workspace-selector.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 5451
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/theme/e2e-hiring-manager-selector.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 20130
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/theme/e2e-hiring-preparation.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 6373
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/theme/e2e-interactive-cursors.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 3300
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/theme/e2e-interhub-branding.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 1519
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/theme/e2e-library-delete-only.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 8070
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/theme/e2e-library-metadata-placement.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 4720
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/theme/e2e-personal-authoring-polish.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 5415
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/theme/e2e-profile-header-preparation.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 3007
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/theme/e2e-rename-alignment.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 3490
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/theme/e2e-room-authoring-geometry.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 8467
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/theme/e2e-selector-overflow.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 7767
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/theme/e2e-system-theme.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 3904
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/theme/e2e-theme-switch.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 3788
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/theme/e2e-track-vacancy-hierarchy.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 2252
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/theme/e2e-ui2-controls.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 2771
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/theme/e2e-ui2-delete-actions.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 11770
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/theme/e2e-ui2-followup.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 6080
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/theme/e2e-ui2-hiring-clarity.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 6877
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/theme/e2e-ui2-layout-followup.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 9689
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/theme/e2e-ui2-period-room-edit.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 52148
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/theme/e2e-ui2-personal.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 6637
+        },
+        {
+          "mode": "production",
+          "suite": "tests/e2e/theme/e2e-ui2-room.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 2563
+        },
+        {
+          "mode": "development",
+          "suite": "tests/e2e/platform/e2e-local-runtime-chunk-recovery.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 1051
+        },
+        {
+          "mode": "development",
+          "suite": "tests/e2e/theme/e2e-workspace-burger-frames.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 31522
+        },
+        {
+          "mode": "development",
+          "suite": "tests/e2e/theme/e2e-workspace-switch-stability.mjs",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 12923
+        }
+      ],
+      "interrupted": false,
+      "passed": true,
+      "reportDir": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-green-final-complete-20261030-e470zu1w/evidence"
+    },
+    "exit": {
+      "exitCode": 0,
+      "durationSeconds": 1322.926,
+      "finishedAt": "2026-10-30T21:18:55.774034+00:00"
+    },
+    "nodeTests": {
+      "tests": 595,
+      "pass": 595,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "suitesWithCounts": [
+      {
+        "mode": "production",
+        "suite": "tests/e2e/account/e2e-account-room-binding.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 9816,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/account/e2e-account-switch-fresh-data.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 2471,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/account/e2e-auth-navigation.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 971,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/account/e2e-auth-registration-policy.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 827,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/account/e2e-candidate-modal-smoke.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 1411,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/account/e2e-interviewer-role-notes-lock.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 1666,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/account/e2e-login-profile-hydration.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 5624,
+        "tests": {
+          "tests": 10,
+          "pass": 10,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/account/e2e-participants-presence.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 3341,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/account/e2e-personal-hiring-manager.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 10360,
+        "tests": {
+          "tests": 4,
+          "pass": 4,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/account/e2e-personal-interview-cards.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 6157,
+        "tests": {
+          "tests": 7,
+          "pass": 7,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/account/e2e-personal-team-scope.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 11173,
+        "tests": {
+          "tests": 9,
+          "pass": 9,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/account/e2e-profile-room-action-notifications.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 8113,
+        "tests": {
+          "tests": 7,
+          "pass": 7,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/account/e2e-social-login-disabled.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 1829,
+        "tests": {
+          "tests": 2,
+          "pass": 2,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/auth/e2e-invite-token-negative.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 4977,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/authoring/e2e-markdown-explainer-smoke.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 1444,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/authoring/e2e-pdf-export-progress.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 6895,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/authoring/e2e-personal-library-language-metadata.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 4035,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/authoring/e2e-plaintext-language.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 2293,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/authoring/e2e-private-notes-slash-export.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 1825,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/authoring/e2e-room-notes-download.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 1475,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/authoring/e2e-task-create-language-default.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 1140,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/chaos/e2e-chaos-fault-injection.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 3901,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/chaos/e2e-chaos-harness.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 3359,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/dashboard/e2e-admin-users-pagination.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 6201,
+        "tests": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/dashboard/e2e-dashboard-action-notifications.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 2152,
+        "tests": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/dashboard/e2e-dashboard-redesign.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 1503,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/dashboard/e2e-dashboard-smoke.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 901,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/hr/e2e-hr-cabinet.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 52552,
+        "tests": {
+          "tests": 33,
+          "pass": 33,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-activity-history-recovery.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 66305,
+        "tests": {
+          "tests": 10,
+          "pass": 10,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-activity-timeline-grouping.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 15033,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-briefing-focus-mode.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 2616,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-demo-interview-scenario.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 18824,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-interviewer-step-publication.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 6740,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-join-race-sync.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 5895,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-multi-participant-activity.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 40348,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-room-command-editor-ux.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 7223,
+        "tests": {
+          "tests": 7,
+          "pass": 7,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-room-condition-layout.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 11953,
+        "tests": {
+          "tests": 9,
+          "pass": 9,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-room-context-panels.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 81726,
+        "tests": {
+          "tests": 19,
+          "pass": 19,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-room-language-behavior-api.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 285,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-room-panel-continuity.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 21445,
+        "tests": {
+          "tests": 4,
+          "pass": 4,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-room-review-regressions.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 2646,
+        "tests": {
+          "tests": 4,
+          "pass": 4,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-room-shared-mode.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 13027,
+        "tests": {
+          "tests": 4,
+          "pass": 4,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-room-step-smoke.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 2782,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-smoke.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 1162,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/platform/e2e-fixture-lifecycle.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 631,
+        "tests": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/platform/e2e-legacy-domain-notice.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 601,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/platform/e2e-metrika-hosts.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 3114,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-code-sync-regression.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 2142,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-cursor-no-dot.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 1550,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-finished-actions.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 5057,
+        "tests": {
+          "tests": 4,
+          "pass": 4,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-finished-role-access.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 10119,
+        "tests": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-five-participant-collaboration.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 4664,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-hidden-tab-sync.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 12889,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-late-published-manager-workspace-event.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 190,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-manager-workspace-integrity.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 42580,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-markdown-delivery-reliability.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 30378,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-missing-room-sse-recovery.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 7197,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-public-step-publication-preserves-edits.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 7170,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-queued-notes-finish.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 8935,
+        "tests": {
+          "tests": 4,
+          "pass": 4,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-realtime-authorization-recovery.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 1865,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-refresh-server-source-sync.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 1563,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-room-lifecycle-editing.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 39199,
+        "tests": {
+          "tests": 10,
+          "pass": 10,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-slow-network-sync.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 44970,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-sse-reconnect-sync.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 9940,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-yjs-abc-refresh-join-api.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 245,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-yjs-delivery-reliability.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 11233,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-yjs-multi-participant-sync.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 30660,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-yjs-queue-boundaries.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 2659,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-yjs-refresh-stale-snapshot-api.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 255,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/teams/e2e-team-action-notifications.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 9527,
+        "tests": {
+          "tests": 16,
+          "pass": 16,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/teams/e2e-team-availability.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 3565,
+        "tests": {
+          "tests": 5,
+          "pass": 5,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/teams/e2e-team-interview-edit.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 21343,
+        "tests": {
+          "tests": 14,
+          "pass": 14,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/teams/e2e-team-invitation-management.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 83644,
+        "tests": {
+          "tests": 15,
+          "pass": 15,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/teams/e2e-team-management-settings.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 26076,
+        "tests": {
+          "tests": 23,
+          "pass": 23,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/teams/e2e-team-membership.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 3538,
+        "tests": {
+          "tests": 8,
+          "pass": 8,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/teams/e2e-team-room-public-access.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 2161,
+        "tests": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/teams/e2e-team-settings-roster.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 7630,
+        "tests": {
+          "tests": 14,
+          "pass": 14,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/teams/e2e-team-settings-typography.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 1056,
+        "tests": {
+          "tests": 2,
+          "pass": 2,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/teams/e2e-team-workspace-business.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 11609,
+        "tests": {
+          "tests": 13,
+          "pass": 13,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/teams/e2e-team-workspaces.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 58154,
+        "tests": {
+          "tests": 49,
+          "pass": 49,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/teams/e2e-ui2-followup-workspace.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 2994,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/teams/e2e-ui2-team.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 7253,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/teams/e2e-workspace-navigation.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 46781,
+        "tests": {
+          "tests": 109,
+          "pass": 109,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-card-spacing.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 5381,
+        "tests": {
+          "tests": 4,
+          "pass": 4,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-header-ux-review.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 5477,
+        "tests": {
+          "tests": 8,
+          "pass": 8,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-header-workspace-selector.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 5451,
+        "tests": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-hiring-manager-selector.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 20130,
+        "tests": {
+          "tests": 6,
+          "pass": 6,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-hiring-preparation.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 6373,
+        "tests": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-interactive-cursors.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 3300,
+        "tests": {
+          "tests": 4,
+          "pass": 4,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-interhub-branding.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 1519,
+        "tests": {
+          "tests": 4,
+          "pass": 4,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-library-delete-only.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 8070,
+        "tests": {
+          "tests": 6,
+          "pass": 6,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-library-metadata-placement.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 4720,
+        "tests": {
+          "tests": 5,
+          "pass": 5,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-personal-authoring-polish.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 5415,
+        "tests": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-profile-header-preparation.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 3007,
+        "tests": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-rename-alignment.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 3490,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-room-authoring-geometry.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 8467,
+        "tests": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-selector-overflow.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 7767,
+        "tests": {
+          "tests": 4,
+          "pass": 4,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-system-theme.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 3904,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-theme-switch.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 3788,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-track-vacancy-hierarchy.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 2252,
+        "tests": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-ui2-controls.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 2771,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-ui2-delete-actions.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 11770,
+        "tests": {
+          "tests": 5,
+          "pass": 5,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-ui2-followup.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 6080,
+        "tests": {
+          "tests": 4,
+          "pass": 4,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-ui2-hiring-clarity.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 6877,
+        "tests": {
+          "tests": 6,
+          "pass": 6,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-ui2-layout-followup.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 9689,
+        "tests": {
+          "tests": 9,
+          "pass": 9,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-ui2-period-room-edit.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 52148,
+        "tests": {
+          "tests": 7,
+          "pass": 7,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-ui2-personal.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 6637,
+        "tests": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-ui2-room.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 2563,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "development",
+        "suite": "tests/e2e/platform/e2e-local-runtime-chunk-recovery.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 1051,
+        "tests": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "development",
+        "suite": "tests/e2e/theme/e2e-workspace-burger-frames.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 31522,
+        "tests": {
+          "tests": 9,
+          "pass": 9,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "mode": "development",
+        "suite": "tests/e2e/theme/e2e-workspace-switch-stability.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 12923,
+        "tests": {
+          "tests": 7,
+          "pass": 7,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      }
+    ]
+  },
+  "cleanupAudit": {
+    "result": "PASS",
+    "at": "2026-10-30T21:19:28.497678+00:00",
+    "readOnly": true,
+    "scratchDatabase": "interview_hr_1788631751397",
+    "ownedSchemas": [
+      "interhub_e2e_9984dc134cc64409a2f7f9d14863f489",
+      "interhub_e2e_ffce8bcda59942cbabd88a35b62e53d1"
+    ],
+    "remainingOwnedSchemas": [],
+    "historicalOwnedSchemasChecked": [
+      "interhub_e2e_189aef6f99654dc5ac3f4df95b8efdfb",
+      "interhub_e2e_2103ab5731004d1380a741c0fb4c1ea0",
+      "interhub_e2e_26df324ee36c4de3b874f054fc40b147",
+      "interhub_e2e_35bf9ba19a4141109c3da2d362b2cfa4",
+      "interhub_e2e_95d59ab87c904a99914d06e4bab4b7f6",
+      "interhub_e2e_974baf0f78534c7da6c4b2f364919832",
+      "interhub_e2e_d3c2a1fe456e49d3abf6bbd18a00acc3",
+      "interhub_e2e_ff5a2afc178c48838f8dcc59efd4e192"
+    ],
+    "remainingHistoricalOwnedSchemas": [],
+    "ownedRuntimeNames": [
+      "interhub-e2e-runtime-KV0bq1",
+      "interhub-e2e-runtime-lNw0Ry"
+    ],
+    "remainingMatchingPids": [],
+    "userAppOrProductionActions": false
+  },
+  "extraStaticChecks": {
+    "createdAt": "2026-10-30T18:59:50.546198+00:00",
+    "sourceRoot": "/Users/romanzheltov/Desktop/frontentd-projects/interview-online-codex",
+    "sourceEdits": false,
+    "servicesBuiltStartedStopped": false,
+    "composeVersion": {
+      "command": [
+        "docker",
+        "compose",
+        "version",
+        "--short"
+      ],
+      "available": true,
+      "exitCode": 0,
+      "output": "2.32.4"
+    },
+    "composeEnvironment": "whitelisted system PATH/HOME/LANG/TMPDIR; required application values are public synthetic fixtures; --env-file /dev/null prevents dotenv input",
+    "checks": [
+      {
+        "kind": "shell-syntax",
+        "file": "scripts/dev-up.sh",
+        "command": [
+          "bash",
+          "-n",
+          "scripts/dev-up.sh"
+        ],
+        "exitCode": 0,
+        "output": "",
+        "sha256": "3136cd8ff28dd91556698f4c238d3aa41896f98c00c99a1cf343fc51f46352ca"
+      },
+      {
+        "kind": "shell-syntax",
+        "file": "backend/scripts/environment_doctor.sh",
+        "command": [
+          "bash",
+          "-n",
+          "backend/scripts/environment_doctor.sh"
+        ],
+        "exitCode": 0,
+        "output": "",
+        "sha256": "2c8fc38de6b0f0f148397ffb722f532628080627e04cd2a1156634f0a9297631"
+      },
+      {
+        "kind": "shell-syntax",
+        "file": "deploy/scripts/deploy_docker.sh",
+        "command": [
+          "bash",
+          "-n",
+          "deploy/scripts/deploy_docker.sh"
+        ],
+        "exitCode": 0,
+        "output": "",
+        "sha256": "8936faa64d53887d43175abffefa23886aa03aae908175b9ee66dfbf5acb1ea3"
+      },
+      {
+        "kind": "shell-syntax",
+        "file": "deploy/scripts/init_ssl_docker.sh",
+        "command": [
+          "bash",
+          "-n",
+          "deploy/scripts/init_ssl_docker.sh"
+        ],
+        "exitCode": 0,
+        "output": "",
+        "sha256": "2d2686715f2cc265c6af09d83a52ff71e1dc65dee780acc91338d343eebc57a0"
+      },
+      {
+        "kind": "shell-syntax",
+        "file": "deploy/scripts/run_docker_local.sh",
+        "command": [
+          "bash",
+          "-n",
+          "deploy/scripts/run_docker_local.sh"
+        ],
+        "exitCode": 0,
+        "output": "",
+        "sha256": "bf8b00074228093777e70280b02e85aea436a9a6aec19c0b4085ee92dbd99f05"
+      },
+      {
+        "kind": "shell-syntax",
+        "file": "frontend/docker-entrypoint.sh",
+        "command": [
+          "sh",
+          "-n",
+          "frontend/docker-entrypoint.sh"
+        ],
+        "exitCode": 0,
+        "output": "",
+        "sha256": "7bc6a00693e595028409486e2990e9151ddf875e43b2ae8431a23fd09e1b7e86"
+      },
+      {
+        "kind": "compose-config",
+        "files": [
+          "docker-compose.dev.yml"
+        ],
+        "command": [
+          "docker",
+          "compose",
+          "--env-file",
+          "/dev/null",
+          "-f",
+          "docker-compose.dev.yml",
+          "config",
+          "--quiet"
+        ],
+        "exitCode": 0,
+        "status": "PASS",
+        "output": ""
+      },
+      {
+        "kind": "compose-config",
+        "files": [
+          "docker-compose.prod.yml"
+        ],
+        "command": [
+          "docker",
+          "compose",
+          "--env-file",
+          "/dev/null",
+          "-f",
+          "docker-compose.prod.yml",
+          "config",
+          "--quiet"
+        ],
+        "exitCode": 0,
+        "status": "PASS",
+        "output": ""
+      },
+      {
+        "kind": "compose-config",
+        "files": [
+          "docker-compose.prod.yml",
+          "docker-compose.local.yml"
+        ],
+        "command": [
+          "docker",
+          "compose",
+          "--env-file",
+          "/dev/null",
+          "-f",
+          "docker-compose.prod.yml",
+          "-f",
+          "docker-compose.local.yml",
+          "config",
+          "--quiet"
+        ],
+        "exitCode": 0,
+        "status": "PASS",
+        "output": ""
+      },
+      {
+        "kind": "compose-config",
+        "files": [
+          "docker-compose.prod.yml",
+          "docker-compose.shared-proxy.yml"
+        ],
+        "command": [
+          "docker",
+          "compose",
+          "--env-file",
+          "/dev/null",
+          "-f",
+          "docker-compose.prod.yml",
+          "-f",
+          "docker-compose.shared-proxy.yml",
+          "config",
+          "--quiet"
+        ],
+        "exitCode": 0,
+        "status": "PASS",
+        "output": ""
+      },
+      {
+        "kind": "compose-config",
+        "files": [
+          "docker-compose.prod.yml",
+          "docker-compose.local.yml",
+          "docker-compose.shared-proxy.yml"
+        ],
+        "command": [
+          "docker",
+          "compose",
+          "--env-file",
+          "/dev/null",
+          "-f",
+          "docker-compose.prod.yml",
+          "-f",
+          "docker-compose.local.yml",
+          "-f",
+          "docker-compose.shared-proxy.yml",
+          "config",
+          "--quiet"
+        ],
+        "exitCode": 0,
+        "status": "PASS",
+        "output": ""
+      }
+    ]
+  },
+  "review": {
+    "decision": "APPROVE",
+    "security": "PASS",
+    "reliability": "PASS",
+    "multiTestSha256": "6654de7c09ebbc779d2fc98906c98a0cc1cff3264a140aee128edf6f9f22fe60",
+    "nativeAxOptIn": "fakePage/fakeNativeFocus only, no OS actions"
+  },
+  "multiParticipant": {
+    "result": "PASS",
+    "totalSources": 2100,
+    "editorConverged": true,
+    "editorModels": [
+      {
+        "participant": "owner",
+        "available": true,
+        "length": 2112,
+        "digits": [
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300
+        ],
+        "equalsOwner": true
+      },
+      {
+        "participant": "interviewer",
+        "available": true,
+        "length": 2112,
+        "digits": [
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300
+        ],
+        "equalsOwner": true
+      },
+      {
+        "participant": "hr",
+        "available": true,
+        "length": 2112,
+        "digits": [
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300
+        ],
+        "equalsOwner": true
+      },
+      {
+        "participant": "candidate-1",
+        "available": true,
+        "length": 2112,
+        "digits": [
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300
+        ],
+        "equalsOwner": true
+      },
+      {
+        "participant": "candidate-2",
+        "available": true,
+        "length": 2112,
+        "digits": [
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300
+        ],
+        "equalsOwner": true
+      },
+      {
+        "participant": "candidate-3",
+        "available": true,
+        "length": 2112,
+        "digits": [
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300
+        ],
+        "equalsOwner": true
+      },
+      {
+        "participant": "candidate-4",
+        "available": true,
+        "length": 2112,
+        "digits": [
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300
+        ],
+        "equalsOwner": true
+      },
+      {
+        "participant": "candidate-5",
+        "available": true,
+        "length": 2112,
+        "digits": [
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300
+        ],
+        "equalsOwner": true
+      },
+      {
+        "participant": "candidate-6",
+        "available": true,
+        "length": 2112,
+        "digits": [
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300
+        ],
+        "equalsOwner": true
+      },
+      {
+        "participant": "candidate-7",
+        "available": true,
+        "length": 2112,
+        "digits": [
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300
+        ],
+        "equalsOwner": true
+      }
+    ],
+    "convergedAfterReload": [
+      "owner",
+      "hr"
+    ],
+    "unexpectedRuntimeCount": 0,
+    "failures": [],
+    "limitations": [
+      "Browser did not expose hidden visibility after real tab activation; leave/return visibility coverage remains unverified."
+    ]
+  },
+  "completedCandidateRuns": [
+    {
+      "base": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-green-final-complete-20261030-6okjftyp",
+      "interrupted": false,
+      "suites": 111,
+      "counts": {
+        "tests": 595,
+        "pass": 594,
+        "fail": 1,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "failedFiles": [
+        "tests/e2e/theme/e2e-header-workspace-selector.mjs"
+      ],
+      "sourceManifestSha256": "384e7ac11c065050088775227399581b46920485e7275279c9c73c71e7ed36b2"
+    }
+  ],
+  "interruptedCandidateRuns": [
+    {
+      "driver": 8991,
+      "master": 9018,
+      "processCount": 18,
+      "at": "2026-10-30T19:34:50.759631+00:00",
+      "base": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-green-final-complete-20261030-z2t1ju7l",
+      "reason": "Unbounded owned CDP diagnostic after exact fetch cancellation; preserve as interrupted non-PASS, fix then rerun all111"
+    },
+    {
+      "base": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-green-final-complete-20261030-35b4kf_c",
+      "driver": 13866,
+      "master": 13891,
+      "at": "2026-10-30T19:46:45.816577+00:00",
+      "reason": "Known invalid-invite test expected SSE error despite earlier terminal REST404; stop failed candidate, retain bounded multi PASS, rerun all111 after fix",
+      "knownFailures": [
+        "tests/e2e/auth/e2e-invite-token-negative.mjs"
+      ],
+      "completedFiles": 37,
+      "multiWholeRunPassed": true,
+      "sourceManifestSha256": "9963ffd15c2fa1a2b1dbd4bb2aeb3e3fa1d9e3354ccffc84d7a7027b12a0d621"
+    },
+    {
+      "base": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-green-final-complete-20261030-bf9yysed",
+      "driver": 17546,
+      "master": 17571,
+      "at": "2026-10-30T20:02:18.134209+00:00",
+      "reason": "Known observer history-body loss and two readiness races; preserve non-PASS candidate and rerun all111 after verified fixes",
+      "knownFailures": [
+        "tests/e2e/interview/e2e-multi-participant-activity.mjs",
+        "tests/e2e/interview/e2e-room-context-panels.mjs",
+        "tests/e2e/interview/e2e-room-shared-mode.mjs"
+      ],
+      "completedFiles": 72,
+      "multiWholeRunPassed": false,
+      "sourceManifestSha256": "0cff0c8126149c1f414bb9151d53d09bc73ff616c3cb2380196820a363d1425b"
+    },
+    {
+      "base": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-green-final-complete-20261030-w4aly5ny",
+      "driver": 36223,
+      "master": 36250,
+      "at": "2026-10-30T20:56:38.966199+00:00",
+      "reason": "Known missing-room test assumed one fallback probe despite earlier terminal REST404; stop failed candidate and rerun all111 after both real response orders and remaining3 recovery cases pass",
+      "knownFailures": [
+        "tests/e2e/realtime/e2e-missing-room-sse-recovery.mjs"
+      ],
+      "completedFiles": 86,
+      "multiWholeRunPassed": true,
+      "sourceManifestSha256": "69acfe4657a6debba5da61f507d85bb7962c4bf3b657975ebfd6c28a64285bf7"
+    }
+  ],
+  "priorPostRepairWholeRun": {
+    "summaryPath": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-green-final-e2e-20261030-5c4zckw3/evidence/summary.json",
+    "counts": {
+      "tests": 595,
+      "pass": 591,
+      "fail": 3,
+      "cancelled": 0,
+      "skipped": 1,
+      "todo": 0
+    },
+    "failedFiles": [
+      "tests/e2e/account/e2e-personal-interview-cards.mjs",
+      "tests/e2e/authoring/e2e-personal-library-language-metadata.mjs",
+      "tests/e2e/interview/e2e-multi-participant-activity.mjs"
+    ]
+  },
+  "limits": [
+    "Google/VK enabled suite deferred by explicit user decision; disabled suite included",
+    "Live NativeAX/manual physical tab foreground witness not performed; fake contract is not product acceptance",
+    "Existing two frontend asset size warnings; DOM creation/sanitization remains on main thread",
+    "Production topology and product acceptance are separate; no deployment performed"
+  ],
+  "evidence": {
+    "backend": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-backend-final-green-20261030-fo25cr7n",
+    "frontend": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-frontend-final-missing-jngvjial",
+    "wholeE2E": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-green-final-complete-20261030-e470zu1w",
+    "forcedHistory": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-history-nonce-forced-20261030-uc6v4oci/summary.json",
+    "readiness": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-panels-mode-readiness-r5jdng4w/final-summary.json",
+    "headerGeometry": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-header-selector-readiness-tdono9np/final-summary.json",
+    "missingRoom": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-missing-room-final-green-20261030-t9ou4vq9/summary.json",
+    "authNegative": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-invalid-invite-green-20261030-40le665l/summary.json",
+    "targetedMulti": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-history-nonce-ordinary-20261030-2919y7xd/summary.json"
+  }
+}

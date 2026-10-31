@@ -12,7 +12,7 @@ import React, {
   useState,
 } from "react";
 import { Button, Tooltip } from "antd";
-import { IconHelpCircle } from "components/antd-icons";
+import { IconCode, IconHelpCircle } from "components/antd-icons";
 import { isRoomReadOnly } from "./roomEditPolicy";
 
 import styles from "./RoomContextPanels.module.css";
@@ -306,6 +306,7 @@ export function RoomContextPanels({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const surfaceGridRef = useRef<HTMLDivElement | null>(null);
   const conditionOwnsFocusRef = useRef(false);
+  const editorReturnRequestedRef = useRef(false);
   const tabRefs = useRef(new Map<AuxiliarySurfaceName, HTMLButtonElement>());
   const initialGeometry = useMemo(readUsableGeometry, []);
   const [geometry, setGeometry] = useState(initialGeometry);
@@ -313,7 +314,7 @@ export function RoomContextPanels({
   const previousAutomaticModeRef = useRef(initialAutomaticMode);
   const [mode, setMode] = useState<RoomContextLayoutMode>(initialAutomaticMode);
   const [activeSurface, setActiveSurface] = useState<RoomContextSurfaceName>(
-    "steps",
+    "editor",
   );
   const [focusedSurface, setFocusedSurface] =
     useState<RoomContextSurfaceName>(
@@ -403,7 +404,8 @@ export function RoomContextPanels({
     previousAutomaticModeRef.current = nextMode;
     setGeometry(nextGeometry);
     setMode(nextMode);
-    setActiveSurface("steps");
+    editorReturnRequestedRef.current = false;
+    setActiveSurface("editor");
     setFocusedSurface("steps");
     setLastAuxiliarySurface("steps");
     setConditionExpanded(true);
@@ -477,6 +479,18 @@ export function RoomContextPanels({
       setShowBothCommunicationSurfaces(false);
     }
   }, []);
+
+  useLayoutEffect(() => {
+    if (activeSurface !== "editor" || !editorReturnRequestedRef.current) return;
+    editorReturnRequestedRef.current = false;
+    const region = rootRef.current?.querySelector<HTMLElement>(`#${surfaceRegionId("editor")}`);
+    const content = region?.querySelector<HTMLElement>('.cm-content');
+    if (content) content.focus({ preventScroll: true });
+    if (region && !region.contains(document.activeElement)) {
+      region.tabIndex = -1;
+      region.focus({ preventScroll: true });
+    }
+  }, [activeSurface]);
 
   const moveVisibleFocus = (
     event: KeyboardEvent<HTMLElement>,
@@ -598,18 +612,26 @@ export function RoomContextPanels({
 
         <div className={styles.secondaryControls}>
           {headerAction}
-          {mode === "focus" && activeSurface !== "editor" ? (
-            <Button
-              type="text"
-              htmlType="button"
-              className={styles.modeButton}
-              aria-label="Вернуться к редактору"
-              onClick={() => setActiveSurface("editor")}
-            >
-              К редактору
-            </Button>
-          ) : null}
         </div>
+        {mode === "focus" && activeSurface !== "editor" ? (
+          <div className={styles.editorReturn}>
+            <Button
+              type="primary"
+              htmlType="button"
+              block
+              icon={<IconCode size={16} aria-hidden="true" />}
+              className={styles.editorReturnButton}
+              aria-label="Вернуться к редактору"
+              aria-controls={surfaceRegionId("editor")}
+              onClick={() => {
+                editorReturnRequestedRef.current = true;
+                setActiveSurface("editor");
+              }}
+            >
+              Вернуться к редактору
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       <RoomContext.Provider value={contextValue}>

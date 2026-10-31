@@ -4,9 +4,17 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { runObservedProtocolCommand, withProtocolDeadline } from '../support/observed-protocol-command.mjs';
 
 const web = process.env.E2E_BASE_URL || 'http://localhost:5173';
 const api = process.env.E2E_API_URL || 'http://localhost:18080/api';
+const requestTraceHeader = 'x-interhub-test-request-id';
+const historyBodyLookupFailures = [
+  'response.json: Protocol error (Network.getResponseBody): No data found for resource with given identifier',
+  'response.json: Protocol error (Network.getResponseBody): No resource with given identifier found',
+];
+const forceHistoryBodyLookupLoss = process.env.E2E_FORCE_HISTORY_BODY_LOOKUP_LOSS === 'true';
+let forcedHistoryInspections = 0;
 const rounds = 3, keysPerRound = 100;
 const out = fileURLToPath(new URL(`../../../../output/playwright/multi-activity/${Date.now()}/`, import.meta.url));
 await mkdir(out, { recursive: true });
@@ -57,6 +65,21 @@ async function open(auth, room, label, candidate = false) {
   let lifecycleObservationOrder = 0;
   const observedCloses = new Map();
   const rejectedActivity = [], resourceConsoles = [], httpFailures = [];
+  const fetchCancellations = new Map();
+  const cancellationFor = traceId => {
+    let entry = fetchCancellations.get(traceId);
+    if (!entry) {
+      let resolve;
+      const promise = new Promise(done => { resolve = done; });
+      entry = { promise, resolve }; fetchCancellations.set(traceId, entry);
+    }
+    return entry;
+  };
+  await context.exposeBinding('__multiFetchCanceled', ({ page, frame }, value) => {
+    if (page !== view.page || frame !== page.mainFrame() || typeof value?.traceId !== 'string' ||
+        typeof value?.documentId !== 'string') return;
+    cancellationFor(value.traceId).resolve(value);
+  });
   await context.exposeBinding('__multiExplicitClose', ({ page, frame }, value) => {
     if (page !== view.page || frame !== page.mainFrame() || !value ||
         typeof value.documentId !== 'string' || typeof value.sourceId !== 'string' ||
@@ -66,18 +89,18 @@ async function open(auth, room, label, candidate = false) {
       documentId: value.documentId, sourceId: value.sourceId, order: ++lifecycleObservationOrder,
     });
   });
-  await context.addInitScript(({ token, name, candidate, userId, observeInjectedDuplicate }) => {
+  await context.addInitScript(({ token, name, candidate, userId, observeInjectedDuplicate, requestTraceHeader, roomPath, relayPath, historyPath }) => {
     localStorage.setItem('auth_token', token); localStorage.setItem('display_name', name);
     const native = window.EventSource;
     // Full URLs stay inside this document's memory. The inspector returns only
     // source IDs, paths and lifecycle timestamps, never auth/capability values.
     const sourceAudits = [], auditBySource = new WeakMap(), documentId = crypto.randomUUID();
-    const rejectedAttempts = [];
+    const rejectedAttempts = [], fetchAudits = new Map();
     const relayObservations = { keyPressRequestsAfterInjection: 0, matchingRelayRequests: 0,
       matchingSessionRequests: 0, matchingOldTokenRequests: 0,
       matchingHydratedRetryRequests: 0, matchingRejectedResponses: 0 };
     let duplicateAdmission = null;
-    window.__multi = { connections: 0, state: null, errors: [], privateLeaks: [], candidateKeys: 0, longTasks: [], tabEvents: [] };
+    window.__multi = { documentId, connections: 0, state: null, errors: [], privateLeaks: [], candidateKeys: 0, longTasks: [], tabEvents: [] };
     window.__multi.inspectExplicitStartupClose = (requestUrl, failedAt, observedCloses = [], failedOrder = null) => {
       const matches = sourceAudits.filter(audit => audit.url === requestUrl);
       if (matches.length !== 1) return { proven: false, matchingSources: matches.length };
@@ -104,7 +127,7 @@ async function open(auth, room, label, candidate = false) {
       };
     };
     window.__multi.inspectInjectedTokenRejection = query => {
-      const matches = rejectedAttempts.filter(attempt => attempt.url === query.requestUrl &&
+      const matches = rejectedAttempts.filter(attempt => attempt.id === query.traceId && attempt.url === query.requestUrl &&
         attempt.sessionId === query.sessionId && attempt.token === query.eventToken &&
         attempt.sourceEventId === query.sourceEventId);
       const attempt = matches.length === 1 ? matches[0] : null;
@@ -122,8 +145,8 @@ async function open(auth, room, label, candidate = false) {
           duplicateErrored: admission?.errorAt !== null && admission?.errorAt !== undefined,
           duplicateStateObserved: admission?.admittedAt !== null && admission?.admittedAt !== undefined,
           duplicateRotatedToken: typeof admission?.newToken === 'string' && admission.newToken !== admission.oldToken,
-          responseBodyRead: attempt?.bodyInspectionCompleted === true && attempt?.bodyUnreadable === false,
-          exactStaleReason: attempt?.exactStaleReason === true,
+          responseBodyRead: query.originalResponseProven === true || (attempt?.bodyInspectionCompleted === true && attempt?.bodyUnreadable === false),
+          exactStaleReason: query.originalResponseProven === true || attempt?.exactStaleReason === true,
           retryAccepted: attempt?.retryAcceptedAt !== null && attempt?.retryAcceptedAt !== undefined,
           retryRotatedToken: typeof attempt?.retryToken === 'string' && attempt.retryToken !== admission?.oldToken,
           retryTokenIsCurrent: typeof attempt?.retryToken === 'string' && window.__multi.state?.eventToken === attempt.retryToken,
@@ -141,43 +164,142 @@ async function open(auth, room, label, candidate = false) {
       if (matches.length !== 1) return { proven: false, matchingAttempts: matches.length, diagnostic };
       return {
         proven: admission.sameParticipant && admission.admittedAt !== null &&
-          admission.newToken !== admission.oldToken && attempt.exactStaleReason &&
+          admission.newToken !== admission.oldToken && query.originalResponseProven === true &&
           attempt.retryAcceptedAt !== null && attempt.retryToken !== admission.oldToken &&
           window.__multi.state?.eventToken === attempt.retryToken &&
           current?.openedAt !== null && current?.openedAt !== undefined && current.stateSyncAt !== null,
         documentId, auditId: attempt.id, duplicateAuditId: admission.id,
         injectedAt: admission.injectedAt, admittedAt: admission.admittedAt,
-        rejectedAt: attempt.rejectedAt, exactStaleReason: attempt.exactStaleReason,
+        rejectedAt: query.rejectedAt, exactStaleReason: query.originalResponseProven === true,
         retryAcceptedAt: attempt.retryAcceptedAt, hydratedSourceId: current?.id ?? null,
         diagnostic,
       };
     };
+    window.__multi.inspectStartupSyncCancellation = ({ traceId, failedAt, observedCloses, failedOrder }) => {
+      const fetch = fetchAudits.get(traceId), source = sourceAudits.find(source => source.id === fetch?.sourceId);
+      const close = observedCloses.find(close => close.documentId === documentId && close.sourceId === source?.id);
+      const closedBeforeFailure = source?.closedAt < failedAt || (source?.closedAt === failedAt && close?.order < failedOrder);
+      const replacement = sourceAudits.find(next => next !== source && next.identityUrl === source?.identityUrl &&
+        next.createdAt >= source.closedAt && next.openedAt !== null && next.stateSyncAt !== null && next.errorAt === null);
+      return {
+        proven: fetch?.eventType === 'request_state_sync' && fetch.method === 'POST' && fetch.path === relayPath &&
+          fetch.responseStatus === null && fetch.abortAt !== null && fetch.abortAt <= failedAt &&
+          fetch.rejectionName === 'AbortError' && source?.closedAt !== null && closedBeforeFailure &&
+          [0, 1].includes(source.readyStateAtClose) && source.errorAt === null && Boolean(replacement),
+        classification: 'explicit-startup-sync-cancellation', documentId, traceId,
+        sourceId: source?.id ?? null, abortAt: fetch?.abortAt ?? null,
+        rejectionName: fetch?.rejectionName ?? null, explicitCloseAt: source?.closedAt ?? null,
+        readyStateAtClose: source?.readyStateAtClose ?? null, replacementSourceId: replacement?.id ?? null,
+      };
+    };
+    window.__multi.inspectHistoryResponse = traceId => {
+      const audit = fetchAudits.get(traceId);
+      return audit ? { documentId, traceId, method: audit.method, path: audit.path,
+        responseStatus: audit.responseStatus, ...audit.history } : null;
+    };
+    window.__multi.inspectCandidateResponse = traceId => {
+      const audit = fetchAudits.get(traceId);
+      return audit ? { documentId, traceId, method: audit.method, path: audit.path,
+        responseStatus: audit.responseStatus, ...audit.privacy } : null;
+    };
+    window.__multi.inspectFetchCancellation = traceId => {
+      const audit = fetchAudits.get(traceId);
+      return { proven: audit?.responseStatus === null && audit.abortAt !== null && audit.rejectionName === 'AbortError',
+        documentId, traceId, method: audit?.method ?? null, path: audit?.path ?? null,
+        abortAt: audit?.abortAt ?? null, rejectionName: audit?.rejectionName ?? null };
+    };
+    window.__multi.inspectStartupRoomCancellation = ({ traceId, failedAt }) => {
+      const audit = fetchAudits.get(traceId), current = auditBySource.get(window.__multi.source);
+      const state = window.__multi.state, stream = current ? new URL(current.url) : null;
+      const participant = state?.participants?.find(participant => participant.sessionId === stream?.searchParams.get('sessionId'));
+      // Full authoritative SSE hydration may supersede a startup REST read; the
+      // application does not promise another REST request after its cancellation.
+      // Compare auth/capabilities only in memory and export redacted proof gates.
+      const gates = {
+        exactRead: audit?.method === 'GET' && audit.path === roomPath,
+        headerlessAbort: audit?.responseStatus === null && audit.abortAt !== null && audit.abortAt <= failedAt && audit.rejectionName === 'AbortError',
+        currentStreamOpen: window.__multi.source?.readyState === 1 && current?.openedAt !== null && current?.openedAt !== undefined && current.errorAt === null,
+        canonicalHydration: current?.stateSyncAt !== null && current?.stateSyncAt !== undefined && current.stateSyncAt >= audit?.startedAt &&
+          state?.inviteCode === roomPath.split('/').at(-1) && typeof state?.code === 'string' && Array.isArray(state?.tasks) &&
+          Number.isSafeInteger(state?.currentStep) && typeof state?.eventToken === 'string' && state.eventToken.length > 0,
+        sameRoomAndParticipant: stream?.pathname === relayPath.replace(/\/events$/, '/stream') && participant?.userId === userId,
+        sameAuthorization: audit?.authorization === `Bearer ${stream?.searchParams.get('authToken')}`,
+        sameCapabilities: (audit?.ownerToken ?? '') === (stream?.searchParams.get('ownerToken') ?? '') && !audit?.interviewerToken &&
+          (!audit?.eventToken || audit.eventToken === state?.eventToken),
+      };
+      return {
+        proven: Object.values(gates).every(Boolean), gates,
+        classification: 'explicit-startup-room-read-sse-supersession', documentId, traceId,
+        abortAt: audit?.abortAt ?? null, rejectionName: audit?.rejectionName ?? null,
+        hydratedSourceId: current?.id ?? null, hydratedAt: current?.stateSyncAt ?? null,
+      };
+    };
     const nativeFetch = window.fetch.bind(window);
-    if (observeInjectedDuplicate) window.fetch = (input, init) => {
+    window.fetch = (input, init) => {
       let body = null;
       try { if (typeof init?.body === 'string') body = JSON.parse(init.body); } catch {}
-      const url = typeof input === 'string' ? new URL(input, location.href).href : input?.url;
+      const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url, location.href);
+      const method = (init?.method ?? input?.method ?? 'GET').toUpperCase();
+      const observe = url.origin === location.origin && ((method === 'POST' && url.pathname === relayPath) ||
+        (method === 'GET' && [roomPath, historyPath].includes(url.pathname)));
+      if (!observe) return nativeFetch(input, init);
+      const traceId = `${documentId}:${crypto.randomUUID()}`, headers = new Headers(init?.headers ?? input?.headers);
+      headers.set(requestTraceHeader, traceId);
+      const signal = init?.signal ?? input?.signal;
+      const audit = { method, path: url.pathname, eventType: body?.type ?? null,
+        startedAt: Date.now(), authorization: headers.get('authorization') ?? '',
+        ownerToken: headers.get('x-room-owner-token'), interviewerToken: headers.get('x-room-interviewer-token'), eventToken: headers.get('x-room-event-token'),
+        sourceId: auditBySource.get(window.__multi.source)?.id ?? null,
+        responseStatus: null, abortAt: signal?.aborted ? Date.now() : null, rejectionName: null, privacy: null, history: null, body: null };
+      signal?.addEventListener('abort', () => { audit.abortAt ??= Date.now(); }, { once: true });
+      fetchAudits.set(traceId, audit);
       const admission = duplicateAdmission;
-      const oldAttempt = admission && body?.type === 'key_press' && url === admission.relayUrl &&
+      const oldAttempt = observeInjectedDuplicate && admission && body?.type === 'key_press' && url.href === admission.relayUrl &&
         body.sessionId === admission.sessionId && body.eventToken === admission.oldToken;
-      const hydratedRetry = admission && body?.type === 'key_press' && url === admission.relayUrl &&
+      const hydratedRetry = admission && body?.type === 'key_press' && url.href === admission.relayUrl &&
         body.sessionId === admission.sessionId && body.eventToken !== admission.oldToken &&
         body.eventToken === window.__multi.state?.eventToken;
       if (admission && body?.type === 'key_press') {
         relayObservations.keyPressRequestsAfterInjection++;
-        if (url === admission.relayUrl) relayObservations.matchingRelayRequests++;
+        if (url.href === admission.relayUrl) relayObservations.matchingRelayRequests++;
         if (body.sessionId === admission.sessionId) relayObservations.matchingSessionRequests++;
         if (oldAttempt) relayObservations.matchingOldTokenRequests++;
         if (hydratedRetry) relayObservations.matchingHydratedRetryRequests++;
       }
-      return nativeFetch(input, init).then(response => {
+      const attempt = oldAttempt ? { id: traceId, admission, url: url.href,
+        sessionId: body.sessionId, token: body.eventToken, sourceEventId: body.sourceEventId,
+        rejectedAt: null, exactStaleReason: false, bodyInspectionCompleted: false,
+        bodyUnreadable: false, retryAcceptedAt: null, retryToken: null } : null;
+      if (attempt) rejectedAttempts.push(attempt);
+      return nativeFetch(input, { ...init, headers }).then(response => {
+        audit.responseStatus = response.status;
+        if (method === 'GET' && url.pathname === historyPath && response.ok) {
+          audit.history = { completed: false, valid: false };
+          // Inspect a clone of this exact original response before the app reads
+          // it. Only redacted page metadata survives; no replay request is sent.
+          void response.clone().json().then(value => {
+            const valid = value !== null && typeof value === 'object' && Array.isArray(value.events) &&
+              value.events.length <= 200 && Number.isSafeInteger(value.throughSequence) && value.throughSequence >= 0;
+            audit.history = { completed: true, valid, count: Array.isArray(value?.events) ? value.events.length : null,
+              through: Number.isSafeInteger(value?.throughSequence) ? value.throughSequence : null };
+          }).catch(error => { audit.history = { completed: true, valid: false, errorName: error.name }; });
+        }
+        if (method === 'GET' && url.pathname === roomPath && response.ok) {
+          audit.body = { completed: false, valid: false };
+          if (candidate) audit.privacy = { completed: false, passed: false };
+          void response.clone().json().then(value => {
+            const valid = value !== null && typeof value === 'object' && !Array.isArray(value) && value.inviteCode === roomPath.split('/').at(-1);
+            audit.body = { completed: true, valid };
+            if (candidate) audit.privacy = { completed: true, passed: valid &&
+              !/"(candidateKeyHistory|lastCandidateKey|sourceEventId|acceptedSequence|pastePreview)"/.test(JSON.stringify(value)) };
+          }).catch(error => {
+            audit.body = { completed: true, valid: false, errorName: error.name };
+            if (candidate) audit.privacy = { completed: true, passed: false, errorName: error.name };
+          });
+        }
         if (oldAttempt && response.status === 403) {
           relayObservations.matchingRejectedResponses++;
-          const attempt = { id: `injected-relay-${rejectedAttempts.length + 1}`, admission, url,
-            sessionId: body.sessionId, token: body.eventToken, sourceEventId: body.sourceEventId,
-            rejectedAt: Date.now(), exactStaleReason: false, bodyInspectionCompleted: false,
-            bodyUnreadable: false, retryAcceptedAt: null, retryToken: null };
-          rejectedAttempts.push(attempt);
+          attempt.rejectedAt = Date.now();
           // Observe a clone only; the application receives the original response
           // immediately and unreadable/other error bodies cannot prove this case.
           void response.clone().json().then(data => {
@@ -191,6 +313,12 @@ async function open(auth, room, label, candidate = false) {
           }
         }
         return response;
+      }).catch(error => {
+        audit.rejectionName = error.name;
+        if (audit.abortAt !== null && error.name === 'AbortError') {
+          try { window.__multiFetchCanceled?.({ documentId, traceId })?.catch(() => {}); } catch {}
+        }
+        throw error;
       });
     };
     for (const name of ['focus', 'blur', 'visibilitychange']) window.addEventListener(name, () => window.__multi.tabEvents.push({ name, visibility: document.visibilityState, at: Date.now() }), true);
@@ -262,11 +390,14 @@ async function open(auth, room, label, candidate = false) {
       });
       replacement.onerror = () => replacement.close();
     };
-  }, { token: auth.token, name: auth.user.displayName, candidate, userId: auth.user.id, observeInjectedDuplicate: label === 'candidate-1' });
+  }, { token: auth.token, name: auth.user.displayName, candidate, userId: auth.user.id, observeInjectedDuplicate: label === 'candidate-1',
+    requestTraceHeader, roomPath: `/api/rooms/${room.inviteCode}`, historyPath: `/api/rooms/${room.inviteCode}/activity-history`, relayPath: `/api/realtime/rooms/${room.inviteCode}/events` });
   const page = await context.newPage(); view.page = page; page.setDefaultTimeout(15000);
   const responseStatuses = new WeakMap();
   const requestGenerations = new WeakMap();
   const startupRequests = new WeakSet();
+  const interceptedResponses = new Map();
+  const interceptedCandidateResponses = new Map();
   const runtime = (kind, detail, eventType = null, responseStatus = null, sourceLifecycle = null, at = Date.now(), injectedFault = closing || view.expectedFault || view.offline) => {
     const networkFailure = /ERR_(INTERNET_DISCONNECTED|ABORTED|NETWORK_CHANGED|FAILED)|Failed to fetch/.test(detail);
     const supersededMutation = kind === 'requestfailed' && /ERR_ABORTED/.test(detail) && ['yjs_update', 'code_update'].includes(eventType);
@@ -274,7 +405,7 @@ async function open(auth, room, label, candidate = false) {
     const discardedDocumentInspection = kind === 'history-body-unavailable-after-navigation';
     const explicitStartupClose = sourceLifecycle?.proven === true;
     const expected = discardedDocumentInspection || acceptedResponseCancellation || supersededMutation || explicitStartupClose || (injectedFault && ['requestfailed', 'console'].includes(kind) && networkFailure);
-    const entry = { label, kind, detail, eventType, responseStatus, expected, observationOrder: ++lifecycleObservationOrder, classification: discardedDocumentInspection ? 'discarded-document-inspection' : acceptedResponseCancellation ? 'body-cancel-after-success-headers' : supersededMutation ? 'superseded-mutation-request' : explicitStartupClose ? 'explicit-startup-stream-close' : expected ? 'injected-network-or-cleanup' : 'unexpected', ...(sourceLifecycle ? { sourceLifecycle } : {}), at };
+    const entry = { label, kind, detail, eventType, responseStatus, expected, observationOrder: ++lifecycleObservationOrder, classification: discardedDocumentInspection ? 'discarded-document-inspection' : acceptedResponseCancellation ? 'body-cancel-after-success-headers' : supersededMutation ? 'superseded-mutation-request' : explicitStartupClose ? sourceLifecycle.classification ?? 'explicit-startup-stream-close' : expected ? 'injected-network-or-cleanup' : 'unexpected', ...(sourceLifecycle ? { sourceLifecycle } : {}), at };
     report.runtime.push(entry); return entry;
   };
   page.on('pageerror', error => runtime('pageerror', error.message));
@@ -303,6 +434,29 @@ async function open(auth, room, label, candidate = false) {
         runtime('requestfailed', detail, eventType, status, lifecycle, failedAt, injectedFaultAtFailure);
       })();
       pendingInspections.add(task); task.finally(() => pendingInspections.delete(task));
+    } else if (startupRequests.has(req) && view.documentGeneration === 0 && requestGenerations.get(req) === 0 &&
+        req.method() === 'POST' && path === `/api/realtime/rooms/${room.inviteCode}/events` &&
+        eventType === 'request_state_sync' && failure === 'net::ERR_ABORTED' && status === null &&
+        req.headers()[requestTraceHeader]) {
+      const task = (async () => {
+        const query = { traceId: req.headers()[requestTraceHeader], failedAt, observedCloses: [...observedCloses.values()], failedOrder };
+        await page.waitForFunction(query => window.__multi?.inspectStartupSyncCancellation(query)?.proven === true,
+          query, { timeout: 1500 }).catch(() => {});
+        const proof = await page.evaluate(query => window.__multi?.inspectStartupSyncCancellation(query) ?? null, query).catch(() => null);
+        runtime('requestfailed', detail, eventType, status, proof, failedAt, false);
+      })();
+      pendingInspections.add(task); task.finally(() => pendingInspections.delete(task));
+    } else if (startupRequests.has(req) && view.documentGeneration === 0 && requestGenerations.get(req) === 0 &&
+        req.method() === 'GET' && path === `/api/rooms/${room.inviteCode}` &&
+        failure === 'net::ERR_ABORTED' && status === null && req.headers()[requestTraceHeader]) {
+      const task = (async () => {
+        const query = { traceId: req.headers()[requestTraceHeader], failedAt };
+        await page.waitForFunction(query => window.__multi?.inspectStartupRoomCancellation(query)?.proven === true,
+          query, { timeout: 1500 }).catch(() => {});
+        const proof = await page.evaluate(query => window.__multi?.inspectStartupRoomCancellation(query) ?? null, query).catch(() => null);
+        runtime('requestfailed', detail, eventType, status, proof, failedAt, false);
+      })();
+      pendingInspections.add(task); task.finally(() => pendingInspections.delete(task));
     } else runtime('requestfailed', detail, eventType, status, null, failedAt);
   });
   page.on('request', req => {
@@ -328,50 +482,238 @@ async function open(auth, room, label, candidate = false) {
       httpFailures.push({ entry, url: req.url(), generation: requestGenerations.get(req) });
       const body = req.method() === 'POST' && path.endsWith('/events') ? req.postDataJSON() : null;
       if (label === 'candidate-1' && response.status() === 403 && body?.type === 'key_press') {
-        rejectedActivity.push({ entry, generation: requestGenerations.get(req), query: {
+        const traceId = req.headers()[requestTraceHeader];
+        const bodyInspection = response.json().then(value => ({ traceId, responseStatus: response.status(),
+          exactStaleReason: value?.error === 'Недействительный eventToken для этой сессии', readable: true })).catch(() => null);
+        rejectedActivity.push({ entry, traceId, bodyInspection, generation: requestGenerations.get(req), query: {
+          traceId,
           requestUrl: req.url(), sessionId: body.sessionId, eventToken: body.eventToken, sourceEventId: body.sourceEventId,
         } });
       }
     }
     if (req.method() === 'GET' && path.endsWith('/activity-history') && response.ok()) {
-      const task = response.json().then(body => {
-        assert.ok(body.events.length <= 200, 'History page must remain bounded');
+      const inspection = forceHistoryBodyLookupLoss
+        ? Promise.reject(new Error(historyBodyLookupFailures[forcedHistoryInspections++ % historyBodyLookupFailures.length])) : response.json();
+      const task = inspection.then(body => {
+        assert.ok(Array.isArray(body?.events) && body.events.length <= 200, 'History page must remain bounded');
+        assert.ok(Number.isSafeInteger(body.throughSequence) && body.throughSequence >= 0, 'History page must have a valid boundary');
         report.historyPages.push({ label, count: body.events.length, through: body.throughSequence });
-      }).catch(error => {
-        // Chromium can discard an old document's response body during reload.
-        // Only this exact inspector failure, proven to belong to an earlier
-        // document, is expected; malformed JSON and current-page failures fail.
-        const lostOldDocument = requestGenerations.get(req) < view.documentGeneration && error.message === 'response.json: Protocol error (Network.getResponseBody): No data found for resource with given identifier';
-        runtime(lostOldDocument ? 'history-body-unavailable-after-navigation' : 'history-inspection', error.message);
+      }).catch(async error => {
+        const requestGeneration = requestGenerations.get(req), traceId = req.headers()[requestTraceHeader];
+        const lookupFailure = historyBodyLookupFailures.includes(error.message);
+        const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+        const traceParts = traceId?.split(':');
+        const requestDocumentId = traceParts?.length === 2 && traceParts.every(part => uuid.test(part)) ? traceParts[0] : null;
+        const originalRequestProven = requestDocumentId !== null && Number.isSafeInteger(requestGeneration) &&
+          path === `/api/rooms/${room.inviteCode}/activity-history` && response.status() === 200;
+        let snapshot = null, observedInvalidBody = false;
+        const readSnapshot = async () => {
+          const next = await withProtocolDeadline(() => page.evaluate(({ traceId, roomPath }) => ({
+            documentId: window.__multi?.documentId ?? null, roomMatches: location.pathname === roomPath,
+            body: window.__multi?.inspectHistoryResponse(traceId) ?? null,
+          }), { traceId, roomPath: `/room/${room.inviteCode}` }), 'verify-original-history-response').catch(() => null);
+          const body = next?.body;
+          if (body?.documentId === requestDocumentId && body.traceId === traceId && body.completed === true && body.valid === false &&
+              (!body.errorName || body.errorName === 'SyntaxError')) observedInvalidBody = true;
+          return next;
+        };
+        if (lookupFailure && originalRequestProven) {
+          snapshot = await readSnapshot();
+          if (!uuid.test(snapshot?.documentId ?? '')) {
+            await page.waitForFunction(() => typeof window.__multi?.documentId === 'string', null, { timeout: 1500 }).catch(() => {});
+            snapshot = await readSnapshot();
+          }
+          if (snapshot?.documentId === requestDocumentId && snapshot.body?.completed !== true) {
+            await page.waitForFunction(({ id, documentId }) => window.__multi?.documentId !== documentId ||
+              window.__multi?.inspectHistoryResponse(id)?.completed === true,
+            { id: traceId, documentId: requestDocumentId }, { timeout: 1500 }).catch(() => {});
+            snapshot = await readSnapshot();
+          }
+          const inspectedBody = snapshot?.body;
+          if (snapshot?.roomMatches === true && snapshot.documentId === requestDocumentId &&
+              inspectedBody?.documentId === requestDocumentId && inspectedBody.traceId === traceId &&
+              inspectedBody.method === 'GET' && inspectedBody.path === path && inspectedBody.responseStatus === response.status() &&
+              inspectedBody.completed === true && inspectedBody.valid === true &&
+              Number.isSafeInteger(inspectedBody.count) && inspectedBody.count >= 0 && inspectedBody.count <= 200 &&
+              Number.isSafeInteger(inspectedBody.through) && inspectedBody.through >= 0) {
+            report.historyPages.push({ label, count: inspectedBody.count, through: inspectedBody.through });
+            const entry = runtime('history-inspection', 'Original history JSON validated after exact browser body lookup loss', null, null,
+              { proven: true, classification: 'same-response-history-inspected', ...inspectedBody });
+            entry.historyInspectionDiagnostic = { requestGeneration, currentGeneration: view.documentGeneration,
+              requestDocumentId, currentDocumentId: snapshot.documentId };
+            return;
+          }
+        }
+        // The nonce is created in the fetch's actual document, before native
+        // fetch. Late request events cannot relabel an old document as current.
+        // Unknown nonces and any invalid original proof we observed still fail.
+        const lostOldDocument = lookupFailure && originalRequestProven && snapshot?.roomMatches === true &&
+          uuid.test(snapshot.documentId ?? '') && requestDocumentId !== snapshot.documentId && !observedInvalidBody;
+        const entry = runtime(lostOldDocument ? 'history-body-unavailable-after-navigation' : 'history-inspection',
+          lookupFailure ? error.message : `History response inspection failed (${error.name})`);
+        entry.historyInspectionDiagnostic = { requestGeneration: requestGeneration ?? null,
+          currentGeneration: view.documentGeneration, requestDocumentId, currentDocumentId: snapshot?.documentId ?? null,
+          responseStatus: response.status(), traceObserved: Boolean(traceId), inspectedBody: snapshot?.body ?? null, observedInvalidBody };
       });
       pendingInspections.add(task); task.finally(() => pendingInspections.delete(task));
     }
     if (candidate && req.method() === 'GET' && path === `/api/rooms/${room.inviteCode}` && response.ok()) {
       const task = response.json().then(body => {
         const text = JSON.stringify(body);
-        assert.ok(!/"(candidateKeyHistory|lastCandidateKey|sourceEventId|acceptedSequence)"/.test(text), 'Candidate HTTP room leaked history');
-      }).catch(error => runtime('privacy-inspection', error.message));
+        assert.ok(!/"(candidateKeyHistory|lastCandidateKey|sourceEventId|acceptedSequence|pastePreview)"/.test(text), 'Candidate HTTP room leaked history');
+      }).catch(async error => {
+        const inspectionDetail = historyBodyLookupFailures.includes(error.message)
+          ? error.message : `Candidate response inspection failed (${error.name})`;
+        const traceId = req.headers()[requestTraceHeader];
+        const sameDocument = requestGenerations.get(req) === view.documentGeneration;
+        let inspectedBody = null;
+        if (sameDocument && traceId && historyBodyLookupFailures.includes(error.message)) {
+          await page.waitForFunction(id => window.__multi?.inspectCandidateResponse(id)?.completed === true,
+            traceId, { timeout: 1500 }).catch(() => {});
+          const proof = await page.evaluate(id => window.__multi?.inspectCandidateResponse(id) ?? null, traceId).catch(() => null);
+          const originalResponse = interceptedCandidateResponses.get(traceId);
+          inspectedBody = { browser: proof, originalResponse: originalResponse ?? null };
+          const verified = proof?.passed === true ? proof : originalResponse;
+          const inspectedViolation = proof?.completed === true && proof.passed === false && !proof.errorName;
+          if (!inspectedViolation && verified?.traceId === traceId && verified.method === 'GET' && verified.path === path &&
+              verified.responseStatus === response.status() && verified.completed === true && verified.passed === true) {
+            const entry = runtime('privacy-inspection', inspectionDetail);
+            entry.expected = true; entry.classification = 'same-response-privacy-inspected'; entry.privacyProof = verified;
+            return;
+          }
+        }
+        const entry = runtime('privacy-inspection', inspectionDetail);
+        entry.privacyInspectionDiagnostic = { traceObserved: Boolean(traceId), sameDocument, inspectedBody };
+      });
       pendingInspections.add(task); task.finally(() => pendingInspections.delete(task));
     }
   });
+  if (candidate) {
+    const cdp = await withProtocolDeadline(() => context.newCDPSession(page), 'create-diagnostic-session'), paused = new Set();
+    const send = (method, params) => withProtocolDeadline(() => cdp.send(method, params), method);
+    const cancellationProof = async (traceId, path, method) => {
+      const notification = await cancellationFor(traceId).promise;
+      const proof = await withProtocolDeadline(() => page.evaluate(traceId => window.__multi?.inspectFetchCancellation(traceId) ?? null, traceId),
+        'verify-original-fetch-cancellation');
+      return proof?.proven === true && proof.documentId === notification.documentId && proof.traceId === traceId &&
+        proof.path === path && proof.method === method ? { ...proof, classification: 'explicit-aborted-response-diagnostic' } : { proven: false };
+    };
+    let observing = false, observingPrivacy = true;
+    const configure = () => send('Fetch.enable', { patterns: [
+      ...(observingPrivacy ? [{ urlPattern: `*/api/rooms/${room.inviteCode}`, requestStage: 'Response' }] : []),
+      ...(observing ? [{ urlPattern: `*/api/realtime/rooms/${room.inviteCode}/events`, requestStage: 'Response' }] : []),
+    ] });
+    cdp.on('Fetch.requestPaused', event => {
+      const path = new URL(event.request.url).pathname;
+      const traceId = Object.entries(event.request.headers).find(([name]) => name.toLowerCase() === requestTraceHeader)?.[1];
+      const task = (async () => {
+        let responseReadPending = false;
+        try {
+          const roomRead = observingPrivacy && event.responseStatusCode === 200 && event.request.method === 'GET' && path === `/api/rooms/${room.inviteCode}`;
+          const body = event.request.method === 'POST' ? JSON.parse(event.request.postData ?? '{}') : null;
+          const rejectedActivity = observing && event.responseStatusCode === 403 && body?.type === 'key_press';
+          if ((!roomRead && !rejectedActivity) || !traceId) return;
+          responseReadPending = true;
+          const observed = await runObservedProtocolCommand({
+            command: () => cdp.send('Fetch.getResponseBody', { requestId: event.requestId }),
+            cancellation: cancellationProof(traceId, path, event.request.method), description: 'Fetch.getResponseBody',
+          });
+          if (observed.kind === 'cancelled') {
+            runtime('original-response-canceled', 'Original diagnostic body read canceled by its exact fetch', null, null, observed.proof);
+            return;
+          }
+          const original = observed.value;
+          responseReadPending = false;
+          const value = JSON.parse(Buffer.from(original.body, original.base64Encoded ? 'base64' : 'utf8').toString('utf8'));
+          if (roomRead) {
+            const proof = { traceId, responseStatus: 200, method: 'GET', path,
+              completed: true, passed: value !== null && typeof value === 'object' && !Array.isArray(value) && value.inviteCode === room.inviteCode &&
+                !/"(candidateKeyHistory|lastCandidateKey|sourceEventId|acceptedSequence|pastePreview)"/.test(JSON.stringify(value)) };
+            interceptedCandidateResponses.set(traceId, proof);
+            if (!proof.passed) runtime('privacy-inspection', 'Original candidate room JSON failed exact-room/private-field checks');
+          }
+          else interceptedResponses.set(traceId, { traceId, responseStatus: 403, readable: true,
+            path, sourceEventId: body.sourceEventId, exactStaleReason: value?.error === 'Недействительный eventToken для этой сессии' });
+        } catch (error) {
+          let cancellation = null;
+          const invalidCanceledInterception = responseReadPending && traceId &&
+            error.message === 'cdpSession.send: Protocol error (Fetch.getResponseBody): Invalid InterceptionId.';
+          if (invalidCanceledInterception) {
+            const proof = await withProtocolDeadline(() => cancellationProof(traceId, path, event.request.method),
+              'verify-invalid-interception-cancellation').catch(() => null);
+            if (proof?.proven === true) cancellation = proof;
+          }
+          const entry = runtime('original-response-inspection', `Original response capture failed (${error.name})`, null, null, cancellation);
+          entry.responseInspectionDiagnostic = { responseStatus: event.responseStatusCode ?? null,
+            method: event.request.method, path, responseReadPending, invalidCanceledInterception: Boolean(invalidCanceledInterception) };
+        }
+        finally { await send('Fetch.continueResponse', { requestId: event.requestId }).catch(async error => {
+          if (!observing && !observingPrivacy) return;
+          // Chromium invalidates an intercepted response when the application
+          // aborts that exact fetch. The request's own failure is still audited
+          // separately; only this diagnostic resume race can be accounted for.
+          let cancellation = null;
+          if (traceId && error.message === 'cdpSession.send: Protocol error (Fetch.continueResponse): Invalid InterceptionId.') {
+            const proof = await withProtocolDeadline(() => cancellationProof(traceId, path, event.request.method),
+              'verify-invalid-interception-cancellation').catch(() => null);
+            if (proof?.proven === true) cancellation = proof;
+          }
+          runtime('original-response-resume', `Original response resume failed (${error.name})`, null, null, cancellation);
+        }); }
+      })();
+      paused.add(task); task.finally(() => paused.delete(task));
+    });
+    view.startInjectedResponseObserver = async () => {
+      observing = true;
+      await configure();
+    };
+    const drain = () => withProtocolDeadline(() => Promise.all([...paused]), 'observer-drain');
+    view.stopInjectedResponseObserver = async () => {
+      try { await drain(); }
+      finally { if (observing) { observing = false; if (observingPrivacy) await configure(); else await send('Fetch.disable'); } }
+    };
+    view.stopStartupResponseObserver = async () => {
+      try { await drain(); }
+      finally { if (observingPrivacy) { observingPrivacy = false; if (observing) await configure(); else await send('Fetch.disable'); } }
+    };
+    view.closeDiagnostics = async () => {
+      try { await drain(); }
+      finally {
+        observing = false; observingPrivacy = false;
+        try { await send('Fetch.disable'); }
+        finally { await withProtocolDeadline(() => cdp.detach(), 'detach'); }
+      }
+    };
+    await configure();
+  }
   await page.goto(`${web}/room/${room.inviteCode}`, { waitUntil: 'domcontentloaded' });
   await page.locator('[data-testid="room-code-editor-host"] .cm-content').waitFor();
   await page.waitForFunction(() => Boolean(window.__multi.state?.eventToken));
   view.startup = false;
+  await view.stopStartupResponseObserver?.();
   view.confirmInjectedTokenRejections = async durableSourceIds => {
     for (const rejected of rejectedActivity) {
       const action = view.actions.get(rejected.query.sourceEventId);
+      const nativeBody = await rejected.bodyInspection;
+      const pausedBody = interceptedResponses.get(rejected.traceId);
+      const originalBody = nativeBody?.readable ? nativeBody : pausedBody;
+      const originalResponseProven = typeof rejected.traceId === 'string' && originalBody?.traceId === rejected.traceId &&
+        originalBody.responseStatus === 403 && originalBody.readable === true && originalBody.exactStaleReason === true &&
+        (!pausedBody || (pausedBody.sourceEventId === rejected.query.sourceEventId && pausedBody.path === `/api/realtime/rooms/${room.inviteCode}/events`));
       const nodeGates = {
         originalDocument: rejected.generation === 0 && view.documentGeneration === 0,
         sameSourceDurable: durableSourceIds.has(rejected.query.sourceEventId),
         sameSourceAcknowledged: action?.acknowledged === true,
         sameSourceRetried: action?.attempts >= 2,
+        exactOriginalResponseReason: originalResponseProven,
       };
       rejected.entry.injectedRelayDiagnostic = { nodeGates, sourceAttemptCount: action?.attempts ?? 0 };
       if (rejected.generation !== 0 || view.documentGeneration !== 0 ||
           !durableSourceIds.has(rejected.query.sourceEventId)) continue;
       if (!action?.acknowledged || action.attempts < 2) continue;
-      const proof = await page.evaluate(query => window.__multi.inspectInjectedTokenRejection(query), rejected.query);
+      const proof = await page.evaluate(query => window.__multi.inspectInjectedTokenRejection(query), {
+        ...rejected.query, originalResponseProven, rejectedAt: rejected.entry.at,
+      });
       rejected.entry.injectedRelayDiagnostic.browser = proof?.diagnostic ?? null;
       if (!proof?.proven) continue;
       rejected.entry.expected = true; rejected.entry.classification = 'injected-stale-event-token';
@@ -494,6 +836,7 @@ try {
       gapBefore = (await raw()).length;
       owner.offline = true; owner.expectedFault = true; await owner.context.setOffline(true);
       candidates[0].expectedFault = true;
+      await candidates[0].startInjectedResponseObserver();
       const before = await candidates[0].page.evaluate(() => window.__multi.connections);
       await candidates[0].page.evaluate(() => window.__multi.reconnect());
       report.candidateReconnectBefore = before;
@@ -518,6 +861,7 @@ try {
       await owner.context.setOffline(false); owner.offline = false;
       await owner.page.waitForFunction(() => window.__multi.source.readyState === 1);
       await candidates[0].page.waitForFunction(before => window.__multi.connections > before && window.__multi.source.readyState === 1, report.candidateReconnectBefore);
+      await candidates[0].stopInjectedResponseObserver();
     }
     await Promise.all(managers.map(view => hasIds(view, expectedIds())));
     phase(`round ${round} complete: ${actions().length} distinct activity sources visible`);
@@ -572,7 +916,7 @@ try {
     }
   }
   phase('verification: manager reload, partial-history UI exports and older pages');
-  await Promise.all(pendingInspections);
+  await withProtocolDeadline(() => Promise.all(pendingInspections), 'response-inspection-drain');
   owner.documentGeneration++; owner.expectedFault = true; await owner.page.reload({ waitUntil: 'domcontentloaded' });
   await owner.page.locator('[data-testid="room-code-editor-host"] .cm-content').waitFor(); await logs(owner);
   await owner.page.getByRole('button', { name: 'Показать более ранние события', exact: true }).waitFor(); owner.expectedFault = false;
@@ -601,7 +945,7 @@ try {
   await layout(owner, 'owner-desktop-complete');
   phase('verification: desktop exports/paging passed; narrow guest interviewer controls and download');
   await hr.page.setViewportSize({ width: 900, height: 900 });
-  await Promise.all(pendingInspections);
+  await withProtocolDeadline(() => Promise.all(pendingInspections), 'response-inspection-drain');
   hr.documentGeneration++; hr.expectedFault = true; await hr.page.reload({ waitUntil: 'domcontentloaded' });
   await hr.page.locator('[data-testid="room-code-editor-host"] .cm-content').waitFor();
   await measure('narrow-hr-open-logs', () => logs(hr));
@@ -613,19 +957,39 @@ try {
   await loadAll(hr); await layout(hr, 'hr-narrow-complete');
   await hasIds(hr, sourceIds); await screenshot(candidates[0], 'candidate-no-private-logs');
   phase('verification: activity, exports, privacy and both layouts completed');
-  await Promise.all(pendingInspections);
+  await withProtocolDeadline(() => Promise.all(pendingInspections), 'response-inspection-drain');
   report.performance = await Promise.all(views.map(async view => ({ participant: view.label, ...await view.page.evaluate(() => ({ longTasks: window.__multi.longTasks.length, longestTaskMs: Math.max(0, ...window.__multi.longTasks) })) })));
   const unexpected = report.runtime.filter(item => !item.expected);
   report.unexpectedRuntimeCount = unexpected.length;
   if (unexpected.length) report.failures.push(`Unexpected runtime errors: ${unexpected.length}; inspect report.runtime`);
   assert.deepEqual(report.failures, [], 'Product verification failures');
-  report.result = 'PASS'; phase('MULTI_PARTICIPANT_ACTIVITY_OK');
+  report.result = 'PASS';
 } catch (error) {
   report.result = 'FAIL'; report.error = error.stack || String(error); console.error(error); process.exitCode = 1;
   for (const view of views.filter(v => !v.candidate)) await screenshot(view, `failure-${view.label}`).catch(() => {});
 } finally {
   report.observedTabEvents = await Promise.all(views.map(async view => ({ participant: view.label, ...await view.page.evaluate(() => ({ events: window.__multi?.tabEvents, parseErrors: window.__multi?.errors, privateLeaks: window.__multi?.privateLeaks })).catch(() => ({ unavailable: true })) })));
-  closing = true; report.finishedAt = new Date().toISOString();
+  report.forcedHistoryBodyLookupLoss = { enabled: forceHistoryBodyLookupLoss, count: forcedHistoryInspections };
+  closing = true;
+  await Promise.all(views.map(view => view.closeDiagnostics?.().catch(error => {
+    report.failures.push(`Diagnostic cleanup failed: ${view.label}: ${error.message}`);
+    report.result = 'FAIL'; process.exitCode = 1;
+  })));
+  await withProtocolDeadline(() => Promise.all(pendingInspections), 'final-response-inspection-drain').catch(error => {
+    report.failures.push(`Final response inspection drain failed (${error.name})`);
+    report.result = 'FAIL'; process.exitCode = 1;
+  });
+  // Cleanup can settle response observers after the flow assertions. Keep this
+  // final decision synchronous with serialization so late failures cannot pass.
+  const finalUnexpected = report.runtime.filter(item => !item.expected).length;
+  if (finalUnexpected > 0) {
+    if (finalUnexpected !== report.unexpectedRuntimeCount)
+      report.failures.push(`Unexpected runtime errors at report finalization: ${finalUnexpected}; inspect report.runtime`);
+    report.result = 'FAIL'; process.exitCode = 1;
+  }
+  report.unexpectedRuntimeCount = finalUnexpected;
+  report.finishedAt = new Date().toISOString();
+  if (report.result === 'PASS') phase('MULTI_PARTICIPANT_ACTIVITY_OK');
   await writeFile(`${out}/report.json`, JSON.stringify(report, null, 2));
   console.log(`ARTIFACTS ${out}`);
   await Promise.all([...new Set([browser, tabBrowser])].map(instance => instance.close()));

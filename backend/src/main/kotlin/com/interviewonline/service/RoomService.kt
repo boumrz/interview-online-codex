@@ -181,17 +181,7 @@ class RoomService(
         val task = room.tasks.firstOrNull { it.stepIndex == stepIndex }
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Задача не найдена")
 
-        return RoomTaskWorkspaceDto(
-            stepIndex = task.stepIndex,
-            title = task.title,
-            language = normalizeLanguage(task.solutionLanguage?.ifBlank { null } ?: task.language),
-            code = task.solutionCode ?: task.starterCode,
-            briefingMarkdown = task.briefingMarkdown?.takeIf { it.isNotBlank() } ?: task.description,
-            revision = task.workspaceRevision,
-            yjsDocumentBase64 = task.workspaceYjsDocumentBase64,
-            yjsSequence = task.workspaceYjsSequence,
-            focusMode = taskFocusMode(task),
-        )
+        return taskWorkspaceDto(task)
     }
 
     /**
@@ -876,6 +866,7 @@ class RoomService(
         yjsDocumentBase64 = task.workspaceYjsDocumentBase64,
         yjsSequence = task.workspaceYjsSequence,
         focusMode = taskFocusMode(task),
+        taskId = task.id,
     )
 
     private fun taskFocusMode(task: RoomTask): Boolean =

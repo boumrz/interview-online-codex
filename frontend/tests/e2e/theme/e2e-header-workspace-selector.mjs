@@ -59,6 +59,51 @@ async function style(control) {
   });
 }
 
+async function settledMenuGeometry(page) {
+  const menu = page.getByRole('menu', { name: 'Выбор команды', exact: true });
+  const nodes = await Promise.all([
+    page.getByRole('button', { name: /Команды:/ }).elementHandle(),
+    menu.elementHandle(),
+    menu.getByRole('menuitem', { name: 'Создать команду', exact: true }).elementHandle(),
+    menu.getByRole('menuitemradio', { name: 'Личное', exact: true }).elementHandle(),
+  ]);
+  let probe;
+  try {
+    probe = await page.evaluateHandle(([trigger, menu, create, personal]) => {
+      let previous = '';
+      let stableFrames = 0;
+      return () => {
+        if (![trigger, menu, create, personal].every(node => node?.isConnected)) return false;
+        const box = node => {
+          const { x, y, width, height } = node.getBoundingClientRect();
+          return { x, y, width, height };
+        };
+        let scrollTop = 0;
+        for (let parent = personal.parentElement; parent && menu.contains(parent); parent = parent.parentElement) {
+          scrollTop += parent.scrollTop;
+        }
+        const snapshot = {
+          buttonBox: box(trigger), menuBox: box(menu), createBox: box(create), personalBox: box(personal),
+          scrollTop,
+        };
+        const signature = JSON.stringify(snapshot);
+        stableFrames = signature === previous ? stableFrames + 1 : 0;
+        previous = signature;
+        const popup = menu.closest('.ant-popover') ?? menu;
+        const moving = popup.getAnimations({ subtree: true }).some(animation =>
+          (animation.playState === 'running' || animation.pending) && Number.isFinite(animation.effect?.getComputedTiming().endTime));
+        return !moving && stableFrames >= 2 && [snapshot.menuBox, snapshot.createBox, snapshot.personalBox].every(rect => rect.width > 0 && rect.height > 0)
+          ? snapshot : false;
+      };
+    }, nodes);
+    const ready = await page.waitForFunction(probe => probe(), probe, { polling: 'raf', timeout: 5_000 });
+    try { return await ready.jsonValue(); } finally { await ready.dispose(); }
+  } finally {
+    await probe?.dispose();
+    await Promise.all(nodes.filter(Boolean).map(node => node.dispose()));
+  }
+}
+
 test('all header actions use the same background hover without changing text, text color or borders', async () => {
   const { auth, team, browser, page } = await fixture();
   const room = await request('/rooms', auth.token, { title: 'Шапка комнаты', language: 'nodejs', taskIds: [] });
@@ -109,13 +154,17 @@ test('workspace selector anchors to the trigger and keeps creation above the scr
     const create = menu.getByRole('menuitem', { name: 'Создать команду', exact: true });
     const personal = menu.getByRole('menuitemradio', { name: 'Личное', exact: true });
     assert.equal(await personal.getAttribute('aria-checked'), 'true');
-    const [buttonBox, menuBox, createBox] = await Promise.all([trigger.boundingBox(), menu.boundingBox(), create.boundingBox()]);
-    assert.ok(menuBox.y >= buttonBox.y + buttonBox.height && menuBox.y <= buttonBox.y + buttonBox.height + 24, 'menu opens beneath selector');
-    assert.ok(Math.abs(menuBox.x - buttonBox.x) <= 16, 'menu aligns with selector');
-    assert.ok(createBox.y < (await personal.boundingBox()).y, 'creation is first');
-    await menu.getByRole('menuitemradio', { name: 'Дополнительная команда 30', exact: true }).scrollIntoViewIfNeeded();
-    const after = await create.boundingBox();
-    assert.ok(Math.abs(after.y - createBox.y) <= 1, 'creation stays fixed while workspace choices scroll');
+    const last = menu.getByRole('menuitemradio', { name: 'Дополнительная команда 30', exact: true });
+    await last.waitFor({ state: 'attached' });
+    const before = await settledMenuGeometry(page);
+    const { buttonBox, menuBox, createBox, personalBox } = before;
+    assert.ok(menuBox.y >= buttonBox.y + buttonBox.height && menuBox.y <= buttonBox.y + buttonBox.height + 24, `menu opens beneath selector: ${JSON.stringify(before)}`);
+    assert.ok(Math.abs(menuBox.x - buttonBox.x) <= 16, `menu aligns with selector: ${JSON.stringify(before)}`);
+    assert.ok(createBox.y < personalBox.y, `creation is first: ${JSON.stringify(before)}`);
+    await last.scrollIntoViewIfNeeded();
+    const after = await settledMenuGeometry(page);
+    assert.ok(after.scrollTop > before.scrollTop, 'workspace choices actually scroll');
+    assert.ok(Math.abs(after.createBox.y - createBox.y) <= 1, `creation stays fixed while workspace choices scroll: ${JSON.stringify({ before, after })}`);
     assert.equal(await create.isVisible(), true);
     await create.click();
     const modal = page.getByRole('dialog', { name: 'Создать команду', exact: true });
