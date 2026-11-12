@@ -117,6 +117,8 @@ data class RoomResponse(
     val briefingMarkdown: String = "",
     val roomEditorMode: String = "code",
     val roomEditorModeRevision: Long = 0,
+    val roomDiagramsEnabled: Boolean = false,
+    val roomWhiteboardEnabled: Boolean = false,
     val ownerToken: String?,
     val interviewerToken: String?,
     val role: String = "candidate",

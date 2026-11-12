@@ -98,3 +98,7 @@ frontend/test-two-windows.mjs
 
 interview-vtools.conf
 .env.docker.local
+
+# Pinned draw.io static assets are reproduced from a verified upstream archive.
+frontend/public/drawio/
+frontend/public/.drawio-prepare-*/

@@ -26,6 +26,10 @@ data class RoomRealtimePayload(
     val briefingMarkdown: String = "",
     val roomEditorMode: String = "code",
     val roomEditorModeRevision: Long = 0,
+    val roomDiagramsEnabled: Boolean = false,
+    val roomWhiteboardEnabled: Boolean = false,
+    /** Stable room-local default ink color for the requesting participant. */
+    val drawingColor: String? = null,
     val participants: List<ParticipantPayload>,
     val isOwner: Boolean = false,
     val role: String = "candidate",
@@ -118,6 +122,8 @@ data class ParticipantPayload(
     val displayName: String,
     val userId: String? = null,
     val participantId: String? = null,
+    /** Visual default shared by this participant's room canvas sessions. */
+    val drawingColor: String? = null,
     val role: String = "candidate",
     val presenceStatus: String = "active",
     val isAuthenticated: Boolean = false,

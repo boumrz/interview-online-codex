@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Комната · Схема</title>
+    <link rel="stylesheet" href="../../frontend/public/theme-tokens.css" />
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; color: var(--app-text); background: var(--app-bg); font: 13px/1.45 var(--font-base); }
+      button, select { font: inherit; color: var(--app-text); background: var(--app-surface); border: 1px solid var(--app-control-border); border-radius: 6px; padding: 6px 9px; }
+      button { cursor: pointer; }
+      button:focus-visible, select:focus-visible { outline: 2px solid var(--app-focus); outline-offset: 2px; }
+      header, .mode, .tabs, .tools, .status, .condition { padding: 12px; border-bottom: 1px solid var(--app-border); background: var(--app-surface); }
+      header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+      .mode, .tools, .tabs { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .tabs { color: var(--app-muted); font-size: 12px; gap: 14px; }
+      .mode span, .muted { color: var(--app-muted); }
+      .tools button { border: 0; background: var(--app-surface-soft); }
+      .status { font-size: 12px; color: var(--app-success); min-height: 36px; }
+      .status.warning { background: var(--app-warning-bg); color: var(--app-warning); }
+      .status.error { background: var(--app-error-bg); color: var(--app-error); }
+      .status.info { background: var(--app-info-bg); color: var(--app-info); }
+      .canvas { position: relative; height: 280px; background: var(--app-editor-bg); overflow: hidden; }
+      .canvas svg { width: 100%; height: 100%; color: var(--app-editor-text); }
+      .empty { display: grid; place-content: center; text-align: center; padding: 24px; height: 100%; }
+      .empty h2 { font-size: 18px; margin: 0 0 8px; }
+      .empty p { margin: 0; color: var(--app-muted); max-width: 270px; }
+      .shape { fill: var(--app-selected-bg); stroke: var(--app-primary); stroke-width: 1.5; }
+      .link { fill: none; stroke: var(--app-muted); stroke-width: 1.5; }
+      .freehand { fill: none; stroke: var(--app-primary); stroke-width: 2; stroke-linecap: round; }
+      .tag { font-size: 11px; padding: 3px 7px; border-radius: 12px; background: var(--app-selected-bg); color: var(--app-selected-text); }
+      .overlay { position: fixed; inset: 0; background: var(--app-mask); display: grid; place-content: center; padding: 20px; }
+      .dialog { max-width: 350px; background: var(--app-surface); padding: 22px; border-radius: 12px; box-shadow: 0 10px 40px var(--app-mask); }
+      .dialog h2 { font-size: 20px; margin: 0 0 12px; }
+      .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+      .primary { color: var(--app-on-primary); background: var(--app-primary); border-color: var(--app-primary); }
+      body.expanded { height: 100dvh; display: flex; flex-direction: column; }
+      body.expanded > header, body.expanded > .mode, body.expanded > .condition, body.expanded > .tabs { display: none; }
+      body.expanded .canvas { min-height: 0; height: auto; flex: 1; }
+      .expand { margin-left: auto; font-weight: 600; }
+      .mock-workspace { display: grid; grid-template-columns: minmax(320px, 360px) minmax(0, 1fr); gap: 10px; padding: 10px; }
+      .mock-workspace.collapsed { grid-template-columns: 48px minmax(0, 1fr); }
+      .mock-sidebar, .mock-rail, .mock-editor { min-width: 0; border: 1px solid var(--app-border); border-radius: 8px; overflow: hidden; background: var(--app-surface); }
+      .mock-sidebar-top { display: flex; align-items: flex-start; justify-content: space-between; padding: 8px; gap: 8px; border-bottom: 1px solid var(--app-border); }
+      .mock-sidebar-top > button { flex: 0 0 36px; width: 36px; padding: 0; }
+      .mock-sidebar button, .mock-rail button { min-height: 36px; }
+      .mock-sidebar .tabs { display: grid; flex: 1; min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 0; border: 0; }
+      .mock-sidebar .tabs button[aria-selected="true"] { background: var(--app-selected-bg); color: var(--app-selected-text); border-color: var(--app-primary); }
+      .mock-sidebar-content { min-height: 220px; padding: 12px; }
+      .mock-rail { display: none; padding: 5px; }
+      .mock-rail button { width: 36px; padding: 0; }
+      .mock-workspace.collapsed .mock-sidebar { display: none; }
+      .mock-workspace.collapsed .mock-rail { display: block; }
+      .mock-return { display: none; width: 100%; min-height: 40px !important; font-weight: 600; }
+      body.mock-narrow .mock-workspace { grid-template-columns: 48px minmax(0, 1fr); }
+      body.mock-narrow .mock-workspace:not(.collapsed) .mock-sidebar { grid-column: 1 / -1; }
+      body.mock-narrow .mock-workspace:not(.collapsed) .mock-editor { display: none; }
+      body.mock-narrow .mock-return { display: block; }
+      body.expanded .mock-workspace { display: flex; flex: 1; min-height: 0; padding: 0; }
+      body.expanded .mock-sidebar, body.expanded .mock-rail { display: none; }
+      body.expanded .mock-editor { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+    </style>
+  </head>
+  <body>
+    <header><strong>System Design · Интервью</strong><span class="tag" id="role">Интервьюер</span></header>
+    <div class="mode"><strong>Режим комнаты</strong><select aria-label="Режим комнаты"><option>Code</option><option>Markdown</option><option selected>Схема</option><option>Доска</option></select></div>
+    <div class="condition"><strong>Условие задания</strong><div class="muted">Спроектируйте сервис обработки уведомлений.</div></div>
+    <div class="tabs"><span>Шаги</span><span>Заметки</span><span>Чат</span><span>Активность</span></div>
+    <div class="tools" id="tools"><button title="Фигуры">□ Фигуры</button><button title="Соединения">↗ Связь</button><button title="Текст">Т</button><button title="Свободный набросок">✎</button><button title="Отменить своё действие">↶</button><button id="export">Экспорт</button></div>
+    <div class="status" id="status" role="status">Сохранено</div>
+    <main class="canvas" id="canvas" aria-label="Общая схема">
+      <svg viewBox="0 0 380 260" role="img" aria-label="Client связан с API и базой данных">
+        <path class="link" d="M110 100H150 M240 100H275" />
+        <path class="link" d="m143 96 7 4-7 4 m125-8 7 4-7 4" />
+        <rect class="shape" x="20" y="75" width="90" height="50" rx="8" />
+        <rect class="shape" x="150" y="75" width="90" height="50" rx="8" />
+        <rect class="shape" x="275" y="75" width="90" height="50" rx="8" />
+        <g fill="currentColor" text-anchor="middle" font-size="14"><text x="65" y="105">Client</text><text x="195" y="105">API</text><text x="320" y="105">Database</text></g>
+        <path class="freehand" d="M142 147Q178 134 241 147 M183 156q-12 8-4 20t18 18" />
+        <text x="205" y="190" fill="currentColor" font-size="12">Проверить нагрузку</text>
+        <path d="m245 155 7 17 3-7 7-2z" fill="var(--app-primary)" />
+        <text x="260" y="184" fill="var(--app-primary-text)" font-size="11">Кандидат</text>
+      </svg>
+    </main>
+    <script>
+      const query = new URLSearchParams(location.search);
+      const state = query.get("state") || "saved";
+      document.documentElement.dataset.theme = query.get("theme") === "dark" ? "dark" : "light";
+      const status = document.getElementById("status");
+      const canvas = document.getElementById("canvas");
+      const tools = document.getElementById("tools");
+      const role = document.getElementById("role");
+      const empty = (title, text) => `<div class="empty"><h2>${title}</h2><p>${text}</p></div>`;
+      if (state === "whiteboard") {
+        document.querySelector("select").value = "Доска";
+        tools.innerHTML = '<button>Перо</button><button>Ластик</button><button>Текст</button><button>↶ Отменить</button>';
+        canvas.innerHTML = '<svg viewBox="0 0 600 280" aria-label="Рукописное объяснение алгоритма"><path class="freehand" d="M80 90q30-45 50 0t60 0m-28 13 28-13-13-18M260 80q-30-20-35 20t40 15M310 80v70m0-35h35m-5-35v70M390 100q20-30 50 0t60 0"/><text x="100" y="210" fill="currentColor" font-size="24">Объясняем идею · O(log n)</text></svg>';
+      }
+      if (state === "loading") { status.textContent = "Подготавливаем схему…"; status.className = "status info"; canvas.innerHTML = empty("Загрузка схемы", "Готовим общую рабочую область."); tools.hidden = true; }
+      if (state === "empty") { status.textContent = "Сохранено"; canvas.innerHTML = empty("Начните с идеи", "Добавьте фигуру или нарисуйте набросок. Схема общая для всех участников."); }
+      if (state === "reconnect") { status.className = "status warning"; status.textContent = "Восстанавливаем связь · Новые изменения ещё не сохранены"; }
+      if (state === "error") { status.className = "status error"; status.innerHTML = 'Не удалось сохранить. Ввод сохранён в открытой комнате. <button id="retry">Повторить</button>'; document.getElementById("retry").onclick = () => { status.className = "status"; status.textContent = "Сохранено"; }; }
+      if (state === "readonly") { role.textContent = "Кандидат · Только просмотр"; document.querySelector("select").disabled = true; tools.innerHTML = '<button>Экспорт</button>'; status.className = "status info"; status.textContent = "Интервью завершено · Только просмотр"; }
+      if (state !== "revoked" && state !== "loading") {
+        const expand = document.createElement("button"); expand.className = "expand";
+        const updateExpansion = () => { expand.textContent = document.body.classList.contains("expanded") ? "Вернуться в комнату" : "Развернуть схему"; };
+        expand.onclick = () => { document.body.classList.toggle("expanded"); updateExpansion(); };
+        if (state === "expanded") document.body.classList.add("expanded");
+        updateExpansion(); tools.append(expand);
+      }
+      if (state === "revoked") { role.textContent = "Нет доступа"; tools.hidden = true; document.querySelector("select").disabled = true; status.className = "status error"; status.textContent = "Доступ к комнате изменился"; canvas.innerHTML = empty("Схема недоступна", "Вернитесь в список интервью."); }
+      if (state === "confirm") {
+        const overlay = document.createElement("div"); overlay.className = "overlay";
+        overlay.innerHTML = '<section class="dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title"><h2 id="confirm-title">Открыть схему для всех?</h2><p>Рабочая область изменится у кандидата и всех интервьюеров. Код и Markdown сохранятся.</p><div class="actions"><button id="cancel">Отмена</button><button id="confirm" class="primary">Открыть схему</button></div></section>';
+        document.body.append(overlay); document.getElementById("cancel").onclick = () => overlay.remove(); document.getElementById("confirm").onclick = () => overlay.remove();
+      }
+      if (state.startsWith("sidebar-")) {
+        document.querySelector("body > .tabs").remove();
+        const workspace = document.createElement("div"); workspace.className = "mock-workspace";
+        workspace.innerHTML = '<aside class="mock-rail"><button aria-label="Показать боковую панель" title="Показать боковую панель">»</button></aside><aside class="mock-sidebar" aria-label="Области интервью"><div class="mock-sidebar-top"><nav class="tabs" role="tablist" aria-label="Рабочие области комнаты"><button role="tab" aria-selected="true">Шаги</button><button role="tab" aria-selected="false">Мои заметки</button><button role="tab" aria-selected="false">Чат</button><button role="tab" aria-selected="false">Активность</button></nav><button aria-label="Скрыть боковую панель" title="Скрыть боковую панель">‹</button></div><button class="mock-return primary">Вернуться к редактору</button><div class="mock-sidebar-content"><strong id="mock-panel-title">Шаги</strong><p class="muted">Материалы и обсуждение интервью находятся здесь.</p><textarea aria-label="Черновик" rows="5" style="width:100%;box-sizing:border-box;font:inherit">Черновик остаётся при скрытии панели.</textarea></div></aside><section class="mock-editor"></section>';
+        workspace.querySelector(".mock-editor").append(tools, status, canvas);
+        document.body.append(workspace);
+        const rail = workspace.querySelector(".mock-rail button");
+        const collapse = workspace.querySelector(".mock-sidebar-top button");
+        const tabs = [...workspace.querySelectorAll('[role="tab"]')];
+        let selected = tabs[0];
+        tabs.forEach(tab => tab.onclick = () => { tabs.forEach(item => item.setAttribute("aria-selected", String(item === tab))); selected = tab; workspace.querySelector("#mock-panel-title").textContent = tab.textContent; });
+        const hide = () => { workspace.classList.add("collapsed"); rail.focus(); };
+        collapse.onclick = hide; workspace.querySelector(".mock-return").onclick = hide;
+        rail.onclick = () => { workspace.classList.remove("collapsed"); selected.focus(); };
+        if (state === "sidebar-closed") workspace.classList.add("collapsed");
+        if (state === "sidebar-narrow") document.body.classList.add("mock-narrow");
+      }
+    </script>
+  </body>
+</html>

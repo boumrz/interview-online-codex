@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "predev": "node --experimental-strip-types scripts/generate-theme-css.mjs",
+    "predev": "node scripts/prepare-drawio.mjs --if-enabled && node --experimental-strip-types scripts/generate-theme-css.mjs",
     "dev": "rspack serve --config rspack.config.mjs",
-    "prebuild": "node --experimental-strip-types scripts/generate-theme-css.mjs",
+    "prebuild": "node scripts/prepare-drawio.mjs --if-enabled && node --experimental-strip-types scripts/generate-theme-css.mjs",
     "build": "rspack build --config rspack.config.mjs && npm run compress:dist",
     "compress:dist": "node scripts/compress-dist.mjs",
     "typecheck": "tsc --noEmit",
@@ -68,7 +68,8 @@
     "e2e:slow-network": "node tests/e2e/run-isolated.mjs tests/e2e/realtime/e2e-slow-network-sync.mjs",
     "chaos:test": "node tests/e2e/run-isolated.mjs tests/e2e/chaos/e2e-chaos-harness.mjs",
     "chaos:faults": "node tests/e2e/run-isolated.mjs tests/e2e/chaos/e2e-chaos-fault-injection.mjs",
-    "test:e2e-fixture-safety": "node --test tests/contract/e2e-fixture-safety.test.mjs tests/contract/e2e-owned-runtime.test.mjs"
+    "test:e2e-fixture-safety": "node --test tests/contract/e2e-fixture-safety.test.mjs tests/contract/e2e-owned-runtime.test.mjs",
+    "prepare:drawio": "node scripts/prepare-drawio.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "6.3.4",
@@ -84,6 +85,7 @@
     "@codemirror/state": "^6.6.0",
     "@codemirror/theme-one-dark": "^6.1.3",
     "@codemirror/view": "^6.41.0",
+    "@excalidraw/excalidraw": "0.18.1",
     "@reduxjs/toolkit": "^2.3.0",
     "antd": "6.6.5",
     "dompurify": "^3.4.16",
@@ -102,12 +104,13 @@
   "devDependencies": {
     "@rspack/cli": "^2.2.8",
     "@rspack/core": "^2.2.8",
+    "@rspack/dev-server": "^2.2.1",
     "@types/node": "^22.8.7",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "css-loader": "^7.1.2",
+    "fflate": "0.8.3",
     "playwright": "^1.58.2",
-    "typescript": "^5.6.3",
-    "@rspack/dev-server": "^2.2.1"
+    "typescript": "^5.6.3"
   }
 }

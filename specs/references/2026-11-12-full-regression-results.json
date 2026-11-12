@@ -1,0 +1,1704 @@
+{
+  "date": "2026-11-12",
+  "status": "automated_scope_verified_product_review_pending",
+  "requestedUi": {
+    "diagramModeLabel": "drawio",
+    "canvasExpansionLabel": "На весь экран",
+    "storedModeKey": "diagram"
+  },
+  "backend": {
+    "command": [
+      "mvn",
+      "test"
+    ],
+    "exitCode": 0,
+    "suites": 77,
+    "tests": 529,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "durationSeconds": 225.795,
+    "results": [
+      {
+        "suite": "com.interviewonline.SmokeTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 4.085
+      },
+      {
+        "suite": "com.interviewonline.agent.WorkflowStateMachineTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.001
+      },
+      {
+        "suite": "com.interviewonline.config.ChatReceiptHmacConfigurationTest",
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.024
+      },
+      {
+        "suite": "com.interviewonline.config.TeamInvitationLinkEncryptionEnvironmentTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.036
+      },
+      {
+        "suite": "com.interviewonline.config.WebConfigCorsTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.258
+      },
+      {
+        "suite": "com.interviewonline.controller.AuthCredentialPolicyIntegrationTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.023
+      },
+      {
+        "suite": "com.interviewonline.controller.CandidateActivityHistoryIntegrationTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 2.491
+      },
+      {
+        "suite": "com.interviewonline.controller.CandidateActivityPoolIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.51
+      },
+      {
+        "suite": "com.interviewonline.controller.DurableCandidateActivityIntegrationTest",
+        "tests": 13,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.535
+      },
+      {
+        "suite": "com.interviewonline.controller.E2eFixtureIsolationIntegrationTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.637
+      },
+      {
+        "suite": "com.interviewonline.controller.GuestRoomRoleIntegrationTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.395
+      },
+      {
+        "suite": "com.interviewonline.controller.HiringManagerNicknameIntegrationTest",
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.908
+      },
+      {
+        "suite": "com.interviewonline.controller.HiringManagerPreviewIntegrationTest",
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.596
+      },
+      {
+        "suite": "com.interviewonline.controller.HrAccountProfileIntegrationTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.298
+      },
+      {
+        "suite": "com.interviewonline.controller.HrHostNotesWorkbookIntegrationTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.498
+      },
+      {
+        "suite": "com.interviewonline.controller.HrInterviewProjectionIntegrationTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.439
+      },
+      {
+        "suite": "com.interviewonline.controller.HrParticipantProjectionIntegrationTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.349
+      },
+      {
+        "suite": "com.interviewonline.controller.HrPermissionPoolIntegrationTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.304
+      },
+      {
+        "suite": "com.interviewonline.controller.HrRoleRemovalIntegrationTest",
+        "tests": 19,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 5.505
+      },
+      {
+        "suite": "com.interviewonline.controller.HrRoomArchiveIntegrationTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 2.063
+      },
+      {
+        "suite": "com.interviewonline.controller.HrRoomTrackingIntegrationTest",
+        "tests": 21,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 4.21
+      },
+      {
+        "suite": "com.interviewonline.controller.HrTeamWorkspaceExportIntegrationTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.925
+      },
+      {
+        "suite": "com.interviewonline.controller.HrWorkbookIntegrationTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.358
+      },
+      {
+        "suite": "com.interviewonline.controller.InvitationRateLimitPostgresIntegrationTest",
+        "tests": 11,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 11.982
+      },
+      {
+        "suite": "com.interviewonline.controller.LibraryArchiveRetirementMigrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.219
+      },
+      {
+        "suite": "com.interviewonline.controller.LibraryRemovalSnapshotIntegrationTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.515
+      },
+      {
+        "suite": "com.interviewonline.controller.ManagerWorkspaceYjsRecoveryIntegrationTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.703
+      },
+      {
+        "suite": "com.interviewonline.controller.MarkdownTaskDeliveryIntegrationTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.666
+      },
+      {
+        "suite": "com.interviewonline.controller.PersonalInterviewDetailsIntegrationTest",
+        "tests": 9,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 2.725
+      },
+      {
+        "suite": "com.interviewonline.controller.PersonalInterviewScopeIntegrationTest",
+        "tests": 12,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 3.276
+      },
+      {
+        "suite": "com.interviewonline.controller.ProductMetricsControllerTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.083
+      },
+      {
+        "suite": "com.interviewonline.controller.RealtimeChatIdempotencyIntegrationTest",
+        "tests": 31,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 5.059
+      },
+      {
+        "suite": "com.interviewonline.controller.RealtimeStreamStatusIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.571
+      },
+      {
+        "suite": "com.interviewonline.controller.RoomDiagramDisabledIntegrationTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.613
+      },
+      {
+        "suite": "com.interviewonline.controller.RoomDiagramIntegrationTest",
+        "tests": 18,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 3.056
+      },
+      {
+        "suite": "com.interviewonline.controller.RoomDrawingColorDisabledIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.67
+      },
+      {
+        "suite": "com.interviewonline.controller.RoomDrawingColorIntegrationTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.932
+      },
+      {
+        "suite": "com.interviewonline.controller.RoomEditorModeIntegrationTest",
+        "tests": 11,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.2
+      },
+      {
+        "suite": "com.interviewonline.controller.RoomEditorModeMigrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.197
+      },
+      {
+        "suite": "com.interviewonline.controller.RoomMetadataYjsDeliveryIntegrationTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 2.165
+      },
+      {
+        "suite": "com.interviewonline.controller.RoomPersistenceIsolationIntegrationTest",
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 16.8
+      },
+      {
+        "suite": "com.interviewonline.controller.RoomWhiteboardDisabledIntegrationTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.658
+      },
+      {
+        "suite": "com.interviewonline.controller.RoomWhiteboardIntegrationTest",
+        "tests": 20,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.777
+      },
+      {
+        "suite": "com.interviewonline.controller.RoomWorkspaceSnapshotControllerTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.031
+      },
+      {
+        "suite": "com.interviewonline.controller.SocialAuthConfigurationTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.083
+      },
+      {
+        "suite": "com.interviewonline.controller.SocialAuthDisabledIntegrationTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.402
+      },
+      {
+        "suite": "com.interviewonline.controller.SocialAuthIntegrationTest",
+        "tests": 14,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 3.045
+      },
+      {
+        "suite": "com.interviewonline.controller.SocialAuthMigrationIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.777
+      },
+      {
+        "suite": "com.interviewonline.controller.TeamAccessIntegrationTest",
+        "tests": 17,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 3.224
+      },
+      {
+        "suite": "com.interviewonline.controller.TeamCreateRestartHttpIntegrationTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 2.781
+      },
+      {
+        "suite": "com.interviewonline.controller.TeamDefaultConfigurationIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.897
+      },
+      {
+        "suite": "com.interviewonline.controller.TeamInterviewCreationIntegrationTest",
+        "tests": 60,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 23.467
+      },
+      {
+        "suite": "com.interviewonline.controller.TeamInvitationLinkRecoveryIntegrationTest",
+        "tests": 25,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 21.929
+      },
+      {
+        "suite": "com.interviewonline.controller.TeamLegacyConfigurationIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.872
+      },
+      {
+        "suite": "com.interviewonline.controller.TeamManagementCommandIntegrationTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 13.043
+      },
+      {
+        "suite": "com.interviewonline.controller.TeamManagementCommandRestartHttpIntegrationTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 2.183
+      },
+      {
+        "suite": "com.interviewonline.controller.TeamMemberDirectoryIntegrationTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 2.463
+      },
+      {
+        "suite": "com.interviewonline.controller.TeamMergeMigrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.209
+      },
+      {
+        "suite": "com.interviewonline.controller.TeamOwnershipTransferIntegrationTest",
+        "tests": 11,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 9.723
+      },
+      {
+        "suite": "com.interviewonline.controller.TeamSharedInterviewAccessIntegrationTest",
+        "tests": 15,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 4.497
+      },
+      {
+        "suite": "com.interviewonline.controller.TeamTaskLibraryIntegrationTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.011
+      },
+      {
+        "suite": "com.interviewonline.controller.TeamTaskSetIntegrationTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.203
+      },
+      {
+        "suite": "com.interviewonline.controller.TeamTrackVacancyIntegrationTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.741
+      },
+      {
+        "suite": "com.interviewonline.controller.TeamWorkspaceDefaultConfigurationIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.955
+      },
+      {
+        "suite": "com.interviewonline.controller.TeamWorkspaceLegacyConfigurationIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.873
+      },
+      {
+        "suite": "com.interviewonline.controller.UserPresetLifecycleIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.82
+      },
+      {
+        "suite": "com.interviewonline.migration.TeamSchemaMigrationIntegrationTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.806
+      },
+      {
+        "suite": "com.interviewonline.service.ClientIpResolverTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.005
+      },
+      {
+        "suite": "com.interviewonline.service.CollaborationServiceYjsRelayPolicyTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.0
+      },
+      {
+        "suite": "com.interviewonline.service.HostNotesStorageCompatibilityTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.004
+      },
+      {
+        "suite": "com.interviewonline.service.HrWorkbookCleanupTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.151
+      },
+      {
+        "suite": "com.interviewonline.service.RealtimeConnectionLifecycleDiagnosticsIntegrationTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.723
+      },
+      {
+        "suite": "com.interviewonline.service.RealtimeConnectionLifecycleIntegrationTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 7.39
+      },
+      {
+        "suite": "com.interviewonline.service.RoomAccessServiceTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.274
+      },
+      {
+        "suite": "com.interviewonline.service.RoomRealtimeActivityLoadIntegrationTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.649
+      },
+      {
+        "suite": "com.interviewonline.service.RoomRealtimeLifecycleDiagnosticsTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.262
+      },
+      {
+        "suite": "com.interviewonline.service.RoomStreamAdmissionSendBoundaryIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.669
+      }
+    ],
+    "ownedSchemasObserved": [
+      "auth_credential_policy_2ff232e54c7847c88d9751018382a7bb",
+      "fixture_isolation_e2e_5a7a8cc3f72f43249efa222af7c5250e",
+      "guest_room_roles_da3cdef8a7cf42a98275a1380a4227da",
+      "hiring_nickname_db43bff5b8314d9da5797d875ac3a61b",
+      "hiring_preview_b61980998f6748efb25118a43f964cbd",
+      "hr_archive_4d9b220c66d34fd4ad8eeaafbd97cfeb",
+      "hr_host_notes_2ad37f817da941d7a69cfaee08baa18d",
+      "hr_profile_3cd3718aee3b46c89d047c7e380d412c",
+      "hr_projection_0e1199d9d65d427da466a6e86cace46a",
+      "hr_team_export_f79d60915ac4440cb0cb3caa5ef5de00",
+      "hr_workbook_99585deceb064efc8dd83bb55efc3d0f",
+      "hrpermissionpool_40a4db08e0cf4f4a8c407c8e945951b5",
+      "hrroleremoval_453b45287c154baab0d7e15db10621ea",
+      "hrroomtracking_7ba5e7cadbf84cee9579401ccf35d0ab",
+      "invitation_rate_limit_dddfe15a8ed94a2c8d5e6d50a8130afd",
+      "invitation_recovery_e0d23815f87c4bc180b74858c87476ac",
+      "invitation_recovery_v15_72292a3f39714941b3e21762230463ed",
+      "library_archive_upgrade_15e32a3139a24d62a7c8ec1c494a082f",
+      "library_remove_e9c496ebb058489c850a4eaf6e9a0f8f",
+      "manager_yjs_recovery_8fbc83410ca441ffb01290016ab52a1d",
+      "markdown_delivery_ebefe0d681694e73a9e9bae41c2fdc86",
+      "member_directory_fbd753901a04426c8c34292143682957",
+      "metadata_yjs_delivery_83877756fcca408f8d5c0c95cbb8da3e",
+      "ownership_transfer_9c9088fc7e164accb1b74b7f46cf0dcf",
+      "personal_interview_details_303f84324317434fa9a99d7a206b36c7",
+      "personal_interview_scope_9836832a4d984bf7b72d22bb84ca1036",
+      "realtime_chat_idempotency_d13032c4318b4fbf89b8fbab308f7603",
+      "room_activity_load_2de54e4e18e840b9ace82b43d2f973ef",
+      "room_diagram_d6cd3fbed714418692e75d183109fc7e",
+      "room_diagram_disabled_948a2c0959a6490d9d6110928a4b4e7c",
+      "room_drawing_color_002125afce73482bb75bc2a7112fe1f2",
+      "room_drawing_color_off_a64e0130a0c848adaf49bf6eb4662096",
+      "room_mode_27178fa764584995b0ccf143a50fea3e",
+      "room_mode_upgrade_9c6497bddcb743b9af0eee28679b7cb9",
+      "room_persistence_isolation_2fd603bd9b97499f85fb9ecc8dc0eb50",
+      "room_whiteboard_776faeb518fa4e34844cda7e117a90fb",
+      "room_whiteboard_disabled_02007abe176c4ff9bc22d0d4794ebc6e",
+      "social_auth_a91a55effd264c82b64abf83cd9f5e14",
+      "social_auth_disabled_89bc8274050849298d322a46da7963ad",
+      "social_auth_upgrade_e39084f71df24bc691a0a9a1c9c9c52b",
+      "team_access_47afafbed5fb40009aa292bcf2a4a22a",
+      "team_default_configuration_075a6cd223fc4dc39012f46075d13e86",
+      "team_feature_default_b892d9567c134222990f197bb21f7ba4",
+      "team_feature_off_4595c8bcf3784f57aaf521cf4ed08b25",
+      "team_fresh_0c523bcc34774a58b5d2d1dc35bc8e24",
+      "team_interviews_2e81d5625558435a9bd9c8d0d396878f",
+      "team_legacy_configuration_611362ada3b44c1287c850d4e66ab1f1",
+      "team_management_commands_62be6f65a4bd416bb1e06a6b02b0f4e7",
+      "team_management_restart_3c5bb23a101e4e28a27588296d08f947",
+      "team_merge_upgrade_ea540a877b7649fe932d071311a29b12",
+      "team_restart_66e0aa00e48149d9909011d053b1829e",
+      "team_restart_http_4633c2e3b8f94f6db94a10b748729d29",
+      "team_shared_interview_99fb8510ebe148a99af1a59e5de66ae1",
+      "team_task_sets_55a43140850644c0b58540b380f4c47e",
+      "team_tasks_249030a984494fc5b48f41940f8a0738",
+      "team_tracks_7a09cb36ab4c46a4a1ebc0a4f621a03c",
+      "team_upgrade_9071a33e740a455092afee28c4bf4aa0",
+      "user_preset_lifecycle_87f0f8025c494d8085a45d03ec7a0c2f"
+    ],
+    "ownedSchemasStillPresent": [],
+    "currentSourceMismatches": [],
+    "package": {
+      "command": [
+        "mvn",
+        "-q",
+        "-DskipTests",
+        "package"
+      ],
+      "exitCode": 0,
+      "artifact": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-full-backend-final-20261112-bqdei93z/backend/target/interhub-backend-0.0.1-SNAPSHOT.jar",
+      "sha256": "f4b0f104a976fbccfb73316831e2bacab2e56d8933ffd89f887f0de1bba72758"
+    },
+    "evidenceSummaryPath": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-full-backend-final-20261112-bqdei93z/summary.json"
+  },
+  "frontendUnitAndContract": {
+    "tests": 219,
+    "pass": 219,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0
+  },
+  "scripts": {
+    "tests": 37,
+    "pass": 37,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0
+  },
+  "browser": {
+    "passed": true,
+    "activeFiles": 118,
+    "caseCounts": {
+      "production": {
+        "tests": 603,
+        "pass": 602,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 1
+      },
+      "development": {
+        "tests": 17,
+        "pass": 17,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      }
+    },
+    "passedCases": 619,
+    "manualSkippedCases": [],
+    "excludedFiles": [
+      {
+        "file": "tests/e2e/account/e2e-social-login.mjs",
+        "reason": "Google/VK integration is deferred by the user; FEATURE_SOCIAL_AUTH_ENABLED remains false"
+      }
+    ],
+    "featureFlags": {
+      "FEATURE_ROOM_DIAGRAMS_ENABLED": "true",
+      "FEATURE_ROOM_WHITEBOARD_ENABLED": "true",
+      "FEATURE_SOCIAL_AUTH_ENABLED": "false"
+    },
+    "modeResults": [
+      {
+        "mode": "production",
+        "exitCode": 0,
+        "startedAt": "2026-11-12T12:47:19.135Z",
+        "finishedAt": "2026-11-12T13:09:51.830Z"
+      },
+      {
+        "mode": "development",
+        "exitCode": 0,
+        "startedAt": "2026-11-12T13:09:51.830Z",
+        "finishedAt": "2026-11-12T13:11:07.457Z"
+      }
+    ],
+    "suites": [
+      {
+        "mode": "production",
+        "suite": "tests/e2e/account/e2e-account-room-binding.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 10056
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/account/e2e-account-switch-fresh-data.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 2852
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/account/e2e-auth-navigation.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 979
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/account/e2e-auth-registration-policy.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 943
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/account/e2e-candidate-modal-smoke.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 1796
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/account/e2e-interviewer-role-notes-lock.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 2323
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/account/e2e-login-profile-hydration.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 5909
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/account/e2e-participants-presence.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 3456
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/account/e2e-personal-hiring-manager.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 10344
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/account/e2e-personal-interview-cards.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 6345
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/account/e2e-personal-team-scope.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 11233
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/account/e2e-profile-room-action-notifications.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 8590
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/account/e2e-social-login-disabled.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 1869
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/auth/e2e-invite-token-negative.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 5073
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/authoring/e2e-markdown-explainer-smoke.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 2129
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/authoring/e2e-pdf-export-progress.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 7107
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/authoring/e2e-personal-library-language-metadata.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 3939
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/authoring/e2e-plaintext-language.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 2072
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/authoring/e2e-private-notes-slash-export.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 1609
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/authoring/e2e-room-notes-download.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 1467
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/authoring/e2e-task-create-language-default.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 1129
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/chaos/e2e-chaos-fault-injection.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 3998
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/chaos/e2e-chaos-harness.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 3757
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/dashboard/e2e-admin-users-pagination.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 5827
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/dashboard/e2e-dashboard-action-notifications.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 2194
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/dashboard/e2e-dashboard-redesign.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 1489
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/dashboard/e2e-dashboard-smoke.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 887
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/hr/e2e-hr-cabinet.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 52104
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-activity-history-recovery.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 65661
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-activity-timeline-grouping.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 15076
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-briefing-focus-mode.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 2502
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-demo-interview-scenario.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 19101
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-interviewer-step-publication.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 7281
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-join-race-sync.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 5690
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-multi-participant-activity.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 39834
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-room-canvas-labels.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 3087
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-room-command-editor-ux.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 7497
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-room-condition-layout.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 12268
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-room-context-panels.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 87582
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-room-diagrams.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 26480
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-room-drawing-colors.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 6552
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-room-language-behavior-api.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 296
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-room-panel-continuity.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 22301
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-room-panel-visibility.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 2749
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-room-review-regressions.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 2597
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-room-shared-mode.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 23915
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-room-step-smoke.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 3138
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-room-whiteboard-pen-hover.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 4643
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-room-whiteboard-pen-profiles.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 6978
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-room-whiteboard.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 19397
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/interview/e2e-smoke.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 1215
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/platform/e2e-fixture-lifecycle.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 685
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/platform/e2e-legacy-domain-notice.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 657
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/platform/e2e-metrika-hosts.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 3104
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-code-sync-regression.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 2433
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-cursor-no-dot.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 1686
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-finished-actions.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 5518
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-finished-role-access.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 9924
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-five-participant-collaboration.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 4920
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-hidden-tab-sync.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 12945
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-late-published-manager-workspace-event.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 191
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-manager-workspace-integrity.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 42713
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-markdown-delivery-reliability.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 30917
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-missing-room-sse-recovery.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 7167
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-public-step-publication-preserves-edits.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 7292
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-queued-notes-finish.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 9053
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-realtime-authorization-recovery.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 1871
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-refresh-server-source-sync.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 1602
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-room-lifecycle-editing.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 40169
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-slow-network-sync.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 48149
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-sse-reconnect-sync.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 9986
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-yjs-abc-refresh-join-api.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 300
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-yjs-delivery-reliability.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 11346
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-yjs-multi-participant-sync.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 30636
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-yjs-queue-boundaries.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 2712
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/realtime/e2e-yjs-refresh-stale-snapshot-api.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 260
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/teams/e2e-team-action-notifications.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 9735
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/teams/e2e-team-availability.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 3472
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/teams/e2e-team-interview-edit.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 21401
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/teams/e2e-team-invitation-management.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 83951
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/teams/e2e-team-management-settings.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 25692
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/teams/e2e-team-membership.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 3556
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/teams/e2e-team-room-public-access.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 2128
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/teams/e2e-team-settings-roster.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 7687
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/teams/e2e-team-settings-typography.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 1097
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/teams/e2e-team-workspace-business.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 11947
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/teams/e2e-team-workspaces.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 58730
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/teams/e2e-ui2-followup-workspace.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 2654
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/teams/e2e-ui2-team.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 6648
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/teams/e2e-workspace-navigation.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 46677
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-card-spacing.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 5611
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-header-ux-review.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 5574
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-header-workspace-selector.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 5484
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-hiring-manager-selector.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 20171
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-hiring-preparation.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 6405
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-interactive-cursors.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 3338
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-interhub-branding.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 1566
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-library-delete-only.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 7374
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-library-metadata-placement.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 4776
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-personal-authoring-polish.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 5270
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-profile-header-preparation.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 3107
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-rename-alignment.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 3334
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-room-authoring-geometry.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 8166
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-selector-overflow.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 7640
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-system-theme.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 3976
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-theme-switch.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 3567
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-track-vacancy-hierarchy.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 2335
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-ui2-controls.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 2727
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-ui2-delete-actions.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 12297
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-ui2-followup.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 6170
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-ui2-hiring-clarity.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 7043
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-ui2-layout-followup.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 9979
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-ui2-period-room-edit.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 52494
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-ui2-personal.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 6859
+      },
+      {
+        "mode": "production",
+        "suite": "tests/e2e/theme/e2e-ui2-room.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 2247
+      },
+      {
+        "mode": "development",
+        "suite": "tests/e2e/platform/e2e-local-runtime-chunk-recovery.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 1119
+      },
+      {
+        "mode": "development",
+        "suite": "tests/e2e/theme/e2e-workspace-burger-frames.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 31313
+      },
+      {
+        "mode": "development",
+        "suite": "tests/e2e/theme/e2e-workspace-switch-stability.mjs",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 13035
+      }
+    ],
+    "reportDir": "/var/folders/x6/8g_rbv593g9fb5mktbl8knmh0000gn/T/interhub-complete-e2e-20261112-n350yst7",
+    "conditionalSkippedCasesInMainProfile": [
+      {
+        "name": "teams/invitation-native-ax-lifecycle",
+        "reason": "Pure collector/barrier contract gated by four opt-in flags; covered by the additional full-file profile below, not an actual live OS-focus witness"
+      }
+    ],
+    "additionalProfiles": [
+      {
+        "suite": "tests/e2e/teams/e2e-team-invitation-management.mjs",
+        "flags": {
+          "E2E_TEAM_INVITATIONS_NATIVE_AX": "1",
+          "E2E_NATIVE_AX_LOCAL_ONLY": "1",
+          "E2E_NATIVE_AX_ALLOW_OS_FOCUS": "1",
+          "E2E_NATIVE_AX_TEST_ID": "teams/invitation-native-ax-lifecycle"
+        },
+        "tests": 15,
+        "passed": 15,
+        "failures": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "uniqueAdditionalCases": 1,
+        "actualHostFocusActions": false,
+        "log": "/tmp/interhub-native-ax-contract-matrix-20261112.log"
+      }
+    ],
+    "uniquePassedCasesAcrossProfiles": 620
+  },
+  "nativeTablet": {
+    "passed": true,
+    "chain": "Linux uinput -> evdev -> udev Tablet -> Xorg/libinput TABLET -> headed Chromium -> InterHub",
+    "device": {
+      "source": "linux-uinput",
+      "device": "InterHub Generic Pressure Pen 14-bit",
+      "pressureLevels": 16384,
+      "screen": [
+        1280,
+        900
+      ],
+      "nativeInput": true
+    },
+    "canvasInput": "native-uinput-only",
+    "cdpDrawingDispatches": 0,
+    "hoverNoWrite": true,
+    "pressure": true,
+    "peerRendered": true,
+    "eraserUndo": true,
+    "reconnect": true,
+    "reload": true,
+    "exports": [
+      "excalidraw",
+      "PNG",
+      "SVG"
+    ],
+    "exportsExecutedIn": "peer application browser, from the confirmed native-uinput drawing",
+    "trustedPenEvents": 52,
+    "cleanedUp": true,
+    "physicalVendorFirmwareVerified": false
+  },
+  "builds": {
+    "typecheck": "PASS",
+    "frontendFlagsOff": "PASS",
+    "frontendFlagsOn": "PASS",
+    "backendJar": "PASS",
+    "frontendWarnings": "Two asset/entrypoint size warnings, no build errors"
+  },
+  "shellScripts": [
+    "scripts/dev-up.sh",
+    "deploy/scripts/deploy_docker.sh",
+    "deploy/scripts/init_ssl_docker.sh",
+    "deploy/scripts/run_docker_local.sh",
+    "backend/scripts/environment_doctor.sh",
+    "frontend/docker-entrypoint.sh"
+  ],
+  "composeVariants": [
+    [
+      "docker-compose.dev.yml"
+    ],
+    [
+      "docker-compose.prod.yml"
+    ],
+    [
+      "docker-compose.prod.yml",
+      "docker-compose.local.yml"
+    ],
+    [
+      "docker-compose.prod.yml",
+      "docker-compose.shared-proxy.yml"
+    ]
+  ],
+  "productSource": {
+    "files": 383,
+    "changedAfterFreeze": [],
+    "manifestSha256": "0e4d1c26c0b967a9d99cefdb30529f1265969759092d64c4e11f45521a206eb1"
+  },
+  "passedTestCasesTotal": 1406,
+  "limitations": [
+    "Live Native AX OS-focus manual witness not executed; its pure collector/barrier software contract passed in the additional opt-in profile",
+    "Google/VK login deferred and disabled",
+    "Physical XPPen/Parblo firmware and vendor drivers not certified",
+    "OS witness exports executed in peer application browser, not guest download filesystem"
+  ]
+}

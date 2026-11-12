@@ -25,6 +25,10 @@ async function open(viewport) {
     throw error;
   }
 }
+async function selectSidebarSurface(page, name) {
+  await page.getByRole("tab", { name, exact: true }).click();
+}
+
 test("condition stays outside the four tabs and collapse preserves its mounted editor and draft", async () => {
   const { browser, page } = await open({ width: 1366, height: 850 });
   try {
@@ -53,12 +57,13 @@ test("condition stays outside the four tabs and collapse preserves its mounted e
     assert.equal(await tabs.getByRole("tab", { name: "Мои заметки", exact: true }).getAttribute("aria-selected"), "true");
   } finally { await browser.close(); }
 });
-test("short tablet room starts with steps and keeps condition, controls and editor reachable in both themes", async () => {
+test("short tablet room starts with editor and keeps condition, controls and auxiliary tabs reachable in both themes", async () => {
   const { browser, page } = await open({ width: 768, height: 520 });
   try {
     const steps = page.getByRole("tab", { name: "Шаги", exact: true });
-    await page.waitForFunction(() => document.querySelector('#room-context-tab-steps')?.getAttribute('aria-selected') === 'true');
-    assert.equal(await steps.getAttribute("aria-selected"), "true");
+    await page.getByRole("region", { name: "Редактор", exact: true }).waitFor();
+    assert.equal(await page.getByRole("tab", { selected: true }).count(), 0);
+    await selectSidebarSurface(page, "Шаги");
     for (const theme of ["light", "dark"]) {
       await page.evaluate(theme => { localStorage.setItem("interview-online:ui-theme",theme);window.dispatchEvent(new StorageEvent("storage",{key:"interview-online:ui-theme",newValue:theme})); }, theme);
       const condition = page.getByRole("region", { name: "Условие", exact: true });
@@ -70,7 +75,7 @@ test("short tablet room starts with steps and keeps condition, controls and edit
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
       await page.getByRole("button", { name: "Свернуть условие", exact: true }).click();
       await page.getByRole("button", { name: "Развернуть условие", exact: true }).click();
-      await steps.click();
+      await selectSidebarSurface(page, "Шаги");
     }
   } finally { await browser.close(); }
 });
@@ -81,7 +86,7 @@ test("expanded condition leaves chat and notes composers visible when focused in
     for (const viewport of [{ width: 384, height: 512 }, { width: 819, height: 480 }, { width: 512, height: 300 }]) {
     await page.setViewportSize(viewport);
     for (const [tab, testId, sendId] of [["Мои заметки", "room-private-notes-input", "room-private-notes-send"], ["Чат", "room-notes-input", "room-notes-send"]]) {
-    await page.getByRole("tab", { name: tab, exact: true }).click();
+    await selectSidebarSurface(page, tab);
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     const input = page.getByTestId(testId);
     await input.focus();
@@ -115,7 +120,7 @@ test("condition has stable geometry across tabs and its vertical resize preserve
     const section = page.locator("[data-condition-expanded]");
     const initial = await section.boundingBox();
     for (const name of ["Мои заметки", "Чат", "Активность", "Шаги"]) {
-      await page.getByRole("tab", { name, exact: true }).click();
+      await selectSidebarSurface(page, name);
       await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       const box = await section.boundingBox();
       assert.ok(Math.abs(box.y - initial.y) <= 1 && Math.abs(box.height - initial.height) <= 1,
@@ -177,7 +182,7 @@ test("Markdown removes the separate condition and returning to Code restores its
     const mainSource = page.getByRole("region", { name: "Редактор", exact: true }).getByTestId("room-markdown-editor").locator(".cm-content");
     assert.equal(await mainSource.innerText(), markdown);
     for (const name of ["Мои заметки", "Чат", "Активность", "Шаги"]) {
-      await page.getByRole("tab", { name, exact: true }).click();
+      await selectSidebarSurface(page, name);
       assert.equal(await mainSource.isVisible(), true);
       assert.equal(await page.getByRole("region", { name: "Условие", exact: true }).count(), 0);
     }
@@ -326,7 +331,7 @@ test("short Focus condition can grow manually while chat and notes remain reacha
     for (let index = 0; index < 4; index++) await separator.press("ArrowDown");
     assert.ok(Number(await separator.getAttribute("aria-valuenow")) >= initial + 80);
     for (const [tab, inputId, actionId] of [["Мои заметки", "room-private-notes-input", "room-private-notes-send"], ["Чат", "room-notes-input", "room-notes-send"]]) {
-      await page.getByRole("tab", { name: tab, exact: true }).click();
+      await selectSidebarSurface(page, tab);
       const input = page.getByTestId(inputId);
       await input.focus();
       await input.fill("Доступный черновик панели");

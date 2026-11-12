@@ -57,7 +57,7 @@ class SocialAuthMigrationIntegrationTest(
 
     @Test fun `V34 preserves pre-existing local credentials account profile and owned interview`() {
         postgres.verifyPostgres16()
-        assertEquals("34",jdbc.queryForObject("SELECT version FROM flyway_schema_history WHERE success=true ORDER BY installed_rank DESC LIMIT 1",String::class.java))
+        assertEquals("37",jdbc.queryForObject("SELECT version FROM flyway_schema_history WHERE success=true ORDER BY installed_rank DESC LIMIT 1",String::class.java))
         assertEquals(passwordHash,jdbc.queryForObject("SELECT password_hash FROM users WHERE id=?",String::class.java,userId))
         assertEquals("Preserved code",jdbc.queryForObject("SELECT code FROM rooms WHERE id=? AND owner_user_id=?",String::class.java,roomId,userId))
         mvc.post("/api/auth/login") {

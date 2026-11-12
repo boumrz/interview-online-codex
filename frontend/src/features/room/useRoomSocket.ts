@@ -3,7 +3,7 @@ import { applyUpdate, Doc, encodeStateAsUpdate, mergeUpdates } from "yjs";
 import { API_BASE_URL } from "../../config/runtime";
 import { activityRetryDelay, ACTIVITY_REQUEST_TIMEOUT_MS } from "./activityRetry";
 import { base64ToBytes, bytesToBase64 } from "./yjsCodec";
-import type { RoomTask } from "../../types";
+import type { RoomEditorMode, RoomTask } from "../../types";
 import { trackEvent } from "../../services/analytics";
 import { isRoomReadOnly } from "./roomEditPolicy";
 import { createRoomEventSource, roomRealtimeFetch } from "./roomRealtimeTransport";
@@ -37,6 +37,7 @@ type Participant = {
   displayName: string;
   userId?: string | null;
   participantId?: string | null;
+  drawingColor?: string | null;
   role: "owner" | "interviewer" | "candidate";
   presenceStatus: "active" | "away";
   isAuthenticated?: boolean;
@@ -118,8 +119,11 @@ type RealtimeState = {
    */
   personalNotes?: PersonalNoteEntryPayload[];
   briefingMarkdown?: string;
-  roomEditorMode?: "code" | "markdown";
+  roomEditorMode?: RoomEditorMode;
   roomEditorModeRevision?: number;
+  roomDiagramsEnabled?: boolean;
+  roomWhiteboardEnabled?: boolean;
+  drawingColor?: string | null;
   tasks?: RoomTask[];
   taskScores: Record<string, number | null>;
   participants: Participant[];
@@ -193,6 +197,9 @@ type Options = {
   onNoteMessageAck?: (payload: NoteMessageAckPayload) => void;
   onNoteMessageFailure?: (payload: NoteMessageFailurePayload) => void;
   onPrivateNoteFailure?: (payload: { privateNoteId: string }) => void;
+  /** Wake the diagram's ordered recovery path; scene data stays out of room state. */
+  onDiagramChanged?: () => void;
+  onWhiteboardChanged?: () => void;
 };
 
 type NoteMessageAckPayload = {
@@ -499,6 +506,8 @@ export function useRoomSocket({
   onNoteMessageAck,
   onNoteMessageFailure,
   onPrivateNoteFailure,
+  onDiagramChanged,
+  onWhiteboardChanged,
 }: Options) {
   const sseRef = useRef<EventSource | null>(null);
   const pendingMessagesRef = useRef<QueuedClientMessage[]>([]);
@@ -611,6 +620,8 @@ export function useRoomSocket({
   });
   const roomModeControllerRef = useRef<AbortController | null>(null);
   const [connected, setConnected] = useState(false);
+  // A transport-open event precedes state_sync and its renewed capability.
+  const [roomAuthorityToken, setRoomAuthorityToken] = useState<string | null>(null);
   const [accessDenied, setAccessDenied] = useState(false);
   const [roomUnavailable, setRoomUnavailable] = useState(false);
   const participantId = useMemo(() => getOrCreateParticipantId(), []);
@@ -645,6 +656,7 @@ export function useRoomSocket({
         activityRetryTimerRef.current = null;
       }
       eventTokenRef.current = null;
+      setRoomAuthorityToken(null);
       queueDrainInProgressRef.current = false;
       inFlightControllerRef.current = null;
       tryDrainQueueRef.current = null;
@@ -796,6 +808,7 @@ export function useRoomSocket({
     const invalidateTransportLease = () => {
       streamLease += 1;
       eventTokenRef.current = null;
+      setRoomAuthorityToken(null);
       activityCaptureConfirmedRef.current = false;
       abortInFlightRequest();
       abortActivityInFlightRequest();
@@ -829,6 +842,7 @@ export function useRoomSocket({
       dropPendingQueue();
       dropPendingActivity();
       eventTokenRef.current = null;
+      setRoomAuthorityToken(null);
       activityCaptureConfirmedRef.current = false;
       tryDrainActivityRef.current = null;
       queueActivityRef.current = null;
@@ -1307,6 +1321,7 @@ export function useRoomSocket({
               }
               authorizationRecoveryAttempted = true;
               eventTokenRef.current = null;
+      setRoomAuthorityToken(null);
               scheduleReconnect();
               break;
             }
@@ -1536,6 +1551,7 @@ export function useRoomSocket({
               }
               authorizationRecoveryAttempted = true;
               eventTokenRef.current = null;
+      setRoomAuthorityToken(null);
               scheduleReconnect();
               break;
             }
@@ -1711,6 +1727,7 @@ export function useRoomSocket({
       if (isTerminal() || statusProbeInFlight) return;
 
       eventTokenRef.current = null;
+      setRoomAuthorityToken(null);
       const params = buildParams();
       const source = createRoomEventSource(`${API_BASE_URL}/realtime/rooms/${inviteCode}/stream?${params.toString()}`);
       const lease = ++streamLease;
@@ -1822,6 +1839,7 @@ export function useRoomSocket({
           roomReadOnlyRef.current = isRoomReadOnly(payload);
           if (roomReadOnlyRef.current) stopReadOnlyActivity();
           eventTokenRef.current = payload.eventToken?.trim() || null;
+          setRoomAuthorityToken(eventTokenRef.current);
           activityCaptureConfirmedRef.current =
             Boolean(eventTokenRef.current);
           setAccessDenied(false);
@@ -2064,6 +2082,14 @@ export function useRoomSocket({
           requestStateSync({ expectHydration: true });
           return;
         }
+        if (message.type === "diagram_changed") {
+          onDiagramChanged?.();
+          return;
+        }
+        if (message.type === "whiteboard_changed") {
+          onWhiteboardChanged?.();
+          return;
+        }
         if (message.type === "error") {
           emitMetric("prod_realtime_server_error_message", {}, { minIntervalMs: 2000 });
           onError((message.payload as { message: string }).message);
@@ -2158,6 +2184,7 @@ export function useRoomSocket({
       activityDrainInProgressRef.current = null;
       activityInFlightControllerRef.current = null;
       eventTokenRef.current = null;
+      setRoomAuthorityToken(null);
       activityCaptureConfirmedRef.current = false;
       lastPresenceRef.current = null;
       terminalAccessFailureRef.current = false;
@@ -2185,6 +2212,8 @@ export function useRoomSocket({
     onNoteMessageAck,
     onNoteMessageFailure,
     onPrivateNoteFailure,
+    onDiagramChanged,
+    onWhiteboardChanged,
     onState,
     onYjsUpdate,
     ownerToken,
@@ -2209,7 +2238,7 @@ export function useRoomSocket({
 
   // A confirmed room command is sent once. It must never become a deferred
   // document draft that changes everyone's editor after a later reconnect.
-  const sendRoomEditorModeUpdate = async (roomEditorMode: "code" | "markdown", expectedRoomEditorModeRevision: number) => {
+  const sendRoomEditorModeUpdate = async (roomEditorMode: RoomEditorMode, expectedRoomEditorModeRevision: number) => {
     if (!connected || !roomCanManageRef.current || roomReadOnlyRef.current || !eventTokenRef.current || roomModeControllerRef.current) {
       throw new Error("Дождитесь подключения и проверьте доступ к комнате.");
     }
@@ -2541,6 +2570,7 @@ export function useRoomSocket({
 
   return {
     connected,
+    roomAuthorityToken,
     accessDenied,
     roomUnavailable,
     terminateRoomUnavailable,

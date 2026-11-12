@@ -1,0 +1,6 @@
+.indicator { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; height: 36px; color: var(--app-muted); font-size: 12px; white-space: nowrap; }
+.swatch { display: inline-block; width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--app-control-border); box-shadow: 0 0 0 2px var(--app-surface); }
+.legend { display: flex; flex-direction: column; gap: 10px; max-width: 260px; max-height: 240px; overflow-y: auto; }
+.participant { display: flex; align-items: center; gap: 8px; overflow-wrap: anywhere; }
+.participant .swatch { flex-shrink: 0; }
+.help { font-size: 12px; color: var(--app-muted); }

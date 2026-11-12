@@ -127,13 +127,21 @@ async function openSharedCodeEditor(page) {
   const tabs = page.getByRole("tablist", { name: "Рабочие области комнаты", exact: true });
   await tabs.waitFor({ state: "visible", timeout: 15000 });
   assert.deepEqual(await tabs.getByRole("tab").allTextContents(), ["Шаги", "Мои заметки", "Чат", "Активность"]);
-  assert.equal(await tabs.getByRole("tab", { name: "Шаги", exact: true }).getAttribute("aria-selected"), "true");
-  const condition = page.getByRole("region", { name: "Условие", exact: true });
-  await condition.waitFor({ state: "visible", timeout: 10000 });
-  const returnToEditor = page.getByRole("button", { name: "Вернуться к редактору", exact: true });
-  if (await returnToEditor.isVisible()) await returnToEditor.click();
   const editor = page.getByRole("region", { name: "Редактор", exact: true });
   await editor.getByTestId("room-code-editor-host").locator(".cm-editor").waitFor({ state: "visible", timeout: 15000 });
+  assert.equal(await tabs.getByRole("tab", { selected: true }).count(), 0, "The narrow room opens the editor before any auxiliary tab is selected");
+
+  const steps = tabs.getByRole("tab", { name: "Шаги", exact: true });
+  await steps.click();
+  await page.locator('[data-room-context-surface="steps"][data-room-context-visible="true"]').waitFor({ state: "visible", timeout: 10000 });
+  assert.equal(await steps.getAttribute("aria-selected"), "true", "Steps are selected only after explicitly opening them");
+  const returnToEditor = page.getByRole("button", { name: "Вернуться к редактору", exact: true });
+  await returnToEditor.waitFor({ state: "visible", timeout: 10000 });
+  await returnToEditor.click();
+  await editor.getByTestId("room-code-editor-host").locator(".cm-editor").waitFor({ state: "visible", timeout: 15000 });
+  assert.equal(await tabs.getByRole("tab", { selected: true }).count(), 0, "Returning restores the editor rather than leaving the narrow auxiliary area active");
+  const condition = page.getByRole("region", { name: "Условие", exact: true });
+  await condition.waitFor({ state: "visible", timeout: 10000 });
   assert.equal(await condition.isVisible(), true, "Condition stays visible when the shared code editor opens");
 }
 

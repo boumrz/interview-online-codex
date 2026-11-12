@@ -23,6 +23,7 @@ import {
   awarenessUserColors,
 } from "./awarenessIdentity";
 import { normalizeRoomLanguage } from "./roomLanguage";
+import { normalizeDrawingColor } from "./drawingColor";
 
 /**
  * Список поддерживаемых языков для селекта в шапке комнаты.
@@ -49,6 +50,7 @@ export type Participant = {
   displayName: string;
   userId?: string | null;
   participantId?: string | null;
+  drawingColor?: string | null;
   role: "owner" | "interviewer" | "candidate";
   presenceStatus: "active" | "away";
   isAuthenticated?: boolean;
@@ -154,9 +156,21 @@ export function TopBar({
                   isInterviewer ? "Снять роль нанимающего" : "Назначить нанимающим";
                 const { color: cursorColor, colorLight: cursorColorLight } =
                   awarenessUserColors(participant.sessionId);
+                const drawingColor = normalizeDrawingColor(participant.drawingColor);
                 const menuOpened = openParticipantMenus[participant.sessionId] === true;
                 const participantCard = (
                   <span className={roomPageStyles.participantNameRow}>
+                    {drawingColor ? (
+                      <span
+                        className={roomPageStyles.participantDrawingColor}
+                        style={{ backgroundColor: drawingColor }}
+                        role="img"
+                        aria-label={`Цвет рисования: ${participant.displayName}, ${drawingColor}`}
+                        title={`Цвет рисования: ${participant.displayName}`}
+                        data-testid="participant-drawing-color"
+                        data-color={drawingColor}
+                      />
+                    ) : null}
                     <span className={roomPageStyles.participantName}>
                       {participant.displayName}
                     </span>

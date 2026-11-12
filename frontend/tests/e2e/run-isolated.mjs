@@ -141,6 +141,9 @@ try {
     readFileSync(join(isolatedBackend, "target", "e2e-runtime-classpath.txt"), "utf8").trim()].join(delimiter);
 
   execFileSync(process.execPath, ["--experimental-strip-types", "scripts/generate-theme-css.mjs"], { cwd: frontendDir, env: frontendEnv, stdio: "inherit" });
+  if (process.env.FEATURE_ROOM_DIAGRAMS_ENABLED === "true") {
+    execFileSync(process.execPath, ["scripts/prepare-drawio.mjs"], { cwd: frontendDir, env: frontendEnv, stdio: "inherit" });
+  }
   if (process.env.E2E_PRODUCTION === "true" || process.env.E2E_TEAM_WORKSPACES_PRODUCTION === "true") {
     productionDir = mkdtempSync(join(fileURLToPath(frontendDir), ".team-availability-"));
     execFileSync(process.execPath, [fileURLToPath(new URL("node_modules/@rspack/cli/bin/rspack.js", frontendDir)),

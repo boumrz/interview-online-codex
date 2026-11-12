@@ -32,6 +32,11 @@ test("the complete E2E command lists every active suite in the required mode wit
   const result = await fullCommand();
   assert.equal(result.code, 0, `complete regression needs an inspectable plan: ${result.output}`);
   const plan = JSON.parse(result.output);
+  assert.deepEqual(plan.featureFlags, {
+    FEATURE_ROOM_DIAGRAMS_ENABLED: "true",
+    FEATURE_ROOM_WHITEBOARD_ENABLED: "true",
+    FEATURE_SOCIAL_AUTH_ENABLED: "false",
+  }, "the full active suite must exercise both canvases while deferred social login stays off");
   const all = await suiteFiles(new URL("../e2e/", import.meta.url));
   assert.deepEqual([...plan.production, ...plan.development].sort(), all.filter(file => file !== "tests/e2e/account/e2e-social-login.mjs"));
   assert.deepEqual(plan.development, [

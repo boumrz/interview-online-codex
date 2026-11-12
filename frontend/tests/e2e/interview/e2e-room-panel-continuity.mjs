@@ -101,7 +101,18 @@ async function openRoom(auth, room, viewport = { width: 1280, height: 720 }) {
   await page.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ state: "attached", timeout: 20_000 });
   await page.locator('[data-testid="room-connection-status"][data-state="online"]').waitFor({ timeout: 20_000 });
   await settle(page);
-  assert.equal(await page.getByRole("tab", { name: "Шаги", exact: true }).getAttribute("aria-selected"), "true", "AC12_ROOM_STARTS_WITH_STEPS");
+  const tabs = page.getByRole("tablist", { name: "Рабочие области комнаты", exact: true });
+  await page.getByRole("region", { name: "Редактор", exact: true }).getByTestId("room-code-editor-host").locator(".cm-editor").waitFor({ state: "visible" });
+  const layout = await page.locator("[data-room-context-mode]").getAttribute("data-room-context-mode");
+  if (layout === "focus") {
+    assert.equal(await tabs.getByRole("tab", { selected: true }).count(), 0, "AC12_NARROW_ROOM_STARTS_WITH_EDITOR");
+  } else {
+    assert.equal(await tabs.getByRole("tab", { name: "Шаги", exact: true }).getAttribute("aria-selected"), "true", "AC12_WIDE_ROOM_STARTS_WITH_STEPS");
+  }
+  // AC-12 starts reading from Steps deliberately; narrow rooms initially show
+  // the editor and require the same explicit tab action as a real participant.
+  await openSurface(page, "Шаги");
+  await page.locator('[data-room-context-surface="steps"][data-room-context-visible="true"]').waitFor({ state: "visible" });
   return { context, page };
 }
 

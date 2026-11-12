@@ -7,6 +7,10 @@ import { chromium } from "playwright";
 const web = process.env.E2E_BASE_URL ?? "http://localhost:5173";
 const api = process.env.E2E_API_URL ?? "http://localhost:8080/api";
 const code = "const preserved = 42;\n";
+const expectedModes = ["Code", "Markdown",
+  ...(process.env.FEATURE_ROOM_DIAGRAMS_ENABLED === "true" ? ["Редактор диаграмм"] : []),
+  ...(process.env.FEATURE_ROOM_WHITEBOARD_ENABLED === "true" ? ["Доска"] : []),
+];
 const markdown = "# Условие\nТекст задания сохраняется.";
 async function request(path, token, body, method = body ? "POST" : "GET") {
   const response = await fetch(`${api}${path}`, {
@@ -30,7 +34,7 @@ async function fixture({ theme = "light", captureMarkdownWorker = false, taskMar
     localStorage.setItem("interview-online:ui-theme", theme);
     if (captureMarkdownWorker) {
       const NativeWorker = window.Worker;
-      window.markdownReplyGate = { hold: false, held: [], created: 0 };
+      window.markdownReplyGate = { hold: false, held: [], created: 0, sent: [], received: [] };
       window.releaseMarkdownReplies = () => {
         window.markdownReplyGate.hold = false;
         window.markdownReplyGate.held.splice(0).forEach(deliver => deliver());
@@ -41,8 +45,15 @@ async function fixture({ theme = "light", captureMarkdownWorker = false, taskMar
           this.isMarkdownPreview = options?.name === "markdown-preview";
           if (this.isMarkdownPreview) window.markdownReplyGate.created++;
         }
+        postMessage(message, ...args) {
+          if (this.isMarkdownPreview && typeof message?.markdown === "string") {
+            window.markdownReplyGate.sent.push({ id: message.id, length: message.markdown.length, tail: message.markdown.slice(-110) });
+          }
+          return super.postMessage(message, ...args);
+        }
         set onmessage(handler) {
           super.onmessage = event => {
+            if (this.isMarkdownPreview) window.markdownReplyGate.received.push({ id: event.data?.id, tail: event.data?.html?.slice(-110), failed: typeof event.data?.error === "string" });
             const deliver = () => handler?.call(this, event);
             if (this.isMarkdownPreview && window.markdownReplyGate.hold) window.markdownReplyGate.held.push(deliver);
             else deliver();
@@ -76,7 +87,7 @@ async function openModeMenu(page) {
   }, inputId, { timeout: 5_000 });
   const { listboxId, labels } = await rendered.jsonValue();
   await rendered.dispose();
-  assert.deepEqual(labels, ["Code", "Markdown"]);
+  assert.deepEqual(labels, expectedModes);
   return {
     labels,
     dropdown: page.locator(".ant-select-dropdown").filter({ has: page.locator(`[id=${JSON.stringify(listboxId)}]`) }),
@@ -202,7 +213,7 @@ test("room mode uses concise choices, secondary mode text and a quiet finish act
       await mkdir(evidence, { recursive: true });
       await f.page.screenshot({ path: `${evidence}/room-header-${theme}.png` });
       const { dropdown, labels } = await openModeMenu(f.page);
-      assert.deepEqual(labels, ["Code", "Markdown"]);
+      assert.deepEqual(labels, expectedModes);
       await dropdown.evaluate(el => Promise.all(el.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => {}))));
       await f.page.screenshot({ path: `${evidence}/room-mode-${theme}.png` });
       await f.page.keyboard.press("Escape");
@@ -259,8 +270,16 @@ for (const scope of ["public", "private"]) for (const theme of ["light", "dark"]
       await guest.goto(`${web}/room/${f.room.inviteCode}`);
       await guest.getByTestId("room-markdown-preview").getByRole("heading", { name: title, exact: true }).waitFor();
       const source = editor.getByTestId("room-markdown-editor").locator(".cm-content");
+      // The observer page was opened last. Real typing belongs to the visible,
+      // focused interviewer page, not a background browser tab.
+      await f.page.bringToFront();
       await source.click();
+      assert.equal(await source.evaluate(element => document.hasFocus() && document.activeElement === element), true, "the visible Markdown source owns keyboard focus");
       await f.page.keyboard.press("ControlOrMeta+End");
+      assert.equal(await source.evaluate(element => {
+        const view = element.cmTile?.root?.view;
+        return view?.state.selection.main.head === view?.state.doc.length;
+      }), true, "keyboard typing starts at the end of the actual CodeMirror document");
       await preview.evaluate(element => {
         const content = element.firstElementChild;
         if (!content?.textContent.trim()) throw new Error("PREVIEW_WAS_NOT_INITIALISED");
@@ -286,6 +305,7 @@ for (const scope of ["public", "private"]) for (const theme of ["light", "dark"]
       await f.page.keyboard.press("Enter");
       await f.page.keyboard.press("Enter");
       await f.page.keyboard.type(tail, { delay: 8 });
+      assert.equal(await source.evaluate(element => element.cmTile?.root?.view?.state.doc.toString()), expected, "native keyboard input reaches the complete Markdown source before Worker replies are released");
       await f.page.waitForFunction(() => window.markdownReplyGate.held.length > 0);
       assert.equal(await preview.getByText(tail, { exact: true }).count(), 0, "a genuine native Worker reply is still held");
       await preview.getByRole("heading", { name: title, exact: true }).waitFor();
@@ -313,6 +333,22 @@ for (const scope of ["public", "private"]) for (const theme of ["light", "dark"]
         assert.equal(clean(room.briefingMarkdown), initial, "private draft does not alter the published Markdown");
         assert.equal((await guest.getByTestId("room-markdown-preview").innerText()).includes(tail), false, "candidate cannot see private Markdown edits");
       } else await guest.getByTestId("room-markdown-preview").getByText(tail, { exact: true }).waitFor();
+    } catch (error) {
+      console.info("MARKDOWN_CONTINUITY_FAILURE", await f.page.evaluate(expected => {
+        const source = document.querySelector('#room-context-region-editor [data-testid="room-markdown-editor"] .cm-content');
+        const view = source?.cmTile?.root?.view;
+        const text = view?.state.doc.toString();
+        const preview = document.querySelector('#room-context-region-editor [data-testid="room-markdown-preview"]');
+        return {
+          focused: document.hasFocus(), activeTag: document.activeElement?.tagName,
+          activeClass: document.activeElement?.className,
+          sourceMatchesExpected: text === expected, sourceLength: text?.length, expectedLength: expected.length,
+          sourceTail: text?.slice(-160), selection: view?.state.selection.main,
+          previewTail: preview?.textContent?.slice(-160), held: window.markdownReplyGate?.held.length,
+          sent: window.markdownReplyGate?.sent.slice(-4), received: window.markdownReplyGate?.received.slice(-4),
+        };
+      }, expected).catch(() => ({ pageUnavailable: true })));
+      throw error;
     } finally {
       await f.page.evaluate(() => { window.releaseMarkdownReplies?.(); window.stopPreviewPaintAudit?.(); }).catch(() => {});
       await f.close();

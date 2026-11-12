@@ -31,6 +31,11 @@ async function main() {
   if (process.argv.slice(2).some(arg => arg !== "--list")) throw new Error("E2E_FULL_UNKNOWN_ARGUMENT");
   const files = await collect(new URL("./", import.meta.url));
   const plan = {
+    featureFlags: {
+      FEATURE_ROOM_DIAGRAMS_ENABLED: "true",
+      FEATURE_ROOM_WHITEBOARD_ENABLED: "true",
+      FEATURE_SOCIAL_AUTH_ENABLED: "false",
+    },
     production: files.filter(file => file !== deferredSuite && !developmentSuites.has(file)),
     development: files.filter(file => developmentSuites.has(file)),
     excluded: [{ file: deferredSuite, reason: "Google/VK integration is deferred by the user; FEATURE_SOCIAL_AUTH_ENABLED remains false" }],
@@ -55,7 +60,7 @@ async function main() {
       const startedAt = new Date().toISOString();
       const run = owned.start(process.execPath, ["tests/e2e/run-isolated.mjs", ...plan[mode]], {
         cwd: frontend,
-        env: { ...process.env, FEATURE_SOCIAL_AUTH_ENABLED: "false", E2E_PRODUCTION: String(mode === "production"),
+        env: { ...process.env, ...plan.featureFlags, E2E_PRODUCTION: String(mode === "production"),
           E2E_TEAM_WORKSPACES_PRODUCTION: String(mode === "production"),
           E2E_CONTINUE_ON_FAILURE: "true", E2E_RESULTS_FILE: join(reportDir, `${mode}-results.jsonl`) },
         stdio: ["ignore", "pipe", "pipe"],

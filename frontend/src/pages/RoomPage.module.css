@@ -193,6 +193,14 @@
   line-height: 1.1;
 }
 
+.participantDrawingColor {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border: 1px solid var(--app-border-strong, var(--app-border));
+  border-radius: 2px;
+}
+
 .participantNameRow {
   min-width: 0;
   display: flex;
@@ -2673,7 +2681,7 @@
 
 .roomModeTooltip { animation: none !important; transition: none !important; transform: none !important; }
 
-.roomModeSelect { width: 266px; max-width: 100%; }
+.roomModeSelect { width: 330px; max-width: 100%; }
 .roomModeSelectedLabel { display: inline-flex; align-items: baseline; gap: 6px; color: var(--app-text); }
 .roomModeSelectedValue { font-size: 13px; color: var(--app-muted); }
 

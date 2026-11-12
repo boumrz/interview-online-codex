@@ -54,6 +54,8 @@ class RoomService(
     private val objectMapper: ObjectMapper,
     private val personalInterviewSummaryProjector: PersonalInterviewSummaryProjector,
     private val roomHrTrackingService: RoomHrTrackingService,
+    private val roomDiagramFeatureGate: RoomDiagramFeatureGate,
+    private val roomWhiteboardFeatureGate: RoomWhiteboardFeatureGate,
 ) {
     /**
      * Creates a "quick" room from the landing page.
@@ -793,8 +795,10 @@ class RoomService(
                 )
             } else emptyList(),
             briefingMarkdown = activeTask?.briefingMarkdown?.takeIf { it.isNotBlank() } ?: activeTask?.description.orEmpty(),
-            roomEditorMode = room.roomEditorMode,
+            roomEditorMode = roomWhiteboardFeatureGate.visibleMode(roomDiagramFeatureGate.visibleMode(room.roomEditorMode)),
             roomEditorModeRevision = room.roomEditorModeRevision,
+            roomDiagramsEnabled = roomDiagramFeatureGate.enabled,
+            roomWhiteboardEnabled = roomWhiteboardFeatureGate.enabled,
             ownerToken = if (includeOwnerToken) room.ownerSessionToken else null,
             interviewerToken = if (includeInterviewerToken) room.interviewerSessionToken else null,
             role = access.role.wireValue,

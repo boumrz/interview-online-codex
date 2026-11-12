@@ -48,8 +48,12 @@ try {
   const choices = page.locator(".ant-select-dropdown:visible .ant-select-item-option");
   await choices.first().waitFor();
   const labels = await choices.allTextContents();
-  if (labels.length !== 2 || !labels.includes("Code") || !labels.includes("Markdown")) {
-    throw new Error(`ROOM_EDITOR_MODE_MUST_OFFER_CODE_AND_MARKDOWN:${JSON.stringify(labels)}`);
+  const expectedModes = ["Code", "Markdown",
+    ...(process.env.FEATURE_ROOM_DIAGRAMS_ENABLED === "true" ? ["Редактор диаграмм"] : []),
+    ...(process.env.FEATURE_ROOM_WHITEBOARD_ENABLED === "true" ? ["Доска"] : []),
+  ];
+  if (JSON.stringify(labels) !== JSON.stringify(expectedModes)) {
+    throw new Error(`ROOM_EDITOR_MODE_MUST_OFFER_CONFIGURED_MODES:${JSON.stringify({ labels, expectedModes })}`);
   }
   await choices.getByText("Markdown", { exact: true }).click();
   const modeConfirmation = page.getByRole("dialog", { name: "Изменить режим комнаты?" });

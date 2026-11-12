@@ -7,6 +7,8 @@ RUN npm ci
 
 COPY . .
 ARG FEATURE_SOCIAL_AUTH_ENABLED=false
+ARG FEATURE_ROOM_DIAGRAMS_ENABLED=false
+ARG FEATURE_ROOM_WHITEBOARD_ENABLED=false
 RUN npm run typecheck && npm run build
 
 FROM nginx:1.27-alpine AS runtime

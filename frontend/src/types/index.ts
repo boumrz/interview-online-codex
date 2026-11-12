@@ -442,6 +442,8 @@ export type RoomAccessMember = {
   isOwner: boolean;
 };
 
+export type RoomEditorMode = "code" | "markdown" | "diagram" | "whiteboard";
+
 export type Room = {
   status: "active" | "frozen" | "finished";
   finishedAt?: string | null;
@@ -455,8 +457,10 @@ export type Room = {
   notes: string;
   notesMessages: RoomNoteMessage[];
   briefingMarkdown: string;
-  roomEditorMode?: "code" | "markdown";
+  roomEditorMode?: RoomEditorMode;
   roomEditorModeRevision?: number;
+  roomDiagramsEnabled?: boolean;
+  roomWhiteboardEnabled?: boolean;
   ownerToken: string | null;
   interviewerToken: string | null;
   role: "owner" | "interviewer" | "candidate" | string;

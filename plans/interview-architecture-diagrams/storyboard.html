@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>P2.4 · Совместная схема — состояния</title>
+    <link rel="stylesheet" href="../../frontend/public/theme-tokens.css" />
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; padding: 32px; background: var(--app-bg); color: var(--app-text); font: 15px/1.55 var(--font-base); }
+      main { max-width: 1440px; margin: auto; }
+      h1 { font: 40px/1.15 Georgia, serif; margin: 16px 0; }
+      h2 { font-size: 22px; margin: 32px 0 16px; }
+      a { color: var(--app-primary-text); }
+      button { color: var(--app-text); background: var(--app-surface); border: 1px solid var(--app-border); padding: 8px 14px; border-radius: 8px; cursor: pointer; font: inherit; }
+      button:focus-visible, a:focus-visible { outline: 2px solid var(--app-focus); outline-offset: 3px; }
+      .pill { background: var(--app-selected-bg); color: var(--app-selected-text); border-radius: 20px; padding: 4px 10px; font-size: 12px; }
+      .muted { color: var(--app-muted); }
+      .row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+      pre { white-space: pre-wrap; padding: 20px; background: var(--app-surface); border: 1px solid var(--app-border); border-radius: 12px; font: 14px/1.6 var(--font-code); }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(370px, 1fr)); gap: 20px; }
+      article { min-width: 0; background: var(--app-surface); border: 1px solid var(--app-border); border-radius: 12px; overflow: hidden; }
+      article header, article footer { padding: 16px; }
+      article h3 { margin: 4px 0; }
+      article p { margin: 8px 0; }
+      iframe { border: 0; border-top: 1px solid var(--app-border); border-bottom: 1px solid var(--app-border); width: 100%; height: 540px; display: block; }
+      label { display: block; font-size: 13px; margin: 6px 0; }
+      .notice { background: var(--app-info-bg); border-radius: 10px; padding: 16px; }
+      footer.meta { margin-top: 32px; color: var(--app-muted); }
+      @media(max-width: 600px) { body { padding: 16px; } .grid { grid-template-columns: 1fr; } h1 { font-size: 30px; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <a href="../interview-architecture-diagrams.md">← План доработки</a>
+      <header>
+        <div class="row" style="margin-top: 20px"><span class="pill">P2.4 · ДО РЕАЛИЗАЦИИ</span><button id="theme" type="button">Тёмная тема</button></div>
+        <h1>Одна схема для общего обсуждения</h1>
+        <p>Макеты интеграции draw.io в основную область комнаты: переключение, совместная работа, сохранение и просмотр.</p>
+        <p class="muted">Это макеты состояний. Область схемы условно показывает будущий draw.io; его рабочая панель и инструменты остаются стандартными.</p>
+        <p><a href="../../specs/features/p2-4-room-diagrams.md">Текущий контракт P2.4</a> · <a href="../../specs/features/p2-1-room-layout-modes.md">Общий режим комнаты</a></p>
+      </header>
+      <h2>Поток</h2>
+      <pre>Управляющий: Code / Markdown
+  → выбирает «Схема» → подтверждение для всех
+  → загрузка → пустой холст / сохранённая схема
+  → кандидат и интервьюеры редактируют одновременно
+  → сохранение → «Сохранено»
+                 ↘ разрыв → восстановление → тот же документ
+                 ↘ ошибка → повтор → подтверждение
+  → finished: кандидат смотрит, управляющий продолжает работу
+  → отзыв доступа: документ скрыт, очереди остановлены</pre>
+      <div class="notice">Принятые границы: одна схема на интервью; обе формы рисования; текущие права комнаты; статический редактор в InterHub. Дополнительных платформ и платных интеграций нет. Продуктовых вопросов, блокирующих эти макеты, не осталось.</div>
+      <h2>Основные состояния</h2>
+      <section class="grid" id="states" aria-label="Макеты комнаты"></section>
+      <h2>Проверка переходов</h2>
+      <ul>
+        <li>Отмена диалога сохраняет текущий режим всех участников.</li>
+        <li>Переключение Code / Markdown / Схема сохраняет документы и собственную историю отмены.</li>
+        <li>«Развернуть схему» освобождает всё окно только у текущего участника; возврат восстанавливает комнату.</li>
+        <li>Боковая панель скрывается независимо от условия; вкладки открывают её снова.</li>
+        <li>Сохранение подтверждается сервером; разрыв и ошибка не очищают холст.</li>
+        <li>Finished кандидат видит просмотр; frozen блокирует изменение всем.</li>
+        <li>Отзыв доступа скрывает документ и игнорирует запоздалые ответы.</li>
+      </ul>
+      <h2>Последовательность реализации</h2>
+      <ol>
+        <li>Изолированно проверить встроенный draw.io и совместные изменения.</li>
+        <li>Реализовать сохранение и права через реальные серверные операции.</li>
+        <li>Подключить холст к обеим проекциям комнаты и существующему переключателю.</li>
+        <li>Проверить перечисленные состояния, реальные экспорты и независимый scoped review.</li>
+      </ol>
+      <footer class="meta">P2.4 · 10 ноября 2026 · <a href="../../specs/features/p2-4-room-diagrams.md">Контракт и критерии проверки</a></footer>
+    </main>
+    <script>
+      const states = [
+        ["confirm", "Подтверждение общего режима", "Менеджер явно меняет рабочую область кандидата и всех интервьюеров."],
+        ["loading", "Подготовка холста", "Редактор загружается; старый документ не выдаётся за новую схему."],
+        ["empty", "Пустой холст", "Можно начать с готовых блоков или свободного наброска."],
+        ["saved", "Совместная работа", "Принятый документ сохранён; положение холста индивидуально."],
+        ["expanded", "Схема на всё окно", "Шапка, условие и боковые области скрыты; возврат всегда доступен. Редактор и Undo сохраняются."],
+        ["whiteboard", "Доска для объяснения", "Отдельный общий документ: перо, рукописные наброски, текст и базовые фигуры. Схема draw.io сохраняется независимо."],
+        ["sidebar-open", "Левая панель открыта", "Вкладки находятся внутри панели; её собственная кнопка сворачивает содержимое."],
+        ["sidebar-closed", "Левая панель свёрнута", "Компактная полоса с кнопкой 36px возвращает прежнюю вкладку и черновик."],
+        ["sidebar-narrow", "Узкое окно: вспомогательная область", "Явно открытая панель занимает рабочую область. Возврат в редактор всегда доступен."],
+        ["reconnect", "Восстановление связи", "Документ остаётся видимым, новые правки ещё не подтверждены."],
+        ["error", "Ошибка и повтор", "Ошибка заметна, сохранённая схема и текущий ввод остаются доступны."],
+        ["readonly", "Кандидат после завершения", "Схема доступна для просмотра и экспорта; изменение недоступно."],
+        ["revoked", "Доступ отозван", "Защищённый документ скрыт; повторное сохранение недоступно."]
+      ];
+      const list = document.getElementById("states");
+      for (const [state, title, description] of states) {
+        const article = document.createElement("article");
+        article.innerHTML = `<header><span class="pill">Макет</span><h3>${title}</h3><p class="muted">${description}</p></header><iframe title="${title}" src="room-state.html?state=${state}&theme=light"></iframe><footer><a href="room-state.html?state=${state}&theme=light" target="_blank">Открыть отдельно ↗</a><label><input type="checkbox" /> Режим и права понятны</label><label><input type="checkbox" /> Статус и следующее действие заметны</label><label><input type="checkbox" /> Фокус, узкая ширина и обе темы проверены</label></footer>`;
+        list.append(article);
+      }
+      document.getElementById("theme").addEventListener("click", (event) => {
+        const theme = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+        document.documentElement.dataset.theme = theme;
+        event.currentTarget.textContent = theme === "light" ? "Тёмная тема" : "Светлая тема";
+        for (const iframe of document.querySelectorAll("iframe")) {
+          const url = new URL(iframe.src); url.searchParams.set("theme", theme); iframe.src = url.href;
+        }
+      });
+    </script>
+  </body>
+</html>

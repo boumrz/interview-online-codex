@@ -3,6 +3,7 @@ package com.interviewonline.service
 import com.fasterxml.jackson.databind.ObjectMapper
 import jakarta.annotation.PreDestroy
 import com.interviewonline.config.ChatReceiptHmac
+import com.interviewonline.dto.RoomDiagramOperationDto
 import com.interviewonline.model.Room
 import com.interviewonline.model.RoomParticipant
 import com.interviewonline.model.RoomStatus
@@ -84,6 +85,9 @@ class CollaborationService(
     private val roomRealtimeSendBoundaryProbe: RoomRealtimeSendBoundaryProbe,
     private val roomRealtimeActivityLeaseService: RoomRealtimeActivityLeaseService,
     private val clock: Clock,
+    private val roomDiagramFeatureGate: RoomDiagramFeatureGate,
+    private val roomWhiteboardFeatureGate: RoomWhiteboardFeatureGate,
+    private val roomDrawingColorService: RoomDrawingColorService,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val permissionSyncExecutor = ThreadPoolExecutor(
@@ -128,6 +132,7 @@ class CollaborationService(
         val inviteCode: String,
         val sessionId: String,
         val participantId: String?,
+        val drawingColor: String?,
         val eventToken: String,
         val displayName: String,
         val userId: String?,
@@ -535,6 +540,9 @@ class CollaborationService(
             inviteCode = inviteCode,
             sessionId = sessionId,
             participantId = normalizedParticipantId,
+            drawingColor = if (roomDiagramFeatureGate.enabled || roomWhiteboardFeatureGate.enabled) {
+                roomDrawingColorService.forParticipant(requirePersistedRoomId(room), user?.id, normalizedParticipantId, sessionId)
+            } else null,
             eventToken = "evt_${UUID.randomUUID()}",
             displayName = displayName.trim().ifBlank { "Участник" }.take(64),
             userId = user?.id,
@@ -1044,7 +1052,9 @@ class CollaborationService(
             "room_editor_mode_update" -> {
                 if (!participant.canManageRoom) throw ApiException(HttpStatus.FORBIDDEN, "Недостаточно прав для изменения режима комнаты")
                 val nextMode = request.roomEditorMode
-                if (nextMode !in setOf("code", "markdown")) throw ApiException(HttpStatus.BAD_REQUEST, "Неизвестный режим комнаты")
+                if (nextMode == "diagram") roomDiagramFeatureGate.requireEnabled()
+                if (nextMode == "whiteboard") roomWhiteboardFeatureGate.requireEnabled()
+                if (nextMode !in setOf("code", "markdown", "diagram", "whiteboard")) throw ApiException(HttpStatus.BAD_REQUEST, "Неизвестный режим комнаты")
                 val expectedRevision = request.expectedRoomEditorModeRevision
                     ?: throw ApiException(HttpStatus.BAD_REQUEST, "Не передана версия режима комнаты")
                 if (expectedRevision != persistedRoom.roomEditorModeRevision) {
@@ -2171,6 +2181,29 @@ class CollaborationService(
         return resolveCurrentParticipantRole(room, participant)
     }
 
+    /**
+     * Current admitted SSE identity, resolved under the caller's Room lock.
+     * A canvas can distinguish a lost connection lease from a fresh context or
+     * role denial; the optional code changes classification, never admission.
+     */
+    fun resolveDiagramParticipantRole(room: Room, sessionId: String, eventToken: String?, user: User?, failureCode: String? = null): RoomAccessService.RoomRole {
+        val connectionId = requireConnectionId(room.inviteCode, sessionId, eventToken, requireEventToken = true, failureCode = failureCode)
+        val participant = participants[connectionId]
+            ?: throw ApiException(HttpStatus.FORBIDDEN, "Нет действующего подключения к комнате", code = failureCode ?: "ROOM_ACCESS_DENIED")
+        if (participant.admittedTeamId != room.teamId || (user != null && participant.userId != user.id)) {
+            throw ApiException(HttpStatus.FORBIDDEN, "Подключение относится к другому контексту", code = "ROOM_ACCESS_DENIED")
+        }
+        return resolveCurrentParticipantRole(room, participant)
+    }
+
+    fun broadcastDiagramChanged(inviteCode: String, operation: RoomDiagramOperationDto) {
+        broadcastTransportMessage(inviteCode, "diagram_changed", operation)
+    }
+
+    fun broadcastWhiteboardChanged(inviteCode: String, changed: com.interviewonline.dto.RoomWhiteboardChangedDto) {
+        broadcastTransportMessage(inviteCode, "whiteboard_changed", changed)
+    }
+
     internal fun <T> mutateRoomPermissions(inviteCode: String, mutation: () -> RoomPermissionMutation<T>): T {
         var ownsTransaction = false
         val result = requireNotNull(TransactionTemplate(transactionManager).execute { status ->
@@ -2828,8 +2861,11 @@ class CollaborationService(
             notesMessages = if (participant.canManageRoom) state.notesMessages.toList() else emptyList(),
             personalNotes = personalNotes,
             briefingMarkdown = state.briefingMarkdown,
-            roomEditorMode = editorMode.first,
+            roomEditorMode = roomWhiteboardFeatureGate.visibleMode(roomDiagramFeatureGate.visibleMode(editorMode.first)),
             roomEditorModeRevision = editorMode.second,
+            roomDiagramsEnabled = roomDiagramFeatureGate.enabled,
+            roomWhiteboardEnabled = roomWhiteboardFeatureGate.enabled,
+            drawingColor = participant.drawingColor,
             participants = participantsPayload,
             isOwner = participant.isOwner,
             role = participant.role.wireValue,
@@ -3038,6 +3074,7 @@ class CollaborationService(
         sessionId: String,
         eventToken: String?,
         requireEventToken: Boolean,
+        failureCode: String? = null,
     ): String {
         if (sessionId.isBlank()) {
             throw ApiException(HttpStatus.BAD_REQUEST, "Отсутствует sessionId")
@@ -3045,17 +3082,17 @@ class CollaborationService(
 
         val key = roomSessionKey(inviteCode, sessionId)
         val connectionId = connectionByRoomSession[key]
-            ?: throw ApiException(HttpStatus.FORBIDDEN, "Нет активного подключения для этой сессии")
+            ?: throw ApiException(HttpStatus.FORBIDDEN, "Нет активного подключения для этой сессии", code = failureCode)
         val participant = participants[connectionId]
         if (participant == null || participant.inviteCode != inviteCode || participant.sessionId != sessionId) {
             synchronized(realtimeLifecycleRegistryLock) {
                 connectionByRoomSession.remove(key, connectionId)
             }
-            throw ApiException(HttpStatus.FORBIDDEN, "Нет активного подключения для этой сессии")
+            throw ApiException(HttpStatus.FORBIDDEN, "Нет активного подключения для этой сессии", code = failureCode)
         }
         val providedToken = eventToken?.trim().orEmpty()
         if ((requireEventToken || providedToken.isNotBlank()) && participant.eventToken != providedToken) {
-            throw ApiException(HttpStatus.FORBIDDEN, "Недействительный eventToken для этой сессии")
+            throw ApiException(HttpStatus.FORBIDDEN, "Недействительный eventToken для этой сессии", code = failureCode)
         }
         return connectionId
     }
@@ -3287,6 +3324,7 @@ class CollaborationService(
             displayName = meta.displayName,
             userId = meta.userId,
             participantId = meta.participantId,
+            drawingColor = meta.drawingColor,
             role = meta.role.wireValue,
             presenceStatus = meta.presenceStatus.wireValue,
             isAuthenticated = isAuthenticated,

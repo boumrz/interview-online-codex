@@ -13,6 +13,7 @@
   flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--app-border);
@@ -29,7 +30,108 @@
 
 .secondaryControls {
   flex: 0 0 auto;
+  flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.auxiliaryToggle {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  border: 1px solid var(--app-control-border);
+  border-radius: 8px;
+  background: var(--app-surface);
+  color: var(--app-text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.collapseIcon {
+  transform: rotate(180deg);
+}
+
+.sidebar,
+.sidebarRail {
+  min-width: 0;
+  min-height: 0;
+  grid-column: 1;
+  grid-row: 1;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface);
+  overflow: hidden;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebarRail {
+  display: flex;
+  width: 48px;
+  box-sizing: border-box;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 5px;
+}
+
+.sidebar[hidden],
+.sidebarRail[hidden] {
+  display: none;
+}
+
+.sidebarHeader {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-bottom: 1px solid var(--app-border);
+  background: var(--app-surface-soft);
+}
+
+.sidebarHeading {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--app-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.sidebarBody {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.sidebarBody > .surface {
+  flex: 1 1 auto;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.sidebarBody > .surface[data-room-context-visible="true"] {
+  /* The sidebar header and return action must not squeeze a composer below
+     its usable height. Scroll this retained surface inside the sidebar. */
+  flex: 1 1 0;
+  min-height: 320px;
+}
+
+.auxiliaryToggle:hover {
+  background: var(--app-neutral-hover);
+}
+
+.auxiliaryToggle:focus-visible {
+  outline: 2px solid var(--app-focus);
+  outline-offset: 2px;
 }
 
 .root[data-room-context-mode="focus"] .controls {
@@ -47,6 +149,8 @@
 }
 
 .tabList {
+  display: flex;
+  flex: 0 1 auto;
   min-width: 0;
 }
 
@@ -70,7 +174,11 @@
 }
 
 .surfaceTab {
+  height: 36px;
+  min-height: 36px;
+  overflow: hidden;
   padding: 0 12px;
+  text-overflow: ellipsis;
 }
 
 .surfaceTab:hover,
@@ -268,12 +376,12 @@
 }
 
 .root[data-room-context-mode="focus"] .surfaceGrid {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: 48px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
 }
 
 .root[data-room-context-mode="work"] .surfaceGrid {
-  grid-template-columns: minmax(500px, 1fr) minmax(320px, var(--room-work-auxiliary-width, 0.65fr));
+  grid-template-columns: minmax(320px, var(--room-work-auxiliary-width, 360px)) minmax(500px, 1fr);
   grid-template-rows: minmax(0, 1fr);
 }
 
@@ -288,8 +396,8 @@
 }
 
 .root[data-room-context-mode="work"][data-room-context-condition-scroll="true"] .surfaceGrid {
-  min-height: 400px;
-  flex: 1 0 400px;
+  min-height: calc(var(--room-work-min-height, 400px) + var(--room-grid-padding-bottom));
+  flex: 1 0 calc(var(--room-work-min-height, 400px) + var(--room-grid-padding-bottom));
 }
 
 .root[data-room-context-mode="focus"][data-room-context-condition-scroll="true"] .surfaceGrid {
@@ -326,7 +434,7 @@
 }
 
 .workWidthSeparator {
-  left: calc(100% - var(--room-grid-padding-inline) - var(--room-work-auxiliary-width) - 5px);
+  left: calc(var(--room-grid-padding-inline) + var(--room-work-auxiliary-width) + 5px);
 }
 
 .overviewWidthSeparator {
@@ -456,6 +564,26 @@
 .root[data-room-context-mode="overview"] .surface[data-room-context-surface="notes"] {
   grid-column: 3;
   grid-row: 1 / span 2;
+}
+
+.root[data-room-context-auxiliary-hidden="true"] .surfaceGrid {
+  grid-template-columns: 48px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.root[data-room-context-auxiliary-hidden="true"] .surface[data-room-context-surface="editor"] {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.root[data-room-context-mode="work"] .surface[data-room-context-surface="editor"],
+.root[data-room-context-mode="focus"] .surface[data-room-context-surface="editor"] {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.root[data-room-context-mode="focus"] .sidebar {
+  grid-column: 1 / -1;
 }
 
 .root[data-room-context-narrow-tabs="true"] .controls {

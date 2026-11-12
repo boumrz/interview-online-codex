@@ -2,7 +2,7 @@ import "../support/require-isolated-api.mjs";
 import * as decoding from "lib0/decoding";
 import * as Y from "yjs";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { after, before, test } from "node:test";
 import { chromium } from "playwright";
 
@@ -396,7 +396,7 @@ async function directSurfaceTabs(page) {
   assert.equal(
     await tablist.count(),
     1,
-    "AC11_DIRECT_SURFACE_NAV_MISSING: expected one always-available tablist named «Рабочие области комнаты»",
+    "AC11_DIRECT_SURFACE_NAV_MISSING: expected one visible room toolbar tablist named «Рабочие области комнаты»",
   );
   const tabs = tablist.getByRole("tab");
   assert.equal(await tabs.count(), 4, "AC11_AUXILIARY_SURFACE_COUNT_WRONG");
@@ -1528,15 +1528,18 @@ test("desktop/tablet viewport and zoom-equivalent matrix keeps honest automatic 
         };
         await page.setViewportSize(effective);
         await settleLayout(page);
-        const { tabs } = await directSurfaceTabs(page);
-        for (let index = 0; index < surfaceNames.length; index += 1) {
-          await assertTargetGeometry(tabs.nth(index), `AC11_MATRIX_${baseViewport.width}x${baseViewport.height}@${zoom}_${surfaceNames[index]}`);
-        }
         const geometry = await page.evaluate(() => ({
           clientWidth: document.documentElement.clientWidth,
           scrollWidth: document.documentElement.scrollWidth,
           innerWidth: window.innerWidth,
           innerHeight: window.innerHeight,
+          overflowElements: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1
+            ? [...document.body.querySelectorAll('*')].filter(element => element.getBoundingClientRect().right > innerWidth + 1)
+              .slice(0, 12).map(element => ({ tag: element.tagName, className: element.className, right: element.getBoundingClientRect().right, width: element.getBoundingClientRect().width, position: getComputedStyle(element).position }))
+            : [],
+          bodyBranches: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1
+            ? [...document.body.children].map(element => ({ tag: element.tagName, className: element.className, left: element.getBoundingClientRect().left, right: element.getBoundingClientRect().right, scrollWidth: element.scrollWidth, clientWidth: element.clientWidth, position: getComputedStyle(element).position }))
+            : [],
           surfaceWidth: (() => {
             const grid = document.querySelector('[data-testid="room-context-surface-grid"]');
             if (!grid) return 0;
@@ -1544,6 +1547,10 @@ test("desktop/tablet viewport and zoom-equivalent matrix keeps honest automatic 
             return grid.getBoundingClientRect().width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
           })(),
         }));
+        if (geometry.scrollWidth > geometry.clientWidth + 1) {
+          await writeFile('/tmp/interhub-left-sidebar-matrix-overflow.html', await page.content());
+          await page.screenshot({ path: '/tmp/interhub-left-sidebar-matrix-overflow.png' });
+        }
         assert.ok(geometry.scrollWidth <= geometry.clientWidth + 1, `AC11_GLOBAL_HORIZONTAL_OVERFLOW:${baseViewport.width}x${baseViewport.height}@${zoom}:${JSON.stringify(geometry)}`);
         const expectedFocus = geometry.innerWidth < 1000 || geometry.innerHeight < 440 || geometry.surfaceWidth < 830;
         await assertActiveMode(page, expectedFocus ? "Фокус" : "Рабочий", `AC11_MATRIX_${baseViewport.width}x${baseViewport.height}@${zoom}:${JSON.stringify(geometry)}`);
@@ -1561,6 +1568,12 @@ test("desktop/tablet viewport and zoom-equivalent matrix keeps honest automatic 
               `AC11_AUTOMATIC_DEFAULT_${baseViewport.width}x${baseViewport.height}`,
             );
           }
+        }
+
+        await activateSurfaceByKeyboard(page, "Шаги");
+        const { tabs } = await directSurfaceTabs(page);
+        for (let index = 0; index < surfaceNames.length; index += 1) {
+          await assertTargetGeometry(tabs.nth(index), `AC11_MATRIX_${baseViewport.width}x${baseViewport.height}@${zoom}_${surfaceNames[index]}`);
         }
 
         await activateSurfaceByKeyboard(page, "Чат");
@@ -1646,7 +1659,7 @@ test("usable container geometry, automatic panels and focus transfer stay truthf
         rows: style.gridTemplateRows.split(" ").filter(Boolean).length,
       };
     });
-    assert.deepEqual(tabGrid, { columns: 4, rows: 1 }, `AC11_NARROW_TAB_GRID_NOT_4X1:${JSON.stringify(tabGrid)}`);
+    assert.deepEqual(tabGrid, { columns: 4, rows: 1 }, `AC11_TOOLBAR_TAB_GRID_NOT_4X1:${JSON.stringify(tabGrid)}`);
 
     await constrainedStyle.evaluate((element) => element.remove());
     await settleLayout(page);
@@ -1864,7 +1877,7 @@ test("remediation: editor is a direct Focus region and local splitters resize wi
     assert.ok(workBox, "WORK_CONTEXT_SEPARATOR_BOX_MISSING");
     await page.mouse.move(workBox.x + workBox.width / 2, workBox.y + workBox.height / 2);
     await page.mouse.down();
-    await page.mouse.move(workBox.x + 32, workBox.y + workBox.height / 2);
+    await page.mouse.move(workBox.x - 32, workBox.y + workBox.height / 2);
     await page.mouse.up();
     assert.ok(Number(await workDivider.getAttribute("aria-valuenow")) < Number(await workDivider.getAttribute("aria-valuemax")), "WORK_CONTEXT_POINTER_DRAG_NOT_APPLIED");
 
@@ -1939,11 +1952,11 @@ test("remediation: splitters follow pointer direction and remain inside content-
     assert.ok(workBox, "WORK_POINTER_DIRECTION_SEPARATOR_BOX_MISSING");
     await page.mouse.move(workBox.x + workBox.width / 2, workBox.y + workBox.height / 2);
     await page.mouse.down();
-    await page.mouse.move(workBox.x - 32, workBox.y + workBox.height / 2);
+    await page.mouse.move(workBox.x + 32, workBox.y + workBox.height / 2);
     await page.mouse.up();
     const workChatAfterDrag = await (await surfaceRegion(page, "Чат")).boundingBox();
     assert.ok(Number(await work.getAttribute("aria-valuenow")) > workBeforeDrag, "WORK_CONTEXT_POINTER_DIRECTION_INVERTED");
-    assert.ok(workChatBeforeDrag && workChatAfterDrag && workChatAfterDrag.width > workChatBeforeDrag.width, "WORK_CONTEXT_POINTER_DID_NOT_EXPAND_RIGHT_PANEL_LEFTWARD");
+    assert.ok(workChatBeforeDrag && workChatAfterDrag && workChatAfterDrag.width > workChatBeforeDrag.width, "WORK_CONTEXT_POINTER_DID_NOT_EXPAND_LEFT_PANEL_RIGHTWARD");
 
     await work.focus();
     await page.keyboard.press("End");

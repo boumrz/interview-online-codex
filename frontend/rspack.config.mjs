@@ -1,9 +1,11 @@
 import { defineConfig } from "@rspack/cli";
 import rspack from "@rspack/core";
 import path from "node:path";
+import { SUBSET_WORKER_FILES } from "./scripts/whiteboard-assets.mjs";
 
 const isBuildCommand = process.argv.includes("build");
 const isProduction = isBuildCommand;
+const excalidrawDist = path.resolve(process.cwd(), "node_modules/@excalidraw/excalidraw/dist");
 
 export default defineConfig({
   mode: isProduction ? "production" : "development",
@@ -76,6 +78,14 @@ export default defineConfig({
   module: {
     rules: [
       {
+        // The pinned editor's ESM output imports roughjs subpaths without
+        // extensions. Relax only those vendor imports, not application ESM.
+        test: /\.m?js$/,
+        include: /node_modules[\\/]@excalidraw[\\/]excalidraw[\\/]/,
+        resolve: { fullySpecified: false },
+        use: [path.resolve(process.cwd(), "scripts/excalidraw-local-assets-loader.cjs")]
+      },
+      {
         test: /\.tsx?$/,
         use: "builtin:swc-loader",
         type: "javascript/auto"
@@ -113,7 +123,14 @@ export default defineConfig({
     }
     : undefined,
   plugins: [
+    new rspack.NormalModuleReplacementPlugin(/subset-worker\.chunk\.js$/, (resource) => {
+      if (resource.context.startsWith(excalidrawDist + path.sep)) {
+        resource.request = path.resolve(process.cwd(), "src/features/room/whiteboard/subsetWorkerUrl.ts");
+      }
+    }),
     new rspack.DefinePlugin({
+      __FEATURE_ROOM_DIAGRAMS_ENABLED__: JSON.stringify(process.env.FEATURE_ROOM_DIAGRAMS_ENABLED === "true"),
+      __FEATURE_ROOM_WHITEBOARD_ENABLED__: JSON.stringify(process.env.FEATURE_ROOM_WHITEBOARD_ENABLED === "true"),
       __FEATURE_SOCIAL_AUTH_ENABLED__: JSON.stringify(process.env.FEATURE_SOCIAL_AUTH_ENABLED === "true"),
       __FEATURE_AGENT_OPS__: JSON.stringify(process.env.FEATURE_AGENT_OPS ?? "false"),
       "process.env.FEATURE_AGENT_OPS": JSON.stringify(process.env.FEATURE_AGENT_OPS ?? "false"),
@@ -142,11 +159,33 @@ export default defineConfig({
       patterns: [
         {
           from: path.resolve(process.cwd(), "public"),
-          to: path.resolve(process.cwd(), "dist"),
+          to: ".",
           globOptions: {
-            ignore: ["**/index.html"]
+            ignore: ["**/index.html", "**/drawio/**"]
           }
-        }
+        },
+        ...(process.env.FEATURE_ROOM_DIAGRAMS_ENABLED === "true" ? [{
+          from: path.resolve(process.cwd(), "public/drawio"),
+          to: "drawio",
+          // Keep the pinned upstream editor intact; some unused upstream files
+          // are servlet templates rather than independently parseable modules.
+          info: { minimized: true }
+        }] : []),
+        ...(process.env.FEATURE_ROOM_WHITEBOARD_ENABLED === "true" ? [{
+          from: path.resolve(process.cwd(), "node_modules/@excalidraw/excalidraw/dist/prod/fonts"),
+          to: "whiteboard-assets/fonts",
+          globOptions: { ignore: ["**/Liberation/**"] }
+        }, {
+          from: path.resolve(process.cwd(), "scripts/excalidraw.LICENSE"),
+          to: "whiteboard-assets/LICENSE.txt"
+        }, {
+          from: path.resolve(process.cwd(), "scripts/whiteboard-font-licenses"),
+          to: "whiteboard-assets/font-licenses"
+        }, ...SUBSET_WORKER_FILES.map(file => ({
+          from: path.join(excalidrawDist, "prod", file),
+          to: `whiteboard-assets/subset/${file}`,
+          info: { minimized: true }
+        }))] : [])
       ]
     }),
     new rspack.CssExtractRspackPlugin(

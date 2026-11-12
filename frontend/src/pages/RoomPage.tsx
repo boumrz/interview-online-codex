@@ -120,7 +120,10 @@ import {
   type HrAction,
   type Participant,
 } from "../features/room/TopBar";
-import type { HrManager, Room, RoomTask, RoomTaskWorkspace, TaskTemplate } from "../types";
+import type { HrManager, Room, RoomEditorMode, RoomTask, RoomTaskWorkspace, TaskTemplate } from "../types";
+import { ROOM_DIAGRAMS_ENABLED, ROOM_WHITEBOARD_ENABLED } from "../config/runtime";
+import { RoomDiagramPanel } from "../features/room/diagram/RoomDiagramPanel";
+import { RoomWhiteboardPanel } from "../features/room/whiteboard/RoomWhiteboardPanel";
 import { RoomInterviewPanel } from "../features/room/RoomInterviewPanel";
 import {
   RoomContextPanels,
@@ -177,8 +180,11 @@ type RealtimeState = {
    */
   personalNotes?: PersonalNoteEntry[];
   briefingMarkdown?: string;
-  roomEditorMode?: "code" | "markdown";
+  roomEditorMode?: RoomEditorMode;
   roomEditorModeRevision?: number;
+  roomDiagramsEnabled?: boolean;
+  roomWhiteboardEnabled?: boolean;
+  drawingColor?: string | null;
   tasks?: RoomTask[];
   taskScores: Record<string, number | null>;
   participants: Participant[];
@@ -664,6 +670,10 @@ function isRoomUnavailableError(error: unknown): boolean {
   return status === 404 || status === 410;
 }
 
+function roomEditorModeLabel(mode: RoomEditorMode | undefined): string {
+  return mode === "whiteboard" ? "Доска" : mode === "diagram" ? "Редактор диаграмм" : mode === "markdown" ? "Markdown" : "Code";
+}
+
 export function RoomPage() {
   const { notification } = AntDesignApp.useApp();
   const { inviteCode = "" } = useParams();
@@ -702,6 +712,12 @@ export function RoomPage() {
   const [state, setState] = useState<RealtimeState | null>(null);
   const stateRef = useRef<RealtimeState | null>(null);
   const [error, setError] = useState("");
+  const [diagramRefreshSignal, setDiagramRefreshSignal] = useState(0);
+  const [savedDiagramViewScope, setSavedDiagramViewScope] = useState<string | null>(null);
+  const [whiteboardRefreshSignal, setWhiteboardRefreshSignal] = useState(0);
+  const [savedWhiteboardViewScope, setSavedWhiteboardViewScope] = useState<string | null>(null);
+  const onDiagramChanged = useCallback(() => setDiagramRefreshSignal(value => value + 1), []);
+  const onWhiteboardChanged = useCallback(() => setWhiteboardRefreshSignal(value => value + 1), []);
   const [displayName, setDisplayName] = useState(() => initialStoredName);
   const [draftName, setDraftName] = useState(() => initialStoredName);
   const [candidateNameError, setCandidateNameError] = useState("");
@@ -944,6 +960,9 @@ export function RoomPage() {
       briefingMarkdown: room.briefingMarkdown ?? "",
       roomEditorMode: room.roomEditorMode ?? "code",
       roomEditorModeRevision: room.roomEditorModeRevision ?? 0,
+      roomDiagramsEnabled: room.roomDiagramsEnabled ?? false,
+      roomWhiteboardEnabled: room.roomWhiteboardEnabled ?? false,
+      drawingColor: null,
       tasks: [...(room.tasks ?? [])].sort(
         (left, right) => left.stepIndex - right.stepIndex,
       ),
@@ -2010,6 +2029,7 @@ export function RoomPage() {
   );
   const {
     connected,
+    roomAuthorityToken,
     accessDenied: realtimeAccessDenied,
     roomUnavailable: realtimeRoomUnavailable,
     terminateRoomUnavailable,
@@ -2041,6 +2061,8 @@ export function RoomPage() {
     displayName: effectiveDisplayName,
     ownerToken,
     onState,
+    onDiagramChanged,
+    onWhiteboardChanged,
     onError,
     onCursorUpdate,
     onCandidateKey,
@@ -3094,7 +3116,47 @@ export function RoomPage() {
   const briefingFocusMode = merged.roomEditorMode === "markdown";
   const ownerBriefingValue = stripFocusMarker(rawBriefingValue);
   const candidateBriefingValue = stripFocusMarker(mergedBriefingMarkdown);
-  const candidateBriefingFocusMode = briefingFocusMode;
+  const canViewSavedDiagram = ROOM_DIAGRAMS_ENABLED && Boolean(merged.roomDiagramsEnabled) && roomReadOnly;
+  const canViewSavedWhiteboard = ROOM_WHITEBOARD_ENABLED && Boolean(merged.roomWhiteboardEnabled) && roomReadOnly;
+  const viewingSavedWhiteboard = canViewSavedWhiteboard && savedWhiteboardViewScope === markdownPreviewScope;
+  const viewingSavedDiagram = canViewSavedDiagram && savedDiagramViewScope === markdownPreviewScope && !viewingSavedWhiteboard;
+  const diagramMode = ROOM_DIAGRAMS_ENABLED && Boolean(merged.roomDiagramsEnabled) && (viewingSavedDiagram || (merged.roomEditorMode === "diagram" && !viewingSavedWhiteboard));
+  const whiteboardMode = ROOM_WHITEBOARD_ENABLED && Boolean(merged.roomWhiteboardEnabled) && (viewingSavedWhiteboard || (merged.roomEditorMode === "whiteboard" && !viewingSavedDiagram));
+  const candidateBriefingFocusMode = briefingFocusMode && !diagramMode && !whiteboardMode;
+  const diagramPanel = ROOM_DIAGRAMS_ENABLED && merged.roomDiagramsEnabled ? (
+    <RoomDiagramPanel
+      key={markdownPreviewScope}
+      inviteCode={inviteCode}
+      sessionId={sessionId}
+      authToken={authToken}
+      ownerToken={ownerToken}
+      interviewerToken={interviewerToken}
+      eventToken={roomAuthorityToken}
+      connected={connected && roomAuthorityToken !== null}
+      readOnly={roomReadOnly}
+      active={diagramMode}
+      refreshSignal={diagramRefreshSignal}
+      drawingColor={merged.drawingColor}
+      drawingParticipants={merged.participants}
+    />
+  ) : null;
+  const whiteboardPanel = ROOM_WHITEBOARD_ENABLED && merged.roomWhiteboardEnabled ? (
+    <RoomWhiteboardPanel
+      key={markdownPreviewScope}
+      inviteCode={inviteCode}
+      sessionId={sessionId}
+      authToken={authToken}
+      ownerToken={ownerToken}
+      interviewerToken={interviewerToken}
+      eventToken={roomAuthorityToken}
+      connected={connected && roomAuthorityToken !== null}
+      readOnly={roomReadOnly}
+      active={whiteboardMode}
+      refreshSignal={whiteboardRefreshSignal}
+      drawingColor={merged.drawingColor}
+      drawingParticipants={merged.participants}
+    />
+  ) : null;
   const localStatusTask = mergedTasks.find(
     (task) => task.stepIndex === localSelectedStep,
   );
@@ -3443,6 +3505,10 @@ export function RoomPage() {
           </section>
         ) : canManageRoom ? (
           <OwnerLayout
+            diagramPanel={diagramPanel}
+            diagramMode={diagramMode}
+            whiteboardPanel={whiteboardPanel}
+            whiteboardMode={whiteboardMode}
             merged={merged}
             markdownPreviewScope={markdownPreviewScope}
             tasks={mergedTasks}
@@ -3537,6 +3603,18 @@ export function RoomPage() {
           />
         ) : (
           <CandidateLayout
+            diagramPanel={diagramPanel}
+            diagramMode={diagramMode}
+            whiteboardPanel={whiteboardPanel}
+            whiteboardMode={whiteboardMode}
+            viewingSavedDiagram={viewingSavedDiagram}
+            onToggleSavedDiagram={canViewSavedDiagram && merged.roomEditorMode !== "diagram"
+              ? () => { setSavedWhiteboardViewScope(null); setSavedDiagramViewScope(viewingSavedDiagram ? null : markdownPreviewScope); }
+              : undefined}
+            viewingSavedWhiteboard={viewingSavedWhiteboard}
+            onToggleSavedWhiteboard={canViewSavedWhiteboard && merged.roomEditorMode !== "whiteboard"
+              ? () => { setSavedDiagramViewScope(null); setSavedWhiteboardViewScope(viewingSavedWhiteboard ? null : markdownPreviewScope); }
+              : undefined}
             merged={merged}
             markdownPreviewScope={markdownPreviewScope}
             stepTitle={step?.title ?? "-"}
@@ -3578,6 +3656,10 @@ export function RoomPage() {
 
 
 function OwnerLayout({
+  diagramPanel,
+  diagramMode,
+  whiteboardPanel,
+  whiteboardMode,
   merged,
   markdownPreviewScope,
   tasks,
@@ -3722,7 +3804,11 @@ function OwnerLayout({
       }
     | null;
   privateNotesExportError: string | null;
-  onRoomEditorModeChange: (mode: "code" | "markdown", revision: number) => Promise<void>;
+  diagramPanel: React.ReactNode;
+  diagramMode: boolean;
+  whiteboardPanel: React.ReactNode;
+  whiteboardMode: boolean;
+  onRoomEditorModeChange: (mode: RoomEditorMode, revision: number) => Promise<void>;
   roomModeConnected: boolean;
   briefingMarkdown: string;
   /**
@@ -3778,7 +3864,7 @@ function OwnerLayout({
   isSettingVerdict: boolean;
 }) {
   const { notification: roomNotification } = AntDesignApp.useApp();
-  const [roomModeConfirmation, setRoomModeConfirmation] = useState<{ mode: "code" | "markdown"; revision: number } | null>(null);
+  const [roomModeConfirmation, setRoomModeConfirmation] = useState<{ mode: RoomEditorMode; revision: number } | null>(null);
   const [roomModeSubmitting, setRoomModeSubmitting] = useState(false);
   const [roomModeError, setRoomModeError] = useState<string | null>(null);
   const roomModeContextRef = useRef({ inviteCode, sessionId, authToken, active: true });
@@ -3797,7 +3883,7 @@ function OwnerLayout({
       await onRoomEditorModeChange(roomModeConfirmation.mode, roomModeConfirmation.revision);
       if (!isCurrentModeAction()) return;
       setRoomModeConfirmation(null);
-      roomNotification.success({ placement: "top", role: "status", title: "Режим комнаты изменён", description: roomModeConfirmation.mode === "markdown" ? "Markdown" : "Code" });
+      roomNotification.success({ placement: "top", role: "status", title: "Режим комнаты изменён", description: roomEditorModeLabel(roomModeConfirmation.mode) });
     } catch (failure) {
       if (!isCurrentModeAction()) return;
       setRoomModeError(failure instanceof Error ? failure.message : "Не удалось изменить режим комнаты.");
@@ -4518,7 +4604,7 @@ function OwnerLayout({
       <Modal opened={roomModeConfirmation !== null} onClose={() => { if (!roomModeSubmitting) setRoomModeConfirmation(null); }} title="Изменить режим комнаты?" centered closeOnEscape={!roomModeSubmitting} closeOnClickOutside={!roomModeSubmitting}>
         <Stack gap={16}>
           <Text>Изменится редактор кандидата и всех интервьюеров.</Text>
-          <Text>Режим: {roomModeConfirmation?.mode === "markdown" ? "Markdown" : "Code"}.</Text>
+          <Text>Режим: {roomEditorModeLabel(roomModeConfirmation?.mode)}.</Text>
           {roomModeError ? <Alert color="red" role="alert">{roomModeError}</Alert> : null}
           <Group justify="flex-end">
             <Button variant="default" disabled={roomModeSubmitting} onClick={() => setRoomModeConfirmation(null)}>Отмена</Button>
@@ -4533,7 +4619,7 @@ function OwnerLayout({
         headerAction={
           <div className={styles.editorModeControl}>
             <Select
-              data={[{ value: "code", label: "Code" }, { value: "markdown", label: "Markdown" }]}
+              data={[{ value: "code", label: "Code" }, { value: "markdown", label: "Markdown" }, ...(ROOM_DIAGRAMS_ENABLED && merged.roomDiagramsEnabled ? [{ value: "diagram", label: "Редактор диаграмм" }] : []), ...(ROOM_WHITEBOARD_ENABLED && merged.roomWhiteboardEnabled ? [{ value: "whiteboard", label: "Доска" }] : [])]}
               className={styles.roomModeSelect}
               labelRender={({ label }: { label: React.ReactNode }) => (
                 <span className={styles.roomModeSelectedLabel}>
@@ -4547,7 +4633,7 @@ function OwnerLayout({
               data-testid="room-editor-mode-switch"
               disabled={roomReadOnly || !roomModeConnected || roomModeSubmitting}
               onChange={(value: string | null) => {
-                if (value !== "code" && value !== "markdown") return;
+                if (value !== "code" && value !== "markdown" && !(value === "diagram" && ROOM_DIAGRAMS_ENABLED && merged.roomDiagramsEnabled) && !(value === "whiteboard" && ROOM_WHITEBOARD_ENABLED && merged.roomWhiteboardEnabled)) return;
                 if (value === (merged.roomEditorMode ?? "code")) return;
                 setRoomModeConfirmation({ mode: value, revision: merged.roomEditorModeRevision ?? 0 });
                 setRoomModeError(null);
@@ -4571,6 +4657,7 @@ function OwnerLayout({
             }
           >
             <Box className={styles.contextEditorBody}>
+            <div className={styles.modeEditor} hidden={diagramMode || whiteboardMode}>
             {localWorkspacePreview ? (
               <ManagerWorkspaceEditor
                 error={error}
@@ -4632,6 +4719,9 @@ function OwnerLayout({
                 {error && <Text className={styles.error}>{error}</Text>}
               </Box>
             )}
+            </div>
+            <div className={styles.modeEditor} hidden={!diagramMode}>{diagramPanel}</div>
+            <div className={styles.modeEditor} hidden={!whiteboardMode}>{whiteboardPanel}</div>
             </Box>
           </Box>
         </RoomContextSurface>
@@ -6397,6 +6487,14 @@ function ManagerWorkspaceEditor({
 }
 
 function CandidateLayout({
+  diagramPanel,
+  diagramMode,
+  whiteboardPanel,
+  whiteboardMode,
+  viewingSavedDiagram,
+  onToggleSavedDiagram,
+  viewingSavedWhiteboard,
+  onToggleSavedWhiteboard,
   merged,
   markdownPreviewScope,
   stepTitle,
@@ -6418,6 +6516,14 @@ function CandidateLayout({
   error,
   briefingFocusMode,
 }: {
+  diagramPanel: React.ReactNode;
+  diagramMode: boolean;
+  whiteboardPanel: React.ReactNode;
+  whiteboardMode: boolean;
+  viewingSavedDiagram: boolean;
+  onToggleSavedDiagram?: () => void;
+  viewingSavedWhiteboard: boolean;
+  onToggleSavedWhiteboard?: () => void;
   merged: RealtimeState;
   markdownPreviewScope: string;
   stepTitle: string;
@@ -6461,8 +6567,14 @@ function CandidateLayout({
             </Text>
           </Group>
           <Badge variant="light" color="gray">
-            Режим комнаты — {briefingFocusMode ? "Markdown" : "Code"}
+            Режим комнаты — {roomEditorModeLabel(merged.roomEditorMode)}
           </Badge>
+          {onToggleSavedDiagram && <Button variant="light" size="sm" onClick={onToggleSavedDiagram}>
+            {viewingSavedDiagram ? "К материалам интервью" : "Посмотреть схему"}
+          </Button>}
+          {onToggleSavedWhiteboard && <Button variant="light" size="sm" onClick={onToggleSavedWhiteboard}>
+            {viewingSavedWhiteboard ? "К материалам интервью" : "Посмотреть доску"}
+          </Button>}
         </Group>
       </Box>
 
@@ -6477,7 +6589,7 @@ function CandidateLayout({
         focusMode={briefingFocusMode}
       />
 
-      <div className={styles.modeEditor} hidden={briefingFocusMode}>
+      <div className={styles.modeEditor} hidden={briefingFocusMode || diagramMode || whiteboardMode}>
         <SharedRoomEditorPanel
           merged={merged}
           stepStarterCode={stepStarterCode}
@@ -6498,6 +6610,8 @@ function CandidateLayout({
         />
       </div>
 
+      <div className={styles.modeEditor} hidden={!diagramMode}>{diagramPanel}</div>
+      <div className={styles.modeEditor} hidden={!whiteboardMode}>{whiteboardPanel}</div>
       {error && <Text className={styles.error}>{error}</Text>}
     </Box>
   );
