@@ -101,4 +101,5 @@ interview-vtools.conf
 
 # Pinned draw.io static assets are reproduced from a verified upstream archive.
 frontend/public/drawio/
+frontend/.cache/drawio/
 frontend/public/.drawio-prepare-*/

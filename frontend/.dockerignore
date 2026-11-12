@@ -7,6 +7,8 @@ coverage/
 playwright-report/
 test-results/
 public/drawio/
+# Keep .cache/drawio/ in the build context: it contains the checksum-verified
+# offline WAR, while the expanded vendor tree above is prepared in the image.
 ss-*.png
 screenshot-*.png
 smoke-debug.png

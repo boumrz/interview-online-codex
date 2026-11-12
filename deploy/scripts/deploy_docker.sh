@@ -4,6 +4,19 @@ set -euo pipefail
 # Environment files contain persistent secrets, including when invoked with bash -x.
 set +x
 
+enable_room_canvases_requested=false
+for argument in "$@"; do
+  case "${argument}" in
+    --enable-canvases) enable_room_canvases_requested=true ;;
+    --help)
+      echo "Usage: deploy_docker.sh [--enable-canvases]"
+      echo "--enable-canvases safely enables diagrams and whiteboard in the existing server env, then rebuilds both services."
+      exit 0
+      ;;
+    *) echo "Unknown deployment option. Use --help." >&2; exit 2 ;;
+  esac
+done
+
 APP_ROOT="${APP_ROOT:-/opt/interview-online}"
 REPO_DIR="${REPO_DIR:-${APP_ROOT}/repo}"
 ENV_FILE="${ENV_FILE:-/etc/interview-online/.env}"
@@ -33,6 +46,13 @@ fi
 
 # shellcheck disable=SC1090
 source "${ENV_FILE}"
+
+if [ "${enable_room_canvases_requested}" = "true" ]; then
+  # Compose gives exported values precedence over the persisted env file.
+  # Validate this requested release before persisting the two settings.
+  export FEATURE_ROOM_DIAGRAMS_ENABLED=true
+  export FEATURE_ROOM_WHITEBOARD_ENABLED=true
+fi
 
 # A canonical unpadded Base64URL encoding of 32 bytes has 43 characters;
 # the last character must contain two zero padding bits.
@@ -113,6 +133,20 @@ if ! command -v python3 >/dev/null 2>&1; then
 fi
 VALIDATOR_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 compose config --format json | python3 "${VALIDATOR_DIR}/validate_team_encryption.py"
+canvas_validation_args=(--check-compose)
+if [ "${enable_room_canvases_requested}" = "true" ]; then
+  canvas_validation_args+=(--require-enabled)
+fi
+compose config --format json | python3 "${VALIDATOR_DIR}/configure_room_canvases.py" "${canvas_validation_args[@]}"
+
+echo "==> Preparing the pinned diagram editor archive"
+compose config --format json | python3 "${VALIDATOR_DIR}/prepare_drawio_archive.py" --from-compose \
+  --release "${REPO_DIR}/frontend/scripts/drawio-release.json" \
+  --cache-dir "${REPO_DIR}/frontend/.cache/drawio"
+
+if [ "${enable_room_canvases_requested}" = "true" ]; then
+  python3 "${VALIDATOR_DIR}/configure_room_canvases.py" --enable-env "${ENV_FILE}"
+fi
 
 echo "==> Building images"
 compose build
@@ -125,10 +159,14 @@ compose exec -T backend curl -fsS http://127.0.0.1:8080/api/public/health >/dev/
 
 echo "==> Running smoke checks"
 wait_for_host_url "Public health" "${DOMAIN}" "http://127.0.0.1/healthz" 30 2
+compose config --format json | python3 "${VALIDATOR_DIR}/configure_room_canvases.py" \
+  --verify-assets "http://127.0.0.1:${HTTP_PORT:-80}/" "${DOMAIN}"
 
 if grep -q '^NGINX_SSL=true' "${ENV_FILE}"; then
   wait_for_url "Public HTTPS health" "https://${DOMAIN}/healthz" 30 2
   wait_for_url "Public HTTPS index" "https://${DOMAIN}/" 15 2
+  compose config --format json | python3 "${VALIDATOR_DIR}/configure_room_canvases.py" \
+    --verify-assets "https://${DOMAIN}/" "${DOMAIN}"
   if [ "${FINANCE_PROXY_ENABLED}" = "true" ]; then
     wait_for_url "Finance HTTPS index" "https://${FINANCE_DOMAIN}/" 15 2
   fi

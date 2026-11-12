@@ -42,7 +42,7 @@
 | P5.1 | [Проекции процессов](specs/features/p5-1-process-projections.md) | Реализована; API/каталог, повторная панель интервью снята |
 | P5.2 | [История: план объединения команд](specs/features/p5-2-team-merge-plan.md) | Снята с продукта |
 | P5.3 | [История: commit объединения](specs/features/p5-3-team-merge-commit.md) | Снята с продукта; legacy redirects сохранены |
-| P6 | [Финальный выпуск](specs/features/p6-release-gates.md) | [Полный снимок 12.11](specs/references/2026-11-12-full-regression-tablet-input.md): 1406 уникальных PASS, 118/118 E2E файлов и дополнительный opt-in contract profile; types/builds/JAR/shell/Compose PASS, independent review approve. Generic OS virtual pen подтверждён; live macOS Native AX, физические vendor drivers и product/topology приёмка отдельно. Google/VK отложен |
+| P6 | [Финальный выпуск](specs/features/p6-release-gates.md) | [Полный снимок 12.11](specs/references/2026-11-12-full-regression-tablet-input.md): 1406 уникальных PASS, 118/118 E2E файлов и дополнительный opt-in contract profile. Активация холстов/кэш WAR: scripts 72/72, asset contracts 19/19, types/build и independent review PASS; фактическая Docker-выкладка на стенд ожидается. Generic OS virtual pen подтверждён; live macOS Native AX, физические vendor drivers и product/topology приёмка отдельно. Google/VK отложен |
 
 ## Очередь завершения
 
