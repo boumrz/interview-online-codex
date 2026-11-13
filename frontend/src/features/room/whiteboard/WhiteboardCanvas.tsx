@@ -58,6 +58,13 @@ export default React.memo(function WhiteboardCanvas({ active, readOnly, drawingC
   const focusCanvas = useCallback(() => {
     hostRef.current?.querySelector<HTMLElement>(".excalidraw")?.focus({ preventScroll: true });
   }, [hostRef]);
+  const observeElements = useCallback((elements: readonly OrderedExcalidrawElement[]) => {
+    // Match native collaboration: an unfinished new shape is local. In
+    // particular, restoreElements normalizes an empty text placeholder into a
+    // tombstone; sending it would let a peer delete text still being entered.
+    // Explicit deletions always travel, including zero-sized tombstones.
+    callback.current(elements.filter(element => element.isDeleted || (!isInvisiblySmallElement(element) && !(element.type === "text" && element.text === ""))));
+  }, []);
   const observe = useCallback((elements: readonly OrderedExcalidrawElement[], appState: AppState) => {
     if (appState.contextMenu) {
       // The SDK opens its menu directly on a touch hold, without dispatching
@@ -68,12 +75,8 @@ export default React.memo(function WhiteboardCanvas({ active, readOnly, drawingC
     onAppStateChange(appState);
     setActiveTool(appState.activeTool.type);
     setColor(appState.currentItemStrokeColor);
-    // Match native collaboration: an unfinished new shape is local. In
-    // particular, restoreElements normalizes an empty text placeholder into a
-    // tombstone; sending it would let a peer delete text still being entered.
-    // Explicit deletions always travel, including zero-sized tombstones.
-    callback.current(elements.filter(element => element.isDeleted || (!isInvisiblySmallElement(element) && !(element.type === "text" && element.text === ""))));
-  }, [onAppStateChange, focusCanvas, hostRef]);
+    observeElements(elements);
+  }, [observeElements, onAppStateChange, focusCanvas, hostRef]);
 
   function pasteOnCanvas(event: React.ClipboardEvent<HTMLDivElement>) {
     if (!(event.target instanceof HTMLElement) || event.target.closest("textarea, input, [contenteditable=true]")) return;
@@ -104,6 +107,7 @@ export default React.memo(function WhiteboardCanvas({ active, readOnly, drawingC
     sdkRef.current = sdk;
     let firstScene = true;
     const handle: WhiteboardCanvasHandle = {
+      flushLocalChanges() { observeElements(sdk.getSceneElementsIncludingDeleted()); },
       setDrawingColor,
       applyScene(snapshot, replaceLocal) {
         const restored = restoreScene(snapshot.elements);
@@ -139,7 +143,7 @@ export default React.memo(function WhiteboardCanvas({ active, readOnly, drawingC
       },
     };
     readyCallback.current(handle);
-  }, [setDrawingColor]);
+  }, [setDrawingColor, observeElements]);
 
   useEffect(() => () => { sdkRef.current = null; readyCallback.current(null); }, []);
   return <div className={styles.board}>

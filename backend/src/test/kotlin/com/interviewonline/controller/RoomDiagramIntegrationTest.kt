@@ -53,6 +53,7 @@ class RoomDiagramIntegrationTest(
         val first = get(room)
         val second = get(room)
         assertEquals(200, first.response.status)
+        assertTrue(body(first).path("taskId").isNull)
         assertEquals(body(first).path("diagramId"), body(second).path("diagramId"))
         assertEquals(0L, body(first).path("sequence").asLong())
         assertEquals("drawio", body(first).path("editor").asText())
@@ -76,9 +77,91 @@ class RoomDiagramIntegrationTest(
         assertEquals(XML, incremental.path("operations")[0].path("xml").asText())
         val event = owner.result.response.contentAsString.lineSequence().filter { it.startsWith("data:") }
             .map { mapper.readTree(it.removePrefix("data:")) }.last { it.path("type").asText() == "diagram_changed" }
-        assertEquals(operation, event.path("payload").path("operationId").asText())
+        assertEquals(id, event.path("payload").path("diagramId").asText())
+        assertFalse(event.path("payload").has("xml"))
+        assertFalse(event.path("payload").has("patch"))
         assertEquals(1L, event.path("payload").path("sequence").asLong())
         assertEquals(id, body(get(room)).path("diagramId").asText())
+    }
+
+    @Test fun `task diagrams isolate snapshots history and receipts across publication and deletion`() {
+        val room = room()
+        val first = addTask(room, 0)
+        val second = addTask(room, 1)
+        val owner = stream(room, true)
+        val candidate = stream(room, false)
+        val published = body(get(room, candidate))
+        val preview = body(get(room, owner, taskId = second))
+        assertEquals(first, published.path("taskId").asText())
+        assertEquals(second, preview.path("taskId").asText())
+        val firstId = published.path("diagramId").asText()
+        val secondId = preview.path("diagramId").asText()
+        val operation = UUID.randomUUID().toString()
+        val firstXml = XML.replace("API", "First")
+        val secondXml = XML.replace("API", "Second")
+
+        assertTrue(firstId != secondId)
+        assertEquals(firstId, body(get(room, candidate, taskId = first)).path("diagramId").asText())
+        assertEquals(200, change(room, candidate, firstId, operation, 0, firstXml, taskId = first).response.status)
+        assertEquals(0, body(get(room, owner, after = 0, taskId = second)).path("operations").size())
+        assertEquals(200, change(room, owner, secondId, operation, 0, secondXml, taskId = second).response.status)
+        assertEquals(409, change(room, owner, firstId, UUID.randomUUID().toString(), 1, XML, taskId = second).response.status)
+        assertEquals(404, get(room, candidate, taskId = second).response.status)
+        val mixedCredentials = mvc.get("/api/rooms/${room.inviteCode}/diagram") {
+            param("taskId", second); param("sessionId", candidate.sessionId)
+            header("X-Room-Event-Token", candidate.eventToken); header("X-Room-Owner-Token", room.ownerSessionToken)
+        }.andReturn()
+        assertEquals(404, mixedCredentials.response.status, "the selected live identity determines task access")
+        assertTrue(change(room, candidate, secondId, operation, 0, secondXml, taskId = second).response.status in setOf(403, 404))
+        val candidateNotifications = candidate.result.response.contentAsString.lineSequence().filter { it.startsWith("data:") }
+            .map { mapper.readTree(it.removePrefix("data:")) }.filter { it.path("type").asText() == "diagram_changed" }
+        assertTrue(candidateNotifications.none { it.path("payload").path("diagramId").asText() == secondId })
+        assertEquals(1, body(get(room, owner, after = 0, taskId = second)).path("operations").size())
+        assertEquals(firstXml, body(get(room, candidate)).path("xml").asText())
+        jdbc.update("UPDATE rooms SET current_step=1 WHERE id=?", room.id)
+        assertEquals(secondXml, body(get(room, candidate)).path("xml").asText())
+        assertEquals(409, change(room, candidate, firstId, UUID.randomUUID().toString(), 1, XML).response.status)
+        assertTrue(get(room, candidate, taskId = first).response.status in setOf(403, 404))
+        assertEquals(firstXml, body(get(room, owner, after = 0, taskId = first)).path("operations")[0].path("xml").asText())
+        jdbc.update("DELETE FROM room_tasks WHERE id=?", first)
+        jdbc.update("UPDATE room_tasks SET step_index=0 WHERE id=?", second)
+        jdbc.update("UPDATE rooms SET current_step=0 WHERE id=?", room.id)
+        assertEquals(secondId, body(get(room, candidate)).path("diagramId").asText())
+        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM room_diagram_operations WHERE diagram_id=?", Int::class.java, firstId))
+        assertTrue(get(room, owner, taskId = first).response.status in setOf(403, 404))
+        val foreign = addTask(room(), 0)
+        assertTrue(get(room, owner, taskId = foreign).response.status in setOf(403, 404))
+    }
+
+    @Test fun `first added task inherits the taskless document and receipts once`() {
+        val room = room()
+        val owner = stream(room, true)
+        val diagram = body(get(room, owner, taskId = "")).path("diagramId").asText()
+        val operation = UUID.randomUUID().toString()
+        assertEquals(200, change(room, owner, diagram, operation, 0, XML, taskId = "").response.status)
+        val response = mvc.post("/api/rooms/${room.inviteCode}/tasks") {
+            header("X-Room-Owner-Token", room.ownerSessionToken)
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"customTasks":[{"title":"A"},{"title":"B"}]}"""
+        }.andReturn()
+        assertEquals(200, response.response.status, response.response.contentAsString)
+        val ids = jdbc.queryForList("SELECT id FROM room_tasks WHERE room_id=? ORDER BY step_index", String::class.java, room.id)
+        assertEquals(2, ids.size)
+        val inherited = body(get(room, owner, after = 0, taskId = ids.first()))
+        assertEquals(ids.first(), inherited.path("taskId").asText())
+        assertEquals(diagram, inherited.path("diagramId").asText())
+        assertEquals(XML, inherited.path("xml").asText())
+        assertEquals(operation, inherited.path("operations")[0].path("operationId").asText())
+        assertEquals(1, body(change(room, owner, diagram, operation, 0, XML, taskId = ids.first())).path("sequence").asInt())
+        assertEquals(0, body(get(room, owner, taskId = ids.last())).path("sequence").asInt())
+        assertTrue(get(room, owner, taskId = "").response.status in setOf(403, 404, 409))
+    }
+
+    private fun addTask(room: Room, step: Int): String {
+        val id = UUID.randomUUID().toString()
+        jdbc.update("INSERT INTO room_tasks(id,room_id,step_index,title,description,starter_code,language) VALUES (?,?,?,'Task','','','nodejs')",
+            id, room.id, step)
+        return id
     }
 
     @Test fun `concurrent stale snapshot cannot overwrite committed state and retry is idempotent`() {
@@ -319,13 +402,15 @@ class RoomDiagramIntegrationTest(
         assertEquals(200, result.response.status)
         return Connection(sessionId, state(result).path("eventToken").asText(), result)
     }
-    private fun get(room: Room, connection: Connection? = null, after: Long? = null): MvcResult = mvc.get("/api/rooms/${room.inviteCode}/diagram") {
+    private fun get(room: Room, connection: Connection? = null, after: Long? = null, taskId: String? = null): MvcResult = mvc.get("/api/rooms/${room.inviteCode}/diagram") {
         connection?.let { param("sessionId", it.sessionId); header("X-Room-Event-Token", it.eventToken) }
         after?.let { param("afterSequence", it.toString()) }
+        taskId?.let { param("taskId", it) }
     }.andReturn()
     private fun change(room: Room, connection: Connection, id: String, operationId: String, base: Long, xml: String,
-        patch: Any? = mapOf("u" to mapOf("room-diagram" to mapOf("name" to "Diagram")))): MvcResult = mvc.post("/api/rooms/${room.inviteCode}/diagram/changes") {
+        patch: Any? = mapOf("u" to mapOf("room-diagram" to mapOf("name" to "Diagram"))), taskId: String? = null): MvcResult = mvc.post("/api/rooms/${room.inviteCode}/diagram/changes") {
         param("sessionId", connection.sessionId); header("X-Room-Event-Token", connection.eventToken)
+        taskId?.let { param("taskId", it) }
         contentType = MediaType.APPLICATION_JSON
         content = mapper.writeValueAsString(mapOf("diagramId" to id, "operationId" to operationId, "baseSequence" to base, "xml" to xml,
             "patch" to patch))

@@ -1,5 +1,6 @@
 import '../support/require-isolated-api.mjs';
 import { assertCompactCanvasHeader, assertStableAutosave } from '../support/canvas-header.mjs';
+import { expectLegacyCanvasBlocked, selectCanvasTask, waitForCanvasTask } from '../support/canvas-tasks.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { chromium } from 'playwright';
@@ -122,8 +123,9 @@ async function openModeOption(page, label) {
 }
 
 async function editorFrame(page) {
-  await page.getByText('Сохранено', { exact: true }).waitFor();
-  const element = await page.locator('iframe[title="Редактор схемы"]').elementHandle();
+  const panel = diagramPanel(page);
+  await panel.getByRole('status').filter({ hasText: /^Сохранено$/ }).waitFor();
+  const element = await panel.getByTitle('Редактор схемы', { exact: true }).elementHandle();
   assert.ok(element);
   const frame = await element.contentFrame();
   assert.ok(frame);
@@ -207,6 +209,49 @@ async function confirmedDiagram(room) {
   assert.equal(response.status, 200);
   return response.json();
 }
+
+test('при переключении задач схемы изолированы у интервьюера и кандидата', async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const room = await createRoom();
+    const [first, second] = room.tasks;
+    const owner = (await openParticipant(browser, room, true)).page;
+    const candidate = (await openParticipant(browser, room)).page;
+    await chooseMode(owner, 'Редактор диаграмм');
+    await waitForCanvasTask(candidate, first.id);
+    await insertBlock(await editorFrame(owner), 'Авторизация');
+    const candidateFirst = await editorFrame(candidate);
+    await waitForBlocks(candidateFirst, ['Авторизация']);
+    const visibleLabel = (frame, label) => frame.locator('.geDiagramContainer').getByText(label, { exact: true });
+    await visibleLabel(candidateFirst, 'Авторизация').first().waitFor();
+
+    await selectCanvasTask(owner, second);
+    const secondFrame = await editorFrame(owner);
+    await waitForBlocks(secondFrame, []);
+    assert.equal(await visibleLabel(secondFrame, 'Авторизация').count(), 0);
+    await insertBlock(secondFrame, 'Уведомления');
+    // Switch back immediately, before the new shape's save is acknowledged.
+    await selectCanvasTask(owner, first);
+    await waitForBlocks(await editorFrame(owner), ['Авторизация']);
+    await waitForCanvasTask(candidate, first.id);
+    await waitForBlocks(candidateFirst, ['Авторизация']);
+    await selectCanvasTask(owner, second);
+    const reopened = await editorFrame(owner);
+    await waitForBlocks(reopened, ['Уведомления']);
+    await visibleLabel(reopened, 'Уведомления').first().waitFor();
+    assert.equal(await visibleLabel(reopened, 'Авторизация').count(), 0);
+
+    await owner.getByTestId('room-publish-step').click();
+    await waitForCanvasTask(candidate, second.id);
+    await waitForBlocks(await editorFrame(candidate), ['Уведомления']);
+    await candidate.reload();
+    await waitForCanvasTask(candidate, second.id);
+    await waitForBlocks(await editorFrame(candidate), ['Уведомления']);
+    await selectCanvasTask(owner, first);
+    await waitForBlocks(await editorFrame(owner), ['Авторизация']);
+    await expectLegacyCanvasBlocked(owner, 'diagram', first, second);
+  } finally { await browser.close(); }
+});
 
 test('два участника сохраняют общую схему, отменяют свои действия и возвращаются к ней после смены режима', async () => {
   const browser = await chromium.launch({ headless: true });

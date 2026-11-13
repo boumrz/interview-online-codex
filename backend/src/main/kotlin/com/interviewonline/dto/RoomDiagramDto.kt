@@ -23,11 +23,14 @@ data class RoomDiagramOperationDto(
     val checksum: String? = null,
 )
 
+data class RoomDiagramChangedDto(val diagramId: String, val sequence: Long, val taskId: String?)
+
 data class RoomDiagramDto(
     val diagramId: String,
     val sequence: Long,
     val xml: String,
     val canEdit: Boolean,
+    val taskId: String?,
     val operations: List<RoomDiagramOperationDto> = emptyList(),
     val requiresSnapshot: Boolean = false,
     val editor: String = "drawio",

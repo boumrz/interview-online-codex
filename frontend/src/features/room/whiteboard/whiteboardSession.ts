@@ -1,9 +1,11 @@
 import { API_BASE_URL } from "../../../config/runtime";
 import { classifyDiagramResponse } from "../diagram/diagramRequestPolicy";
+import { matchesCanvasTask, canvasTaskMismatch } from "../canvasTaskScope";
 import { roomRealtimeFetch } from "../roomRealtimeTransport";
 import { compareElementVersions, elementFingerprint, parseAck, parseElement, parseSnapshot, type WhiteboardChange, type WhiteboardElement, type WhiteboardSnapshot } from "./whiteboardProtocol";
 
 export type WhiteboardConnection = {
+  taskId: string | null;
   inviteCode: string;
   sessionId: string;
   authToken?: string | null;
@@ -21,6 +23,7 @@ export type WhiteboardSession = {
   reset(): void;
   retry(): void;
   destroy(): void;
+  hasUnsavedChanges(): boolean;
   getSnapshot(): WhiteboardSnapshot | undefined;
 };
 export type WhiteboardSessionOptions = {
@@ -37,6 +40,7 @@ class SessionError extends Error {}
 
 export function createWhiteboardSession(options: WhiteboardSessionOptions): WhiteboardSession {
   const lifetime = new AbortController();
+  const { taskId } = options.current();
   const fetcher = options.fetch ?? fetch;
   const throttle = Math.max(0, options.throttleMs ?? 200);
   const pending = new Map<string, WhiteboardElement>();
@@ -51,7 +55,8 @@ export function createWhiteboardSession(options: WhiteboardSessionOptions): Whit
   let timerDue = 0;
   let queuedDelay: number | undefined;
   let refreshRequested = false;
-  let forceNextScene = false;
+  let forceNextScene = true;
+  let scopeMismatch = false;
   let resetting = false;
   let validationBlocked = false;
   let writeDenied = false;
@@ -64,7 +69,7 @@ export function createWhiteboardSession(options: WhiteboardSessionOptions): Whit
 
   function ready(): boolean { const connection = options.current(); return connection.connected && Boolean(connection.eventToken) && connection.eventToken !== rejectedProof; }
   function authorizedToEdit(): boolean { return Boolean(canonical?.canEdit) && !options.current().readOnly && !writeDenied && !state.accessDenied; }
-  function editable(): boolean { return !resetting && authorizedToEdit(); }
+  function editable(): boolean { return !scopeMismatch && !resetting && authorizedToEdit(); }
   function publish(next: Partial<WhiteboardState> = {}): void {
     if (closed) return;
     state = { ...state, ...next, loaded: canonical !== undefined, editable: editable(), pending: pending.size, canDiscard: validationBlocked && !state.accessDenied };
@@ -78,7 +83,7 @@ export function createWhiteboardSession(options: WhiteboardSessionOptions): Whit
     options.onState({ ...state });
   }
   function status(): void {
-    if (state.accessDenied || validationBlocked) { publish(); return; }
+    if (state.accessDenied || validationBlocked || scopeMismatch) { publish(); return; }
     publish({ error: false, message: !canonical ? ready() ? "Подготавливаем доску…" : "Ожидаем подключение к комнате…"
       : !editable() ? "Только просмотр · Сохранённая доска"
         : !ready() ? pending.size ? "Восстанавливаем связь · Новые изменения ещё не сохранены" : "Восстанавливаем связь…"
@@ -87,6 +92,11 @@ export function createWhiteboardSession(options: WhiteboardSessionOptions): Whit
   function block(): void {
     validationBlocked = true;
     publish({ error: true, message: "Изменение доски отклонено. Несохранённые изменения остаются в этой вкладке." });
+  }
+  function verifyScope(body: unknown): boolean {
+    scopeMismatch = !matchesCanvasTask(body, taskId);
+    if (scopeMismatch) publish({ error: true, message: canvasTaskMismatch });
+    return !scopeMismatch;
   }
   function clearPending(): void { pending.clear(); acknowledged.clear(); attempt = undefined; }
   function forceCanonical(): void { if (canonical) options.onScene(canonical, true); }
@@ -123,7 +133,7 @@ export function createWhiteboardSession(options: WhiteboardSessionOptions): Whit
     if (connection.interviewerToken) headers["X-Room-Interviewer-Token"] = connection.interviewerToken;
     if (connection.eventToken) headers["X-Room-Event-Token"] = connection.eventToken;
     if (body !== undefined) headers["Content-Type"] = "application/json";
-    const query = new URLSearchParams({ sessionId: connection.sessionId });
+    const query = new URLSearchParams({ sessionId: connection.sessionId, taskId: taskId ?? "" });
     const response = await roomRealtimeFetch(`${API_BASE_URL}/rooms/${encodeURIComponent(connection.inviteCode)}/whiteboard${method === "POST" ? "/changes" : ""}?${query}`, {
       method, headers, ...(body === undefined ? {} : { body }),
       signal: AbortSignal.any([lifetime.signal, AbortSignal.timeout(12_000)]),
@@ -163,6 +173,7 @@ export function createWhiteboardSession(options: WhiteboardSessionOptions): Whit
       if (ready()) { refreshRequested = true; schedule(); }
       return false;
     }
+    if (!verifyScope(body)) return false;
     const incoming = parseSnapshot(body);
     if (canonical && incoming.boardId !== canonical.boardId) { block(); return false; }
     if (incoming.sequence < Math.max(minimumSequence, canonical?.sequence ?? 0)) throw new SessionError("Ожидаем актуальную версию доски. Повторите действие.");
@@ -217,8 +228,10 @@ export function createWhiteboardSession(options: WhiteboardSessionOptions): Whit
     const result = await request("POST", sent.body);
     if (!result) return "stopped";
     if (result.action === "conflict") return "conflict";
-    const ack = parseAck(await result.response.json());
+    const body: unknown = await result.response.json();
     if (closed || attempt !== sent) return "stopped";
+    if (!verifyScope(body)) return "stopped";
+    const ack = parseAck(body);
     if (ack.boardId !== sent.change.boardId || ack.operationId !== sent.change.operationId || ack.sequence < sent.change.baseSequence) throw new SessionError("Не удалось подтвердить сохранение доски. Повторите действие.");
     minimumSequence = Math.max(minimumSequence, ack.sequence);
     for (const element of sent.change.elements) {
@@ -306,6 +319,7 @@ export function createWhiteboardSession(options: WhiteboardSessionOptions): Whit
     retry() { if (closed || state.accessDenied) return; refreshRequested = true; if (!validationBlocked) publish({ error: false }); schedule(); },
     destroy() { if (closed) return; closed = true; permissionEpoch++; lifetime.abort(); if (timer) clearTimeout(timer); clearPending(); canonical = undefined; rejectedProof = null; },
     getSnapshot() { return canonical; },
+    hasUnsavedChanges() { return pending.size > 0 || attempt !== undefined || validationBlocked; },
   };
   publish();
   return session;

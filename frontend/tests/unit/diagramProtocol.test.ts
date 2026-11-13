@@ -4,7 +4,7 @@ import { createDiagramQueue, parseDiagramDocument, parseDiagramOperation, buildD
 
 const diagramId = "7f8284e9-77f0-4e27-b3b7-3e0bea9f282c";
 const operationId = "cc4eb4e9-fcc9-4975-8a24-4ea0394f8375";
-const document = () => ({ diagramId, sequence: 2, xml: "<mxfile/>", canEdit: true, editor: "drawio", schemaVersion: 1, operations: [{ operationId, sequence: 2, sessionId: "candidate", xml: "<mxfile/>", patch: { u: { page: {} } } }], requiresSnapshot: false });
+const document = () => ({ diagramId, sequence: 2, xml: "<mxfile/>", canEdit: true, editor: "drawio", schemaVersion: 1, operations: [{ diagramId, operationId, sequence: 2, sessionId: "candidate", xml: "<mxfile/>", patch: { u: { page: {} } } }], requiresSnapshot: false });
 
 test("accepts the current server document and its ordered operations", () => {
   const result = parseDiagramDocument(document());
@@ -14,9 +14,15 @@ test("accepts the current server document and its ordered operations", () => {
 });
 
 test("rejects malformed server boundaries and unsupported formats", () => {
-  for (const input of [null, [], {}, { ...document(), sequence: -1 }, { ...document(), sequence: 1.5 }, { ...document(), canEdit: "true" }, { ...document(), editor: "external" }, { ...document(), schemaVersion: 9 }, { ...document(), operations: [{ operationId, sequence: 3, sessionId: "candidate", xml: "x" }] }, { ...document(), operations: [{ operationId, sequence: 1, sessionId: "candidate", xml: "x" }, { operationId, sequence: 1, sessionId: "candidate", xml: "x" }] }]) {
+  for (const input of [null, [], {}, { ...document(), sequence: -1 }, { ...document(), sequence: 1.5 }, { ...document(), canEdit: "true" }, { ...document(), editor: "external" }, { ...document(), schemaVersion: 9 }, { ...document(), operations: [{ diagramId, operationId, sequence: 3, sessionId: "candidate", xml: "x" }] }, { ...document(), operations: [{ diagramId, operationId, sequence: 1, sessionId: "candidate", xml: "x" }, { diagramId, operationId, sequence: 1, sessionId: "candidate", xml: "x" }] }]) {
     assert.throws(() => parseDiagramDocument(input), /Некорректный/);
   }
+});
+
+test("rejects a receipt or recovery operation from a different diagram", () => {
+  const foreign = { ...document().operations[0], diagramId: "another-diagram" };
+  assert.throws(() => parseDiagramOperation(foreign, diagramId), /Некорректный/);
+  assert.throws(() => parseDiagramDocument({ ...document(), operations: [foreign] }), /Некорректный/);
 });
 
 test("acknowledgement removes only the accepted head and preserves the next local edit", () => {
@@ -54,11 +60,11 @@ test("document supplied IDs cannot change the prototype of canonical order recor
 });
 
 test("accepts a compacted duplicate receipt without treating it as an empty document", () => {
-  const receipt = parseDiagramOperation({ operationId, sequence: 1, sessionId: "candidate", xml: null });
+  const receipt = parseDiagramOperation({ diagramId, operationId, sequence: 1, sessionId: "candidate", xml: null }, diagramId);
   assert.equal(receipt.xml, null);
   assert.equal(receipt.operationId, operationId);
   assert.throws(() => parseDiagramDocument({ ...document(), operations: [receipt] }), /Некорректный/);
-  const omittedXml = parseDiagramOperation({ operationId, sequence: 1, sessionId: "candidate" });
+  const omittedXml = parseDiagramOperation({ diagramId, operationId, sequence: 1, sessionId: "candidate" }, diagramId);
   assert.equal(omittedXml.xml, null);
 });
 

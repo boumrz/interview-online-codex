@@ -53,6 +53,7 @@ data class RoomTaskDto(
     val score: Int?,
     val sourceTaskTemplateId: String? = null,
     val mandatory: Boolean = false,
+    val id: String? = null,
 )
 
 /**

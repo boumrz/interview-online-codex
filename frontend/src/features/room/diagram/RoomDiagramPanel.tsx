@@ -9,11 +9,14 @@ import { classifyDiagramResponse } from "./diagramRequestPolicy";
 import { useDiagramExpansion } from "./useDiagramExpansion";
 import { normalizeDrawingColor } from "../drawingColor";
 import { RoomCanvasToolbar } from "../RoomCanvasToolbar";
+import { TaskCanvasSessions, type TaskCanvasLifecycle } from "../TaskCanvasSessions";
+import { matchesCanvasTask, canvasTaskMismatch } from "../canvasTaskScope";
 import { installDrawioDrawingDefaults } from "./drawioDrawingDefaults";
 import { installDrawioToolbarMenus } from "./drawioToolbarMenus";
 import styles from "./RoomDiagramPanel.module.css";
 
 export type RoomDiagramPanelProps = {
+  taskId: string | null;
   inviteCode: string;
   sessionId: string;
   authToken?: string | null;
@@ -30,7 +33,7 @@ export type RoomDiagramPanelProps = {
 type PanelState = { loaded: boolean; editable: boolean; message: string; error: boolean; busy: boolean; preview?: string; presentationOnly: boolean; accessDenied: boolean; canDiscard: boolean };
 type Bridge = ReturnType<typeof createDrawioBridge>;
 type ExportFormat = "drawio" | "png" | "svg";
-type Controller = { refresh(): void; permissionsChanged(): void; editorEvent(event: DrawioEvent, canonical: boolean): void; export(format: ExportFormat): void; destroy(): void };
+type Controller = { refresh(): void; permissionsChanged(): void; editorEvent(event: DrawioEvent, canonical: boolean): void; export(format: ExportFormat): void; retire(onSettled: () => void): () => void; destroy(): void };
 const initialState: PanelState = { loaded: false, editable: false, message: "Подготавливаем схему…", error: false, busy: false, presentationOnly: false, accessDenied: false, canDiscard: false };
 
 const editorUrl = "/drawio/?embed=1&proto=json&spin=1&configure=1&pages=0&offline=1&local=1&stealth=1&gapi=0&od=0&gh=0&gl=0&saveAndExit=0&noSaveBtn=1&noExitBtn=1&ui=kennedy&lang=ru";
@@ -70,6 +73,7 @@ function createController(options: {
   configureNativeEditor(canonical: boolean): void;
 }): Controller {
   const { visible, canonical } = options;
+  const { taskId } = options.current();
   const lifetime = new AbortController();
   let closed = false;
   let readyVisible = false;
@@ -84,16 +88,23 @@ function createController(options: {
   let permissionEpoch = 0;
   let verifiedSequence = -1;
   let validationBlocked = false;
+  let scopeMismatch = false;
+  let onRetired: (() => void) | undefined;
   const configuredFrames = new Set<boolean>();
   const attempts = new Map<string, { diagramId: string; operationId: string; baseSequence: number; xml: string; patch: PendingDiagramChange["patch"]; checksum?: string }>();
   const update = (next: Partial<PanelState>) => {
     if (!closed) { state = { ...state, ...next }; options.notify(state); }
   };
-  const editable = () => accepted?.canEdit === true && !options.current().readOnly;
-  const savedStatus = () => { if (!validationBlocked) update({ message: !accepted ? options.current().connected ? "Подготавливаем схему…" : "Ожидаем подключение к комнате…" : !options.current().connected ? "Восстанавливаем связь · Новые изменения ещё не сохранены" : queue.size ? "Сохранение…" : editable() ? "Сохранено" : "Только просмотр · Сохранённая схема", error: false, editable: editable() }); };
+  const editable = () => !scopeMismatch && accepted?.canEdit === true && !options.current().readOnly;
+  const releaseIfSaved = () => { if (!closed && queue.size === 0) onRetired?.(); };
+  const savedStatus = () => {
+    if (!validationBlocked && !scopeMismatch) update({ message: !accepted ? options.current().connected ? "Подготавливаем схему…" : "Ожидаем подключение к комнате…" : !options.current().connected ? "Восстанавливаем связь · Новые изменения ещё не сохранены" : queue.size ? "Сохранение…" : editable() ? "Сохранено" : "Только просмотр · Сохранённая схема", error: false, editable: editable() });
+    releaseIfSaved();
+  };
 
   function fail(error: unknown): void {
     if (closed || lifetime.signal.aborted) return;
+    releaseIfSaved();
     if (error instanceof Error && error.name === "DiagramAuthorityPending") { update({ error: false, message: "Восстанавливаем подключение · Изменения ещё не сохранены" }); return; }
     update({ error: true, busy: false, message: error instanceof Error ? error.message : "Не удалось сохранить схему. Повторите действие." });
   }
@@ -110,7 +121,7 @@ function createController(options: {
     if (props.interviewerToken) headers["X-Room-Interviewer-Token"] = props.interviewerToken;
     if (props.eventToken) headers["X-Room-Event-Token"] = props.eventToken;
     if (body !== undefined) headers["Content-Type"] = "application/json";
-    const query = new URLSearchParams({ sessionId: props.sessionId });
+    const query = new URLSearchParams({ sessionId: props.sessionId, taskId: taskId ?? "" });
     if (afterSequence !== undefined) query.set("afterSequence", String(afterSequence));
     const response = await roomRealtimeFetch(`${API_BASE_URL}/rooms/${encodeURIComponent(props.inviteCode)}/diagram${method === "POST" ? "/changes" : ""}?${query}`, {
       method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -188,8 +199,14 @@ function createController(options: {
     const previous = accepted;
     const response = await request("GET", previous?.sequence);
     if (!response.ok) throw new Error("Не удалось загрузить схему. Повторите действие.");
-    const document = parseDiagramDocument(await response.json());
+    const body: unknown = await response.json();
     if (closed || epoch !== permissionEpoch) return;
+    scopeMismatch = !matchesCanvasTask(body, taskId);
+    if (scopeMismatch) {
+      update({ editable: false, error: true, message: canvasTaskMismatch });
+      return;
+    }
+    const document = parseDiagramDocument(body);
     if (previous && document.diagramId === previous.diagramId && document.sequence < previous.sequence) return;
     if (previous && document.diagramId !== previous.diagramId) { queue.revoke(); queue = createDiagramQueue(); attempts.clear(); visibleLoaded = false; }
     if (!document.canEdit || options.current().readOnly) { queue.revoke(); attempts.clear(); validationBlocked = false; update({ canDiscard: false }); }
@@ -240,7 +257,9 @@ function createController(options: {
       return;
     }
     if (!response.ok) throw new Error("Не удалось сохранить схему. Изменения остаются в открытой комнате.");
-    const operation = parseDiagramOperation(await response.json());
+    const body: unknown = await response.json();
+    if (closed || epoch !== permissionEpoch || !editable()) return;
+    const operation = parseDiagramOperation(body, attempt.diagramId);
     if (operation.operationId !== head.operationId) throw new Error("Не удалось подтвердить сохранение схемы");
     queue.acknowledge(head.operationId); attempts.delete(head.operationId);
     if (operation.xml === null) {
@@ -319,25 +338,38 @@ function createController(options: {
     export(format) {
       schedule(async () => {
         await pull();
-        if (closed || !accepted) return;
+        if (closed || !accepted || !options.current().active) return;
         update({ busy: true, message: "Подготавливаем файл…", error: false });
         if (format === "drawio") download(new Blob([accepted.xml], { type: "application/xml;charset=utf-8" }), "interview-diagram.drawio");
         else {
           await canonicalLoad(accepted.xml);
           const result = await canonical.request("export", { format });
-          if (closed || !accepted) return;
+          if (closed || !accepted || !options.current().active) return;
           if (typeof result.data !== "string") throw new Error("Не удалось подготовить файл схемы");
           download(imageBlob(result.data, format), `interview-diagram.${format}`);
         }
         update({ busy: false }); savedStatus();
       });
     },
-    destroy() { closed = true; permissionEpoch++; queue.revoke(); attempts.clear(); accepted = undefined; state = { ...initialState }; lifetime.abort(); visible.destroy(); canonical.destroy(); },
+    retire(onSettled) {
+      let cancelled = false;
+      const finish = () => {
+        if (cancelled || closed) return;
+        onRetired = onSettled;
+        releaseIfSaved();
+      };
+      // Native draw.io posts its autosave patch asynchronously. The getDiff
+      // reply from the same iframe follows edits committed before the switch.
+      if (visibleLoaded && editable()) void visible.request("getDiff").then(finish, finish);
+      else finish();
+      return () => { cancelled = true; onRetired = undefined; };
+    },
+    destroy() { closed = true; onRetired = undefined; permissionEpoch++; queue.revoke(); attempts.clear(); accepted = undefined; state = { ...initialState }; lifetime.abort(); visible.destroy(); canonical.destroy(); },
   };
   return controller;
 }
 
-function MountedRoomDiagramPanel(props: RoomDiagramPanelProps) {
+function MountedRoomDiagramPanel(props: RoomDiagramPanelProps & TaskCanvasLifecycle) {
   const assignedColor = useRef<string | null>(null);
   assignedColor.current ??= normalizeDrawingColor(props.drawingColor);
   const drawingColor = assignedColor.current;
@@ -378,16 +410,23 @@ function MountedRoomDiagramPanel(props: RoomDiagramPanelProps) {
     controller.current = session;
     const receive = (event: MessageEvent) => { visibleBridge.receive(event); canonicalBridge.receive(event); };
     window.addEventListener("message", receive);
-    const loadingTimeout = setTimeout(() => setState((previous) => previous.loaded ? previous : { ...previous, error: true, message: "Не удалось загрузить редактор схемы. Повторите действие." }), 25_000);
+    const loadingTimeout = setTimeout(() => setState((previous) => previous.loaded || previous.error ? previous : { ...previous, error: true, message: "Не удалось загрузить редактор схемы. Повторите действие." }), 25_000);
     return () => { clearTimeout(loadingTimeout); window.removeEventListener("message", receive); session.destroy(); applyAssignedColor.current = undefined; if (controller.current === session) controller.current = null; };
   }, [props.inviteCode, props.sessionId, retry, state.accessDenied, drawingColor]);
 
-  useEffect(() => { controller.current?.refresh(); }, [props.refreshSignal, props.connected, props.eventToken]);
+  const refreshSignal = props.retiring ? undefined : props.refreshSignal;
+  useEffect(() => { controller.current?.refresh(); }, [refreshSignal, props.connected, props.eventToken]);
   useEffect(() => { controller.current?.permissionsChanged(); }, [props.readOnly]);
+  useEffect(() => {
+    if (!props.retiring) return;
+    const release = () => props.release(props.taskId);
+    if (!controller.current) { release(); return; }
+    return controller.current.retire(release);
+  }, [props.retiring, props.taskId, props.release, retry, state.accessDenied, drawingColor]);
 
   const url = `${editorUrl}&dark=${initialTheme.current === "dark" ? "1" : "0"}`;
   const readonly = props.readOnly || (state.loaded && !state.editable);
-  return <section ref={panelRef} className={`${styles.panel} ${expanded ? styles.expanded : ""}`} aria-label="Схема интервью" aria-hidden={!props.active} data-diagram-expanded={expanded ? "true" : "false"}>
+  return <section ref={panelRef} hidden={props.retiring} data-canvas-task-id={props.taskId ?? ""} className={`${styles.panel} ${expanded ? styles.expanded : ""}`} aria-label="Схема интервью" aria-hidden={!props.active} data-diagram-expanded={expanded ? "true" : "false"}>
     <RoomCanvasToolbar expanded={expanded} onToggleExpanded={toggleExpanded}
       color={drawingColor} onApplyColor={props.active && state.loaded && !readonly && !state.busy && !state.accessDenied ? applyAssignedColor.current : undefined}
       nativeFormat="drawio" canDownload={props.active && state.loaded && !state.busy && !state.accessDenied && props.connected}
@@ -413,7 +452,7 @@ export function RoomDiagramPanel(props: RoomDiagramPanelProps) {
   // Context keys are random nonces, so credentials never enter a DOM identity.
   // Event-token renewal is not a context change and preserves history/queues.
   const context = useMemo(() => crypto.randomUUID(), [props.inviteCode, props.sessionId, props.authToken, props.ownerToken, props.interviewerToken]);
-  const [activatedContext, setActivatedContext] = useState<string | null>(props.active ? context : null);
-  useEffect(() => { if (props.active) setActivatedContext(context); }, [props.active, context]);
-  return props.active || activatedContext === context ? <MountedRoomDiagramPanel key={context} {...props} /> : null;
+  return <TaskCanvasSessions key={context} taskId={props.taskId} active={props.active}>
+    {session => <MountedRoomDiagramPanel {...props} {...session} active={props.active && !session.retiring} />}
+  </TaskCanvasSessions>;
 }

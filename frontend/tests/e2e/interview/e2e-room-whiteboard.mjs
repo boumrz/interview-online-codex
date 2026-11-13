@@ -1,5 +1,6 @@
 import '../support/require-isolated-api.mjs';
 import { assertCompactCanvasHeader, assertStableAutosave } from '../support/canvas-header.mjs';
+import { expectLegacyCanvasBlocked, selectCanvasTask, waitForCanvasTask } from '../support/canvas-tasks.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { chromium } from 'playwright';
@@ -104,7 +105,7 @@ async function waitScene(room, predicate) {
   do { state = await snapshot(room); if (predicate(state)) return state; await new Promise(resolve => setTimeout(resolve, 100)); } while (Date.now() < deadline);
   assert.fail(`whiteboard did not reach expected state; sequence=${state?.sequence}, count=${state?.elements.length}`);
 }
-function canvas(page) { return page.getByTestId('room-whiteboard-canvas').locator('canvas.interactive'); }
+function canvas(page) { return panel(page).getByTestId('room-whiteboard-canvas').locator('canvas.interactive'); }
 function drawingTools(page) { return page.getByRole('group', { name: 'Инструменты доски', exact: true }); }
 async function tool(page, name) {
   const input = drawingTools(page).getByTestId(`toolbar-${name}`);
@@ -113,7 +114,7 @@ async function tool(page, name) {
 }
 async function drawingPoint(page, offset = 0, vertical = .55) {
   const bounds = await canvas(page).boundingBox();
-  const container = await page.getByTestId('room-whiteboard-canvas').boundingBox();
+  const container = await panel(page).getByTestId('room-whiteboard-canvas').boundingBox();
   const viewport = page.viewportSize();
   assert.ok(bounds && container && viewport);
   const left = Math.max(bounds.x, container.x, 0), top = Math.max(bounds.y, container.y, 0);
@@ -225,6 +226,114 @@ test('Доска — отдельный четвёртый общий режим
     await canvas(owner.page).waitFor();
     assert.deepEqual(owner.external, [], 'all editor resources are local');
     assert.equal((await snapshot(room)).elements.length, 0);
+  } finally { await browser.close(); }
+});
+
+test('при переключении задач доски изолированы у интервьюера и кандидата', async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const room = await createRoom();
+    const [first, second] = room.tasks;
+    const owner = (await participant(browser, room, true)).page;
+    const candidate = (await participant(browser, room)).page;
+    async function boardTexts(page) {
+      await saved(page);
+      const file = await exported(page, '.excalidraw');
+      return visibleElements(JSON.parse(file.bytes.toString('utf8'))).filter(element => element.type === 'text').map(element => element.text).sort();
+    }
+    async function expectRedInk(page, expected) {
+      await saved(page);
+      const surface = await panel(page).locator('canvas.static').elementHandle();
+      assert.ok(surface);
+      // The native scene can diverge from the accepted document used for export.
+      // Inspect the actual pixels on the drawing layer displayed to the user.
+      await page.waitForFunction(({ surface, expected }) => {
+        const { width, height } = surface;
+        if (!width || !height) return false;
+        const { data } = surface.getContext('2d').getImageData(0, 0, width, height);
+        let red = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          if (data[i] > 150 && data[i + 1] < 80 && data[i + 2] < 80 && data[i + 3] > 100) red++;
+          if (red >= 8) return expected;
+        }
+        return !expected;
+      }, { surface, expected });
+    }
+    await mode(owner, 'Доска');
+    await waitForCanvasTask(candidate, first.id);
+    await saved(owner);
+    await drawingTools(owner).getByLabel('Цвет рисования').fill('#e00000');
+    await stroke(owner);
+    await expectRedInk(owner, true);
+    await text(owner, 'Клиент');
+    await waitScene(room, state => visibleElements(state).some(element => element.text === 'Клиент'));
+
+    await selectCanvasTask(owner, second);
+    assert.deepEqual(await boardTexts(owner), []);
+    await expectRedInk(owner, false);
+    await text(owner, 'Очередь');
+    await selectCanvasTask(owner, first);
+    assert.deepEqual(await boardTexts(owner), ['Клиент']);
+    await expectRedInk(owner, true);
+    await waitForCanvasTask(candidate, first.id);
+    assert.deepEqual(await boardTexts(candidate), ['Клиент']);
+    await selectCanvasTask(owner, second);
+    assert.deepEqual(await boardTexts(owner), ['Очередь']);
+    await expectRedInk(owner, false);
+
+    await owner.getByTestId('room-publish-step').click();
+    await waitForCanvasTask(candidate, second.id);
+    assert.deepEqual(await boardTexts(candidate), ['Очередь']);
+    await candidate.reload();
+    await waitForCanvasTask(candidate, second.id);
+    assert.deepEqual(await boardTexts(candidate), ['Очередь']);
+    await selectCanvasTask(owner, first);
+    assert.deepEqual(await boardTexts(owner), ['Клиент']);
+    await expectLegacyCanvasBlocked(owner, 'whiteboard', first, second);
+  } finally { await browser.close(); }
+});
+
+test('при переключении задач доска получает правку из интервала между загрузкой и подпиской', async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const room = await createRoom();
+    const second = room.tasks[1];
+    const reader = (await participant(browser, room, true)).page;
+    const writer = (await participant(browser, room, true)).page;
+    await mode(reader, 'Доска');
+    await saved(reader);
+    await selectCanvasTask(writer, second);
+    await saved(writer);
+
+    const events = '**/realtime/rooms/*/events';
+    let release;
+    const gate = new Promise(resolve => { release = resolve; });
+    const openForSecond = request => request.method() === 'POST'
+      && new URL(request.url()).pathname.endsWith('/events')
+      && request.postDataJSON()?.type === 'manager_workspace_open'
+      && request.postDataJSON().stepIndex === second.stepIndex;
+    await reader.route(events, async route => {
+      if (openForSecond(route.request())) await gate;
+      await route.continue();
+    });
+    let catchup;
+    try {
+      await Promise.all([reader.waitForRequest(openForSecond), selectCanvasTask(reader, second)]);
+      await saved(reader);
+      const before = await exported(reader, '.excalidraw');
+      assert.deepEqual(visibleElements(JSON.parse(before.bytes.toString('utf8'))), []);
+      const response = writer.waitForResponse(response => response.request().method() === 'POST'
+        && new URL(response.url()).pathname.endsWith('/whiteboard/changes')
+        && new URL(response.url()).searchParams.get('taskId') === second.id && response.ok());
+      await Promise.all([response, text(writer, 'Правка до подписки')]);
+      catchup = reader.waitForResponse(response => response.request().method() === 'GET'
+        && new URL(response.url()).pathname.endsWith('/whiteboard')
+        && new URL(response.url()).searchParams.get('taskId') === second.id && response.ok());
+    } finally { release(); }
+
+    await (await catchup).finished();
+    const after = await exported(reader, '.excalidraw');
+    assert.deepEqual(visibleElements(JSON.parse(after.bytes.toString('utf8'))).map(element => element.text), ['Правка до подписки']);
   } finally { await browser.close(); }
 });
 

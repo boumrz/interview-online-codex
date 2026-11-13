@@ -19,8 +19,9 @@ function sequence(input: unknown): number {
 }
 function text(input: unknown): string { return typeof input === "string" ? input : invalid(); }
 
-export function parseDiagramOperation(input: unknown): DiagramOperation {
+export function parseDiagramOperation(input: unknown, diagramId: string): DiagramOperation {
   if (!isDiagramRecord(input)) return invalid();
+  if (input.diagramId !== diagramId) return invalid();
   if (input.patch !== undefined && input.patch !== null && !isDiagramRecord(input.patch)) return invalid();
   if (input.checksum !== undefined && input.checksum !== null && typeof input.checksum !== "string") return invalid();
   return {
@@ -34,9 +35,10 @@ export function parseDiagramOperation(input: unknown): DiagramOperation {
 export function parseDiagramDocument(input: unknown): DiagramDocument {
   if (!isDiagramRecord(input) || input.editor !== "drawio" || input.schemaVersion !== 1 || typeof input.canEdit !== "boolean" || typeof input.requiresSnapshot !== "boolean" || !Array.isArray(input.operations)) return invalid();
   const acceptedSequence = sequence(input.sequence);
-  const operations = input.operations.map(parseDiagramOperation);
+  const diagramId = text(input.diagramId);
+  const operations = input.operations.map(operation => parseDiagramOperation(operation, diagramId));
   if (operations.some((operation, index) => operation.xml === null || operation.sequence > acceptedSequence || (index > 0 && operation.sequence <= operations[index - 1]!.sequence))) return invalid();
-  return { diagramId: text(input.diagramId), sequence: acceptedSequence, xml: text(input.xml), canEdit: input.canEdit, editor: "drawio", schemaVersion: 1, operations, requiresSnapshot: input.requiresSnapshot };
+  return { diagramId, sequence: acceptedSequence, xml: text(input.xml), canEdit: input.canEdit, editor: "drawio", schemaVersion: 1, operations, requiresSnapshot: input.requiresSnapshot };
 }
 
 export function buildDiagramOrderPatch(pages: ReadonlyArray<DiagramOrderPage>): DiagramPatch {

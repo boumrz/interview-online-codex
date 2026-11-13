@@ -32,6 +32,7 @@ import com.interviewonline.repository.UserRepository
 import com.interviewonline.service.LanguageNormalizer.normalize as normalizeLanguage
 import com.interviewonline.ws.NoteMessagePayload
 import org.springframework.http.HttpStatus
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionSynchronization
@@ -56,6 +57,7 @@ class RoomService(
     private val roomHrTrackingService: RoomHrTrackingService,
     private val roomDiagramFeatureGate: RoomDiagramFeatureGate,
     private val roomWhiteboardFeatureGate: RoomWhiteboardFeatureGate,
+    private val jdbc: JdbcTemplate,
 ) {
     /**
      * Creates a "quick" room from the landing page.
@@ -384,6 +386,10 @@ class RoomService(
 
         val saved = roomRepository.save(room)
         if (tasksToAppend.isNotEmpty()) {
+            if (hadNoTasksBeforeAppend) {
+                roomRepository.flush()
+                attachTasklessCanvases(saved)
+            }
             roomProductMetricsProjector.recordPreparation(saved.id.orEmpty())
         }
         collaborationService.syncFromRoom(saved)
@@ -397,6 +403,19 @@ class RoomService(
         /** Null means "fall back to the current room language". */
         val language: String?,
     )
+
+    private fun attachTasklessCanvases(room: Room) {
+        // Local H2 uses Hibernate without the canvas tables. On PostgreSQL,
+        // keep existing work even if a canvas feature flag is currently off.
+        val hasCanvasStorage = jdbc.queryForObject(
+            "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='room_whiteboards')",
+            Boolean::class.java,
+        ) == true
+        if (!hasCanvasStorage) return
+        val taskId = requireNotNull(room.tasks.first { it.stepIndex == room.currentStep }.id)
+        jdbc.update("UPDATE room_diagrams SET task_id=? WHERE room_id=? AND task_id IS NULL", taskId, room.id)
+        jdbc.update("UPDATE room_whiteboards SET task_id=? WHERE room_id=? AND task_id IS NULL", taskId, room.id)
+    }
 
     /**
      * In-room task title edit (PATCH semantics). Behaviour-preserving:
@@ -808,6 +827,7 @@ class RoomService(
             accessMembers = if (access.canManageRoom) buildAccessMembers(room) else emptyList(),
             tasks = room.tasks.map {
                 RoomTaskDto(
+                    id = it.id,
                     stepIndex = it.stepIndex,
                     title = it.title,
                     description = it.description,

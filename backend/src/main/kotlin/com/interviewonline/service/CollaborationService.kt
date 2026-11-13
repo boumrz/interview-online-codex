@@ -3,7 +3,7 @@ package com.interviewonline.service
 import com.fasterxml.jackson.databind.ObjectMapper
 import jakarta.annotation.PreDestroy
 import com.interviewonline.config.ChatReceiptHmac
-import com.interviewonline.dto.RoomDiagramOperationDto
+import com.interviewonline.dto.RoomDiagramChangedDto
 import com.interviewonline.model.Room
 import com.interviewonline.model.RoomParticipant
 import com.interviewonline.model.RoomStatus
@@ -2196,12 +2196,21 @@ class CollaborationService(
         return resolveCurrentParticipantRole(room, participant)
     }
 
-    fun broadcastDiagramChanged(inviteCode: String, operation: RoomDiagramOperationDto) {
-        broadcastTransportMessage(inviteCode, "diagram_changed", operation)
+    fun broadcastDiagramChanged(inviteCode: String, changed: RoomDiagramChangedDto) {
+        broadcastCanvasChanged(inviteCode, changed.taskId, "diagram_changed", changed)
     }
 
     fun broadcastWhiteboardChanged(inviteCode: String, changed: com.interviewonline.dto.RoomWhiteboardChangedDto) {
-        broadcastTransportMessage(inviteCode, "whiteboard_changed", changed)
+        broadcastCanvasChanged(inviteCode, changed.taskId, "whiteboard_changed", changed)
+    }
+
+    private fun broadcastCanvasChanged(inviteCode: String, taskId: String?, type: String, hint: Any) {
+        val state = roomState[inviteCode] ?: return
+        if (synchronized(state) { state.publishedTaskId == taskId }) {
+            broadcastTransportMessage(inviteCode, type, hint)
+        } else if (taskId != null) {
+            broadcastManagerWorkspaceTransport(ManagerWorkspaceKey(inviteCode, taskId), type, hint)
+        }
     }
 
     internal fun <T> mutateRoomPermissions(inviteCode: String, mutation: () -> RoomPermissionMutation<T>): T {

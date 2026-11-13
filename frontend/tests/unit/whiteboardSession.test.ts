@@ -22,10 +22,11 @@ async function until(condition: () => boolean, label: string) {
   assert.equal(condition(), true, label);
 }
 const pause = () => new Promise(resolve => setTimeout(resolve, 25));
-type Request = { method: string; headers: Headers; body?: WhiteboardChange; rawBody?: string; signal?: AbortSignal | null };
+type Request = { method: string; taskId: string | null; headers: Headers; body?: WhiteboardChange; rawBody?: string; signal?: AbortSignal | null };
 
-function harness(options: { throttleMs?: number } = {}) {
-  let connection: WhiteboardConnection = { inviteCode: "room", sessionId: "session", ownerToken: "owner", authToken: "auth", eventToken: "proof", connected: true, readOnly: false };
+function harness(options: { throttleMs?: number; taskId?: string | null } = {}) {
+  let connection: WhiteboardConnection = { inviteCode: "room", taskId: options.taskId ?? null, sessionId: "session", ownerToken: "owner", authToken: "auth", eventToken: "proof", connected: true, readOnly: false };
+  const taskId = options.taskId ?? null;
   let saved = snapshot();
   const requests: Request[] = [];
   const states: WhiteboardState[] = [];
@@ -39,17 +40,18 @@ function harness(options: { throttleMs?: number } = {}) {
     const elements = new Map(saved.elements.map(element => [element.id, element]));
     for (const item of body.elements) elements.set(item.id, item);
     saved = snapshot([...elements.values()], saved.sequence + 1, saved.canEdit);
-    const receipt = { boardId: saved.boardId, sequence: saved.sequence, operationId: body.operationId };
+    const receipt = { boardId: saved.boardId, taskId, sequence: saved.sequence, operationId: body.operationId };
     receipts.set(body.operationId, receipt);
     return Response.json(receipt);
   };
-  const fetcher: typeof fetch = async (_url, init) => {
-    const request: Request = { method: init?.method ?? "GET", headers: new Headers(init?.headers), signal: init?.signal };
+  const fetcher: typeof fetch = async (url, init) => {
+    const requestedTask = new URL(String(url), "http://localhost").searchParams.get("taskId");
+    const request: Request = { method: init?.method ?? "GET", taskId: requestedTask, headers: new Headers(init?.headers), signal: init?.signal };
     if (typeof init?.body === "string") { request.rawBody = init.body; request.body = JSON.parse(init.body) as WhiteboardChange; }
     requests.push(request);
     const intercepted = intercept?.(request);
     if (intercepted) return intercepted;
-    return request.method === "POST" ? accept(request) : Response.json(saved);
+    return request.method === "POST" ? accept(request) : Response.json({ ...saved, taskId });
   };
   const session = createWhiteboardSession({ current: () => connection, onState: state => states.push(state), onScene: (snapshot, force) => scenes.push({ snapshot, force }), fetch: fetcher, throttleMs: options.throttleMs ?? 0 });
   return {
@@ -63,6 +65,80 @@ function harness(options: { throttleMs?: number } = {}) {
     async settled() { await until(() => states.at(-1)?.pending === 0 && states.at(-1)?.message === "Сохранено", "pending changes become durably saved"); },
   };
 }
+
+test("an outgoing task session drains only to its original task, including an explicit taskless board", async () => {
+  for (const taskId of ["dcb8b846-ce76-4763-948d-6c1170cd3612", null]) {
+    const h = harness({ taskId });
+    try {
+      await h.load();
+      h.connection = { ...h.connection, connected: false };
+      h.session.observe([element("unfinished")]);
+      assert.equal(h.session.hasUnsavedChanges(), true);
+      h.connection = { ...h.connection, taskId: "eb77b94e-2cc5-457e-9457-f8783548d7d4", connected: true };
+      h.session.refresh();
+      await h.settled();
+      assert.equal(h.posts.length, 1);
+      assert.equal(h.session.hasUnsavedChanges(), false);
+      assert.deepEqual([...new Set(h.requests.map(request => request.taskId))], [taskId ?? ""]);
+    } finally { h.session.destroy(); }
+  }
+});
+
+test("an editor replaces the initial SDK scene with only the selected task's saved elements", async () => {
+  const h = harness({ taskId: "task-b" });
+  try {
+    await h.load();
+    assert.equal(h.scenes[0]?.force, true);
+    assert.deepEqual(h.scenes[0]?.snapshot.elements, []);
+  } finally { h.session.destroy(); }
+});
+
+test("a room-wide or wrong-task response cannot enter the board or enable writes", async () => {
+  for (const scope of [{}, { taskId: "task-a" }, { taskId: null }]) {
+    const h = harness({ taskId: "task-b" });
+    try {
+      h.intercept = request => request.method === "GET" ? Response.json({ ...snapshot([element("from-A")]), ...scope }) : undefined;
+      h.session.refresh();
+      await until(() => h.state.error || h.state.loaded, "first response settled");
+      assert.equal(h.state.loaded, false);
+      assert.match(h.state.message, /задач/);
+      assert.equal(h.scenes.length, 0);
+      h.session.observe([element("mine")]); await pause();
+      assert.equal(h.posts.length, 0);
+      h.intercept = undefined; h.session.retry();
+      await until(() => h.state.loaded && h.state.editable, "verified board becomes editable");
+    } finally { h.session.destroy(); }
+  }
+});
+
+test("a room without tasks still requires an explicitly taskless board", async () => {
+  const h = harness();
+  try {
+    h.intercept = request => request.method === "GET" ? Response.json(snapshot([element("legacy")])) : undefined;
+    h.session.refresh();
+    await until(() => h.state.error, "unscoped response refused");
+    assert.equal(h.scenes.length, 0);
+    h.intercept = undefined; await h.load();
+    assert.equal(h.state.editable, true);
+  } finally { h.session.destroy(); }
+});
+
+test("a receipt for another task pauses writes and preserves the unacknowledged edit", async () => {
+  const h = harness({ taskId: "task-b" });
+  try {
+    await h.load();
+    h.intercept = request => request.method === "POST" ? Response.json({
+      boardId: request.body!.boardId, operationId: request.body!.operationId, sequence: 1, taskId: "task-a",
+    }) : undefined;
+    h.session.observe([element("mine")]);
+    await until(() => h.state.error, "foreign receipt rejected");
+    assert.equal(h.state.editable, false);
+    assert.equal(h.state.pending, 1);
+    h.intercept = undefined; h.session.retry(); await h.settled();
+    assert.equal(h.posts.length, 2);
+    assert.equal(h.posts[0]!.rawBody, h.posts[1]!.rawBody);
+  } finally { h.session.destroy(); }
+});
 
 test("loads canonical state and does not echo native view changes or remote elements", async () => {
   const h = harness();
@@ -279,7 +355,7 @@ test("batches fit the UTF-8 request budget and a single oversized element retain
 test("destroy aborts outstanding requests and ignores all late callbacks", async () => {
   const h = harness();
   let release: (() => void) | undefined;
-  h.intercept = request => request.method === "GET" ? new Promise(resolve => { release = () => resolve(Response.json(snapshot())); }) : undefined;
+  h.intercept = request => request.method === "GET" ? new Promise(resolve => { release = () => resolve(Response.json({ ...snapshot(), taskId: null })); }) : undefined;
   h.session.refresh();
   await until(() => release !== undefined, "GET begins");
   h.session.destroy();
@@ -315,8 +391,8 @@ test("a response body completed after a permission epoch change cannot publish i
     let release: (() => void) | undefined;
     h.intercept = request => {
       if (request.method !== "GET" || release) return;
-      const response = Response.json(snapshot());
-      response.json = () => new Promise(resolve => { release = () => resolve(snapshot()); });
+      const response = Response.json({ ...snapshot(), taskId: null });
+      response.json = () => new Promise(resolve => { release = () => resolve({ ...snapshot(), taskId: null }); });
       return response;
     };
     h.session.refresh();
@@ -352,7 +428,7 @@ test("a late readonly GET from the old capability cannot discard the renewed ses
     h.session.observe([element("draft")]);
     let release: (() => void) | undefined;
     h.intercept = request => {
-      if (request.method === "GET" && !release) return new Promise(resolve => { release = () => resolve(Response.json(snapshot([], 0, false))); });
+      if (request.method === "GET" && !release) return new Promise(resolve => { release = () => resolve(Response.json({ ...snapshot([], 0, false), taskId: null })); });
     };
     h.connection = { ...h.connection, connected: true };
     h.session.refresh();
@@ -399,7 +475,7 @@ test("reset ignores a delayed native change while its canonical GET is pending",
     await until(() => h.state.canDiscard, "draft was rejected");
     let release: (() => void) | undefined;
     h.intercept = request => request.method === "GET" && !release
-      ? new Promise(resolve => { release = () => resolve(Response.json(snapshot())); }) : undefined;
+      ? new Promise(resolve => { release = () => resolve(Response.json({ ...snapshot(), taskId: null })); }) : undefined;
     h.session.reset();
     await until(() => release !== undefined, "reset snapshot read is pending");
     h.session.observe([rejected]);

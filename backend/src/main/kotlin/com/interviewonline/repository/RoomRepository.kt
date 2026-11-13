@@ -1,8 +1,10 @@
 package com.interviewonline.repository
 
 import com.interviewonline.model.Room
+import jakarta.persistence.LockModeType
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.EntityGraph
+import org.springframework.data.jpa.repository.Lock
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 
@@ -18,6 +20,13 @@ interface RoomRepository : JpaRepository<Room, String> {
     fun findPersonalSummaryOwnerNames(@Param("roomIds") roomIds: Collection<String>): List<PersonalRoomManagerNameRow>
 
     fun findByInviteCode(inviteCode: String): Room?
+    // Task publication and canvas writes lock this row for update. A shared
+    // lock lets readers run together, after any pending publication commits,
+    // and keeps the selected task and its contents consistent through this read.
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("select r from Room r where r.inviteCode = :inviteCode")
+    fun lockForSharedReadByInviteCode(@Param("inviteCode") inviteCode: String): Room?
+
     @EntityGraph(attributePaths = ["tasks"])
     fun findWithTasksByInviteCode(inviteCode: String): Room?
     @EntityGraph(attributePaths = ["tasks"])

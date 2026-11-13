@@ -7,6 +7,7 @@ import type { WhiteboardCanvasHandle, WhiteboardExportFormat } from "./whiteboar
 import styles from "./RoomWhiteboardPanel.module.css";
 import { normalizeDrawingColor } from "../drawingColor";
 import { RoomCanvasToolbar } from "../RoomCanvasToolbar";
+import { TaskCanvasSessions, type TaskCanvasLifecycle } from "../TaskCanvasSessions";
 
 const WhiteboardCanvas = lazy(() => import("./WhiteboardCanvas"));
 export type RoomWhiteboardPanelProps = WhiteboardConnection & { active: boolean; refreshSignal: number; drawingColor?: string | null };
@@ -20,7 +21,7 @@ function download(blob: Blob, extension: string) {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-function MountedWhiteboardPanel(props: RoomWhiteboardPanelProps) {
+function MountedWhiteboardPanel(props: RoomWhiteboardPanelProps & TaskCanvasLifecycle) {
   // An SSE reconnect can briefly have no assignment. Keep the native editor
   // and its manual color choice once the first server assignment arrived.
   const assignedColor = useRef<string | null>(null);
@@ -45,9 +46,17 @@ function MountedWhiteboardPanel(props: RoomWhiteboardPanelProps) {
     controller.refresh();
     return () => { controller.destroy(); if (session.current === controller) session.current = null; };
   }, [canvas]);
-  useEffect(() => { session.current?.refresh(); }, [props.refreshSignal, props.connected, props.eventToken]);
+  const refreshSignal = props.retiring ? undefined : props.refreshSignal;
+  useEffect(() => { session.current?.refresh(); }, [refreshSignal, props.connected, props.eventToken]);
   useEffect(() => { session.current?.permissionsChanged(); }, [props.readOnly]);
   useEffect(() => { if (state.accessDenied) canvas?.clear(); }, [state.accessDenied, canvas]);
+  useEffect(() => {
+    if (!props.retiring) return;
+    // Read the SDK scene once more in case React has not delivered the final
+    // native onChange yet. Keep the task session until its own writes settle.
+    canvas?.flushLocalChanges();
+    if (!session.current?.hasUnsavedChanges()) props.release(props.taskId);
+  }, [props.retiring, props.taskId, props.release, canvas, state.pending, state.canDiscard, state.accessDenied]);
 
   const exportSnapshot = async (format: WhiteboardExportFormat) => {
     const controller = session.current;
@@ -56,13 +65,13 @@ function MountedWhiteboardPanel(props: RoomWhiteboardPanelProps) {
     setExporting(true); setExportError(null);
     try {
       const blob = await canvas.exportSnapshot(snapshot, format);
-      if (current.current.connected && session.current === controller && controller.getSnapshot()) download(blob, format);
+      if (current.current.active && current.current.connected && session.current === controller && controller.getSnapshot()) download(blob, format);
     }
     catch { setExportError("Не удалось подготовить файл доски. Повторите экспорт."); }
     finally { setExporting(false); }
   };
 
-  return <section ref={panelRef} aria-label="Доска интервью" aria-hidden={!props.active} data-whiteboard-expanded={expanded ? "true" : "false"} className={`${styles.panel} ${expanded ? styles.expanded : ""}`}>
+  return <section ref={panelRef} hidden={props.retiring} data-canvas-task-id={props.taskId ?? ""} aria-label="Доска интервью" aria-hidden={!props.active} data-whiteboard-expanded={expanded ? "true" : "false"} className={`${styles.panel} ${expanded ? styles.expanded : ""}`}>
     <RoomCanvasToolbar expanded={expanded} onToggleExpanded={toggleExpanded}
       color={drawingColor}
       onApplyColor={props.active && !props.readOnly && state.editable && canvas && drawingColor
@@ -86,7 +95,7 @@ function MountedWhiteboardPanel(props: RoomWhiteboardPanelProps) {
 
 export function RoomWhiteboardPanel(props: RoomWhiteboardPanelProps) {
   const context = useMemo(() => crypto.randomUUID(), [props.inviteCode, props.sessionId, props.authToken, props.ownerToken, props.interviewerToken]);
-  const [activated, setActivated] = useState<string | null>(props.active ? context : null);
-  useEffect(() => { if (props.active) setActivated(context); }, [props.active, context]);
-  return props.active || activated === context ? <MountedWhiteboardPanel key={context} {...props} /> : null;
+  return <TaskCanvasSessions key={context} taskId={props.taskId} active={props.active}>
+    {session => <MountedWhiteboardPanel {...props} {...session} active={props.active && !session.retiring} />}
+  </TaskCanvasSessions>;
 }

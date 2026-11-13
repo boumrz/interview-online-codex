@@ -14,12 +14,14 @@ data class RoomWhiteboardDto(
     val sequence: Long,
     val elements: List<JsonNode>,
     val canEdit: Boolean,
+    val taskId: String? = null,
 )
 
 data class RoomWhiteboardOperationDto(
     val boardId: String,
     val sequence: Long,
     val operationId: String,
+    val taskId: String? = null,
 )
 
-data class RoomWhiteboardChangedDto(val boardId: String, val sequence: Long)
+data class RoomWhiteboardChangedDto(val boardId: String, val sequence: Long, val taskId: String? = null)

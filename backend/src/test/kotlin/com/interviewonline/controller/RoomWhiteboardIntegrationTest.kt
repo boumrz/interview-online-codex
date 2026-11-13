@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.interviewonline.model.Room
 import com.interviewonline.repository.RoomRepository
 import com.interviewonline.support.Postgres16TestSupport
+import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -24,6 +25,7 @@ import org.springframework.test.web.servlet.post
 import java.util.UUID
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 @SpringBootTest(properties = ["app.features.room-whiteboard-enabled=true", "app.features.room-diagrams-enabled=true"])
 @AutoConfigureMockMvc(print = MockMvcPrint.NONE)
@@ -316,6 +318,96 @@ class RoomWhiteboardIntegrationTest(
         assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM room_whiteboard_operations WHERE room_id=?", Int::class.java, room.id))
     }
 
+    @Test fun `task boards isolate snapshots receipts and permissions across publication and removal`() {
+        val room = room()
+        val currentTask = addTask(room, 0)
+        val draftTask = addTask(room, 1)
+        val candidate = stream(room)
+        val manager = stream(room, true)
+        val first = body(get(room, manager, taskId = currentTask)).path("boardId").asText()
+        val second = body(get(room, manager, taskId = draftTask)).path("boardId").asText()
+        assertNotEquals(first, second)
+        assertEquals(first, boardId(room), "unscoped clients follow the published task")
+        assertEquals(404, get(room, candidate, taskId = draftTask).response.status)
+        assertEquals(404, get(room, manager, taskId = "").response.status)
+        assertEquals(404, get(room, manager, taskId = addTask(room(), 0)).response.status)
+
+        val operation = UUID.randomUUID().toString()
+        assertEquals(200, change(room, candidate, first, listOf(stroke("a")), operationId = operation, taskId = currentTask).response.status)
+        assertEquals(404, change(room, candidate, second, listOf(stroke("x")), taskId = draftTask).response.status)
+        assertEquals(204, mvc.post("/api/realtime/rooms/${room.inviteCode}/events") {
+            contentType = MediaType.APPLICATION_JSON
+            content = mapper.writeValueAsString(mapOf("sessionId" to manager.sessionId, "eventToken" to manager.eventToken,
+                "type" to "manager_workspace_open", "stepIndex" to 1))
+        }.andReturn().response.status)
+        assertEquals(200, change(room, manager, second, listOf(stroke("b")), operationId = operation, taskId = draftTask).response.status)
+        val event = messages(manager.result).last { it.path("type").asText() == "whiteboard_changed" }
+        assertEquals(draftTask, event.path("payload").path("taskId").asText())
+        assertEquals(second, event.path("payload").path("boardId").asText())
+        assertFalse(messages(candidate.result).any { it.path("type").asText() == "whiteboard_changed" && it.path("payload").path("boardId").asText() == second })
+        assertEquals("a", body(get(room)).path("elements").single().path("id").asText())
+        jdbc.update("UPDATE rooms SET current_step=1 WHERE id=?", room.id)
+        assertEquals("b", body(get(room, candidate)).path("elements").single().path("id").asText())
+        assertEquals(409, change(room, candidate, first, listOf(stroke("late"))).response.status)
+        assertEquals(404, change(room, candidate, first, listOf(stroke("late")), taskId = currentTask).response.status)
+        assertEquals(1, body(get(room, manager, taskId = currentTask)).path("sequence").asInt())
+        jdbc.update("DELETE FROM room_tasks WHERE id=?", currentTask)
+        jdbc.update("UPDATE room_tasks SET step_index=0 WHERE id=?", draftTask)
+        jdbc.update("UPDATE rooms SET current_step=0 WHERE id=?", room.id)
+        assertEquals(second, boardId(room))
+        assertEquals(404, get(room, manager, taskId = currentTask).response.status)
+        assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM room_whiteboard_operations WHERE room_id=?", Int::class.java, room.id))
+    }
+
+    @Test fun `candidate canvas reads wait for publication to commit before checking task visibility`() {
+        val room = room()
+        addTask(room, 0)
+        val nextTask = addTask(room, 1)
+        val candidate = stream(room)
+        val readers = Executors.newFixedThreadPool(2)
+        try {
+            postgres.connection().use { publication ->
+                publication.autoCommit = false
+                val holderPid = publication.createStatement().use { statement ->
+                    statement.executeQuery("SELECT pg_backend_pid()").use { it.next(); it.getInt(1) }
+                }
+                publication.prepareStatement("UPDATE rooms SET current_step=1 WHERE id=?").use { statement ->
+                    statement.setString(1, room.id)
+                    statement.executeUpdate()
+                }
+                // A client can receive the new step from SSE while the publishing
+                // transaction still holds the room lock.
+                val results = listOf("diagram", "whiteboard").map { canvas ->
+                    readers.submit<MvcResult> {
+                        mvc.get("/api/rooms/${room.inviteCode}/$canvas") {
+                            param("taskId", nextTask)
+                            param("sessionId", candidate.sessionId)
+                            header("X-Room-Event-Token", candidate.eventToken)
+                        }.andReturn()
+                    }
+                }
+                await().atMost(5, TimeUnit.SECONDS).until {
+                    jdbc.queryForObject("""
+                        SELECT count(*) FROM pg_stat_activity
+                        WHERE ? = ANY(pg_blocking_pids(pid))
+                    """.trimIndent(), Int::class.java, holderPid) == results.size
+                }
+                publication.commit()
+                results.forEach { result ->
+                    val response = result.get(5, TimeUnit.SECONDS).response
+                    assertEquals(200, response.status, response.contentAsString)
+                }
+            }
+        } finally { readers.shutdownNow() }
+    }
+
+    private fun addTask(room: Room, stepIndex: Int): String {
+        val id = UUID.randomUUID().toString()
+        jdbc.update("INSERT INTO room_tasks(id,room_id,step_index,title,description,starter_code,language) VALUES (?,?,?,'Task','','','nodejs')",
+            id, room.id, stepIndex)
+        return id
+    }
+
     private fun room(): Room = rooms.saveAndFlush(Room(title = "Whiteboard integration", inviteCode = "board-${UUID.randomUUID()}", ownerSessionToken = "owner-${UUID.randomUUID()}", interviewerSessionToken = "interviewer-${UUID.randomUUID()}", code = "original-code"))
     private data class Connection(val sessionId: String, val eventToken: String, val result: MvcResult)
     private fun stream(room: Room, owner: Boolean = false, account: HrTestAccount? = null, sessionId: String = "board-${UUID.randomUUID()}"): Connection {
@@ -327,12 +419,14 @@ class RoomWhiteboardIntegrationTest(
         assertEquals(200, result.response.status)
         return Connection(sessionId, state(result).path("eventToken").asText(), result)
     }
-    private fun get(room: Room, connection: Connection? = null, sendToken: Boolean = true, authToken: String? = null) = mvc.get("/api/rooms/${room.inviteCode}/whiteboard") {
+    private fun get(room: Room, connection: Connection? = null, sendToken: Boolean = true, authToken: String? = null, taskId: String? = null) = mvc.get("/api/rooms/${room.inviteCode}/whiteboard") {
+        taskId?.let { param("taskId", it) }
         connection?.let { param("sessionId", it.sessionId); if (sendToken) header("X-Room-Event-Token", it.eventToken) }
         authToken?.let { header("Authorization", "Bearer $it") }
     }.andReturn()
     private fun boardId(room: Room) = body(get(room)).path("boardId").asText()
-    private fun change(room: Room, connection: Connection, id: String, elements: List<Map<String, Any?>>, base: Long = 0, operationId: String = UUID.randomUUID().toString(), sendToken: Boolean = true, authToken: String? = null) = mvc.post("/api/rooms/${room.inviteCode}/whiteboard/changes") {
+    private fun change(room: Room, connection: Connection, id: String, elements: List<Map<String, Any?>>, base: Long = 0, operationId: String = UUID.randomUUID().toString(), sendToken: Boolean = true, authToken: String? = null, taskId: String? = null) = mvc.post("/api/rooms/${room.inviteCode}/whiteboard/changes") {
+        taskId?.let { param("taskId", it) }
         param("sessionId", connection.sessionId); if (sendToken) header("X-Room-Event-Token", connection.eventToken)
         authToken?.let { header("Authorization", "Bearer $it") }
         contentType = MediaType.APPLICATION_JSON

@@ -716,8 +716,6 @@ export function RoomPage() {
   const [savedDiagramViewScope, setSavedDiagramViewScope] = useState<string | null>(null);
   const [whiteboardRefreshSignal, setWhiteboardRefreshSignal] = useState(0);
   const [savedWhiteboardViewScope, setSavedWhiteboardViewScope] = useState<string | null>(null);
-  const onDiagramChanged = useCallback(() => setDiagramRefreshSignal(value => value + 1), []);
-  const onWhiteboardChanged = useCallback(() => setWhiteboardRefreshSignal(value => value + 1), []);
   const [displayName, setDisplayName] = useState(() => initialStoredName);
   const [draftName, setDraftName] = useState(() => initialStoredName);
   const [candidateNameError, setCandidateNameError] = useState("");
@@ -1041,6 +1039,20 @@ export function RoomPage() {
   const localPreviewTask = mergedTasks.find(
     (task) => task.stepIndex === selectedManagerStep,
   );
+  const canvasTaskStep = canManageRoom ? selectedManagerStep : merged?.currentStep;
+  // An explicit empty scope belongs only to rooms with no tasks. Wait for the
+  // task identity during hydration rather than loading the wrong document.
+  const canvasTaskId = mergedTasks.length
+    ? mergedTasks.find(task => task.stepIndex === canvasTaskStep)?.id ?? undefined
+    : null;
+  const visibleCanvasTask = useRef(canvasTaskId);
+  useLayoutEffect(() => { visibleCanvasTask.current = canvasTaskId; }, [canvasTaskId]);
+  const onDiagramChanged = useCallback((taskId: string | null) => {
+    if (visibleCanvasTask.current === taskId) setDiagramRefreshSignal(value => value + 1);
+  }, []);
+  const onWhiteboardChanged = useCallback((taskId: string | null) => {
+    if (visibleCanvasTask.current === taskId) setWhiteboardRefreshSignal(value => value + 1);
+  }, []);
   const {
     data: localWorkspaceSnapshot,
     isFetching: isLocalWorkspaceSnapshotFetching,
@@ -3123,9 +3135,10 @@ export function RoomPage() {
   const diagramMode = ROOM_DIAGRAMS_ENABLED && Boolean(merged.roomDiagramsEnabled) && (viewingSavedDiagram || (merged.roomEditorMode === "diagram" && !viewingSavedWhiteboard));
   const whiteboardMode = ROOM_WHITEBOARD_ENABLED && Boolean(merged.roomWhiteboardEnabled) && (viewingSavedWhiteboard || (merged.roomEditorMode === "whiteboard" && !viewingSavedDiagram));
   const candidateBriefingFocusMode = briefingFocusMode && !diagramMode && !whiteboardMode;
-  const diagramPanel = ROOM_DIAGRAMS_ENABLED && merged.roomDiagramsEnabled ? (
+  const diagramPanel = ROOM_DIAGRAMS_ENABLED && merged.roomDiagramsEnabled && canvasTaskId !== undefined ? (
     <RoomDiagramPanel
       key={markdownPreviewScope}
+      taskId={canvasTaskId}
       inviteCode={inviteCode}
       sessionId={sessionId}
       authToken={authToken}
@@ -3139,9 +3152,10 @@ export function RoomPage() {
       drawingColor={merged.drawingColor}
     />
   ) : null;
-  const whiteboardPanel = ROOM_WHITEBOARD_ENABLED && merged.roomWhiteboardEnabled ? (
+  const whiteboardPanel = ROOM_WHITEBOARD_ENABLED && merged.roomWhiteboardEnabled && canvasTaskId !== undefined ? (
     <RoomWhiteboardPanel
       key={markdownPreviewScope}
+      taskId={canvasTaskId}
       inviteCode={inviteCode}
       sessionId={sessionId}
       authToken={authToken}

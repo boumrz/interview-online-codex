@@ -198,8 +198,8 @@ type Options = {
   onNoteMessageFailure?: (payload: NoteMessageFailurePayload) => void;
   onPrivateNoteFailure?: (payload: { privateNoteId: string }) => void;
   /** Wake the diagram's ordered recovery path; scene data stays out of room state. */
-  onDiagramChanged?: () => void;
-  onWhiteboardChanged?: () => void;
+  onDiagramChanged?: (taskId: string | null) => void;
+  onWhiteboardChanged?: (taskId: string | null) => void;
 };
 
 type NoteMessageAckPayload = {
@@ -1238,6 +1238,14 @@ export function useRoomSocket({
             if (isTerminal() || lease !== streamLease) break;
 
             if (response.ok) {
+              if (head.payload.type === "manager_workspace_open") {
+                // A private canvas write can land between its first GET and this subscription.
+                const taskId = roomTaskIdsRef.current.get(head.payload.stepIndex);
+                if (taskId && managerSubscriptionsRef.current.has(head.payload.stepIndex)) {
+                  onDiagramChanged?.(taskId);
+                  onWhiteboardChanged?.(taskId);
+                }
+              }
               if (head.payload.type === "manager_workspace_yjs_update") {
                 managerSaveFailuresRef.current.delete(head.payload.stepIndex);
                 managerFailedDocumentsRef.current.delete(head.payload.stepIndex);
@@ -2082,12 +2090,12 @@ export function useRoomSocket({
           requestStateSync({ expectHydration: true });
           return;
         }
-        if (message.type === "diagram_changed") {
-          onDiagramChanged?.();
-          return;
-        }
-        if (message.type === "whiteboard_changed") {
-          onWhiteboardChanged?.();
+        if (message.type === "diagram_changed" || message.type === "whiteboard_changed") {
+          const taskId = (message.payload as { taskId?: unknown } | null)?.taskId;
+          if (taskId == null || typeof taskId === "string") {
+            const notify = message.type === "diagram_changed" ? onDiagramChanged : onWhiteboardChanged;
+            notify?.(taskId ?? null);
+          }
           return;
         }
         if (message.type === "error") {

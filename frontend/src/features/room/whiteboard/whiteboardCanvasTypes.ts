@@ -2,6 +2,7 @@ import type { WhiteboardElement, WhiteboardSnapshot } from "./whiteboardProtocol
 
 export type WhiteboardExportFormat = "excalidraw" | "png" | "svg";
 export type WhiteboardCanvasHandle = {
+  flushLocalChanges(): void;
   applyScene(snapshot: WhiteboardSnapshot, replaceLocal: boolean): void;
   setDrawingColor(color: string): void;
   clear(): void;
