@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Modal } from "antd";
+import { Button, Modal } from "antd";
 import { API_BASE_URL } from "../../../config/runtime";
 import { roomRealtimeFetch } from "../roomRealtimeTransport";
 import { useThemeMode } from "../../theme/ThemeProvider";
@@ -8,8 +8,9 @@ import { createDiagramQueue, diagramOrderPatchFromXml, isDiagramRecord, parseDia
 import { classifyDiagramResponse } from "./diagramRequestPolicy";
 import { useDiagramExpansion } from "./useDiagramExpansion";
 import { normalizeDrawingColor } from "../drawingColor";
-import { DrawingColorIndicator, type DrawingParticipant } from "../DrawingColorIndicator";
+import { RoomCanvasToolbar } from "../RoomCanvasToolbar";
 import { installDrawioDrawingDefaults } from "./drawioDrawingDefaults";
+import { installDrawioToolbarMenus } from "./drawioToolbarMenus";
 import styles from "./RoomDiagramPanel.module.css";
 
 export type RoomDiagramPanelProps = {
@@ -24,7 +25,6 @@ export type RoomDiagramPanelProps = {
   active: boolean;
   refreshSignal: number;
   drawingColor?: string | null;
-  drawingParticipants?: readonly DrawingParticipant[];
 };
 
 type PanelState = { loaded: boolean; editable: boolean; message: string; error: boolean; busy: boolean; preview?: string; presentationOnly: boolean; accessDenied: boolean; canDiscard: boolean };
@@ -67,7 +67,7 @@ function createController(options: {
   current: () => RoomDiagramPanelProps;
   notify: (state: PanelState) => void;
   drawingColor: string;
-  initializeDrawingDefaults(canonical: boolean): void;
+  configureNativeEditor(canonical: boolean): void;
 }): Controller {
   const { visible, canonical } = options;
   const lifetime = new AbortController();
@@ -278,7 +278,7 @@ function createController(options: {
       const frame = isCanonical ? canonical : visible;
       if (event.event === "configure") {
         if (!configuredFrames.has(isCanonical)) {
-          try { options.initializeDrawingDefaults(isCanonical); configuredFrames.add(isCanonical); }
+          try { options.configureNativeEditor(isCanonical); configuredFrames.add(isCanonical); }
           catch (error) { fail(error); return; }
         }
         // The embed adapts its own panels after a resize. Parent styles do not
@@ -286,7 +286,20 @@ function createController(options: {
         // Configure only new objects; restoring shared XML never changes its
         // colors. Native manual choices remain local for the editor lifetime.
         // draw.io replaces its edge defaults instead of merging this object.
-        frame.send("configure", { config: { defaultVertexStyle: { strokeColor: options.drawingColor, fontColor: options.drawingColor }, defaultEdgeStyle: { edgeStyle: "orthogonalEdgeStyle", rounded: "0", jettySize: "auto", orthogonalLoop: "1", defaultLabelBackgroundColor: "page", strokeColor: options.drawingColor, fontColor: options.drawingColor }, defaultLibraries: "general;flowchart;er;uml", noAutoFocus: true, defaultPageVisible: false, defaultGridEnabled: false, suppressNewWindows: true, enableCustomLibraries: false, customCss: ".geTabContainer{display:none!important}*,*::before,*::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}", hideMenuItems: ["new", "open", "import", "importFrom", "export", "exportAs", "save", "saveAs", "pageSetup", "background", "backgroundImage", "plugins", "embed", "publish", "insertImage", "insertPage", "duplicatePage", "removePage", "renamePage", "pages"] } });
+        frame.send("configure", { config: {
+          defaultVertexStyle: { strokeColor: options.drawingColor, fontColor: options.drawingColor },
+          defaultEdgeStyle: { edgeStyle: "orthogonalEdgeStyle", rounded: "0", jettySize: "auto", orthogonalLoop: "1", defaultLabelBackgroundColor: "page", strokeColor: options.drawingColor, fontColor: options.drawingColor },
+          defaultLibraries: "general;flowchart;er;uml",
+          noAutoFocus: true,
+          defaultPageVisible: false,
+          defaultGridEnabled: false,
+          suppressNewWindows: true,
+          enableCustomLibraries: false,
+          hideMenus: ["file", "edit", "view", "arrange", "extras", "help"],
+          // draw.io reserves a grid row even when it has no top-level menus.
+          customCss: ".geEditor>.geMenubarContainer,.geTabContainer{display:none!important}.interhubToolbarMenu{top:var(--interhub-toolbar-bottom)!important;box-sizing:border-box;max-height:calc(100dvh - var(--interhub-toolbar-bottom) - 2px)!important;overflow-y:auto!important}*,*::before,*::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}",
+          hideMenuItems: ["new", "open", "import", "importFrom", "export", "exportAs", "save", "saveAs", "pageSetup", "background", "backgroundImage", "plugins", "embed", "publish", "insertImage", "insertPage", "duplicatePage", "removePage", "renamePage", "pages"],
+        } });
       }
       if (event.event === "init") {
         if (isCanonical) readyCanonical = true; else readyVisible = true;
@@ -332,6 +345,7 @@ function MountedRoomDiagramPanel(props: RoomDiagramPanelProps) {
   const current = useRef(props); current.current = props;
   const visible = useRef<HTMLIFrameElement>(null);
   const canonical = useRef<HTMLIFrameElement>(null);
+  const applyAssignedColor = useRef<(() => void) | undefined>(undefined);
   const controller = useRef<Controller | null>(null);
   const [state, setState] = useState<PanelState>(initialState);
   const [retry, setRetry] = useState(0);
@@ -351,12 +365,21 @@ function MountedRoomDiagramPanel(props: RoomDiagramPanelProps) {
     const bridge = (source: Window, isCanonical: boolean) => createDrawioBridge({ source, origin: window.location.origin, post: (message, origin) => source.postMessage(message, origin), onEvent: (event) => controller.current?.editorEvent(event, isCanonical) });
     const visibleBridge = bridge(visibleWindow, false);
     const canonicalBridge = bridge(canonicalWindow, true);
-    const session = createController({ visible: visibleBridge, canonical: canonicalBridge, current: () => current.current, notify: setState, drawingColor, initializeDrawingDefaults: isCanonical => installDrawioDrawingDefaults(isCanonical ? canonicalWindow : visibleWindow, drawingColor) });
+    const session = createController({
+      visible: visibleBridge, canonical: canonicalBridge, current: () => current.current, notify: setState, drawingColor,
+      configureNativeEditor(isCanonical) {
+        const applyColor = installDrawioDrawingDefaults(isCanonical ? canonicalWindow : visibleWindow, drawingColor);
+        if (!isCanonical) {
+          applyAssignedColor.current = applyColor;
+          installDrawioToolbarMenus(visibleWindow);
+        }
+      },
+    });
     controller.current = session;
     const receive = (event: MessageEvent) => { visibleBridge.receive(event); canonicalBridge.receive(event); };
     window.addEventListener("message", receive);
     const loadingTimeout = setTimeout(() => setState((previous) => previous.loaded ? previous : { ...previous, error: true, message: "Не удалось загрузить редактор схемы. Повторите действие." }), 25_000);
-    return () => { clearTimeout(loadingTimeout); window.removeEventListener("message", receive); session.destroy(); if (controller.current === session) controller.current = null; };
+    return () => { clearTimeout(loadingTimeout); window.removeEventListener("message", receive); session.destroy(); applyAssignedColor.current = undefined; if (controller.current === session) controller.current = null; };
   }, [props.inviteCode, props.sessionId, retry, state.accessDenied, drawingColor]);
 
   useEffect(() => { controller.current?.refresh(); }, [props.refreshSignal, props.connected, props.eventToken]);
@@ -365,16 +388,13 @@ function MountedRoomDiagramPanel(props: RoomDiagramPanelProps) {
   const url = `${editorUrl}&dark=${initialTheme.current === "dark" ? "1" : "0"}`;
   const readonly = props.readOnly || (state.loaded && !state.editable);
   return <section ref={panelRef} className={`${styles.panel} ${expanded ? styles.expanded : ""}`} aria-label="Схема интервью" aria-hidden={!props.active} data-diagram-expanded={expanded ? "true" : "false"}>
-    <div className={styles.toolbar}>
-      <span role="status" className={`${styles.status} ${state.error ? styles.error : ""}`}>{state.message}</span>
-      <DrawingColorIndicator color={drawingColor} participants={props.drawingParticipants} />
-      <div className={styles.exports}>
-        <button type="button" className={`${styles.button} ${styles.expandButton}`} aria-expanded={expanded} onClick={toggleExpanded}>{expanded ? "Вернуться в комнату" : "На весь экран"}</button>
-        {state.error && !state.canDiscard && <button type="button" className={styles.button} onClick={() => { if (state.loaded) controller.current?.refresh(); else { setState(initialState); setRetry((value) => value + 1); } }}>Повторить</button>}
-        {state.canDiscard && <button type="button" className={styles.button} onClick={() => setConfirmDiscard(true)}>Вернуться к сохранённой схеме</button>}
-        {(["drawio", "png", "svg"] as const).map((format) => <button key={format} type="button" className={styles.button} disabled={!state.loaded || state.busy || !props.connected} onClick={() => controller.current?.export(format)}>{format === "drawio" ? ".drawio" : format.toUpperCase()}</button>)}
-      </div>
-    </div>
+    <RoomCanvasToolbar expanded={expanded} onToggleExpanded={toggleExpanded}
+      color={drawingColor} onApplyColor={props.active && state.loaded && !readonly && !state.busy && !state.accessDenied ? applyAssignedColor.current : undefined}
+      nativeFormat="drawio" canDownload={props.active && state.loaded && !state.busy && !state.accessDenied && props.connected}
+      onDownload={format => controller.current?.export(format)} status={state.message} error={state.error}>
+      {state.error && !state.canDiscard && <Button onClick={() => { if (state.loaded) controller.current?.refresh(); else { setState(initialState); setRetry(value => value + 1); } }}>Повторить</Button>}
+      {state.canDiscard && <Button onClick={() => setConfirmDiscard(true)}>Вернуться к сохранённой схеме</Button>}
+    </RoomCanvasToolbar>
     {state.presentationOnly && <p className={styles.notice}>Настройки вида холста действуют в этой вкладке. Фигуры и наброски сохраняются для всех.</p>}
     <div className={styles.body}>
       {drawingColor && !state.accessDenied && <iframe key={`visible-${retry}`} ref={visible} title="Редактор схемы" src={url} className={`${styles.frame} ${readonly ? styles.hidden : ""} ${!state.loaded ? styles.loadingFrame : ""}`} tabIndex={readonly || !props.active || !state.loaded ? -1 : 0} sandbox="allow-scripts allow-same-origin allow-downloads" />}

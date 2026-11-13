@@ -888,12 +888,14 @@ export function RoomContextSurface({
         }
       }}
     >
-      <h2 aria-label={definition.regionTitle} className={`${styles.surfaceTitle} ${name === "notes" ? styles.notesTitle : ""}`}>
-        {definition.regionTitle}
-        {name === "notes" ? <Tooltip trigger={["hover", "focus"]} title="Заметки видны только вам.">
-          <button type="button" className={styles.notesHelp} aria-label="Кто видит мои заметки"><IconHelpCircle size={16} aria-hidden="true" /></button>
-        </Tooltip> : null}
-      </h2>
+      {name !== "editor" && (
+        <h2 aria-label={definition.regionTitle} className={`${styles.surfaceTitle} ${name === "notes" ? styles.notesTitle : ""}`}>
+          {definition.regionTitle}
+          {name === "notes" ? <Tooltip trigger={["hover", "focus"]} title="Заметки видны только вам.">
+            <button type="button" className={styles.notesHelp} aria-label="Кто видит мои заметки"><IconHelpCircle size={16} aria-hidden="true" /></button>
+          </Tooltip> : null}
+        </h2>
+      )}
       <div className={styles.surfaceBody}>{children}</div>
     </section>
   );

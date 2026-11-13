@@ -35,3 +35,36 @@ test("a manual freehand choice survives repeated initialization of the same grap
 test("an incompatible native startup fails explicitly instead of silently using a shared black default", () => {
   assert.throws(() => installDrawioDrawingDefaults({} as Window, "#2563EB"), /Не удалось настроить цвет/);
 });
+
+test("applying the assigned color restores tools for new shapes, lines, labels and pen without editing the selection", () => {
+  const assigned = "#2563EB";
+  const custom = "#EB4D13";
+  const selected = Object.freeze({ style: `strokeColor=${custom};fillColor=none;` });
+  let penColor = "";
+  class NativeEvent {
+    name: string;
+    constructor(name: string, ..._properties: unknown[]) { this.name = name; }
+  }
+  class NativeUi {
+    editor = { graph: {
+      currentVertexStyle: { fillColor: "none", strokeColor: custom, fontColor: custom },
+      currentEdgeStyle: { edgeStyle: "elbowEdgeStyle", strokeWidth: 4, strokeColor: custom, fontColor: custom },
+      freehand: { setStrokeColor: (color: string) => { penColor = color; } },
+      selection: selected,
+    } };
+    seen: string[] = [];
+    initializeEmbedMode() {}
+    fireEvent(event: NativeEvent) { this.seen.push(event.name); }
+  }
+  const applyColor = installDrawioDrawingDefaults({ EditorUi: NativeUi, mxEventObject: NativeEvent } as unknown as Window, assigned);
+  const ui = new NativeUi();
+  ui.initializeEmbedMode();
+  const graph = ui.editor.graph;
+  graph.freehand.setStrokeColor(custom);
+  applyColor();
+  assert.deepEqual(graph.currentVertexStyle, { fillColor: "none", strokeColor: assigned, fontColor: assigned });
+  assert.deepEqual(graph.currentEdgeStyle, { edgeStyle: "elbowEdgeStyle", strokeWidth: 4, strokeColor: assigned, fontColor: assigned });
+  assert.equal(penColor, assigned);
+  assert.equal(graph.selection, selected);
+  assert.deepEqual(ui.seen, ["styleChanged"]);
+});

@@ -6,10 +6,10 @@ import type { WhiteboardElement } from "./whiteboardProtocol";
 import type { WhiteboardCanvasHandle, WhiteboardExportFormat } from "./whiteboardCanvasTypes";
 import styles from "./RoomWhiteboardPanel.module.css";
 import { normalizeDrawingColor } from "../drawingColor";
-import { DrawingColorIndicator, type DrawingParticipant } from "../DrawingColorIndicator";
+import { RoomCanvasToolbar } from "../RoomCanvasToolbar";
 
 const WhiteboardCanvas = lazy(() => import("./WhiteboardCanvas"));
-export type RoomWhiteboardPanelProps = WhiteboardConnection & { active: boolean; refreshSignal: number; drawingColor?: string | null; drawingParticipants?: readonly DrawingParticipant[] };
+export type RoomWhiteboardPanelProps = WhiteboardConnection & { active: boolean; refreshSignal: number; drawingColor?: string | null };
 const initialState: WhiteboardState = { loaded: false, editable: false, message: "Подготавливаем доску…", error: false, canDiscard: false, accessDenied: false, pending: 0 };
 
 function download(blob: Blob, extension: string) {
@@ -33,6 +33,7 @@ function MountedWhiteboardPanel(props: RoomWhiteboardPanelProps) {
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const canExport = props.active && props.connected && state.loaded && !state.accessDenied && !exporting;
   const { panelRef, expanded, toggleExpanded } = useCanvasExpansion(props.active);
   const onReady = useCallback((handle: WhiteboardCanvasHandle | null) => setCanvas(handle), []);
   const onChange = useCallback((elements: readonly WhiteboardElement[]) => session.current?.observe(elements), []);
@@ -51,27 +52,26 @@ function MountedWhiteboardPanel(props: RoomWhiteboardPanelProps) {
   const exportSnapshot = async (format: WhiteboardExportFormat) => {
     const controller = session.current;
     const snapshot = controller?.getSnapshot();
-    if (!canvas || !snapshot || !controller) return;
+    if (!canExport || !canvas || !snapshot || !controller) return;
     setExporting(true); setExportError(null);
     try {
       const blob = await canvas.exportSnapshot(snapshot, format);
-      if (session.current === controller && controller.getSnapshot()) download(blob, format);
+      if (current.current.connected && session.current === controller && controller.getSnapshot()) download(blob, format);
     }
     catch { setExportError("Не удалось подготовить файл доски. Повторите экспорт."); }
     finally { setExporting(false); }
   };
 
   return <section ref={panelRef} aria-label="Доска интервью" aria-hidden={!props.active} data-whiteboard-expanded={expanded ? "true" : "false"} className={`${styles.panel} ${expanded ? styles.expanded : ""}`}>
-    <div className={styles.toolbar}>
-      <span role="status" className={`${styles.status} ${state.error || exportError ? styles.error : ""}`}>{exportError ?? state.message}</span>
-      <DrawingColorIndicator color={drawingColor} participants={props.drawingParticipants} />
-      <div className={styles.actions}>
-        <Button aria-expanded={expanded} type="primary" ghost onClick={toggleExpanded}>{expanded ? "Вернуться в комнату" : "На весь экран"}</Button>
-        {state.error && !state.canDiscard && !state.accessDenied && <Button onClick={() => session.current?.retry()}>Повторить</Button>}
-        {state.canDiscard && <Button onClick={() => setConfirmDiscard(true)}>Вернуться к сохранённой доске</Button>}
-        {(["excalidraw", "png", "svg"] as const).map(format => <Button key={format} disabled={!state.loaded || state.accessDenied || exporting || !props.connected} onClick={() => void exportSnapshot(format)}>{format === "excalidraw" ? ".excalidraw" : format.toUpperCase()}</Button>)}
-      </div>
-    </div>
+    <RoomCanvasToolbar expanded={expanded} onToggleExpanded={toggleExpanded}
+      color={drawingColor}
+      onApplyColor={props.active && !props.readOnly && state.editable && canvas && drawingColor
+        ? () => canvas.setDrawingColor(drawingColor) : undefined}
+      nativeFormat="excalidraw" canDownload={canExport} onDownload={exportSnapshot}
+      status={exportError ?? state.message} error={state.error || !!exportError}>
+      {state.error && !state.canDiscard && !state.accessDenied && <Button onClick={() => session.current?.retry()}>Повторить</Button>}
+      {state.canDiscard && <Button onClick={() => setConfirmDiscard(true)}>Вернуться к сохранённой доске</Button>}
+    </RoomCanvasToolbar>
     <div className={styles.body}>
       {drawingColor && !state.accessDenied && <div className={styles.canvas} data-testid="room-whiteboard-canvas" onDropCapture={event => {
         if (event.dataTransfer.files.length) { event.preventDefault(); event.stopPropagation(); }

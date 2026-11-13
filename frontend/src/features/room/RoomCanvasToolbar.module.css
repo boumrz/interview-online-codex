@@ -1,0 +1,59 @@
+.toolbar {
+  position: relative;
+  z-index: 3;
+  container-type: inline-size;
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
+  padding: 8px;
+  margin-block-end: 8px;
+  border-bottom: 1px solid var(--app-border);
+  background: var(--app-surface);
+}
+
+.actions, .feedback {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.toolbar button {
+  transition: none !important;
+  animation: none !important;
+}
+.expand { justify-self: end; }
+.swatch {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--app-control-border);
+  border-radius: 50%;
+}
+.feedback { grid-column: 1 / -1; margin-block-start: 4px; }
+.saveStatus {
+  flex: none;
+  inline-size: 7.5em;
+  font-size: 13px;
+  line-height: 20px;
+  white-space: nowrap;
+  color: var(--app-muted);
+}
+.status, .error { min-width: 0; font-size: 13px; overflow-wrap: anywhere; }
+.status { color: var(--app-muted); }
+.error { color: var(--app-error); }
+
+@container (max-width: 550px) {
+  .expandLabel { display: none; }
+  .toolbar .expand { width: 32px; padding-inline: 0; }
+}
+@container (max-width: 400px) {
+  .actions > button[aria-haspopup="menu"] .actionLabel { display: none; }
+  .actions > button[aria-haspopup="menu"] { width: 32px; padding-inline: 0; }
+}
+@container (max-width: 300px) {
+  .actionLabel { display: none; }
+  .actions > button { width: 32px; padding-inline: 0; }
+}

@@ -3,6 +3,7 @@
 
 import argparse
 from contextlib import contextmanager
+import errno
 import hashlib
 from http.client import IncompleteRead
 import json
@@ -11,6 +12,7 @@ from pathlib import Path
 import re
 import signal
 import ssl
+import stat
 import sys
 import tempfile
 import time
@@ -50,10 +52,45 @@ def read_release(filename):
     return release
 
 
-def archive_digest(stream, limit, output=None):
+def filesystem_reason(error):
+    return {
+        errno.EACCES: "permission denied",
+        errno.EPERM: "permission denied",
+        errno.ENOENT: "file or parent directory does not exist",
+        errno.ENOTDIR: "a parent path is not a directory",
+        errno.EEXIST: "the directory path is occupied by an existing file",
+        errno.ENOSPC: "no space left on device",
+        errno.EROFS: "read-only filesystem",
+    }.get(error.errno, "filesystem I/O error")
+
+
+def open_offline_archive(filename):
+    source = Path(filename)
+    try:
+        if not stat.S_ISREG(source.stat().st_mode):
+            raise ArchiveError(f"Offline archive is not a regular file: {source}")
+        return source.open("rb")
+    except FileNotFoundError:
+        raise ArchiveError(
+            f"Missing offline archive: {source}. Copy the verified WAR to this server first, "
+            "then retry with DRAWIO_ARCHIVE_PATH pointing to the transferred file."
+        ) from None
+    except OSError as error:
+        raise ArchiveError(f"Cannot read offline archive {source}: {filesystem_reason(error)}.") from None
+
+
+def archive_digest(stream, limit, output=None, offline_source=None):
     digest = hashlib.sha256()
     total = 0
-    while chunk := stream.read(64 * 1024):
+    while True:
+        try:
+            chunk = stream.read(64 * 1024)
+        except OSError as error:
+            if offline_source is None:
+                raise
+            raise ArchiveError(f"Cannot read offline archive {offline_source}: {filesystem_reason(error)}.") from None
+        if not chunk:
+            break
         total += len(chunk)
         if total > limit:
             raise ArchiveError("The draw.io archive exceeds the pinned maximum size.")
@@ -129,10 +166,12 @@ def prepare(release, cache_directory):
             return
         offline = os.environ.get("DRAWIO_ARCHIVE_PATH")
         if offline:
-            def copy_offline(output):
-                with Path(offline).open("rb") as source:
-                    return archive_digest(source, release["maxArchiveBytes"], output)
-            stage_archive(cache, release, copy_offline)
+            # Diagnose a missing/unreadable source before creating any cache
+            # directories; the path may only exist on the operator's laptop.
+            with open_offline_archive(offline) as source:
+                def copy_offline(output):
+                    return archive_digest(source, release["maxArchiveBytes"], output, offline_source=offline)
+                stage_archive(cache, release, copy_offline)
             print(f"Pinned offline draw.io WAR copied into the Docker build context: {cache}")
             return
         timeout = limit_from_environment("DRAWIO_DOWNLOAD_TIMEOUT_MS", 180000, 900000) / 1000
@@ -164,7 +203,7 @@ def prepare(release, cache_directory):
                 raise ArchiveError(f"Pinned draw.io download failed ({reason}); retries are bounded.")
             time.sleep(0.2 * (attempt + 1))
     except (ArchiveError, OSError) as error:
-        reason = str(error) if isinstance(error, ArchiveError) else "Cannot read or prepare the draw.io cache/offline file; check file permissions."
+        reason = str(error) if isinstance(error, ArchiveError) else f"Cannot prepare or write draw.io cache: {filesystem_reason(error)}."
         raise ArchiveError(
             f"{reason}\nCanonical cache: {cache}\nExpected SHA-256: {release['archiveSha256']}\n"
             f"Pinned public URL: {release['archiveUrl']}\n"

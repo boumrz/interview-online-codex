@@ -1,4 +1,5 @@
 import '../support/require-isolated-api.mjs';
+import { assertCompactCanvasHeader, assertStableAutosave } from '../support/canvas-header.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { chromium } from 'playwright';
@@ -104,8 +105,9 @@ async function waitScene(room, predicate) {
   assert.fail(`whiteboard did not reach expected state; sequence=${state?.sequence}, count=${state?.elements.length}`);
 }
 function canvas(page) { return page.getByTestId('room-whiteboard-canvas').locator('canvas.interactive'); }
+function drawingTools(page) { return page.getByRole('group', { name: 'Инструменты доски', exact: true }); }
 async function tool(page, name) {
-  const input = page.getByTestId(`toolbar-${name}`);
+  const input = drawingTools(page).getByTestId(`toolbar-${name}`);
   await input.locator('..').click();
   assert.equal(await input.isChecked(), true);
 }
@@ -198,8 +200,9 @@ async function holdFirstWrite(page, actor) {
   return { change, release: () => release() };
 }
 async function exported(page, label) {
+  await panel(page).getByRole('button', { name: 'Скачать', exact: true }).click();
   const downloading = page.waitForEvent('download');
-  await panel(page).getByRole('button', { name: label, exact: true }).click();
+  await panel(page).getByRole('menuitem', { name: label, exact: true }).click();
   const download = await downloading;
   const chunks = [];
   for await (const chunk of await download.createReadStream()) chunks.push(chunk);
@@ -222,6 +225,83 @@ test('Доска — отдельный четвёртый общий режим
     await canvas(owner.page).waitFor();
     assert.deepEqual(owner.external, [], 'all editor resources are local');
     assert.equal((await snapshot(room)).elements.length, 0);
+  } finally { await browser.close(); }
+});
+
+test('простая доска открывается с карандашом и сохраняет выбранный инструмент для следующих фигур', async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const room = await createRoom();
+    const { page } = await participant(browser, room, true);
+    await mode(page, 'Доска');
+    await saved(page);
+    const tools = drawingTools(page);
+    const names = ['Выделение', 'Карандаш', 'Линия', 'Прямоугольник', 'Текст', 'Ластик'];
+    await tools.waitFor();
+    assert.equal(await tools.getByRole('radio').count(), names.length);
+    for (const name of names) assert.ok(await tools.getByRole('radio', { name, exact: true }).isVisible(), name);
+    assert.ok(await tools.getByRole('radio', { name: 'Карандаш', exact: true }).isChecked());
+
+    async function drag(offset, vertical, dx, dy) {
+      const { x, y } = await drawingPoint(page, offset, vertical);
+      await page.mouse.move(x, y); await page.mouse.down();
+      await page.mouse.move(x + dx, y + dy, { steps: 8 }); await page.mouse.up();
+    }
+    // The first mark needs no tool click. A hidden SDK shortcut must not turn
+    // the next real gesture into a diamond.
+    await drag(-70, .30, 40, 20);
+    await page.keyboard.press('3');
+    await drag(35, .30, 40, 20);
+    await waitScene(room, state => visibleElements(state).filter(e => e.type === 'freedraw').length === 2);
+
+    await tool(page, 'rectangle');
+    const ownColor = panel(page).getByTestId('room-drawing-color');
+    const assignedColor = (await ownColor.getAttribute('data-color')).toLowerCase();
+    const manualColor = assignedColor === '#db136a' ? '#835adb' : '#db136a';
+    await tools.getByLabel('Цвет рисования').fill(manualColor);
+    await drag(-70, .52, 50, 30);
+    const firstBlocks = await waitScene(room, state => visibleElements(state).some(e => e.type === 'rectangle'));
+    const firstBlock = visibleElements(firstBlocks).find(e => e.type === 'rectangle');
+    assert.equal(firstBlock.strokeColor.toLowerCase(), manualColor);
+    await ownColor.press('Enter');
+    assert.equal(await tools.getByLabel('Цвет рисования').inputValue(), assignedColor);
+    assert.ok(await tools.getByRole('radio', { name: 'Прямоугольник', exact: true }).isChecked());
+    await drag(35, .52, 50, 30);
+    const blocks = await waitScene(room, state => visibleElements(state).filter(e => e.type === 'rectangle').length === 2);
+    for (const block of visibleElements(blocks).filter(e => e.type === 'rectangle')) {
+      assert.equal(block.roughness, 0);
+      assert.equal(block.backgroundColor, 'transparent');
+      assert.equal(block.strokeColor.toLowerCase(), block.id === firstBlock.id ? manualColor : assignedColor);
+    }
+    assert.ok(await tools.getByRole('radio', { name: 'Прямоугольник', exact: true }).isChecked());
+    await tool(page, 'line');
+    await drag(-10, .52, 35, 0);
+    await text(page, 'Связь');
+    const scene = await waitScene(room, state => visibleElements(state).some(e => e.type === 'text' && e.text === 'Связь'));
+    assert.deepEqual(visibleElements(scene).map(e => e.type).sort(), ['freedraw', 'freedraw', 'line', 'rectangle', 'rectangle', 'text']);
+
+    await tool(page, 'selection');
+    const point = await drawingPoint(page, -70, .52);
+    await page.mouse.click(point.x, point.y);
+    await page.mouse.click(point.x, point.y, { button: 'right' });
+    const sdk = panel(page).locator('.excalidraw');
+    assert.equal(await sdk.locator('.App-toolbar-container:visible, .context-menu:visible, .selected-shape-actions:visible, .color-picker__button.properties-trigger:visible').count(), 0);
+
+    const clipboardText = 'flowchart LR\n  A --> B';
+    await sdk.evaluate((surface, value) => {
+      const data = new DataTransfer();
+      data.setData('text/plain', value);
+      surface.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: data }));
+    }, clipboardText);
+    const pasted = await waitScene(room, state => visibleElements(state).some(e => e.originalText === clipboardText));
+    assert.equal(visibleElements(pasted).length, 7, 'paste adds a single label');
+    await tool(page, 'rectangle');
+    assert.ok(await sdk.evaluate(surface => surface === document.activeElement), 'pointer tool choice returns focus to the drawing');
+    await sdk.evaluate(surface => {
+      const mac = /mac/i.test(navigator.platform);
+      surface.dispatchEvent(new KeyboardEvent('keydown', { key: 'я', code: 'KeyZ', metaKey: mac, ctrlKey: !mac, bubbles: true, cancelable: true }));
+    });
+    await waitScene(room, state => visibleElements(state).length === 6 && !visibleElements(state).some(e => e.originalText === clipboardText));
   } finally { await browser.close(); }
 });
 
@@ -293,11 +373,16 @@ test('два автора рисуют одновременно, своё Undo �
     assert.deepEqual(peerTextDeletes, [], 'a peer must not normalize an unfinished text object into a published deletion');
 
     const oldGeneration = await candidate.page.evaluate(() => window.__whiteboardTestSyncedGeneration);
+    const downloadButton = panel(candidate.page).getByRole('button', { name: 'Скачать', exact: true });
+    await downloadButton.click();
+    await panel(candidate.page).getByRole('menuitem', { name: 'PNG', exact: true }).waitFor();
     await candidate.context.setOffline(true);
     // Chromium's offline emulation may preserve an existing EventSource. Close
     // its lease through the same error event a broken network stream produces.
     await candidate.page.evaluate(() => window.__whiteboardTestSources.at(-1).dispatchEvent(new Event('error')));
     await candidate.page.waitForFunction(() => document.querySelector('[data-testid="room-connection-status"]')?.getAttribute('data-state') !== 'online');
+    await panel(candidate.page).getByRole('menuitem', { name: 'PNG', exact: true }).waitFor({ state: 'hidden' });
+    assert.equal(await downloadButton.isDisabled(), true);
     const offlineIds = new Set(candidateIds);
     await stroke(candidate.page, -130);
     await stroke(owner.page, 120);
@@ -344,12 +429,15 @@ test('доска сохраняет native canvas между четырьмя р
     const owner = await participant(browser, room, true);
     const candidate = await participant(browser, room);
     await mode(owner.page, 'Доска'); await Promise.all([saved(owner.page), saved(candidate.page)]);
-    await stroke(owner.page); await waitScene(room, state => visibleElements(state).length === 1); await saved(owner.page);
+    await assertStableAutosave(panel(owner.page), canvas(owner.page), '**/whiteboard/changes?*', () => stroke(owner.page));
+    await waitScene(room, state => visibleElements(state).length === 1);
     const original = await canvas(owner.page).elementHandle();
     const code = await owner.page.locator('[data-testid="room-code-editor-host"]').elementHandle();
     const before = await panel(owner.page).boundingBox();
+    await assertCompactCanvasHeader(panel(owner.page));
     await panel(owner.page).getByRole('button', { name: 'На весь экран', exact: true }).click();
     const expanded = await panel(owner.page).boundingBox();
+    await assertCompactCanvasHeader(panel(owner.page));
     assert.ok(expanded.width >= 1438 && expanded.height >= 998 && expanded.x <= 1 && expanded.y <= 1);
     assert.equal(await candidate.page.getByRole('button', { name: 'Вернуться в комнату', exact: true }).count(), 0);
     assert.equal(await original.evaluate(element => element.isConnected), true);
@@ -373,11 +461,21 @@ test('доска сохраняет native canvas между четырьмя р
     await panel(candidate.page).getByRole('status').filter({ hasText: /Только просмотр/ }).waitFor();
     await canvas(candidate.page).waitFor();
     await panel(candidate.page).getByRole('button', { name: 'На весь экран', exact: true }).click();
-    await candidate.page.setViewportSize({ width: 800, height: 420 });
+    await candidate.page.setViewportSize({ width: 340, height: 420 });
+    await assertCompactCanvasHeader(panel(candidate.page), { narrow: true });
+    assert.ok(await panel(candidate.page).getByRole('button', { name: /Ваш цвет/ }).isDisabled());
     const restore = panel(candidate.page).getByRole('button', { name: 'Вернуться в комнату', exact: true });
     const restoreBox = await restore.boundingBox();
-    assert.ok(restoreBox.y + restoreBox.height < 420 && restoreBox.x + restoreBox.width <= 800);
-    assert.equal(await candidate.page.getByTestId('toolbar-freedraw').isVisible(), false, 'readonly has no drawing tools');
+    assert.ok(restoreBox.y + restoreBox.height < 420 && restoreBox.x + restoreBox.width <= 340);
+    const downloadButton = panel(candidate.page).getByRole('button', { name: 'Скачать', exact: true });
+    await downloadButton.press('Enter');
+    const formats = panel(candidate.page).getByRole('menu', { name: 'Формат скачивания' });
+    await formats.waitFor();
+    assert.deepEqual(await formats.getByRole('menuitem').allTextContents(), ['PNG', 'SVG', '.excalidraw']);
+    assert.equal(await formats.evaluate(menu => !menu.closest('[inert]')), true);
+    await candidate.page.keyboard.press('Escape');
+    await formats.waitFor({ state: 'hidden' });
+    assert.equal(await drawingTools(candidate.page).isVisible(), false, 'readonly has no drawing tools');
     await restore.click();
     await candidate.page.setViewportSize({ width: 1440, height: 1000 });
     await candidate.page.getByRole('button', { name: 'К материалам интервью', exact: true }).click();
@@ -404,6 +502,9 @@ test('постоянный отказ доски сохраняет ввод д�
     await stroke(owner.page, 130);
     const reset = panel(owner.page).getByRole('button', { name: 'Вернуться к сохранённой доске', exact: true });
     await reset.waitFor();
+    const errorStatus = panel(owner.page).getByRole('status').filter({ hasText: /отклонено/i });
+    const errorBox = await errorStatus.boundingBox();
+    assert.ok(errorBox && errorBox.width > 1 && errorBox.height > 1, 'a rejected save displays its error');
     assert.equal((await snapshot(room)).sequence, canonical.sequence);
     await panel(owner.page).getByRole('button', { name: 'На весь экран', exact: true }).click();
     await reset.click();

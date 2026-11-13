@@ -3,6 +3,7 @@ import type { WhiteboardElement, WhiteboardSnapshot } from "./whiteboardProtocol
 export type WhiteboardExportFormat = "excalidraw" | "png" | "svg";
 export type WhiteboardCanvasHandle = {
   applyScene(snapshot: WhiteboardSnapshot, replaceLocal: boolean): void;
+  setDrawingColor(color: string): void;
   clear(): void;
   exportSnapshot(snapshot: WhiteboardSnapshot, format: WhiteboardExportFormat): Promise<Blob>;
 };

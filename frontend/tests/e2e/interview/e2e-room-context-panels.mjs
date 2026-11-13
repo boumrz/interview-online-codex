@@ -411,7 +411,13 @@ async function assertSurfaceContent(page, name, region, expectedTasks = fixtures
   const task = expectedTasks[0];
   assert.ok(task, `AC11_${name}_EXPECTED_TASK_FIXTURE_MISSING`);
   const heading = region.getByRole("heading", { name: surfaceRegionNames[name], exact: true });
-  if (name !== "Условие") assert.equal(await heading.count(), 1, `AC11_SURFACE_HEADING_MISSING:${name}`);
+  if (name === "Редактор") {
+    assert.equal(await heading.count(), 0, "AC11_REDUNDANT_EDITOR_HEADING");
+    const contentInset = await region.evaluate(el => el.firstElementChild.getBoundingClientRect().top - el.getBoundingClientRect().top - el.clientTop);
+    assert.ok(Math.abs(contentInset) <= 1, "AC11_EMPTY_EDITOR_TITLE_ROW");
+  } else if (name !== "Условие") {
+    assert.equal(await heading.count(), 1, `AC11_SURFACE_HEADING_MISSING:${name}`);
+  }
   if (name === "Редактор") {
     assert.equal(await region.locator('[data-testid="room-code-editor-host"] .cm-editor').count(), 1, "AC11_EDITOR_CONTENT_MISSING");
   } else if (name === "Шаги") {

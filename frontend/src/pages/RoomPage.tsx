@@ -3137,7 +3137,6 @@ export function RoomPage() {
       active={diagramMode}
       refreshSignal={diagramRefreshSignal}
       drawingColor={merged.drawingColor}
-      drawingParticipants={merged.participants}
     />
   ) : null;
   const whiteboardPanel = ROOM_WHITEBOARD_ENABLED && merged.roomWhiteboardEnabled ? (
@@ -3154,7 +3153,6 @@ export function RoomPage() {
       active={whiteboardMode}
       refreshSignal={whiteboardRefreshSignal}
       drawingColor={merged.drawingColor}
-      drawingParticipants={merged.participants}
     />
   ) : null;
   const localStatusTask = mergedTasks.find(

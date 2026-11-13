@@ -65,7 +65,7 @@ async function waitScene(room, count) {
 }
 async function stroke(page, offset = 0) {
   await page.bringToFront();
-  await page.getByTestId('toolbar-freedraw').locator('..').click();
+  await page.getByRole('group', { name: 'Инструменты доски' }).getByTestId('toolbar-freedraw').locator('..').click();
   const canvas = page.getByTestId('room-whiteboard-canvas').locator('canvas.interactive');
   const bounds = await canvas.boundingBox();
   assert.ok(bounds);
@@ -87,16 +87,7 @@ async function frame(page) {
 }
 async function manualColor(page, value) {
   await page.bringToFront();
-  await page.getByTestId('room-whiteboard-canvas').locator('.color-picker__button.properties-trigger').first().click();
-  try { await page.locator('input.color-picker-input').fill(value.replace('#', '')); }
-  catch (error) {
-    console.info('NATIVE_COLOR_PICKER', await page.locator('.color-picker__button').evaluateAll(nodes => nodes.map(node => ({ label: node.getAttribute('aria-label'), title: node.title, state: node.dataset.state, html: node.outerHTML.slice(0, 700) }))));
-    console.info('NATIVE_PICKER_INPUTS', await page.locator('.excalidraw input').evaluateAll(nodes => nodes.map(node => ({ cls: node.className, type: node.type, label: node.getAttribute('aria-label') }))));
-    await page.screenshot({ path: '/tmp/interhub-drawing-colors-picker-failure.png' });
-    throw error;
-  }
-  await panel(page, 'Доска интервью').getByRole('status').click();
-  await page.locator('input.color-picker-input').waitFor({ state: 'hidden' });
+  await panel(page, 'Доска интервью').getByLabel('Цвет рисования', { exact: true }).fill(value.toLowerCase());
 }
 async function blockAndConnector(editor, expected) {
   await editor.evaluate(() => {
@@ -172,19 +163,10 @@ test('цвета новых native штрихов и схем уникальны
     await Promise.all([ready(owner, 'Доска интервью'), ready(candidate, 'Доска интервью')]);
     const ownerColor = await color(owner, 'Доска интервью'), candidateColor = await color(candidate, 'Доска интервью');
     assert.notEqual(ownerColor, candidateColor, 'participants have different assigned defaults');
-    await panel(candidate, 'Доска интервью').getByRole('button', { name: /Ваш цвет/ }).click();
-    const legend = candidate.getByRole('list', { name: 'Цвета участников' });
-    await legend.waitFor();
-    assert.match(await legend.innerText(), /Интервьюер/);
-    assert.match(await legend.innerText(), /Кандидат.*вы/s);
-    assert.deepEqual((await legend.getByTestId('drawing-participant-color').evaluateAll(nodes => nodes.map(node => node.dataset.color))).sort(), [ownerColor, candidateColor].sort());
-    await panel(candidate, 'Доска интервью').getByRole('button', { name: /Ваш цвет/ }).click();
-    await legend.waitFor({ state: 'hidden' });
-    for (const page of [owner]) {
-      const roster = page.getByTestId('participant-drawing-color');
-      await roster.nth(1).waitFor();
-      assert.deepEqual((await roster.evaluateAll(nodes => nodes.map(node => node.dataset.color))).sort(), [ownerColor, candidateColor].sort(), 'roster links both names to native drawing colors');
-    }
+    const roster = owner.getByTestId('participant-drawing-color');
+    await roster.nth(1).waitFor();
+    assert.deepEqual((await roster.evaluateAll(nodes => nodes.map(node => node.dataset.color))).sort(),
+      [ownerColor, candidateColor].sort(), 'roster links both names to native drawing colors');
     await stroke(owner, -50); await waitScene(room, 1);
     await stroke(candidate, 30);
     const strokes = await waitScene(room, 2);
@@ -217,6 +199,26 @@ test('цвета новых native штрихов и схем уникальны
       assert.equal(defaults.vertex.toUpperCase(), expected);
       assert.equal(defaults.edge.toUpperCase(), expected);
       assert.equal(defaults.routing, 'orthogonalEdgeStyle');
+      if (page === owner) {
+        // Seed alternate local styles and an existing selection. The next
+        // clicks and insertions use the real toolbar, palette and native pen.
+        await editor.evaluate(({ id, customColor }) => {
+          const graph = window.__interhubTestUi.editor.graph;
+          graph.setSelectionCell(graph.getModel().getCell(id));
+          for (const style of [graph.currentVertexStyle, graph.currentEdgeStyle]) {
+            style.strokeColor = customColor;
+            style.fontColor = customColor;
+          }
+          graph.freehand.setStrokeColor(customColor);
+        }, { id: legacyId, customColor });
+        await panel(owner, 'Схема интервью').getByRole('button', { name: /Ваш цвет/ }).press('Enter');
+        assert.equal(await owner.getByRole('list', { name: 'Цвета участников' }).count(), 0);
+        const restored = await editor.evaluate(() => {
+          const graph = window.__interhubTestUi.editor.graph;
+          return [graph.currentVertexStyle.fontColor, graph.currentEdgeStyle.fontColor].map(value => value.toUpperCase());
+        });
+        assert.deepEqual(restored, [expected, expected], 'keyboard action restores text defaults');
+      }
       const block = await blockAndConnector(editor, expected);
       const freehandId = await diagramFreehand(page, editor, expected);
       diagramObjects.push({ ...block, freehandId, color: expected });

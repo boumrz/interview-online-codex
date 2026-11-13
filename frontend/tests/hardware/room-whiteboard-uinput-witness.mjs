@@ -36,7 +36,7 @@ async function frames(values) {
  assert.equal(response.status,200);assert.equal((await response.json()).source,'linux-uinput');
 }
 async function tool(page,name) {
- const radio=page.getByTestId(`toolbar-${name}`);await radio.locator('..').click();assert.equal(await radio.isChecked(),true);
+ const radio=page.getByRole('group',{name:'Инструменты доски'}).getByTestId(`toolbar-${name}`);await radio.locator('..').click();assert.equal(await radio.isChecked(),true);
 }
 async function position(page,dx=0) {
  const bounds=await page.getByTestId('room-whiteboard-canvas').locator('canvas.interactive').boundingBox();
@@ -56,7 +56,8 @@ async function stroke(page,start,eraser=false) {
  await frames(values);
 }
 async function exported(page,label) {
- const pending=page.waitForEvent('download');await panel(page).getByRole('button',{name:label,exact:true}).click();
+ await panel(page).getByRole('button',{name:'Скачать',exact:true}).click();
+ const pending=page.waitForEvent('download');await panel(page).getByRole('menuitem',{name:label,exact:true}).click();
  const chunks=[];for await(const chunk of await(await pending).createReadStream())chunks.push(chunk);return Buffer.concat(chunks);
 }
 function realPressure(element) {return element.type==='freedraw'&&element.simulatePressure===false&&element.pressures.some(p=>p<.35)&&element.pressures.some(p=>p>.7);}

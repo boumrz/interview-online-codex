@@ -50,7 +50,7 @@ async function setup(browser, existingRoom, owner = true) {
 function panel(page) { return page.getByRole('region', { name: 'Доска интервью', exact: true }); }
 function preview(page) { return page.getByTestId('whiteboard-pen-hover'); }
 async function tool(page, name) {
-  const input = page.getByTestId(`toolbar-${name}`);
+  const input = page.getByRole('group', { name: 'Инструменты доски' }).getByTestId(`toolbar-${name}`);
   await input.locator('..').click();
   assert.equal(await input.isChecked(), true);
 }

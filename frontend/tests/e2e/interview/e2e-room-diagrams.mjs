@@ -1,4 +1,5 @@
 import '../support/require-isolated-api.mjs';
+import { assertCompactCanvasHeader, assertStableAutosave } from '../support/canvas-header.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { chromium } from 'playwright';
@@ -6,6 +7,14 @@ import { chromium } from 'playwright';
 const web = process.env.E2E_BASE_URL;
 const api = process.env.E2E_API_URL;
 function diagramPanel(page) { return page.getByRole('region', { name: 'Схема интервью', exact: true }); }
+
+async function downloadDiagram(page, format) {
+  const panel = diagramPanel(page);
+  await panel.getByRole('button', { name: 'Скачать', exact: true }).click();
+  const downloading = page.waitForEvent('download');
+  await panel.getByRole('menuitem', { name: format, exact: true }).click();
+  return downloading;
+}
 
 async function createRoom() {
   const response = await fetch(`${api}/public/rooms`, {
@@ -122,6 +131,53 @@ async function editorFrame(page) {
   return frame;
 }
 
+async function assertDiagramToolbarAtTop(frame) {
+  assert.equal(await frame.locator('.geMenubarContainer:visible').count(), 0, 'desktop menu row is hidden');
+  const toolbar = frame.locator('.geToolbarContainer').filter({ has: frame.locator('.geToolbar') }).first();
+  assert.equal(await toolbar.evaluate(el => el.getBoundingClientRect().top), 0, 'the menu leaves no empty row');
+  assert.ok(await toolbar.locator('[title^="Отменить"]').isVisible(), 'Undo is available on the toolbar');
+}
+
+test('список масштаба прокручивается под панелью инструментов на низком холсте', async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const room = await createRoom();
+    const { page } = await openParticipant(browser, room, true);
+    await chooseMode(page, 'Редактор диаграмм');
+    const frame = await editorFrame(page);
+    await diagramPanel(page).getByRole('button', { name: 'На весь экран', exact: true }).click();
+    await page.setViewportSize({ width: 1440, height: 340 });
+    const zoom = frame.locator('.geToolbar .geZoomInput');
+    await zoom.click();
+    const popup = frame.locator('body > div.mxPopupMenu').filter({ hasText: '125%' });
+    await popup.waitFor();
+    const bounds = await popup.evaluate(async menu => {
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const toolbar = document.querySelector('.geToolbarContainer .geToolbar').parentElement;
+      const { top, bottom } = menu.getBoundingClientRect();
+      return { top, bottom, toolbarBottom: toolbar.getBoundingClientRect().bottom, height: innerHeight, scrollable: menu.scrollHeight > menu.clientHeight };
+    });
+    assert.ok(bounds.top >= bounds.toolbarBottom && bounds.bottom <= bounds.height, JSON.stringify(bounds));
+    assert.ok(bounds.scrollable, 'all scale choices remain reachable');
+    await popup.getByText('400%', { exact: true }).click();
+    assert.equal(await zoom.inputValue(), '400%');
+    const view = frame.locator('.geToolbar [title^="Вид"]').first();
+    await view.press('Enter');
+    const openedMenu = frame.locator('body > div.mxPopupMenu:visible');
+    await openedMenu.waitFor();
+    assert.ok(await openedMenu.evaluate(menu => menu.getBoundingClientRect().top) >= bounds.toolbarBottom);
+    await page.keyboard.press('Escape');
+    await openedMenu.waitFor({ state: 'hidden' });
+
+    await frame.locator('.geDiagramContainer').click({ position: { x: 100, y: 85 }, button: 'right' });
+    await openedMenu.waitFor();
+    assert.ok(await openedMenu.evaluate(menu => menu.getBoundingClientRect().top) > bounds.toolbarBottom,
+      'the canvas context menu opens at the pointer');
+  } finally {
+    await browser.close();
+  }
+});
+
 async function insertBlock(frame, label, x = 60) {
   await frame.evaluate(({ label, x }) => {
     const graph = window.__interhubTestUi.editor.graph;
@@ -206,9 +262,7 @@ test('два участника сохраняют общую схему, отм
     const late = await openParticipant(browser, room);
     await waitForBlocks(await editorFrame(late.page), ['Database']);
 
-    const downloadPromise = owner.page.waitForEvent('download');
-    await owner.page.getByRole('button', { name: '.drawio', exact: true }).click();
-    const download = await downloadPromise;
+    const download = await downloadDiagram(owner.page, '.drawio');
     const stream = await download.createReadStream();
     const chunks = [];
     for await (const chunk of stream) chunks.push(chunk);
@@ -234,9 +288,7 @@ test('два участника сохраняют общую схему, отм
     await waitForBlocks(await editorFrame(owner.page), ['Database', 'Cache', 'Queue']);
 
     for (const format of ['SVG', 'PNG']) {
-      const downloading = owner.page.waitForEvent('download');
-      await owner.page.getByRole('button', { name: format, exact: true }).click();
-      const exported = await downloading;
+      const exported = await downloadDiagram(owner.page, format);
       const content = [];
       for await (const chunk of await exported.createReadStream()) content.push(chunk);
       const bytes = Buffer.concat(content);
@@ -379,6 +431,9 @@ test('отклонённое изменение сохраняет чернов�
     await insertBlock(frame, 'Unconfirmed', 260);
     const reset = page.getByRole('button', { name: 'Вернуться к сохранённой схеме', exact: true });
     await reset.waitFor();
+    const errorStatus = diagramPanel(page).getByRole('status').filter({ hasText: /отклонено/i });
+    const errorBox = await errorStatus.boundingBox();
+    assert.ok(errorBox && errorBox.width > 1 && errorBox.height > 1, 'a rejected save displays its error');
     assert.doesNotMatch((await confirmedDiagram(room)).xml, /Unconfirmed/);
     await reset.click();
     let dialog = page.getByRole('dialog', { name: 'Удалить несохранённые изменения?' });
@@ -411,13 +466,16 @@ test('схема разворачивается на всё окно локал�
     const candidateFrame = await editorFrame(candidate.page);
     const panel = owner.page.getByRole('region', { name: 'Схема интервью', exact: true });
     const original = await panel.boundingBox();
+    await assertCompactCanvasHeader(panel);
+    await assertDiagramToolbarAtTop(frame);
     await frame.evaluate(() => { window.__originalDiagramEditor = window.__interhubTestUi; });
-    await insertBlock(frame, 'Service');
-    await owner.page.getByText('Сохранено', { exact: true }).waitFor();
+    await assertStableAutosave(panel, panel.getByTitle('Редактор схемы', { exact: true }), '**/diagram/changes?*',
+      () => insertBlock(frame, 'Service'));
     await owner.page.getByRole('tab', { name: 'Чат', exact: true }).click();
 
     await diagramPanel(owner.page).getByRole('button', { name: 'На весь экран', exact: true }).click();
     const expanded = await panel.boundingBox();
+    await assertCompactCanvasHeader(panel);
     assert.ok(expanded.width >= 1438 && expanded.height >= 998 && expanded.x <= 1 && expanded.y <= 1, `fills the viewport: ${JSON.stringify(expanded)}`);
     assert.ok(expanded.width * expanded.height > original.width * original.height * 2, 'expanded area is substantially larger');
     assert.equal(await candidate.page.getByRole('button', { name: 'Вернуться в комнату', exact: true }).count(), 0, 'expansion is personal');
@@ -425,11 +483,12 @@ test('схема разворачивается на всё окно локал�
     assert.notEqual(await owner.page.getByRole('button', { name: 'Вернуться в комнату', exact: true }).getAttribute('tabindex'), '-1', 'restore stays keyboard accessible after selecting an auxiliary tab');
     assert.equal(await owner.page.locator('iframe[title="Редактор схемы"]').getAttribute('tabindex'), '0');
     assert.equal(await editorFrame(owner.page), frame, 'the iframe is not remounted');
+    await assertDiagramToolbarAtTop(frame);
     assert.equal(await frame.evaluate(() => window.__originalDiagramEditor === window.__interhubTestUi), true);
     await insertBlock(frame, 'Database', 300);
     await waitForBlocks(candidateFrame, ['Service', 'Database']);
     await owner.page.getByText('Сохранено', { exact: true }).waitFor();
-    await frame.evaluate(() => window.__interhubTestUi.actions.get('undo').funct());
+    await frame.locator('.geToolbar [title^="Отменить"]').click();
     await Promise.all([waitForBlocks(frame, ['Service']), waitForBlocks(candidateFrame, ['Service'])]);
     await owner.page.getByRole('button', { name: 'Вернуться в комнату', exact: true }).click();
     assert.deepEqual(await panel.boundingBox(), original, 'the prior room layout returns');
@@ -457,10 +516,11 @@ test('схема разворачивается на всё окно локал�
     assert.equal(await chatSurface.getAttribute('inert'), null, 'visible sidebar becomes interactive after leaving the expanded canvas');
 
     await diagramPanel(candidate.page).getByRole('button', { name: 'На весь экран', exact: true }).click();
-    await candidate.page.setViewportSize({ width: 800, height: 420 });
+    await candidate.page.setViewportSize({ width: 340, height: 420 });
+    await assertCompactCanvasHeader(diagramPanel(candidate.page), { narrow: true });
     const restore = candidate.page.getByRole('button', { name: 'Вернуться в комнату', exact: true });
     const restoreBox = await restore.boundingBox();
-    assert.ok(restoreBox.x >= 0 && restoreBox.y >= 0 && restoreBox.x + restoreBox.width <= 800 && restoreBox.y + restoreBox.height <= 420, 'restore remains on a short screen');
+    assert.ok(restoreBox.x >= 0 && restoreBox.y >= 0 && restoreBox.x + restoreBox.width <= 340 && restoreBox.y + restoreBox.height <= 420, 'restore remains on a short screen');
     await restore.click();
     await candidate.page.setViewportSize({ width: 1440, height: 1000 });
     await chooseMode(owner.page, 'Code');
@@ -482,6 +542,17 @@ test('схема разворачивается на всё окно локал�
     await diagramPanel(candidate.page).getByRole('button', { name: 'На весь экран', exact: true }).click();
     const readonlyBounds = await candidate.page.getByRole('region', { name: 'Схема интервью', exact: true }).boundingBox();
     assert.ok(readonlyBounds.width >= 1438 && readonlyBounds.height >= 998, 'candidate readonly also uses the whole viewport');
+    const readerPanel = diagramPanel(candidate.page);
+    assert.ok(await readerPanel.getByRole('button', { name: /Ваш цвет/ }).isDisabled());
+    await assertCompactCanvasHeader(readerPanel);
+    await readerPanel.getByRole('button', { name: 'Скачать', exact: true }).press('Enter');
+    const formats = readerPanel.getByRole('menu', { name: 'Формат скачивания' });
+    await formats.waitFor();
+    assert.deepEqual((await formats.getByRole('menuitem').allTextContents()).sort(), ['.drawio', 'PNG', 'SVG']);
+    assert.equal(await formats.evaluate(menu => !menu.closest('[inert]')), true);
+    const download = candidate.page.waitForEvent('download');
+    await formats.getByRole('menuitem', { name: '.drawio', exact: true }).click();
+    assert.match((await download).suggestedFilename(), /\.drawio$/);
     await candidate.page.getByRole('button', { name: 'Вернуться в комнату', exact: true }).click();
   } finally {
     await browser.close();

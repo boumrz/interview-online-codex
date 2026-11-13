@@ -14,7 +14,7 @@ function panel(page) { return page.getByRole('region', { name: 'Доска ин�
 async function saved(page) { await panel(page).getByRole('status').filter({ hasText: /^Сохранено$/ }).waitFor(); }
 async function tool(page, name) {
   await page.bringToFront();
-  const radio = page.getByTestId(`toolbar-${name}`);
+  const radio = page.getByRole('group', { name: 'Инструменты доски' }).getByTestId(`toolbar-${name}`);
   await radio.locator('..').click();
   assert.equal(await radio.isChecked(), true);
 }
@@ -113,8 +113,9 @@ async function assertPenOnly(page) {
   assert.ok(events.some(event => event.buttons === 1 && event.pressure > .7));
 }
 async function exported(page, label) {
+  await panel(page).getByRole('button', { name: 'Скачать', exact: true }).click();
   const pending = page.waitForEvent('download');
-  await panel(page).getByRole('button', { name: label, exact: true }).click();
+  await panel(page).getByRole('menuitem', { name: label, exact: true }).click();
   const chunks = [];
   for await (const chunk of await (await pending).createReadStream()) chunks.push(chunk);
   return Buffer.concat(chunks);

@@ -16,11 +16,23 @@ const version = "32.6.10";
 const secret = "signed-url-secret-must-not-appear";
 const configuration = enabled => ({ services: { web: { build: { args: { FEATURE_ROOM_DIAGRAMS_ENABLED: enabled ? "true" : "false" } } } } });
 const exists = async file => access(file).then(() => true, () => false);
-async function run(f, { enabled = true, environment = {}, release = f.release } = {}) {
+async function run(f, { enabled = true, environment = {}, release = f.release, denyOfflineRead = false } = {}) {
   const env = { ...process.env, DRAWIO_DOWNLOAD_TIMEOUT_MS: "200", DRAWIO_DOWNLOAD_ATTEMPTS: "2" };
   delete env.DRAWIO_ARCHIVE_PATH;
   Object.assign(env, environment);
-  const child = spawn("python3", [helper, "--from-compose", "--release", release, "--cache-dir", f.cache], { env, stdio: ["pipe", "pipe", "pipe"] });
+  const invocation = [helper, "--from-compose", "--release", release, "--cache-dir", f.cache];
+  const child = spawn("python3", denyOfflineRead ? ["-c", `
+import errno, os, runpy, sys
+from pathlib import Path
+original = Path.open
+def deny_input(self, *args, **kwargs):
+    if str(self) == os.environ['DRAWIO_ARCHIVE_PATH']:
+        raise PermissionError(errno.EACCES, '${secret}')
+    return original(self, *args, **kwargs)
+Path.open = deny_input
+sys.argv = sys.argv[1:]
+runpy.run_path(sys.argv[0], run_name='__main__')
+`, ...invocation] : invocation, { env, stdio: ["pipe", "pipe", "pipe"] });
   const chunks = []; child.stdout.on("data", x => chunks.push(x)); child.stderr.on("data", x => chunks.push(x));
   child.stdin.end(JSON.stringify(configuration(enabled)));
   const [code] = await once(child, "close"); const output = Buffer.concat(chunks).toString();
@@ -53,6 +65,38 @@ test("an offline pinned WAR is copied into the Docker-context cache and the veri
   assert.equal((await run(f, { environment: { DRAWIO_ARCHIVE_PATH: "an-unused-missing-file" } })).code, 0);
   assert.deepEqual(f.requests, []);
   assert.deepEqual(await readdir(path.dirname(f.archive)), ["draw.war"]);
+}));
+
+test("a missing offline input identifies the source and transfer remedy without HTTP or partial files", () => fixture(async f => {
+  const missing = path.join(f.directory, "not-transferred.war");
+  const result = await run(f, { environment: { DRAWIO_ARCHIVE_PATH: missing } });
+  assert.notEqual(result.code, 0); assert.match(result.output, /Missing offline archive/i);
+  assert.ok(result.output.includes(missing)); assert.match(result.output, /copy.*server/i);
+  assert.deepEqual(f.requests, []); assert.equal(await exists(f.archive), false);
+  assert.equal(await exists(f.cache), false, "missing input must be diagnosed before cache preparation");
+}));
+
+test("a directory supplied as the offline input is identified as not a regular archive", () => fixture(async f => {
+  const result = await run(f, { environment: { DRAWIO_ARCHIVE_PATH: f.directory } });
+  assert.notEqual(result.code, 0); assert.match(result.output, /Offline archive is not a regular file/i);
+  assert.ok(result.output.includes(f.directory)); assert.deepEqual(f.requests, []);
+  assert.equal(await exists(f.archive), false); assert.equal(await exists(f.cache), false);
+}));
+
+test("an unreadable offline input reports source read access instead of a cache permission failure", () => fixture(async f => {
+  const result = await run(f, { environment: { DRAWIO_ARCHIVE_PATH: f.offline }, denyOfflineRead: true });
+  assert.notEqual(result.code, 0); assert.match(result.output, /Cannot read offline archive.*permission denied/i);
+  assert.ok(result.output.includes(f.offline)); assert.deepEqual(f.requests, []);
+  assert.equal(await exists(f.archive), false);
+  if (await exists(path.dirname(f.archive))) assert.deepEqual(await readdir(path.dirname(f.archive)), []);
+}));
+
+test("a blocked cache directory identifies the cache write operation and preserves the input", () => fixture(async f => {
+  await writeFile(f.cache, "existing non-directory");
+  const result = await run(f, { environment: { DRAWIO_ARCHIVE_PATH: f.offline } });
+  assert.notEqual(result.code, 0); assert.match(result.output, /Cannot prepare or write draw.io cache/i);
+  assert.ok(result.output.includes(f.archive)); assert.deepEqual(f.requests, []);
+  assert.deepEqual(await readFile(f.offline), bytes); assert.equal(await readFile(f.cache, "utf8"), "existing non-directory");
 }));
 
 test("corrupt canonical caches fail closed and are never silently overwritten", () => fixture(async f => {
