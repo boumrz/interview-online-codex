@@ -46,9 +46,9 @@ export function RoomCanvasToolbar<NativeFormat extends "drawio" | "excalidraw">(
     <div className={styles.actions}>
       {color && <Button type="text" onClick={onApplyColor} disabled={!onApplyColor}
         data-testid="room-drawing-color" data-color={color}
-        aria-label={`Ваш цвет (${color})`} title="Применить свой цвет для новых объектов"
+        aria-label={`Закреплённый цвет (${color})`} title="Цвет, закреплённый за вами при входе в комнату. Применить к новым объектам."
         icon={<span aria-hidden="true" className={styles.swatch} style={{ backgroundColor: color }} />}>
-        <span className={styles.actionLabel}>Ваш цвет</span>
+        <span className={styles.actionLabel}>Закреплённый цвет</span>
       </Button>}
       <Dropdown
         trigger={["click"]} placement="bottomLeft" transitionName="" autoFocus destroyOnHidden

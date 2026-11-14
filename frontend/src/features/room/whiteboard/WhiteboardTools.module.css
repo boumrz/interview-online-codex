@@ -7,6 +7,11 @@
 }
 .surface { position: relative; flex: 1; min-height: 0; }
 
+/* Match palette RGB values in both themes. The paired native adapter also
+   removes raster counter-inversion and the frame-label editing filter. */
+.surface :global(.excalidraw.theme--dark canvas) { filter: none; }
+.surface :global(.excalidraw-wysiwyg) { filter: none !important; }
+
 .bar {
   display: flex;
   flex-wrap: wrap;

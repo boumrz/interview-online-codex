@@ -220,3 +220,79 @@ test('изображения добавляются файлом, из буфе�
     assert.equal(images(await snapshot(room)).length, 6);
   } finally { await browser.close(); }
 });
+
+test('ластик стирает пометки поверх изображения и сохраняет саму картинку', async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const response = await fetch(`${api}/public/rooms`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: 'Лист задания и пометки', ownerDisplayName: 'Учитель', language: 'nodejs' }) });
+    assert.equal(response.status, 200);
+    const room = await response.json();
+    const owner = await participant(browser, room, true);
+    const pupil = await participant(browser, room, false);
+    await mode(owner, 'Доска');
+    await Promise.all([saved(owner), saved(pupil)]);
+    const dataURL = await owner.evaluate(() => {
+      const canvas = document.createElement('canvas'); canvas.width = 240; canvas.height = 160;
+      const context = canvas.getContext('2d'); context.fillStyle = '#eb3349'; context.fillRect(0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL('image/png');
+    });
+    await transferImage(owner, 'drop', dataURL);
+    const uploaded = await waitScene(room, scene => images(scene).length === 1);
+    const picture = images(uploaded)[0];
+    await saved(owner);
+    const choose = async name => {
+      const radio = panel(owner).getByRole('radio', { name, exact: true });
+      await radio.locator('..').click();
+      assert.equal(await radio.isChecked(), true);
+    };
+    const overImage = async vertical => {
+      const bounds = await displayedImage(owner);
+      const from = { x: bounds.x + bounds.width * .25, y: bounds.y + bounds.height * vertical };
+      await owner.mouse.move(from.x, from.y); await owner.mouse.down();
+      await owner.mouse.move(from.x + bounds.width * .5, from.y, { steps: 12 }); await owner.mouse.up();
+    };
+    await choose('Карандаш');
+    await overImage(.5);
+    const annotated = await waitScene(room, scene => scene.elements.some(element => element.type === 'freedraw' && !element.isDeleted && element.lastCommittedPoint));
+    const note = annotated.elements.find(element => element.type === 'freedraw' && !element.isDeleted);
+    await saved(owner);
+
+    await choose('Ластик');
+    await overImage(.5);
+    const erased = await waitScene(room, scene => scene.elements.some(element => element.id === note.id && element.isDeleted));
+    assert.equal(images(erased).length, 1, 'eraser must leave the worksheet image while removing the annotation');
+    assert.deepEqual(images(erased)[0], picture, 'eraser must not mutate image identity, version or geometry');
+    assert.equal(erased.files[picture.fileId].dataURL, dataURL);
+    await saved(owner);
+    await overImage(.2);
+    await owner.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await saved(owner);
+    assert.deepEqual(images(await snapshot(room))[0], picture, 'eraser on bare image is a no-op');
+    await displayedImage(pupil);
+
+    await panel(owner).getByTestId('button-undo').click();
+    await waitScene(room, scene => images(scene).length === 1 && scene.elements.some(element => element.id === note.id && !element.isDeleted));
+    await saved(owner);
+    await choose('Выделение');
+    const bounds = await displayedImage(owner);
+    await owner.mouse.click(bounds.x + bounds.width * .2, bounds.y + bounds.height * .2);
+    await owner.keyboard.press('Delete');
+    await waitScene(room, scene => images(scene).length === 0);
+    await saved(owner);
+    await panel(owner).getByTestId('button-undo').click();
+    await waitScene(room, scene => images(scene).length === 1);
+    await saved(owner);
+    await panel(owner).getByRole('button', { name: 'Очистить всё', exact: true }).click();
+    await waitScene(room, scene => scene.elements.every(element => element.isDeleted));
+    await saved(owner);
+    await panel(owner).getByTestId('button-undo').click();
+    await waitScene(room, scene => images(scene).length === 1 && scene.elements.some(element => element.id === note.id && !element.isDeleted));
+    await saved(owner);
+    await pupil.reload({ waitUntil: 'domcontentloaded' });
+    await saved(pupil);
+    const peer = JSON.parse((await exported(pupil, '.excalidraw')).toString('utf8'));
+    assert.equal(images(peer).length, 1);
+    assert.equal(images(peer)[0].id, picture.id);
+    assert.equal(peer.files[picture.fileId].dataURL, dataURL);
+  } finally { await browser.close(); }
+});

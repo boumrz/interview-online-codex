@@ -612,7 +612,7 @@ test('схема разворачивается на всё окно локал�
     const readonlyBounds = await candidate.page.getByRole('region', { name: 'Схема интервью', exact: true }).boundingBox();
     assert.ok(readonlyBounds.width >= 1438 && readonlyBounds.height >= 998, 'candidate readonly also uses the whole viewport');
     const readerPanel = diagramPanel(candidate.page);
-    assert.ok(await readerPanel.getByRole('button', { name: /Ваш цвет/ }).isDisabled());
+    assert.ok(await readerPanel.getByRole('button', { name: /Закреплённый цвет/ }).isDisabled());
     await assertCompactCanvasHeader(readerPanel);
     await readerPanel.getByRole('button', { name: 'Скачать', exact: true }).press('Enter');
     const formats = readerPanel.getByRole('menu', { name: 'Формат скачивания' });

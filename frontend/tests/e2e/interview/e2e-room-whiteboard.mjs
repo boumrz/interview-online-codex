@@ -577,6 +577,8 @@ test('простая доска открывается с карандашом �
     const names = ['Выделение', 'Карандаш', 'Линия', 'Прямоугольник', 'Круг', 'Текст', 'Ластик'];
     await tools.waitFor();
     assert.equal(await tools.getByRole('radio').count(), names.length);
+    assert.equal(await tools.getByRole('radio').first().getAttribute('aria-label'), 'Выделение', 'the hand selection tool is first');
+    assert.equal(await panel(page).getByRole('button', { name: /^Закреплённый цвет/ }).count(), 1);
     for (const name of names) assert.ok(await tools.getByRole('radio', { name, exact: true }).isVisible(), name);
     assert.ok(await tools.getByRole('radio', { name: 'Карандаш', exact: true }).isChecked());
 
@@ -856,7 +858,7 @@ test('доска сохраняет native canvas между четырьмя р
     await panel(candidate.page).getByRole('button', { name: 'На весь экран', exact: true }).click();
     await candidate.page.setViewportSize({ width: 340, height: 420 });
     await assertCompactCanvasHeader(panel(candidate.page), { narrow: true });
-    assert.ok(await panel(candidate.page).getByRole('button', { name: /Ваш цвет/ }).isDisabled());
+    assert.ok(await panel(candidate.page).getByRole('button', { name: /Закреплённый цвет/ }).isDisabled());
     const restore = panel(candidate.page).getByRole('button', { name: 'Вернуться в комнату', exact: true });
     const restoreBox = await restore.boundingBox();
     assert.ok(restoreBox.y + restoreBox.height < 420 && restoreBox.x + restoreBox.width <= 340);

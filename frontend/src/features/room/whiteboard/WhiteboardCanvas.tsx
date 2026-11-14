@@ -71,6 +71,10 @@ function supportsStrokeWidth(tool: string): tool is keyof typeof initialWidths {
 
 export default React.memo(function WhiteboardCanvas({ active, readOnly, drawingColor, onReady, onChange }: WhiteboardCanvasProps) {
   const { mode } = useThemeMode();
+  // Dark paper is a local view preference. Colors and raster bytes themselves
+  // stay unchanged, matching the palette and the light-background exports.
+  const backgroundColor = mode === "dark" ? "#121212" : "#ffffff";
+  const background = useRef(backgroundColor); background.current = backgroundColor;
   const callback = useRef(onChange); callback.current = onChange;
   const readyCallback = useRef(onReady); readyCallback.current = onReady;
   const sdkRef = useRef<ExcalidrawImperativeAPI | null>(null);
@@ -225,6 +229,7 @@ export default React.memo(function WhiteboardCanvas({ active, readOnly, drawingC
   const attach = useCallback((sdk: ExcalidrawImperativeAPI) => {
     if (sdkRef.current === sdk) return;
     sdkRef.current = sdk;
+    sdk.updateScene({ appState: { viewBackgroundColor: background.current }, captureUpdate: CaptureUpdateAction.NEVER });
     let firstScene = true;
     const handle: WhiteboardCanvasHandle = {
       flushLocalChanges() { observeElements(sdk.getSceneElementsIncludingDeleted()); },
@@ -273,6 +278,9 @@ export default React.memo(function WhiteboardCanvas({ active, readOnly, drawingC
     importingOperation.current = null; setImporting(false); setImportError(null);
   }, [active, readOnly]);
   useEffect(() => () => { importGate.current.generation++; importingOperation.current = null; sdkRef.current = null; readyCallback.current(null); }, []);
+  useEffect(() => {
+    sdkRef.current?.updateScene({ appState: { viewBackgroundColor: backgroundColor }, captureUpdate: CaptureUpdateAction.NEVER });
+  }, [backgroundColor]);
   return <div className={styles.board}>
     {active && !readOnly && <WhiteboardTools
       canClear={canClear}
@@ -321,7 +329,7 @@ export default React.memo(function WhiteboardCanvas({ active, readOnly, drawingC
           currentItemRoughness: 0,
           currentItemRoundness: "sharp",
           currentItemFontFamily: FONT_FAMILY.Nunito,
-          viewBackgroundColor: "#ffffff",
+          viewBackgroundColor: backgroundColor,
         } }}
         name="Доска интервью"
         langCode="ru-RU"

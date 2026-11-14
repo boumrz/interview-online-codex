@@ -211,7 +211,7 @@ test('цвета новых native штрихов и схем уникальны
           }
           graph.freehand.setStrokeColor(customColor);
         }, { id: legacyId, customColor });
-        await panel(owner, 'Схема интервью').getByRole('button', { name: /Ваш цвет/ }).press('Enter');
+        await panel(owner, 'Схема интервью').getByRole('button', { name: /Закреплённый цвет/ }).press('Enter');
         assert.equal(await owner.getByRole('list', { name: 'Цвета участников' }).count(), 0);
         const restored = await editor.evaluate(() => {
           const graph = window.__interhubTestUi.editor.graph;

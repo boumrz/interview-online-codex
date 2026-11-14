@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 
 export async function assertCompactCanvasHeader(panel, { narrow = false } = {}) {
   const toolbar = panel.getByRole('group', { name: 'Действия с холстом' });
-  const color = toolbar.getByRole('button', { name: /Ваш цвет/ });
+  const color = toolbar.getByRole('button', { name: /Закреплённый цвет/ });
   const download = toolbar.getByRole('button', { name: 'Скачать', exact: true });
   const expand = toolbar.getByRole('button', { name: /^(На весь экран|Вернуться в комнату)$/ });
   const [colorBox, downloadBox, expandBox, bounds] = await Promise.all(
@@ -42,7 +42,7 @@ export async function assertStableAutosave(panel, canvas, changesRoute, edit) {
   const status = toolbar.getByRole('status');
   const layout = {
     canvas, toolbar, status,
-    color: toolbar.getByRole('button', { name: /Ваш цвет/ }),
+    color: toolbar.getByRole('button', { name: /Закреплённый цвет/ }),
     download: toolbar.getByRole('button', { name: 'Скачать', exact: true }),
     fullscreen: toolbar.getByRole('button', { name: /^(На весь экран|Вернуться в комнату)$/ }),
   };
