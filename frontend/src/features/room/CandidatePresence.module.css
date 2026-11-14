@@ -1,0 +1,7 @@
+.indicator[data-presence="active"] {
+  --candidate-presence-border: color-mix(in srgb, var(--app-success) 48%, var(--app-border));
+}
+
+.indicator[data-presence="away"] {
+  --candidate-presence-border: color-mix(in srgb, var(--app-error) 52%, var(--app-border));
+}

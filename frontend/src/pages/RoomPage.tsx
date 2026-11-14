@@ -63,7 +63,7 @@ import {
 import { VerdictBadge } from "../features/room/VerdictBadge";
 import { ActivityTimeline } from "../features/room/ActivityTimeline";
 import { useCandidateActivityHistory } from "../features/room/useCandidateActivityHistory";
-import { reconcileActivityEvents } from "../features/room/activityTimelineProjection";
+import { mergeActivitySnapshot, reconcileActivityEvents } from "../features/room/activityTimelineProjection";
 import { PRODUCT_METRIKA_EVENT, setVisitParams, trackEvent } from "../services/analytics";
 import {
   useRoomSocket,
@@ -141,6 +141,7 @@ import {
 } from "../features/room/roomChatDelivery";
 
 import { isRoomReadOnly } from "../features/room/roomEditPolicy";
+import { currentParticipantSnapshot } from "../features/room/participantSnapshot";
 import styles from "./RoomPage.module.css";
 
 type CursorInfo = {
@@ -166,6 +167,7 @@ type CursorInfo = {
 
 type RealtimeState = {
   inviteCode: string;
+  viewerScope?: string;
   language: string;
   code: string;
   lastCodeUpdatedBySessionId: string | null;
@@ -188,6 +190,7 @@ type RealtimeState = {
   tasks?: RoomTask[];
   taskScores: Record<string, number | null>;
   participants: Participant[];
+  participantSnapshotRevision?: number;
   isOwner: boolean;
   role: "owner" | "interviewer" | "candidate";
   canManageRoom: boolean;
@@ -271,7 +274,6 @@ type MobileRoomTab = "editor" | "collaboration" | "tasks";
  */
 const MIN_BRIEFING_HEIGHT = 120;
 const MAX_BRIEFING_HEIGHT = 420;
-const LOG_HISTORY_LIMIT = 50;
 const REMOTE_SELECTION_HIGHLIGHT_ENABLED = true;
 const REMOTE_CARET_HIGHLIGHT_ENABLED = true;
 const REMOTE_CURSOR_RENDER_DEBOUNCE_MS = 80;
@@ -709,8 +711,10 @@ export function RoomPage() {
     ? authUser?.displayName?.trim() || readStoredDisplayName(inviteCode)
     : readStoredDisplayName(inviteCode);
 
-  const [state, setState] = useState<RealtimeState | null>(null);
+  const [receivedState, setState] = useState<RealtimeState | null>(null);
+  const state = receivedState?.viewerScope === markdownPreviewScope ? receivedState : null;
   const stateRef = useRef<RealtimeState | null>(null);
+  const managerAccessGeneration = useRef(0);
   const [error, setError] = useState("");
   const [diagramRefreshSignal, setDiagramRefreshSignal] = useState(0);
   const [savedDiagramViewScope, setSavedDiagramViewScope] = useState<string | null>(null);
@@ -1378,7 +1382,7 @@ export function RoomPage() {
 
   const onState = useCallback(
     (incoming: RealtimeState) => {
-      const previousState = stateRef.current;
+      const previousState = stateRef.current?.viewerScope === markdownPreviewScope ? stateRef.current : null;
       // Invalidate on each server transition, even if React batches loss and
       // regain of manager access into one render.
       if (
@@ -1395,7 +1399,8 @@ export function RoomPage() {
           cursor,
         ]),
       );
-      const participants = (incoming.participants ?? []).map((participant) => ({
+      const roster = currentParticipantSnapshot(previousState, incoming);
+      const participants = (roster.participants ?? []).map((participant) => ({
         ...participant,
         role: participant.role ?? "candidate",
       }));
@@ -1490,17 +1495,10 @@ export function RoomPage() {
             .filter((item): item is RoomTask => Boolean(item))
             .sort((left, right) => left.stepIndex - right.stepIndex)
         : (previousState?.tasks ?? []);
-      const canonicalCandidateKeyHistory = incoming.canManageRoom
-        ? reconcileActivityEvents(
-            Array.isArray(incoming.candidateKeyHistory)
-              ? incoming.candidateKeyHistory
-              : incoming.lastCandidateKey
-                ? [incoming.lastCandidateKey]
-                : [],
-          ).slice(-LOG_HISTORY_LIMIT)
-        : [];
       const nextState: RealtimeState = {
         ...incoming,
+        viewerScope: markdownPreviewScope,
+        participantSnapshotRevision: roster.participantSnapshotRevision,
         language: normalizeRoomLanguage(incoming.language),
         tasks: nextTasks,
         participants,
@@ -1535,8 +1533,8 @@ export function RoomPage() {
             ? incoming.briefingMarkdown
             : "",
         canGrantAccess: Boolean(incoming.canGrantAccess),
-        candidateKeyHistory: canonicalCandidateKeyHistory,
-        lastCandidateKey: canonicalCandidateKeyHistory.at(-1) ?? null,
+        candidateKeyHistory: incoming.canManageRoom ? incoming.candidateKeyHistory : [],
+        lastCandidateKey: incoming.canManageRoom ? incoming.lastCandidateKey : null,
       };
       lastKnownServerYjsSequenceRef.current =
         typeof nextState.lastYjsSequence === "number" &&
@@ -1576,6 +1574,7 @@ export function RoomPage() {
       }
       clearRecoverySyncPending();
       const lostBriefingAccess = previousState?.canManageRoom && !nextState.canManageRoom;
+      if (lostBriefingAccess) managerAccessGeneration.current += 1;
       const becameReadOnly = isRoomReadOnly(nextState) && (!previousState || !isRoomReadOnly(previousState));
       if (lostBriefingAccess || becameReadOnly) {
         if (briefingDebounceTimerRef.current != null) window.clearTimeout(briefingDebounceTimerRef.current);
@@ -1590,9 +1589,14 @@ export function RoomPage() {
         }
       }
       stateRef.current = nextState;
-      setState(nextState);
+      // React may batch candidate_key(s) and this state_sync before rendering.
+      // Read the preceding queued update, including records absent from the server's short tail.
+      setState(previous => {
+        const candidateKeyHistory = mergeActivitySnapshot(previous, nextState);
+        return { ...nextState, candidateKeyHistory, lastCandidateKey: candidateKeyHistory.at(-1) ?? null };
+      });
     },
-    [clearRecoverySyncPending, invalidateHrAssignments],
+    [clearRecoverySyncPending, invalidateHrAssignments, markdownPreviewScope],
   );
 
   const onEditorValueChange = useCallback((value: string) => {
@@ -1722,22 +1726,14 @@ export function RoomPage() {
       if (!previous || !incomingKey?.sessionId) {
         return previous;
       }
-      if (!previous.canManageRoom) {
+      if (!previous.canManageRoom || previous.viewerScope !== markdownPreviewScope) {
         return previous;
       }
 
-      const timestampEpochMs =
-        typeof incomingKey.timestampEpochMs === "number"
-          ? incomingKey.timestampEpochMs
-          : Date.now();
-      const normalizedKey: CandidateKeyInfo = {
-        ...incomingKey,
-        timestampEpochMs,
-      };
       const nextHistory = reconcileActivityEvents([
         ...(previous.candidateKeyHistory ?? []),
-        normalizedKey,
-      ]).slice(-LOG_HISTORY_LIMIT);
+        incomingKey,
+      ]);
       const nextLastCandidateKey = nextHistory.at(-1) ?? null;
 
       return {
@@ -1746,7 +1742,7 @@ export function RoomPage() {
         candidateKeyHistory: nextHistory,
       };
     });
-  }, []);
+  }, [markdownPreviewScope]);
 
   const onRecoveryStateSync = useCallback(
     (lastYjsSequence: number) => {
@@ -2039,6 +2035,7 @@ export function RoomPage() {
     },
     [],
   );
+  const [interactiveDiagramFrame, setInteractiveDiagramFrame] = useState<HTMLIFrameElement | null>(null);
   const {
     connected,
     roomAuthorityToken,
@@ -2067,6 +2064,7 @@ export function RoomPage() {
     sendManagerWorkspaceAwarenessUpdate,
     sendKeyPress,
   } = useRoomSocket({
+    interactiveDiagramFrame,
     enabled: canConnect && !initialRoomUnavailable,
     inviteCode,
     authToken,
@@ -3074,6 +3072,7 @@ export function RoomPage() {
   );
 
   useCandidateKeyTracker({
+    interactiveDiagramFrame,
     active: merged?.role === "candidate" && !roomReadOnly,
     onKeyEvent: handleCandidateKeyPress,
   });
@@ -3137,6 +3136,7 @@ export function RoomPage() {
   const candidateBriefingFocusMode = briefingFocusMode && !diagramMode && !whiteboardMode;
   const diagramPanel = ROOM_DIAGRAMS_ENABLED && merged.roomDiagramsEnabled && canvasTaskId !== undefined ? (
     <RoomDiagramPanel
+      onInteractiveFrame={setInteractiveDiagramFrame}
       key={markdownPreviewScope}
       taskId={canvasTaskId}
       inviteCode={inviteCode}
@@ -3172,16 +3172,8 @@ export function RoomPage() {
   const localStatusTask = mergedTasks.find(
     (task) => task.stepIndex === localSelectedStep,
   );
-  const candidateParticipantsForStatus = merged.participants.filter(
-    (participant) => participant.role === "candidate",
-  );
-  const candidatePresenceStatus = candidateParticipantsForStatus.length === 0
-    ? "не подключен"
-    : candidateParticipantsForStatus.some(
-        (participant) => participant.presenceStatus === "away",
-      )
-      ? "вне фокуса"
-      : "в фокусе";
+  const showCandidateStatuses = canManageRoom && !realtimeAccessDenied && merged.viewerScope === markdownPreviewScope;
+  const presenceConfirmed = connected && roomAuthorityToken !== null && roomAuthorityToken === merged.eventToken;
 
   /**
    * Переключение focus mode со стороны интервьюера. Состояние едет
@@ -3394,8 +3386,9 @@ export function RoomPage() {
           interviewListPath={interviewListPath}
           authToken={authToken}
           connected={connected}
+          presenceConfirmed={presenceConfirmed}
           participants={merged.participants}
-          showParticipants={canManageRoom}
+          showParticipants={showCandidateStatuses}
           showLanguageControl={canManageRoom && !(localWorkspacePreview ? localStatusTask?.mandatory : step?.mandatory)}
           languageDisabled={roomReadOnly}
           currentLanguage={normalizeRoomLanguage(localWorkspacePreview?.language ?? merged.language)}
@@ -3427,7 +3420,8 @@ export function RoomPage() {
             publishedStep={canManageRoom && step
               ? { stepIndex: step.stepIndex, title: step.title }
               : undefined}
-            candidateStatus={canManageRoom ? candidatePresenceStatus : undefined}
+            candidates={showCandidateStatuses ? merged.participants.filter(person => person.role === "candidate") : undefined}
+            presenceConfirmed={presenceConfirmed}
           />
           <div className={styles.interviewPanelActions}>
             {canManageRoom && roomScopeError ? <Alert color="red" role="alert">
@@ -3517,6 +3511,7 @@ export function RoomPage() {
           </section>
         ) : canManageRoom ? (
           <OwnerLayout
+            key={`${markdownPreviewScope}:${managerAccessGeneration.current}`}
             diagramPanel={diagramPanel}
             diagramMode={diagramMode}
             whiteboardPanel={whiteboardPanel}
@@ -3581,8 +3576,6 @@ export function RoomPage() {
             participantLabel={effectiveDisplayName}
             sendAwarenessUpdate={sendAwarenessUpdate}
             onAwarenessBridgeReady={onAwarenessBridgeReady}
-            lastCandidateKey={merged.lastCandidateKey}
-            candidateKeyHistory={merged.candidateKeyHistory ?? []}
             syncKey={currentSyncKey}
             resyncSignal={resyncSignal}
             editorReady={editorReady}
@@ -3728,8 +3721,6 @@ function OwnerLayout({
   participantLabel,
   sendAwarenessUpdate,
   onAwarenessBridgeReady,
-  lastCandidateKey,
-  candidateKeyHistory,
   syncKey,
   resyncSignal,
   editorReady,
@@ -3843,8 +3834,6 @@ function OwnerLayout({
   participantLabel: string;
   sendAwarenessUpdate: (awarenessUpdate: string) => void;
   onAwarenessBridgeReady: (applyFn: ((b64: string) => void) | null) => void;
-  lastCandidateKey: CandidateKeyInfo | null;
-  candidateKeyHistory: CandidateKeyInfo[];
   syncKey: string;
   resyncSignal: number;
   editorReady: boolean;
@@ -4344,28 +4333,6 @@ function OwnerLayout({
   const showLeftPanel = isCompactLayout
     ? activeMobileTab !== "editor"
     : currentSidePanel !== null;
-  const candidateParticipants = merged.participants.filter(
-    (participant) => participant.role === "candidate",
-  );
-  const candidateOutOfFocus = candidateParticipants.some(
-    (participant) => participant.presenceStatus === "away",
-  );
-  const candidatePresenceState =
-    candidateParticipants.length === 0
-      ? "offline"
-      : candidateOutOfFocus
-        ? "away"
-        : "active";
-  const candidatePresenceLabel =
-    candidatePresenceState === "offline"
-      ? "Не подключен"
-      : candidatePresenceState === "away"
-        ? "Вне фокуса"
-        : "В фокусе";
-  const recentCandidateKeyHistory = useMemo(() => {
-    const recent = (candidateKeyHistory ?? []).slice(-LOG_HISTORY_LIMIT);
-    return recent.length === 0 && lastCandidateKey ? [lastCandidateKey] : recent;
-  }, [candidateKeyHistory, lastCandidateKey]);
   const [activitySurfaceVisible, setActivitySurfaceVisible] = useState(false);
   useEffect(() => {
     if (!merged.canManageRoom) {
@@ -4396,7 +4363,7 @@ function OwnerLayout({
     ownerToken,
     authToken,
     eventToken: merged.eventToken,
-    keyHistory: recentCandidateKeyHistory,
+    keyHistory: merged.candidateKeyHistory,
     canManageRoom: merged.canManageRoom,
     active: activitySurfaceVisible,
   });
@@ -5256,14 +5223,6 @@ function OwnerLayout({
 
         <RoomContextSurface name="activity">
           <div className={styles.contextSurfaceScroll}>
-            <Group justify="space-between" align="center" gap={8}>
-              <Text size="sm" c="var(--app-muted)">
-                Кандидат
-              </Text>
-              <Badge variant="light" data-state={candidatePresenceState}>
-                {candidatePresenceLabel}
-              </Badge>
-            </Group>
             <div
               className={styles.contextActivityHistory}
               role="region"
@@ -6024,23 +5983,6 @@ function OwnerLayout({
             ) : (
               <Box className={styles.outputPanel}>
                 <div className={styles.panelTabs}>
-                  <div
-                    className={styles.ownerPresenceBanner}
-                    aria-label="Кандидат"
-                  >
-                    <div className={styles.ownerPresenceCopy}>
-                      <Text className={styles.ownerPresenceLabel}>
-                        Кандидат
-                      </Text>
-                    </div>
-                    <Badge
-                      className={styles.ownerPresenceBadge}
-                      variant="light"
-                      data-state={candidatePresenceState}
-                    >
-                      {candidatePresenceLabel}
-                    </Badge>
-                  </div>
                   <div
                     className={styles.panelTabsList}
                     role="tablist"

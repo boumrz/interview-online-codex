@@ -2,7 +2,7 @@ import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useStat
 import { Button, Modal } from "antd";
 import { useDiagramExpansion as useCanvasExpansion } from "../diagram/useDiagramExpansion";
 import { createWhiteboardSession, type WhiteboardConnection, type WhiteboardSession, type WhiteboardState } from "./whiteboardSession";
-import type { WhiteboardElement } from "./whiteboardProtocol";
+import type { WhiteboardElement, WhiteboardFiles } from "./whiteboardProtocol";
 import type { WhiteboardCanvasHandle, WhiteboardExportFormat } from "./whiteboardCanvasTypes";
 import styles from "./RoomWhiteboardPanel.module.css";
 import { normalizeDrawingColor } from "../drawingColor";
@@ -37,7 +37,7 @@ function MountedWhiteboardPanel(props: RoomWhiteboardPanelProps & TaskCanvasLife
   const canExport = props.active && props.connected && state.loaded && !state.accessDenied && !exporting;
   const { panelRef, expanded, toggleExpanded } = useCanvasExpansion(props.active);
   const onReady = useCallback((handle: WhiteboardCanvasHandle | null) => setCanvas(handle), []);
-  const onChange = useCallback((elements: readonly WhiteboardElement[]) => session.current?.observe(elements), []);
+  const onChange = useCallback((elements: readonly WhiteboardElement[], files?: WhiteboardFiles) => session.current?.observe(elements, files), []);
 
   useEffect(() => {
     if (!canvas) return;
@@ -82,9 +82,7 @@ function MountedWhiteboardPanel(props: RoomWhiteboardPanelProps & TaskCanvasLife
       {state.canDiscard && <Button onClick={() => setConfirmDiscard(true)}>Вернуться к сохранённой доске</Button>}
     </RoomCanvasToolbar>
     <div className={styles.body}>
-      {drawingColor && !state.accessDenied && <div className={styles.canvas} data-testid="room-whiteboard-canvas" onDropCapture={event => {
-        if (event.dataTransfer.files.length) { event.preventDefault(); event.stopPropagation(); }
-      }}><Suspense fallback={<div className={styles.placeholder}>Подготавливаем редактор доски…</div>}><WhiteboardCanvas active={props.active} readOnly={props.readOnly || !state.editable} drawingColor={drawingColor} onReady={onReady} onChange={onChange} /></Suspense></div>}
+      {drawingColor && !state.accessDenied && <div className={styles.canvas} data-testid="room-whiteboard-canvas"><Suspense fallback={<div className={styles.placeholder}>Подготавливаем редактор доски…</div>}><WhiteboardCanvas active={props.active} readOnly={props.readOnly || !state.editable} drawingColor={drawingColor} onReady={onReady} onChange={onChange} /></Suspense></div>}
       {(!state.loaded || state.accessDenied) && <div className={styles.placeholder}>{state.message}</div>}
     </div>
     <Modal getContainer={() => panelRef.current ?? document.body} open={confirmDiscard} title="Удалить несохранённые изменения доски?" okText="Загрузить сохранённую" cancelText="Оставить изменения" okButtonProps={{ danger: true }} onCancel={() => setConfirmDiscard(false)} onOk={() => { setConfirmDiscard(false); session.current?.reset(); }}>

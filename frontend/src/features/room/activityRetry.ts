@@ -5,3 +5,10 @@ export function activityRetryDelay(attempt: number): number {
 }
 
 export const ACTIVITY_REQUEST_TIMEOUT_MS = 10000;
+
+/** Only 204 confirms persistence at the activity relay. */
+export function activityPostOutcome(status: number): "accepted" | "retry" | "rejected" {
+  if (status === 204) return "accepted";
+  if ((status >= 200 && status < 300) || [408, 425, 429].includes(status) || status >= 500) return "retry";
+  return "rejected";
+}

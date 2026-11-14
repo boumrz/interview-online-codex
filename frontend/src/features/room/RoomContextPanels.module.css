@@ -246,7 +246,8 @@
 }
 
 .statusRoleBadge,
-.statusItem {
+.statusItem,
+.candidateStatus {
   display: inline-flex;
   min-width: 0;
   min-height: 24px;
@@ -261,6 +262,36 @@
   line-height: 16px;
   padding: 3px 8px;
   white-space: nowrap;
+}
+
+.candidateStatuses {
+  display: flex;
+  min-width: 0;
+  max-height: 76px;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+.candidateStatuses:focus-visible {
+  outline: 2px solid var(--app-focus);
+  outline-offset: -2px;
+}
+
+.candidateStatus {
+  display: inline-block;
+  max-width: 100%;
+  border-color: var(--candidate-presence-border, var(--app-border));
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-weight: 400;
+}
+
+.candidateName {
+  font-weight: 600;
 }
 
 .statusRoleBadge[data-role-tone="blue"] {
@@ -685,11 +716,6 @@
     margin-bottom: 0;
     --room-grid-padding-bottom: 0px;
   }
-
-  .statusRow.statusRow {
-    grid-template-columns: 64px minmax(0, 110px) minmax(0, 1fr);
-  }
-
 }
 
 @media (max-height: 650px) {
@@ -699,8 +725,9 @@
     height: 40px;
     flex: 1 1 100%;
     display: grid;
-    grid-template-columns: 72px minmax(0, 145px) minmax(0, 1fr);
-    grid-template-rows: repeat(2, 20px);
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    align-content: center;
     gap: 0 4px;
     overflow: hidden;
   }
@@ -724,23 +751,25 @@
   }
 
   .statusItem[data-testid="room-explicit-connection-status"] {
-    grid-column: 2;
-    grid-row: 1;
-  }
-
-  .statusItem[data-testid="room-local-step-status"] {
     grid-column: 1 / span 2;
     grid-row: 2;
   }
 
-  .statusItem[data-testid="room-published-step-status"] {
-    grid-column: 3;
-    grid-row: 2;
+  .candidateStatuses {
+    grid-column: 2;
+    grid-row: 1;
+    flex-wrap: nowrap;
   }
 
-  .statusItem[data-testid="room-candidate-presence-status"] {
-    grid-column: 3;
-    grid-row: 1;
+  .candidateStatus,
+  .candidateStatuses .statusItem {
+    width: auto;
+    max-width: none;
+    min-height: 20px;
+    padding: 1px 5px;
+    font-size: 11px;
+    line-height: 16px;
+    white-space: nowrap;
   }
 
   .surfaceTitle {

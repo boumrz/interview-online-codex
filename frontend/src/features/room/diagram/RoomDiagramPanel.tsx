@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button, Modal } from "antd";
 import { API_BASE_URL } from "../../../config/runtime";
 import { roomRealtimeFetch } from "../roomRealtimeTransport";
@@ -28,6 +28,7 @@ export type RoomDiagramPanelProps = {
   active: boolean;
   refreshSignal: number;
   drawingColor?: string | null;
+  onInteractiveFrame?: (frame: HTMLIFrameElement | null) => void;
 };
 
 type PanelState = { loaded: boolean; editable: boolean; message: string; error: boolean; busy: boolean; preview?: string; presentationOnly: boolean; accessDenied: boolean; canDiscard: boolean };
@@ -423,6 +424,13 @@ function MountedRoomDiagramPanel(props: RoomDiagramPanelProps & TaskCanvasLifecy
     if (!controller.current) { release(); return; }
     return controller.current.retire(release);
   }, [props.retiring, props.taskId, props.release, retry, state.accessDenied, drawingColor]);
+
+  const interactive = props.active && !props.readOnly && state.loaded && state.editable && !state.accessDenied;
+  useLayoutEffect(() => {
+    if (!interactive || !visible.current) return;
+    props.onInteractiveFrame?.(visible.current);
+    return () => props.onInteractiveFrame?.(null);
+  }, [interactive, props.onInteractiveFrame, retry]);
 
   const url = `${editorUrl}&dark=${initialTheme.current === "dark" ? "1" : "0"}`;
   const readonly = props.readOnly || (state.loaded && !state.editable);

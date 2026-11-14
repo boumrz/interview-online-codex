@@ -924,9 +924,58 @@ test("manager status row keeps candidate state without redundant published or lo
       "AC11_MANAGER_STATUS_NESTED_IN_SWITCHABLE_SURFACE",
     );
     assert.equal(await candidateStatus.count(), 1, "AC11_CANDIDATE_STATUS_MISSING");
-    assert.match((await candidateStatus.textContent())?.trim() ?? "", /^Кандидат: (не подключен|в фокусе|подключен)$/, "AC11_CANDIDATE_STATUS_NOT_EXPLICIT");
+    assert.equal((await candidateStatus.textContent())?.trim(), "Нет подключённых кандидатов");
     assert.equal(await candidateStatus.getAttribute("role"), "status", "AC11_CANDIDATE_STATUS_ROLE_MISSING");
     assert.equal(await candidateStatus.getAttribute("aria-live"), "polite", "AC11_CANDIDATE_STATUS_ARIA_LIVE_MISSING");
+    const guests = [];
+    try {
+      for (let i = 0; i < 2; i++) {
+        const guest = await openRoom({ room: fixtures.room, displayName: "Тёзка" });
+        guests.push(guest);
+        assert.equal(await guest.page.getByTestId("room-candidate-presence-status").count(), 0);
+      }
+      const chips = candidateStatus.getByTestId("room-candidate-status");
+      await chips.nth(1).waitFor({ state: "visible" });
+      const labels = await chips.allTextContents();
+      assert.ok(labels.every(label => label.startsWith("Тёзка · ")));
+      assert.equal(new Set(labels.map(label => label.match(/^Тёзка · \S+/)?.[0])).size, 2);
+      const names = await Promise.all(guests.map(async ({ page: guestPage }) =>
+        "Тёзка · " + (await sessionIdFor(guestPage, fixtures.room.inviteCode, "PRESENCE")).slice(-6)));
+      for (const { page: guestPage } of guests) {
+        await guestPage.evaluate(() => {
+          Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
+          Object.defineProperty(document, "hasFocus", { configurable: true, value: () => true });
+          window.dispatchEvent(new Event("focus"));
+        });
+      }
+      const waitStatus = (index, text) =>
+        candidateStatus.getByTitle(names[index] + " — " + text, { exact: true }).waitFor({ state: "visible" });
+      await Promise.all([waitStatus(0, "В фокусе"), waitStatus(1, "В фокусе")]);
+      await guests[0].page.evaluate(() => {
+        Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      await Promise.all([waitStatus(0, "Вне фокуса"), waitStatus(1, "В фокусе")]);
+      const tones = await chips.evaluateAll(elements => {
+        const context = document.createElement("canvas").getContext("2d");
+        return Object.fromEntries(elements.map(element => {
+          context.fillStyle = getComputedStyle(element).borderTopColor;
+          context.fillRect(0, 0, 1, 1);
+          const [red, green, blue] = context.getImageData(0, 0, 1, 1).data;
+          return [element.dataset.presence, { red, green, blue }];
+        }));
+      });
+      assert.ok(tones.active.green > tones.active.red && tones.active.green > tones.active.blue);
+      assert.ok(tones.away.red > tones.away.green && tones.away.red > tones.away.blue);
+      await guests[0].page.evaluate(() => {
+        Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
+        document.dispatchEvent(new Event("visibilitychange"));
+        window.dispatchEvent(new Event("focus"));
+      });
+      await Promise.all([waitStatus(0, "В фокусе"), waitStatus(1, "В фокусе")]);
+    } finally {
+      await Promise.all(guests.map(guest => closeRoomContext(guest.context)));
+    }
   } finally {
     await closeRoomContext(context);
   }

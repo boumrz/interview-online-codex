@@ -39,3 +39,24 @@ test("parsed snapshots own immutable JSON data rather than caller-owned mutable 
   assert.deepEqual(parsed.elements[0]?.points, [[0, 0], [20, 30]]);
   assert.equal(Object.isFrozen(parsed.elements[0]), true);
 });
+
+const imageFile = () => ({ id: "picture", mimeType: "image/png", dataURL: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z1SAAAAAASUVORK5CYII=", created: 1 });
+const image = () => element({ type: "image", fileId: "picture", status: "saved", scale: [1, 1], points: undefined, pressures: undefined, simulatePressure: undefined });
+
+test("image snapshots retain immutable raster files, including deleted images for undo", () => {
+  const input = snapshot({ elements: [image(), { ...image(), id: "deleted-image", isDeleted: true }], files: { picture: imageFile() } });
+  const parsed = parseSnapshot(input);
+  assert.equal(parsed.files.picture?.dataURL, imageFile().dataURL);
+  assert.equal(Object.isFrozen(parsed.files.picture), true);
+  assert.equal(parsed.elements[1]?.isDeleted, true);
+  assert.deepEqual(parseSnapshot(snapshot()).files, {});
+});
+
+test("image snapshots reject missing assets, unsafe URLs, mismatched IDs and oversized raster payloads", () => {
+  for (const files of [undefined, {}, { picture: { ...imageFile(), id: "other" } }, { picture: { ...imageFile(), mimeType: "image/svg+xml" } }, { picture: { ...imageFile(), dataURL: "https://example.test/image.png" } }, { picture: { ...imageFile(), dataURL: "data:image/png;base64," + "A".repeat(7_000_000) } }]) {
+    assert.throws(() => parseSnapshot(snapshot({ elements: [image()], files })));
+  }
+  for (const overrides of [{ scale: [0, 1] }, { fileId: null }, { status: "unknown" }]) {
+    assert.throws(() => parseSnapshot(snapshot({ elements: [{ ...image(), ...overrides }], files: { picture: imageFile() } })));
+  }
+});

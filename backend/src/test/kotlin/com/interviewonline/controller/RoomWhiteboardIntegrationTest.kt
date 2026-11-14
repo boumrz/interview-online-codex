@@ -72,6 +72,96 @@ class RoomWhiteboardIntegrationTest(
         assertEquals("original-code", jdbc.queryForObject("SELECT code FROM rooms WHERE id=?", String::class.java, room.id))
     }
 
+    @Test fun `whiteboard activity records actual candidate scene edits once and excludes receipts metadata and tombstones`() {
+        val room = room()
+        val candidate = stream(room)
+        val owner = stream(room, true)
+        val id = boardId(room)
+        val original = stroke("private-id")
+        val op = UUID.randomUUID().toString()
+        assertEquals(200, change(room, candidate, id, listOf(original), operationId = op).response.status)
+        assertEquals(200, change(room, candidate, id, listOf(original), operationId = op).response.status)
+        assertEquals(409, change(room, candidate, id, listOf(stroke("other")), operationId = op).response.status)
+        assertEquals(200, change(room, candidate, id, listOf(original + mapOf("version" to 2, "updated" to 222))).response.status)
+        assertEquals(200, change(room, candidate, id, listOf(original)).response.status)
+        assertEquals(200, change(room, candidate, id, listOf(stroke("never-visible", deleted = true))).response.status)
+        assertEquals(200, change(room, candidate, id, listOf(stroke("private-id", version = 3, deleted = true))).response.status)
+        assertEquals(200, change(room, owner, id, listOf(stroke("manager"))).response.status)
+        val recorded = messages(owner.result).filter { it.path("type").asText() == "candidate_key" }.map { it.path("payload") }
+        assertEquals(listOf("whiteboard_edit", "whiteboard_edit"), recorded.map { it.path("eventKind").asText() })
+        assertEquals(listOf(1, 2), recorded.map { it.path("acceptedSequence").asInt() })
+        assertTrue(recorded.all { it.path("sessionId").asText() == candidate.sessionId && it.path("key").asText() == "" && !it.toString().contains("private-id") })
+        assertTrue(messages(candidate.result).none { it.path("type").asText() == "candidate_key" })
+    }
+
+    @Test fun `a long freehand gesture logs once across intermediate saves without hiding another candidate or later edits`() {
+        val room = room()
+        val first = stream(room)
+        val second = stream(room)
+        val observer = stream(room, true)
+        val id = boardId(room)
+        fun path(version: Int, points: Int, finished: Boolean = false) = stroke("long", version) + mapOf(
+            "points" to (0 until points).map { listOf(it, it) }, "pressures" to List(points) { 0.5 },
+            "lastCommittedPoint" to if (finished) listOf(points - 1, points - 1) else null,
+            "width" to points - 1, "height" to points - 1,
+        )
+        fun save(actor: Connection, element: Map<String, Any?>) {
+            val result = change(room, actor, id, listOf(element))
+            assertEquals(200, result.response.status, result.response.contentAsString)
+        }
+        fun authors() = messages(observer.result).filter { it.path("type").asText() == "candidate_key" }
+            .map { it.path("payload").path("sessionId").asText() }
+
+        save(first, path(1, 2))
+        save(first, path(2, 4))
+        save(second, stroke("their-stroke")) // Interleaved second candidate must retain their own gesture.
+        save(first, path(3, 8))
+        save(first, path(4, 9, finished = true))
+        assertEquals(listOf(first.sessionId, second.sessionId), authors())
+        save(first, path(5, 10)) // Appending after a completed gesture is a new edit.
+        save(first, path(6, 10) + ("x" to 42))
+        save(first, path(7, 10) + ("isDeleted" to true))
+        save(first, path(8, 10))
+        save(first, stroke("another"))
+        val beforeTakeover = authors().size
+        save(second, stroke("another", version = 2) + mapOf(
+            "points" to listOf(listOf(0, 0), listOf(2, 3), listOf(5, 1), listOf(6, 5)),
+            "pressures" to listOf(0.2, 0.7, 0.4, 0.5)))
+        assertEquals(7, beforeTakeover)
+        assertEquals(beforeTakeover + 1, authors().size)
+        assertEquals(second.sessionId, authors().last())
+        save(first, stroke("new-pen"))
+        save(first, stroke("new-pen", version = 2) + ("strokeColor" to "#eeeeee"))
+        val reconnected = stream(room, sessionId = first.sessionId)
+        save(reconnected, stroke("new-pen", version = 3) + mapOf(
+            "strokeColor" to "#eeeeee", "points" to listOf(listOf(0, 0), listOf(2, 3), listOf(5, 1), listOf(6, 5)),
+            "pressures" to listOf(0.2, 0.7, 0.4, 0.5)))
+        assertEquals(11, authors().size)
+        assertEquals(14, body(get(room)).path("sequence").asInt())
+    }
+
+    @Test fun `a failed journal insert rolls back the scene and receipt and allows the same operation to succeed`() {
+        val room = room()
+        val candidate = stream(room)
+        val owner = stream(room, true)
+        val id = boardId(room)
+        val operation = UUID.randomUUID().toString()
+        val constraint = "canvas_log_failure_" + UUID.randomUUID().toString().replace("-", "")
+        jdbc.execute("ALTER TABLE room_keystroke_events ADD CONSTRAINT $constraint CHECK (room_id <> '${room.id}')")
+        try {
+            val failed = runCatching { change(room, candidate, id, listOf(stroke("stroke")), operationId = operation) }
+            assertTrue(failed.isFailure || failed.getOrThrow().response.status >= 400)
+            assertEquals(0, body(get(room)).path("sequence").asInt())
+            assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM room_whiteboard_operations WHERE room_id=?", Int::class.java, room.id))
+            assertTrue(messages(owner.result).none { it.path("type").asText() in setOf("candidate_key", "whiteboard_changed") })
+        } finally {
+            jdbc.execute("ALTER TABLE room_keystroke_events DROP CONSTRAINT $constraint")
+        }
+        assertEquals(200, change(room, candidate, id, listOf(stroke("stroke")), operationId = operation).response.status)
+        assertEquals(1, body(get(room)).path("sequence").asInt())
+        assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM room_keystroke_events WHERE room_id=?", Int::class.java, room.id))
+    }
+
     @Test fun `concurrent different strokes merge even from the same old base`() {
         val room = room(); val a = stream(room); val b = stream(room); val id = boardId(room)
         val executor = Executors.newFixedThreadPool(2)
@@ -82,6 +172,9 @@ class RoomWhiteboardIntegrationTest(
             assertEquals(listOf(200, 200), statuses)
             assertEquals(setOf("a", "b"), body(get(room)).path("elements").map { it.path("id").asText() }.toSet())
             assertEquals(2L, body(get(room)).path("sequence").asLong())
+            assertEquals(setOf(a.sessionId, b.sessionId), jdbc.queryForList(
+                "SELECT session_id FROM room_keystroke_events WHERE room_id=? AND event_kind='whiteboard_edit'",
+                String::class.java, room.id).toSet())
         } finally { executor.shutdownNow() }
     }
 

@@ -84,6 +84,34 @@ class RoomDiagramIntegrationTest(
         assertEquals(id, body(get(room)).path("diagramId").asText())
     }
 
+    @Test fun `only a committed candidate graph change appends one generic manager-only activity record`() {
+        val room = room()
+        val candidate = stream(room, false)
+        val owner = stream(room, true)
+        val document = body(get(room))
+        val id = document.path("diagramId").asText()
+        val op = UUID.randomUUID().toString()
+        assertEquals(200, change(room, candidate, id, op, 0, XML).response.status)
+        assertEquals(200, change(room, candidate, id, op, 0, XML).response.status)
+        assertEquals(409, change(room, candidate, id, op, 0, XML.replace("API", "conflict"), patch = emptyMap<String, Any>()).response.status)
+        assertEquals(409, change(room, candidate, id, UUID.randomUUID().toString(), 0, XML).response.status)
+        val viewOnly = XML.replace("<mxGraphModel>", "<mxGraphModel dx=\"30\">").replace("><mxCell", ">\n  <mxCell")
+            .replace("<mxCell id=\"0\"/>", "<mxCell id=\"0\">\n</mxCell>")
+        assertEquals(200, change(room, candidate, id, UUID.randomUUID().toString(), 1, viewOnly).response.status)
+        assertEquals(200, change(room, owner, id, UUID.randomUUID().toString(), 2, XML.replace("API", "manager")).response.status)
+        fun activity(connection: Connection) = connection.result.response.getContentAsString(Charsets.UTF_8).lineSequence()
+            .filter { it.startsWith("data:") }.map { mapper.readTree(it.removePrefix("data:")) }
+            .filter { it.path("type").asText() == "candidate_key" }.map { it.path("payload") }.toList()
+        val event = activity(owner).single()
+        assertEquals("diagram_edit", event.path("eventKind").asText())
+        assertEquals(candidate.sessionId, event.path("sessionId").asText())
+        assertEquals(1, event.path("acceptedSequence").asInt())
+        assertEquals("", event.path("key").asText())
+        assertFalse(event.toString().contains("service-a"))
+        assertTrue(activity(candidate).isEmpty())
+        assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM room_keystroke_events WHERE room_id=? AND event_kind='diagram_edit'", Int::class.java, room.id))
+    }
+
     @Test fun `task diagrams isolate snapshots history and receipts across publication and deletion`() {
         val room = room()
         val first = addTask(room, 0)

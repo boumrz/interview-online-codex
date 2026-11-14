@@ -18,6 +18,16 @@ async function tool(page, name) {
   await radio.locator('..').click();
   assert.equal(await radio.isChecked(), true);
 }
+async function pixelWidth(page, value) {
+  await page.getByRole('button', { name: /^Толщина линии:/ }).click();
+  const dialog = page.getByRole('dialog', { name: 'Толщина линии', exact: true });
+  const input = dialog.getByRole('spinbutton', { name: 'Толщина в пикселях', exact: true });
+  await input.fill(String(value));
+  await input.press('Tab');
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'hidden' });
+}
+const nativeFreehandWidth = pixels => pixels / (4.25 * Math.SQRT2);
 async function room() {
   const response = await fetch(`${api}/public/rooms`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: 'Перо без mouse fallback', ownerDisplayName: 'Автор A', language: 'nodejs' }) });
   assert.equal(response.status, 200);
@@ -91,8 +101,13 @@ async function point(page, dx) {
   return p;
 }
 async function pen(actor, profile, dx, selectedTool = 'freedraw', position) {
+  const surface = actor.page.getByTestId('room-whiteboard-canvas').locator('canvas.interactive');
+  const before = position ? await surface.boundingBox() : null;
   await tool(actor.page, selectedTool);
-  const start = position ?? await point(actor.page, dx);
+  const after = position ? await surface.boundingBox() : null;
+  // The width picker is hidden for eraser, which can remove a toolbar row.
+  // Reproject an earlier stroke's screen point into the resized canvas.
+  const start = position ? { x: position.x + after.x - before.x, y: position.y + after.y - before.y } : await point(actor.page, dx);
   const low = quantize(.18, profile.levels), high = quantize(.86, profile.levels);
   await actor.cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...start, pointerType: 'pen', buttons: 0, force: 0 });
   if (selectedTool === 'freedraw') await actor.page.getByTestId('whiteboard-pen-hover').waitFor();
@@ -104,7 +119,10 @@ async function pen(actor, profile, dx, selectedTool = 'freedraw', position) {
   await actor.cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: start.x + 56, y: start.y + 8, button: 'left', buttons: 0, clickCount: 1, pointerType: 'pen', force: 0 });
   return start;
 }
-function realPressure(element) { return element.type === 'freedraw' && element.simulatePressure === false && element.pressures.some(p => p < .3) && element.pressures.some(p => p > .7); }
+function fixedWidthStroke(element) {
+  return element.type === 'freedraw' && !!element.lastCommittedPoint && element.simulatePressure === false &&
+    element.pressures.length === element.points.length && element.pressures.every(p => p === .5);
+}
 async function assertPenOnly(page) {
   const events = await page.evaluate(() => window.__penProfileEvents);
   assert.ok(events.filter(event => event.type === 'pointerdown').length >= 1);
@@ -121,6 +139,48 @@ async function exported(page, label) {
   return Buffer.concat(chunks);
 }
 
+test('перо с разным нажимом рисует одинаковую толщину уже до отпускания', { timeout: 60000 }, async () => {
+  const browser = await chromium.launch();
+  try {
+    const doc = await room();
+    const { page, cdp } = await participant(browser, doc, true);
+    await board(page);
+    await saved(page);
+    await page.bringToFront();
+    await pixelWidth(page, 16);
+    const color = await panel(page).getByTestId('room-drawing-color').getAttribute('data-color');
+    const start = await point(page, -80);
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...start, button: 'left', buttons: 1, pointerType: 'pen', force: .12 });
+    for (let dx = 4; dx <= 128; dx += 4) {
+      await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: start.x + dx, y: start.y, buttons: 1, pointerType: 'pen', force: dx < 64 ? .12 : .92 });
+      await page.evaluate(() => new Promise(requestAnimationFrame));
+    }
+    const thicknesses = await page.evaluate(({ start, color }) => {
+      const rgb = [1, 3, 5].map(i => parseInt(color.slice(i, i + 2), 16));
+      const canvases = [...document.querySelectorAll('[data-testid="room-whiteboard-canvas"] canvas')].filter(canvas => {
+        const rect = canvas.getBoundingClientRect();
+        return canvas.width && canvas.height && rect.width && rect.height;
+      });
+      return [32, 96].map(dx => Math.max(...canvases.map(canvas => {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
+        const x = Math.round((start.x + dx - rect.left) * scaleX);
+        const y = Math.round((start.y - rect.top - 35) * scaleY);
+        const pixels = canvas.getContext('2d').getImageData(x, y, 1, Math.round(70 * scaleY)).data;
+        let matched = 0;
+        for (let i = 0; i < pixels.length; i += 4) {
+          if (pixels[i + 3] > 180 && rgb.every((channel, offset) => Math.abs(pixels[i + offset] - channel) < 20)) matched++;
+        }
+        return matched / scaleY;
+      })));
+    }, { start, color });
+    assert.ok(thicknesses.every(width => width >= 14 && width <= 17), '16 px is rendered as an approximately 16 px stroke: ' + JSON.stringify(thicknesses));
+    assert.ok(Math.abs(thicknesses[0] - thicknesses[1]) <= 1, JSON.stringify(thicknesses));
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: start.x + 128, y: start.y, button: 'left', buttons: 0, pointerType: 'pen', force: 0 });
+    await waitScene(doc, scene => visible(scene).length === 1 && fixedWidthStroke(visible(scene)[0]));
+  } finally { await browser.close(); }
+});
+
 for (const profile of profiles) test(`PEN only ${profile.name}: hover, pressure, two authors, eraser/Undo, reconnect, reload and exports`, { timeout: 180000 }, async () => {
   const browser = await chromium.launch({ headless: true });
   try {
@@ -132,13 +192,16 @@ for (const profile of profiles) test(`PEN only ${profile.name}: hover, pressure,
     const ownerColor = await panel(owner.page).getByTestId('room-drawing-color').getAttribute('data-color');
     const candidateColor = await panel(candidate.page).getByTestId('room-drawing-color').getAttribute('data-color');
     assert.notEqual(ownerColor, candidateColor);
+    await pixelWidth(owner.page, 16);
     const ownStart = await pen(owner, profile, -105);
-    const first = await waitScene(doc, scene => visible(scene).length === 1 && realPressure(visible(scene)[0]));
+    const first = await waitScene(doc, scene => visible(scene).length === 1 && fixedWidthStroke(visible(scene)[0]));
     const ownId = visible(first)[0].id;
     assert.equal(visible(first)[0].strokeColor.toUpperCase(), ownerColor);
+    assert.ok(Math.abs(visible(first)[0].strokeWidth - nativeFreehandWidth(16)) < 1e-8);
     await pen(candidate, profile, 65);
-    const both = await waitScene(doc, scene => visible(scene).length === 2 && visible(scene).every(realPressure));
+    const both = await waitScene(doc, scene => visible(scene).length === 2 && visible(scene).every(fixedWidthStroke));
     const peerId = visible(both).find(element => element.id !== ownId).id;
+    assert.ok(Math.abs(visible(both).find(element => element.id === peerId).strokeWidth - nativeFreehandWidth(4)) < 1e-8);
     assert.equal(visible(both).find(element => element.id === peerId).strokeColor.toUpperCase(), candidateColor);
     await Promise.all([saved(owner.page), saved(candidate.page)]);
     await pen(owner, profile, 0, 'eraser', ownStart);
@@ -157,7 +220,7 @@ for (const profile of profiles) test(`PEN only ${profile.name}: hover, pressure,
     await pen(candidate, profile, -30);
     await candidate.context.setOffline(false);
     await candidate.page.waitForFunction(previous => window.__penProfileGeneration > previous && window.__penProfileGeneration === window.__penProfileSources.length - 1, generation);
-    const recovered = await waitScene(doc, scene => visible(scene).length === 3 && visible(scene).every(realPressure));
+    const recovered = await waitScene(doc, scene => visible(scene).length === 3 && visible(scene).every(fixedWidthStroke));
     await Promise.all([saved(owner.page), saved(candidate.page)]);
     await assertPenOnly(candidate.page);
     const newId = visible(recovered).find(element => element.id !== ownId && element.id !== peerId).id;
@@ -169,7 +232,14 @@ for (const profile of profiles) test(`PEN only ${profile.name}: hover, pressure,
     await owner.page.bringToFront();
     const json = JSON.parse((await exported(owner.page, '.excalidraw')).toString('utf8'));
     assert.deepEqual(visible(json).map(element => element.id).sort(), visible(recovered).map(element => element.id).sort());
-    assert.ok(visible(json).every(realPressure), 'native export retains real pressure from pen');
+    // Native restore/export clears lastCommittedPoint, a capture-only marker.
+    // The accepted stroke's actual geometry and fixed pressure must survive.
+    const geometry = scene => visible(scene).map(element => ({
+      id: element.id, type: element.type, x: element.x, y: element.y, width: element.width, height: element.height, angle: element.angle,
+      points: element.points, pressures: element.pressures, simulatePressure: element.simulatePressure,
+      strokeWidth: element.strokeWidth, strokeColor: element.strokeColor,
+    })).sort((left, right) => left.id.localeCompare(right.id));
+    assert.deepEqual(geometry(json), geometry(recovered), 'native export retains the accepted fixed-width geometry');
     const png = await exported(owner.page, 'PNG');
     assert.deepEqual([...png.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
     const svg = (await exported(owner.page, 'SVG')).toString('utf8');

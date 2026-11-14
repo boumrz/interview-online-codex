@@ -60,7 +60,10 @@ async function exported(page,label) {
  const pending=page.waitForEvent('download');await panel(page).getByRole('menuitem',{name:label,exact:true}).click();
  const chunks=[];for await(const chunk of await(await pending).createReadStream())chunks.push(chunk);return Buffer.concat(chunks);
 }
-function realPressure(element) {return element.type==='freedraw'&&element.simulatePressure===false&&element.pressures.some(p=>p<.35)&&element.pressures.some(p=>p>.7);}
+function fixedWidthStroke(element) {
+ return element.type==='freedraw' && element.lastCommittedPoint && !element.simulatePressure &&
+  element.pressures.length===element.points.length && element.pressures.every(p=>p===.5);
+}
 
 test('Linux uinput TABLET -> native pen -> actual room board, peer, erase/Undo, reconnect and exports', {timeout:300000}, async()=>{
  await mkdir(proofDir,{recursive:true});
@@ -100,8 +103,8 @@ test('Linux uinput TABLET -> native pen -> actual room board, peer, erase/Undo, 
   assert.equal((await scene(room)).sequence,before.sequence);assert.equal(writes,beforeWrites);
   await page.screenshot({path:`${proofDir}native-app-hover.png`});console.log('NATIVE_STAGE hover-no-write PASS');
   await stroke(page,point);
-  const drawn=await waitScene(room,s=>visible(s).length===1&&realPressure(visible(s)[0]));const first=visible(drawn)[0];
-  console.log('NATIVE_STAGE pressure-durable PASS',{min:Math.min(...first.pressures),max:Math.max(...first.pressures),points:first.points.length});
+  const drawn=await waitScene(room,s=>visible(s).length===1&&fixedWidthStroke(visible(s)[0]));const first=visible(drawn)[0];
+  console.log('NATIVE_STAGE fixed-stroke-durable PASS',{min:Math.min(...first.pressures),max:Math.max(...first.pressures),points:first.points.length});
   assert.equal(first.strokeColor.toUpperCase(),ownColor);assert.equal(first.pressures.length,first.points.length);await Promise.all([saved(page),saved(peer)]);
   await peer.waitForFunction(color=>{
    const r=parseInt(color.slice(1,3),16),g=parseInt(color.slice(3,5),16),b=parseInt(color.slice(5,7),16);
@@ -121,17 +124,17 @@ test('Linux uinput TABLET -> native pen -> actual room board, peer, erase/Undo, 
   await page.waitForFunction(()=>document.querySelector('[data-testid="room-connection-status"]')?.getAttribute('data-state')!=='online');
   await stroke(page,await position(page,-125));await context.setOffline(false);
   await page.waitForFunction(previous=>window.__nativeTabletGeneration>previous&&window.__nativeTabletGeneration===window.__nativeTabletSources.length-1,generation);
-  const recovered=await waitScene(room,s=>visible(s).length===2&&visible(s).every(realPressure));await Promise.all([saved(page),saved(peer)]);
+  const recovered=await waitScene(room,s=>visible(s).length===2&&visible(s).every(fixedWidthStroke));await Promise.all([saved(page),saved(peer)]);
   console.log('NATIVE_STAGE offline-reconnect PASS');
   const nativeEvents=await page.evaluate(()=>window.__nativeTabletEvents);
   assert.ok(nativeEvents.some(e=>e.type==='pointerdown'));assert.ok(nativeEvents.every(e=>e.trusted&&e.pointerType==='pen'),'native canvas input contains no CDP/mouse fallback');
   assert.ok(nativeEvents.some(e=>e.buttons===1&&e.pressure>.1&&e.pressure<.35)&&nativeEvents.some(e=>e.buttons===1&&e.pressure>.7));
-  const json=JSON.parse((await exported(peer,'.excalidraw')).toString('utf8'));assert.deepEqual(visible(json).map(e=>e.id).sort(),visible(recovered).map(e=>e.id).sort());assert.ok(visible(json).every(realPressure));
+  const json=JSON.parse((await exported(peer,'.excalidraw')).toString('utf8'));assert.deepEqual(visible(json).map(e=>e.id).sort(),visible(recovered).map(e=>e.id).sort());assert.ok(visible(json).every(fixedWidthStroke));
   const png=await exported(peer,'PNG');assert.deepEqual([...png.subarray(0,8)],[137,80,78,71,13,10,26,10]);
   const svg=(await exported(peer,'SVG')).toString('utf8');assert.match(svg,/<svg/);assert.match(svg,/<path/);
   await page.reload({waitUntil:'domcontentloaded'});await saved(page);assert.equal(await panel(page).getByTestId('room-drawing-color').getAttribute('data-color'),ownColor);
   assert.deepEqual(pageErrors,[]);
-  const proof={passed:true,chain:'Linux uinput -> evdev -> udev Tablet -> Xorg/libinput TABLET -> headed Chromium -> InterHub',device:capabilities,canvasInput:'native-uinput-only',cdpDrawingDispatches:0,hoverNoWrite:true,pressure:true,peerRendered:true,eraserUndo:true,reconnect:true,reload:true,exports:['excalidraw','PNG','SVG'],exportsExecutedIn:'peer application browser, from the confirmed native-uinput drawing',nativeEvents,confirmedElements:visible(recovered).map(e=>({id:e.id,type:e.type,color:e.strokeColor,points:e.points.length,pressures:e.pressures})),physicalVendorHardwareTested:false};
+  const proof={passed:true,chain:'Linux uinput -> evdev -> udev Tablet -> Xorg/libinput TABLET -> headed Chromium -> InterHub',device:capabilities,canvasInput:'native-uinput-only',cdpDrawingDispatches:0,hoverNoWrite:true,variableInputPressure:true,fixedStrokeWidth:true,peerRendered:true,eraserUndo:true,reconnect:true,reload:true,exports:['excalidraw','PNG','SVG'],exportsExecutedIn:'peer application browser, from the confirmed native-uinput drawing',nativeEvents,confirmedElements:visible(recovered).map(e=>({id:e.id,type:e.type,color:e.strokeColor,points:e.points.length,pressures:e.pressures})),physicalVendorHardwareTested:false};
   await writeFile(`${proofDir}native-app-result.json`,JSON.stringify(proof,null,2)+'\n');console.log('NATIVE_UINPUT_WITNESS_PASS',{events:nativeEvents.length,elements:proof.confirmedElements.length});
  }catch(error){await writeFile(`${proofDir}native-app-failure.json`,JSON.stringify({message:error.message,pageErrors,nativeEvents:await page.evaluate(()=>window.__nativeTabletEvents).catch(()=>[])},null,2)+'\n');throw error;}finally{await peerBrowser.close();await context.close();await browser.close();forwarding.kill('SIGTERM');}
 });

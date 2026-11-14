@@ -51,6 +51,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.RejectedExecutionException
@@ -99,7 +100,6 @@ class CollaborationService(
     @PreDestroy
     fun stopPermissionSync() = permissionSyncExecutor.shutdown()
     private val notesLockMillis = 3_000L
-    private val candidateKeyHistoryMaxSize = 50
     private val notesHistoryLimit = 500
     private val chatReceiptTtlMillis = TimeUnit.HOURS.toMillis(24)
     private val chatReceiptTombstoneTtlMillis = TimeUnit.HOURS.toMillis(48)
@@ -144,6 +144,8 @@ class CollaborationService(
         var guestGrantRevision: Long?,
         var role: RoomAccessService.RoomRole,
         var presenceStatus: PresenceStatus,
+        var lastPresenceSequence: Long? = null,
+        val freedraw: AtomicReference<StrokeSample?> = AtomicReference(null),
     ) {
         val isOwner: Boolean
             get() = role == RoomAccessService.RoomRole.OWNER
@@ -218,9 +220,8 @@ class CollaborationService(
         val yjsSequenceAuthorBySequence: MutableMap<Long, String> = ConcurrentHashMap(),
         val grantedRoleBySessionId: MutableMap<String, RoomAccessService.RoomRole> = ConcurrentHashMap(),
         val guestPrincipalIdByIdentityKey: MutableMap<String, String> = ConcurrentHashMap(),
-        var lastCandidateKey: CandidateKeyPayload? = null,
-        val candidateKeyHistory: MutableList<CandidateKeyPayload> = mutableListOf(),
-        var lastCandidateKeyAtEpochMs: Long = 0L,
+        // Replace the immutable tail atomically so concurrent SSE snapshots see a complete revision.
+        @Volatile var candidateKeyHistory: List<CandidateKeyPayload> = emptyList(),
         var verdict: String? = null,
         var verdictComment: String? = null,
         var status: String = "active",
@@ -267,8 +268,6 @@ class CollaborationService(
         val yjsSequence: Long?,
     )
 
-    private data class PendingCandidateHistory(val expectedTeamId: String?, val json: String)
-
     /**
      * Payload-структуры (`NotesThreadPayload`, `RoomPrivateNotesPayload`,
      * `RoomPrivateNotesAuthorPayload`) живут в файле `PrivateNotesPayloads.kt`
@@ -283,11 +282,12 @@ class CollaborationService(
                 inFlightRoomWork.containsKey(code) ||
                 pendingRoomCodeDbSaveByRoom.containsKey(code) ||
                 latestCodeForDebouncedDbSaveByRoom.containsKey(code) ||
-                pendingCandidateKeyHistorySaveByRoom.containsKey(code) ||
                 pendingYjsStateBroadcastByRoom.containsKey(code)
         }
     private val sseConnections = ConcurrentHashMap<String, SseEmitter>()
     private val participants = ConcurrentHashMap<String, ParticipantMeta>()
+    private class ParticipantSnapshotClock(var revision: Long = 0)
+    private val participantSnapshotClocks = ConcurrentHashMap<String, ParticipantSnapshotClock>()
     /** Serialises aggregate diagnostic observation with registry membership mutations. */
     private val realtimeLifecycleRegistryLock = Any()
     private val guestReconnectGrantsByDigest = ConcurrentHashMap<String, GuestReconnectGrant>()
@@ -307,9 +307,6 @@ class CollaborationService(
     private class BusyRoomPersistence : RuntimeException()
     private val pendingRoomCodeDbSaveByRoom = ConcurrentHashMap<String, ScheduledFuture<*>>()
     private val latestCodeForDebouncedDbSaveByRoom = ConcurrentHashMap<String, PendingRoomCodeSave>()
-    private val roomCandidateKeyHistorySaveScheduler = Executors.newSingleThreadScheduledExecutor()
-    private val pendingCandidateKeyHistorySaveByRoom = ConcurrentHashMap<String, ScheduledFuture<*>>()
-    private val latestCandidateKeyHistoryJsonByRoom = ConcurrentHashMap<String, PendingCandidateHistory>()
     private val inFlightRoomWork = ConcurrentHashMap<String, Int>()
 
     private fun enterRoomWork(inviteCode: String) {
@@ -366,11 +363,6 @@ class CollaborationService(
         val nextState = toRealtimeState(room)
         val continuingSamePublishedStep = currentState?.currentStep == nextState.currentStep &&
             currentState?.publishedTaskId == nextState.publishedTaskId
-        val mergedCandidateKeyHistory = CandidateKeyHistoryHelpers.merge(
-            inMemory = currentState?.candidateKeyHistory.orEmpty(),
-            persisted = nextState.candidateKeyHistory,
-        )
-        val mergedLastCandidateKey = mergedCandidateKeyHistory.lastOrNull()
         replaceRealtimeState(room.inviteCode, nextState.copy(
             notesLockedBySessionId = currentState?.notesLockedBySessionId,
             notesLockedByDisplayName = currentState?.notesLockedByDisplayName,
@@ -389,17 +381,11 @@ class CollaborationService(
             // authority evidence used to validate queued snapshots/heartbeats.
             lastIncrementalYjsSessionId = if (continuingSamePublishedStep) currentState?.lastIncrementalYjsSessionId else nextState.lastIncrementalYjsSessionId,
             yjsSequenceAuthorBySequence = if (continuingSamePublishedStep) currentState?.yjsSequenceAuthorBySequence ?: nextState.yjsSequenceAuthorBySequence else nextState.yjsSequenceAuthorBySequence,
-            lastCandidateKey = mergedLastCandidateKey,
-            candidateKeyHistory = mergedCandidateKeyHistory.toMutableList(),
-            lastCandidateKeyAtEpochMs = mergedLastCandidateKey?.timestampEpochMs ?: 0L,
             verdict = nextState.verdict,
             verdictComment = nextState.verdictComment,
             status = nextState.status,
             finishedAt = nextState.finishedAt,
         ))
-        if (mergedCandidateKeyHistory.isNotEmpty()) {
-            scheduleCandidateKeyHistorySave(room.inviteCode, mergedCandidateKeyHistory, room.teamId)
-        }
         room.tasks.firstOrNull { it.stepIndex == room.currentStep }?.let { publishedTask ->
             cleanupPublishedManagerWorkspace(room.inviteCode, publishedTask)
         }
@@ -695,9 +681,7 @@ class CollaborationService(
                 return handleIdempotentNoteMessage(inviteCode, request, reconnectCapability)
             }
             if (request.type == "key_press") {
-                // Authorization still runs in the shared dispatcher. Do not retain
-                // an outer connection while durable acceptance commits independently.
-                handleRealtimeEventInTransaction(inviteCode, request)
+                trackKeyPress(inviteCode, request)
                 return null
             }
             mutateRoomPermissions(inviteCode) {
@@ -957,7 +941,7 @@ class CollaborationService(
 
     private fun handleRealtimeEventInTransaction(inviteCode: String, request: RealtimeEventRequest): String? {
         val eventReceivedAt = System.currentTimeMillis()
-        val passiveEvent = request.type in setOf("key_press", "presence_update", "request_state_sync", "leave_room")
+        val passiveEvent = request.type in setOf("presence_update", "request_state_sync", "leave_room")
         val persistedRoom = if (passiveEvent) {
             roomRepository.findByInviteCode(inviteCode)
         } else {
@@ -971,7 +955,7 @@ class CollaborationService(
         }
         val requiresEventToken =
             request.type != "request_state_sync" &&
-                request.type != "presence_update"
+                (request.type != "presence_update" || request.presenceSequence != null)
         val connectionId = if (legacyNoteMessage) {
             requireChatConnectionId(inviteCode, request)
         } else {
@@ -1007,7 +991,6 @@ class CollaborationService(
                 "manager_workspace_open", "manager_workspace_yjs_update", "manager_workspace_briefing_update",
                 "manager_workspace_language_update", "manager_workspace_focus_mode_update", "room_editor_mode_update",
                 "grant_interviewer_access", "revoke_interviewer_access", "participant_role_update",
-                "key_press",
             )
         if (mutatesRoom) requireLiveMutableRoom(persistedRoom)
         if (mutatesRoom && persistedRoom.status == RoomStatus.FINISHED.wireValue && !participant.canManageRoom) {
@@ -1029,7 +1012,7 @@ class CollaborationService(
             )
             return null
         }
-        if (requiresEventToken) {
+        if (requiresEventToken && request.type != "presence_update") {
             val clientEventSequence = request.clientEventSequence
             if (clientEventSequence != null) {
                 synchronized(state) {
@@ -1103,7 +1086,7 @@ class CollaborationService(
             )
             "presentation_markdown_update", "briefing_markdown_update" ->
                 updateBriefingMarkdown(connectionId, request.briefingMarkdown ?: request.presentationMarkdown.orEmpty(), request.taskId, request.syncKey)
-            "presence_update" -> updatePresence(connectionId, request.presenceStatus)
+            "presence_update" -> updatePresence(connectionId, request.presenceStatus, request.presenceSequence)
             "cursor_update" -> updateCursor(
                 connectionId = connectionId,
                 lineNumber = request.lineNumber,
@@ -1192,19 +1175,6 @@ class CollaborationService(
                 targetUserId = request.targetUserId,
                 targetRole = roomAccessService.normalizeRole(request.role),
             )
-            "key_press" -> trackKeyPress(
-                connectionId = connectionId,
-                key = request.key,
-                keyCode = request.keyCode,
-                ctrlKey = request.ctrlKey ?: false,
-                altKey = request.altKey ?: false,
-                shiftKey = request.shiftKey ?: false,
-                metaKey = request.metaKey ?: false,
-                eventKind = request.eventKind,
-                pasteLength = request.pasteLength,
-                pastePreview = request.pastePreview,
-                sourceEventId = request.sourceEventId,
-            )
             else -> throw ApiException(HttpStatus.BAD_REQUEST, "Неизвестный тип сообщения: ${request.type}")
         }
         return null
@@ -1217,15 +1187,15 @@ class CollaborationService(
         val emitter = sseConnections[connectionId] ?: return
 
         participants.values.filter { it.inviteCode == inviteCode }.forEach(::refreshParticipantAuthority)
-        val roomParticipants = aggregateRoomParticipants(inviteCode)
+        val (participantRevision, roomParticipants) = snapshotRoomParticipants(inviteCode)
         val participantsPayload = roomParticipants.map { participantMetaToPayload(it) }
         val participantBySessionId = roomParticipants.associateBy { it.sessionId }
         val cursorsPayload = buildCursorsPayload(state, participantBySessionId)
 
         try {
-            val payload = buildPayload(inviteCode, state, participantsPayload, cursorsPayload, participant)
+            val payload = buildPayload(inviteCode, state, participantsPayload, participantRevision, cursorsPayload, participant)
             val message = WsOutgoingMessage(type = "state_sync", payload = payload)
-            sendSseMessage(emitter, objectMapper.writeValueAsString(message))
+            sendSseMessage(emitter, encodeSseMessage(message))
         } catch (ex: Exception) {
             logger.warn("Failed to send room state via sse", ex)
             detachConnection(connectionId, closeTransport = true)
@@ -1616,28 +1586,6 @@ class CollaborationService(
             }, delayMillis, TimeUnit.MILLISECONDS)
             pendingRoomCodeDbSaveByRoom[inviteCode] = next
         }
-    }
-
-    private fun scheduleCandidateKeyHistorySave(inviteCode: String, history: List<CandidateKeyPayload>, expectedTeamId: String?) {
-        val serializedHistory = CandidateKeyHistoryHelpers.serialize(history, objectMapper)
-        latestCandidateKeyHistoryJsonByRoom[inviteCode] = PendingCandidateHistory(expectedTeamId, serializedHistory)
-        pendingCandidateKeyHistorySaveByRoom.remove(inviteCode)?.cancel(false)
-        val next = roomCandidateKeyHistorySaveScheduler.schedule({
-            enterRoomWork(inviteCode)
-            try {
-                pendingCandidateKeyHistorySaveByRoom.remove(inviteCode)
-                val latest = latestCandidateKeyHistoryJsonByRoom.remove(inviteCode) ?: return@schedule
-                withLockedActiveRoom(inviteCode, expectedTeamId = latest.expectedTeamId, publicPersistence = true) { room ->
-                    room.candidateKeyHistory = latest.json
-                    roomRepository.save(room)
-                }
-            } catch (ex: Exception) {
-                logger.warn("Debounced candidate key history save failed for {}", inviteCode, ex)
-            } finally {
-                leaveRoomWork(inviteCode)
-            }
-        }, 260, TimeUnit.MILLISECONDS)
-        pendingCandidateKeyHistorySaveByRoom[inviteCode] = next
     }
 
     private fun scheduleStateBroadcastFromYjs(inviteCode: String) {
@@ -2142,11 +2090,17 @@ class CollaborationService(
         broadcastState(participant.inviteCode)
     }
 
-    private fun updatePresence(connectionId: String, presenceStatus: String?) {
+    private fun updatePresence(connectionId: String, presenceStatus: String?, sequence: Long?) {
         val participant = participants[connectionId] ?: return
         val nextStatus = PresenceStatus.fromWire(presenceStatus)
-        if (participant.presenceStatus == nextStatus) return
-        participant.presenceStatus = nextStatus
+        val clock = participantSnapshotClocks.computeIfAbsent(participant.inviteCode) { ParticipantSnapshotClock() }
+        synchronized(clock) {
+            val previous = participant.lastPresenceSequence
+            if (previous != null && (sequence == null || sequence <= previous)) return
+            participant.lastPresenceSequence = sequence
+            if (participant.presenceStatus == nextStatus) return
+            participant.presenceStatus = nextStatus
+        }
         broadcastState(participant.inviteCode)
     }
 
@@ -2181,19 +2135,39 @@ class CollaborationService(
         return resolveCurrentParticipantRole(room, participant)
     }
 
+    data class StrokeSample(val boardId: String, val elementId: String, val version: Long, val nonce: Long)
+
+    data class CanvasParticipant(
+        val role: RoomAccessService.RoomRole,
+        val sessionId: String,
+        val displayName: String,
+        val freedraw: AtomicReference<StrokeSample?>,
+    )
+
     /**
      * Current admitted SSE identity, resolved under the caller's Room lock.
      * A canvas can distinguish a lost connection lease from a fresh context or
      * role denial; the optional code changes classification, never admission.
      */
-    fun resolveDiagramParticipantRole(room: Room, sessionId: String, eventToken: String?, user: User?, failureCode: String? = null): RoomAccessService.RoomRole {
+    fun resolveCanvasParticipant(room: Room, sessionId: String, eventToken: String?, user: User?, failureCode: String? = null): CanvasParticipant {
         val connectionId = requireConnectionId(room.inviteCode, sessionId, eventToken, requireEventToken = true, failureCode = failureCode)
         val participant = participants[connectionId]
             ?: throw ApiException(HttpStatus.FORBIDDEN, "Нет действующего подключения к комнате", code = failureCode ?: "ROOM_ACCESS_DENIED")
         if (participant.admittedTeamId != room.teamId || (user != null && participant.userId != user.id)) {
             throw ApiException(HttpStatus.FORBIDDEN, "Подключение относится к другому контексту", code = "ROOM_ACCESS_DENIED")
         }
-        return resolveCurrentParticipantRole(room, participant)
+        return CanvasParticipant(resolveCurrentParticipantRole(room, participant), participant.sessionId, participant.displayName, participant.freedraw)
+    }
+
+    enum class CanvasActivity(val wireValue: String) { DIAGRAM_EDIT("diagram_edit"), WHITEBOARD_EDIT("whiteboard_edit") }
+
+    fun recordCanvasActivity(room: Room, actor: CanvasParticipant, kind: CanvasActivity): CandidateKeyPayload? {
+        if (actor.role != RoomAccessService.RoomRole.CANDIDATE) return null
+        return keystrokePersistenceService.appendUnderRoomLock(requirePersistedRoomId(room), CandidateKeyPayload(
+            sessionId = actor.sessionId, displayName = actor.displayName, eventKind = kind.wireValue,
+            key = "", keyCode = "", ctrlKey = false, altKey = false, shiftKey = false, metaKey = false,
+            timestampEpochMs = 0, sourceEventId = UUID.randomUUID().toString(),
+        ))
     }
 
     fun broadcastDiagramChanged(inviteCode: String, changed: RoomDiagramChangedDto) {
@@ -2474,114 +2448,68 @@ class CollaborationService(
         )
     }
 
-    private fun trackKeyPress(
-        connectionId: String,
-        key: String?,
-        keyCode: String?,
-        ctrlKey: Boolean,
-        altKey: Boolean,
-        shiftKey: Boolean,
-        metaKey: Boolean,
-        eventKind: String? = null,
-        pasteLength: Int? = null,
-        pastePreview: String? = null,
-        sourceEventId: String? = null,
-    ) {
-        val participant = participants[connectionId] ?: return
-        if (participant.role != RoomAccessService.RoomRole.CANDIDATE) return
-
-        val normalizedEventKind = CandidateKeyHistoryHelpers.normalizeEventKind(eventKind)
-        val isSyntheticEvent = normalizedEventKind != "keydown"
-        val normalizedKey = CandidateKeyHistoryHelpers.normalizeIncomingKey(key)
-        val normalizedCode = CandidateKeyHistoryHelpers.normalizeIncomingKeyCode(keyCode)
-        val normalizedSourceEventId = normalizeSourceEventId(sourceEventId)
-        // Синтетические события (blur/visibility) могут не нести key/keyCode,
-        // но всё равно важны для лога — пропускаем фильтр пустоты.
-        if (!isSyntheticEvent && normalizedKey.isBlank() && normalizedCode.isBlank()) return
-
-        val state = roomState[participant.inviteCode] ?: return
-        // Hold the in-memory room monitor only for metadata/history. The durable
-        // database acceptance below may wait on the room row, so doing it while
-        // synchronized(state) would delay independent Yjs/code collaboration.
-        val roomId = synchronized(state) {
-            state.roomId.takeIf { it.isNotBlank() }
-                ?: throw ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Room activity state has no persisted room ID")
-        }
-        val acceptance = keystrokePersistenceService.accept(
-            roomId = roomId,
-            payload = CandidateKeyPayload(
-                sessionId = participant.sessionId,
-                displayName = participant.displayName,
-                key = when {
-                    normalizedKey.isNotEmpty() -> normalizedKey
-                    normalizedCode.isNotEmpty() -> normalizedCode
-                    isSyntheticEvent -> ""
-                    else -> "Unknown"
-                },
-                keyCode = when {
-                    normalizedCode.isNotEmpty() -> normalizedCode
-                    normalizedKey.isNotEmpty() -> normalizedKey
-                    isSyntheticEvent -> ""
-                    else -> "Unknown"
-                },
-                ctrlKey = ctrlKey,
-                altKey = altKey,
-                shiftKey = shiftKey,
-                metaKey = metaKey,
-                timestampEpochMs = 0,
-                eventKind = normalizedEventKind,
-                pasteLength = CandidateKeyHistoryHelpers.sanitizePasteLength(pasteLength),
-                pastePreview = CandidateKeyHistoryHelpers.sanitizePastePreview(pastePreview),
-                sourceEventId = normalizedSourceEventId,
-            ),
+    private fun trackKeyPress(inviteCode: String, request: RealtimeEventRequest) {
+        // This lane uses the action UUID for retries, independently of editor clientEventSequence.
+        val connectionId = requireConnectionId(inviteCode, request.sessionId, request.eventToken, requireEventToken = true)
+        val participant = participants[connectionId] ?: throw activityAccessDenied()
+        val roomId = roomState[inviteCode]?.roomId
+            ?: throw ApiException(HttpStatus.SERVICE_UNAVAILABLE, "Состояние комнаты восстанавливается")
+        val key = request.key.orEmpty()
+        val code = request.keyCode.orEmpty()
+        val kind = request.eventKind ?: "keydown"
+        if (kind !in setOf("keydown", "window_blur", "window_focus", "tab_hidden", "tab_visible", "paste") ||
+            (kind == "keydown" && key.isEmpty() && code.isEmpty()) ||
+            key.length > 64 || code.length > 64 || (request.pasteLength ?: 0) < 0 ||
+            (request.pastePreview?.length ?: 0) > 50
+        ) throw ApiException(HttpStatus.BAD_REQUEST, "Некорректные данные действия кандидата")
+        val payload = CandidateKeyPayload(
+            sessionId = participant.sessionId,
+            displayName = participant.displayName,
+            key = key,
+            keyCode = code,
+            ctrlKey = request.ctrlKey ?: false,
+            altKey = request.altKey ?: false,
+            shiftKey = request.shiftKey ?: false,
+            metaKey = request.metaKey ?: false,
+            timestampEpochMs = 0,
+            eventKind = kind,
+            pasteLength = request.pasteLength,
+            pastePreview = request.pastePreview,
+            sourceEventId = normalizeSourceEventId(request.sourceEventId),
         )
-        if (!acceptance.created) return
-        val keyEvent = acceptance.payload
-        var historySnapshot = emptyList<CandidateKeyPayload>()
-        roomState.computeIfPresent(participant.inviteCode) { _, current ->
-            // A sync or publication may have replaced the state while the
-            // database accepted the event. Apply to the current state atomically
-            // with replacement, without holding either monitor during DB work.
-            synchronized(current) {
-                val canonicalHistory = CandidateKeyHistoryHelpers.canonicalize(current.candidateKeyHistory + keyEvent)
-                current.candidateKeyHistory.clear()
-                current.candidateKeyHistory.addAll(canonicalHistory)
-                current.lastCandidateKey = canonicalHistory.lastOrNull()
-                current.lastCandidateKeyAtEpochMs = current.lastCandidateKey?.timestampEpochMs ?: 0L
-                historySnapshot = canonicalHistory
-            }
-            current
+        val acceptance = keystrokePersistenceService.accept(roomId, payload) { lockedRoom ->
+            // Authority may have changed while this action waited on the room row.
+            if (requireConnectionId(inviteCode, request.sessionId, request.eventToken, requireEventToken = true) != connectionId ||
+                participant.admittedTeamId != lockedRoom.teamId ||
+                resolveCurrentParticipantRole(lockedRoom, participant) != RoomAccessService.RoomRole.CANDIDATE
+            ) throw activityAccessDenied()
         }
-
-        scheduleCandidateKeyHistorySave(participant.inviteCode, historySnapshot, participant.admittedTeamId)
-        if (normalizedEventKind == "keydown" || normalizedEventKind == "paste") {
+        if (!acceptance.created) return
+        publishCandidateActivity(inviteCode, acceptance.payload)
+        if (kind == "keydown" || kind == "paste") {
             roomProductMetricsProjector.recordMeaningfulCandidateActivity(roomId)
         }
-
-        val managerConnectionIds = participants.entries
-            .asSequence()
-            .filter { (_, meta) -> meta.inviteCode == participant.inviteCode && isCurrentManagerParticipant(meta) }
-            .map { (id, _) -> id }
-            .toSet()
-        if (managerConnectionIds.isEmpty()) {
-            return
-        }
-        broadcastTransportMessage(
-            inviteCode = participant.inviteCode,
-            type = "candidate_key",
-            payload = keyEvent,
-            includeConnectionIds = managerConnectionIds,
-        )
-
     }
 
+    fun publishCandidateActivity(inviteCode: String, event: CandidateKeyPayload) {
+        roomState.computeIfPresent(inviteCode) { _, current ->
+            current.candidateKeyHistory = CandidateKeyHistoryHelpers.canonicalize(current.candidateKeyHistory + event)
+            current
+        }
+        broadcastTransportMessage(inviteCode = inviteCode, type = "candidate_key", payload = event)
+    }
+
+    private fun activityAccessDenied() = ApiException(
+        HttpStatus.FORBIDDEN, "Нет действующего доступа для записи действий кандидата", code = "ROOM_ACCESS_DENIED",
+    )
+
     private fun normalizeSourceEventId(rawSourceEventId: String?): String {
-        val candidate = rawSourceEventId?.trim().orEmpty()
-        if (candidate.isBlank()) return UUID.randomUUID().toString()
-        return runCatching { UUID.fromString(candidate).toString() }
-            .getOrElse {
-                throw ApiException(HttpStatus.BAD_REQUEST, "sourceEventId must be a UUID")
-            }
+        if (rawSourceEventId == null) return UUID.randomUUID().toString()
+        val canonical = runCatching { UUID.fromString(rawSourceEventId).toString() }.getOrNull()
+        if (canonical == null || !canonical.equals(rawSourceEventId, ignoreCase = true)) {
+            throw ApiException(HttpStatus.BAD_REQUEST, "sourceEventId must be a UUID")
+        }
+        return canonical
     }
 
     private fun nextStep(connectionId: String) {
@@ -2659,9 +2587,8 @@ class CollaborationService(
             pendingRoomCodeDbSaveByRoom.remove(inviteCode)?.cancel(false)
             latestCodeForDebouncedDbSaveByRoom.remove(inviteCode)
         }
-        pendingCandidateKeyHistorySaveByRoom.remove(inviteCode)?.cancel(false)
-        latestCandidateKeyHistoryJsonByRoom.remove(inviteCode)
         roomState.remove(inviteCode)
+        participantSnapshotClocks.remove(inviteCode)
         if (closedRoomId != null) {
             guestReconnectGrantsByDigest.entries.removeIf { (_, grant) -> grant.roomId == closedRoomId }
         }
@@ -2699,7 +2626,7 @@ class CollaborationService(
         TransactionTemplate(transactionManager).executeWithoutResult {
             participants.values.filter { it.inviteCode == inviteCode }.forEach(::refreshParticipantAuthority)
         }
-        val roomParticipants = aggregateRoomParticipants(inviteCode)
+        val (participantRevision, roomParticipants) = snapshotRoomParticipants(inviteCode)
         val participantsPayload = roomParticipants.map { participantMetaToPayload(it) }
         val participantBySessionId = roomParticipants.associateBy { it.sessionId }
         val cursorsPayload = buildCursorsPayload(state, participantBySessionId)
@@ -2714,13 +2641,13 @@ class CollaborationService(
             }
             try {
                 val payload = requireNotNull(TransactionTemplate(transactionManager).execute {
-                    buildPayload(inviteCode, state, participantsPayload, cursorsPayload, participant)
+                    buildPayload(inviteCode, state, participantsPayload, participantRevision, cursorsPayload, participant)
                 })
                 val message = WsOutgoingMessage(type = "state_sync", payload = payload)
                 roomRealtimeSendBoundaryProbe.observeImmediatelyBeforeStateSyncSend()
                 emitter.send(
                     SseEmitter.event()
-                        .data(objectMapper.writeValueAsString(message)),
+                        .data(encodeSseMessage(message)),
                 )
             } catch (ex: Exception) {
                 logger.warn("Failed to broadcast room state via sse", ex)
@@ -2736,7 +2663,7 @@ class CollaborationService(
                 .filter { it.value.isNotEmpty() }
                 .map { it.key }
                 .toSet() + pendingRoomCodeDbSaveByRoom.keys + latestCodeForDebouncedDbSaveByRoom.keys +
-                pendingCandidateKeyHistorySaveByRoom.keys + pendingYjsStateBroadcastByRoom.keys +
+                pendingYjsStateBroadcastByRoom.keys +
                 inFlightRoomWork.keys)
             val lost = runCatching { roomRealtimeActivityLeaseService.reconcile(rooms) }
                 .getOrElse { ex ->
@@ -2778,17 +2705,19 @@ class CollaborationService(
         }
 
         val message = WsOutgoingMessage(type = type, payload = payload)
-        val encoded = objectMapper.writeValueAsString(message)
+        val encoded = encodeSseMessage(message)
 
         val sseConnectionIds = roomSseConnections[inviteCode]?.toList().orEmpty()
         sseConnectionIds.forEach { connectionId ->
             if (excludeConnectionId != null && excludeConnectionId == connectionId) return@forEach
             if (includeConnectionIds != null && !includeConnectionIds.contains(connectionId)) return@forEach
             val emitter = sseConnections[connectionId]
-            if (participants[connectionId] == null || emitter == null) {
+            val participant = participants[connectionId]
+            if (participant == null || emitter == null) {
                 detachConnection(connectionId, closeTransport = false)
                 return@forEach
             }
+            if (type == "candidate_key" && !canReceiveCandidateActivity(participant)) return@forEach
             try {
                 sendSseMessage(emitter, encoded)
             } catch (ex: Exception) {
@@ -2796,6 +2725,15 @@ class CollaborationService(
                 detachConnection(connectionId, closeTransport = true)
             }
         }
+    }
+
+    private fun canReceiveCandidateActivity(participant: ParticipantMeta): Boolean {
+        if (!participant.canManageRoom) return false
+        return TransactionTemplate(transactionManager).execute {
+            val room = roomRepository.findByInviteCode(participant.inviteCode)
+            room != null && room.archivedAt == null && room.teamId == participant.admittedTeamId &&
+                resolveCurrentParticipantRole(room, participant).canManageRoom
+        } == true
     }
 
     private fun sendManagerWorkspaceSync(
@@ -2841,6 +2779,10 @@ class CollaborationService(
         )
     }
 
+    // The UTF-8 JSON generator escapes isolated UTF-16 units before SSE encodes the text.
+    private fun encodeSseMessage(message: WsOutgoingMessage): String =
+        objectMapper.writeValueAsBytes(message).toString(Charsets.UTF_8)
+
     private fun sendSseMessage(emitter: SseEmitter, encodedMessage: String) {
         emitter.send(
             SseEmitter.event()
@@ -2852,12 +2794,14 @@ class CollaborationService(
         inviteCode: String,
         state: RealtimeState,
         participantsPayload: List<ParticipantPayload>,
+        participantRevision: Long,
         cursorsPayload: List<CursorPayload>,
         participant: ParticipantMeta,
     ): RoomRealtimePayload {
         refreshParticipantAuthority(participant)
         val personalNotes = buildParticipantPersonalNotes(state, participant)
         val editorMode = synchronized(state) { state.roomEditorMode to state.roomEditorModeRevision }
+        val candidateHistory = if (canReceiveCandidateActivity(participant)) state.candidateKeyHistory else null
         return RoomRealtimePayload(
             inviteCode = inviteCode,
             language = state.language,
@@ -2876,6 +2820,7 @@ class CollaborationService(
             roomWhiteboardEnabled = roomWhiteboardFeatureGate.enabled,
             drawingColor = participant.drawingColor,
             participants = participantsPayload,
+            participantSnapshotRevision = participantRevision,
             isOwner = participant.isOwner,
             role = participant.role.wireValue,
             canManageRoom = participant.canManageRoom,
@@ -2887,8 +2832,8 @@ class CollaborationService(
             tasks = state.tasks.toList(),
             taskScores = state.taskScoresByStepIndex.toMap(),
             cursors = cursorsPayload,
-            lastCandidateKey = if (participant.canManageRoom) state.lastCandidateKey else null,
-            candidateKeyHistory = if (participant.canManageRoom) state.candidateKeyHistory.toList() else null,
+            lastCandidateKey = candidateHistory?.lastOrNull(),
+            candidateKeyHistory = candidateHistory,
             verdict = state.verdict,
             verdictComment = state.verdictComment,
             status = state.status,
@@ -3014,11 +2959,6 @@ class CollaborationService(
         room.code = nextTask.solutionCode ?: nextTask.starterCode
         room.briefingMarkdown = withTaskFocusMarker(nextTask.briefingMarkdown.orEmpty(), taskFocusMode(nextTask))
         roomRepository.save(room)
-        val mergedCandidateKeyHistory = CandidateKeyHistoryHelpers.merge(
-            inMemory = currentState?.candidateKeyHistory.orEmpty(),
-            persisted = loadCandidateKeyHistory(room),
-        )
-        val mergedLastCandidateKey = mergedCandidateKeyHistory.lastOrNull()
         val taskPayloads = buildTaskPayloads(room)
 
         replaceRealtimeState(inviteCode, RealtimeState(
@@ -3055,9 +2995,7 @@ class CollaborationService(
             lastClientEventSequenceBySessionId = currentState?.lastClientEventSequenceBySessionId ?: ConcurrentHashMap(),
             grantedRoleBySessionId = currentState?.grantedRoleBySessionId ?: ConcurrentHashMap(),
             guestPrincipalIdByIdentityKey = currentState?.guestPrincipalIdByIdentityKey ?: ConcurrentHashMap(),
-            lastCandidateKey = mergedLastCandidateKey,
-            candidateKeyHistory = mergedCandidateKeyHistory.toMutableList(),
-            lastCandidateKeyAtEpochMs = mergedLastCandidateKey?.timestampEpochMs ?: 0L,
+            candidateKeyHistory = loadCandidateKeyHistory(room),
             verdict = room.verdict,
             verdictComment = room.verdictComment,
             status = room.status ?: "active",
@@ -3238,6 +3176,12 @@ class CollaborationService(
             presenceStatus = mergedPresence,
             isHr = group.any { it.isHr },
         )
+    }
+
+    /** Assign the revision at capture; serialization and sending may finish out of order. */
+    private fun snapshotRoomParticipants(inviteCode: String): Pair<Long, List<ParticipantMeta>> {
+        val clock = participantSnapshotClocks.computeIfAbsent(inviteCode) { ParticipantSnapshotClock() }
+        return synchronized(clock) { ++clock.revision to aggregateRoomParticipants(inviteCode) }
     }
 
     private fun aggregateRoomParticipants(inviteCode: String): List<ParticipantMeta> {
@@ -3597,8 +3541,6 @@ class CollaborationService(
         val language = normalizeLanguage(currentTask?.solutionLanguage?.ifBlank { null } ?: room.language)
         val code = currentTask?.solutionCode ?: room.code.ifBlank { currentTask?.starterCode.orEmpty() }
         val notes = room.notes.orEmpty().ifBlank { currentTask?.interviewerNotes.orEmpty() }
-        val candidateKeyHistory = loadCandidateKeyHistory(room)
-        val lastCandidateKey = candidateKeyHistory.lastOrNull()
         val taskPayloads = buildTaskPayloads(room)
         val chatThread = PrivateNotesSerialization.parseChatThread(room.interviewerChat, notes, objectMapper)
         return RealtimeState(
@@ -3630,9 +3572,7 @@ class CollaborationService(
             lastCodeSequenceBySessionId = ConcurrentHashMap(),
             lastYjsSnapshotSequenceBySessionId = ConcurrentHashMap(),
             lastClientEventSequenceBySessionId = ConcurrentHashMap(),
-            lastCandidateKey = lastCandidateKey,
-            candidateKeyHistory = candidateKeyHistory.toMutableList(),
-            lastCandidateKeyAtEpochMs = lastCandidateKey?.timestampEpochMs ?: 0L,
+            candidateKeyHistory = loadCandidateKeyHistory(room),
             verdict = room.verdict,
             verdictComment = room.verdictComment,
             status = room.status ?: "active",
@@ -3646,9 +3586,9 @@ class CollaborationService(
             ?: throw ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Room has no persisted Room ID")
 
     private fun loadCandidateKeyHistory(room: Room): List<CandidateKeyPayload> {
-        val durable = roomKeystrokeEventRepository.findActivityBefore(
-            requirePersistedRoomId(room), null, Long.MAX_VALUE,
-            PageRequest.of(0, candidateKeyHistoryMaxSize),
+        val durable = roomKeystrokeEventRepository.findActivityThrough(
+            requirePersistedRoomId(room), Long.MAX_VALUE,
+            PageRequest.of(0, CandidateKeyHistoryHelpers.MAX_HISTORY_SIZE),
         )
         return if (durable.isNotEmpty()) {
             CandidateKeyHistoryHelpers.canonicalize(durable.map { it.toPayload() })
@@ -3663,7 +3603,7 @@ class CollaborationService(
             val currentSnapshot = current?.let { state ->
                 synchronized(state) {
                     Triple(
-                        state.candidateKeyHistory.toList(),
+                        state.candidateKeyHistory,
                         state.chatRevision,
                         state.notesMessages.toList(),
                     )
@@ -3671,12 +3611,9 @@ class CollaborationService(
             }
             val currentHistory = currentSnapshot?.first.orEmpty()
             val history = CandidateKeyHistoryHelpers.merge(currentHistory, next.candidateKeyHistory)
-            val last = history.lastOrNull()
             val keepNewerChat = currentSnapshot != null && currentSnapshot.second > next.chatRevision
             next.copy(
-                candidateKeyHistory = history.toMutableList(),
-                lastCandidateKey = last,
-                lastCandidateKeyAtEpochMs = last?.timestampEpochMs ?: 0L,
+                candidateKeyHistory = history,
                 chatRevision = if (keepNewerChat) currentSnapshot!!.second else next.chatRevision,
                 notesMessages = if (keepNewerChat) currentSnapshot!!.third.toMutableList() else next.notesMessages,
             )

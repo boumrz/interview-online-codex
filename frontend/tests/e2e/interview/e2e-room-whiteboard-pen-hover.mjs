@@ -127,11 +127,11 @@ test('перо: наведение без штриха, давление, вых
     await hover(cdp, end);
     await alignedPreview(page, end);
     await panel(page).getByRole('status').filter({ hasText: /^Сохранено$/ }).waitFor();
-    const drawn = await waitScene(room, scene => visibleElements(scene).length === 1 && visibleElements(scene)[0].pressures?.some(value => value < .3) && visibleElements(scene)[0].pressures?.some(value => value > .7));
+    const drawn = await waitScene(room, scene => visibleElements(scene).length === 1 && visibleElements(scene)[0].lastCommittedPoint);
     const stroke = visibleElements(drawn)[0];
     assert.equal(stroke.type, 'freedraw');
     assert.equal(stroke.simulatePressure, false);
-    assert.ok(stroke.pressures.some(value => value < .3) && stroke.pressures.some(value => value > .7));
+    assert.ok(stroke.pressures.every(value => value === .5));
     assert.equal(stroke.pressures.length, stroke.points.length);
     assert.equal(JSON.stringify(drawn).includes('whiteboard-pen-hover'), false);
 
@@ -208,8 +208,9 @@ test('перо без hover и переменного давления: конт
     const scene = await waitScene(room, state => visibleElements(state).length === 1 && visibleElements(state)[0].points.length >= 10);
     const stroke = visibleElements(scene)[0];
     assert.equal(stroke.type, 'freedraw');
-    assert.equal(stroke.simulatePressure, true, 'constant .5 is the standard no-pressure signal');
-    assert.deepEqual(stroke.pressures, []);
+    assert.equal(stroke.simulatePressure, false, 'the default .5 pointer signal does not enable simulated pressure');
+    assert.equal(stroke.pressures.length, stroke.points.length);
+    assert.ok(stroke.pressures.every(value => value === .5));
     assert.deepEqual(errors, []);
     await cdp.detach();
   } finally { await browser.close(); }

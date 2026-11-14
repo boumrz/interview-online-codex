@@ -16,8 +16,7 @@ import com.interviewonline.ws.CandidateKeyPayload
  */
 internal object CandidateKeyHistoryHelpers {
     /**
-     * Максимальное число событий в истории нажатий, хранимой в памяти и в БД.
-     * Совпадает с прошлой константой `candidateKeyHistoryMaxSize` сервиса.
+     * Размер хвоста для быстрого state_sync. Полная история хранится в отдельных строках.
      */
     const val MAX_HISTORY_SIZE: Int = 50
 
@@ -54,45 +53,17 @@ internal object CandidateKeyHistoryHelpers {
         return canonicalize(parsed)
     }
 
-    /**
-     * Сериализует историю в JSON для сохранения в БД. Тот же формат, что и
-     * раньше: `{ "version": 1, "events": [...] }`. Сразу же сортирует и
-     * обрезает до максимального размера, чтобы хранилище никогда не пухло.
-     */
-    fun serialize(history: List<CandidateKeyPayload>, objectMapper: ObjectMapper): String {
-        val normalized = canonicalize(history)
-        return objectMapper.writeValueAsString(mapOf("version" to 1, "events" to normalized))
-    }
-
-    /**
-     * Сливает in-memory историю с тем, что было в БД. Использует составной
-     * ключ дедупликации (sessionId + timestamp + key + keyCode + модификаторы +
-     * eventKind), чтобы события с одинаковым ts но разными типами (например,
-     * keydown и tab_hidden) не схлопывались в одно.
-     */
     fun merge(
         inMemory: List<CandidateKeyPayload>,
         persisted: List<CandidateKeyPayload>,
-    ): List<CandidateKeyPayload> {
-        val merged = linkedMapOf<String, CandidateKeyPayload>()
-        (persisted + inMemory)
-            .sortedWith(canonicalOrder)
-            .forEach { event ->
-                merged[dedupeKey(event)] = event
-            }
-        return canonicalize(merged.values)
-    }
+    ): List<CandidateKeyPayload> = canonicalize(persisted + inMemory)
 
-    /** Canonicalizes retained history using durable source identity when present. */
-    fun canonicalize(history: Collection<CandidateKeyPayload>): List<CandidateKeyPayload> {
-        val deduplicated = linkedMapOf<String, CandidateKeyPayload>()
-        history.sortedWith(canonicalOrder).forEach { event ->
-            deduplicated[dedupeKey(event)] = event
-        }
-        return deduplicated.values
-            .sortedWith(canonicalOrder)
+    /** Select the latest accepted rows even if the clock moved backwards, then order for display. */
+    fun canonicalize(history: Collection<CandidateKeyPayload>): List<CandidateKeyPayload> =
+        history.distinctBy(::dedupeKey)
+            .sortedWith(compareBy<CandidateKeyPayload> { it.acceptedSequence ?: Long.MIN_VALUE }.then(canonicalOrder))
             .takeLast(MAX_HISTORY_SIZE)
-    }
+            .sortedWith(canonicalOrder)
 
     private fun dedupeKey(event: CandidateKeyPayload): String {
         val sourceEventId = event.sourceEventId?.trim().orEmpty()
@@ -111,22 +82,15 @@ internal object CandidateKeyHistoryHelpers {
         event.eventKind,
     ).joinToString(":")
 
-    /**
-     * Приводит входящий `eventKind` к одному из поддерживаемых значений.
-     * Неизвестные/пустые значения трактуем как обычное `keydown`, чтобы
-     * ничего не падало при появлении старых клиентов или новых, ещё не
-     * добавленных категорий событий.
-     */
-    fun normalizeEventKind(rawKind: String?): String {
-        val normalized = rawKind?.trim()?.lowercase().orEmpty()
-        return when (normalized) {
-            "window_blur",
-            "window_focus",
-            "tab_hidden",
-            "tab_visible",
-            "paste" -> normalized
-            else -> "keydown"
-        }
+    /** Reproduce the old representation only when acknowledging a retry of a pre-upgrade row. */
+    fun legacyStoredFields(payload: CandidateKeyPayload): CandidateKeyPayload {
+        val key = normalizeIncomingKey(payload.key)
+        val code = normalizeIncomingKeyCode(payload.keyCode)
+        return payload.copy(
+            key = key.ifEmpty { code },
+            keyCode = code.ifEmpty { key }.ifBlank { "" },
+            pasteLength = payload.pasteLength?.coerceIn(0, 1_000_000),
+        )
     }
 
     /**
@@ -135,7 +99,7 @@ internal object CandidateKeyHistoryHelpers {
      * строку, если после тримминга ничего не осталось (тогда вызывающий код
      * может опереться только на `keyCode`).
      */
-    fun normalizeIncomingKey(rawKey: String?): String {
+    private fun normalizeIncomingKey(rawKey: String?): String {
         val raw = rawKey?.take(64) ?: return ""
         if (raw == " ") return raw
         if (raw == "\u00A0") return "Space"
@@ -152,21 +116,11 @@ internal object CandidateKeyHistoryHelpers {
         return normalized.take(32)
     }
 
-    fun sanitizePastePreview(raw: String?): String? {
-        if (raw == null) return null
-        return raw.take(50)
-    }
-
-    fun sanitizePasteLength(raw: Int?): Int? {
-        if (raw == null) return null
-        return raw.coerceIn(0, 1_000_000)
-    }
-
     /**
      * Нормализует поле `keyCode` (DOM `KeyboardEvent.code`): чистит мусор и
      * обрезает длину, чтобы клиент не смог раздуть payload в логе.
      */
-    fun normalizeIncomingKeyCode(rawCode: String?): String {
+    private fun normalizeIncomingKeyCode(rawCode: String?): String {
         val trimmed = rawCode?.trim().orEmpty()
         if (trimmed.isBlank()) return ""
         val normalized = when (trimmed) {

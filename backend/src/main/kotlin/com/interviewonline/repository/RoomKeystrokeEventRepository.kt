@@ -18,12 +18,23 @@ interface RoomKeystrokeEventRepository : JpaRepository<RoomKeystrokeEvent, Strin
     @Query("""
         SELECT event FROM RoomKeystrokeEvent event
         WHERE event.roomId = :roomId AND event.acceptedSequence <= :throughSequence
-          AND (:beforeSequence IS NULL OR event.acceptedSequence < :beforeSequence)
+        ORDER BY event.acceptedSequence DESC
+    """)
+    fun findActivityThrough(
+        @Param("roomId") roomId: String,
+        @Param("throughSequence") throughSequence: Long,
+        pageable: Pageable,
+    ): List<RoomKeystrokeEvent>
+
+    @Query("""
+        SELECT event FROM RoomKeystrokeEvent event
+        WHERE event.roomId = :roomId AND event.acceptedSequence <= :throughSequence
+          AND event.acceptedSequence < :beforeSequence
         ORDER BY event.acceptedSequence DESC
     """)
     fun findActivityBefore(
         @Param("roomId") roomId: String,
-        @Param("beforeSequence") beforeSequence: Long?,
+        @Param("beforeSequence") beforeSequence: Long,
         @Param("throughSequence") throughSequence: Long,
         pageable: Pageable,
     ): List<RoomKeystrokeEvent>

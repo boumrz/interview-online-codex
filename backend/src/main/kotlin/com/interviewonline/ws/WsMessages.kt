@@ -31,6 +31,7 @@ data class RoomRealtimePayload(
     /** Stable room-local default ink color for the requesting participant. */
     val drawingColor: String? = null,
     val participants: List<ParticipantPayload>,
+    val participantSnapshotRevision: Long,
     val isOwner: Boolean = false,
     val role: String = "candidate",
     val canManageRoom: Boolean = false,

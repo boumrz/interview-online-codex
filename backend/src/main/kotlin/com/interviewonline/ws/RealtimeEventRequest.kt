@@ -28,6 +28,7 @@ data class RealtimeEventRequest(
     /** Stable room-task identity captured when the Markdown draft was edited. */
     val taskId: String? = null,
     val presenceStatus: String? = null,
+    val presenceSequence: Long? = null,
     val lineNumber: Int? = null,
     val column: Int? = null,
     val selectionStartLineNumber: Int? = null,

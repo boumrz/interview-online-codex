@@ -35,16 +35,16 @@ class RoomKeystrokeEvent(
     @Column(name = "room_id", nullable = false, length = 255)
     var roomId: String = "",
 
-    @Column(name = "session_id", nullable = false, length = 128)
+    @Column(name = "session_id", nullable = false, length = 255)
     var sessionId: String = "",
 
-    @Column(name = "display_name", nullable = false, length = 128)
+    @Column(name = "display_name", nullable = false, length = 513)
     var displayName: String = "",
 
-    @Column(name = "key_value", length = 64)
+    @Column(name = "key_value", length = 257)
     var keyValue: String? = null,
 
-    @Column(name = "key_code", length = 64)
+    @Column(name = "key_code", length = 257)
     var keyCode: String? = null,
 
     @Column(name = "ctrl_key", nullable = false)
@@ -65,7 +65,7 @@ class RoomKeystrokeEvent(
     @Column(name = "paste_length")
     var pasteLength: Int? = null,
 
-    @Column(name = "paste_preview", length = 50)
+    @Column(name = "paste_preview", length = 201)
     var pastePreview: String? = null,
 
     @Column(name = "timestamp_epoch_ms", nullable = false)
@@ -73,6 +73,9 @@ class RoomKeystrokeEvent(
 
     @Column(name = "source_event_id", length = 36)
     var sourceEventId: String? = null,
+
+    @Column(name = "raw_fields_preserved", nullable = false)
+    var rawFieldsPreserved: Boolean = false,
 
     @Column(name = "accepted_sequence")
     var acceptedSequence: Long? = null,

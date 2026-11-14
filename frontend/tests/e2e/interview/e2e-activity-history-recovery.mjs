@@ -20,7 +20,7 @@ async function fixture() {
   await request(`/rooms/${room.inviteCode}/tasks`, { token: owner.token, method: 'POST', body: { customTasks: [{ title: 'Задача', description: 'Проверка истории', starterCode: '// history\n', language: 'nodejs' }] } });
   return { owner, candidate, room };
 }
-async function open(browser, auth, room) {
+async function open(browser, auth, room, configureContext) {
   const context = await browser.newContext();
   await context.addInitScript(({ token, name }) => {
     localStorage.setItem('auth_token', token); localStorage.setItem('display_name', name);
@@ -28,6 +28,7 @@ async function open(browser, auth, room) {
     window.EventSource = class extends Native {
       constructor(...args) { super(...args); window.__activitySource = this; window.__activityConnections = (window.__activityConnections || 0) + 1; }
       set onmessage(handler) {
+        window.__replayActivityKey = (payload) => handler?.call(this, new MessageEvent('message', { data: JSON.stringify({ type: 'candidate_key', payload }) }));
         window.__replayActivityState = (payload) => handler?.call(this, new MessageEvent('message', { data: JSON.stringify({ type: 'state_sync', payload }) }));
         super.onmessage = (event) => {
           const message = JSON.parse(event.data);
@@ -42,6 +43,7 @@ async function open(browser, auth, room) {
       }
     };
   }, { token: auth.token, name: auth.user.displayName });
+  if (configureContext) await configureContext(context);
   const page = await context.newPage(); page.setDefaultTimeout(15000);
   await page.goto(`${web}/room/${room.inviteCode}`, { waitUntil: 'domcontentloaded' });
   await page.locator('[data-testid="room-code-editor-host"] .cm-content').waitFor();
@@ -76,6 +78,40 @@ async function loadAll(page) {
   }
   assert.fail('History cursor did not exhaust');
 }
+
+test('a stale snapshot in the same batch keeps both candidates’ live actions and their exact details', { timeout: 30000 }, async () => {
+  const browser = await chromium.launch();
+  try {
+    const { owner, room } = await fixture();
+    const { page } = await open(browser, owner, room);
+    await openLogs(page);
+    await page.getByText('Активность не зафиксирована', { exact: true }).waitFor();
+    // These replayed messages never reach the database, so a subsequent read
+    // cannot conceal a loss in the SSE -> React path under test.
+    const actions = ['Shift', ' ', ' ', 'Enter'].map((key, index) => ({
+      sourceEventId: randomUUID(), acceptedSequence: index + 1,
+      sessionId: index < 3 ? 'session-first' : 'session-second', displayName: 'Саша',
+      timestampEpochMs: 1700000000000, key, keyCode: ['ShiftLeft', 'Space', 'Space', 'Enter'][index],
+      ctrlKey: false, altKey: false, metaKey: false, shiftKey: index === 0,
+    }));
+    await page.evaluate(events => {
+      events.forEach(event => window.__replayActivityKey(event));
+      window.__replayActivityState({
+        ...window.__activityState, candidateKeyHistory: [{ ...events[0], key: 'STALE' }], lastCandidateKey: null,
+      });
+    }, actions);
+    await waitIds(page, actions.map(event => event.sourceEventId));
+    const firstGroup = page.getByTestId('activity-timeline-entry').filter({ hasText: actions[0].sourceEventId });
+    await firstGroup.locator('summary').click();
+    const rows = firstGroup.getByRole('listitem');
+    assert.equal(await rows.count(), 3);
+    assert.match(await rows.nth(0).innerText(), /ShiftLeft/);
+    assert.match(await rows.nth(1).innerText(), /Space/);
+    assert.match(await rows.nth(2).innerText(), /Space/);
+    assert.equal((await firstGroup.innerText()).includes('STALE'), false);
+    assert.equal(await page.getByTestId('activity-timeline-entry').count(), 2);
+  } finally { await browser.close(); }
+});
 
 test('whole activity history survives the 50-event tail, empty snapshots, missed broadcasts and reload', { timeout: 120000 }, async () => {
   const browser = await chromium.launch();
@@ -138,7 +174,72 @@ test('whole activity history survives the 50-event tail, empty snapshots, missed
   } finally { await browser.close(); }
 });
 
-for (const failure of ['three-server-errors', 'hung-request', 'rate-limit']) {
+test('candidate profile hydration keeps the unacknowledged UUIDs when the display name rebinds SSE', { timeout: 35000 }, async () => {
+  const browser = await chromium.launch();
+  let releaseProfile;
+  const profileReady = new Promise(resolve => { releaseProfile = resolve; });
+  try {
+    const { owner, candidate, room } = await fixture();
+    const attempted = [];
+    let initialToken;
+    const target = await open(browser, candidate, room, async context => {
+      await context.route('**/api/me/profile', async route => {
+        const response = await route.fetch();
+        await profileReady;
+        const user = await response.json();
+        await route.fulfill({ response, json: { ...user, displayName: 'Уточнённое имя' } });
+      });
+      await context.route(`**/api/realtime/rooms/${room.inviteCode}/events`, async route => {
+        const payload = route.request().postDataJSON();
+        if (payload.type === 'key_press' && ['a', 'b'].includes(payload.key)) {
+          attempted.push({ id: payload.sourceEventId, key: payload.key });
+          initialToken ??= payload.eventToken;
+          if (payload.eventToken === initialToken) return route.fulfill({ status: 503 });
+        }
+        return route.continue();
+      });
+    });
+    await target.page.locator('[data-testid="room-code-editor-host"] .cm-content').click();
+    await target.page.keyboard.type('ab');
+    await target.page.getByText(/Запись активности задерживается/).waitFor();
+    const oldConnections = await target.page.evaluate(() => window.__activityConnections);
+    releaseProfile();
+    await target.page.waitForFunction(previous => window.__activityConnections > previous, oldConnections);
+    await target.page.getByText(/Запись активности задерживается/).waitFor({ state: 'hidden' });
+    const raw = await request(`/rooms/${room.inviteCode}/keystroke-events`, { token: owner.token });
+    assert.deepEqual(raw.filter(e => ['a', 'b'].includes(e.keyValue)).map(e => [e.keyValue, e.sourceEventId]),
+      [['a', attempted[0].id], ['b', attempted.find(e => e.key === 'b').id]]);
+    assert.equal(new Set(attempted.filter(e => e.key === 'a').map(e => e.id)).size, 1);
+  } finally { releaseProfile(); await browser.close(); }
+});
+
+test('a held modifier survives a room rerender between the keyboard and window blur events', { timeout: 30000 }, async () => {
+  const browser = await chromium.launch();
+  try {
+    const { owner, candidate, room } = await fixture();
+    const target = await open(browser, candidate, room);
+    const editor = target.page.locator('[data-testid="room-code-editor-host"] .cm-content');
+    await editor.click();
+    await target.page.keyboard.down('Alt');
+    await target.page.evaluate(async () => {
+      window.__replayActivityState(window.__activityState);
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    });
+    const postedBlur = target.page.waitForResponse(response => {
+      if (response.request().method() !== 'POST' || !response.url().endsWith('/events')) return false;
+      return response.request().postDataJSON().eventKind === 'window_blur';
+    });
+    await target.page.evaluate(() => window.dispatchEvent(new Event('blur')));
+    const response = await postedBlur;
+    assert.equal(response.status(), 204);
+    const id = response.request().postDataJSON().sourceEventId;
+    const rows = await request(`/rooms/${room.inviteCode}/keystroke-events`, { token: owner.token });
+    assert.equal(rows.find(row => row.sourceEventId === id)?.altKey, true);
+    await target.page.keyboard.up('Alt');
+  } finally { await browser.close(); }
+});
+
+for (const failure of ['three-server-errors', 'hung-request', 'rate-limit', 'http-request-timeout']) {
   test(`activity FIFO automatically recovers from ${failure} without losing source actions`, { timeout: 60000 }, async () => {
     const browser = await chromium.launch(); let release = () => {};
     try {
@@ -187,6 +288,7 @@ for (const failure of ['three-server-errors', 'hung-request', 'rate-limit']) {
           const count = attempts.filter(a => a.key === 'a').length;
           if (failure === 'three-server-errors' && count <= 3) return route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"raw-server-secret"}' });
           if (failure === 'rate-limit' && count === 1) return route.fulfill({ status: 429, body: '{}' });
+          if (failure === 'http-request-timeout' && count === 1) return route.fulfill({ status: 408, body: '{}' });
         }
         delivered.push(body.sourceEventId); await route.continue();
       });
@@ -194,6 +296,9 @@ for (const failure of ['three-server-errors', 'hung-request', 'rate-limit']) {
       await target.page.keyboard.type('ab'); await first;
       await target.page.getByText(/Запись активности задерживается/).waitFor();
       if (failure === 'three-server-errors') {
+        const unloadWasCancelled = await target.page.evaluate(() =>
+          !window.dispatchEvent(new Event('beforeunload', { cancelable: true })));
+        assert.equal(unloadWasCancelled, true, 'Unconfirmed activity must guard an accidental reload');
         const connections = await target.page.evaluate(() => window.__activityConnections);
         await target.page.evaluate(() => window.__activitySource.onerror(new Event('error')));
         await target.page.waitForFunction(previous => window.__activityConnections > previous && window.__activitySource.readyState === 1, connections);
@@ -224,6 +329,11 @@ for (const failure of ['three-server-errors', 'hung-request', 'rate-limit']) {
       }
       await waitIds(manager.page, delivered);
       await target.page.getByText(/Запись активности задерживается/).waitFor({ state: 'hidden' });
+      if (failure === 'three-server-errors') {
+        const unloadAllowed = await target.page.evaluate(() =>
+          window.dispatchEvent(new Event('beforeunload', { cancelable: true })));
+        assert.equal(unloadAllowed, true, 'Once every action is acknowledged, reloading must not prompt');
+      }
       assert.equal(await target.page.getByText('raw-server-secret', { exact: false }).count(), 0);
       const raw = await request(`/rooms/${room.inviteCode}/keystroke-events`, { token: owner.token });
       for (const id of delivered) assert.equal(raw.filter(e => e.sourceEventId === id).length, 1);

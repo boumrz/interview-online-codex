@@ -337,6 +337,235 @@ test('при переключении задач доска получает п�
   } finally { await browser.close(); }
 });
 
+function widthTrigger(page) { return drawingTools(page).getByRole('button', { name: /^Толщина линии:/ }); }
+function widthDialog(page) { return page.getByRole('dialog', { name: 'Толщина линии', exact: true }); }
+async function openWidth(page) {
+  await widthTrigger(page).click();
+  await widthDialog(page).waitFor();
+  return widthDialog(page);
+}
+async function setPixelWidth(page, value) {
+  const dialog = await openWidth(page);
+  const number = dialog.getByRole('spinbutton', { name: 'Толщина в пикселях', exact: true });
+  await number.fill(String(value));
+  await number.press('Tab');
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'hidden' });
+}
+async function assertPixelWidth(page, value) {
+  assert.equal(await widthTrigger(page).getAttribute('aria-label'), `Толщина линии: ${value} px`);
+}
+async function checkStrokeWidthSpacing(page) {
+  const group = drawingTools(page);
+  const board = group.locator('..');
+  const widths = [240, 340, 375, 480, 481, 650, 651, 960];
+  try {
+    for (const width of widths) {
+      await board.evaluate((el, width) => { el.style.inlineSize = width + 'px'; }, width);
+      const layout = await group.evaluate(bar => {
+        const button = bar.querySelector('button[aria-label^="Толщина линии:"]');
+        const caption = [...bar.querySelectorAll('span')].find(el => el.textContent === 'Толщина линии');
+        const field = button.getBoundingClientRect();
+        const outer = bar.getBoundingClientRect();
+        const peers = [...bar.children].filter(el => !el.contains(button)).map(el => el.getBoundingClientRect());
+        const above = peers.filter(rect => rect.bottom <= field.top);
+        return {
+          caption: caption?.innerText ?? null,
+          left: field.left - outer.left, right: outer.right - field.right,
+          height: field.height,
+          sampleHeight: button.querySelector('span[aria-hidden="true"] > span')?.getBoundingClientRect().height ?? 0,
+          expectedSampleHeight: Math.min(32, Number(button.getAttribute('aria-label').match(/([0-9]+) px/)[1])),
+          top: field.top - outer.top, bottom: outer.bottom - field.bottom,
+          rowGap: above.length ? field.top - Math.max(...above.map(rect => rect.bottom)) : null,
+          overflow: bar.scrollWidth - bar.clientWidth,
+        };
+      });
+      const details = width + 'px ' + JSON.stringify(layout);
+      assert.equal(layout.caption, null, 'the sample and pixel value need no duplicate visible caption: ' + details);
+      assert.ok(layout.left >= 8 && layout.right >= 8, details);
+      assert.ok(layout.height >= 36 && layout.height <= 40, details);
+      assert.ok(Math.abs(layout.sampleHeight - layout.expectedSampleHeight) < .1, 'large custom widths keep a bounded preview: ' + details);
+      assert.ok(layout.top >= 8 && layout.bottom >= 8 && (layout.rowGap === null || layout.rowGap >= 8), details);
+      assert.ok(layout.overflow <= 1, details);
+    }
+  } finally {
+    await board.evaluate(el => el.style.removeProperty('inline-size'));
+  }
+}
+
+test('толщина задаётся отдельно до рисования карандашом, линией, прямоугольником и кругом', async () => {
+  const browser = await chromium.launch();
+  try {
+    const room = await createRoom();
+    const { page } = await participant(browser, room, true);
+    const peer = (await participant(browser, room)).page;
+    await mode(page, 'Доска');
+    await Promise.all([saved(page), saved(peer)]);
+    assert.equal(await widthTrigger(page).count(), 1, 'pixel width control is available before drawing');
+    await assertPixelWidth(page, 4);
+    await checkStrokeWidthSpacing(page);
+    await stroke(page, -170);
+    const original = await waitScene(room, state => visibleElements(state).length === 1 && !!visibleElements(state)[0].lastCommittedPoint);
+    await saved(page);
+    let originalStroke = visibleElements(original)[0];
+
+    // Real keyboard input drives both representations, including exact limits.
+    let dialog = await openWidth(page);
+    const slider = dialog.getByRole('slider', { name: 'Толщина линии', exact: true });
+    const number = dialog.getByRole('spinbutton', { name: 'Толщина в пикселях', exact: true });
+    await number.fill('50');
+    await number.press('Enter');
+    await dialog.waitFor({ state: 'hidden' });
+    await assertPixelWidth(page, 50);
+    dialog = await openWidth(page);
+    assert.equal(await number.inputValue(), '50', 'custom width survives reopening');
+    assert.equal(await dialog.getByRole('button', { name: '32 px', exact: true }).getAttribute('aria-pressed'), 'false');
+    assert.equal(await dialog.getByRole('button', { pressed: true }).count(), 0, 'custom width does not select a quick preset');
+    assert.equal(await slider.inputValue(), '32', 'the quick slider thumb is bounded without changing custom width');
+    assert.equal(await number.getAttribute('min'), '1');
+    assert.equal(await number.getAttribute('max'), '1000');
+    await number.fill('');
+    await assertPixelWidth(page, 50);
+    await number.press('Tab');
+    assert.equal(await number.inputValue(), '50', 'empty draft restores a custom width');
+    await page.keyboard.press('Escape');
+    await dialog.waitFor({ state: 'hidden' });
+    await assertPixelWidth(page, 50);
+    await checkStrokeWidthSpacing(page);
+    dialog = await openWidth(page);
+    assert.equal(await number.inputValue(), '50', 'Escape and blur preserve custom width');
+    assert.equal(await slider.getAttribute('min'), '4');
+    assert.equal(await slider.getAttribute('max'), '32');
+    assert.equal(await slider.getAttribute('step'), '1');
+    await slider.press('End');
+    await assertPixelWidth(page, 32);
+    assert.equal(await number.inputValue(), '32', 'End selects the quick maximum even when a custom value already pins the thumb there');
+    await number.fill('1');
+    await slider.press('Home');
+    await assertPixelWidth(page, 4);
+    assert.equal(await number.inputValue(), '4', 'Home selects the quick minimum from a smaller custom value');
+    await number.fill('1000');
+    await number.press('Enter');
+    await dialog.waitFor({ state: 'hidden' });
+    await assertPixelWidth(page, 1000);
+    dialog = await openWidth(page);
+    assert.equal(await number.inputValue(), '1000', 'opening at the manual maximum does not silently clamp it');
+    await page.keyboard.press('Escape');
+    await dialog.waitFor({ state: 'hidden' });
+    await assertPixelWidth(page, 1000);
+    dialog = await openWidth(page);
+    await number.fill('64');
+    await dialog.getByRole('button', { name: '4 px', exact: true }).click();
+    assert.equal(await slider.inputValue(), '4', 'a quick preset replaces a custom numeric width');
+    await number.fill('64');
+    await slider.press('Home');
+    assert.equal(await number.inputValue(), '4', 'moving the quick slider replaces a custom numeric width');
+    await slider.press('End');
+    assert.equal(await number.inputValue(), '32');
+    await slider.press('ArrowLeft');
+    assert.equal(await number.inputValue(), '31');
+    await slider.press('Home');
+    assert.equal(await number.inputValue(), '4');
+    await number.fill('13');
+    assert.equal(await slider.inputValue(), '13');
+    await number.fill('');
+    await assertPixelWidth(page, 13);
+    await number.press('Tab');
+    assert.equal(await number.inputValue(), '13', 'empty draft restores the current width');
+    for (const [draft, expected] of [['1', 1], ['1000', 1000], ['0', 1], ['-7', 1], ['1001', 1000], ['2', 2], ['99', 99], ['12.6', 13]]) {
+      await number.fill(draft);
+      await number.press('Tab');
+      assert.equal(await number.inputValue(), String(expected));
+      assert.equal(await slider.inputValue(), String(Math.min(32, Math.max(4, expected))));
+      await assertPixelWidth(page, expected);
+    }
+    for (const value of [4, 8, 16, 32]) {
+      await dialog.getByRole('button', { name: `${value} px`, exact: true }).click();
+      assert.equal(await number.inputValue(), String(value));
+      assert.equal(await slider.inputValue(), String(value));
+    }
+    await number.fill('18.6');
+    await number.press('Enter');
+    await dialog.waitFor({ state: 'hidden' });
+    await assertPixelWidth(page, 19);
+    await widthTrigger(page).press('Enter');
+    await dialog.waitFor();
+    await page.keyboard.press('Escape');
+    await dialog.waitFor({ state: 'hidden' });
+    assert.ok(await widthTrigger(page).evaluate(button => button === document.activeElement), 'Escape restores focus');
+    dialog = await openWidth(page);
+    await panel(page).getByRole('status').filter({ hasText: /^Сохранено$/ }).click();
+    await dialog.waitFor({ state: 'hidden' });
+    dialog = await openWidth(page);
+    await tool(page, 'line');
+    await dialog.waitFor({ state: 'hidden' });
+    await assertPixelWidth(page, 4);
+    const afterSettings = await snapshot(room);
+    assert.equal(afterSettings.sequence, original.sequence, 'changing settings does not save a scene');
+    assert.deepEqual(afterSettings.elements, original.elements, 'settings never alter an existing stroke');
+    await page.getByTestId('button-undo').click();
+    await waitScene(room, state => visibleElements(state).length === 0);
+    await page.getByTestId('button-redo').click();
+    originalStroke = visibleElements(await waitScene(room, state => visibleElements(state).length === 1))[0];
+    await saved(page);
+
+    const expected = { freedraw: 50, line: 50, rectangle: 8, ellipse: 1 };
+    const native = value => value / (4.25 * Math.SQRT2);
+    let count = 1;
+    for (const [type, value] of Object.entries(expected)) {
+      await tool(page, type);
+      await setPixelWidth(page, value);
+      const { x, y } = await drawingPoint(page, -100 + count * 55, .56);
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      await page.mouse.move(x + 30, y + 24, { steps: 8 });
+      await page.mouse.up();
+      count++;
+      const scene = await waitScene(room, state => visibleElements(state).length === count && visibleElements(state).some(e => e.type === type && e.id !== originalStroke.id));
+      const element = visibleElements(scene).find(e => e.type === type && e.id !== originalStroke.id);
+      assert.ok(Math.abs(element.strokeWidth - (type === 'freedraw' ? native(value) : value)) < 1e-8, `${type} stores honest pixel width`);
+    }
+    for (const type of ['selection', 'eraser', 'text']) {
+      await tool(page, type);
+      assert.equal(await widthTrigger(page).count(), 0);
+    }
+    for (const [type, value] of Object.entries(expected)) {
+      await tool(page, type);
+      await assertPixelWidth(page, value);
+    }
+    const scene = await snapshot(room);
+    assert.deepEqual(scene.elements.find(e => e.id === originalStroke.id), originalStroke);
+    const exportedScene = JSON.parse((await exported(page, '.excalidraw')).bytes.toString('utf8'));
+    const widths = Object.fromEntries(visibleElements(exportedScene).filter(e => e.id !== originalStroke.id).map(e => [e.type, e.strokeWidth]));
+    for (const [type, value] of Object.entries(expected)) assert.ok(Math.abs(widths[type] - (type === 'freedraw' ? native(value) : value)) < 1e-8);
+    await peer.reload({ waitUntil: 'domcontentloaded' });
+    await saved(peer);
+    const reloaded = JSON.parse((await exported(peer, '.excalidraw')).bytes.toString('utf8'));
+    assert.deepEqual(reloaded.elements, exportedScene.elements, 'peer reload/export retains all chosen widths');
+    await assertPixelWidth(peer, 4, 'peer settings remain local');
+
+    await setPixelWidth(page, 50);
+    await panel(page).getByRole('button', { name: 'На весь экран', exact: true }).click();
+    await page.setViewportSize({ width: 340, height: 420 });
+    await assertPixelWidth(page, 50);
+    await widthTrigger(page).press('Enter');
+    dialog = widthDialog(page);
+    await dialog.waitFor();
+    const popup = await dialog.boundingBox();
+    assert.ok(popup.x >= 0 && popup.x + popup.width <= 340 && popup.y >= 0 && popup.y + popup.height <= 420, JSON.stringify(popup));
+    assert.equal(await dialog.getByRole('spinbutton', { name: 'Толщина в пикселях', exact: true }).inputValue(), '50');
+    assert.equal(await dialog.getByRole('slider', { name: 'Толщина линии', exact: true }).inputValue(), '32');
+    assert.equal(await dialog.getByRole('button', { name: '32 px', exact: true }).getAttribute('aria-pressed'), 'false');
+    await page.keyboard.press('Escape');
+    await assertPixelWidth(page, 50);
+    await page.screenshot({ path: '/tmp/interhub-whiteboard-pixel-width-narrow.png' });
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await panel(page).getByRole('button', { name: 'Вернуться в комнату', exact: true }).click();
+    await openWidth(page);
+    await page.screenshot({ path: '/tmp/interhub-whiteboard-pixel-width.png' });
+  } finally { await browser.close(); }
+});
+
 test('простая доска открывается с карандашом и сохраняет выбранный инструмент для следующих фигур', async () => {
   const browser = await chromium.launch({ headless: true });
   try {
@@ -345,7 +574,7 @@ test('простая доска открывается с карандашом �
     await mode(page, 'Доска');
     await saved(page);
     const tools = drawingTools(page);
-    const names = ['Выделение', 'Карандаш', 'Линия', 'Прямоугольник', 'Текст', 'Ластик'];
+    const names = ['Выделение', 'Карандаш', 'Линия', 'Прямоугольник', 'Круг', 'Текст', 'Ластик'];
     await tools.waitFor();
     assert.equal(await tools.getByRole('radio').count(), names.length);
     for (const name of names) assert.ok(await tools.getByRole('radio', { name, exact: true }).isVisible(), name);
@@ -414,7 +643,60 @@ test('простая доска открывается с карандашом �
   } finally { await browser.close(); }
 });
 
-test('два автора рисуют одновременно, своё Undo сохраняет чужой штрих, pen давление и текст переживают reconnect и reload', async () => {
+test('круг сохраняет равные стороны без Shift, очистка текущей доски отменяется одним Undo', async () => {
+  const browser = await chromium.launch();
+  try {
+    const room = await createRoom();
+    const owner = (await participant(browser, room, true)).page;
+    const peer = (await participant(browser, room)).page;
+    await mode(owner, 'Доска');
+    await Promise.all([saved(owner), saved(peer)]);
+    await selectCanvasTask(owner, room.tasks[1]);
+    await saved(owner);
+    await text(owner, 'Отдельная задача');
+    await saved(owner);
+    await selectCanvasTask(owner, room.tasks[0]);
+    await saved(owner);
+    await stroke(peer);
+    const drawn = await waitScene(room, state => visibleElements(state).some(e => e.type === 'freedraw'));
+    const strokeId = visibleElements(drawn)[0].id;
+    await owner.bringToFront();
+    await tool(owner, 'ellipse');
+    for (const [offset, dx, dy] of [[-65, 50, 12], [55, 0, -30]]) {
+      const { x, y } = await drawingPoint(owner, offset, .32);
+      await owner.mouse.move(x, y); await owner.mouse.down();
+      await owner.mouse.move(x + dx, y + dy, { steps: 6 }); await owner.mouse.up();
+    }
+    const populated = await waitScene(room, state => visibleElements(state).filter(e => e.type === 'ellipse').length === 2);
+    const ids = visibleElements(populated).map(e => e.id).sort();
+    for (const circle of visibleElements(populated).filter(e => e.type === 'ellipse')) {
+      assert.ok(circle.width > 0 && circle.width === circle.height);
+    }
+    const clear = drawingTools(owner).getByRole('button', { name: 'Очистить всё', exact: true });
+    await saved(owner);
+    await clear.click();
+    const blank = await waitScene(room, state => visibleElements(state).length === 0);
+    assert.deepEqual(blank.elements.map(e => e.id).sort(), ids);
+    await peer.waitForFunction(() => {
+      const clear = document.querySelector('button[aria-label="Очистить всё"]');
+      return clear?.disabled === true;
+    });
+    await panel(owner).getByTestId('button-undo').click();
+    const restored = await waitScene(room, state => visibleElements(state).length === 3);
+    assert.deepEqual(visibleElements(restored).map(e => e.id).sort(), ids);
+    assert.ok(visibleElements(restored).some(e => e.id === strokeId));
+    await selectCanvasTask(owner, room.tasks[1]);
+    await saved(owner);
+    const otherTask = await exported(owner, '.excalidraw');
+    assert.deepEqual(visibleElements(JSON.parse(otherTask.bytes.toString('utf8'))).map(e => e.text), ['Отдельная задача']);
+    await selectCanvasTask(owner, room.tasks[0]);
+    await saved(owner);
+    const original = await exported(owner, '.excalidraw');
+    assert.deepEqual(visibleElements(JSON.parse(original.bytes.toString('utf8'))).map(e => e.id).sort(), ids);
+  } finally { await browser.close(); }
+});
+
+test('два автора рисуют одновременно, своё Undo сохраняет чужой штрих, равномерный штрих пера и текст переживают reconnect и reload', async () => {
   const browser = await chromium.launch({ headless: true });
   try {
     const room = await createRoom();
@@ -460,9 +742,11 @@ test('два автора рисуют одновременно, своё Undo �
     await waitScene(room, state => visibleElements(state).length === 1 && visibleElements(state)[0].id === otherId);
     await saved(owner.page);
     await penStroke(owner.page);
-    const pressure = await waitScene(room, state => visibleElements(state).some(element => element.type === 'freedraw' && element.simulatePressure === false && element.pressures?.some(value => value < .3) && element.pressures?.some(value => value > .7)));
-    const pen = visibleElements(pressure).find(element => element.type === 'freedraw' && element.simulatePressure === false);
+    const penScene = await waitScene(room, state => visibleElements(state).some(element => ![ownId, otherId].includes(element.id) && element.type === 'freedraw' && element.lastCommittedPoint));
+    const pen = visibleElements(penScene).find(element => ![ownId, otherId].includes(element.id));
+    assert.equal(pen.simulatePressure, false);
     assert.equal(pen.pressures.length, pen.points.length);
+    assert.ok(pen.pressures.every(value => value === .5));
     await saved(owner.page);
     const beforeTouch = await snapshot(room);
     await touchGesture(owner.page);
@@ -510,7 +794,7 @@ test('два автора рисуют одновременно, своё Undo �
     const json = await exported(owner.page, '.excalidraw');
     const parsed = JSON.parse(json.bytes.toString('utf8'));
     assert.match(json.filename, /\.excalidraw$/);
-    assert.ok(parsed.elements.some(element => element.id === pen.id && element.pressures.some(value => value > .7)));
+    assert.ok(parsed.elements.some(element => element.id === pen.id && element.pressures.every(value => value === .5)));
     const svg = await exported(owner.page, 'SVG'); assert.match(svg.bytes.toString('utf8'), /<svg\b/);
     const png = await exported(owner.page, 'PNG'); assert.deepEqual([...png.bytes.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
     const workerUrl = `${new URL(web).origin}/whiteboard-assets/subset/subset-worker.chunk.js`;

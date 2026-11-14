@@ -7,6 +7,7 @@ data class RoomWhiteboardChangeRequest(
     val operationId: String,
     val baseSequence: Long,
     val elements: List<JsonNode>,
+    val files: Map<String, JsonNode> = emptyMap(),
 )
 
 data class RoomWhiteboardDto(
@@ -15,6 +16,7 @@ data class RoomWhiteboardDto(
     val elements: List<JsonNode>,
     val canEdit: Boolean,
     val taskId: String? = null,
+    val files: Map<String, JsonNode> = emptyMap(),
 )
 
 data class RoomWhiteboardOperationDto(

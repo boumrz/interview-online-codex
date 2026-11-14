@@ -84,6 +84,29 @@ export function reconcileActivityEvents(events: ActivityTimelineEvent[]): Activi
   return unique.sort(canonicalCompare);
 }
 
+type ActivitySnapshot = {
+  inviteCode: string;
+  viewerScope?: string;
+  canManageRoom: boolean;
+  candidateKeyHistory: ActivityTimelineEvent[];
+  lastCandidateKey: ActivityTimelineEvent | null;
+};
+
+/** A state_sync contains only a tail. Never use its absence of an event as a deletion. */
+export function mergeActivitySnapshot(previous: ActivitySnapshot | null, incoming: ActivitySnapshot): ActivityTimelineEvent[] {
+  if (!incoming.canManageRoom) return [];
+  const retained = previous?.canManageRoom && previous.inviteCode === incoming.inviteCode &&
+    previous.viewerScope === incoming.viewerScope ? previous.candidateKeyHistory : [];
+  const merged = reconcileActivityEvents([
+    ...retained,
+    ...(Array.isArray(incoming.candidateKeyHistory) ? incoming.candidateKeyHistory : []),
+    ...(incoming.lastCandidateKey ? [incoming.lastCandidateKey] : []),
+  ]);
+  // The retained list is already canonical. Repeated room broadcasts normally
+  // contain only known actions and should not trigger another timeline render.
+  return merged.length === retained.length ? retained : merged;
+}
+
 /**
  * Creates a display-only projection. The source event array is never mutated
  * and no grouping state is retained between calls, so late state-sync events
@@ -129,8 +152,8 @@ export function projectActivityTimeline(events: ActivityTimelineEvent[]): Activi
  * stable short identifier rather than user-entered activity content.
  */
 export function formatActivityTimelineParticipant(
-  group: ActivityTimelineGroup,
-  groups: ActivityTimelineGroup[],
+  group: Pick<ActivityTimelineGroup, "sessionId" | "displayName">,
+  groups: ReadonlyArray<Pick<ActivityTimelineGroup, "sessionId" | "displayName">>,
 ): string {
   const displayName = group.displayName.trim() || "Кандидат";
   const hasSameNameDifferentSession = groups.some(
@@ -191,8 +214,12 @@ function isStandaloneModifier(event: ActivityTimelineEvent): boolean {
   return label === "Ctrl" || label === "Alt" || label === "Shift" || label === "Cmd";
 }
 
-function stateLabel(eventKind: string): string | null {
+function activityLabel(eventKind: string): string | null {
   switch (eventKind) {
+    case "diagram_edit":
+      return "Изменение диаграммы";
+    case "whiteboard_edit":
+      return "Рисование на доске";
     case "window_blur":
       return "Окно потеряло фокус";
     case "window_focus":
@@ -213,8 +240,8 @@ function actionToken(event: ActivityTimelineEvent): string | null {
     return `Вставка: ${length} симв.`;
   }
 
-  const focusLabel = stateLabel(eventKind);
-  if (focusLabel) return focusLabel;
+  const label = activityLabel(eventKind);
+  if (label) return label;
 
   if (eventKind !== "keydown") return `Неизвестное действие: ${eventKind}`;
   if (isStandaloneModifier(event)) return null;
@@ -224,6 +251,13 @@ function actionToken(event: ActivityTimelineEvent): string | null {
     return "Неизвестный ввод";
   }
   return keyLabel;
+}
+
+export function formatActivityEventDetail(event: ActivityTimelineEvent): string {
+  const kind = event.eventKind ?? "keydown";
+  if (kind === "paste") return `Вставка: ${event.pasteLength ?? 0} симв.`;
+  if (kind !== "keydown") return activityLabel(kind) ?? kind;
+  return `${formatEventKey(event)} · key=${JSON.stringify(event.key)} · code=${JSON.stringify(event.keyCode)}`;
 }
 
 /**

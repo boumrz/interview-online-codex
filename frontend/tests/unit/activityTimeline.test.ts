@@ -160,6 +160,40 @@ test("uses accepted sequence for equal timestamps and reconciles late and duplic
   ]);
 });
 
+test("the latest room snapshot cannot replace live actions in the same viewer scope or leak them into another", async () => {
+  const { mergeActivitySnapshot } = await import("../../src/features/room/activityTimelineProjection.ts");
+  const events = [
+    event("a", 1, 500, { key: " ", keyCode: "Space" }),
+    event("b", 2, 500, { key: " ", keyCode: "Space", sessionId: "candidate-b" }),
+  ];
+  const snap = {
+    inviteCode: "room", viewerScope: "manager-a", canManageRoom: true,
+    candidateKeyHistory: events, lastCandidateKey: events[1],
+  };
+  const stale = { ...snap, candidateKeyHistory: [{ ...events[1], key: "STALE" }], lastCandidateKey: events[0] };
+  assert.deepEqual(mergeActivitySnapshot(snap, stale), events);
+  assert.deepEqual(mergeActivitySnapshot(snap, { ...snap, candidateKeyHistory: [], lastCandidateKey: null }), events);
+  assert.deepEqual(mergeActivitySnapshot(null, { ...snap, candidateKeyHistory: [], lastCandidateKey: events[0] }), [events[0]]);
+  assert.deepEqual(mergeActivitySnapshot(snap, { ...stale, canManageRoom: false }), []);
+  for (const next of [{ ...stale, inviteCode: "other" }, { ...stale, viewerScope: "manager-b" }]) {
+    assert.deepEqual(mergeActivitySnapshot(snap, { ...next, candidateKeyHistory: [], lastCandidateKey: null }), []);
+  }
+});
+
+test("individual activity rows show repeated keys, exact whitespace and modifiers without exposing paste previews", async () => {
+  const { formatActivityEventDetail } = await import("../../src/features/room/activityTimelineProjection.ts");
+  for (const [key, keyCode] of [[" ", "Space"], ["Shift", "ShiftLeft"], ["\t", "Tab"]]) {
+    const row = formatActivityEventDetail(event("id", 1, 1, { key, keyCode, shiftKey: key === "Shift" }));
+    assert.ok(row.includes(JSON.stringify(key)), row);
+    assert.ok(row.includes(keyCode), row);
+  }
+  const pasted = formatActivityEventDetail(event("paste", 2, 1, {
+    eventKind: "paste", pasteLength: 8, pastePreview: "private!",
+  }));
+  assert.match(pasted, /Вставка: 8 симв/);
+  assert.ok(!pasted.includes("private!"));
+});
+
 test("formats text, shortcuts, paste length, focus labels, and unknown input without a paste preview", async () => {
   const { projectActivityTimeline, formatActivityTimelineSummary } = await loadProjection();
   const group = projectActivityTimeline([
@@ -236,4 +270,18 @@ test("collapses adjacent identical named actions with a count without losing the
       summary.indexOf("Enter") < summary.lastIndexOf("Backspace"),
     `summary should preserve actions after a collapsed run: ${summary}`,
   );
+});
+
+test("committed canvas edits have brief labels in the summary and detail without disclosing object data", async () => {
+  const { projectActivityTimeline, formatActivityTimelineSummary, formatActivityEventDetail } =
+    await import("../../src/features/room/activityTimelineProjection.ts");
+  const events = ["diagram_edit", "diagram_edit", "whiteboard_edit"].map((eventKind, index) =>
+    event("canvas-" + index, index + 1, 1000 + index, {
+      eventKind, key: "private shape", keyCode: "private path", pastePreview: "private text",
+    }));
+  const [group] = projectActivityTimeline([...events, events[0]]);
+  assert.deepEqual(group.sourceEventIds, ["canvas-0", "canvas-1", "canvas-2"]);
+  assert.equal(formatActivityTimelineSummary(group), "Изменение диаграммы × 2 · Рисование на доске");
+  assert.deepEqual(group.events.map(formatActivityEventDetail),
+    ["Изменение диаграммы", "Изменение диаграммы", "Рисование на доске"]);
 });

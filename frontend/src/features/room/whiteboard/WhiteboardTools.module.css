@@ -11,8 +11,8 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 2px;
-  padding: 4px 8px;
+  gap: 8px;
+  padding: 8px;
   border-bottom: 1px solid var(--app-border);
   background: var(--app-surface);
 }
@@ -28,6 +28,10 @@
   cursor: pointer;
 }
 .tool { padding: 0 7px; color: var(--app-muted); font-size: 16px; }
+.circleIcon { box-sizing: border-box; width: 15px; height: 15px; border: 1.5px solid currentColor; border-radius: 50%; }
+.action { font-family: inherit; background: transparent; border: 0; }
+.action:focus-visible { outline: 2px solid var(--app-focus); }
+.action:disabled { opacity: .45; cursor: default; }
 .tool:hover, .color:hover { background: var(--app-surface-soft); }
 .tool:has(:checked) { background: var(--app-selected-bg); color: var(--app-selected-text); }
 .tool:has(:focus-visible), .color:has(:focus-visible) { outline: 2px solid var(--app-focus); }
@@ -56,3 +60,73 @@
 }
 .surface :global(.App-bottom-bar) { width: auto; right: auto; }
 .surface :global(.App-bottom-bar:not(:has([data-testid="button-undo"], .scroll-back-to-content))) { display: none; }
+
+.widthControl {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+  color: var(--app-muted);
+  font-size: 13px;
+}
+.widthTrigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 1px 8px;
+  border: 1px solid var(--app-control-border);
+  border-radius: 6px;
+  background: var(--app-surface);
+  color: var(--app-text);
+  font: inherit;
+  cursor: pointer;
+}
+.widthTrigger:hover { background: var(--app-surface-soft); }
+.widthTrigger:focus-visible, .widthPopup input:focus-visible, .widthPresets button:focus-visible { outline: 2px solid var(--app-focus); outline-offset: 2px; }
+.widthSample { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 32px; }
+.widthSample > span { width: 36px; border-radius: 999px; }
+.widthValue { min-width: 33px; font-variant-numeric: tabular-nums; text-align: start; }
+.widthArrow {
+  font-size: 10px;
+  pointer-events: none;
+}
+.widthPopup { width: 228px; max-width: calc(100vw - 56px); color: var(--app-text); font-size: 13px; white-space: normal; }
+.widthNumberRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.widthNumberRow input {
+  box-sizing: border-box;
+  width: 72px;
+  min-height: 36px;
+  border: 1px solid var(--app-control-border);
+  border-radius: 6px;
+  padding: 4px 6px;
+  background: var(--app-surface);
+  color: var(--app-text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.widthSlider { display: block; width: 100%; min-height: 28px; margin: 8px 0 0; accent-color: var(--app-focus); cursor: pointer; }
+.widthLimits { display: flex; justify-content: space-between; color: var(--app-muted); font-size: 12px; }
+.widthPresets { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin-top: 12px; }
+.widthPresets button {
+  min-width: 0;
+  min-height: 36px;
+  padding: 4px;
+  border: 1px solid var(--app-control-border);
+  border-radius: 6px;
+  background: var(--app-surface);
+  color: var(--app-text);
+  font: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.widthPresets button:hover { background: var(--app-surface-soft); }
+.widthPresets button[aria-pressed="true"] { border-color: var(--app-focus); background: var(--app-selected-bg); color: var(--app-selected-text); }
+.widthHint { margin: 10px 0 0; color: var(--app-muted); font-size: 12px; }
+
+.fileInput { display: none; }
+.importMessage { padding: 6px 12px; font-size: 13px; color: var(--app-muted); }
+.importError { color: var(--app-danger); }

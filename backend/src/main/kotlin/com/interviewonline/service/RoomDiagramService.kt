@@ -48,7 +48,7 @@ class RoomDiagramService(
             val room = rooms.lockForSharedReadByInviteCode(inviteCode) ?: throw missingRoom()
             requireNotArchived(room)
             val liveRole = credentials.sessionId?.let {
-                collaboration.resolveDiagramParticipantRole(room, it, credentials.eventToken, credentials.user)
+                collaboration.resolveCanvasParticipant(room, it, credentials.eventToken, credentials.user).role
             }
             val role = liveRole ?: accessService.resolveAccess(room, credentials.user,
                 credentials.ownerToken, credentials.interviewerToken).role
@@ -79,13 +79,14 @@ class RoomDiagramService(
 
     fun change(inviteCode: String, credentials: Credentials, request: RoomDiagramChangeRequest, taskId: String? = null): RoomDiagramOperationDto {
         gate.requireEnabled()
-        validator.validate(request)
+        val proposedCells = validator.validate(request)
         val outcome = requireNotNull(transaction.execute {
             val room = rooms.lockByInviteCode(inviteCode) ?: throw missingRoom()
             requireNotArchived(room)
             val sessionId = credentials.sessionId?.takeIf { it.isNotBlank() && it.length <= 255 }
                 ?: throw denied()
-            val role = collaboration.resolveDiagramParticipantRole(room, sessionId, credentials.eventToken, credentials.user)
+            val actor = collaboration.resolveCanvasParticipant(room, sessionId, credentials.eventToken, credentials.user)
+            val role = actor.role
             if (room.status == "frozen") throw ApiException(HttpStatus.CONFLICT, "Комната недоступна для изменений", code = "ROOM_FROZEN")
             if (!canEdit(room, role)) throw ApiException(HttpStatus.FORBIDDEN, "Интервью доступно только для просмотра", code = "ROOM_READ_ONLY")
             val scope = taskScope.resolve(room, taskId, role.canManageRoom)
@@ -96,7 +97,7 @@ class RoomDiagramService(
                 { result, _ -> result.getString("fingerprint") to operation(result, current.diagramId) }, current.diagramId, request.operationId).firstOrNull()
             if (receipt != null) {
                 if (receipt.first != fingerprint) throw ApiException(HttpStatus.CONFLICT, "Идентификатор изменения уже использован", code = "DIAGRAM_OPERATION_REUSED")
-                return@execute receipt.second to null
+                return@execute Triple(receipt.second, null, null)
             }
             if (request.baseSequence != current.sequence || current.sequence == Long.MAX_VALUE) throw conflict(current.sequence)
             val next = current.sequence + 1
@@ -110,13 +111,20 @@ class RoomDiagramService(
             // receipts. Older readers recover from the canonical XML snapshot.
             jdbc.update("UPDATE room_diagram_operations SET xml=NULL,patch=NULL,checksum=NULL WHERE diagram_id=? AND sequence<=? AND xml IS NOT NULL",
                 current.diagramId, next - RECOVERY_WINDOW)
-            RoomDiagramOperationDto(current.diagramId, next, request.operationId, sessionId, request.xml, request.patch, request.checksum) to
-                RoomDiagramChangedDto(current.diagramId, next, scope)
+            val activity = if (!role.canManageRoom && request.xml != current.xml && validator.cellsChanged(current.xml, proposedCells)) {
+                collaboration.recordCanvasActivity(room, actor, CollaborationService.CanvasActivity.DIAGRAM_EDIT)
+            } else null
+            Triple(
+                RoomDiagramOperationDto(current.diagramId, next, request.operationId, sessionId, request.xml, request.patch, request.checksum),
+                RoomDiagramChangedDto(current.diagramId, next, scope), activity,
+            )
         })
         // TransactionTemplate has returned and released its Room row lock and
         // connection before any potentially slow SSE client receives data.
-        outcome.second?.let { collaboration.broadcastDiagramChanged(inviteCode, it) }
-        return outcome.first
+        val (operation, changed, activity) = outcome
+        changed?.let { collaboration.broadcastDiagramChanged(inviteCode, it) }
+        activity?.let { collaboration.publishCandidateActivity(inviteCode, it) }
+        return operation
     }
 
     private fun snapshot(room: Room, taskId: String?): RoomDiagramDto = jdbc.query(

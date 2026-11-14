@@ -15,11 +15,12 @@ class RoomWhiteboardController(private val boards: RoomWhiteboardService, privat
         @PathVariable inviteCode: String,
         @RequestParam(required = false) sessionId: String?,
         @RequestParam(required = false) taskId: String?,
+        @RequestParam(required = false) knownFileIds: String?,
         @RequestHeader("Authorization", required = false) authorization: String?,
         @RequestHeader("X-Room-Owner-Token", required = false) ownerToken: String?,
         @RequestHeader("X-Room-Interviewer-Token", required = false) interviewerToken: String?,
         @RequestHeader("X-Room-Event-Token", required = false) eventToken: String?,
-    ) = privateResponse(boards.get(inviteCode, credentials(authorization, ownerToken, interviewerToken, eventToken, sessionId), taskId))
+    ) = privateResponse(boards.get(inviteCode, credentials(authorization, ownerToken, interviewerToken, eventToken, sessionId), taskId, knownFileIds))
 
     @PostMapping("/changes")
     fun change(

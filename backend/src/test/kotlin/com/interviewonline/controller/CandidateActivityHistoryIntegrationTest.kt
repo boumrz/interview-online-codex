@@ -17,6 +17,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.mock.mockito.SpyBean
 import org.springframework.http.MediaType
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.MvcResult
 import org.springframework.test.web.servlet.get
@@ -42,6 +43,7 @@ class CandidateActivityHistoryIntegrationTest(
     @Autowired private val rooms: RoomRepository,
     @Autowired private val collaboration: CollaborationService,
     @Autowired private val transactions: PlatformTransactionManager,
+    @Autowired private val jdbc: JdbcTemplate,
 ) {
     @SpyBean private lateinit var persistence: KeystrokePersistenceService
     private val fixtures = mutableListOf<ActivityHttpFixture>()
@@ -49,6 +51,107 @@ class CandidateActivityHistoryIntegrationTest(
     @AfterEach fun cleanup() {
         Mockito.reset(persistence)
         fixtures.forEach { collaboration.closeRoom(it.room.inviteCode) }
+    }
+
+    @Test fun `concurrent candidate submissions preserve every raw field and immutable identity across retries`() {
+        val f = fixture()
+        val candidates = listOf(f.join(), f.join())
+        val fields = listOf(
+            mapOf("eventKind" to "keydown", "key" to "Esc", "keyCode" to "OSRight", "shiftKey" to true),
+            mapOf("eventKind" to "keydown", "key" to " ", "keyCode" to ""),
+            mapOf("eventKind" to "keydown", "key" to "", "keyCode" to "KeyY"),
+            mapOf("eventKind" to "keydown", "key" to "x".repeat(64), "keyCode" to ""),
+            mapOf("eventKind" to "paste", "key" to "", "keyCode" to "", "pasteLength" to 1_000_001, "pastePreview" to "  пример\n "),
+            mapOf("eventKind" to "tab_hidden", "key" to "", "keyCode" to ""),
+        )
+        val actions = (0 until 72).map { index ->
+            candidates[index % candidates.size] to
+                (fields[index % fields.size] + ("sourceEventId" to UUID.randomUUID().toString()))
+        }
+        val workers = java.util.concurrent.Executors.newFixedThreadPool(4)
+        try {
+            val posts = actions.map { (candidate, action) ->
+                workers.submit<Int> { f.post(candidate, "key_press", action).response.status }
+            }
+            posts.forEach { assertEquals(204, it.get(30, TimeUnit.SECONDS)) }
+        } finally { workers.shutdownNow() }
+
+        val (originalCandidate, original) = actions.first()
+        assertEquals(204, f.post(originalCandidate, "key_press", original).response.status)
+        assertEquals(409, f.post(originalCandidate, "key_press", original + ("key" to "different")).response.status)
+        assertEquals(409, f.post(candidates.last(), "key_press", original).response.status)
+        val rows = history(f).path("events")
+        assertEquals(actions.size, rows.size())
+        assertEquals((1..actions.size).toSet(), rows.map { it.path("acceptedSequence").asInt() }.toSet())
+        val byId = rows.associateBy { it.path("sourceEventId").asText() }
+        actions.forEach { (candidate, action) ->
+            val row = byId.getValue(action.getValue("sourceEventId") as String)
+            assertEquals(candidate.session, row.path("sessionId").asText())
+            action.forEach { (field, value) -> assertEquals(mapper.valueToTree<JsonNode>(value), row.get(field), field) }
+        }
+    }
+
+    @Test fun `activity fields round trip NUL emoji and isolated UTF16 units on all JSON transports`() {
+        val f = fixture()
+        val candidate = f.join()
+        val manager = f.join(f.owner.token)
+        val key = "💻"
+        val code = "~raw"
+        // JS slice(0, 50) may leave half an emoji at the paste preview boundary.
+        val preview = "a".repeat(47) + "\u0000 " + '\uD83D'
+        val source = UUID.randomUUID().toString()
+        val action = mapOf("sourceEventId" to source, "eventKind" to "paste", "key" to key, "keyCode" to code,
+            "pasteLength" to 100, "pastePreview" to preview)
+        repeat(2) { assertEquals(204, f.post(candidate, "key_press", action).response.status) }
+        assertEquals(204, f.post(manager, "request_state_sync").response.status)
+        val received = f.messages(manager)
+        val live = received.single { it.path("type").asText() == "candidate_key" }.path("payload")
+        val snapshot = received.last { it.path("type").asText() == "state_sync" }.path("payload").path("candidateKeyHistory").single()
+        val export = mvc.get("/api/rooms/${f.room.inviteCode}/keystroke-events") {
+            header("Authorization", "Bearer ${f.owner.token}")
+        }.andReturn()
+        val exported = mapper.readTree(export.response.contentAsByteArray).single()
+        for (entry in listOf(history(f).path("events").single(), live, snapshot, exported)) {
+            assertEquals(key, (entry.get("key") ?: entry.get("keyValue")).asText())
+            assertEquals(code, entry.path("keyCode").asText())
+            assertEquals(preview, entry.path("pastePreview").asText())
+        }
+        val persisted = events.findByRoomIdAndSourceEventId(f.room.id, source)!!
+        assertFalse(persisted.pastePreview!!.any { it == '\u0000' || it.isSurrogate() })
+    }
+
+    @Test fun `upgrade retries of a pre-existing normalized record keep its accepted fields and sequence`() {
+        val f = fixture()
+        val candidate = f.join()
+        val source = UUID.randomUUID().toString()
+        events.saveAndFlush(RoomKeystrokeEvent(
+            roomId = f.room.id, sessionId = candidate.session, displayName = "Prior name",
+            keyValue = "Escape", keyCode = "Meta", sourceEventId = source, timestampEpochMs = 123, acceptedSequence = 17,
+        ))
+        val original = mapOf("key" to "Esc", "keyCode" to "OSRight", "sourceEventId" to source)
+        assertEquals(204, f.post(candidate, "key_press", original).response.status)
+        assertEquals(409, f.post(candidate, "key_press", original + ("ctrlKey" to true)).response.status)
+        val stored = history(f).path("events").single()
+        assertEquals("Escape", stored.path("key").asText())
+        assertEquals("Meta", stored.path("keyCode").asText())
+        assertEquals(17, stored.path("acceptedSequence").asInt())
+        assertEquals(123, stored.path("timestampEpochMs").asInt())
+        assertEquals("Prior name", stored.path("displayName").asText())
+    }
+
+    @Test fun `relay acknowledges only recorded candidate actions and UUID retries are independent of editor sequencing`() {
+        val f = fixture()
+        val candidate = f.join()
+        val manager = f.join(f.owner.token)
+        val action = mapOf("key" to "a", "keyCode" to "KeyA", "sourceEventId" to UUID.randomUUID().toString())
+        assertEquals(403, f.post(manager, "key_press", action).response.status)
+        assertEquals(400, f.post(candidate, "key_press", action + mapOf("key" to "", "keyCode" to "")).response.status)
+        assertEquals(400, f.post(candidate, "key_press", action + ("key" to "x".repeat(65))).response.status)
+        assertEquals(204, f.post(candidate, "key_press", action + ("clientEventSequence" to 3)).response.status)
+        assertEquals(204, f.post(candidate, "key_press", action + ("clientEventSequence" to 3)).response.status)
+        val second = action + mapOf("sourceEventId" to UUID.randomUUID().toString(), "clientEventSequence" to 2)
+        assertEquals(204, f.post(candidate, "key_press", second).response.status)
+        assertEquals(2, history(f).path("events").size())
     }
 
     @Test fun `latest and older pages traverse all 451 identities despite equal and backward timestamps`() {
@@ -177,6 +280,50 @@ class CandidateActivityHistoryIntegrationTest(
         assertEquals(410, f.getHistory().response.status)
     }
 
+    @Test fun `persisted revocation blocks raw events and latest snapshots even before the manager cache refreshes`() {
+        val f = fixture()
+        val owner = f.join(f.owner.token)
+        val account = HrHttpFixtures.register(mvc, mapper, false, "log-reader").first
+        val interviewer = f.join(account.token)
+        assertEquals(204, f.post(owner, "grant_interviewer_access", mapOf("targetSessionId" to interviewer.session)).response.status)
+        val candidate = f.join()
+        val action = mapOf("key" to "a", "keyCode" to "KeyA", "sourceEventId" to UUID.randomUUID().toString())
+        assertEquals(204, f.post(candidate, "key_press", action).response.status)
+        assertEquals(1, f.messages(interviewer).count { it.path("type").asText() == "candidate_key" })
+
+        assertEquals(1, jdbc.update("UPDATE room_participants SET role='candidate' WHERE room_id=? AND user_id=?", f.room.id, account.id))
+        assertEquals(204, f.post(candidate, "key_press", action + ("sourceEventId" to UUID.randomUUID().toString())).response.status)
+        // Trigger a broadcast via another participant, without first sending a request from the stale connection.
+        assertEquals(204, f.post(candidate, "presence_update", mapOf("presenceStatus" to "away")).response.status)
+        val sent = f.messages(interviewer)
+        assertEquals(1, sent.count { it.path("type").asText() == "candidate_key" })
+        val snapshot = sent.last { it.path("type").asText() == "state_sync" }.path("payload")
+        assertFalse(snapshot.has("candidateKeyHistory"))
+        assertFalse(snapshot.has("lastCandidateKey"))
+        assertEquals(403, f.getHistory(token = account.token, eventToken = interviewer.token).response.status)
+        assertEquals(2, history(f).path("events").size())
+    }
+
+    @Test fun `a backwards clock cannot evict a newly accepted event from the 50-record realtime tail`() {
+        val f = fixture()
+        val futureTimestamp = System.currentTimeMillis() + 1_000_000
+        events.saveAllAndFlush((1L..50L).map { sequence ->
+            RoomKeystrokeEvent(roomId = f.room.id, sessionId = "past", displayName = "Past",
+                keyValue = "x", keyCode = "KeyX", timestampEpochMs = futureTimestamp + sequence,
+                sourceEventId = UUID.randomUUID().toString(), acceptedSequence = sequence)
+        })
+        collaboration.closeRoom(f.room.inviteCode)
+        val manager = f.join(f.owner.token)
+        val candidate = f.join()
+        assertEquals(204, f.post(candidate, "key_press", mapOf("key" to "x", "sourceEventId" to UUID.randomUUID().toString())).response.status)
+        assertEquals(204, f.post(manager, "request_state_sync").response.status)
+        val snapshot = f.messages(manager).last { it.path("type").asText() == "state_sync" }.path("payload")
+        val tail = snapshot.path("candidateKeyHistory")
+        assertEquals(50, tail.size())
+        assertEquals((2L..51L).toSet(), tail.map { it.path("acceptedSequence").asLong() }.toSet())
+        assertEquals(tail.last(), snapshot.path("lastCandidateKey"))
+    }
+
     @Test fun `public manager join reconstructs a bounded durable tail after volatile loss and stale JSON`() {
         val f = fixture()
         seed(f, 1L..75L)
@@ -204,7 +351,7 @@ class CandidateActivityHistoryIntegrationTest(
             entered.countDown()
             check(release.await(5, TimeUnit.SECONDS))
             call.callRealMethod()
-        }.`when`(persistence).accept(anyString(), anyArgument())
+        }.`when`(persistence).accept(anyString(), anyArgument(), anyArgument())
         val source = UUID.randomUUID().toString()
         val post = CompletableFuture.supplyAsync { f.post(candidate, "key_press", mapOf("key" to "a", "keyCode" to "KeyA", "sourceEventId" to source)).response.status }
         try {
@@ -219,6 +366,31 @@ class CandidateActivityHistoryIntegrationTest(
         assertEquals(listOf(source), latest.map { it.path("sourceEventId").asText() })
     }
 
+    @Test fun `sequenced presence cannot be rolled back by a late update or replay with different status`() {
+        val f = fixture()
+        val manager = f.join(f.owner.token)
+        val candidate = f.join()
+        fun send(sequence: Long?, status: String, proof: String = candidate.token) =
+            f.post(candidate, "presence_update", mapOf("presenceStatus" to status, "eventToken" to proof) +
+                (sequence?.let { mapOf("presenceSequence" to it) } ?: emptyMap())).response.status
+        fun snapshot() = f.messages(manager).last { it.path("type").asText() == "state_sync" }.path("payload")
+        fun status() = snapshot().path("participants").single { it.path("sessionId").asText() == candidate.session }
+            .path("presenceStatus").asText()
+
+        assertEquals(204, send(null, "away"))
+        assertEquals("away", status())
+        val previousRevision = snapshot().path("participantSnapshotRevision").asLong()
+        assertEquals(204, send(3, "active"))
+        assertTrue(snapshot().path("participantSnapshotRevision").asLong() > previousRevision)
+        assertEquals(204, send(2, "away"))
+        assertEquals(204, send(3, "away"))
+        assertEquals(204, send(null, "away"))
+        assertEquals(403, send(15, "away", proof = ""))
+        assertEquals("active", status())
+        assertEquals(204, send(4, "away"))
+        assertEquals("away", status())
+    }
+
     private fun fixture() = ActivityHttpFixture(mvc, mapper).also(fixtures::add)
     private fun seed(f: ActivityHttpFixture, sequences: LongRange) {
         events.saveAllAndFlush(sequences.map { sequence ->
@@ -229,7 +401,7 @@ class CandidateActivityHistoryIntegrationTest(
         val result = f.getHistory(query)
         assertEquals(200, result.response.status, result.response.contentAsString)
         assertTrue(result.response.getHeader("Cache-Control").orEmpty().contains("no-store"))
-        return mapper.readTree(result.response.contentAsString)
+        return mapper.readTree(result.response.contentAsByteArray)
     }
     private fun assertCanonical(page: JsonNode) {
         val pairs = page.path("events").map { it.path("timestampEpochMs").asLong() to it.path("acceptedSequence").asLong() }
@@ -266,10 +438,10 @@ internal class ActivityHttpFixture(private val mvc: MockMvc, private val mapper:
 
     fun post(stream: ActivityStream, type: String, fields: Map<String, Any> = emptyMap()): MvcResult = mvc.post("/api/realtime/rooms/${room.inviteCode}/events") {
         contentType = MediaType.APPLICATION_JSON
-        content = mapper.writeValueAsString(mapOf("sessionId" to stream.session, "eventToken" to stream.token, "type" to type) + fields)
+        content = mapper.writeValueAsBytes(mapOf("sessionId" to stream.session, "eventToken" to stream.token, "type" to type) + fields)
     }.andReturn()
 
     fun messages(stream: ActivityStream) = messages(stream.response)
-    private fun messages(result: MvcResult): List<JsonNode> = result.response.contentAsString.lineSequence()
+    private fun messages(result: MvcResult): List<JsonNode> = result.response.getContentAsString(Charsets.UTF_8).lineSequence()
         .filter { it.startsWith("data:") }.map { mapper.readTree(it.removePrefix("data:")) }.toList()
 }

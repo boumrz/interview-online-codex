@@ -133,6 +133,30 @@ async function editorFrame(page) {
   return frame;
 }
 
+test('клавиши внутри активного редактора диаграмм сохраняются по одному разу', async () => {
+  const browser = await chromium.launch();
+  try {
+    const room = await createRoom();
+    const owner = await openParticipant(browser, room, true);
+    const candidate = await openParticipant(browser, room);
+    await chooseMode(owner.page, 'Редактор диаграмм');
+    const frame = await editorFrame(candidate.page);
+    await frame.locator('.geDiagramContainer').click({ position: { x: 100, y: 85 } });
+    const logged = candidate.page.waitForResponse(response => {
+      if (response.request().method() !== 'POST' || !response.url().endsWith('/events')) return false;
+      const payload = response.request().postDataJSON();
+      return payload.type === 'key_press' && payload.key === 'F2';
+    });
+    await candidate.page.keyboard.press('F2');
+    assert.equal((await logged).status(), 204);
+    const raw = await fetch(`${api}/rooms/${room.inviteCode}/keystroke-events`, { headers: { 'X-Room-Owner-Token': room.ownerToken } });
+    assert.equal(raw.status, 200);
+    const keys = (await raw.json()).filter(row => row.keyValue === 'F2');
+    assert.equal(keys.length, 1);
+    assert.equal(keys[0].keyCode, 'F2');
+  } finally { await browser.close(); }
+});
+
 async function assertDiagramToolbarAtTop(frame) {
   assert.equal(await frame.locator('.geMenubarContainer:visible').count(), 0, 'desktop menu row is hidden');
   const toolbar = frame.locator('.geToolbarContainer').filter({ has: frame.locator('.geToolbar') }).first();

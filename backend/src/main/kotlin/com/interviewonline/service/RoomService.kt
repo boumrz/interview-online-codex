@@ -674,19 +674,20 @@ class RoomService(
         return roomKeystrokeEventRepository
             .findByRoomIdOrderByTimestampEpochMsAscAcceptedSequenceAsc(room.id!!)
             .map { e ->
+                val event = e.toPayload()
                 KeystrokeEventDto(
                     id = e.id!!,
                     sessionId = e.sessionId,
-                    displayName = e.displayName,
-                    keyValue = e.keyValue,
-                    keyCode = e.keyCode,
+                    displayName = event.displayName,
+                    keyValue = event.key.takeIf { e.keyValue != null },
+                    keyCode = event.keyCode.takeIf { e.keyCode != null },
                     ctrlKey = e.ctrlKey,
                     altKey = e.altKey,
                     shiftKey = e.shiftKey,
                     metaKey = e.metaKey,
                     eventKind = e.eventKind,
                     pasteLength = e.pasteLength,
-                    pastePreview = e.pastePreview,
+                    pastePreview = event.pastePreview,
                     timestampEpochMs = e.timestampEpochMs,
                     sourceEventId = e.sourceEventId,
                     acceptedSequence = e.acceptedSequence,

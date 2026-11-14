@@ -1,10 +1,12 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { Button, Flex, Typography } from "antd";
 import { DownloadOutlined } from "@ant-design/icons";
 import {
   formatActivityTimelineSummary,
   formatActivityTimelineParticipant,
+  formatActivityEventDetail,
   projectActivityTimeline,
+  type ActivityTimelineGroup,
 } from "./activityTimelineProjection";
 import type { CandidateActivityHistory } from "./useCandidateActivityHistory";
 
@@ -13,13 +15,31 @@ type ActivityTimelineProps = {
   canManageRoom: boolean;
 };
 
+const clock = new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+const formatTime = (timestamp: number) => clock.format(timestamp);
+
+function ActivityEventDetails({ group }: { group: ActivityTimelineGroup }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <details style={{ color: "var(--app-muted)", fontSize: 12, marginTop: 4 }} onToggle={event => setOpen(event.currentTarget.open)}>
+      <summary style={{ cursor: "pointer" }}>События ({group.events.length})</summary>
+      {open && (
+        <ol style={{ margin: "4px 0 0", paddingInlineStart: 24 }}>
+          {group.events.map((event, index) => (
+            <li key={event.sourceEventId ?? index} style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+              {formatTime(event.timestampEpochMs)} · {formatActivityEventDetail(event)}
+            </li>
+          ))}
+        </ol>
+      )}
+    </details>
+  );
+}
+
 export function ActivityTimeline({ history, canManageRoom }: ActivityTimelineProps) {
   const groups = useMemo(() => projectActivityTimeline(history.events), [history.events]);
   if (!canManageRoom) return null;
 
-  const formatTime = (timestampEpochMs: number) => new Date(timestampEpochMs).toLocaleTimeString("ru-RU", {
-    hour: "2-digit", minute: "2-digit", second: "2-digit",
-  });
   const formatTimeRange = (start: number, end: number) =>
     start === end ? formatTime(start) : `${formatTime(start)}–${formatTime(end)}`;
 
@@ -75,9 +95,10 @@ export function ActivityTimeline({ history, canManageRoom }: ActivityTimelinePro
                     {formatTimeRange(group.startTimestampEpochMs, group.endTimestampEpochMs)}
                   </Typography.Text>
                 </Flex>
-                <Typography.Text data-testid="activity-timeline-summary" style={{ color: "var(--app-text)", fontSize: 12 }}>
+                <Typography.Text data-testid="activity-timeline-summary" style={{ color: "var(--app-text)", fontSize: 12, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
                   {formatActivityTimelineSummary(group)}
                 </Typography.Text>
+                <ActivityEventDetails group={group} />
                 {group.sourceEventIds.map((sourceEventId) => (
                   <span key={sourceEventId} data-testid="activity-timeline-source-id" style={{ display: "none" }}>
                     {sourceEventId}

@@ -15,14 +15,14 @@ const { createWhiteboardSession } = await import("../../src/features/room/whiteb
 function element(id = "stroke", version = 1, overrides: Record<string, unknown> = {}): WhiteboardElement {
   return { id, type: "freedraw", x: 0, y: 0, width: 20, height: 30, version, versionNonce: 100, isDeleted: false, points: [[0, 0], [20, 30]], ...overrides };
 }
-function snapshot(elements: ReadonlyArray<WhiteboardElement> = [], sequence = 0, canEdit = true): WhiteboardSnapshot { return parseSnapshot({ boardId: "board", sequence, elements, canEdit }); }
+function snapshot(elements: ReadonlyArray<WhiteboardElement> = [], sequence = 0, canEdit = true, files = {}): WhiteboardSnapshot { return parseSnapshot({ boardId: "board", sequence, elements, canEdit, files }); }
 async function until(condition: () => boolean, label: string) {
   const deadline = Date.now() + 1500;
   while (!condition() && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 3));
   assert.equal(condition(), true, label);
 }
 const pause = () => new Promise(resolve => setTimeout(resolve, 25));
-type Request = { method: string; taskId: string | null; headers: Headers; body?: WhiteboardChange; rawBody?: string; signal?: AbortSignal | null };
+type Request = { method: string; taskId: string | null; knownFileIds?: string[]; headers: Headers; body?: WhiteboardChange; rawBody?: string; signal?: AbortSignal | null };
 
 function harness(options: { throttleMs?: number; taskId?: string | null } = {}) {
   let connection: WhiteboardConnection = { inviteCode: "room", taskId: options.taskId ?? null, sessionId: "session", ownerToken: "owner", authToken: "auth", eventToken: "proof", connected: true, readOnly: false };
@@ -39,19 +39,20 @@ function harness(options: { throttleMs?: number; taskId?: string | null } = {}) 
     if (previous) return Response.json(previous);
     const elements = new Map(saved.elements.map(element => [element.id, element]));
     for (const item of body.elements) elements.set(item.id, item);
-    saved = snapshot([...elements.values()], saved.sequence + 1, saved.canEdit);
+    saved = snapshot([...elements.values()], saved.sequence + 1, saved.canEdit, { ...saved.files, ...body.files });
     const receipt = { boardId: saved.boardId, taskId, sequence: saved.sequence, operationId: body.operationId };
     receipts.set(body.operationId, receipt);
     return Response.json(receipt);
   };
   const fetcher: typeof fetch = async (url, init) => {
     const requestedTask = new URL(String(url), "http://localhost").searchParams.get("taskId");
-    const request: Request = { method: init?.method ?? "GET", taskId: requestedTask, headers: new Headers(init?.headers), signal: init?.signal };
+    const knownFileIds = new URL(String(url), "http://localhost").searchParams.get("knownFileIds")?.split(",").filter(Boolean) ?? [];
+    const request: Request = { method: init?.method ?? "GET", taskId: requestedTask, knownFileIds, headers: new Headers(init?.headers), signal: init?.signal };
     if (typeof init?.body === "string") { request.rawBody = init.body; request.body = JSON.parse(init.body) as WhiteboardChange; }
     requests.push(request);
     const intercepted = intercept?.(request);
     if (intercepted) return intercepted;
-    return request.method === "POST" ? accept(request) : Response.json({ ...saved, taskId });
+    return request.method === "POST" ? accept(request) : Response.json({ ...saved, taskId, files: Object.fromEntries(Object.entries(saved.files).filter(([id]) => !knownFileIds.includes(id))) });
   };
   const session = createWhiteboardSession({ current: () => connection, onState: state => states.push(state), onScene: (snapshot, force) => scenes.push({ snapshot, force }), fetch: fetcher, throttleMs: options.throttleMs ?? 0 });
   return {
@@ -82,6 +83,105 @@ test("an outgoing task session drains only to its original task, including an ex
       assert.deepEqual([...new Set(h.requests.map(request => request.taskId))], [taskId ?? ""]);
     } finally { h.session.destroy(); }
   }
+});
+
+const rasterFile = () => ({ id: "picture", mimeType: "image/png", dataURL: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z1SAAAAAASUVORK5CYII=", created: 1 });
+const rasterElement = (version = 1) => element("photo", version, { type: "image", fileId: "picture", status: "saved", scale: [1, 1] });
+
+test("image data travels atomically with its element and is omitted from later moves", async () => {
+  const h = harness();
+  try {
+    await h.load();
+    h.session.observe([rasterElement()], { picture: rasterFile() });
+    await h.settled();
+    assert.equal(h.saved.files.picture?.dataURL, rasterFile().dataURL);
+    assert.equal(h.posts[0]?.body?.files?.picture?.dataURL, rasterFile().dataURL);
+    h.session.observe([rasterElement(2)], { picture: rasterFile() });
+    await until(() => h.posts.length === 2 && h.state.message === "Сохранено", "move saves");
+    assert.equal(Object.keys(h.posts[1]?.body?.files ?? {}).length, 0);
+  } finally { h.session.destroy(); }
+});
+
+test("a disconnected image is retained in memory and retries its original bytes after reconnect", async () => {
+  const h = harness();
+  try {
+    await h.load();
+    h.connection = { ...h.connection, connected: false };
+    h.session.observe([rasterElement()], { picture: rasterFile() });
+    assert.equal(h.session.hasUnsavedChanges(), true);
+    h.connection = { ...h.connection, connected: true, eventToken: "new-proof" };
+    h.session.refresh();
+    await h.settled();
+    assert.equal(h.saved.files.picture?.dataURL, rasterFile().dataURL);
+    assert.equal(h.saved.elements[0]?.id, "photo");
+  } finally { h.session.destroy(); }
+});
+
+test("an image with missing file data blocks locally without posting a broken document", async () => {
+  const h = harness();
+  try {
+    await h.load();
+    h.session.observe([rasterElement()]);
+    await pause();
+    assert.equal(h.state.canDiscard, true);
+    assert.equal(h.posts.length, 0);
+  } finally { h.session.destroy(); }
+});
+
+test("lost image acknowledgements retry the identical operation and file bytes", async () => {
+  const h = harness();
+  try {
+    await h.load();
+    let lost = false;
+    h.intercept = request => {
+      if (request.method === "POST" && !lost) { lost = true; h.accept(request); throw new TypeError("connection lost"); }
+      return undefined;
+    };
+    h.session.observe([rasterElement()], { picture: rasterFile() });
+    await until(() => h.state.error, "lost response visible");
+    h.session.retry();
+    await h.settled();
+    assert.equal(h.posts.length, 2);
+    assert.equal(h.posts[0]?.rawBody, h.posts[1]?.rawBody);
+    assert.equal(h.saved.sequence, 1);
+    assert.equal(Object.keys(h.saved.files).length, 1);
+  } finally { h.session.destroy(); }
+});
+
+test("large image additions split into bounded atomic requests without resending existing assets", async () => {
+  const h = harness();
+  try {
+    await h.load();
+    const dataURL = "data:image/png;base64," + Buffer.alloc(3_500_000).toString("base64");
+    const files = { picture: { ...rasterFile(), dataURL }, second: { ...rasterFile(), id: "second", dataURL } };
+    h.session.observe([rasterElement(), { ...rasterElement(), id: "photo-2", fileId: "second" }], files);
+    await h.settled();
+    assert.equal(h.posts.length, 2);
+    for (const post of h.posts) {
+      assert.ok(Buffer.byteLength(post.rawBody!) <= 8 * 1024 * 1024);
+      assert.equal(post.body?.elements.length, 1);
+      assert.equal(Object.keys(post.body?.files ?? {}).length, 1);
+    }
+    assert.equal(Object.keys(h.saved.files).length, 2);
+  } finally { h.session.destroy(); }
+});
+
+test("refreshes reuse known raster bytes and fetch only newly shared assets", async () => {
+  const h = harness();
+  try {
+    h.saved = snapshot([rasterElement()], 1, true, { picture: rasterFile() });
+    await h.load();
+    h.session.observe([rasterElement(2)], { picture: rasterFile() });
+    await h.settled();
+    assert.deepEqual(h.requests.filter(request => request.method === "GET").at(-1)?.knownFileIds, ["picture"]);
+    assert.equal(h.session.getSnapshot()?.files.picture?.dataURL, rasterFile().dataURL);
+    const second = { ...rasterFile(), id: "second" };
+    h.saved = snapshot([rasterElement(2), { ...rasterElement(), id: "photo-2", fileId: "second" }], 3, true, { picture: rasterFile(), second });
+    h.session.refresh();
+    await until(() => h.session.getSnapshot()?.sequence === 3, "new peer image loaded");
+    assert.deepEqual(Object.keys(h.session.getSnapshot()!.files).sort(), ["picture", "second"]);
+    assert.equal(h.session.getSnapshot()?.files.second?.dataURL, second.dataURL);
+  } finally { h.session.destroy(); }
 });
 
 test("an editor replaces the initial SDK scene with only the selected task's saved elements", async () => {

@@ -2,7 +2,7 @@ import { API_BASE_URL } from "../../../config/runtime";
 import { classifyDiagramResponse } from "../diagram/diagramRequestPolicy";
 import { matchesCanvasTask, canvasTaskMismatch } from "../canvasTaskScope";
 import { roomRealtimeFetch } from "../roomRealtimeTransport";
-import { compareElementVersions, elementFingerprint, parseAck, parseElement, parseSnapshot, type WhiteboardChange, type WhiteboardElement, type WhiteboardSnapshot } from "./whiteboardProtocol";
+import { compareElementVersions, elementFingerprint, parseAck, parseElement, parseFiles, parseSnapshot, type WhiteboardChange, type WhiteboardElement, type WhiteboardFile, type WhiteboardFiles, type WhiteboardSnapshot } from "./whiteboardProtocol";
 
 export type WhiteboardConnection = {
   taskId: string | null;
@@ -18,7 +18,7 @@ export type WhiteboardConnection = {
 export type WhiteboardState = { loaded: boolean; editable: boolean; message: string; error: boolean; canDiscard: boolean; accessDenied: boolean; pending: number };
 export type WhiteboardSession = {
   refresh(): void;
-  observe(elements: ReadonlyArray<WhiteboardElement>): void;
+  observe(elements: ReadonlyArray<WhiteboardElement>, files?: WhiteboardFiles): void;
   permissionsChanged(): void;
   reset(): void;
   retry(): void;
@@ -36,6 +36,7 @@ export type WhiteboardSessionOptions = {
 
 type Attempt = { change: WhiteboardChange; body: string };
 const MAX_BATCH_BYTES = 480 * 1024;
+const MAX_REQUEST_BYTES = 8 * 1024 * 1024;
 class SessionError extends Error {}
 
 export function createWhiteboardSession(options: WhiteboardSessionOptions): WhiteboardSession {
@@ -44,6 +45,7 @@ export function createWhiteboardSession(options: WhiteboardSessionOptions): Whit
   const fetcher = options.fetch ?? fetch;
   const throttle = Math.max(0, options.throttleMs ?? 200);
   const pending = new Map<string, WhiteboardElement>();
+  const pendingFiles = new Map<string, WhiteboardFile>();
   // A durable ACK can precede its refreshed scene. Suppress native camera/view
   // echoes of that acknowledged version until the matching canonical read.
   const acknowledged = new Map<string, { fingerprint: string; sequence: number }>();
@@ -98,11 +100,11 @@ export function createWhiteboardSession(options: WhiteboardSessionOptions): Whit
     if (scopeMismatch) publish({ error: true, message: canvasTaskMismatch });
     return !scopeMismatch;
   }
-  function clearPending(): void { pending.clear(); acknowledged.clear(); attempt = undefined; }
+  function clearPending(): void { pending.clear(); pendingFiles.clear(); acknowledged.clear(); attempt = undefined; }
   function forceCanonical(): void { if (canonical) options.onScene(canonical, true); }
   function denyRead(): void {
     permissionEpoch++; clearPending(); validationBlocked = false; resetting = false; writeDenied = true;
-    if (canonical) options.onScene({ ...canonical, elements: [], canEdit: false }, true);
+    if (canonical) options.onScene({ ...canonical, elements: [], files: {}, canEdit: false }, true);
     canonical = undefined;
     publish({ accessDenied: true, error: true, message: "Доска недоступна. Доступ к комнате изменился." });
   }
@@ -134,9 +136,20 @@ export function createWhiteboardSession(options: WhiteboardSessionOptions): Whit
     if (connection.eventToken) headers["X-Room-Event-Token"] = connection.eventToken;
     if (body !== undefined) headers["Content-Type"] = "application/json";
     const query = new URLSearchParams({ sessionId: connection.sessionId, taskId: taskId ?? "" });
+    if (method === "GET" && canonical) {
+      const known: string[] = [];
+      let size = 0;
+      for (const id of Object.keys(canonical.files)) {
+        if (size + id.length + 1 > 5500) break;
+        known.push(id); size += id.length + 1;
+      }
+      if (known.length) query.set("knownFileIds", known.join(","));
+    }
     const response = await roomRealtimeFetch(`${API_BASE_URL}/rooms/${encodeURIComponent(connection.inviteCode)}/whiteboard${method === "POST" ? "/changes" : ""}?${query}`, {
       method, headers, ...(body === undefined ? {} : { body }),
-      signal: AbortSignal.any([lifetime.signal, AbortSignal.timeout(12_000)]),
+      // A saved board can contain 20 MiB of raster data; allow its base64
+      // transfer on a slower connection while retaining context cancellation.
+      signal: AbortSignal.any([lifetime.signal, AbortSignal.timeout(120_000)]),
     }, fetcher);
     if (closed || epoch !== permissionEpoch) return undefined;
     if (response.status === 403) {
@@ -174,7 +187,9 @@ export function createWhiteboardSession(options: WhiteboardSessionOptions): Whit
       return false;
     }
     if (!verifyScope(body)) return false;
-    const incoming = parseSnapshot(body);
+    // Never attach cached private bytes to a response for another board/task.
+    if (canonical && typeof body === "object" && body !== null && "boardId" in body && body.boardId !== canonical.boardId) { block(); return false; }
+    const incoming = parseSnapshot(body, canonical?.files);
     if (canonical && incoming.boardId !== canonical.boardId) { block(); return false; }
     if (incoming.sequence < Math.max(minimumSequence, canonical?.sequence ?? 0)) throw new SessionError("Ожидаем актуальную версию доски. Повторите действие.");
     minimumSequence = incoming.sequence;
@@ -190,6 +205,7 @@ export function createWhiteboardSession(options: WhiteboardSessionOptions): Whit
         if (remote && compareElementVersions(remote, local) >= 0) pending.delete(id);
       }
       for (const [id, version] of acknowledged) if (version.sequence <= incoming.sequence) acknowledged.delete(id);
+      for (const id of pendingFiles.keys()) if (Object.hasOwn(incoming.files, id)) pendingFiles.delete(id);
     }
     options.onScene(incoming, force);
     forceNextScene = false;
@@ -203,18 +219,24 @@ export function createWhiteboardSession(options: WhiteboardSessionOptions): Whit
     const operationId = crypto.randomUUID();
     const base = { boardId: canonical.boardId, operationId, baseSequence: canonical.sequence };
     const elements: WhiteboardElement[] = [];
+    const files: Record<string, WhiteboardFile> = {};
     let bytes = new TextEncoder().encode(JSON.stringify({ ...base, elements: [] })).byteLength;
+    let fileBytes = 0;
     for (const element of pending.values()) {
       const size = new TextEncoder().encode(JSON.stringify(element)).byteLength;
-      if (bytes + size + (elements.length ? 1 : 0) > MAX_BATCH_BYTES) {
+      const fileId = element.type === "image" ? String(element.fileId) : undefined;
+      const file = fileId && !Object.hasOwn(canonical.files, fileId) && !Object.hasOwn(files, fileId) ? pendingFiles.get(fileId) : undefined;
+      const extraBytes = file ? new TextEncoder().encode(JSON.stringify({ [file.id]: file })).byteLength : 0;
+      if (bytes + size + (elements.length ? 1 : 0) > MAX_BATCH_BYTES || bytes + size + fileBytes + extraBytes + 32 > MAX_REQUEST_BYTES) {
         if (!elements.length) block();
         break;
       }
       bytes += size + (elements.length ? 1 : 0);
+      if (file) { files[file.id] = file; fileBytes += extraBytes; }
       elements.push(element);
     }
     if (!elements.length) return undefined;
-    const change: WhiteboardChange = Object.freeze({ ...base, elements: Object.freeze(elements) });
+    const change: WhiteboardChange = Object.freeze({ ...base, elements: Object.freeze(elements), ...(Object.keys(files).length ? { files: Object.freeze(files) } : {}) });
     return { change, body: JSON.stringify(change) };
   }
 
@@ -281,10 +303,12 @@ export function createWhiteboardSession(options: WhiteboardSessionOptions): Whit
 
   const session: WhiteboardSession = {
     refresh() { if (closed || state.accessDenied) return; refreshRequested = true; status(); schedule(); },
-    observe(elements) {
+    observe(elements, files = {}) {
       if (closed || !canonical || !editable()) return;
       try {
         const accepted = new Map(canonical.elements.map(element => [element.id, element]));
+        const changes: WhiteboardElement[] = [];
+        const incomingFiles: Record<string, WhiteboardFile> = {};
         for (const element of elements) {
           const fingerprint = elementFingerprint(element);
           if (acknowledged.get(element.id)?.fingerprint === fingerprint) continue;
@@ -292,8 +316,23 @@ export function createWhiteboardSession(options: WhiteboardSessionOptions): Whit
           if (remote && compareElementVersions(element, remote) <= 0) continue;
           const previous = pending.get(element.id);
           if (previous && compareElementVersions(element, previous) <= 0) continue;
-          pending.set(element.id, parseElement(element));
+          const parsed = parseElement(element);
+          if (parsed.type === "image") {
+            const id = String(parsed.fileId);
+            const known = canonical.files[id] ?? pendingFiles.get(id);
+            const supplied = files[id];
+            if (!known && !supplied) throw new Error("Missing image");
+            if (known && supplied && (known.dataURL !== supplied.dataURL || known.mimeType !== supplied.mimeType)) throw new Error("Image identifier reused");
+            if (!known && supplied) incomingFiles[id] = supplied;
+          }
+          changes.push(parsed);
         }
+        // Validate the complete retained asset budget before mutating the draft.
+        if (Object.keys(incomingFiles).length) {
+          const validated = parseFiles({ ...canonical.files, ...Object.fromEntries(pendingFiles), ...incomingFiles });
+          for (const file of Object.values(validated)) if (!Object.hasOwn(canonical.files, file.id)) pendingFiles.set(file.id, file);
+        }
+        for (const element of changes) pending.set(element.id, element);
         if (pending.size > 5000) block();
         else status();
         if (!validationBlocked && (pending.size || attempt)) schedule(Math.max(0, nextWriteAt - Date.now()));

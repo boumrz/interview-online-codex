@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { observeDiagramWindow, observeRoomWindowFocus } from "./roomWindowFocus";
 import type {
   CandidateKeyEventKind,
   KeyPressPayload,
@@ -10,6 +11,7 @@ type CandidateKeyTrackerOptions = {
    * Для интервьюера/owner глобальный лог не нужен.
    */
   active: boolean;
+  interactiveDiagramFrame: HTMLIFrameElement | null;
   /**
    * Колбэк, который шлёт payload на сервер. Хук НЕ принимает на себя
    * решения по троттлингу/доставке — это ответственность подписчика.
@@ -17,23 +19,10 @@ type CandidateKeyTrackerOptions = {
   onKeyEvent: (payload: KeyPressPayload) => void;
 };
 
-/**
- * Глобальные слушатели клавиатуры и фокуса на стороне кандидата. Они
- * закрывают пробелы, которые не покрывает `keydown`-хэндлер CodeMirror:
- *   1. Клавиши, нажатые когда фокус не в редакторе (модалки, заметки,
- *      адресная строка браузера и т.п.) — глобальный `keydown` в фазе
- *      capture.
- *   2. `Alt+Tab`/`Cmd+Tab`/смена приложения — ОС перехватывает Tab до
- *      браузера, но окно теряет фокус: ловим `window.blur` и пишем в лог
- *      синтетическое событие с накопленным состоянием модификаторов
- *      (например «Alt+Tab — переключение окна»).
- *   3. Смена вкладки внутри браузера — `document.visibilitychange`.
- *
- * Хук бережёт ровно одно состояние — последние известные модификаторы,
- * чтобы при `blur`/`visibilitychange` сформировать осмысленный лейбл.
- */
+/** Capture room events once, including keys consumed by the embedded diagram editor. */
 export function useCandidateKeyTracker({
   active,
+  interactiveDiagramFrame,
   onKeyEvent,
 }: CandidateKeyTrackerOptions): void {
   useEffect(() => {
@@ -58,10 +47,6 @@ export function useCandidateKeyTracker({
 
     const onWindowKeyDown = (event: KeyboardEvent) => {
       updateModifiers(event);
-      // Если фокус в CodeMirror — у редактора есть свой keydown-хэндлер,
-      // который уже отправит событие. Дублировать не нужно.
-      // This capture-phase listener is the single source for candidate
-      // activity, including CodeMirror shortcuts that editor keymaps consume.
       onKeyEvent({
         key: event.key,
         keyCode: event.code,
@@ -113,18 +98,23 @@ export function useCandidateKeyTracker({
       }
     };
 
-    window.addEventListener("keydown", onWindowKeyDown, true);
-    window.addEventListener("keyup", onWindowKeyUp, true);
-    window.addEventListener("blur", onWindowBlur);
-    window.addEventListener("focus", onWindowFocus);
+    const listenForKeys = (target: Window) => {
+      target.addEventListener("keydown", onWindowKeyDown, true);
+      target.addEventListener("keyup", onWindowKeyUp, true);
+      return () => {
+        target.removeEventListener("keydown", onWindowKeyDown, true);
+        target.removeEventListener("keyup", onWindowKeyUp, true);
+      };
+    };
+    const detachHost = listenForKeys(window);
+    const detachDiagram = observeDiagramWindow(interactiveDiagramFrame, listenForKeys);
+    const detachFocus = observeRoomWindowFocus(interactiveDiagramFrame, focused => focused ? onWindowFocus() : onWindowBlur());
     document.addEventListener("visibilitychange", onVisibilityChange);
-
     return () => {
-      window.removeEventListener("keydown", onWindowKeyDown, true);
-      window.removeEventListener("keyup", onWindowKeyUp, true);
-      window.removeEventListener("blur", onWindowBlur);
-      window.removeEventListener("focus", onWindowFocus);
+      detachHost();
+      detachDiagram();
+      detachFocus();
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [active, onKeyEvent]);
+  }, [active, interactiveDiagramFrame, onKeyEvent]);
 }

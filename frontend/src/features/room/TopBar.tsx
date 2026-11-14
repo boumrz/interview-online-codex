@@ -24,6 +24,8 @@ import {
 } from "./awarenessIdentity";
 import { normalizeRoomLanguage } from "./roomLanguage";
 import { normalizeDrawingColor } from "./drawingColor";
+import { participantPresenceLabel } from "./participantSnapshot";
+import candidatePresence from "./CandidatePresence.module.css";
 
 /**
  * Список поддерживаемых языков для селекта в шапке комнаты.
@@ -65,15 +67,12 @@ export function isEligibleHrParticipant(participant: Participant): boolean {
 
 export type HrAction = "assign" | "remove";
 
-function getParticipantPresenceLabel(status: Participant["presenceStatus"]) {
-  return status === "active" ? "В фокусе" : "Вне фокуса";
-}
-
 export type TopBarProps = {
   roomTitle: string;
   interviewListPath: string;
   authToken: string | null;
   connected: boolean;
+  presenceConfirmed: boolean;
   participants: Participant[];
   showParticipants: boolean;
   showLanguageControl: boolean;
@@ -102,6 +101,7 @@ export function TopBar({
   interviewListPath,
   authToken,
   connected,
+  presenceConfirmed,
   participants,
   showParticipants,
   showLanguageControl,
@@ -134,9 +134,11 @@ export function TopBar({
               aria-label="Участники комнаты"
             >
               {participants.map((participant) => {
-                const presenceLabel = getParticipantPresenceLabel(
-                  participant.presenceStatus,
-                );
+                const presence = presenceConfirmed ? participant.presenceStatus : "unknown";
+                const presenceLabel = participantPresenceLabel(presence);
+                const cardClass = participant.role === "candidate"
+                  ? `${roomPageStyles.participantCard} ${candidatePresence.indicator}`
+                  : roomPageStyles.participantCard;
                 const eligibleHr = isTeamRoom && isEligibleHrParticipant(participant);
                 const isInterviewer = participant.role === "interviewer";
                 const canChangeInterviewerRole =
@@ -213,9 +215,9 @@ export function TopBar({
                   return (
                     <div
                       key={participant.sessionId}
-                      className={roomPageStyles.participantCard}
-                      data-presence={participant.presenceStatus}
-                      data-testid={`participant-badge-${participant.presenceStatus}`}
+                      className={cardClass}
+                      data-presence={presence}
+                      data-testid={`participant-badge-${presence}`}
                       style={participantStyle}
                       title={presenceLabel}
                     >
@@ -242,9 +244,9 @@ export function TopBar({
                     <Menu.Target>
                       <button
                         type="button"
-                        className={`${roomPageStyles.participantCard} ${roomPageStyles.participantCardButton} app-header-control`}
-                        data-presence={participant.presenceStatus}
-                        data-testid={`participant-badge-${participant.presenceStatus}`}
+                        className={`${cardClass} ${roomPageStyles.participantCardButton} app-header-control`}
+                        data-presence={presence}
+                        data-testid={`participant-badge-${presence}`}
                         style={participantStyle}
                         aria-label={`${participant.displayName}, ${presenceLabel}. Открыть доступные действия участника`}
                         aria-haspopup="menu"

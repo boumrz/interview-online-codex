@@ -15,6 +15,10 @@ import { Button, Tooltip } from "antd";
 import { IconChevronRight, IconCode, IconHelpCircle } from "components/antd-icons";
 import { isRoomReadOnly } from "./roomEditPolicy";
 import { acquireRoomInert } from "./roomInert";
+import { formatActivityTimelineParticipant } from "./activityTimelineProjection";
+import { participantPresenceLabel } from "./participantSnapshot";
+import candidatePresence from "./CandidatePresence.module.css";
+import type { Participant } from "./TopBar";
 
 import styles from "./RoomContextPanels.module.css";
 import {
@@ -225,14 +229,16 @@ export function RoomStatusStrip({
   connected,
   localStep,
   publishedStep,
-  candidateStatus,
+  candidates,
+  presenceConfirmed,
   roomStatus,
 }: {
   role: "owner" | "interviewer" | "candidate";
   connected: boolean;
   localStep?: RoomStatusStep;
   publishedStep?: RoomStatusStep;
-  candidateStatus?: string;
+  candidates?: Participant[];
+  presenceConfirmed: boolean;
   roomStatus?: string;
 }) {
   const roleLabel = role === "owner"
@@ -279,15 +285,39 @@ export function RoomStatusStrip({
           Соединение: восстанавливается
         </span>
       ) : null}
-      {candidateStatus ? (
-        <span
-          className={styles.statusItem}
+      {candidates && role !== "candidate" ? (
+        <div
+          className={styles.candidateStatuses}
           data-testid="room-candidate-presence-status"
           role="status"
           aria-live="polite"
+          aria-atomic="false"
+          aria-label="Статусы кандидатов"
+          tabIndex={candidates.length > 1 ? 0 : undefined}
         >
-          {`Кандидат: ${candidateStatus}`}
-        </span>
+          {candidates.length === 0 ? (
+            <span className={styles.statusItem}>
+              {presenceConfirmed ? "Нет подключённых кандидатов" : "Уточняем статус кандидатов"}
+            </span>
+          ) : candidates.map(person => {
+            const state = presenceConfirmed ? person.presenceStatus : "unknown";
+            const label = participantPresenceLabel(state);
+            const name = formatActivityTimelineParticipant(person, candidates);
+            return (
+              <span
+                key={person.sessionId}
+                className={`${styles.candidateStatus} ${candidatePresence.indicator}`}
+                data-testid="room-candidate-status"
+                data-presence={state}
+                aria-atomic="true"
+                title={`${name} — ${label}`}
+              >
+                <span className={styles.candidateName}>{name}</span>
+                {" — "}{label}
+              </span>
+            );
+          })}
+        </div>
       ) : null}
     </div>
   );

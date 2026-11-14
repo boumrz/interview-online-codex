@@ -45,10 +45,10 @@ class CandidateActivityHistoryService(
             ?.acceptedSequence ?: 0L
         val frozenThrough = throughSequence?.coerceAtMost(committedMaximum) ?: committedMaximum
         val page = PageRequest.of(0, limit + 1)
-        val rows = if (afterSequence != null) {
-            eventRepository.findActivityAfter(roomId, afterSequence, frozenThrough, page)
-        } else {
-            eventRepository.findActivityBefore(roomId, beforeSequence, frozenThrough, page)
+        val rows = when {
+            afterSequence != null -> eventRepository.findActivityAfter(roomId, afterSequence, frozenThrough, page)
+            beforeSequence != null -> eventRepository.findActivityBefore(roomId, beforeSequence, frozenThrough, page)
+            else -> eventRepository.findActivityThrough(roomId, frozenThrough, page)
         }
         val selected = rows.take(limit)
         val hasMore = rows.size > limit

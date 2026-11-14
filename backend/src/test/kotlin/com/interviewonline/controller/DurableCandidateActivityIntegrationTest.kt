@@ -330,7 +330,7 @@ class DurableCandidateActivityIntegrationTest(
             persistenceEntered.countDown()
             assertTrue(releasePersistence.await(5, TimeUnit.SECONDS))
             invocation.callRealMethod()
-        }.`when`(keystrokePersistenceService).accept(anyString(), anyArgument())
+        }.`when`(keystrokePersistenceService).accept(anyString(), anyArgument(), anyArgument())
 
         val keyFuture = CompletableFuture.runAsync {
             postCandidateKey(fixture, UUID.randomUUID().toString(), "d", "KeyD")
@@ -402,11 +402,11 @@ class DurableCandidateActivityIntegrationTest(
     private fun postCandidateKeysConcurrently(fixture: Fixture, sourceEventIds: List<String>): List<Int> {
         val ready = CountDownLatch(sourceEventIds.size)
         val start = CountDownLatch(1)
-        val requests = sourceEventIds.mapIndexed { index, sourceEventId ->
+        val requests = sourceEventIds.map { sourceEventId ->
             CompletableFuture.supplyAsync {
                 ready.countDown()
                 assertTrue(start.await(5, TimeUnit.SECONDS), "concurrent activity posts were not released")
-                postCandidateKey(fixture, sourceEventId, "k$index", "KeyK$index")
+                postCandidateKey(fixture, sourceEventId, "k", "KeyK")
             }
         }
 
@@ -618,6 +618,7 @@ class DurableCandidateActivityIntegrationTest(
             inviteCode,
             state,
             emptyList<Any>(),
+            1L,
             emptyList<Any>(),
             participant,
         ) as RoomRealtimePayload

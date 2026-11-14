@@ -29,7 +29,7 @@ class RoomDiagramValidator(private val mapper: ObjectMapper) {
         val validatedStencils = mutableMapOf<String, Int>()
     }
 
-    fun validate(request: RoomDiagramChangeRequest) {
+    fun validate(request: RoomDiagramChangeRequest): Element? {
         if (runCatching { UUID.fromString(request.operationId) }.isFailure || request.operationId.length != 36 ||
             runCatching { UUID.fromString(request.diagramId) }.isFailure || request.diagramId.length != 36 ||
             request.baseSequence < 0 || request.xml.isBlank() || bytes(request.xml) > MAX_XML_BYTES ||
@@ -49,6 +49,31 @@ class RoomDiagramValidator(private val mapper: ObjectMapper) {
         validateCellIds(models[0])
         validateStyles(document, budget)
         request.patch?.let { validatePatch(it, budget) }
+        return cellRoot(document)
+    }
+
+    /** Compare only graph content. Native zoom, pan, editor attributes and XML layout are local details. */
+    fun cellsChanged(previousXml: String, proposed: Element?): Boolean {
+        val previous = cellRoot(parseXml(previousXml, maxElements = 50_000, maxDepth = 64))
+        return if (previous == null) proposed != null else !previous.isEqualNode(proposed)
+    }
+
+    private fun cellRoot(document: Document): Element? {
+        val model = document.getElementsByTagName("mxGraphModel").item(0) as? Element ?: return null
+        val root = elements(model).firstOrNull { it.tagName == "root" } ?: return null
+        fun removeIndentation(node: Node) {
+            val elementContent = node is Element && (node.tagName in GRAPH_CONTAINERS || elements(node).isNotEmpty())
+            var child = node.firstChild
+            while (child != null) {
+                val next = child.nextSibling
+                if (child.nodeType == Node.COMMENT_NODE ||
+                    (elementContent && child.nodeType == Node.TEXT_NODE && child.nodeValue.isBlank())
+                ) node.removeChild(child) else removeIndentation(child)
+                child = next
+            }
+        }
+        removeIndentation(root)
+        return root
     }
 
     private fun validateCellIds(model: Element) {
@@ -271,6 +296,7 @@ class RoomDiagramValidator(private val mapper: ObjectMapper) {
     private fun reject(message: String): Nothing = throw ApiException(HttpStatus.BAD_REQUEST, message, code = "DIAGRAM_INVALID_DOCUMENT")
 
     private companion object {
+        val GRAPH_CONTAINERS = setOf("root", "mxCell", "mxGeometry", "mxPoint", "mxRectangle", "Array")
         const val PAGE_ID = "room-diagram"
         const val MAX_XML_BYTES = 2_000_000
         const val MAX_PATCH_BYTES = 250_000

@@ -203,18 +203,24 @@ export function useCandidateActivityHistory({
     };
   }, [context, inviteCode, authToken, ownerToken, eventToken, canManageRoom, active]);
 
-  useEffect(() => {
-    if (!hasCurrentIdentity() || context.state.terminal != null) return;
-    context.state = { ...context.state, events: reconcileActivityEvents([...context.state.events, ...keyHistory]) };
-    setRendered({ context, state: context.state });
-  }, [context, keyHistory]);
-
-  const state = hasCurrentIdentity() ? (rendered.context === context ? rendered.state : context.state) : emptyHistory();
+  const authorized = hasCurrentIdentity();
+  const state = authorized ? (rendered.context === context ? rendered.state : context.state) : emptyHistory();
+  // Room state retains all live records for this viewer. History requests own
+  // only their pages/cursors, so completion of a fetch cannot replace a live
+  // update (including one in the same React batch).
+  const showEvents = authorized && state.terminal == null;
+  const events = useMemo(() => {
+    if (!showEvents) return [];
+    if (state.events.length === 0) return keyHistory;
+    if (keyHistory.length === 0) return state.events;
+    return reconcileActivityEvents([...state.events, ...keyHistory]);
+  }, [showEvents, state.events, keyHistory]);
   return {
     ...state,
+    events,
     initialized: state.cursor.confirmedThrough != null,
     hasMore: state.cursor.olderBefore != null,
-    canExport: active && hasCurrentIdentity() && state.terminal == null,
+    canExport: active && showEvents,
     loadOlder: () => { if (controls.current?.context === context) controls.current.run("older"); },
     retry: () => {
       if (controls.current?.context === context) {
