@@ -103,3 +103,6 @@ interview-vtools.conf
 frontend/public/drawio/
 frontend/.cache/drawio/
 frontend/public/.drawio-prepare-*/
+
+# Private local aggregate report for the Metrika dashboard
+/.local-metrics/

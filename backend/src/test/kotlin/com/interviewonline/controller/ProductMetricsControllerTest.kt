@@ -1,5 +1,6 @@
 package com.interviewonline.controller
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.interviewonline.model.Room
 import com.interviewonline.model.RoomProductMetric
 import com.interviewonline.model.User
@@ -11,6 +12,8 @@ import com.interviewonline.repository.UserRepository
 import com.interviewonline.repository.UserSessionRepository
 import com.interviewonline.service.RoomAccessService
 import com.interviewonline.service.RoomProductMetricsProjector
+import com.interviewonline.support.Postgres16TestSupport
+import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -20,25 +23,33 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.http.MediaType
+import org.springframework.test.annotation.DirtiesContext
+import org.springframework.test.context.DynamicPropertyRegistry
+import org.springframework.test.context.DynamicPropertySource
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
+import org.springframework.test.web.servlet.post
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.UUID
+import java.util.concurrent.Callable
+import java.util.concurrent.CyclicBarrier
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.reflect.full.memberProperties
 
 @SpringBootTest
 @AutoConfigureMockMvc
-class ProductMetricsControllerTest(
-    @Autowired private val mockMvc: MockMvc,
-    @Autowired private val userRepository: UserRepository,
-    @Autowired private val userSessionRepository: UserSessionRepository,
-    @Autowired private val roomRepository: RoomRepository,
-    @Autowired private val roomParticipantRepository: RoomParticipantRepository,
-    @Autowired private val roomProductMetricRepository: RoomProductMetricRepository,
-    @Autowired private val projector: RoomProductMetricsProjector,
-) {
+open class ProductMetricsControllerTest {
+    @Autowired private lateinit var mockMvc: MockMvc
+    @Autowired private lateinit var mapper: ObjectMapper
+    @Autowired private lateinit var userRepository: UserRepository
+    @Autowired private lateinit var userSessionRepository: UserSessionRepository
+    @Autowired private lateinit var roomRepository: RoomRepository
+    @Autowired private lateinit var roomParticipantRepository: RoomParticipantRepository
+    @Autowired private lateinit var roomProductMetricRepository: RoomProductMetricRepository
+    @Autowired private lateinit var projector: RoomProductMetricsProjector
     private val moscow = ZoneId.of("Europe/Moscow")
 
     @AfterEach
@@ -130,6 +141,84 @@ class ProductMetricsControllerTest(
     }
 
     @Test
+    fun `average weights each eligible room once by the first completion date`() {
+        val admin = createUser("duration-admin", "admin")
+        val token = createSession(admin)
+        val noon = yesterdayAt(12)
+        fun completed(candidate: Instant?, manager: Instant?, finish: Instant?) {
+            val room = createRoom(admin, noon.minusSeconds(2 * 86400))
+            room.finishedAt = finish
+            room.status = if (finish == null) "active" else "finished"
+            roomRepository.save(room)
+            roomProductMetricRepository.save(RoomProductMetric(roomId = room.id!!, createdAt = room.createdAt,
+                firstCandidateJoinedAt = candidate, firstInterviewerJoinedAt = manager))
+        }
+        completed(noon.minusSeconds(750), noon.minusSeconds(1200), noon)
+        completed(noon.minusSeconds(3000), noon.minusSeconds(1650), noon)
+        completed(null, noon.minusSeconds(60), noon)
+        completed(noon.plusSeconds(1), noon.minusSeconds(60), noon)
+        completed(noon, noon, null)
+        completed(noon.minusSeconds(90000), noon.minusSeconds(87000), noon.minusSeconds(86400))
+        val day = noon.atZone(moscow).toLocalDate()
+        fun read(date: LocalDate) = mockMvc.get("/api/admin/product-metrics") {
+            header("Authorization", "Bearer $token")
+            param("start", date.toString())
+            param("end", date.toString())
+        }
+        read(day).andExpect {
+            status { isOk() }
+            jsonPath("$.completedInterviewDuration.measuredInterviews") { value(2) }
+            jsonPath("$.completedInterviewDuration.averageMinutes") { value(20.0) }
+        }
+        read(day.minusDays(2)).andExpect {
+            status { isOk() }
+            jsonPath("$.completedInterviewDuration.measuredInterviews") { value(0) }
+            jsonPath("$.completedInterviewDuration.averageMinutes") { doesNotExist() }
+        }
+    }
+
+    @Test
+    fun `only the first successful finish returns the interview duration`() {
+        val owner = createUser("duration-owner", "user")
+        val token = createSession(owner)
+        val room = createRoom(owner, yesterdayAt(9))
+        projector.recordRoomCreated(room, RoomProductMetricsProjector.SOURCE_DASHBOARD)
+        projector.recordParticipantJoin(room.id!!, RoomAccessService.RoomRole.OWNER, yesterdayAt(10))
+        projector.recordParticipantJoin(room.id!!, RoomAccessService.RoomRole.CANDIDATE, yesterdayAt(11))
+        fun finish() = mockMvc.post("/api/rooms/${room.inviteCode}/verdict") {
+            header("Authorization", "Bearer $token")
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"verdict":"HIRE"}"""
+        }
+        val pool = Executors.newFixedThreadPool(2)
+        try {
+            val start = CyclicBarrier(2)
+            val requests = List(2) {
+                Callable {
+                    start.await(10, TimeUnit.SECONDS)
+                    val response = finish().andExpect { status { isOk() } }.andReturn().response
+                    mapper.readTree(response.contentAsByteArray)
+                }
+            }
+            val replies = pool.invokeAll(requests, 20, TimeUnit.SECONDS).map { it.get() }
+            assertEquals(1, replies.count { it.path("completedInterviewDurationMinutes").isNumber })
+            assertEquals(1, replies.count { !it.has("completedInterviewDurationMinutes") })
+        } finally {
+            pool.shutdownNow()
+        }
+        finish().andExpect {
+            status { isOk() }
+            jsonPath("$.completedInterviewDurationMinutes") { doesNotExist() }
+        }
+        mockMvc.get("/api/rooms/${room.inviteCode}") {
+            header("Authorization", "Bearer $token")
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.completedInterviewDurationMinutes") { doesNotExist() }
+        }
+    }
+
+    @Test
     fun `product metrics endpoint rejects missing privileges and invalid ranges`() {
         val admin = createUser("admin-check", "admin")
         val adminToken = createSession(admin)
@@ -199,4 +288,13 @@ class ProductMetricsControllerTest(
         .atTime(hour, 0)
         .atZone(moscow)
         .toInstant()
+}
+
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+class ProductMetricsPostgresTest : ProductMetricsControllerTest() {
+    companion object {
+        private val postgres = Postgres16TestSupport.create("product_metrics")
+        @JvmStatic @DynamicPropertySource fun properties(registry: DynamicPropertyRegistry) = postgres.register(registry)
+        @JvmStatic @AfterAll fun cleanupSchema() = postgres.close()
+    }
 }

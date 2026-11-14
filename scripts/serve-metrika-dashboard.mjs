@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 
+import { spawn } from "node:child_process";
+import { snapshotPage, snapshotScriptSource, unavailableSnapshotPage } from "./metrika-dashboard-snapshot.mjs";
 import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import {
@@ -32,6 +35,7 @@ function send(response, statusCode, contentType, body, extraHeaders = {}) {
   response.writeHead(statusCode, {
     "Content-Type": contentType,
     "Cache-Control": "no-store",
+    "X-InterHub-Dashboard": "metrika",
     "Content-Security-Policy": "default-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
@@ -73,7 +77,7 @@ function parseDashboardRequest(searchParams) {
   return { force: refresh === "1", range };
 }
 
-export function createDashboardServer({ service, normalizeRange = (range) => range, readAsset = (file) => readFile(join(assetDirectory, file), "utf8") }) {
+export function createDashboardServer({ service, getSnapshotPage, normalizeRange = (range) => range, readAsset = (file) => readFile(join(assetDirectory, file), "utf8") }) {
   return createServer(async (request, response) => {
     if (!isAllowedHost(request.headers.host)) {
       send(response, 421, "application/json; charset=utf-8", JSON.stringify({ error: "Локальный дэшборд доступен только на этом компьютере." }));
@@ -84,7 +88,17 @@ export function createDashboardServer({ service, normalizeRange = (range) => ran
       send(response, 405, "application/json; charset=utf-8", JSON.stringify({ error: "Метод не поддерживается." }), { Allow: "GET" });
       return;
     }
-    if (url.pathname === "/api/dashboard-data") {
+    if (getSnapshotPage && url.pathname === "/") {
+      try {
+        send(response, 200, "text/html; charset=utf-8", await getSnapshotPage(), {
+          "Content-Security-Policy": `default-src 'self'; script-src ${snapshotScriptSource}; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
+        });
+      } catch {
+        send(response, 503, "text/html; charset=utf-8", unavailableSnapshotPage());
+      }
+      return;
+    }
+    if (url.pathname === "/api/dashboard-data" && service) {
       let dashboardRequest;
       try {
         dashboardRequest = parseDashboardRequest(url.searchParams);
@@ -114,16 +128,43 @@ export function createDashboardServer({ service, normalizeRange = (range) => ran
   });
 }
 
-export async function startDashboard(config) {
+const snapshotFile = new URL("../.local-metrics/snapshot.json", import.meta.url);
+
+const readSavedSnapshot = () => readFile(snapshotFile, "utf8");
+
+export async function exportDashboardSnapshot(config, {
+  readSnapshot = readSavedSnapshot, outputPath = fileURLToPath(new URL("dashboard.html", snapshotFile)),
+} = {}) {
+  const snapshot = JSON.parse(await readSnapshot());
+  const stylesheet = await readFile(join(assetDirectory, "dashboard.css"), "utf8");
+  const html = snapshotPage(snapshot, config, { stylesheet });
+  const temporaryPath = `${outputPath}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporaryPath, html, { flag: "wx", mode: 0o600 });
+    await rename(temporaryPath, outputPath);
+  } finally {
+    await rm(temporaryPath, { force: true });
+  }
+  return outputPath;
+}
+
+export function createConfiguredDashboardServer(config, { readSnapshot = readSavedSnapshot } = {}) {
+  if (!config.token) {
+    return createDashboardServer({ getSnapshotPage: async () => snapshotPage(JSON.parse(await readSnapshot()), config) });
+  }
   const resolveProductGoalCatalogue = createProductGoalCatalogueResolver({ config });
   const service = createDashboardService({
     load: (window) => loadDashboardData(config, { window, resolveProductGoalCatalogue }),
     cacheKey: (window) => window.cacheKey,
   });
-  const server = createDashboardServer({
+  return createDashboardServer({
     service,
     normalizeRange: (range) => createDashboardWindow(config.timezone, range),
   });
+}
+
+export async function startDashboard(config) {
+  const server = createConfiguredDashboardServer(config);
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(config.port, "127.0.0.1", resolve);
@@ -133,8 +174,17 @@ export async function startDashboard(config) {
 
 async function main() {
   const config = parseDashboardConfig();
+  if (process.argv.includes("--export")) {
+    try {
+      console.log(await exportDashboardSnapshot(config));
+    } catch {
+      throw new DashboardError("Проверьте файл .local-metrics/snapshot.json и возможность записи в его папку.", "configuration");
+    }
+    return;
+  }
   const server = await startDashboard(config);
   const url = `http://127.0.0.1:${config.port}`;
+  if (process.platform === "darwin" && process.argv.includes("--open")) spawn("/usr/bin/open", [url], { stdio: "ignore" });
   console.log(`Локальный дэшборд доступен: ${url}`);
   console.log("Оставьте это окно открытым; Ctrl+C остановит локальный дэшборд.");
   process.on("SIGINT", () => server.close(() => process.exit(0)));

@@ -8,7 +8,13 @@ data class ProductMetricsResponse(
     val funnel: ProductMetricsFunnelDto?,
     val interviewers: ProductMetricsInterviewersDto?,
     val reliability: ProductMetricsReliabilityDto?,
+    val completedInterviewDuration: CompletedInterviewDurationDto?,
     val daily: List<ProductMetricsDailyDto>,
+)
+
+data class CompletedInterviewDurationDto(
+    val measuredInterviews: Int,
+    val averageMinutes: Double?,
 )
 
 data class ProductMetricsRangeDto(

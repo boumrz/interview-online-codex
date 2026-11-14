@@ -23,6 +23,7 @@ import { NavLink, Navigate, useLocation, useNavigate, useSearchParams } from "re
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { useClipboardNotification } from "../../components/useClipboardNotification";
 import { getApiErrorMessage } from "../../services/apiErrors";
+import { trackEvent } from "../../services/analytics";
 import { updateProfile as updateAuthProfile } from "../../features/auth/authSlice";
 import { PersonalWorkspaceHeader } from "./PersonalWorkspaceHeader";
 import { parseLibraryTransfer, serializeTask } from "../../features/workspace/libraryTransfer";
@@ -296,13 +297,13 @@ function CreateInterview({ tasks, isTaskLoading }: { tasks: TaskTemplate[]; isTa
     generation: generationRef.current,
   };
 
-  const captureIdentity = (): RequestIdentity => ({ ...identityRef.current });
+  const captureIdentity = (): RequestIdentity => ({ ...identityRef.current, generation: generationRef.current });
   const isCurrentIdentity = (identity: RequestIdentity) => (
     identity.token.length > 0
     && localStorage.getItem("auth_token") === identity.token
     && identityRef.current.token === identity.token
     && identityRef.current.userId === identity.userId
-    && identityRef.current.generation === identity.generation
+    && generationRef.current === identity.generation
   );
 
   React.useEffect(() => {
@@ -399,6 +400,7 @@ function CreateInterview({ tasks, isTaskLoading }: { tasks: TaskTemplate[]; isTa
         ...(hiringManagers.length ? { hiringManagerIds: hiringManagers.map(person => person.normalizedId) } : {}),
       }).unwrap();
       if (!isCurrentIdentity(identity)) return;
+      trackEvent("prod_room_create_success");
       persistOwnerRoom(room, auth.user?.displayName?.trim() || "Интервьюер");
       pendingOwnerInviteRef.current = room.inviteCode;
       if (metadataDraft.candidateName || metadataDraft.position) {

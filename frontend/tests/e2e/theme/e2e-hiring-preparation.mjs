@@ -20,6 +20,44 @@ async function teamMember(owner,team,person) {
  const token=new URL(url,web).hash.slice('#token='.length);
  assert.ok(token, 'fixture invitation token'); await req('/team-invitations/accept',person.token,{token});
 }
+
+test('confirmed personal and team creations each emit one parameter-free analytics goal after retry', async () => {
+  const owner = await account('Владелец интервью');
+  const { team } = await req('/teams', owner.token, { name: 'Команда аналитики' });
+  const { browser, page } = await open(owner);
+  // Local development reports blocked goals through the console without sending traffic to Yandex.
+  await page.addInitScript(() => {
+    window.workspaceCreationGoals = [];
+    const warn = console.warn;
+    console.warn = (...args) => {
+      if (args[0] === '[analytics:reachGoal] blocked on local host' && args[1]?.event === 'prod_room_create_success') {
+        window.workspaceCreationGoals.push(args[1]);
+      }
+      warn.apply(console, args);
+    };
+  });
+  try {
+    for (const [scope, endpoint] of [['personal', '/rooms'], [`teams/${team.id}`, `/teams/${team.id}/interviews`]]) {
+      await page.goto(`${web}/workspace/${scope}/interviews/new`);
+      const dialog = page.getByRole('dialog', { name: 'Создать интервью', exact: true });
+      await dialog.getByRole('textbox', { name: 'Название интервью', exact: true }).fill('Закрытое название интервью');
+      const submit = dialog.getByRole('button', { name: 'Создать интервью', exact: true });
+      await page.route(`**/api${endpoint}`, route => route.fulfill({
+        status: 503, contentType: 'application/json', body: JSON.stringify({ message: 'Повторите попытку.' }),
+      }), { times: 1 });
+      await submit.click();
+      await dialog.getByRole('alert').filter({ hasText: /Повторите попытку|Не удалось/ }).waitFor();
+      assert.equal(await page.evaluate(() => window.workspaceCreationGoals.length), 0);
+      await submit.click();
+      await page.waitForURL(/\/room\//);
+      const successes = await page.evaluate(() => window.workspaceCreationGoals);
+      assert.equal(successes.length, 1);
+      assert.equal(successes[0].payload, undefined);
+    }
+  } finally {
+    await browser.close();
+  }
+});
 test('personal preparation offers nickname hiring without TEAM context and retains tasks only inside the selector',async()=>{
  const auth=await account('Автор формы'); const task=await req('/me/tasks',auth.token,{title:'Выбранная задача',description:'Условие',starterCode:'',language:'nodejs'});
  const {browser,page}=await open(auth);

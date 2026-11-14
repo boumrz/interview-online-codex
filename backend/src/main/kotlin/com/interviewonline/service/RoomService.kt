@@ -615,12 +615,13 @@ class RoomService(
         collaborationService.snapshotAcceptedPublishedEditorState(room)
         room.verdict = verdictValue.wireValue
         room.verdictComment = request.verdictComment?.take(2000)
+        val firstCompletion = room.status != "finished" && room.finishedAt == null
         room.status = "finished"
         val verdictSavedAt = Instant.now()
         if (room.finishedAt == null) room.finishedAt = verdictSavedAt
 
         roomRepository.save(room)
-        roomProductMetricsProjector.recordVerdictSaved(room.id.orEmpty(), verdictSavedAt)
+        val durationMinutes = roomProductMetricsProjector.recordVerdictSaved(room.id.orEmpty(), verdictSavedAt)
 
         // Capture values for use in the after-commit callback (room fields may change).
         val broadcastVerdict = verdictValue.wireValue
@@ -648,7 +649,7 @@ class RoomService(
             access = access,
             includeOwnerToken = false,
             includeInterviewerToken = false,
-        )
+        ).copy(completedInterviewDurationMinutes = durationMinutes.takeIf { firstCompletion })
     }
 
     /**

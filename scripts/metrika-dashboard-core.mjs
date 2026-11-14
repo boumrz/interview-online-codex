@@ -264,9 +264,6 @@ function timezoneOffset(timezone, date) {
 
 export function parseDashboardConfig(environment = process.env) {
   const token = environment.METRIKA_OAUTH_TOKEN?.trim();
-  if (!token) {
-    throw new DashboardError("Не задан METRIKA_OAUTH_TOKEN. Локальный дэшборд не запущен.", "configuration");
-  }
   const counterId = Number.parseInt(environment.METRIKA_COUNTER_ID ?? String(DEFAULT_COUNTER_ID), 10);
   if (!Number.isInteger(counterId) || counterId <= 0) {
     throw new DashboardError("METRIKA_COUNTER_ID должен быть положительным числом.", "configuration");

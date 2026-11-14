@@ -1,5 +1,6 @@
 package com.interviewonline.service
 
+import com.interviewonline.model.CompletedInterviewAttendance
 import com.interviewonline.model.Room
 import com.interviewonline.model.RoomProductMetric
 import com.interviewonline.repository.RoomProductMetricRepository
@@ -84,12 +85,15 @@ class RoomProductMetricsProjector(
     }
 
     @Transactional
-    fun recordVerdictSaved(roomId: String, occurredAt: Instant = Instant.now()) {
-        update(roomId) { metric ->
+    fun recordVerdictSaved(roomId: String, occurredAt: Instant = Instant.now()): Double? {
+        val saved = update(roomId) { metric ->
             if (metric.firstVerdictSavedAt == null) {
                 metric.firstVerdictSavedAt = occurredAt
             }
             metric.latestVerdictSavedAt = occurredAt
+        }
+        return saved?.let {
+            CompletedInterviewAttendance(it.firstCandidateJoinedAt, it.firstInterviewerJoinedAt, occurredAt).durationMinutes()
         }
     }
 
@@ -98,9 +102,9 @@ class RoomProductMetricsProjector(
         roomProductMetricRepository.deleteById(roomId)
     }
 
-    private fun update(roomId: String, mutation: (RoomProductMetric) -> Unit) {
-        val metric = roomProductMetricRepository.findById(roomId).orElse(null) ?: return
+    private fun update(roomId: String, mutation: (RoomProductMetric) -> Unit): RoomProductMetric? {
+        val metric = roomProductMetricRepository.lockForUpdate(roomId) ?: return null
         mutation(metric)
-        roomProductMetricRepository.save(metric)
+        return metric
     }
 }

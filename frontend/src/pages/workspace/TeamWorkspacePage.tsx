@@ -7,6 +7,7 @@ import { Navigate, NavLink, useLocation, useNavigate, useParams } from "react-ro
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { useClipboardNotification } from "../../components/useClipboardNotification";
 import { getApiErrorMessage } from "../../services/apiErrors";
+import { trackEvent } from "../../services/analytics";
 import { WorkspaceSwitcher } from "../../features/workspace/WorkspaceSwitcher";
 import { ThemeToggleButton } from "../../features/theme/ThemeToggleButton";
 import { parseLibraryTransfer, serializeTask, serializeTaskSet } from "../../features/workspace/libraryTransfer";
@@ -1263,6 +1264,7 @@ function TeamCreateInterview({
       createRequestRef.current = request;
       const result = await request.unwrap();
       if (contextRef.current !== capturedContext || localStorage.getItem("auth_token") !== authToken) return;
+      trackEvent("prod_room_create_success");
       setCreateError("");
       setProgrammeConflict(false);
       navigate(`/room/${result.interview.inviteCode}`);

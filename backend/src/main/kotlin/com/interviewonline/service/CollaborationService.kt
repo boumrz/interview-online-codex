@@ -4,15 +4,19 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import jakarta.annotation.PreDestroy
 import com.interviewonline.config.ChatReceiptHmac
 import com.interviewonline.dto.RoomDiagramChangedDto
+import com.interviewonline.dto.RoomLanguageObservationRequest
+import com.interviewonline.dto.RoomLanguageObservationResponse
 import com.interviewonline.model.Room
 import com.interviewonline.model.RoomParticipant
 import com.interviewonline.model.RoomStatus
 import com.interviewonline.model.RoomTask
+import com.interviewonline.model.RoomTaskLanguageObservation
 import com.interviewonline.model.User
 import com.interviewonline.repository.RoomParticipantRepository
 import com.interviewonline.repository.RoomKeystrokeEventRepository
 import com.interviewonline.repository.RoomHrAssignmentRepository
 import com.interviewonline.repository.RoomRepository
+import com.interviewonline.repository.RoomTaskLanguageObservationRepository
 import com.interviewonline.repository.lockByInviteCode
 import com.interviewonline.repository.UserRepository
 import com.interviewonline.service.LanguageNormalizer.normalize as normalizeLanguage
@@ -89,6 +93,7 @@ class CollaborationService(
     private val roomDiagramFeatureGate: RoomDiagramFeatureGate,
     private val roomWhiteboardFeatureGate: RoomWhiteboardFeatureGate,
     private val roomDrawingColorService: RoomDrawingColorService,
+    private val languageObservations: RoomTaskLanguageObservationRepository,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val permissionSyncExecutor = ThreadPoolExecutor(
@@ -661,6 +666,39 @@ class CollaborationService(
         return MessageDigest.getInstance("SHA-256")
             .digest(capability.toByteArray(Charsets.UTF_8))
             .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+    }
+
+    @Transactional
+    fun observePublishedLanguage(inviteCode: String, request: RoomLanguageObservationRequest): RoomLanguageObservationResponse? {
+        val connectionId = requireConnectionId(inviteCode, request.sessionId, request.eventToken, requireEventToken = true)
+        // Publication, role transitions and other observers serialize on this row.
+        val room = roomRepository.lockByInviteCode(inviteCode) ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
+        if (requireConnectionId(inviteCode, request.sessionId, request.eventToken, requireEventToken = true) != connectionId) {
+            throw activityAccessDenied()
+        }
+        val participant = participants[connectionId] ?: throw activityAccessDenied()
+        if (participant.admittedTeamId != room.teamId) throw activityAccessDenied()
+        if (room.archivedAt != null || room.finishedAt != null || (room.status ?: "active") != RoomStatus.ACTIVE.wireValue ||
+            resolveCurrentParticipantRole(room, participant) != RoomAccessService.RoomRole.CANDIDATE) return null
+        val task = room.tasks.firstOrNull { it.stepIndex == room.currentStep } ?: return null
+        val language = normalizeLanguage(task.solutionLanguage?.ifBlank { null } ?: room.language)
+        if (task.id != request.taskId || language != request.language) return null
+
+        val roomId = requirePersistedRoomId(room)
+        if (languageObservations.existsByRoomIdAndLanguageAndTaskId(roomId, language, request.taskId)) {
+            return RoomLanguageObservationResponse(language)
+        }
+        val previousLanguages = languageObservations.observedLanguages(roomId)
+        val firstForRoom = language !in previousLanguages
+        languageObservations.save(RoomTaskLanguageObservation(
+            room = room, taskId = request.taskId, language = language, observedAt = clock.instant(),
+        ))
+        return RoomLanguageObservationResponse(
+            language = language,
+            firstForRoom = firstForRoom,
+            firstForStep = true,
+            firstMultilanguageRoom = firstForRoom && language != "plaintext" && previousLanguages.count { it != "plaintext" } == 1,
+        )
     }
 
     fun handleRealtimeEvent(

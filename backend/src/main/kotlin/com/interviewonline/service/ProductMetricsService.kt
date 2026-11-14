@@ -1,5 +1,6 @@
 package com.interviewonline.service
 
+import com.interviewonline.dto.CompletedInterviewDurationDto
 import com.interviewonline.dto.ProductMetricsDailyDto
 import com.interviewonline.dto.ProductMetricsFunnelDto
 import com.interviewonline.dto.ProductMetricsInterviewersDto
@@ -62,10 +63,11 @@ class ProductMetricsService(
             return unavailable(rangeDto, freshThrough, earliest.createdAt, "collection_started_after_range")
         }
 
-        val metrics = roomProductMetricRepository.findWithLifecycleFactInRange(
-            startAt = range.start.atStartOfDay(MOSCOW_ZONE).toInstant(),
-            endExclusive = range.end.plusDays(1).atStartOfDay(MOSCOW_ZONE).toInstant(),
-        )
+        val startAt = range.start.atStartOfDay(MOSCOW_ZONE).toInstant()
+        val endExclusive = range.end.plusDays(1).atStartOfDay(MOSCOW_ZONE).toInstant()
+        val metrics = roomProductMetricRepository.findWithLifecycleFactInRange(startAt, endExclusive)
+        val durations = roomProductMetricRepository.findCompletedAttendanceInRange(startAt, endExclusive)
+            .mapNotNull { it.durationMinutes() }
         val metricByRoomId = metrics.associateBy { it.roomId }
         val roomsById = roomRepository.findAllById(metricByRoomId.keys).associateBy { it.id!! }
         val createdMetrics = metrics.filter { it.createdAt.isInRange(range) }
@@ -94,6 +96,10 @@ class ProductMetricsService(
             funnel = funnel,
             interviewers = interviewerMetrics,
             reliability = reliability,
+            completedInterviewDuration = CompletedInterviewDurationDto(
+                measuredInterviews = durations.size,
+                averageMinutes = durations.takeIf { it.isNotEmpty() }?.average(),
+            ),
             daily = buildDaily(range, metrics),
         )
     }
@@ -207,6 +213,7 @@ class ProductMetricsService(
         funnel = null,
         interviewers = null,
         reliability = null,
+        completedInterviewDuration = null,
         daily = emptyList(),
     )
 

@@ -1,5 +1,6 @@
 package com.interviewonline.dto
 
+import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.databind.DeserializationContext
 import com.fasterxml.jackson.databind.JsonDeserializer
@@ -132,6 +133,8 @@ data class RoomResponse(
     val verdictComment: String? = null,
     val status: String = "active",
     val finishedAt: String? = null,
+    @get:JsonInclude(JsonInclude.Include.NON_NULL)
+    val completedInterviewDurationMinutes: Double? = null,
 )
 
 data class RoomSummaryDto(

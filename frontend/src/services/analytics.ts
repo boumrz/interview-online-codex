@@ -73,6 +73,9 @@ const APPROVED_PAYLOAD_FIELDS = new Set([
   "error_stage", "error_code", "verdict_code", "has_comment",
 ]);
 
+// The server stores JS/TS as nodejs and questions without syntax as plaintext.
+const INTERVIEW_LANGUAGES = new Set(["nodejs", "python", "kotlin", "java", "sql", "plaintext"]);
+const LEGACY_LANGUAGE_VALUES = new Set([...INTERVIEW_LANGUAGES, "javascript", "typescript", "csharp", "cpp", "go", "php"]);
 const STRING_VALUE_ALLOWLIST: Record<string, ReadonlySet<string>> = {
   auth_status: new Set(["anonymous", "authenticated"]),
   actor_role: new Set(["owner", "interviewer", "candidate"]),
@@ -80,9 +83,9 @@ const STRING_VALUE_ALLOWLIST: Record<string, ReadonlySet<string>> = {
   schema_version: new Set(["v1"]),
   mode: new Set(["login", "register"]),
   reason: new Set(["password_too_short", "display_name_required", "nickname_required", "nickname_too_short", "nickname_has_space"]),
-  language: new Set(["nodejs", "javascript", "typescript", "python", "java", "sql", "csharp", "cpp", "go", "php", "plaintext"]),
-  first_task_language: new Set(["nodejs", "javascript", "typescript", "python", "java", "sql", "csharp", "cpp", "go", "php", "plaintext"]),
-  task_language: new Set(["nodejs", "javascript", "typescript", "python", "java", "sql", "csharp", "cpp", "go", "php", "plaintext"]),
+  language: LEGACY_LANGUAGE_VALUES,
+  first_task_language: LEGACY_LANGUAGE_VALUES,
+  task_language: LEGACY_LANGUAGE_VALUES,
   task_count_bucket: new Set(["1", "2_3", "4_plus"]),
   target_role: new Set(["interviewer", "candidate"]),
   error_stage: new Set(["join", "editor", "realtime", "verdict"]),
@@ -136,7 +139,10 @@ export function analyticsRouteTemplate(path: string): string {
   const pathname = path.trim().split(/[?#]/, 1)[0] || "/";
   if (/^\/room\/[^/]+\/?$/i.test(pathname)) return "/room/:invite";
   if (/^\/dashboard\/[^/]+\/?$/i.test(pathname)) return "/dashboard/:section";
-  if (pathname === "/" || pathname === "/login" || pathname === "/dashboard") return pathname;
+  if (/^\/workspace\/personal\/(interviews(?:\/new)?|library|candidates)$/.test(pathname)) return pathname;
+  const teamSection = /^\/workspace\/teams\/[^/]+\/(interviews(?:\/new)?|library|candidates|tracks|members|settings|profile)$/.exec(pathname);
+  if (teamSection) return `/workspace/teams/:teamId/${teamSection[1]}`;
+  if (pathname === "/" || pathname === "/login" || pathname === "/dashboard" || pathname === "/profile") return pathname;
   return "/other";
 }
 
@@ -235,6 +241,51 @@ export function trackEvent(goalId: string, payload?: MetricPayload) {
   if (!APPROVED_EVENT_NAMES.has(goal)) return;
   const params = sanitizePayload(payload);
   invokeYm("reachGoal", params ? [goal, params] : [goal], { debugEvent: goal, debugPayload: params });
+}
+
+export function trackInterviewLanguageObservation(language: string, acknowledgement: unknown) {
+  if (!INTERVIEW_LANGUAGES.has(language) || !acknowledgement || typeof acknowledgement !== "object") return;
+  const flags = acknowledgement as Record<string, unknown>;
+  if (flags.language !== language) return;
+  const params = { language };
+  if (flags.firstForStep === true) {
+    const goal = "int_step_language_v1";
+    invokeYm("reachGoal", [goal, params], { debugEvent: goal, debugPayload: params });
+  }
+  if (flags.firstForRoom === true) {
+    const goal = "int_room_language_v1";
+    invokeYm("reachGoal", [goal, params], { debugEvent: goal, debugPayload: params });
+  }
+  if (flags.firstMultilanguageRoom === true && language !== "plaintext") {
+    const goal = "int_multilanguage_room_v1";
+    invokeYm("reachGoal", [goal], { debugEvent: goal });
+  }
+}
+
+export function trackCompletedInterviewDuration(minutes: number | null | undefined) {
+  if (typeof minutes !== "number" || !Number.isFinite(minutes) || minutes < 0) return;
+  const goal = "int_interview_duration_v1";
+  const params = { duration_minutes: minutes };
+  invokeYm("reachGoal", [goal, params], { debugEvent: goal, debugPayload: params });
+}
+
+/** Keep both first-edit goals for the whole room visit, across task and role changes. */
+export function createRoomCodeEditTracker(inviteCodeLength: number) {
+  let firstEditTracked = false;
+  let candidateEditTracked = false;
+  return (role: "owner" | "interviewer" | "candidate" | undefined) => {
+    if (!firstEditTracked) {
+      firstEditTracked = true;
+      trackEvent("prod_first_code_edit", { invite_code_len: inviteCodeLength });
+    }
+    if (role === "candidate" && !candidateEditTracked) {
+      candidateEditTracked = true;
+      trackEvent(PRODUCT_METRIKA_EVENT.meaningfulCandidateActivity, {
+        actor_role: "candidate",
+        schema_version: "v1",
+      });
+    }
+  };
 }
 
 export function setVisitParams(payload: MetricPayload) {

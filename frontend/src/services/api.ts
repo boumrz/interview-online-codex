@@ -1377,7 +1377,7 @@ export const api = createApi({
       invalidatesTags: ["Presets"],
     }),
     setVerdict: builder.mutation<
-      Room,
+      Room & { completedInterviewDurationMinutes?: number },
       {
         inviteCode: string;
         verdict: string;

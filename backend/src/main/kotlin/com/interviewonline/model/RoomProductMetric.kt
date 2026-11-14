@@ -5,6 +5,7 @@ import jakarta.persistence.Entity
 import jakarta.persistence.Id
 import jakarta.persistence.Index
 import jakarta.persistence.Table
+import java.time.Duration
 import java.time.Instant
 
 /**
@@ -58,3 +59,16 @@ class RoomProductMetric(
     @Column(name = "realtime_connection_count", nullable = false)
     var realtimeConnectionCount: Int = 0,
 )
+
+/** Wall-clock time from the first admission of both roles until the manager finishes the room. */
+data class CompletedInterviewAttendance(
+    val candidateJoinedAt: Instant?,
+    val interviewerJoinedAt: Instant?,
+    val finishedAt: Instant,
+) {
+    fun durationMinutes(): Double? {
+        val start = maxOf(candidateJoinedAt ?: return null, interviewerJoinedAt ?: return null)
+        if (finishedAt.isBefore(start)) return null
+        return Duration.between(start, finishedAt).toMillis() / 60_000.0
+    }
+}

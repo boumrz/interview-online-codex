@@ -1,5 +1,7 @@
 package com.interviewonline.controller
 
+import com.interviewonline.dto.RoomLanguageObservationRequest
+import com.interviewonline.dto.RoomLanguageObservationResponse
 import com.interviewonline.service.AuthService
 import com.interviewonline.service.CollaborationService
 import com.interviewonline.ws.RealtimeEventRequest
@@ -90,6 +92,16 @@ class RealtimeController(
                 .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
                 .build()
         }
+    }
+
+    @PostMapping("/{inviteCode}/language-observations")
+    fun observePublishedLanguage(
+        @PathVariable inviteCode: String,
+        @RequestBody request: RoomLanguageObservationRequest,
+    ): ResponseEntity<RoomLanguageObservationResponse> {
+        val observation = collaborationService.observePublishedLanguage(inviteCode, request)
+            ?: return ResponseEntity.noContent().build()
+        return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "private, no-store").body(observation)
     }
 
     @PostMapping("/{inviteCode}/events")

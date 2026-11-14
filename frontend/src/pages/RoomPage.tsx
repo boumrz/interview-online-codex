@@ -63,8 +63,9 @@ import {
 import { VerdictBadge } from "../features/room/VerdictBadge";
 import { ActivityTimeline } from "../features/room/ActivityTimeline";
 import { useCandidateActivityHistory } from "../features/room/useCandidateActivityHistory";
+import { observePublishedInterviewLanguage } from "../features/room/roomLanguageObservation";
 import { mergeActivitySnapshot, reconcileActivityEvents } from "../features/room/activityTimelineProjection";
-import { PRODUCT_METRIKA_EVENT, setVisitParams, trackEvent } from "../services/analytics";
+import { createRoomCodeEditTracker, PRODUCT_METRIKA_EVENT, setVisitParams, trackCompletedInterviewDuration, trackEvent } from "../services/analytics";
 import {
   useRoomSocket,
   type ManagerWorkspaceRealtimeState,
@@ -850,7 +851,7 @@ export function RoomPage() {
   const awaitingRecoverySyncRef = useRef(false);
   const roomOpenedTrackedInviteRef = useRef("");
   const previousParticipantsCountRef = useRef<number | null>(null);
-  const firstCodeEditTrackedRef = useRef(false);
+  const trackRoomCodeEdit = useMemo(() => createRoomCodeEditTracker(inviteCode.length), [inviteCode]);
   const candidateJoinedTrackedRef = useRef(false);
   const lastErrorMetricRef = useRef<{ message: string; at: number }>({
     message: "",
@@ -876,7 +877,6 @@ export function RoomPage() {
   }, [authToken, inviteCode]);
 
   useEffect(() => {
-    firstCodeEditTrackedRef.current = false;
     candidateJoinedTrackedRef.current = false;
     roomOpenedTrackedInviteRef.current = "";
     previousParticipantsCountRef.current = null;
@@ -2400,26 +2400,29 @@ export function RoomPage() {
         baseServerYjsSequence,
       );
       if (update) {
-        if (!firstCodeEditTrackedRef.current) {
-          firstCodeEditTrackedRef.current = true;
-          trackEvent("prod_first_code_edit", {
-            invite_code_len: inviteCode.length,
-          });
-          if (merged?.role === "candidate") {
-            trackEvent(PRODUCT_METRIKA_EVENT.meaningfulCandidateActivity, {
-              actor_role: "candidate",
-              schema_version: "v1",
-            });
-          }
-        }
+        trackRoomCodeEdit(merged?.role);
         lastKnownServerYjsSequenceRef.current = baseServerYjsSequence + 1;
       }
     },
-    [inviteCode, merged?.role, sendYjsUpdate],
+    [merged?.role, sendYjsUpdate, trackRoomCodeEdit],
   );
 
   const hasRealtimeState = Boolean(state);
   const participantsCount = state?.participants.length ?? 0;
+  const publishedTaskId = state?.tasks?.find(task => task.stepIndex === state.currentStep)?.id;
+  const publishedLanguage = state?.language;
+  const publishedRole = state?.role;
+  const publishedStatus = state?.status;
+  const publishedEventToken = state?.eventToken;
+
+  useEffect(() => {
+    if (!connected || !roomAuthorityToken || publishedEventToken !== roomAuthorityToken) return;
+    return observePublishedInterviewLanguage({
+      inviteCode, sessionId, role: publishedRole, status: publishedStatus,
+      eventToken: roomAuthorityToken, taskId: publishedTaskId, language: publishedLanguage,
+    });
+  }, [connected, roomAuthorityToken, publishedEventToken, inviteCode, sessionId,
+    publishedRole, publishedStatus, publishedTaskId, publishedLanguage]);
 
   useEffect(() => {
     if (!merged || merged.role !== "candidate" || !connected || !hasRealtimeState) return;
@@ -3016,13 +3019,14 @@ export function RoomPage() {
   const handleSubmitVerdict = async () => {
     if (!selectedVerdict) return;
     try {
-      await setVerdict({
+      const result = await setVerdict({
         inviteCode: merged?.inviteCode ?? inviteCode,
         verdict: selectedVerdict,
         verdictComment: verdictComment.trim() || undefined,
         ownerToken: ownerToken ?? undefined,
         eventToken: merged?.eventToken ?? undefined,
       }).unwrap();
+      trackCompletedInterviewDuration(result.completedInterviewDurationMinutes);
       trackEvent(PRODUCT_METRIKA_EVENT.verdictSaved, {
         actor_role: merged?.role === "interviewer" ? "interviewer" : "owner",
         verdict_code: selectedVerdict,
