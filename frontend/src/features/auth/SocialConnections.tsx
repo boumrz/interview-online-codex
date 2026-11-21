@@ -4,16 +4,14 @@ import { CheckCircleFilled, GithubFilled } from "@ant-design/icons";
 import { useLocation, useNavigate } from "react-router-dom";
 import { store } from "../../app/store";
 import { getApiErrorMessage } from "../../services/apiErrors";
-import { readAuthorizationUrl, readConnections, readProfileLinkResult, socialRequest, type SocialConnection, type SocialProvider } from "../../services/socialAuth";
+import { assertGitHubLinked, readAuthorizationUrl, readGitHubConnection, socialRequest, type SocialConnection } from "../../services/socialAuth";
 import styles from "./SocialConnections.module.css";
 
 type Props = { token: string; userId: string };
 type Scope = Props & { pathname: string; active: boolean };
 type Notice = { type: "success" | "info" | "error"; text: string };
-type UnlinkConfirmation = { provider: SocialProvider; requiresPassword: boolean; error?: string };
+type UnlinkConfirmation = { requiresPassword: boolean; error?: string };
 type UnlinkPasswordFields = { newPassword: string; confirmation: string };
-const providerName = (provider: SocialProvider) => provider === "google" ? "Google" : "GitHub";
-const lastMethodMessage = "Подключите другой способ входа или воспользуйтесь действующим паролем InterHub.";
 
 function hasErrorCode(error: unknown, code: string) {
   return Boolean(error && typeof error === "object" && "data" in error && error.data
@@ -28,10 +26,10 @@ export function SocialConnections({ token, userId }: Props) {
   const loadRequest = useRef<AbortController | null>(null);
   const action = useRef<{ controller: AbortController; kind: "start" | "complete" | "unlink" } | null>(null);
   const restoreHeadingFocus = useRef(false);
-  const [connections, setConnections] = useState<SocialConnection[] | null>(null);
+  const [connection, setConnection] = useState<SocialConnection | null>(null);
   const [loadError, setLoadError] = useState("");
   const [notice, setNotice] = useState<Notice | null>(null);
-  const [starting, setStarting] = useState<SocialProvider | null>(null);
+  const [starting, setStarting] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [canRetryCompletion, setCanRetryCompletion] = useState(false);
   const [sessionChanged, setSessionChanged] = useState(false);
@@ -51,12 +49,12 @@ export function SocialConnections({ token, userId }: Props) {
     loadRequest.current?.abort();
     const controller = new AbortController();
     loadRequest.current = controller;
-    setConnections(null);
+    setConnection(null);
     setLoadError("");
     try {
       const data = await socialRequest<unknown>("/connections", controller.signal, undefined,
         { Authorization: `Bearer ${captured.token}` });
-      if (current(captured, controller)) setConnections(readConnections(data));
+      if (current(captured, controller)) setConnection(readGitHubConnection(data));
     } catch (error) {
       if (current(captured, controller)) setLoadError(getApiErrorMessage(error, "Не удалось загрузить способы входа. Повторите попытку."));
     } finally {
@@ -75,8 +73,8 @@ export function SocialConnections({ token, userId }: Props) {
       const data = await socialRequest<unknown>("/profile-link/complete", controller.signal, {},
         { Authorization: `Bearer ${captured.token}` });
       if (!current(captured, controller)) return;
-      const provider = readProfileLinkResult(data);
-      setNotice({ type: "success", text: `${providerName(provider)} привязан. Можно использовать его для входа.` });
+      assertGitHubLinked(data);
+      setNotice({ type: "success", text: "GitHub привязан. Можно использовать его для входа." });
       void load(captured);
     } catch (error) {
       if (!current(captured, controller)) return;
@@ -93,20 +91,20 @@ export function SocialConnections({ token, userId }: Props) {
     }
   };
 
-  const start = async (provider: SocialProvider) => {
+  const start = async () => {
     const captured = scope.current;
     if (!captured || !current(captured) || action.current) return;
     const controller = new AbortController();
     action.current = { controller, kind: "start" };
-    setStarting(provider);
+    setStarting(true);
     setCanRetryCompletion(false);
     setNotice(null);
     let redirecting = false;
     try {
-      const data = await socialRequest<unknown>(`/${provider}/profile-link/start`, controller.signal, {},
+      const data = await socialRequest<unknown>("/github/profile-link/start", controller.signal, {},
         { Authorization: `Bearer ${captured.token}` });
       if (!current(captured, controller)) return;
-      const url = readAuthorizationUrl(data, provider);
+      const url = readAuthorizationUrl(data);
       redirecting = true;
       window.location.assign(url);
     } catch (error) {
@@ -115,36 +113,35 @@ export function SocialConnections({ token, userId }: Props) {
     } finally {
       if (!redirecting && action.current?.controller === controller) {
         action.current = null;
-        if (current(captured, controller)) setStarting(null);
+        if (current(captured, controller)) setStarting(false);
       }
     }
   };
 
   const unlink = async (confirmation: UnlinkConfirmation, newPassword?: string) => {
-    const { provider, requiresPassword } = confirmation;
+    const { requiresPassword } = confirmation;
     const captured = scope.current;
-    if (!captured || !current(captured) || action.current
-      || !connections?.some((connection) => connection.provider === provider && connection.linked)) return;
+    if (!captured || !current(captured) || action.current || !connection?.linked) return;
     const controller = new AbortController();
     action.current = { controller, kind: "unlink" };
     setUnlinking(true);
-    setUnlinkConfirmation({ provider, requiresPassword });
+    setUnlinkConfirmation({ requiresPassword });
     setCanRetryCompletion(false);
     setNotice(null);
     try {
-      const data = await socialRequest<unknown>(`/${provider}/unlink`, controller.signal, requiresPassword ? { newPassword } : {},
+      const data = await socialRequest<unknown>("/github/unlink", controller.signal, requiresPassword ? { newPassword } : {},
         { Authorization: `Bearer ${captured.token}` });
       if (!current(captured, controller)) return;
-      const next = readConnections(data);
-      if (next.some((connection) => connection.provider === provider && connection.linked)) throw { status: "PARSING_ERROR" };
-      setConnections(next);
+      const next = readGitHubConnection(data);
+      if (next.linked) throw { status: "PARSING_ERROR" };
+      setConnection(next);
       restoreHeadingFocus.current = true;
       setUnlinkConfirmation(null);
-      setNotice({ type: "success", text: `${providerName(provider)} отвязан.` });
+      setNotice({ type: "success", text: "GitHub отвязан." });
     } catch (error) {
       if (!current(captured, controller)) return;
       if (hasErrorCode(error, "SOCIAL_PASSWORD_REQUIRED")) {
-        setUnlinkConfirmation({ provider, requiresPassword: true });
+        setUnlinkConfirmation({ requiresPassword: true });
       } else if (hasErrorCode(error, "SOCIAL_PASSWORD_ALREADY_SET") || hasErrorCode(error, "SOCIAL_CONNECTION_CHANGED")
         || hasErrorCode(error, "SOCIAL_LAST_SIGN_IN_METHOD")) {
         restoreHeadingFocus.current = true;
@@ -152,7 +149,7 @@ export function SocialConnections({ token, userId }: Props) {
         setNotice({ type: "error", text: getApiErrorMessage(error, "Проверьте способы входа и повторите отвязку.") });
         void load(captured);
       } else {
-        setUnlinkConfirmation({ provider, requiresPassword, error: getApiErrorMessage(error, "Не удалось отвязать аккаунт. Повторите попытку.") });
+        setUnlinkConfirmation({ requiresPassword, error: getApiErrorMessage(error, "Не удалось отвязать аккаунт. Повторите попытку.") });
       }
     } finally {
       if (action.current?.controller === controller) {
@@ -165,11 +162,11 @@ export function SocialConnections({ token, userId }: Props) {
   useEffect(() => {
     const captured: Scope = { token, userId, pathname, active: true };
     scope.current = captured;
-    setConnections(null);
+    setConnection(null);
     setLoadError("");
     setSessionChanged(false);
     setNotice(null);
-    setStarting(null);
+    setStarting(false);
     setCompleting(false);
     setCanRetryCompletion(false);
     setUnlinkConfirmation(null);
@@ -184,11 +181,11 @@ export function SocialConnections({ token, userId }: Props) {
       if (current(captured)) return;
       captured.active = false;
       cancel();
-      setConnections(null);
+      setConnection(null);
       setLoadError("");
       setNotice(null);
       setSessionChanged(true);
-      setStarting(null);
+      setStarting(false);
       setCompleting(false);
       setCanRetryCompletion(false);
       setUnlinkConfirmation(null);
@@ -213,7 +210,7 @@ export function SocialConnections({ token, userId }: Props) {
       window.clearTimeout(timer);
       const interruptedCompletion = action.current?.kind === "complete";
       cancel();
-      setStarting(null);
+      setStarting(false);
       setCompleting(false);
       setUnlinkConfirmation(null);
       setUnlinking(false);
@@ -237,43 +234,42 @@ export function SocialConnections({ token, userId }: Props) {
     };
   }, [token, userId, pathname, navigate]);
 
-  const busy = Boolean(starting) || completing || unlinking;
-  const unlinkProvider = unlinkConfirmation?.provider;
-  const unlinkProviderName = unlinkProvider ? providerName(unlinkProvider) : "";
+  const busy = starting || completing || unlinking;
   const unlinkActionLabel = unlinkConfirmation?.requiresPassword ? "Задать пароль и отвязать" : "Отвязать";
 
-  if (connections?.every(({ available, linked }) => !available && !linked)
+  if (connection && !connection.available && !connection.linked
     && !notice && !sessionChanged && !loadError && !completing) return null;
 
   return <section aria-labelledby={headingId}>
     <Card className={styles.panel}>
       <Typography.Title id={headingId} level={2} tabIndex={-1} className={styles.heading}>Способы входа</Typography.Title>
-      <Typography.Paragraph className={styles.description}>Подключите Google или GitHub, чтобы входить в этот же аккаунт.</Typography.Paragraph>
+      <Typography.Paragraph className={styles.description}>Подключите GitHub, чтобы входить в этот же аккаунт.</Typography.Paragraph>
       {sessionChanged ? <Alert type="warning" role="alert" title="Сессия изменилась. Обновите страницу, чтобы увидеть способы входа текущего аккаунта."
         action={<Button onClick={() => window.location.reload()}>Обновить страницу</Button>} /> : <>
         {notice ? <Alert className={styles.notice} type={notice.type} showIcon role={notice.type === "error" ? "alert" : "status"} title={notice.text}
           action={canRetryCompletion ? <Button onClick={() => { if (scope.current) void complete(scope.current); }}>Повторить привязку</Button> : undefined} /> : null}
         {completing ? <div className={styles.loading} role="status"><Spin size="small" /> Подтверждаем привязку…</div> : null}
         {loadError ? <Alert type="error" role="alert" title={loadError} action={<Button onClick={() => { if (scope.current) void load(scope.current); }}>Повторить загрузку</Button>} />
-          : connections === null ? <div className={styles.loading} role="status"><Spin size="small" /> Загружаем способы входа…</div>
-            : <div className={styles.rows}>{connections.map(({ provider, linked, available, canUnlink, requiresPassword }) => <div key={provider} role="group" aria-label={providerName(provider)} className={styles.row}>
+          : connection === null ? <div className={styles.loading} role="status"><Spin size="small" /> Загружаем способы входа…</div>
+            : <div role="group" aria-label="GitHub" className={styles.row}>
               <div className={styles.provider}>
-                <span className={styles.icon} aria-hidden="true">{provider === "google" ? <img src="/auth/google-g.png" alt="" width={22} height={22} /> : <GithubFilled style={{ fontSize: 24 }} />}</span>
-                <div><span className={styles.name}>{providerName(provider)}</span>
-                  <span className={`${styles.status} ${linked ? styles.linked : ""}`}>{linked ? <><CheckCircleFilled aria-hidden="true" /> Привязан</> : "Не привязан"}</span>
-                  {!available ? <span className={styles.unavailable}>Временно недоступен</span> : null}
-                  {requiresPassword ? <span className={styles.unavailable}>Для отвязки нужно задать пароль InterHub.</span>
-                    : linked && !canUnlink ? <span className={styles.unavailable}>{lastMethodMessage}</span> : null}
+                <span className={styles.icon} aria-hidden="true"><GithubFilled style={{ fontSize: 24 }} /></span>
+                <div><span className={styles.name}>GitHub</span>
+                  <span className={`${styles.status} ${connection.linked ? styles.linked : ""}`}>{connection.linked ? <><CheckCircleFilled aria-hidden="true" /> Привязан</> : "Не привязан"}</span>
+                  {!connection.available ? <span className={styles.unavailable}>Временно недоступен</span> : null}
+                  {connection.requiresPassword ? <span className={styles.unavailable}>Для отвязки нужно задать пароль InterHub.</span>
+                    : connection.linked && !connection.canUnlink ? <span className={styles.unavailable}>Для отвязки нужен действующий пароль InterHub.</span> : null}
                 </div>
               </div>
-              {!linked && available ? <Button loading={starting === provider} disabled={busy}
-                onClick={() => void start(provider)}>Подключить {providerName(provider)}</Button>
-                : canUnlink || requiresPassword ? <Button danger disabled={busy} onClick={() => setUnlinkConfirmation({ provider, requiresPassword })}>
-                  Отвязать {providerName(provider)}
+              {!connection.linked && connection.available ? <Button loading={starting} disabled={busy}
+                onClick={() => void start()}>Подключить GitHub</Button>
+                : connection.canUnlink || connection.requiresPassword ? <Button danger disabled={busy}
+                  onClick={() => setUnlinkConfirmation({ requiresPassword: connection.requiresPassword })}>
+                  Отвязать GitHub
                 </Button> : null}
-            </div>)}</div>}
+            </div>}
       </>}
-      <Modal open={Boolean(unlinkProvider) && !sessionChanged} title={`Отвязать ${unlinkProviderName}?`} centered destroyOnHidden
+      <Modal open={Boolean(unlinkConfirmation) && !sessionChanged} title="Отвязать GitHub?" centered destroyOnHidden
         okText={unlinkActionLabel} cancelText="Отмена"
         okButtonProps={{ danger: true, disabled: unlinking, "aria-label": unlinkActionLabel }}
         cancelButtonProps={{ disabled: unlinking }}
@@ -289,7 +285,7 @@ export function SocialConnections({ token, userId }: Props) {
           restoreHeadingFocus.current = false;
           document.getElementById(headingId)?.focus();
         }}>
-        <Typography.Paragraph>Вход через {unlinkProviderName} для этого профиля станет недоступен. Ваши данные и текущая сессия сохранятся.</Typography.Paragraph>
+        <Typography.Paragraph>Вход через GitHub для этого профиля станет недоступен. Ваши данные и текущая сессия сохранятся.</Typography.Paragraph>
         {unlinkConfirmation?.requiresPassword ? <>
           <Typography.Paragraph>Задайте пароль, чтобы входить в InterHub по нику и паролю.</Typography.Paragraph>
           <Form form={passwordForm} layout="vertical" clearOnDestroy disabled={unlinking}

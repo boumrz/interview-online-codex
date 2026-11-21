@@ -15,19 +15,13 @@ import java.util.Locale
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
+internal const val GITHUB_SOCIAL_PROVIDER = "github"
+
 class SocialAuthProperties {
     var publicBaseUrl: String = "http://localhost:5173"
     var flowSecret: String = ""
     var httpTimeoutMillis: String = "5000"
-    var google = Google()
     var github = Github()
-    class Google {
-        var clientId = ""
-        var clientSecret = ""
-        var authorizationUri = "https://accounts.google.com/o/oauth2/v2/auth"
-        var tokenUri = "https://oauth2.googleapis.com/token"
-        var jwkUri = "https://www.googleapis.com/oauth2/v3/certs"
-    }
     class Github {
         var clientId = ""
         var clientSecret = ""
@@ -45,29 +39,27 @@ class SocialAuthConfiguration {
         try {
             val properties = Binder.get(environment).bind("app.social-auth", Bindable.of(SocialAuthProperties::class.java))
                 .orElseGet { SocialAuthProperties() }
-            warnIfIncomplete("GOOGLE", properties.google.clientId, properties.google.clientSecret)
-            warnIfIncomplete("GITHUB", properties.github.clientId, properties.github.clientSecret)
+            warnIfIncomplete(properties.github.clientId, properties.github.clientSecret)
             return SocialAuthSettings(properties)
         } catch (_: Exception) {
             throw IllegalStateException("Invalid social authentication configuration")
         }
     }
 
-    private fun warnIfIncomplete(provider: String, clientId: String, clientSecret: String) {
+    private fun warnIfIncomplete(clientId: String, clientSecret: String) {
         val missing = when {
             clientId.isBlank() && clientSecret.isNotBlank() -> "CLIENT_ID"
             clientSecret.isBlank() && clientId.isNotBlank() -> "CLIENT_SECRET"
             else -> return
         }
-        logger.warn("OAuth sign-in for {} is unavailable: missing {}_{}", provider, provider, missing)
+        logger.warn("OAuth sign-in for GITHUB is unavailable: missing GITHUB_{}", missing)
     }
 }
 
 class SocialAuthSettings(val properties: SocialAuthProperties) {
-    val providers = listOfNotNull(
-        "google".takeIf { properties.google.clientId.isNotBlank() && properties.google.clientSecret.isNotBlank() },
-        "github".takeIf { properties.github.clientId.isNotBlank() && properties.github.clientSecret.isNotBlank() },
-    )
+    val providers = listOfNotNull(GITHUB_SOCIAL_PROVIDER.takeIf {
+        properties.github.clientId.isNotBlank() && properties.github.clientSecret.isNotBlank()
+    })
     private val trustedOrigin = runCatching { normalizeOrigin(properties.publicBaseUrl) }.getOrNull()
     val origin: String get() = checkNotNull(trustedOrigin) { "Invalid social authentication configuration" }
     val secureCookie = trustedOrigin?.startsWith("https://") == true
@@ -84,16 +76,9 @@ class SocialAuthSettings(val properties: SocialAuthProperties) {
             secret = Base64.getUrlDecoder().decode(properties.flowSecret).also {
                 require(it.size == 32 && encode(it) == properties.flowSecret)
             }
-            if ("google" in providers) {
-                endpoint(properties.google.authorizationUri, "https://accounts.google.com/o/oauth2/v2/auth")
-                endpoint(properties.google.tokenUri, "https://oauth2.googleapis.com/token")
-                endpoint(properties.google.jwkUri, "https://www.googleapis.com/oauth2/v3/certs")
-            }
-            if ("github" in providers) {
-                endpoint(properties.github.authorizationUri, "https://github.com/login/oauth/authorize")
-                endpoint(properties.github.tokenUri, "https://github.com/login/oauth/access_token")
-                endpoint(properties.github.userInfoUri, "https://api.github.com/user")
-            }
+            endpoint(properties.github.authorizationUri, "https://github.com/login/oauth/authorize")
+            endpoint(properties.github.tokenUri, "https://github.com/login/oauth/access_token")
+            endpoint(properties.github.userInfoUri, "https://api.github.com/user")
         } catch (_: Exception) { throw IllegalStateException("Invalid social authentication configuration") }
     }
     private fun normalizeOrigin(raw: String): String {
@@ -112,7 +97,7 @@ class SocialAuthSettings(val properties: SocialAuthProperties) {
         require(!secureCookie && uri.scheme == "http" && loopback(uri.host) && uri.rawUserInfo == null && uri.rawQuery == null && uri.rawFragment == null)
     }
     fun matchesOrigin(origin: String?): Boolean = origin != null && origin == trustedOrigin
-    fun callback(provider: String) = "$origin/api/auth/social/$provider/callback"
+    fun callback() = "$origin/api/auth/social/$GITHUB_SOCIAL_PROVIDER/callback"
     fun derive(purpose: String, flowId: String, browserProof: String): String {
         val mac = Mac.getInstance("HmacSHA256")
         mac.init(SecretKeySpec(secret, "HmacSHA256"))

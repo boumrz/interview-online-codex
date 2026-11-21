@@ -11,8 +11,7 @@ const api = process.env.E2E_API_URL;
 const browser = await chromium.launch({ headless: true });
 after(() => browser.close());
 const json = (route, data, status = 200) => route.fulfill({ status, json: data });
-const providerName = (provider) => provider === "google" ? "Google" : "GitHub";
-const connection = (page, provider) => page.getByRole("group", { name: providerName(provider), exact: true });
+const connection = (page) => page.getByRole("group", { name: "GitHub", exact: true });
 const deferred = () => {
   let resolve;
   const promise = new Promise((done) => { resolve = done; });
@@ -37,7 +36,6 @@ async function fixture(t, initial = {}) {
   await page.goto(`${web}/login`);
   await page.evaluate((value) => localStorage.setItem("auth_token", value), auth.token);
   const states = {
-    google: { linked: false, available: true, canUnlink: false },
     github: { linked: false, available: true, canUnlink: false },
     ...initial,
   };
@@ -49,16 +47,17 @@ async function fixture(t, initial = {}) {
   return { context, page, auth, states, read };
 }
 
-test("personal and team profiles show real connection states in both themes", async (t) => {
-  const { context, page, auth } = await fixture(t, { google: { linked: true, available: false, canUnlink: true } });
+test("personal and team profiles show only GitHub when an older API includes Google", async (t) => {
+  const { context, page, auth } = await fixture(t, {
+    google: { linked: true, available: true, canUnlink: true },
+    github: { linked: true, available: false, canUnlink: true },
+  });
   await page.goto(`${web}/profile`);
   await page.getByRole("heading", { name: "Способы входа", exact: true }).waitFor();
-  await connection(page, "google").getByText("Привязан", { exact: true }).waitFor();
-  assert.equal(await connection(page, "google").getByRole("button", { name: "Отвязать Google", exact: true }).isEnabled(), true);
-  await connection(page, "google").getByText("Временно недоступен", { exact: true }).waitFor();
-  await connection(page, "github").getByText("Не привязан", { exact: true }).waitFor();
-  assert.equal(await page.getByRole("button", { name: "Подключить GitHub", exact: true }).isEnabled(), true);
-  await page.screenshot({ path: "/tmp/interhub-profile-connections-desktop.png", fullPage: true });
+  await connection(page).getByText("Привязан", { exact: true }).waitFor();
+  await connection(page).getByText("Временно недоступен", { exact: true }).waitFor();
+  assert.equal(await page.getByRole("button", { name: "Отвязать GitHub", exact: true }).isEnabled(), true);
+  assert.equal(await page.getByRole("group", { name: "Google", exact: true }).count(), 0);
   const teamResponse = await context.request.post(`${api}/teams`, { headers: {
     Authorization: `Bearer ${auth.token}`, "Idempotency-Key": randomUUID(),
   }, data: { name: "Профиль команды" } });
@@ -68,18 +67,18 @@ test("personal and team profiles show real connection states in both themes", as
   await page.evaluate(() => localStorage.setItem("interview-online:ui-theme", "dark"));
   await page.goto(`${web}/workspace/teams/${(team.team ?? team).id}/profile`);
   await page.getByRole("heading", { name: "Способы входа", exact: true }).waitFor();
-  await connection(page, "google").getByText("Привязан", { exact: true }).waitFor();
-  assert.equal(await connection(page, "google").getByRole("button", { name: "Отвязать Google", exact: true }).isEnabled(), true);
-  await page.screenshot({ path: "/tmp/interhub-profile-connections-tablet-dark.png", fullPage: true });
+  await connection(page).getByText("Привязан", { exact: true }).waitFor();
+  assert.equal(await page.getByRole("button", { name: "Отвязать GitHub", exact: true }).isEnabled(), true);
+  assert.equal(await page.getByRole("group", { name: "Google", exact: true }).count(), 0);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
 });
 
 test("unlinking an unavailable provider requires confirmation and uses the returned statuses", async (t) => {
-  const { page, auth, states, read } = await fixture(t, { google: { linked: true, available: false, canUnlink: true } });
+  const { page, auth, states, read } = await fixture(t, { github: { linked: true, available: false, canUnlink: true } });
   let requests = 0;
   const entered = deferred();
   const held = deferred();
-  await page.route("**/api/auth/social/google/unlink", async (route) => {
+  await page.route("**/api/auth/social/github/unlink", async (route) => {
     requests++;
     assert.equal(route.request().method(), "POST");
     assert.equal(route.request().headers().authorization, `Bearer ${auth.token}`);
@@ -87,17 +86,16 @@ test("unlinking an unavailable provider requires confirmation and uses the retur
     assert.deepEqual(route.request().postDataJSON(), {});
     entered.resolve();
     await held.promise;
-    states.google = { linked: false, available: false, canUnlink: false };
-    states.github = { linked: true, available: true, canUnlink: true };
+    states.github = { linked: false, available: false, canUnlink: false };
     return json(route, read());
   });
   await page.goto(`${web}/profile`);
-  const unlink = connection(page, "google").getByRole("button", { name: "Отвязать Google", exact: true });
-  const dialog = page.getByRole("dialog", { name: "Отвязать Google?", exact: true });
+  const unlink = connection(page).getByRole("button", { name: "Отвязать GitHub", exact: true });
+  const dialog = page.getByRole("dialog", { name: "Отвязать GitHub?", exact: true });
   await unlink.click();
   await dialog.getByRole("button", { name: "Отмена", exact: true }).click();
   await page.getByRole("dialog").waitFor({ state: "hidden" });
-  await page.waitForFunction(() => document.activeElement?.textContent?.trim() === "Отвязать Google");
+  await page.waitForFunction(() => document.activeElement?.textContent?.trim() === "Отвязать GitHub");
   assert.equal(requests, 0);
   await unlink.click();
   await dialog.getByRole("button", { name: "Отвязать", exact: true }).click();
@@ -106,27 +104,28 @@ test("unlinking an unavailable provider requires confirmation and uses the retur
   held.resolve();
   await page.getByRole("dialog").waitFor({ state: "hidden" });
   await page.waitForFunction(() => document.activeElement?.textContent?.trim() === "Способы входа");
-  await connection(page, "google").getByText("Не привязан", { exact: true }).waitFor();
-  await connection(page, "github").getByRole("button", { name: "Отвязать GitHub", exact: true }).waitFor();
-  await page.getByRole("status").filter({ hasText: "Google отвязан" }).waitFor();
+  await connection(page).getByText("Не привязан", { exact: true }).waitFor();
+  await page.getByRole("status").filter({ hasText: "GitHub отвязан" }).waitFor();
   assert.equal(requests, 1);
   assert.equal(await page.evaluate(() => localStorage.getItem("auth_token")), auth.token);
+  const reloaded = page.waitForResponse("**/api/auth/social/connections");
   await page.reload();
-  await connection(page, "google").getByText("Не привязан", { exact: true }).waitFor();
+  await reloaded;
+  await page.getByRole("heading", { name: "Способы входа", exact: true }).waitFor({ state: "hidden" });
 });
 
 test("unlink can retry a temporary failure and refreshes eligibility if the last method became protected", async (t) => {
-  const { page, states } = await fixture(t, { google: { linked: true, available: true, canUnlink: true } });
+  const { page, states } = await fixture(t, { github: { linked: true, available: true, canUnlink: true } });
   let requests = 0;
-  await page.route("**/api/auth/social/google/unlink", (route) => {
+  await page.route("**/api/auth/social/github/unlink", (route) => {
     if (++requests === 1) return json(route, { error: "Недоступен" }, 503);
-    states.google.canUnlink = false;
+    states.github.canUnlink = false;
     return json(route, { code: "SOCIAL_LAST_SIGN_IN_METHOD", error: "Последний способ входа" }, 409);
   });
   await page.goto(`${web}/profile`);
-  const google = connection(page, "google");
-  const unlink = google.getByRole("button", { name: "Отвязать Google", exact: true });
-  const dialog = page.getByRole("dialog", { name: "Отвязать Google?", exact: true });
+  const githubConnection = connection(page);
+  const unlink = githubConnection.getByRole("button", { name: "Отвязать GitHub", exact: true });
+  const dialog = page.getByRole("dialog", { name: "Отвязать GitHub?", exact: true });
   await unlink.click();
   const confirm = dialog.getByRole("button", { name: "Отвязать", exact: true });
   await confirm.click();
@@ -136,8 +135,8 @@ test("unlink can retry a temporary failure and refreshes eligibility if the last
     throw new Error(`Confirmation after transient failure: requests=${requests}, dialogs=${JSON.stringify(dialogs)}`, { cause: error });
   });
   await dialog.waitFor({ state: "hidden" });
-  await google.getByText("Привязан", { exact: true }).waitFor();
-  await google.getByText(/Подключите другой способ входа/).waitFor();
+  await githubConnection.getByText("Привязан", { exact: true }).waitFor();
+  await githubConnection.getByText("Для отвязки нужен действующий пароль InterHub.", { exact: true }).waitFor();
   assert.equal(await unlink.count(), 0);
   assert.equal(requests, 2);
 });
@@ -153,21 +152,21 @@ test("connection conflicts explain which profile must remove the existing link",
 });
 
 test("a password already set in another session requires a new confirmation without password fields", async (t) => {
-  const { page, states } = await fixture(t, { google: { linked: true, available: true, canUnlink: false, requiresPassword: true } });
+  const { page, states } = await fixture(t, { github: { linked: true, available: true, canUnlink: false, requiresPassword: true } });
   let requests = 0;
-  await page.route("**/api/auth/social/google/unlink", async (route) => {
+  await page.route("**/api/auth/social/github/unlink", async (route) => {
     if (++requests === 1) {
       assert.deepEqual(route.request().postDataJSON(), { newPassword: "Passphrase-123" });
-      states.google = { linked: true, available: true, canUnlink: true, requiresPassword: false };
+      states.github = { linked: true, available: true, canUnlink: true, requiresPassword: false };
       return json(route, { code: "SOCIAL_PASSWORD_ALREADY_SET", error: "Пароль InterHub уже установлен" }, 409);
     }
     assert.deepEqual(route.request().postDataJSON(), {});
-    states.google = { linked: false, available: true, canUnlink: false, requiresPassword: false };
+    states.github = { linked: false, available: true, canUnlink: false, requiresPassword: false };
     return json(route, { connections: Object.entries(states).map(([provider, state]) => ({ provider, ...state })) });
   });
   await page.goto(`${web}/profile`);
-  const detach = connection(page, "google").getByRole("button", { name: "Отвязать Google", exact: true });
-  const dialog = page.getByRole("dialog", { name: "Отвязать Google?", exact: true });
+  const detach = connection(page).getByRole("button", { name: "Отвязать GitHub", exact: true });
+  const dialog = page.getByRole("dialog", { name: "Отвязать GitHub?", exact: true });
   await detach.click();
   await dialog.getByLabel("Новый пароль InterHub", { exact: true }).fill("Passphrase-123");
   await dialog.getByLabel("Повторите новый пароль", { exact: true }).fill("Passphrase-123");
@@ -178,7 +177,7 @@ test("a password already set in another session requires a new confirmation with
   assert.equal(await dialog.getByLabel("Новый пароль InterHub", { exact: true }).count(), 0);
   await dialog.getByRole("button", { name: "Отвязать", exact: true }).click();
   await dialog.waitFor({ state: "hidden" });
-  await connection(page, "google").getByText("Не привязан", { exact: true }).waitFor();
+  await connection(page).getByText("Не привязан", { exact: true }).waitFor();
   assert.equal(requests, 2);
 });
 
@@ -198,49 +197,38 @@ test("status loading and failures never claim the providers are unlinked", async
   await page.getByRole("alert").filter({ hasText: "Ошибка сервера" }).waitFor();
   assert.equal(await page.getByRole("button", { name: /^Подключить/ }).count(), 0);
   await page.getByRole("button", { name: "Повторить загрузку", exact: true }).click();
-  await page.getByRole("button", { name: "Подключить Google", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Подключить GitHub", exact: true }).waitFor();
 });
 
-test("both providers connect from profile while preserving the current account and session", async (t) => {
+test("GitHub connects from profile while preserving the current account and session", async (t) => {
   const { page, auth, states } = await fixture(t);
-  let selected;
   let completions = 0;
-  for (const provider of ["google", "github"]) {
-    const url = provider === "google" ? "https://accounts.google.com/o/oauth2/v2/auth" : "https://github.com/login/oauth/authorize";
-    await page.route(`**/api/auth/social/${provider}/profile-link/start`, (route) => {
-      assert.equal(route.request().method(), "POST");
-      assert.equal(route.request().headers().authorization, `Bearer ${auth.token}`);
-      assert.equal(route.request().headers().origin, new URL(web).origin);
-      selected = provider;
-      return json(route, { authorizationUrl: `${url}?state=test-only-state` });
-    });
-    await page.route(`${url}?*`, (route) => route.fulfill({ contentType: "text/html; charset=utf-8", body:
-      `<a href="${web}/profile?social_link=ready">Подтвердить подключение</a>` }));
-  }
+  const url = "https://github.com/login/oauth/authorize";
+  await page.route("**/api/auth/social/github/profile-link/start", (route) => {
+    assert.equal(route.request().method(), "POST");
+    assert.equal(route.request().headers().authorization, `Bearer ${auth.token}`);
+    assert.equal(route.request().headers().origin, new URL(web).origin);
+    return json(route, { authorizationUrl: `${url}?state=test-only-state` });
+  });
+  await page.route(`${url}?*`, (route) => route.fulfill({ contentType: "text/html; charset=utf-8", body:
+    `<a href="${web}/profile?social_link=ready">Подтвердить подключение</a>` }));
   await page.route("**/api/auth/social/profile-link/complete", (route) => {
     assert.equal(route.request().headers().authorization, `Bearer ${auth.token}`);
     assert.equal(route.request().headers().origin, new URL(web).origin);
     completions++;
-    states[selected].linked = true;
-    return json(route, { provider: selected, linked: true });
+    states.github.linked = true;
+    return json(route, { provider: "github", linked: true });
   });
   await page.goto(`${web}/profile`);
-  for (const provider of ["google", "github"]) {
-    await page.getByRole("button", { name: `Подключить ${providerName(provider)}`, exact: true }).click();
-    try {
-      await page.getByRole("link", { name: "Подтвердить подключение" }).click();
-    } catch (error) {
-      await page.screenshot({ path: "/tmp/interhub-profile-provider-start-failure.png", fullPage: true });
-      throw new Error(`Provider ${provider} did not open; pathname=${new URL(page.url()).pathname}; alerts=${await page.getByRole("alert").allTextContents()}`, { cause: error });
-    }
-    await connection(page, provider).getByText("Привязан", { exact: true }).waitFor();
-    await page.getByRole("status").filter({ hasText: `${providerName(provider)} привязан` }).waitFor();
-    assert.equal(new URL(page.url()).search, "");
-    assert.equal(await page.evaluate(() => localStorage.getItem("auth_token")), auth.token);
-    await page.reload();
-    await connection(page, provider).getByText("Привязан", { exact: true }).waitFor();
-  }
-  assert.equal(completions, 2);
+  await page.getByRole("button", { name: "Подключить GitHub", exact: true }).click();
+  await page.getByRole("link", { name: "Подтвердить подключение" }).click();
+  await connection(page).getByText("Привязан", { exact: true }).waitFor();
+  await page.getByRole("status").filter({ hasText: "GitHub привязан" }).waitFor();
+  assert.equal(new URL(page.url()).search, "");
+  assert.equal(await page.evaluate(() => localStorage.getItem("auth_token")), auth.token);
+  await page.reload();
+  await connection(page).getByText("Привязан", { exact: true }).waitFor();
+  assert.equal(completions, 1);
   assert.equal(await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }).includes("test-only-state")), false);
 });
 
@@ -250,7 +238,7 @@ test("cancelled, failed and invented result markers do not report a successful c
   await page.route("**/api/auth/social/profile-link/complete", (route) => { completions++; return json(route, {}, 400); });
   for (const marker of ["cancelled", "failed", "success"]) {
     await page.goto(`${web}/profile?social_link=${marker}`);
-    await page.getByRole("button", { name: "Подключить Google", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Подключить GitHub", exact: true }).waitFor();
     if (marker === "cancelled") await page.getByRole("status").filter({ hasText: "Подключение отменено" }).waitFor();
     if (marker === "failed") await page.getByRole("alert").filter({ hasText: "Не удалось подтвердить аккаунт" }).waitFor();
     assert.equal(new URL(page.url()).search, "");
@@ -265,13 +253,13 @@ test("failed completion can be retried without changing the local session", asyn
   let completions = 0;
   await page.route("**/api/auth/social/profile-link/complete", (route) => {
     if (++completions === 1) return json(route, { error: "Недоступен" }, 503);
-    states.google.linked = true;
-    return json(route, { provider: "google", linked: true });
+    states.github.linked = true;
+    return json(route, { provider: "github", linked: true });
   });
   await page.goto(`${web}/profile?social_link=ready`);
   await page.getByRole("alert").filter({ hasText: "Ошибка сервера" }).waitFor();
   await page.getByRole("button", { name: "Повторить привязку", exact: true }).click();
-  await connection(page, "google").getByText("Привязан", { exact: true }).waitFor();
+  await connection(page).getByText("Привязан", { exact: true }).waitFor();
   assert.equal(await page.evaluate(() => localStorage.getItem("auth_token")), auth.token);
   assert.equal(completions, 2);
 });
@@ -283,23 +271,23 @@ test("account changes abort pending starts and ignore late completion and unlink
     const held = deferred();
     const entered = deferred();
     const finished = deferred();
-    const path = action === "start" ? "google/profile-link/start" : action === "complete" ? "profile-link/complete" : "google/unlink";
-    if (action === "unlink") states.google = { linked: true, available: true, canUnlink: true };
+    const path = action === "start" ? "github/profile-link/start" : action === "complete" ? "profile-link/complete" : "github/unlink";
+    if (action === "unlink") states.github = { linked: true, available: true, canUnlink: true };
     await page.route(`**/api/auth/social/${path}`, async (route) => {
       entered.resolve();
       await held.promise;
-      if (action === "unlink") states.google = { linked: false, available: true, canUnlink: false };
-      const response = action === "start" ? { authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth?state=late" }
-        : action === "complete" ? { provider: "google", linked: true } : read();
+      if (action === "unlink") states.github = { linked: false, available: true, canUnlink: false };
+      const response = action === "start" ? { authorizationUrl: "https://github.com/login/oauth/authorize?state=late" }
+        : action === "complete" ? { provider: "github", linked: true } : read();
       await json(route, response).catch(() => {});
       finished.resolve();
     });
     await page.evaluate((token) => localStorage.setItem("auth_token", token), auth.token);
     await page.goto(`${web}/profile${action === "complete" ? "?social_link=ready" : ""}`);
-    if (action === "start") await page.getByRole("button", { name: "Подключить Google", exact: true }).click();
+    if (action === "start") await page.getByRole("button", { name: "Подключить GitHub", exact: true }).click();
     if (action === "unlink") {
-      await page.getByRole("button", { name: "Отвязать Google", exact: true }).click();
-      await page.getByRole("dialog", { name: "Отвязать Google?", exact: true }).getByRole("button", { name: "Отвязать", exact: true }).click();
+      await page.getByRole("button", { name: "Отвязать GitHub", exact: true }).click();
+      await page.getByRole("dialog", { name: "Отвязать GitHub?", exact: true }).getByRole("button", { name: "Отвязать", exact: true }).click();
     }
     await entered.promise;
     await page.evaluate((token) => {
@@ -312,7 +300,7 @@ test("account changes abort pending starts and ignore late completion and unlink
     await page.getByRole("alert").filter({ hasText: "Сессия изменилась" }).waitFor();
     assert.equal(new URL(page.url()).pathname, "/profile");
     assert.equal(await page.getByText("Привязан", { exact: true }).count(), 0);
-    assert.equal(await page.getByText(/Google отвязан/).count(), 0);
+    assert.equal(await page.getByText(/GitHub отвязан/).count(), 0);
     await page.getByRole("dialog").waitFor({ state: "hidden" });
     assert.equal(await page.evaluate(() => localStorage.getItem("auth_token")), other.token);
     await page.unroute(`**/api/auth/social/${path}`);
@@ -327,7 +315,7 @@ test("logout while completion is pending cannot restore the previous session", a
   await page.route("**/api/auth/social/profile-link/complete", async (route) => {
     entered.resolve();
     await held.promise;
-    await json(route, { provider: "google", linked: true }).catch(() => {});
+    await json(route, { provider: "github", linked: true }).catch(() => {});
     finished.resolve();
   });
   await page.goto(`${web}/profile?social_link=ready`);
@@ -338,5 +326,5 @@ test("logout while completion is pending cannot restore the previous session", a
   await finished.promise;
   assert.equal(await page.evaluate(() => localStorage.getItem("auth_token")), null);
   assert.equal(await page.getByRole("heading", { name: "Способы входа", exact: true }).count(), 0);
-  assert.equal(await page.getByText("Google привязан. Можно использовать его для входа.", { exact: true }).count(), 0);
+  assert.equal(await page.getByText("GitHub привязан. Можно использовать его для входа.", { exact: true }).count(), 0);
 });

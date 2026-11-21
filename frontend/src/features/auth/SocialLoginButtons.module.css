@@ -1,5 +1,3 @@
-@import /* webpackIgnore: true */ url("/auth/fonts.css");
-
 .providerButton {
   --provider-background: #fff;
   --provider-hover: #f8faff;
@@ -27,9 +25,8 @@
   background: var(--provider-hover);
 }
 
-.providerButton img { flex: none; object-fit: contain; }
 .providerLabel {
-  font: 500 14px/20px "Google Sans Auth", sans-serif;
-  min-inline-size: 10em;
-  text-align: start;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
 }

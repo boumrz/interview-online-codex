@@ -61,26 +61,24 @@ class SocialAuthService(
     transactionManager: PlatformTransactionManager,
 ) {
     private val transaction = TransactionTemplate(transactionManager)
-    private val supportedProviders = listOf("google", "github")
     fun providers() = settings.providers
     fun connections(token: String?): SocialConnectionsResponse {
         val user = auth.requireUserByToken(token)
-        return connections(!user.passwordHash.isNullOrBlank(), identities.findLinkedProviders(requireNotNull(user.id)))
+        return connections(!user.passwordHash.isNullOrBlank(), hasGithubIdentity(requireNotNull(user.id)))
     }
     fun unlink(provider: String, token: String?, newPassword: String?): SocialConnectionsResponse {
-        if (provider !in supportedProviders) throw providerUnavailable()
+        if (provider != GITHUB_SOCIAL_PROVIDER) throw providerUnavailable()
         return transaction.execute {
             val user = lockedSessionUser(token)
             val userId = requireNotNull(user.id)
-            val linkedProviders = identities.findLinkedProviders(userId)
             // The session lookup may have loaded the user before the row lock was acquired.
             val passwordHash = users.findLocalPasswordHash(userId)
             val hasPassword = passwordHash != null
-            if (provider !in linkedProviders) {
+            if (!hasGithubIdentity(userId)) {
                 if (newPassword != null && (passwordHash == null || !auth.matchesInitialPassword(newPassword, passwordHash))) {
                     throw ApiException(HttpStatus.CONFLICT, "Связь уже снята. Обновите способы входа", code = "SOCIAL_CONNECTION_CHANGED")
                 }
-                return@execute connections(hasPassword, linkedProviders)
+                return@execute connections(hasPassword, linked = false)
             }
             if (hasPassword && newPassword != null) throw passwordAlreadySet()
             if (!hasPassword) {
@@ -92,17 +90,18 @@ class SocialAuthService(
             // Keep the failed marker until expiry so an in-flight callback returns to the profile.
             flows.invalidateProfileLinks(userId, provider)
             identities.deleteProviderLinks(userId, provider)
-            connections(true, linkedProviders - provider)
+            connections(hasPassword = true, linked = false)
         }!!
     }
     private fun passwordAlreadySet() = ApiException(HttpStatus.CONFLICT,
         "Пароль InterHub уже установлен. Подтвердите отвязку ещё раз", code = "SOCIAL_PASSWORD_ALREADY_SET")
 
-    private fun connections(hasPassword: Boolean, linkedProviders: Set<String>): SocialConnectionsResponse =
-        SocialConnectionsResponse(supportedProviders.map { provider ->
-            val linked = provider in linkedProviders
-            SocialConnection(provider, linked, provider in settings.providers, linked && hasPassword, linked && !hasPassword)
-        })
+    private fun hasGithubIdentity(userId: String) = identities.existsByUserIdAndProvider(userId, GITHUB_SOCIAL_PROVIDER)
+
+    private fun connections(hasPassword: Boolean, linked: Boolean): SocialConnectionsResponse =
+        SocialConnectionsResponse(listOf(SocialConnection(
+            GITHUB_SOCIAL_PROVIDER, linked, settings.providers.isNotEmpty(), linked && hasPassword, linked && !hasPassword,
+        )))
 
     fun startProfileLink(provider: String, token: String?): SocialStartResult {
         requireProvider(provider)
@@ -116,7 +115,7 @@ class SocialAuthService(
                 browserProofHash = SocialAuthSettings.hash(proof), expiresAt = Instant.now().plusSeconds(600),
                 intent = "profile_link", initiatingUserId = user.id, initiatingSessionHash = SocialAuthSettings.hash(requireNotNull(token))))
         }
-        return SocialStartResult(providerClient.authorizationUrl(provider, flowId, proof, state), "$flowId.$proof")
+        return SocialStartResult(providerClient.authorizationUrl(flowId, proof, state), "$flowId.$proof")
     }
     fun completeProfileLink(cookie: String?, token: String?): SocialProfileLinkResponse {
         requireEnabled()
@@ -152,7 +151,8 @@ class SocialAuthService(
         val flow = flows.findById(id).orElse(null)
         // Only a fixed destination is selected, including for expired attempts.
         // No query parameter or unverified browser can select a profile result.
-        flow != null && flow.intent == "profile_link" && constantEquals(flow.browserProofHash, SocialAuthSettings.hash(proof))
+        flow != null && flow.provider in settings.providers &&
+            flow.intent == "profile_link" && constantEquals(flow.browserProofHash, SocialAuthSettings.hash(proof))
     }.getOrDefault(false)
     fun requireOrigin(origin: String?) {
         requireEnabled()
@@ -204,7 +204,7 @@ class SocialAuthService(
                 returnInviteHash = context?.returnInviteHash))
             context?.let { flows.delete(it) }
         }
-        return SocialStartResult(providerClient.authorizationUrl(provider, flowId, proof, state), "$flowId.$proof")
+        return SocialStartResult(providerClient.authorizationUrl(flowId, proof, state), "$flowId.$proof")
     }
     fun callback(provider: String, cookie: String?, state: String?, code: String?, error: String?): Boolean {
         requireProvider(provider)
@@ -220,7 +220,7 @@ class SocialAuthService(
             flows.saveAndFlush(stored)
         } ?: return false
         val identity = try {
-            providerClient.exchange(provider, flow.id, proof, requireNotNull(code))
+            providerClient.exchange(flow.id, proof, requireNotNull(code))
         } catch (_: Exception) {
             markFailed(flow.id)
             throw ApiException(HttpStatus.SERVICE_UNAVAILABLE, "Не удалось подтвердить вход через провайдера. Попробуйте снова", code = "SOCIAL_PROVIDER_UNAVAILABLE")

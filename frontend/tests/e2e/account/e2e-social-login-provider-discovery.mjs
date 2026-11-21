@@ -21,28 +21,19 @@ async function fixture(t) {
   return { page, requests };
 }
 
-test("ordinary builds discover configured providers from the API", async (t) => {
-  const { page } = await fixture(t);
+test("ordinary builds offer GitHub even if an older API lists retired providers", async (t) => {
+  const { page, requests } = await fixture(t);
   await page.route("**/api/auth/social/providers", (route) =>
     route.fulfill({ json: { providers: ["google", "github", "vk"] } }));
   await page.goto(`${web}/login`);
-  const readButtonPresentation = (provider) => {
-    const name = `Войти через ${provider}`;
-    return page.getByRole("button", { name, exact: true }).getByText(name, { exact: true }).evaluate(async (label) => {
-      await document.fonts.ready;
-      const { fontFamily, fontSize, fontWeight, lineHeight } = getComputedStyle(label);
-      const button = label.closest("button");
-      const bounds = button.getBoundingClientRect();
-      const icon = button.querySelector('[aria-hidden="true"]');
-      return {
-        fontFamily, fontSize, fontWeight, lineHeight, buttonWidth: bounds.width,
-        iconOffset: icon.getBoundingClientRect().left - bounds.left,
-        labelOffset: label.getBoundingClientRect().left - bounds.left,
-      };
-    });
-  };
-  assert.deepEqual(await readButtonPresentation("GitHub"), await readButtonPresentation("Google"));
-  assert.equal(await page.getByRole("button", { name: "Войти через VK", exact: true }).count(), 0);
+  const buttons = page.getByRole("button", { name: /^Войти через / });
+  await buttons.filter({ hasText: "GitHub" }).waitFor();
+  assert.deepEqual(await buttons.allTextContents(), ["Войти через GitHub"]);
+  await page.waitForLoadState("networkidle");
+  assert.equal(requests.some((path) => path.startsWith("/auth/")), false);
+  await page.getByText("Регистрация", { exact: true }).click();
+  await buttons.filter({ hasText: "GitHub" }).waitFor();
+  assert.deepEqual(await buttons.allTextContents(), ["Войти через GitHub"]);
 });
 
 test("without OAuth credentials ordinary password sign-in and sign-up remain available", async (t) => {

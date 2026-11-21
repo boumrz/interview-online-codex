@@ -84,8 +84,9 @@ class SocialAuthDisabledIntegrationTest(
         }
         mvc.get("/api/auth/social/connections") { header("Authorization", "Bearer $token") }.andExpect {
             status { isOk() }
+            jsonPath("$.connections[0].provider") { value("github") }
             jsonPath("$.connections[0].available") { value(false) }; jsonPath("$.connections[0].linked") { value(false) }
-            jsonPath("$.connections[1].available") { value(false) }; jsonPath("$.connections[1].linked") { value(false) }
+            jsonPath("$.connections[1]") { doesNotExist() }
         }
         for (provider in listOf("google", "github")) mvc.post("/api/auth/social/$provider/profile-link/start") {
             header("Origin", ORIGIN); header("Authorization", "Bearer $token")
@@ -101,17 +102,17 @@ class SocialAuthDisabledIntegrationTest(
             passwordHash = BCryptPasswordEncoder().encode("password123")))
         val token = "usr_${UUID.randomUUID()}"
         sessions.saveAndFlush(com.interviewonline.model.UserSession(user = local, token = token))
-        identities.saveAndFlush(SocialAuthIdentity(provider = "google", subject = "retained-link", user = local))
+        identities.saveAndFlush(SocialAuthIdentity(provider = "github", subject = "150987423", user = local))
         mvc.get("/api/auth/social/connections") { header("Authorization", "Bearer $token") }.andExpect {
             status { isOk() }
             jsonPath("$.connections[0].available") { value(false) }; jsonPath("$.connections[0].linked") { value(true) }
             jsonPath("$.connections[0].canUnlink") { value(true) }
         }
-        mvc.post("/api/auth/social/google/unlink") { header("Authorization", "Bearer $token") }
+        mvc.post("/api/auth/social/github/unlink") { header("Authorization", "Bearer $token") }
             .andExpect { status { isForbidden() } }
-        mvc.post("/api/auth/social/google/unlink") { header("Origin", ORIGIN); header("Authorization", "Bearer $token") }
+        mvc.post("/api/auth/social/github/unlink") { header("Origin", ORIGIN); header("Authorization", "Bearer $token") }
             .andExpect { status { isOk() }; jsonPath("$.connections[0].linked") { value(false) } }
-        assertNull(identities.findByProviderAndSubject("google", "retained-link"))
+        assertNull(identities.findByProviderAndSubject("github", "150987423"))
         mvc.get("/api/me/profile") { header("Authorization", "Bearer $token") }
             .andExpect { status { isOk() }; jsonPath("$.id") { value(local.id) } }
     }
@@ -147,7 +148,7 @@ class SocialAuthDisabledIntegrationTest(
 
     @Test fun `disabled callback returns ordinary login without exchange or flow mutation`() {
         val (flow,cookie)=ready("CREATED")
-        mvc.get("/api/auth/social/google/callback") { cookie(cookie); param("state","known-state"); param("error","access_denied") }
+        mvc.get("/api/auth/social/github/callback") { cookie(cookie); param("state","known-state"); param("error","access_denied") }
             .andExpect { status { isFound() }; header { string("Location","/login") }; header { string("Cache-Control","private, no-store") } }
         assertEquals("CREATED",flows.findById(flow.id).orElseThrow().status)
         mvc.get("/api/auth/social/vk/callback") { param("code","must-not-exchange") }.andExpect { status { isFound() }; header { string("Location","/login") } }
@@ -163,7 +164,7 @@ class SocialAuthDisabledIntegrationTest(
 
     private fun ready(status:String="READY"):Pair<SocialAuthFlow,Cookie> {
         val proof=SocialAuthSettings.randomProof()
-        val flow=flows.saveAndFlush(SocialAuthFlow(id=UUID.randomUUID().toString(),provider="google",stateHash=SocialAuthSettings.hash("known-state-${UUID.randomUUID()}"),browserProofHash=SocialAuthSettings.hash(proof),status=status,subject="verified-${UUID.randomUUID()}",displayName="Имя",expiresAt=Instant.now().plusSeconds(600)))
+        val flow=flows.saveAndFlush(SocialAuthFlow(id=UUID.randomUUID().toString(),provider="github",stateHash=SocialAuthSettings.hash("known-state-${UUID.randomUUID()}"),browserProofHash=SocialAuthSettings.hash(proof),status=status,subject="9842351",displayName="Имя",expiresAt=Instant.now().plusSeconds(600)))
         if(status=="CREATED") { flow.stateHash=SocialAuthSettings.hash("known-state"); flows.saveAndFlush(flow) }
         return flow to Cookie("interhub_social","${flow.id}.$proof")
     }

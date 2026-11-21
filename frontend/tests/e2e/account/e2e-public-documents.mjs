@@ -23,7 +23,10 @@ try {
     await page.getByRole("heading", { name: title, exact: true, level: 1 }).waitFor();
     assert.equal(new URL(page.url()).pathname, path, "Document must remain available directly without login");
     assert.equal(await page.title(), `${title} — InterHub`);
-    assert.ok((await page.locator("article").innerText()).length > 1000, "Document includes its full text");
+    const text = await page.locator("article").innerText();
+    assert.ok(text.length > 1000, "Document includes its full text");
+    assert.match(text, /через GitHub/);
+    assert.doesNotMatch(text, /через Google/);
     await page.reload();
     await page.getByRole("heading", { name: title, exact: true, level: 1 }).waitFor();
     await page.getByRole("link", { name: otherTitle, exact: true }).click();

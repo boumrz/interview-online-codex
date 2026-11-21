@@ -273,7 +273,7 @@ export function SocialLoginPage() {
             </form>
           )}
           {pending && !pending.accountExists && !retryProfile && <Space orientation="vertical" size={4}>
-            <Typography.Text type="secondary">Уже регистрировались через другой сервис? Войдите прежним способом.</Typography.Text>
+            <Typography.Text type="secondary">Можно вернуться ко входу по нику и паролю.</Typography.Text>
             <Link to="/login">Вернуться ко входу</Link>
           </Space>}
           {error && <Alert role="alert" showIcon type={initialResult === "cancelled" ? "info" : "error"} message={error} />}

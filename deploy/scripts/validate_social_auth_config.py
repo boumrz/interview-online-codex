@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check OAuth configuration from resolved Compose values without logging them."""
+"""Check GitHub OAuth configuration from resolved Compose values without logging them."""
 
 import ipaddress
 import json
@@ -47,16 +47,12 @@ def valid_origin(value):
 
 def validate(configuration):
     environment = configuration["services"]["backend"].get("environment", {})
-    ready = False
-    for provider in ("GOOGLE", "GITHUB"):
-        keys = (f"{provider}_CLIENT_ID", f"{provider}_CLIENT_SECRET")
-        configured = tuple(bool((environment.get(key) or "").strip()) for key in keys)
-        if all(configured):
-            ready = True
-        elif any(configured):
+    keys = ("GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET")
+    configured = tuple(bool((environment.get(key) or "").strip()) for key in keys)
+    if not all(configured):
+        if any(configured):
             missing = keys[configured.index(False)]
-            print(f"Warning: {missing} is missing; {provider} login is unavailable.", file=sys.stderr)
-    if not ready:
+            print(f"Warning: {missing} is missing; GITHUB login is unavailable.", file=sys.stderr)
         return
     if not valid_origin(environment.get("PUBLIC_BASE_URL")):
         raise ConfigurationError("PUBLIC_BASE_URL must be a valid HTTPS origin or an HTTP loopback origin.")

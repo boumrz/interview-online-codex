@@ -227,15 +227,31 @@ test("production preflight validates the origin and flow secret whenever credent
   }
 });
 
-test("preflight discovers providers from credentials and reports an incomplete pair without blocking GitHub", async () => {
+test("preflight accepts GitHub credentials independently of stale Google settings and legacy toggles", async () => {
   for (const origin of ["https://deployment-test.invalid", "http://[::1]:5173"]) {
     const backendEnvironment = { ...githubRelease, PUBLIC_BASE_URL: origin,
       GOOGLE_CLIENT_ID: "google-fixture-client",
       FEATURE_SOCIAL_AUTH_ENABLED: "false", GOOGLE_AUTH_ENABLED: "false", GITHUB_AUTH_ENABLED: "false" };
     const result = await runDeployment(key, { trace: true, backendEnvironment });
     assert.equal(result.exitCode, 0, result.output);
-    assert.match(result.output, /GOOGLE_CLIENT_SECRET/);
+    assert.doesNotMatch(result.output, /GOOGLE_CLIENT_SECRET|google-fixture-client/);
     assert.ok(result.commands.some(command => command.endsWith(" up -d")));
     assert.equal(result.output.includes(githubRelease.GITHUB_CLIENT_SECRET), false);
   }
+});
+
+test("preflight warns about incomplete GitHub credentials and ignores a stale Google pair", async () => {
+  const backendEnvironment = {
+    ...githubRelease,
+    PUBLIC_BASE_URL: "invalid-origin",
+    SOCIAL_AUTH_FLOW_SECRET: "invalid-flow-secret",
+    GITHUB_CLIENT_SECRET: "",
+    GOOGLE_CLIENT_ID: "google-fixture-client",
+    GOOGLE_CLIENT_SECRET: "google-fixture-secret",
+  };
+  const result = await runDeployment(key, { trace: true, backendEnvironment });
+  assert.equal(result.exitCode, 0, result.output);
+  assert.match(result.output, /GITHUB_CLIENT_SECRET is missing/);
+  assert.doesNotMatch(result.output, /GOOGLE_CLIENT_|google-fixture-(client|secret)|invalid-flow-secret/);
+  assert.ok(result.commands.some(command => command.endsWith(" up -d")));
 });

@@ -1,15 +1,12 @@
 import { API_BASE_URL } from "../config/runtime";
 
-export type SocialProvider = "google" | "github";
 export type SocialConnection = {
-  provider: SocialProvider;
   linked: boolean;
   available: boolean;
   canUnlink: boolean;
   requiresPassword: boolean;
 };
 export type SocialPending = {
-  provider: SocialProvider;
   displayName: string;
   accountExists: boolean;
 };
@@ -48,50 +45,43 @@ export async function socialRequest<T>(path: string, signal: AbortSignal, body?:
 
 export function readPending(data: unknown): SocialPending {
   if (!data || typeof data !== "object"
-    || !("provider" in data) || (data.provider !== "google" && data.provider !== "github")
+    || !("provider" in data) || data.provider !== "github"
     || !("displayName" in data) || typeof data.displayName !== "string"
     || !("accountExists" in data) || typeof data.accountExists !== "boolean") {
     throw { status: "PARSING_ERROR" };
   }
-  return data as SocialPending;
+  return { displayName: data.displayName, accountExists: data.accountExists };
 }
 
-export function readConnections(value: unknown): SocialConnection[] {
-  if (!value || typeof value !== "object" || !("connections" in value) || !Array.isArray(value.connections)
-    || value.connections.length !== 2) throw { status: "PARSING_ERROR" };
-  const connections = value.connections;
-  return (["google", "github"] as const).map((provider) => {
-    const matches = connections.filter((item: unknown) => item && typeof item === "object"
-      && "provider" in item && item.provider === provider);
-    const item: unknown = matches[0];
-    if (matches.length !== 1 || !item || typeof item !== "object"
-      || !("linked" in item) || typeof item.linked !== "boolean"
-      || !("available" in item) || typeof item.available !== "boolean"
-      || !("canUnlink" in item) || typeof item.canUnlink !== "boolean"
-      || (item.canUnlink && !item.linked)) throw { status: "PARSING_ERROR" };
-    const requiresPassword = "requiresPassword" in item ? item.requiresPassword : false;
-    if (typeof requiresPassword !== "boolean" || (requiresPassword && (!item.linked || item.canUnlink))) {
-      throw { status: "PARSING_ERROR" };
-    }
-    return { provider, linked: item.linked, available: item.available, canUnlink: item.canUnlink, requiresPassword };
-  });
+export function readGitHubConnection(value: unknown): SocialConnection {
+  if (!value || typeof value !== "object" || !("connections" in value)
+    || !Array.isArray(value.connections)) throw { status: "PARSING_ERROR" };
+  const matches = value.connections.filter((item: unknown) => item && typeof item === "object"
+    && "provider" in item && item.provider === "github");
+  const item: unknown = matches[0];
+  if (matches.length !== 1 || !item || typeof item !== "object"
+    || !("linked" in item) || typeof item.linked !== "boolean"
+    || !("available" in item) || typeof item.available !== "boolean"
+    || !("canUnlink" in item) || typeof item.canUnlink !== "boolean"
+    || (item.canUnlink && !item.linked)) throw { status: "PARSING_ERROR" };
+  const requiresPassword = "requiresPassword" in item ? item.requiresPassword : false;
+  if (typeof requiresPassword !== "boolean" || (requiresPassword && (!item.linked || item.canUnlink))) {
+    throw { status: "PARSING_ERROR" };
+  }
+  return { linked: item.linked, available: item.available, canUnlink: item.canUnlink, requiresPassword };
 }
 
-export function readProfileLinkResult(value: unknown): SocialProvider {
-  if (!value || typeof value !== "object" || !("provider" in value)
-    || (value.provider !== "google" && value.provider !== "github")
+export function assertGitHubLinked(value: unknown): void {
+  if (!value || typeof value !== "object" || !("provider" in value) || value.provider !== "github"
     || !("linked" in value) || value.linked !== true) throw { status: "PARSING_ERROR" };
-  return value.provider;
 }
 
-export function readAuthorizationUrl(data: unknown, provider: SocialProvider): string {
+export function readAuthorizationUrl(data: unknown): string {
   if (!data || typeof data !== "object" || !("authorizationUrl" in data)
     || typeof data.authorizationUrl !== "string") throw { status: "PARSING_ERROR" };
   const url = new URL(data.authorizationUrl);
-  const expected = provider === "google"
-    ? "https://accounts.google.com/o/oauth2/v2/auth"
-    : "https://github.com/login/oauth/authorize";
-  if (`${url.origin}${url.pathname}` !== expected || url.username || url.password || url.hash) {
+  if (`${url.origin}${url.pathname}` !== "https://github.com/login/oauth/authorize"
+    || url.username || url.password || url.hash) {
     throw new Error("Invalid authorization URL");
   }
   return url.href;

@@ -56,9 +56,6 @@ interface SocialAuthIdentityRepository : JpaRepository<SocialAuthIdentity, Strin
     """)
     fun findReference(@Param("provider") provider: String, @Param("subject") subject: String): SocialAuthIdentityReference?
 
-    @Query("SELECT DISTINCT identity.provider FROM SocialAuthIdentity identity WHERE identity.user.id = :userId")
-    fun findLinkedProviders(@Param("userId") userId: String): Set<String>
-
     @Modifying
     @Query("DELETE FROM SocialAuthIdentity identity WHERE identity.user.id = :userId AND identity.provider = :provider")
     fun deleteProviderLinks(@Param("userId") userId: String, @Param("provider") provider: String): Int

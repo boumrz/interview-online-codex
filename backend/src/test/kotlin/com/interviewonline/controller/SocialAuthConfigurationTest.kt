@@ -18,17 +18,31 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 
 @ExtendWith(OutputCaptureExtension::class)
 class SocialAuthConfigurationTest {
-    @Test fun `full credentials determine provider availability with no feature toggles`() {
-        assertEquals(listOf("google"), SocialAuthSettings(configuredGoogle()).providers)
+    @Test fun `retired Google settings cannot enable login or affect GitHub configuration`() {
         ApplicationContextRunner().withUserConfiguration(SocialAuthConfiguration::class.java)
             .withPropertyValues(
-                "app.social-auth.enabled=false", "app.social-auth.google.enabled=false", "app.social-auth.github.enabled=false",
+                "app.social-auth.google.client-id=legacy-client",
+                "app.social-auth.google.client-secret=legacy-secret",
+                "app.social-auth.google.token-uri=https://ignored.example/token",
+                "app.social-auth.github.client-id=github-client",
+                "app.social-auth.github.client-secret=github-secret",
                 "app.social-auth.flow-secret=$SECRET",
-                "app.social-auth.google.client-id=google-client", "app.social-auth.google.client-secret=google-secret",
+            ).run { context ->
+                assertNull(context.startupFailure)
+                assertEquals(listOf("github"), context.getBean(SocialAuthSettings::class.java).providers)
+            }
+    }
+
+    @Test fun `complete GitHub credentials determine availability with no feature toggles`() {
+        assertEquals(listOf("github"), SocialAuthSettings(configuredGitHub()).providers)
+        ApplicationContextRunner().withUserConfiguration(SocialAuthConfiguration::class.java)
+            .withPropertyValues(
+                "app.social-auth.enabled=false", "app.social-auth.github.enabled=false",
+                "app.social-auth.flow-secret=$SECRET",
                 "app.social-auth.github.client-id=github-client", "app.social-auth.github.client-secret=github-secret",
             ).run { context ->
                 assertNull(context.startupFailure)
-                assertEquals(listOf("google", "github"), context.getBean(SocialAuthSettings::class.java).providers)
+                assertEquals(listOf("github"), context.getBean(SocialAuthSettings::class.java).providers)
             }
     }
 
@@ -57,24 +71,23 @@ class SocialAuthConfigurationTest {
             }
     }
 
-    @Test fun `partial provider warns without revealing its configured value or disabling a ready provider`(output: CapturedOutput) {
-        val incompleteSecret = "PRIVATE_PARTIAL_GOOGLE_SECRET"
+    @Test fun `partial GitHub credentials warn without revealing the configured value`(output: CapturedOutput) {
+        val incompleteSecret = "PRIVATE_PARTIAL_GITHUB_SECRET"
         ApplicationContextRunner().withUserConfiguration(SocialAuthConfiguration::class.java)
             .withPropertyValues(
-                "app.social-auth.google.client-secret=$incompleteSecret",
-                "app.social-auth.github.client-id=github-client", "app.social-auth.github.client-secret=github-secret",
+                "app.social-auth.github.client-secret=$incompleteSecret",
                 "app.social-auth.flow-secret=$SECRET",
             ).run { context ->
                 assertNull(context.startupFailure)
-                assertEquals(listOf("github"), context.getBean(SocialAuthSettings::class.java).providers)
+                assertTrue(context.getBean(SocialAuthSettings::class.java).providers.isEmpty())
             }
-        assertTrue(output.all.contains("missing GOOGLE_CLIENT_ID"))
+        assertTrue(output.all.contains("missing GITHUB_CLIENT_ID"))
         assertFalse(output.all.contains(incompleteSecret))
     }
 
     @Test fun `active timeout validation hides offending value and original cause`() {
         ApplicationContextRunner().withUserConfiguration(SocialAuthConfiguration::class.java)
-            .withPropertyValues("app.social-auth.google.client-id=google-client", "app.social-auth.google.client-secret=google-secret",
+            .withPropertyValues("app.social-auth.github.client-id=github-client", "app.social-auth.github.client-secret=github-secret",
                 "app.social-auth.flow-secret=$SECRET", "app.social-auth.http-timeout-millis=PRIVATE_BINDING_VALUE")
             .run { context ->
                 val failure=requireNotNull(context.startupFailure)
@@ -94,14 +107,14 @@ class SocialAuthConfigurationTest {
     @Test fun `malformed enabled configuration fails without revealing values or cause`() {
         val invalid = listOf<(SocialAuthProperties) -> Unit>(
             { it.flowSecret = "PRIVATE_SECRET_NEVER_PRINT" },
-            { it.google.tokenUri = "https://attacker.example/PRIVATE_SECRET_NEVER_PRINT" },
+            { it.github.tokenUri = "https://attacker.example/PRIVATE_SECRET_NEVER_PRINT" },
             { it.publicBaseUrl = "http://example.com" },
             { it.publicBaseUrl = "https://user:PRIVATE_SECRET_NEVER_PRINT@example.com" },
             { it.publicBaseUrl = "https://example.com/next?token=PRIVATE_SECRET_NEVER_PRINT" },
             { it.httpTimeoutMillis = "0" },
         )
         invalid.forEach { mutate ->
-            val properties = configuredGoogle()
+            val properties = configuredGitHub()
             mutate(properties)
             val failure = assertThrows(IllegalStateException::class.java) { SocialAuthSettings(properties) }
             assertEquals("Invalid social authentication configuration", failure.message)
@@ -111,19 +124,19 @@ class SocialAuthConfigurationTest {
     }
 
     @Test fun `public origin canonicalizes hostname and default port`() {
-        val settings = SocialAuthSettings(configuredGoogle().apply { publicBaseUrl = "https://EXAMPLE.com:443/" })
+        val settings = SocialAuthSettings(configuredGitHub().apply { publicBaseUrl = "https://EXAMPLE.com:443/" })
         assertEquals("https://example.com", settings.origin)
-        assertEquals("https://example.com/api/auth/social/google/callback", settings.callback("google"))
+        assertEquals("https://example.com/api/auth/social/github/callback", settings.callback())
     }
 
     @Test fun `HTTPS proof uses Host prefix and ignores plain legacy cookie`() {
-        val settings = SocialAuthSettings(configuredGoogle().apply { publicBaseUrl = "https://example.com" })
+        val settings = SocialAuthSettings(configuredGitHub().apply { publicBaseUrl = "https://example.com" })
         val service = mock(SocialAuthService::class.java)
-        `when`(service.start("google")).thenReturn(SocialStartResult("https://accounts.google.com/o/oauth2/v2/auth", "proof"))
-        `when`(service.pending("proof")).thenReturn(SocialPendingResponse("google", "Имя", true))
+        `when`(service.start("github")).thenReturn(SocialStartResult("https://github.com/login/oauth/authorize", "proof"))
+        `when`(service.pending("proof")).thenReturn(SocialPendingResponse("github", "Имя", true))
         `when`(service.pending(null)).thenThrow(ApiException(HttpStatus.UNAUTHORIZED, "Начните вход заново"))
         val mvc = MockMvcBuilders.standaloneSetup(SocialAuthController(service, settings)).build()
-        val start = mvc.post("/api/auth/social/google/start") { header("Origin", settings.origin) }.andReturn()
+        val start = mvc.post("/api/auth/social/github/start") { header("Origin", settings.origin) }.andReturn()
         val cookie = requireNotNull(start.response.getHeader("Set-Cookie"))
         assertTrue(cookie.startsWith("__Host-interhub_social=proof;"))
         assertTrue(cookie.contains("Path=/;")); assertTrue(cookie.contains("Secure"))
@@ -133,8 +146,8 @@ class SocialAuthConfigurationTest {
         mvc.get("/api/auth/social/pending") { cookie(Cookie("__Host-interhub_social", "proof"), Cookie("__Host-interhub_social", "attacker")) }.andExpect { status { isUnauthorized() } }
     }
 
-    private fun configuredGoogle() = SocialAuthProperties().apply {
-        flowSecret = SECRET; google.clientId = "google-client"; google.clientSecret = "google-secret"
+    private fun configuredGitHub() = SocialAuthProperties().apply {
+        flowSecret = SECRET; github.clientId = "github-client"; github.clientSecret = "github-secret"
     }
     companion object { private const val SECRET = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8" }
 }

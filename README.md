@@ -35,11 +35,8 @@ New work should not create OpenSpec changes or require the OpenSpec CLI.
 
 ## Quick Start
 
-Google и GitHub автоматически появляются на странице входа, когда серверу
-переданы ID и секрет соответствующего OAuth-клиента. Для локального входа
-используйте зарегистрированный callback на `http://localhost:5173`.
-Храните ключи вне репозитория.
-[Спецификация и инструкция выкладки](specs/references/2026-11-18-learning-social-login-deploy.md)
+GitHub появляется на странице входа, когда серверу переданы ID и секрет OAuth-клиента. Для локального входа используйте зарегистрированный callback на `http://localhost:5173`. Храните ключи вне репозитория.
+[Спецификация](specs/features/auth-1-social-login.md) · [Инструкция выкладки](DEPLOY_INTERHUB_RU.md)
 
 ### Обучение в приложении
 

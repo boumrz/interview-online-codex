@@ -36,16 +36,14 @@ import java.net.InetSocketAddress
 import java.net.URI
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
-import java.security.KeyPairGenerator
 import java.security.MessageDigest
-import java.security.Signature
-import java.security.interfaces.RSAPublicKey
 import java.time.Instant
 import java.util.Base64
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 
 @ExtendWith(OutputCaptureExtension::class)
 @SpringBootTest
@@ -63,18 +61,14 @@ class SocialAuthIntegrationTest(
     companion object {
         private const val ORIGIN = "http://localhost:5173"
         private val postgres = Postgres16TestSupport.create("social_auth")
-        private val provider = FakeSocialProvider()
+        private val provider = FakeGithubProvider()
+        private val subjectSequence = AtomicLong(10_000_000_000)
         @JvmStatic @DynamicPropertySource fun properties(registry: DynamicPropertyRegistry) {
             postgres.register(registry)
             mapOf(
                 "app.social-auth.public-base-url" to ORIGIN,
                 "app.social-auth.flow-secret" to "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
                 "app.social-auth.http-timeout-millis" to "500",
-                "app.social-auth.google.client-id" to "google-test-client",
-                "app.social-auth.google.client-secret" to "google-test-secret",
-                "app.social-auth.google.authorization-uri" to "${provider.base}/google/authorize",
-                "app.social-auth.google.token-uri" to "${provider.base}/google/token",
-                "app.social-auth.google.jwk-uri" to "${provider.base}/google/keys",
                 "app.social-auth.github.client-id" to "github-test-client",
                 "app.social-auth.github.client-secret" to "github-test-secret",
                 "app.social-auth.github.authorization-uri" to "${provider.base}/github/authorize",
@@ -85,17 +79,17 @@ class SocialAuthIntegrationTest(
         @JvmStatic @AfterAll fun cleanup() { provider.close(); postgres.close() }
     }
 
-    @Test fun `provider start uses canonical callback PKCE nonce and protected cookie`() {
+    @Test fun `provider start uses canonical callback PKCE and protected cookie`() {
         postgres.verifyPostgres16()
         mvc.get("/api/auth/social/providers").andExpect {
-            status { isOk() }; jsonPath("$.providers[0]") { value("google") }; jsonPath("$.providers[1]") { value("github") }
+            status { isOk() }; jsonPath("$.providers", org.hamcrest.Matchers.contains("github"))
             header { string("Cache-Control", "private, no-store") }
         }
         val attempt = start()
-        assertEquals("$ORIGIN/api/auth/social/google/callback", attempt.params["redirect_uri"])
+        assertEquals("$ORIGIN/api/auth/social/github/callback", attempt.params["redirect_uri"])
         assertEquals("S256", attempt.params["code_challenge_method"])
-        assertEquals("openid profile", attempt.params["scope"])
-        assertNotNull(attempt.params["nonce"])
+        assertEquals("", attempt.params["scope"])
+        assertNull(attempt.params["nonce"])
         assertTrue(attempt.cookieHeader.contains("HttpOnly"))
         assertTrue(attempt.cookieHeader.contains("SameSite=Lax"))
         assertTrue(attempt.cookieHeader.contains("Path=/api/auth/social"))
@@ -105,8 +99,8 @@ class SocialAuthIntegrationTest(
         assertFalse(stored.values.any { it == attempt.cookie.value })
     }
 
-    @Test fun `Google exchange creates social profile and later login preserves identity without local password`() {
-        val subject = "google-${suffix()}"
+    @Test fun `GitHub exchange creates social profile and later login preserves identity without local password`() {
+        val subject = githubSubject()
         val ready = ready(subject = subject)
         assertPending(ready, false)
         val nickname = "social_${suffix()}"
@@ -127,7 +121,7 @@ class SocialAuthIntegrationTest(
         val repeated = complete(next)
         assertEquals(200, repeated.response.status)
         assertEquals(id, mapper.readTree(repeated.response.contentAsByteArray).path("user").path("id").asText())
-        assertEquals(1L, jdbc.queryForObject("SELECT count(*) FROM social_auth_identities WHERE provider='google' AND subject=?", Long::class.java, subject))
+        assertEquals(1L, jdbc.queryForObject("SELECT count(*) FROM social_auth_identities WHERE provider='github' AND subject=?", Long::class.java, subject))
     }
 
     @Test fun `GitHub login uses stable id empty scopes and only authenticated user endpoint`() {
@@ -146,19 +140,19 @@ class SocialAuthIntegrationTest(
         assertEquals(id, mapper.readTree(complete(again).response.contentAsByteArray).path("user").path("id").asText())
     }
 
-    @Test fun `VK stays unavailable with configured Google and GitHub`() {
+    @Test fun `VK stays unavailable with configured GitHub`() {
         mvc.post("/api/auth/social/vk/start") { header("Origin", ORIGIN) }.andExpect { status { isNotFound() } }
     }
 
     @Test fun `wrong Origin missing proof wrong state and wrong provider cannot authorize`() {
         val beforeUsers = users.count(); val beforeSessions = sessions.count()
-        mvc.post("/api/auth/social/google/start") { header("Origin", "https://attacker.example"); contentType=MediaType.APPLICATION_JSON; content="{}" }
+        mvc.post("/api/auth/social/github/start") { header("Origin", "https://attacker.example"); contentType=MediaType.APPLICATION_JSON; content="{}" }
             .andExpect { status { isForbidden() } }
-        mvc.post("/api/auth/social/google/start") { contentType=MediaType.APPLICATION_JSON; content="{}" }
+        mvc.post("/api/auth/social/github/start") { contentType=MediaType.APPLICATION_JSON; content="{}" }
             .andExpect { status { isForbidden() } }
-        val attempt = start(); val code = provider.code(attempt.params, "google", "forged")
+        val attempt = start(); val code = provider.code(attempt.params, githubSubject())
         val calls = provider.exchanges.get()
-        for ((cookie, state, kind) in listOf(Triple(null, attempt.params.getValue("state"), "google"), Triple(Cookie("interhub_social", "forged"), attempt.params.getValue("state"), "google"), Triple(attempt.cookie, "wrong-state", "google"), Triple(attempt.cookie, attempt.params.getValue("state"), "vk"))) {
+        for ((cookie, state, kind) in listOf(Triple(null, attempt.params.getValue("state"), "github"), Triple(Cookie("interhub_social", "forged"), attempt.params.getValue("state"), "github"), Triple(attempt.cookie, "wrong-state", "github"), Triple(attempt.cookie, attempt.params.getValue("state"), "vk"))) {
             val result = callback(attempt.copy(cookie = cookie ?: Cookie("none", "")), code, state, kind)
             assertEquals(302, result.response.status)
             assertEquals("$ORIGIN/login/social?result=failed", result.response.getHeader("Location"))
@@ -170,7 +164,7 @@ class SocialAuthIntegrationTest(
     }
 
     @Test fun `callback replay and simultaneous completion are one use`() {
-        val ready = ready(subject = "race-${suffix()}")
+        val ready = ready(subject = githubSubject())
         val count = provider.exchanges.get()
         assertEquals("$ORIGIN/login/social?result=failed", callback(ready, ready.code).response.getHeader("Location"))
         assertEquals(count, provider.exchanges.get())
@@ -182,17 +176,8 @@ class SocialAuthIntegrationTest(
         } finally { executor.shutdownNow() }
     }
 
-    @Test fun `invalid Google signature issuer audience expiry nonce subject and algorithm deny identity`() {
-        for ((key,value) in listOf("iss" to "https://evil.example", "aud" to "wrong-client", "exp" to 1, "nonce" to "wrong-nonce", "sub" to "", "alg" to "HS256", "bad-signature" to true, "iat" to (Instant.now().epochSecond + 3600))) {
-            val attempt=start(); val code=provider.code(attempt.params,"google","negative-${suffix()}",mapOf(key to value))
-            val result=callback(attempt,code)
-            assertEquals("$ORIGIN/login/social?result=failed",result.response.getHeader("Location"))
-            assertEquals(401,pending(attempt).response.status)
-        }
-    }
-
     @Test fun `distinct flows completing one provider subject create one account and preserve retry`(output: CapturedOutput) {
-        val subject="cross-flow-${suffix()}"
+        val subject=githubSubject()
         val attempts=List(2) { ready(subject=subject) }
         val beforeUsers=users.count()
         val executor=Executors.newFixedThreadPool(2)
@@ -216,12 +201,12 @@ class SocialAuthIntegrationTest(
             assertEquals(1,ids.size)
             assertEquals(beforeUsers+1,users.count())
             assertFalse(output.all.contains("Key (provider, subject)"), "provider subjects must not appear in SQL failure logs")
-            assertEquals(1L,jdbc.queryForObject("SELECT count(*) FROM social_auth_identities WHERE provider='google' AND subject=?",Long::class.java,subject))
+            assertEquals(1L,jdbc.queryForObject("SELECT count(*) FROM social_auth_identities WHERE provider='github' AND subject=?",Long::class.java,subject))
         } finally { executor.shutdownNow() }
     }
 
     @Test fun `concurrent first registrations preserve one nickname and keep profile fields out of logs`(output: CapturedOutput) {
-        val attempts = List(2) { ready(subject = "nickname-race-${suffix()}") }
+        val attempts = List(2) { ready(subject = githubSubject()) }
         val nickname = "private_nick_${suffix()}"
         val beforeUsers = users.count()
         val beforeSessions = sessions.count()
@@ -268,7 +253,7 @@ class SocialAuthIntegrationTest(
     }
 
     @Test fun `distinct provider flows cannot concurrently link identity to different local users`(output: CapturedOutput) {
-        val subject="cross-link-${suffix()}"
+        val subject=githubSubject()
         val attempts=List(2) { ready(subject=subject) }
         val accounts=List(2) { users.saveAndFlush(User(nickname="local_${suffix()}",displayName="Прежний",passwordHash=BCryptPasswordEncoder().encode("local-password123"))) }
         val beforeSessions=sessions.count()
@@ -281,7 +266,7 @@ class SocialAuthIntegrationTest(
             assertEquals(listOf(200,409),results.map { it.response.status }.sorted())
             val winner=results.indexOfFirst { it.response.status==200 }
             val loser=1-winner
-            assertEquals(accounts[winner].id,jdbc.queryForObject("SELECT user_id FROM social_auth_identities WHERE provider='google' AND subject=?",String::class.java,subject))
+            assertEquals(accounts[winner].id,jdbc.queryForObject("SELECT user_id FROM social_auth_identities WHERE provider='github' AND subject=?",String::class.java,subject))
             assertEquals(beforeSessions+1,sessions.count())
             assertFalse(output.all.contains("Key (provider, subject)"), "provider subjects must not appear in SQL failure logs")
             assertPending(attempts[loser],true)
@@ -294,23 +279,23 @@ class SocialAuthIntegrationTest(
         val beforeSessions = sessions.count()
         for (overrides in listOf(mapOf("scope" to "repo"), mapOf("userinfo-sub" to ""), mapOf("userinfo-sub" to "-1"), mapOf("token_type" to "mac"))) {
             val attempt = start("github")
-            val code = provider.code(attempt.params, "github", "12345", overrides)
+            val code = provider.code(attempt.params, "12345", overrides)
             assertEquals("$ORIGIN/login/social?result=failed", callback(attempt, code).response.getHeader("Location"))
             assertEquals(401, pending(attempt).response.status)
         }
         assertEquals(beforeUsers, users.count())
         assertEquals(beforeSessions, sessions.count())
         val attempt = start("github")
-        val code = provider.code(attempt.params, "github", "99999", mapOf("name" to ""))
+        val code = provider.code(attempt.params, "99999", mapOf("name" to ""))
         assertEquals("$ORIGIN/login/social", callback(attempt, code).response.getHeader("Location"))
         assertEquals("", mapper.readTree(pending(attempt).response.contentAsByteArray).path("displayName").asText())
     }
 
     @Test fun `expired callback and completion fail and next start cleans expired flows`() {
-        val attempt=start(); val code=provider.code(attempt.params,"google","expire-${suffix()}")
+        val attempt=start(); val code=provider.code(attempt.params, githubSubject())
         expire(attempt)
         assertEquals("$ORIGIN/login/social?result=failed",callback(attempt,code).response.getHeader("Location"))
-        val ready=ready(subject="expire-${suffix()}"); expire(ready)
+        val ready=ready(subject=githubSubject()); expire(ready)
         assertEquals(401,complete(ready,mapOf("nickname" to "expired_${suffix()}","displayName" to "Истёк")).response.status)
         start()
         assertEquals(0L,jdbc.queryForObject("SELECT count(*) FROM social_auth_flows WHERE expires_at <= (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')",Long::class.java))
@@ -319,7 +304,7 @@ class SocialAuthIntegrationTest(
     @Test fun `occupied Cyrillic reserved nickname and invalid name are retryable without account writes`() {
         val occupied="occupied_${suffix()}"
         users.saveAndFlush(User(nickname=occupied,displayName="Другой",passwordHash=BCryptPasswordEncoder().encode("password123")))
-        val ready=ready(subject="retry-${suffix()}"); val beforeUsers=users.count(); val beforeSessions=sessions.count()
+        val ready=ready(subject=githubSubject()); val beforeUsers=users.count(); val beforeSessions=sessions.count()
         for ((nickname,name,status) in listOf(Triple(occupied,"Имя",409), Triple("кириллица","Имя",400),Triple("Boumrz","Имя",400),Triple("ab","Имя",400),Triple("name_${suffix()}","x",400))) {
             assertEquals(status,complete(ready,mapOf("nickname" to nickname,"displayName" to name)).response.status)
             assertEquals(beforeUsers,users.count()); assertEquals(beforeSessions,sessions.count())
@@ -331,7 +316,7 @@ class SocialAuthIntegrationTest(
     @Test fun `explicit linking requires exact local credentials preserves old account and cannot reassign identity`() {
         val nickname="старый${suffix()}"; val password="Старый пароль123"
         val local=users.saveAndFlush(User(nickname=nickname,displayName="Прежнее имя",passwordHash=BCryptPasswordEncoder().encode(password),isHr=true))
-        val ready=ready(subject="linked-${suffix()}"); val before=sessions.count()
+        val ready=ready(subject=githubSubject()); val before=sessions.count()
         assertEquals(401,link(ready,nickname,"wrong").response.status)
         assertEquals(before,sessions.count())
         assertEquals(200,pending(ready).response.status)
@@ -340,11 +325,7 @@ class SocialAuthIntegrationTest(
         val result=mapper.readTree(linked.response.contentAsByteArray).path("user")
         assertEquals(local.id,result.path("id").asText()); assertEquals("Прежнее имя",result.path("displayName").asText()); assertTrue(result.path("isHr").booleanValue())
         mvc.post("/api/auth/login") { contentType=MediaType.APPLICATION_JSON; content=mapper.writeValueAsString(mapOf("nickname" to nickname,"password" to password)) }.andExpect { status { isOk() } }
-        val github = ready("github", "7654321")
-        val githubLinked = link(github, nickname, password)
-        assertEquals(200, githubLinked.response.status)
-        assertEquals(local.id, mapper.readTree(githubLinked.response.contentAsByteArray).path("user").path("id").asText())
-        assertEquals(2L, jdbc.queryForObject("SELECT count(*) FROM social_auth_identities WHERE user_id=?", Long::class.java, local.id))
+        assertEquals(1L, jdbc.queryForObject("SELECT count(*) FROM social_auth_identities WHERE user_id=?", Long::class.java, local.id))
         val another=users.saveAndFlush(User(nickname="other_${suffix()}",displayName="Другой",passwordHash=BCryptPasswordEncoder().encode("secret123")))
         val again=ready(subject=provider.subject(ready.code))
         assertEquals(409,link(again,another.nickname,"secret123").response.status)
@@ -353,20 +334,20 @@ class SocialAuthIntegrationTest(
 
     @Test fun `provider cancellation malformed duplicate callback and finite transport failure leak no secrets`() {
         val attempt=start()
-        val cancelled=mvc.get("/api/auth/social/google/callback") { cookie(attempt.cookie); param("state",attempt.params.getValue("state")); param("error","access_denied"); param("error_description","SECRET_DO_NOT_ECHO") }.andReturn()
+        val cancelled=mvc.get("/api/auth/social/github/callback") { cookie(attempt.cookie); param("state",attempt.params.getValue("state")); param("error","access_denied"); param("error_description","SECRET_DO_NOT_ECHO") }.andReturn()
         assertEquals("$ORIGIN/login/social?result=cancelled",cancelled.response.getHeader("Location")); assertPrivate(cancelled)
         assertFalse(cancelled.response.contentAsString.contains("SECRET_DO_NOT_ECHO"))
-        val duplicate=start(); val duplicateCode=provider.code(duplicate.params,"google","duplicate")
-        val dup=mvc.get("/api/auth/social/google/callback") { cookie(duplicate.cookie); param("state",duplicate.params.getValue("state"),"attacker"); param("code",duplicateCode) }.andReturn()
+        val duplicate=start(); val duplicateCode=provider.code(duplicate.params, githubSubject())
+        val dup=mvc.get("/api/auth/social/github/callback") { cookie(duplicate.cookie); param("state",duplicate.params.getValue("state"),"attacker"); param("code",duplicateCode) }.andReturn()
         assertEquals("$ORIGIN/login/social?result=failed",dup.response.getHeader("Location"))
-        val slow=start(); val code=provider.code(slow.params,"google","slow",mapOf("slow" to true)); val began=System.nanoTime()
+        val slow=start(); val code=provider.code(slow.params, githubSubject(),mapOf("slow" to true)); val began=System.nanoTime()
         assertEquals("$ORIGIN/login/social?result=failed",callback(slow,code).response.getHeader("Location"))
         assertTrue(System.nanoTime()-began < 2_000_000_000L,"provider deadline is finite")
         assertEquals(401,pending(slow).response.status)
     }
 
     @Test fun `provider response body stall is bounded after headers arrive`() {
-        val attempt=start(); val code=provider.code(attempt.params,"google","slow-body",mapOf("slow-body" to true))
+        val attempt=start(); val code=provider.code(attempt.params, githubSubject(),mapOf("slow-body" to true))
         val began=System.nanoTime()
         assertEquals("$ORIGIN/login/social?result=failed",callback(attempt,code).response.getHeader("Location"))
         assertTrue(System.nanoTime()-began < 1_200_000_000L,"deadline includes response body")
@@ -394,7 +375,7 @@ class SocialAuthIntegrationTest(
         val contextId = mapper.readTree(context.response.contentAsByteArray).path("contextId").asText()
         val attempt = start("github", contextCookie, true, contextId)
         assertFalse(attempt.params.values.any { it.contains(room.inviteCode) || it.contains(room.id!!) })
-        val code = provider.code(attempt.params, "github", "56789")
+        val code = provider.code(attempt.params, "56789")
         callback(attempt, code)
         val completed = complete(attempt, mapOf("nickname" to "return_${suffix()}", "displayName" to "Кандидат"))
         assertEquals(200, completed.response.status)
@@ -424,7 +405,7 @@ class SocialAuthIntegrationTest(
 
     @Test fun `missing or expired room context falls back without disclosing a room`() {
         val attempt = start("github", roomReturn = true)
-        val code = provider.code(attempt.params, "github", "678901")
+        val code = provider.code(attempt.params, "678901")
         callback(attempt, code)
         val response = complete(attempt, mapOf("nickname" to "fallback_${suffix()}", "displayName" to "Имя"))
         val token = mapper.readTree(response.response.contentAsByteArray).path("token").asText()
@@ -454,9 +435,9 @@ class SocialAuthIntegrationTest(
             .andExpect { status { isOk() } }.andReturn()
         val cookiePair = context.response.getHeader("Set-Cookie")!!.substringBefore(';').split('=', limit = 2)
         val contextId = mapper.readTree(context.response.contentAsByteArray).path("contextId").asText()
-        val attempt = start("google", Cookie(cookiePair[0], cookiePair[1]), true, contextId)
+        val attempt = start("github", Cookie(cookiePair[0], cookiePair[1]), true, contextId)
         assertFalse(attempt.params.values.any { it.contains(room.inviteCode) || it.contains(room.id!!) })
-        callback(attempt, provider.code(attempt.params, "google", "prejoin-${suffix()}"))
+        callback(attempt, provider.code(attempt.params, githubSubject()))
         val completed = complete(attempt, mapOf("nickname" to "prejoin_${suffix()}", "displayName" to "Кандидат"))
         assertEquals(200, completed.response.status)
         val token = mapper.readTree(completed.response.contentAsByteArray).path("token").asText()
@@ -478,8 +459,8 @@ class SocialAuthIntegrationTest(
         val second = prepareRoom(secondRoom)
         val firstId = mapper.readTree(first.response.contentAsByteArray).path("contextId").asText()
         val cookiePair = second.response.getHeader("Set-Cookie")!!.substringBefore(';').split('=', limit = 2)
-        val attempt = start("google", Cookie(cookiePair[0], cookiePair[1]), true, firstId)
-        callback(attempt, provider.code(attempt.params, "google", "second-tab-${suffix()}"))
+        val attempt = start("github", Cookie(cookiePair[0], cookiePair[1]), true, firstId)
+        callback(attempt, provider.code(attempt.params, githubSubject()))
         val completed = complete(attempt, mapOf("nickname" to "second_tab_${suffix()}", "displayName" to "Кандидат"))
         assertEquals(200, completed.response.status)
         val token = mapper.readTree(completed.response.contentAsByteArray).path("token").asText()
@@ -490,8 +471,10 @@ class SocialAuthIntegrationTest(
         }
     }
 
-    @Test fun `profile connects both providers to existing account without password or a new session`() {
+    @Test fun `active passwordless profile can connect GitHub despite a historical Google identity`() {
         val account = users.saveAndFlush(User(nickname = "старый_${suffix()}", displayName = "Прежнее имя", isHr = true))
+        val legacySubject = "retired-${suffix()}"
+        addIdentity(requireNotNull(account.id), "google", legacySubject)
         val token = auth.createSession(account).token
         val beforeUsers = users.count()
         val beforeSessions = sessions.count()
@@ -499,22 +482,22 @@ class SocialAuthIntegrationTest(
         assertEquals(200, initial.response.status)
         assertPrivate(initial)
         assertEquals(setOf("connections"), mapper.readTree(initial.response.contentAsByteArray).fieldNames().asSequence().toSet())
-        assertEquals(listOf("google", "github"), mapper.readTree(initial.response.contentAsByteArray).path("connections").map { it.path("provider").asText() })
+        assertEquals(listOf("github"), mapper.readTree(initial.response.contentAsByteArray).path("connections").map { it.path("provider").asText() })
         assertTrue(mapper.readTree(initial.response.contentAsByteArray).path("connections").all { !it.path("linked").asBoolean() && it.path("available").asBoolean() })
 
-        for ((kind, subject) in listOf("google" to "profile-${suffix()}", "github" to "98273645")) {
-            val attempt = profileReady(token, kind, subject)
-            assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM social_auth_identities WHERE provider=? AND subject=?", Int::class.java, kind, subject), "callback must not bind an identity")
-            assertEquals(beforeSessions, sessions.count(), "callback must not issue a session")
-            val response = profileComplete(attempt, token)
-            assertEquals(200, response.response.status)
-            assertPrivate(response)
-            assertEquals(mapOf("provider" to kind, "linked" to true), mapper.readValue(response.response.contentAsByteArray, Map::class.java))
-            assertEquals(200, profileComplete(attempt, token).response.status, "retry is idempotent for the same browser and session")
-            assertEquals(account.id, jdbc.queryForObject("SELECT user_id FROM social_auth_identities WHERE provider=? AND subject=?", String::class.java, kind, subject))
-            assertEquals(null, jdbc.queryForObject("SELECT subject FROM social_auth_flows WHERE id=?", String::class.java, attempt.id))
-            assertEquals(null, jdbc.queryForObject("SELECT display_name FROM social_auth_flows WHERE id=?", String::class.java, attempt.id))
-        }
+        val subject = githubSubject()
+        val attempt = profileReady(token, subject = subject)
+        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM social_auth_identities WHERE provider=? AND subject=?", Int::class.java, "github", subject), "callback must not bind an identity")
+        assertEquals(beforeSessions, sessions.count(), "callback must not issue a session")
+        val response = profileComplete(attempt, token)
+        assertEquals(200, response.response.status)
+        assertPrivate(response)
+        assertEquals(mapOf("provider" to "github", "linked" to true), mapper.readValue(response.response.contentAsByteArray, Map::class.java))
+        assertEquals(200, profileComplete(attempt, token).response.status, "retry is idempotent for the same browser and session")
+        assertEquals(account.id, jdbc.queryForObject("SELECT user_id FROM social_auth_identities WHERE provider=? AND subject=?", String::class.java, "github", subject))
+        assertEquals(account.id, jdbc.queryForObject("SELECT user_id FROM social_auth_identities WHERE provider=? AND subject=?", String::class.java, "google", legacySubject))
+        assertEquals(null, jdbc.queryForObject("SELECT subject FROM social_auth_flows WHERE id=?", String::class.java, attempt.id))
+        assertEquals(null, jdbc.queryForObject("SELECT display_name FROM social_auth_flows WHERE id=?", String::class.java, attempt.id))
         assertTrue(mapper.readTree(connections(token).response.contentAsByteArray).path("connections").all { it.path("linked").asBoolean() })
         assertEquals(beforeUsers, users.count())
         assertEquals(beforeSessions, sessions.count())
@@ -529,8 +512,8 @@ class SocialAuthIntegrationTest(
         val replacement = auth.createSession(account).token
         val other = auth.createSession(users.saveAndFlush(User(nickname = "other_${suffix()}", displayName = "Другой"))).token
         assertEquals(401, connections(null).response.status)
-        assertEquals(401, mvc.post("/api/auth/social/google/profile-link/start") { header("Origin", ORIGIN) }.andReturn().response.status)
-        assertEquals(403, mvc.post("/api/auth/social/google/profile-link/start") { header("Authorization", "Bearer $token"); header("Origin", "https://evil.example") }.andReturn().response.status)
+        assertEquals(401, mvc.post("/api/auth/social/github/profile-link/start") { header("Origin", ORIGIN) }.andReturn().response.status)
+        assertEquals(403, mvc.post("/api/auth/social/github/profile-link/start") { header("Authorization", "Bearer $token"); header("Origin", "https://evil.example") }.andReturn().response.status)
         val attempt = profileReady(token)
         val beforeSessions = sessions.count()
         for (invalidToken in listOf(null, "missing", replacement, other)) {
@@ -552,20 +535,20 @@ class SocialAuthIntegrationTest(
             passwordHash = BCryptPasswordEncoder().encode("password123")))
         val other = users.saveAndFlush(User(nickname = "other_${suffix()}", displayName = "Другой"))
         val token = auth.createSession(account).token
-        val removedSubjects = List(2) { "unlink-${suffix()}" }
-        removedSubjects.forEach { addIdentity(requireNotNull(account.id), "google", it) }
-        addIdentity(requireNotNull(other.id), "google", "other-${suffix()}")
+        val removedSubjects = List(2) { githubSubject() }
+        removedSubjects.forEach { addIdentity(requireNotNull(account.id), "github", it) }
+        addIdentity(requireNotNull(other.id), "github", githubSubject())
         val beforeUsers = users.count()
         val beforeSessions = sessions.count()
 
-        assertTrue(connectionRows(connections(token)).getValue("google").path("canUnlink").asBoolean())
-        val response = unlink("google", token)
+        assertTrue(connectionRows(connections(token)).getValue("github").path("canUnlink").asBoolean())
+        val response = unlink("github", token)
         assertEquals(200, response.response.status)
         assertPrivate(response)
         assertEquals(mapper.readTree(connections(token).response.contentAsByteArray), mapper.readTree(response.response.contentAsByteArray))
-        assertFalse(connectionRows(response).getValue("google").path("linked").asBoolean())
-        assertFalse(connectionRows(response).getValue("google").path("canUnlink").asBoolean())
-        val retry = unlink("google", token)
+        assertFalse(connectionRows(response).getValue("github").path("linked").asBoolean())
+        assertFalse(connectionRows(response).getValue("github").path("canUnlink").asBoolean())
+        val retry = unlink("github", token)
         assertEquals(200, retry.response.status)
         assertEquals(connectionRows(response), connectionRows(retry))
         assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM social_auth_identities WHERE user_id=?", Int::class.java, account.id))
@@ -583,45 +566,45 @@ class SocialAuthIntegrationTest(
         val account = users.saveAndFlush(User(nickname = "unlink_guard_${suffix()}", displayName = "Имя"))
         val token = auth.createSession(account).token
         val revoked = auth.createSession(account).token
-        addIdentity(requireNotNull(account.id), "google", "unlink-guard-${suffix()}")
+        addIdentity(requireNotNull(account.id), "github", githubSubject())
         jdbc.update("DELETE FROM user_sessions WHERE token=?", revoked)
 
-        assertEquals(401, unlink("google", null).response.status)
-        assertEquals(401, unlink("google", revoked).response.status)
-        assertEquals(403, unlink("google", token, origin = null).response.status)
-        assertEquals(403, unlink("google", token, origin = "https://other.example").response.status)
+        assertEquals(401, unlink("github", null).response.status)
+        assertEquals(401, unlink("github", revoked).response.status)
+        assertEquals(403, unlink("github", token, origin = null).response.status)
+        assertEquals(403, unlink("github", token, origin = "https://other.example").response.status)
         assertEquals(404, unlink("vk", token).response.status)
-        assertTrue(connectionRows(connections(token)).getValue("google").path("linked").asBoolean())
+        assertTrue(connectionRows(connections(token)).getValue("github").path("linked").asBoolean())
     }
 
     @Test fun `passwordless profile can set its first local password and remove its only provider`() {
         val account = users.saveAndFlush(User(nickname = "unlink_first_${suffix()}", displayName = "Имя", isHr = true))
         val token = auth.createSession(account).token
-        addIdentity(requireNotNull(account.id), "google", "unlink-first-${suffix()}")
-        val initial = connectionRows(connections(token)).getValue("google")
+        addIdentity(requireNotNull(account.id), "github", githubSubject())
+        val initial = connectionRows(connections(token)).getValue("github")
         assertTrue(initial.path("requiresPassword").asBoolean())
         assertFalse(initial.path("canUnlink").asBoolean())
-        val missingPassword = unlink("google", token)
+        val missingPassword = unlink("github", token)
         assertEquals(409, missingPassword.response.status)
         assertEquals("SOCIAL_PASSWORD_REQUIRED", mapper.readTree(missingPassword.response.contentAsByteArray).path("code").asText())
         for (invalidPassword in listOf("12345", "      ", "пароль123", "A".repeat(73))) {
-            val response = unlink("google", token, newPassword = invalidPassword)
+            val response = unlink("github", token, newPassword = invalidPassword)
             assertEquals(400, response.response.status)
             assertFalse(response.response.contentAsString.contains(invalidPassword))
-            assertTrue(connectionRows(connections(token)).getValue("google").path("linked").asBoolean())
+            assertTrue(connectionRows(connections(token)).getValue("github").path("linked").asBoolean())
             assertNull(users.findById(requireNotNull(account.id)).orElseThrow().passwordHash)
         }
         val beforeSessions = sessions.count()
         val password = "A1b2C3"
-        val detached = unlink("google", token, newPassword = password)
+        val detached = unlink("github", token, newPassword = password)
         assertPrivate(detached)
         assertEquals(200, detached.response.status)
         assertFalse(detached.response.contentAsString.contains(password))
-        val google = connectionRows(detached).getValue("google")
-        assertFalse(google.path("linked").asBoolean())
-        assertFalse(google.path("requiresPassword").asBoolean())
-        assertEquals(connectionRows(detached), connectionRows(unlink("google", token, newPassword = password)))
-        val conflictingRetry = unlink("google", token, newPassword = "other-password")
+        val github = connectionRows(detached).getValue("github")
+        assertFalse(github.path("linked").asBoolean())
+        assertFalse(github.path("requiresPassword").asBoolean())
+        assertEquals(connectionRows(detached), connectionRows(unlink("github", token, newPassword = password)))
+        val conflictingRetry = unlink("github", token, newPassword = "other-password")
         assertEquals(409, conflictingRetry.response.status)
         assertEquals("SOCIAL_CONNECTION_CHANGED", mapper.readTree(conflictingRetry.response.contentAsByteArray).path("code").asText())
         assertEquals(beforeSessions, sessions.count())
@@ -641,9 +624,7 @@ class SocialAuthIntegrationTest(
     @Test fun `passwordless unlink requests need a password and cannot overwrite a concurrent first password`() {
         val account = users.saveAndFlush(User(nickname = "unlink_race_${suffix()}", displayName = "Имя"))
         val tokens = List(2) { auth.createSession(account).token }
-        val providers = listOf("google", "github")
-        addIdentity(requireNotNull(account.id), "google", "unlink-race-${suffix()}")
-        addIdentity(requireNotNull(account.id), "github", "97361626")
+        addIdentity(requireNotNull(account.id), "github", githubSubject())
         val initial = connectionRows(connections(tokens.first()))
         assertTrue(initial.values.all { it.path("requiresPassword").asBoolean() })
         assertTrue(initial.values.none { it.path("canUnlink").asBoolean() })
@@ -652,8 +633,8 @@ class SocialAuthIntegrationTest(
             val executor = Executors.newFixedThreadPool(2)
             return try {
                 val gate = java.util.concurrent.CountDownLatch(1)
-                val futures = providers.indices.map { index ->
-                    executor.submit<MvcResult> { gate.await(); unlink(providers[index], tokens[index], newPassword = passwords[index]) }
+                val futures = tokens.indices.map { index ->
+                    executor.submit<MvcResult> { gate.await(); unlink("github", tokens[index], newPassword = passwords[index]) }
                 }
                 gate.countDown()
                 futures.map { it.get(10, java.util.concurrent.TimeUnit.SECONDS) }
@@ -666,13 +647,9 @@ class SocialAuthIntegrationTest(
         assertEquals(listOf(200, 409), responses.map { it.response.status }.sorted())
         val winner = responses.indexOfFirst { it.response.status == 200 }
         val failure = responses[1 - winner]
-        val remaining = providers[1 - winner]
-        assertEquals("SOCIAL_PASSWORD_ALREADY_SET", mapper.readTree(failure.response.contentAsByteArray).path("code").asText())
-        val last = connectionRows(connections(tokens.first())).getValue(remaining)
-        assertTrue(last.path("linked").asBoolean())
-        assertTrue(last.path("canUnlink").asBoolean())
+        assertEquals("SOCIAL_CONNECTION_CHANGED", mapper.readTree(failure.response.contentAsByteArray).path("code").asText())
+        assertFalse(connectionRows(connections(tokens.first())).getValue("github").path("linked").asBoolean())
         assertEquals(account.id, auth.verifyLocalCredentials(account.nickname, passwords[winner]).id)
-        assertEquals(200, unlink(remaining, tokens.first()).response.status)
         assertEquals(beforeSessions, sessions.count())
     }
 
@@ -681,19 +658,21 @@ class SocialAuthIntegrationTest(
             passwordHash = BCryptPasswordEncoder().encode("password123")))
         val token = auth.createSession(account).token
         val pendingLink = profileReady(token)
-        val linkedSubject = "unlink-old-${suffix()}"
+        val linkedSubject = githubSubject()
         val completedLink = profileReady(token, subject = linkedSubject)
-        val otherProvider = profileReady(token, kind = "github", subject = "96372856")
+        val otherAccount = users.saveAndFlush(User(nickname = "other_${suffix()}", displayName = "Другое имя"))
+        val otherToken = auth.createSession(otherAccount).token
+        val otherProfileLink = profileReady(otherToken)
         val normalLogin = ready(subject = linkedSubject)
         assertEquals(200, profileComplete(completedLink, token).response.status)
         assertPending(normalLogin, exists = true)
 
-        assertEquals(200, unlink("google", token).response.status)
+        assertEquals(200, unlink("github", token).response.status)
         assertEquals(401, profileComplete(pendingLink, token).response.status)
         assertEquals(401, profileComplete(completedLink, token).response.status)
         assertPending(normalLogin, exists = false)
-        assertEquals(200, profileComplete(otherProvider, token).response.status)
-        assertFalse(connectionRows(connections(token)).getValue("google").path("linked").asBoolean())
+        assertEquals(200, profileComplete(otherProfileLink, otherToken).response.status)
+        assertFalse(connectionRows(connections(token)).getValue("github").path("linked").asBoolean())
     }
 
     @Test fun `role change waits for passwordless unlink and preserves the newly set password`() {
@@ -701,14 +680,14 @@ class SocialAuthIntegrationTest(
         val admin = users.saveAndFlush(User(nickname = "role_admin_${suffix()}", displayName = "Имя", role = AuthService.ROLE_ADMIN))
         val token = auth.createSession(account).token
         val adminToken = auth.createSession(admin).token
-        addIdentity(requireNotNull(account.id), "google", "role-unlink-${suffix()}")
+        addIdentity(requireNotNull(account.id), "github", githubSubject())
         val password = "new-password-123"
         val executor = Executors.newFixedThreadPool(2)
         try {
             postgres.connection().use { blocker ->
                 blocker.autoCommit = false
                 blocker.createStatement().use { it.execute("LOCK TABLE social_auth_identities IN SHARE MODE") }
-                val detach = executor.submit<MvcResult> { unlink("google", token, newPassword = password) }
+                val detach = executor.submit<MvcResult> { unlink("github", token, newPassword = password) }
                 val roleChange = try {
                     val deadline = System.nanoTime() + 5_000_000_000L
                     var unlinkWaiting = 0
@@ -748,15 +727,15 @@ class SocialAuthIntegrationTest(
             }
         } finally { executor.shutdownNow() }
         assertEquals(AuthService.ROLE_ADMIN, auth.verifyLocalCredentials(account.nickname, password).role)
-        assertFalse(connectionRows(connections(token)).getValue("google").path("linked").asBoolean())
+        assertFalse(connectionRows(connections(token)).getValue("github").path("linked").asBoolean())
     }
 
     @Test fun `provider login waits for unlink and rejects the detached identity`() {
         val account = users.saveAndFlush(User(nickname = "detach_race_${suffix()}", displayName = "Имя",
             passwordHash = BCryptPasswordEncoder().encode("password123")))
         val token = auth.createSession(account).token
-        val subject = "detach-race-${suffix()}"
-        addIdentity(requireNotNull(account.id), "google", subject)
+        val subject = githubSubject()
+        addIdentity(requireNotNull(account.id), "github", subject)
         val attempt = ready(subject = subject)
         assertPending(attempt, exists = true)
         val beforeSessions = sessions.count()
@@ -765,7 +744,7 @@ class SocialAuthIntegrationTest(
             postgres.connection().use { blocker ->
                 blocker.autoCommit = false
                 blocker.createStatement().use { it.execute("LOCK TABLE social_auth_identities IN SHARE MODE") }
-                val detach = executor.submit<MvcResult> { unlink("google", token) }
+                val detach = executor.submit<MvcResult> { unlink("github", token) }
                 val login = try {
                     // Stop unlink just before deletion. Its user row lock is already held.
                     val deadline = System.nanoTime() + 5_000_000_000L
@@ -804,13 +783,14 @@ class SocialAuthIntegrationTest(
     @Test fun `profile intent cannot be consumed by login endpoints and login cannot bind in profile`() {
         val account = users.saveAndFlush(User(nickname = "intent_${suffix()}", displayName = "Имя", passwordHash = BCryptPasswordEncoder().encode("password123")))
         val token = auth.createSession(account).token
-        val attempt = profileReady(token)
+        val subject = githubSubject()
+        val attempt = profileReady(token, subject = subject)
         val beforeSessions = sessions.count()
         assertEquals(401, pending(attempt).response.status)
         assertEquals(401, complete(attempt, mapOf("nickname" to "unexpected_${suffix()}", "displayName" to "Лишний")).response.status)
         assertEquals(401, link(attempt, account.nickname, "password123").response.status)
         assertEquals(401, mvc.post("/api/auth/social/continue") { cookie(attempt.cookie); header("Origin", ORIGIN); header("Authorization", "Bearer $token") }.andReturn().response.status)
-        val loginAttempt = ready("github", "99127364")
+        val loginAttempt = ready(subject = subject)
         assertEquals(401, profileComplete(loginAttempt, token).response.status)
         assertEquals(beforeSessions, sessions.count())
         assertEquals(200, profileComplete(attempt, token).response.status)
@@ -838,21 +818,21 @@ class SocialAuthIntegrationTest(
         val token = auth.createSession(users.saveAndFlush(User(nickname = "cancel_${suffix()}", displayName = "Имя"))).token
         val beforeSessions = sessions.count()
         val cancelled = profileStart(token)
-        mvc.get("/api/auth/social/google/callback") { cookie(cancelled.cookie); param("state", cancelled.params.getValue("state")); param("error", "access_denied") }
+        mvc.get("/api/auth/social/github/callback") { cookie(cancelled.cookie); param("state", cancelled.params.getValue("state")); param("error", "access_denied") }
             .andExpect { status { isFound() }; header { string("Location", "$ORIGIN/profile?social_link=cancelled") } }
         assertEquals(401, profileComplete(cancelled, token).response.status)
         val wrongState = profileStart(token)
-        assertEquals("$ORIGIN/profile?social_link=failed", callback(wrongState, provider.code(wrongState.params, "google", "bad-${suffix()}"), "wrong-state").response.getHeader("Location"))
+        assertEquals("$ORIGIN/profile?social_link=failed", callback(wrongState, provider.code(wrongState.params, githubSubject()), "wrong-state").response.getHeader("Location"))
         val expired = profileStart(token)
         expire(expired)
-        assertEquals("$ORIGIN/profile?social_link=failed", callback(expired, provider.code(expired.params, "google", "expired-${suffix()}")).response.getHeader("Location"))
+        assertEquals("$ORIGIN/profile?social_link=failed", callback(expired, provider.code(expired.params, githubSubject())).response.getHeader("Location"))
         assertEquals(beforeSessions, sessions.count())
     }
 
     @Test fun `occupied profile provider and identity preserve existing connections including historical duplicates`() {
         val account = users.saveAndFlush(User(nickname = "occupied_${suffix()}", displayName = "Имя"))
         val token = auth.createSession(account).token
-        val firstSubject = "existing-${suffix()}"
+        val firstSubject = githubSubject()
         val sameSubject = profileReady(token, subject = firstSubject)
         val first = profileReady(token, subject = firstSubject)
         val otherSubject = profileReady(token)
@@ -861,14 +841,14 @@ class SocialAuthIntegrationTest(
         val rejected = profileComplete(otherSubject, token)
         assertEquals(409, rejected.response.status)
         assertEquals("SOCIAL_PROVIDER_ALREADY_LINKED", mapper.readTree(rejected.response.contentAsByteArray).path("code").asText())
-        mvc.post("/api/auth/social/google/profile-link/start") { header("Origin", ORIGIN); header("Authorization", "Bearer $token") }
+        mvc.post("/api/auth/social/github/profile-link/start") { header("Origin", ORIGIN); header("Authorization", "Bearer $token") }
             .andExpect { status { isConflict() }; jsonPath("$.code") { value("SOCIAL_PROVIDER_ALREADY_LINKED") } }
         val secondAccount = users.saveAndFlush(User(nickname = "occupied_other_${suffix()}", displayName = "Другой"))
         val secondToken = auth.createSession(secondAccount).token
         val occupiedIdentity = profileReady(secondToken, subject = firstSubject)
         assertEquals(409, profileComplete(occupiedIdentity, secondToken).response.status)
         assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM social_auth_identities WHERE user_id=?", Int::class.java, secondAccount.id))
-        jdbc.update("INSERT INTO social_auth_identities(id,provider,subject,user_id,created_at) VALUES (?,'google',?,?,CURRENT_TIMESTAMP)", UUID.randomUUID().toString(), "historical-${suffix()}", account.id)
+        jdbc.update("INSERT INTO social_auth_identities(id,provider,subject,user_id,created_at) VALUES (?,'github',?,?,CURRENT_TIMESTAMP)", UUID.randomUUID().toString(), githubSubject(), account.id)
         assertTrue(mapper.readTree(connections(token).response.contentAsByteArray).path("connections").first().path("linked").asBoolean())
         assertEquals(2, jdbc.queryForObject("SELECT count(*) FROM social_auth_identities WHERE user_id=?", Int::class.java, account.id), "historical multiple identities remain untouched")
     }
@@ -884,16 +864,16 @@ class SocialAuthIntegrationTest(
             val futures = attempts.map { attempt -> executor.submit<MvcResult> { gate.await(); profileComplete(attempt, token) } }
             gate.countDown()
             assertEquals(listOf(200, 409), futures.map { it.get(10, java.util.concurrent.TimeUnit.SECONDS).response.status }.sorted())
-            assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM social_auth_identities WHERE user_id=? AND provider='google'", Int::class.java, account.id))
+            assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM social_auth_identities WHERE user_id=? AND provider='github'", Int::class.java, account.id))
 
-            val subject = "identity-race-${suffix()}"
+            val subject = githubSubject()
             val accounts = List(2) { auth.createSession(users.saveAndFlush(User(nickname = "race_${suffix()}", displayName = "Имя"))).token }
             val competing = accounts.map { profileReady(it, subject = subject) }
             val secondGate = java.util.concurrent.CountDownLatch(1)
             val competingFutures = competing.mapIndexed { index, attempt -> executor.submit<MvcResult> { secondGate.await(); profileComplete(attempt, accounts[index]) } }
             secondGate.countDown()
             assertEquals(listOf(200, 409), competingFutures.map { it.get(10, java.util.concurrent.TimeUnit.SECONDS).response.status }.sorted())
-            assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM social_auth_identities WHERE provider='google' AND subject=?", Int::class.java, subject))
+            assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM social_auth_identities WHERE provider='github' AND subject=?", Int::class.java, subject))
             assertEquals(beforeSessions + 2, sessions.count())
             assertFalse(output.all.contains(subject), "profile identity must not leak through SQL errors")
         } finally { executor.shutdownNow() }
@@ -903,9 +883,9 @@ class SocialAuthIntegrationTest(
         for (sameIdentity in listOf(false, true)) {
             val account = users.saveAndFlush(User(nickname = "mixed_${suffix()}", displayName = "Имя", passwordHash = BCryptPasswordEncoder().encode("password123")))
             val token = auth.createSession(account).token
-            val subject = "mixed-${suffix()}"
+            val subject = githubSubject()
             val legacy = ready(subject = subject)
-            val profile = profileReady(token, subject = if (sameIdentity) subject else "other-${suffix()}")
+            val profile = profileReady(token, subject = if (sameIdentity) subject else githubSubject())
             val beforeSessions = sessions.count()
             val executor = Executors.newFixedThreadPool(2)
             val results = try {
@@ -931,21 +911,21 @@ class SocialAuthIntegrationTest(
             } finally { executor.shutdownNow() }
             assertEquals(if (sameIdentity) listOf(200, 200) else listOf(200, 409), results.map { it.response.status }.sorted())
             assertEquals(beforeSessions + if (results.first().response.status == 200) 1 else 0, sessions.count())
-            assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM social_auth_identities WHERE user_id=? AND provider='google'", Int::class.java, account.id))
+            assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM social_auth_identities WHERE user_id=? AND provider='github'", Int::class.java, account.id))
         }
     }
 
     @Test fun `legacy link refuses a new occupied provider while historical identities still log in`() {
         val account = users.saveAndFlush(User(nickname = "history_${suffix()}", displayName = "Имя", passwordHash = BCryptPasswordEncoder().encode("password123")))
-        val originalSubject = "first-${suffix()}"
+        val originalSubject = githubSubject()
         assertEquals(200, link(ready(subject = originalSubject), account.nickname, "password123").response.status)
         val beforeSessions = sessions.count()
         val rejected = link(ready(), account.nickname, "password123")
         assertEquals(409, rejected.response.status)
         assertEquals("SOCIAL_PROVIDER_ALREADY_LINKED", mapper.readTree(rejected.response.contentAsByteArray).path("code").asText())
         assertEquals(beforeSessions, sessions.count())
-        val historicalSubject = "historical-${suffix()}"
-        jdbc.update("INSERT INTO social_auth_identities(id,provider,subject,user_id,created_at) VALUES (?,'google',?,?,CURRENT_TIMESTAMP)", UUID.randomUUID().toString(), historicalSubject, account.id)
+        val historicalSubject = githubSubject()
+        jdbc.update("INSERT INTO social_auth_identities(id,provider,subject,user_id,created_at) VALUES (?,'github',?,?,CURRENT_TIMESTAMP)", UUID.randomUUID().toString(), historicalSubject, account.id)
         for (subject in listOf(originalSubject, historicalSubject)) {
             val login = complete(ready(subject = subject))
             assertEquals(200, login.response.status)
@@ -988,7 +968,7 @@ class SocialAuthIntegrationTest(
 
     @Test fun `ordinary login and legacy link of the same known attempt cannot deadlock`() {
         val account = users.saveAndFlush(User(nickname = "login_race_${suffix()}", displayName = "Имя", passwordHash = BCryptPasswordEncoder().encode("password123")))
-        val subject = "login-race-${suffix()}"
+        val subject = githubSubject()
         assertEquals(200, link(ready(subject = subject), account.nickname, "password123").response.status)
         val attempt = ready(subject = subject)
         val beforeSessions = sessions.count()
@@ -1044,7 +1024,7 @@ class SocialAuthIntegrationTest(
         jdbc.update("INSERT INTO social_auth_identities(id,provider,subject,user_id,created_at) VALUES (?,?,?,?,CURRENT_TIMESTAMP)",
             UUID.randomUUID().toString(), provider, subject, userId)
     }
-    private fun profileStart(token: String, kind: String = "google"): Attempt {
+    private fun profileStart(token: String, kind: String = "github"): Attempt {
         val result = mvc.post("/api/auth/social/$kind/profile-link/start") { header("Origin", ORIGIN); header("Authorization", "Bearer $token") }.andExpect { status { isOk() } }.andReturn()
         assertPrivate(result)
         val params = parseForm(URI(mapper.readTree(result.response.contentAsByteArray).path("authorizationUrl").asText()).rawQuery)
@@ -1052,9 +1032,9 @@ class SocialAuthIntegrationTest(
         val cookiePair = cookieHeader.substringBefore(';').split('=', limit = 2)
         return Attempt(kind, params, Cookie(cookiePair[0], cookiePair[1]), cookieHeader, cookiePair[1].substringBefore('.'))
     }
-    private fun profileReady(token: String, kind: String = "google", subject: String = "profile-${suffix()}"): Attempt {
+    private fun profileReady(token: String, kind: String = "github", subject: String = githubSubject()): Attempt {
         val attempt = profileStart(token, kind)
-        assertEquals("$ORIGIN/profile?social_link=ready", callback(attempt, provider.code(attempt.params, kind, subject)).response.getHeader("Location"))
+        assertEquals("$ORIGIN/profile?social_link=ready", callback(attempt, provider.code(attempt.params, subject)).response.getHeader("Location"))
         return attempt
     }
     private fun profileComplete(attempt: Attempt, token: String?, origin: String = ORIGIN) = mvc.post("/api/auth/social/profile-link/complete") {
@@ -1062,15 +1042,15 @@ class SocialAuthIntegrationTest(
     }.andReturn()
 
     private data class Attempt(val provider:String,val params:Map<String,String>,val cookie:Cookie,val cookieHeader:String,val id:String,val code:String="")
-    private fun start(provider:String="google", contextCookie:Cookie?=null, roomReturn:Boolean=false, roomContextId:String?=null):Attempt {
+    private fun start(provider:String="github", contextCookie:Cookie?=null, roomReturn:Boolean=false, roomContextId:String?=null):Attempt {
         val result=mvc.post("/api/auth/social/$provider/start") { header("Origin",ORIGIN); header("Host","attacker.example"); header("X-Forwarded-Host","attacker.example"); if(contextCookie != null) cookie(contextCookie); contentType=MediaType.APPLICATION_JSON; content=mapper.writeValueAsString(mapOf("roomReturn" to roomReturn, "roomContextId" to roomContextId)) }.andExpect { status { isOk() } }.andReturn()
         assertPrivate(result)
         val url=URI(mapper.readTree(result.response.contentAsByteArray).path("authorizationUrl").asText())
         val cookieHeader=requireNotNull(result.response.getHeader("Set-Cookie")); val pair=cookieHeader.substringBefore(';').split('=',limit=2)
         return Attempt(provider,parseForm(url.rawQuery),Cookie(pair[0],pair[1]),cookieHeader,pair[1].substringBefore('.'))
     }
-    private fun ready(kind:String="google",subject:String="subject-${suffix()}"):Attempt {
-        val attempt=start(kind); val code=provider.code(attempt.params,kind,subject)
+    private fun ready(kind:String="github",subject:String=githubSubject()):Attempt {
+        val attempt=start(kind); val code=provider.code(attempt.params, subject)
         assertEquals("$ORIGIN/login/social",callback(attempt,code).response.getHeader("Location"))
         return attempt.copy(code=code)
     }
@@ -1090,15 +1070,16 @@ class SocialAuthIntegrationTest(
     }
     private fun assertPrivate(result:MvcResult) { assertEquals("private, no-store",result.response.getHeader("Cache-Control")); assertEquals("no-referrer",result.response.getHeader("Referrer-Policy")) }
     private fun suffix()=UUID.randomUUID().toString().take(8)
+    private fun githubSubject() = subjectSequence.incrementAndGet().toString()
 }
 
 private fun parseForm(value:String?) = value.orEmpty().split('&').filter(String::isNotEmpty).associate { val parts=it.split('=',limit=2); URLDecoder.decode(parts[0],StandardCharsets.UTF_8) to URLDecoder.decode(parts.getOrElse(1){""},StandardCharsets.UTF_8) }
 
-private class FakeSocialProvider:AutoCloseable {
-    private val mapper=ObjectMapper(); private val key=KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.generateKeyPair()
+private class FakeGithubProvider:AutoCloseable {
+    private val mapper=ObjectMapper()
     private val server=HttpServer.create(InetSocketAddress("127.0.0.1",0),0)
     private val executor=Executors.newCachedThreadPool()
-    private data class Fixture(val params:Map<String,String>,val provider:String,val subject:String,val overrides:Map<String,Any>)
+    private data class Fixture(val params:Map<String,String>,val subject:String,val overrides:Map<String,Any>)
     private val fixtures=ConcurrentHashMap<String,Fixture>()
     val forms=ConcurrentHashMap<String,Map<String,String>>(); val userInfoForms=ConcurrentHashMap<String,Map<String,String>>(); val exchanges=AtomicInteger()
     val base="http://127.0.0.1:${server.address.port}"
@@ -1108,14 +1089,12 @@ private class FakeSocialProvider:AutoCloseable {
             val path=exchange.requestURI.path
             val form=parseForm(exchange.requestBody.readBytes().toString(StandardCharsets.UTF_8))
             val body:Any = when(path) {
-                "/google/keys" -> { val public=key.public as RSAPublicKey; mapOf("keys" to listOf(mapOf("kty" to "RSA","use" to "sig","alg" to "RS256","kid" to "local-key","n" to encode(public.modulus.toByteArray().dropWhile { it==0.toByte() }.toByteArray()),"e" to encode(public.publicExponent.toByteArray())))) }
-                "/google/token","/github/token" -> {
+                "/github/token" -> {
                     exchanges.incrementAndGet(); val code=form["code"].orEmpty(); val fixture=requireNotNull(fixtures[code]); forms[code]=form
                     assertEquals(fixture.params["code_challenge"],encode(MessageDigest.getInstance("SHA-256").digest(form.getValue("code_verifier").toByteArray(StandardCharsets.US_ASCII))))
                     assertEquals(fixture.params["redirect_uri"],form["redirect_uri"])
                     if(fixture.overrides["slow"]==true) Thread.sleep(1500)
-                    if(fixture.provider=="google") mapOf("access_token" to "GOOGLE_ACCESS_SECRET","id_token" to token(fixture))
-                    else mapOf("access_token" to "github-access-$code", "token_type" to (fixture.overrides["token_type"] ?: "bearer"), "scope" to (fixture.overrides["scope"] ?: ""))
+                    mapOf("access_token" to "github-access-$code", "token_type" to (fixture.overrides["token_type"] ?: "bearer"), "scope" to (fixture.overrides["scope"] ?: ""))
                 }
                 "/github/userinfo" -> {
                     val authorization = exchange.requestHeaders.getFirst("Authorization")
@@ -1138,17 +1117,8 @@ private class FakeSocialProvider:AutoCloseable {
         }
         server.start()
     }
-    fun code(params:Map<String,String>,provider:String,subject:String,overrides:Map<String,Any> = emptyMap()):String = UUID.randomUUID().toString().also { fixtures[it]=Fixture(params,provider,subject,overrides) }
+    fun code(params:Map<String,String>,subject:String,overrides:Map<String,Any> = emptyMap()):String = UUID.randomUUID().toString().also { fixtures[it]=Fixture(params,subject,overrides) }
     fun subject(code:String)=fixtures.getValue(code).subject
-    private fun token(fixture:Fixture):String {
-        val header=mapOf("alg" to (fixture.overrides["alg"] ?: "RS256"),"kid" to "local-key")
-        val claims=mutableMapOf<String,Any>("iss" to "https://accounts.google.com","aud" to "google-test-client","sub" to fixture.subject,"iat" to Instant.now().epochSecond,"exp" to (Instant.now().epochSecond+300),"nonce" to fixture.params.getValue("nonce"),"name" to "Имя Google")
-        claims.putAll(fixture.overrides.filterKeys { it !in setOf("alg","bad-signature","slow") })
-        val signingInput="${encode(mapper.writeValueAsBytes(header))}.${encode(mapper.writeValueAsBytes(claims))}"
-        val signer=Signature.getInstance("SHA256withRSA"); signer.initSign(key.private); signer.update(signingInput.toByteArray(StandardCharsets.US_ASCII))
-        val signed=signer.sign(); if(fixture.overrides["bad-signature"]==true) signed[0]=(signed[0].toInt() xor 1).toByte()
-        return "$signingInput.${encode(signed)}"
-    }
     private fun encode(value:ByteArray)=Base64.getUrlEncoder().withoutPadding().encodeToString(value)
     override fun close() { server.stop(0); executor.shutdownNow() }
 }

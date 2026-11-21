@@ -1,14 +1,12 @@
 # Выкладка InterHub на interview.vtools.tech
 
-Для обычного обновления достаточно отправить проверенный коммит в `main`, забрать его на сервере и запустить штатный скрипт. Обучение, редактор диаграмм, доска и страницы документов входят в сборку. Настройки OAuth нужны один раз для каждого провайдера.
+Для обычного обновления достаточно отправить проверенный коммит в `main`, забрать его на сервере и запустить штатный скрипт. Обучение, редактор диаграмм, доска и страницы документов входят в сборку. Если GitHub уже работает, используйте раздел 4 для обновления приложения.
 
 | Где | Что уже подготовлено |
 | --- | --- |
-| Mac | Обе пары OAuth и общий ключ находятся в `~/.config/interhub/deploy/social-auth-production.env`. Файл принадлежит текущему пользователю, права `600`. |
+| Mac | Пара GitHub и общий ключ OAuth находятся в `~/.config/interhub/deploy/social-auth-production.env`. Файл принадлежит текущему пользователю, права `600`. |
 | Сервер | `romazh@10.2.2.2` через WireGuard, репозиторий `/opt/interview-online/repo`, окружение `/etc/interview-online/.env`. |
-| Публичный адрес | `https://interview.vtools.tech`. У Google и GitHub сохранены адреса возврата на этом домене. |
-
-21 ноября публичная проверка здоровья прошла. Сервер ещё отдавал главную страницу по `/privacy` и `/terms`, а список способов входа OAuth был пуст. Сначала выложите приложение и включите GitHub. После появления публичных документов можно закончить настройку Google.
+| Публичный адрес | `https://interview.vtools.tech`. Адрес возврата GitHub — `https://interview.vtools.tech/api/auth/social/github/callback`. |
 
 ## 1. Подготовьте коммит
 
@@ -82,11 +80,12 @@ printf 'Резервная копия: %s\n' "$INTERHUB_BACKUP"
 
 ## 3. Подключите GitHub один раз
 
-В отдельном терминале Mac передайте подготовленный файл по SSH. Значения передаются через защищённое соединение и не выводятся в терминал. Временная копия на сервере доступна только владельцу.
+Этот шаг нужен на новом сервере, где GitHub ещё не подключён. Откройте отдельную вкладку терминала **на Mac**. Команда передаёт только параметры GitHub и общие настройки OAuth. Временная копия на сервере доступна владельцу.
 
 ```bash
 set +x
-ssh romazh@10.2.2.2 'set -eu
+awk '/^[[:blank:]]*(export[[:blank:]]+)?(GITHUB_CLIENT_ID|GITHUB_CLIENT_SECRET|PUBLIC_BASE_URL|SOCIAL_AUTH_FLOW_SECRET)[[:blank:]]*=/' "$HOME/.config/interhub/deploy/social-auth-production.env" |
+  ssh romazh@10.2.2.2 'set -eu
   umask 077
   interhub_stage="$HOME/.config/interhub/deploy"
   mkdir -p "$interhub_stage"
@@ -95,14 +94,17 @@ ssh romazh@10.2.2.2 'set -eu
   trap '\''rm -f -- "$interhub_tmp"'\'' EXIT
   cat > "$interhub_tmp"
   test -s "$interhub_tmp"
-  mv -f -- "$interhub_tmp" "$interhub_stage/social-auth-production.env"' \
-  < "$HOME/.config/interhub/deploy/social-auth-production.env"
+  interhub_file="$interhub_stage/social-auth-production.env"
+  mv -fT -- "$interhub_tmp" "$interhub_file"
+  stat -c "Файл на сервере. Владелец %U. Права %a." -- "$interhub_file"'
 ```
 
-Затем в серверном терминале скопируйте следующий блок. Он добавляет в действующий `.env` отсутствующие параметры выбранного провайдера. Пара другого провайдера, ключи БД, чата и приглашений сохраняются. Действующий `SOCIAL_AUTH_FLOW_SECRET` имеет приоритет над локальной копией.
+Ожидаемый вывод — `Файл на сервере. Владелец romazh. Права 600.` Если при запуске следующего блока появляется сообщение «Проверьте, что приватный файл существует и доступен только владельцу», повторите передачу с Mac. Эта проверка срабатывает до записи в действующий `.env`.
+
+Затем вернитесь в серверный терминал `romazh@interview` и скопируйте следующий блок целиком. Закрывающая строка должна содержать только `PY`. Команда добавляет в действующий `.env` отсутствующие параметры GitHub. Ключи БД, чата и приглашений сохраняются. Действующий `SOCIAL_AUTH_FLOW_SECRET` имеет приоритет над локальной копией.
 
 ```bash
-sudo python3 - "$HOME/.config/interhub/deploy/social-auth-production.env" github <<'PY'
+sudo python3 - "$HOME/.config/interhub/deploy/social-auth-production.env" <<'PY'
 import os
 import re
 import sys
@@ -110,9 +112,6 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 staged = Path(sys.argv[1])
-provider = sys.argv[2].upper()
-if provider not in {"GITHUB", "GOOGLE"}:
-    raise SystemExit("Ожидаемый провайдер: github или google.")
 if staged.is_symlink() or not staged.is_file() or staged.stat().st_mode & 0o077:
     raise SystemExit("Проверьте, что приватный файл существует и доступен только владельцу.")
 
@@ -122,7 +121,7 @@ if target.is_symlink() or not target.is_file():
 if target.stat().st_mode & 0o007:
     raise SystemExit("Ограничьте доступ к серверному .env до 640 или 600 перед добавлением ключей.")
 
-pair = (f"{provider}_CLIENT_ID", f"{provider}_CLIENT_SECRET")
+pair = ("GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET")
 keys = (*pair, "PUBLIC_BASE_URL", "SOCIAL_AUTH_FLOW_SECRET")
 assignment = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$")
 
@@ -156,7 +155,7 @@ existing_pair = [current.get(key, (None, ""))[1] for key in pair]
 if any(existing_pair) and not all(existing_pair) and any(
     value and value != prepared[key] for key, value in zip(pair, existing_pair)
 ):
-    raise SystemExit(f"На сервере есть другая неполная пара {provider}. Проверьте её перед продолжением.")
+    raise SystemExit("На сервере есть другая неполная пара GitHub. Проверьте её перед продолжением.")
 
 added = []
 for key in keys:
@@ -189,7 +188,7 @@ if added:
             path.unlink(missing_ok=True)
     print("Записаны параметры " + ", ".join(added))
 else:
-    print(f"Параметры {provider} уже заданы.")
+    print("Параметры GitHub уже заданы.")
 PY
 ```
 
@@ -197,18 +196,23 @@ PY
 
 ## 4. Выложите и проверьте
 
-На сервере выполните тот же блок при первой и каждой следующей выкладке.
+В серверном терминале проверьте ветку и состояние репозитория.
 
 ```bash
-set -euo pipefail
 cd /opt/interview-online/repo
-test "$(git branch --show-current)" = main
-test -z "$(git status --porcelain)"
-git pull --ff-only origin main
-git rev-parse --short HEAD
+git status --short --branch
 ```
 
-Сверьте хеш с подготовленным коммитом, затем запустите выкладку из той же папки.
+На ветке `main` с чистой рабочей копией выполните обычный `git pull`. Если в статусе перечислены файлы, сначала проверьте, могут ли изменения попасть в сборку.
+
+```bash
+git pull --ff-only origin main
+git --no-pager log -1 --oneline
+```
+
+Строка `main -> origin/main` подтверждает скачивание ветки. Хеш в выводе `git log` показывает коммит, из которого будет собираться приложение. Сверьте его с подготовленным коммитом, затем запустите выкладку из той же папки.
+
+Если `GOOGLE_CLIENT_ID` и `GOOGLE_CLIENT_SECRET` когда-либо добавлялись в окружение сервера, удалите только эти строки через `sudoedit /etc/interview-online/.env`. Текущая сборка игнорирует эти параметры. Для действующего GitHub сохраните `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` и общий `SOCIAL_AUTH_FLOW_SECRET`.
 
 ```bash
 set -euo pipefail
@@ -221,7 +225,7 @@ curl -fsS https://interview.vtools.tech/api/auth/social/providers
 
 В приватном окне браузера после первой выкладки проверьте следующее.
 
-- [Страница входа](https://interview.vtools.tech/login) предлагает вход через GitHub. Возврат после авторизации открывает InterHub, обычный вход по паролю доступен.
+- Список провайдеров содержит только `github`. [Страница входа](https://interview.vtools.tech/login) предлагает вход через GitHub. Возврат после авторизации открывает InterHub, обычный вход по паролю доступен.
 - [Политика конфиденциальности](https://interview.vtools.tech/privacy) и [условия использования](https://interview.vtools.tech/terms) показывают текст документов. Код HTTP 200 сам по себе возможен и на главной странице.
 - В тестовом аккаунте откройте библиотеку, наборы задач и комнату. Проверьте обучение на текущем экране, создание набора и переходы через «?». На сервере используйте тестовые данные.
 - При первом обновлении с V42 миграция V46 создаёт отдельное хранилище прогресса версии 2. Существующие аккаунты получат вступление при первом входе в раздел, где доступно обучение. Прогресс версии 1 сохранится в истории.
@@ -229,15 +233,7 @@ curl -fsS https://interview.vtools.tech/api/auth/social/providers
 
 Если перед InterHub есть отдельный HTTP-прокси, сохраните исключение журналирования кодов на OAuth callback и передачу SSE без буферизации. Встроенный nginx содержит эти правила. [Настройки внешнего прокси](specs/references/2026-11-18-learning-social-login-deploy.md#5-прокси-и-ресурсы-холстов)
 
-## 5. Подключите Google после публикации
-
-1. Убедитесь, что `/privacy` и `/terms` открываются по HTTPS без входа. В Google Auth Platform выберите проект `seraphic-plexus-515017-m7`. В **Branding** проверьте адреса документов и домен, затем выполните **Verify Branding** и **Publish branding**, если консоль предлагает эти действия. В **Audience** выберите **Publish app**, чтобы выйти из режима Testing. Публикация приложения и публикация бренда управляются отдельно. [Режимы OAuth в Google](https://developers.google.com/identity/protocols/oauth2/production-readiness/overview) · [Проверка бренда](https://developers.google.com/identity/protocols/oauth2/production-readiness/brand-verification)
-2. Повторите серверный блок из раздела 3 с `google` вместо `github`. `GOOGLE_CLIENT_ID` и `GOOGLE_CLIENT_SECRET` появятся в действующем `.env`. Полная пара добавляет кнопку Google, поэтому выполните этот шаг после проверки готовности публичного входа.
-3. Запустите `bash deploy/scripts/deploy_docker.sh` из `/opt/interview-online/repo`. Убедитесь, что [список провайдеров](https://interview.vtools.tech/api/auth/social/providers) содержит `google` и `github`. Проверьте вход через Google в приватном окне. После этого удалите приватную копию с сервера командой `rm -f -- "$HOME/.config/interhub/deploy/social-auth-production.env"`. На Mac оригинал остаётся доступным владельцу.
-
-Если Google требует подтверждения домена или ручной проверки, GitHub и обучение можно выкладывать независимо. InterHub запрашивает базовые `openid profile`. Название и логотип на экране согласия зависят от состояния опубликованного бренда. [Требования Google](https://developers.google.com/identity/protocols/oauth2/production-readiness/brand-verification)
-
-## 6. Верните предыдущие образы при ошибке
+## 5. Верните предыдущие образы при ошибке
 
 Если сборка завершилась ошибкой до запуска контейнеров, сначала посмотрите `interhub_compose ps`. Если новая версия уже запущена, запишите путь резервного каталога в `INTERHUB_BACKUP` и используйте функцию `interhub_compose` из раздела 2. Команды возвращают предыдущие образы и настройки. Рабочий том PostgreSQL сохраняется.
 

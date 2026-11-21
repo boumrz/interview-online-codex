@@ -38,9 +38,6 @@ app:
   social-auth:
     public-base-url: ${PUBLIC_BASE_URL:http://localhost:5173}
     flow-secret: ${SOCIAL_AUTH_FLOW_SECRET:}
-    google:
-      client-id: ${GOOGLE_CLIENT_ID:}
-      client-secret: ${GOOGLE_CLIENT_SECRET:}
     github:
       client-id: ${GITHUB_CLIENT_ID:}
       client-secret: ${GITHUB_CLIENT_SECRET:}

@@ -1,5 +1,5 @@
 // OAuth UI coverage run against the isolated app and test provider.
-// The default dormant UI has its own e2e-social-login-disabled.mjs suite.
+// The default dormant UI has its own e2e-social-login-provider-discovery.mjs suite.
 import "../support/require-isolated-api.mjs";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -11,7 +11,7 @@ const api = process.env.E2E_API_URL;
 const browser = await chromium.launch({ headless: true });
 after(() => browser.close());
 const json = (route, data, status = 200) => route.fulfill({ status, json: data });
-async function fixture(t, providers = ["google", "github"]) {
+async function fixture(t, providers = ["github"]) {
   const context = await browser.newContext();
   t.after(() => context.close());
   const page = await context.newPage();
@@ -30,14 +30,13 @@ async function account(context) {
 }
 async function pending(page, extra = {}) {
   await page.route("**/api/auth/social/pending", (route) => json(route, {
-    provider: "google", displayName: "Анна", accountExists: false, ...extra,
+    provider: "github", displayName: "Анна", accountExists: false, ...extra,
   }));
 }
 
-test("configured Google/GitHub buttons coexist with local login; disabled providers are absent", async (t) => {
+test("configured GitHub button coexist with local login; disabled providers are absent", async (t) => {
   const { page } = await fixture(t);
   await page.goto(`${web}/login`);
-  await page.getByRole("button", { name: "Войти через Google", exact: true }).waitFor();
   await page.getByRole("button", { name: "Войти через GitHub", exact: true }).waitFor();
   assert.equal(await page.getByLabel("Ник", { exact: true }).isEditable(), true);
   assert.equal(await page.getByLabel("Пароль", { exact: true }).isEditable(), true);
@@ -48,52 +47,45 @@ test("configured Google/GitHub buttons coexist with local login; disabled provid
   assert.equal(await page.getByRole("button", { name: /Войти через/ }).count(), 0);
 });
 
-test("provider buttons follow the selected theme and keep a legible dark hover", async (t) => {
+test("the GitHub button follows the selected theme and keeps a legible dark hover", async (t) => {
   const { page } = await fixture(t);
   await page.goto(`${web}/login`);
-  const providers = ["Google", "GitHub"].map((name) => page.getByRole("button", {
-    name: `Войти через ${name}`, exact: true,
-  }));
-  for (const button of providers) {
-    await button.waitFor();
-    assert.equal(await button.evaluate((node) => getComputedStyle(node).backgroundColor), "rgb(255, 255, 255)");
-  }
+  const button = page.getByRole("button", { name: "Войти через GitHub", exact: true });
+  await button.waitFor();
+  assert.equal(await button.evaluate((node) => getComputedStyle(node).backgroundColor), "rgb(255, 255, 255)");
   await page.getByRole("button", { name: "Тёмная тема", exact: true }).click();
   await page.waitForFunction(() => document.documentElement.dataset.theme === "dark");
-  for (const button of providers) {
-    const handle = await button.elementHandle();
-    await page.waitForFunction((node) => getComputedStyle(node).backgroundColor === "rgb(19, 19, 20)", handle);
-    assert.deepEqual(await button.evaluate((node) => {
-      const style = getComputedStyle(node);
-      return [style.backgroundColor, style.color, style.borderTopColor];
-    }), ["rgb(19, 19, 20)", "rgb(227, 227, 227)", "rgb(142, 145, 143)"]);
-    await button.hover();
-    await page.waitForFunction((node) => {
-      const style = getComputedStyle(node);
-      return style.backgroundColor === "rgb(32, 33, 36)" && style.color === "rgb(227, 227, 227)"
-        && style.borderTopColor === "rgb(142, 145, 143)";
-    }, handle);
-    await page.mouse.move(0, 0);
-    await handle.dispose();
-  }
+  const handle = await button.elementHandle();
+  await page.waitForFunction((node) => getComputedStyle(node).backgroundColor === "rgb(19, 19, 20)", handle);
+  assert.deepEqual(await button.evaluate((node) => {
+    const style = getComputedStyle(node);
+    return [style.backgroundColor, style.color, style.borderTopColor];
+  }), ["rgb(19, 19, 20)", "rgb(227, 227, 227)", "rgb(142, 145, 143)"]);
+  await button.hover();
+  await page.waitForFunction((node) => {
+    const style = getComputedStyle(node);
+    return style.backgroundColor === "rgb(32, 33, 36)" && style.color === "rgb(227, 227, 227)"
+      && style.borderTopColor === "rgb(142, 145, 143)";
+  }, handle);
+  await handle.dispose();
 });
 
 test("start network failure is readable and retry redirects to selected provider", async (t) => {
   const { page } = await fixture(t);
   const requests = [];
-  await page.route("**/api/auth/social/google/start", async (route) => {
+  await page.route("**/api/auth/social/github/start", async (route) => {
     requests.push(route.request());
     if (requests.length === 1) return route.abort("internetdisconnected");
-    return json(route, { authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth?state=fake-state" });
+    return json(route, { authorizationUrl: "https://github.com/login/oauth/authorize?state=fake-state" });
   });
-  await page.route("https://accounts.google.com/o/oauth2/v2/auth?*", (route) => route.fulfill({
-    contentType: "text/html", body: "<p>Google mock sign in</p>",
+  await page.route("https://github.com/login/oauth/authorize?*", (route) => route.fulfill({
+    contentType: "text/html", body: "<p>GitHub mock sign in</p>",
   }));
   await page.goto(`${web}/login`);
-  await page.getByRole("button", { name: "Войти через Google" }).click();
+  await page.getByRole("button", { name: "Войти через GitHub" }).click();
   await page.getByRole("alert").filter({ hasText: "Ошибка сети. Проверьте подключение и повторите попытку." }).waitFor();
-  await page.getByRole("button", { name: "Войти через Google" }).click();
-  await page.waitForURL("https://accounts.google.com/**");
+  await page.getByRole("button", { name: "Войти через GitHub" }).click();
+  await page.waitForURL("https://github.com/login/oauth/authorize?*");
   assert.equal(requests.length, 2);
   assert.equal(requests[1].headers().origin, new URL(web).origin);
   assert.equal(requests[1].headers().authorization, undefined);
@@ -114,18 +106,18 @@ test("leaving a pending provider start cancels it and restores the form on retur
   const { page } = await fixture(t);
   let release;
   const held = new Promise((resolve) => { release = resolve; });
-  await page.route("**/api/auth/social/google/start", async (route) => {
+  await page.route("**/api/auth/social/github/start", async (route) => {
     await held;
-    await json(route, { authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth?state=stale" }).catch(() => {});
+    await json(route, { authorizationUrl: "https://github.com/login/oauth/authorize?state=stale" }).catch(() => {});
   });
   await page.goto(`${web}/login`);
-  const requested = page.waitForRequest("**/api/auth/social/google/start");
-  await page.getByRole("button", { name: "Войти через Google" }).click();
+  const requested = page.waitForRequest("**/api/auth/social/github/start");
+  await page.getByRole("button", { name: "Войти через GitHub" }).click();
   await requested;
   await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
   release();
   await page.waitForFunction(() => !document.querySelector('button[aria-label="Войти в кабинет"]')?.disabled);
-  assert.equal(await page.getByRole("button", { name: "Войти через Google" }).isEnabled(), true);
+  assert.equal(await page.getByRole("button", { name: "Войти через GitHub" }).isEnabled(), true);
   assert.equal(page.url(), `${web}/login`);
 });
 
@@ -162,7 +154,7 @@ test("explicit existing account link checks password and retains form for correc
   const { page, context } = await fixture(t);
   const auth = await account(context);
   const links = [];
-  await pending(page, { provider: "github" });
+  await pending(page);
   await page.route("**/api/auth/social/link", (route) => {
     links.push(route.request().postDataJSON());
     return links.length === 1 ? json(route, { error: "Неверный ник или пароль" }, 401) : json(route, auth);
@@ -246,6 +238,18 @@ test("cancellation and expired attempt offer a clean return to login", async (t)
   await page.getByRole("link", { name: "Начать вход заново", exact: true }).waitFor();
 });
 
+test("a stale Google callback does not attempt to authenticate or create an account", async (t) => {
+  const { page } = await fixture(t);
+  let completions = 0;
+  await pending(page, { provider: "google", accountExists: true });
+  await page.route("**/api/auth/social/complete", (route) => { completions++; return route.abort(); });
+  await page.goto(`${web}/login/social`);
+  await page.getByRole("link", { name: "Начать вход заново", exact: true }).click();
+  await page.getByRole("button", { name: "Войти через GitHub", exact: true }).waitFor();
+  assert.equal(completions, 0);
+  assert.equal(await page.evaluate(() => localStorage.getItem("auth_token")), null);
+});
+
 test("a delayed completion cannot replace an account selected in another tab", async (t) => {
   const { page, context } = await fixture(t);
   const stale = await account(context);
@@ -301,7 +305,7 @@ test("a hidden pending identity request cannot start authentication after its ca
   let completions = 0;
   await page.route("**/api/auth/social/pending", async (route) => {
     await held;
-    await json(route, { provider: "google", displayName: "Анна", accountExists: true }).catch(() => {});
+    await json(route, { provider: "github", displayName: "Анна", accountExists: true }).catch(() => {});
   });
   await page.route("**/api/auth/social/complete", (route) => { completions++; return route.abort(); });
   const requested = page.waitForRequest("**/api/auth/social/pending");
@@ -327,7 +331,7 @@ test("GitHub continuation returns to the same candidate room after profile hydra
   } });
   assert.equal(roomResponse.status(), 200);
   const room = await roomResponse.json();
-  await pending(page, { provider: "github", accountExists: true });
+  await pending(page, { accountExists: true });
   await page.route("**/api/auth/social/complete", (route) => json(route, auth));
   await page.route("**/api/auth/social/continue", (route) => {
     assert.equal(route.request().headers().authorization, `Bearer ${auth.token}`);
@@ -360,13 +364,13 @@ test("social completion preserves explicit team invitation continuation", async 
 
 test("first provider profile can return to the original login method without creating another account", async (t) => {
   const { page } = await fixture(t);
-  await pending(page, { provider: "github" });
+  await pending(page);
   let completed = 0;
   await page.route("**/api/auth/social/complete", (route) => { completed++; return route.abort(); });
   await page.goto(`${web}/login/social`);
-  await page.getByText("Уже регистрировались через другой сервис? Войдите прежним способом.", { exact: true }).waitFor();
+  await page.getByText("Можно вернуться ко входу по нику и паролю.", { exact: true }).waitFor();
   await page.getByRole("link", { name: "Вернуться ко входу", exact: true }).click();
-  await page.getByRole("button", { name: "Войти через Google", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Войти через GitHub", exact: true }).waitFor();
   assert.equal(completed, 0);
   assert.equal(await page.evaluate(() => localStorage.getItem("auth_token")), null);
 });

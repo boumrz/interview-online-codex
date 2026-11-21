@@ -114,17 +114,12 @@ development.
 
 ## Social Login Release State
 
-The implementation is verified with test providers. On 2026-11-18 the owner accepted
-Google terms and confirmed GitHub sudo; both OAuth clients and secrets are prepared.
-Google remains External/Testing with Branding links saved. The requested basic
-identity scopes work in Testing. Publish Audience to leave testing mode and
-verify Branding to display the app name and logo. The public legal documents
-ship with the application.
+GitHub is the sole supported OAuth provider and works on the primary domain.
 The owner retains server access and deployment. Do not request SSH access
-or deploy. The server enables Google and GitHub when their credentials are
-configured. See the owner runbook for live checks.
-The nickname/password flow remains available. VK is still deferred.
+or deploy. Keep the configured GitHub pair and the shared flow secret.
+Nickname/password sign-in remains available. Historical provider records are
+retained for compatibility and do not enable sign-in.
 Contract: [AUTH.1](specs/features/auth-1-social-login.md).
-Current setup/deployment: [owner runbook](specs/references/2026-11-18-learning-social-login-deploy.md).
+Current setup/deployment: [owner runbook](DEPLOY_INTERHUB_RU.md).
 Backend: `backend/src/main/kotlin/com/interviewonline/features/socialauth/`.
 Frontend: `SocialLoginButtons`, `SocialLoginPage`, `services/socialAuth.ts`.

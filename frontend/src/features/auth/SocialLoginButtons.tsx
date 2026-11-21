@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Button, Space } from "antd";
+import { Button } from "antd";
 import { GithubFilled } from "@ant-design/icons";
 import { store } from "../../app/store";
 import { getApiErrorMessage } from "../../services/apiErrors";
-import { readAuthorizationUrl, socialRequest, SOCIAL_INVITATION_RETURN_KEY, SocialProvider } from "../../services/socialAuth";
+import { readAuthorizationUrl, socialRequest, SOCIAL_INVITATION_RETURN_KEY } from "../../services/socialAuth";
 import styles from "./SocialLoginButtons.module.css";
 
 type Props = {
@@ -16,19 +16,18 @@ type Props = {
 };
 
 export function SocialLoginButtons({ disabled, invitationReturn, roomReturn, roomContextId, onError, onBusyChange }: Props) {
-  const [providers, setProviders] = useState<SocialProvider[]>([]);
-  const [starting, setStarting] = useState<SocialProvider | null>(null);
+  const [available, setAvailable] = useState(false);
+  const [starting, setStarting] = useState(false);
   const attempt = useRef<AbortController | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     socialRequest<unknown>("/providers", controller.signal).then((data) => {
       if (controller.signal.aborted || !data || typeof data !== "object"
         || !("providers" in data) || !Array.isArray(data.providers)) return;
-      const configured = data.providers;
-      setProviders(["google", "github"].filter((provider) => configured.includes(provider)) as SocialProvider[]);
+      setAvailable(data.providers.includes("github"));
     }).catch(() => {});
     const cancel = () => { attempt.current?.abort(); attempt.current = null; };
-    const onPageHide = () => { cancel(); setStarting(null); onBusyChange(false); };
+    const onPageHide = () => { cancel(); setStarting(false); onBusyChange(false); };
     window.addEventListener("pagehide", onPageHide);
     return () => {
       controller.abort();
@@ -37,7 +36,7 @@ export function SocialLoginButtons({ disabled, invitationReturn, roomReturn, roo
     };
   }, []);
 
-  const start = async (provider: SocialProvider) => {
+  const start = async () => {
     if (disabled || attempt.current) return;
     const controller = new AbortController();
     attempt.current = controller;
@@ -47,13 +46,13 @@ export function SocialLoginButtons({ disabled, invitationReturn, roomReturn, roo
     const current = () => !controller.signal.aborted && attempt.current === controller
       && store.getState().auth.token === token && localStorage.getItem("auth_token") === storedToken
       && window.location.href === currentLocation;
-    setStarting(provider);
+    setStarting(true);
     onBusyChange(true);
     onError("");
     try {
-      const data = await socialRequest<unknown>(`/${provider}/start`, controller.signal, { roomReturn, roomContextId });
+      const data = await socialRequest<unknown>("/github/start", controller.signal, { roomReturn, roomContextId });
       if (!current()) return;
-      const url = readAuthorizationUrl(data, provider);
+      const url = readAuthorizationUrl(data);
       // Only this fixed, non-secret path survives navigation to the provider.
       sessionStorage.removeItem(SOCIAL_INVITATION_RETURN_KEY);
       if (invitationReturn) sessionStorage.setItem(SOCIAL_INVITATION_RETURN_KEY, "1");
@@ -63,27 +62,18 @@ export function SocialLoginButtons({ disabled, invitationReturn, roomReturn, roo
     } finally {
       if (attempt.current === controller && !controller.signal.aborted) {
         attempt.current = null;
-        setStarting(null);
+        setStarting(false);
         onBusyChange(false);
       }
     }
   };
 
-  if (!providers.length) return null;
+  if (!available) return null;
   return (
-    <Space orientation="vertical" style={{ width: "100%" }}>
-      {providers.map((provider) => (
-        <Button block size="large" key={provider} className={styles.providerButton} disabled={disabled || Boolean(starting)}
-          aria-label={`Войти через ${provider === "google" ? "Google" : "GitHub"}`}
-          loading={starting === provider} onClick={() => void start(provider)}>
-          {provider === "google"
-            ? <img src="/auth/google-g.png" alt="" aria-hidden="true" width={20} height={20} />
-            : <GithubFilled aria-hidden="true" style={{ fontSize: 20 }} />}
-          <span className={styles.providerLabel}>
-            Войти через {provider === "google" ? "Google" : "GitHub"}
-          </span>
-        </Button>
-      ))}
-    </Space>
+    <Button block size="large" className={styles.providerButton} disabled={disabled || starting}
+      aria-label="Войти через GitHub" loading={starting} onClick={() => void start()}>
+      <GithubFilled aria-hidden="true" style={{ fontSize: 20 }} />
+      <span className={styles.providerLabel}>Войти через GitHub</span>
+    </Button>
   );
 }

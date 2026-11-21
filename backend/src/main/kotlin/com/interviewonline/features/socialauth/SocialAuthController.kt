@@ -70,7 +70,7 @@ class SocialAuthController(private val service: SocialAuthService, private val s
     @GetMapping("/{provider}/callback")
     fun callback(@PathVariable provider: String, request: HttpServletRequest): ResponseEntity<Void> {
         if (settings.providers.isEmpty()) return secure(ResponseEntity.status(HttpStatus.FOUND)).header(HttpHeaders.LOCATION, "/login").build()
-        val profileLink = service.isProfileLinkCallback(proof(request))
+        val profileLink = provider in settings.providers && service.isProfileLinkCallback(proof(request))
         fun destination(result: String) = if (profileLink) "/profile?social_link=$result"
             else if (result == "ready") "/login/social" else "/login/social?result=$result"
         val location = try {
