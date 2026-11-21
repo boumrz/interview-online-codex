@@ -28,4 +28,8 @@
 }
 
 .providerButton img { flex: none; object-fit: contain; }
-.googleLabel { font-family: "Google Sans Auth", sans-serif; font-size: 14px; font-weight: 500; }
+.providerLabel {
+  font: 500 14px/20px "Google Sans Auth", sans-serif;
+  min-inline-size: 10em;
+  text-align: start;
+}

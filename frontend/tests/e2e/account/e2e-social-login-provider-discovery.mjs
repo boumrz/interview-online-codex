@@ -26,8 +26,22 @@ test("ordinary builds discover configured providers from the API", async (t) => 
   await page.route("**/api/auth/social/providers", (route) =>
     route.fulfill({ json: { providers: ["google", "github", "vk"] } }));
   await page.goto(`${web}/login`);
-  await page.getByRole("button", { name: "Войти через Google", exact: true }).waitFor();
-  await page.getByRole("button", { name: "Войти через GitHub", exact: true }).waitFor();
+  const readButtonPresentation = (provider) => {
+    const name = `Войти через ${provider}`;
+    return page.getByRole("button", { name, exact: true }).getByText(name, { exact: true }).evaluate(async (label) => {
+      await document.fonts.ready;
+      const { fontFamily, fontSize, fontWeight, lineHeight } = getComputedStyle(label);
+      const button = label.closest("button");
+      const bounds = button.getBoundingClientRect();
+      const icon = button.querySelector('[aria-hidden="true"]');
+      return {
+        fontFamily, fontSize, fontWeight, lineHeight, buttonWidth: bounds.width,
+        iconOffset: icon.getBoundingClientRect().left - bounds.left,
+        labelOffset: label.getBoundingClientRect().left - bounds.left,
+      };
+    });
+  };
+  assert.deepEqual(await readButtonPresentation("GitHub"), await readButtonPresentation("Google"));
   assert.equal(await page.getByRole("button", { name: "Войти через VK", exact: true }).count(), 0);
 });
 

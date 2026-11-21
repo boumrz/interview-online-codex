@@ -79,7 +79,7 @@ export function SocialLoginButtons({ disabled, invitationReturn, roomReturn, roo
           {provider === "google"
             ? <img src="/auth/google-g.png" alt="" aria-hidden="true" width={20} height={20} />
             : <GithubFilled aria-hidden="true" style={{ fontSize: 20 }} />}
-          <span className={provider === "google" ? styles.googleLabel : undefined}>
+          <span className={styles.providerLabel}>
             Войти через {provider === "google" ? "Google" : "GitHub"}
           </span>
         </Button>
