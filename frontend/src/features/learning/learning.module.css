@@ -1,0 +1,97 @@
+.tour {
+  width: min(360px, calc(100vw - 24px));
+  pointer-events: auto;
+}
+
+.floatingCard {
+  position: fixed;
+  z-index: 1600;
+  width: min(336px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  color: var(--app-text);
+  background: var(--app-surface-elevated);
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(3, 8, 20, 0.16);
+}
+
+.compact {
+  width: min(292px, calc(100vw - 24px));
+}
+
+.spotlight {
+  position: fixed;
+  z-index: 1599;
+  border-radius: 8px;
+  box-shadow: 0 0 0 220vmax rgba(3, 8, 20, 0.54);
+  pointer-events: none;
+}
+
+.spotlightMask {
+  inset: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: rgba(3, 8, 20, 0.54);
+}
+
+.tourCard {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+}
+
+.tourHeader,
+.tourFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tourFooter {
+  flex-wrap: wrap;
+}
+
+.tourTitle {
+  margin: 0;
+  font: inherit;
+  font-weight: 600;
+  outline: none;
+}
+
+.tourDescription {
+  margin: 0;
+}
+
+.tourActions {
+  margin-inline-start: auto;
+}
+
+.stepCount {
+  font-variant-numeric: tabular-nums;
+  color: var(--app-muted);
+  white-space: nowrap;
+}
+
+.skipRow {
+  padding-block-start: 8px;
+  border-block-start: 1px solid var(--app-border);
+}
+
+.tourError {
+  display: block;
+  text-align: start;
+}
+
+:global([data-learning-focus="true"]),
+:global(button[data-learning-help-cue="true"]) {
+  outline: 2px solid var(--app-focus);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :global(.ant-tour-placeholder-animated) {
+    transition: none;
+  }
+}

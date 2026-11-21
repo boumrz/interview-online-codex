@@ -1,0 +1,25 @@
+.page { min-height: 100vh; color: var(--app-text); background: var(--app-bg); }
+.header { border-bottom: 1px solid var(--app-border); background: var(--app-surface); }
+.headerInner { display: flex; align-items: center; justify-content: space-between; width: min(var(--container-width), calc(100% - 64px)); min-height: var(--header-height); margin: 0 auto; }
+.brand { display: inline-flex; align-items: center; gap: 10px; color: var(--app-text); font-weight: 600; text-decoration: none; }
+.brandMark { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 8px; color: var(--app-primary-text); background: var(--app-selected-bg); }
+.content { width: min(760px, calc(100% - 48px)); margin: 0 auto; padding: 36px 0 48px; }
+.backLink { display: inline-block; margin-bottom: 24px; }
+.article { font-size: 16px; line-height: 1.75; overflow-wrap: anywhere; }
+.article h1 { margin: 0 0 12px; font-size: clamp(28px, 4vw, 36px); line-height: 1.25; font-weight: 600; letter-spacing: -0.02em; }
+.article h2 { margin: 32px 0 12px; font-size: 21px; line-height: 1.4; font-weight: 600; }
+.article p { margin: 0 0 16px; }
+.article ul { margin: 0 0 16px; padding-left: 24px; }
+.article li + li { margin-top: 8px; }
+.article .updated { margin-bottom: 28px; color: var(--app-muted); font-size: 14px; }
+.page a, .documentLinks a { color: var(--app-primary-text); text-underline-offset: 3px; }
+.page a:hover, .documentLinks a:hover { text-decoration: underline; }
+.page a:focus-visible, .documentLinks a:focus-visible { outline: 2px solid var(--app-primary-text); outline-offset: 4px; border-radius: 2px; }
+.footer { margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--app-border); }
+.documentLinks { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 24px; font-size: 13px; line-height: 1.6; }
+.footer .documentLinks { justify-content: flex-start; font-size: 14px; }
+@media (max-width: 600px) {
+  .headerInner { width: calc(100% - 32px); }
+  .content { width: calc(100% - 32px); padding-top: 24px; }
+  .article h2 { font-size: 20px; }
+}

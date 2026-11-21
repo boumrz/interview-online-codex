@@ -1,12 +1,13 @@
 import React, { FormEvent, useEffect, useState } from "react";
-import { Alert, Button, Card, Input, Modal, Select, Space, Tag, Typography } from "antd";
-import { ArrowRightOutlined, CodeOutlined, LaptopOutlined, TeamOutlined } from "@ant-design/icons";
+import { Alert, Button, Card, Input, Modal, Select, Space, Typography } from "antd";
+import { ArrowRightOutlined, CodeOutlined } from "@ant-design/icons";
 import { Link, useNavigate } from "react-router-dom";
 import { useAppSelector } from "../app/hooks";
 import { useCreateGuestRoomMutation } from "../services/api";
 import { setVisitParams, trackEvent } from "../services/analytics";
 import { ThemeToggleButton } from "../features/theme/ThemeToggleButton";
 import styles from "./LandingPage.module.css";
+import { PublicDocumentLinks } from "./LegalPage";
 
 const LANGUAGES = [
   { value: "nodejs", label: "Node JS" },
@@ -22,6 +23,7 @@ export function LandingPage() {
   const authToken = useAppSelector((store) => store.auth.token);
   const [title, setTitle] = useState("Live-coding interview");
   const [displayName, setDisplayName] = useState("Interviewer");
+  const [joinName, setJoinName] = useState("");
   const [language, setLanguage] = useState("nodejs");
   const [inviteCode, setInviteCode] = useState("");
   const [error, setError] = useState("");
@@ -35,6 +37,7 @@ export function LandingPage() {
 
   const onCreate = async (event: FormEvent) => {
     event.preventDefault();
+    if (isLoading || !displayName.trim() || !title.trim()) return;
     trackEvent("prod_guest_room_create_submit", {
       language,
       has_title: title.trim().length > 0,
@@ -55,8 +58,8 @@ export function LandingPage() {
 
   const onJoin = (event: FormEvent) => {
     event.preventDefault();
-    if (!inviteCode.trim()) return;
-    const name = (displayName || "Участник").trim();
+    if (!inviteCode.trim() || !joinName.trim()) return;
+    const name = joinName.trim();
     const code = inviteCode.trim();
     trackEvent("prod_room_join_submit", {
       invite_code_len: code.length,
@@ -74,13 +77,11 @@ export function LandingPage() {
             <span className={styles.brandMark}><CodeOutlined aria-hidden="true" /></span>
             <span>
               <Typography.Text className={styles.brandName}>InterHub</Typography.Text>
-              <Typography.Text className={styles.brandCaption}>realtime coding room</Typography.Text>
             </span>
           </Link>
           <div className={styles.headerActions}>
-            <Tag className={styles.headerTag}>Live coding</Tag>
             <Link className={`${styles.headerButton} app-header-control`} to={authToken ? "/dashboard/rooms" : "/login"}>
-              Личный кабинет
+              {authToken ? "Личный кабинет" : "Войти"}
             </Link>
             <ThemeToggleButton />
           </div>
@@ -90,40 +91,21 @@ export function LandingPage() {
       <div className={styles.content}>
         <section className={styles.hero} aria-labelledby="landing-title">
           <div className={styles.heroCopy}>
-            <Typography.Text className={styles.eyebrow}>КОМНАТА ДЛЯ ТЕХНИЧЕСКОГО ИНТЕРВЬЮ</Typography.Text>
             <Typography.Title id="landing-title" className={styles.heroTitle} level={1}>
-              Запускайте интервью за 30 секунд.
+              Комната для технического интервью
             </Typography.Title>
+            <Typography.Paragraph className={styles.heroDescription}>Решайте задачу вместе в одном редакторе.</Typography.Paragraph>
+            <Button type="primary" size="large" icon={<ArrowRightOutlined aria-hidden="true" />} onClick={() => { setError(""); setCreateOpened(true); }}>Создать комнату</Button>
+          </div>
 
-            <div className={styles.featureGrid}>
-              <Card className={styles.featureCard}>
-                <span className={styles.featureIcon}><TeamOutlined aria-hidden="true" /></span>
-                <span>
-                  <Typography.Text strong>Совместный редактор</Typography.Text>
-                </span>
-              </Card>
-              <Card className={styles.featureCard}>
-                <span className={styles.featureIcon}><LaptopOutlined aria-hidden="true" /></span>
-                <span>
-                  <Typography.Text strong>Задачи и шаги</Typography.Text>
-                </span>
-              </Card>
-            </div>
-
-            <div className={styles.codeSample} aria-label="Пример кода редактора">
-              <div className={styles.codeSampleHeader}><i aria-hidden="true" /><i aria-hidden="true" /><i aria-hidden="true" /><Typography.Text>solve.py</Typography.Text></div>
-              <pre>{`# Python\ndef solve(nums):\n    return sum(nums)\n\n# Node JS\nfunction solve(nums) {\n  return nums.reduce((a, b) => a + b, 0);\n}`}</pre>
-            </div>
+          <div className={styles.codeSample} aria-label="Пример интерфейса комнаты">
+            <div className={styles.codeSampleHeader}><Typography.Text>Сумма чисел · Node JS</Typography.Text></div>
+            <p className={styles.sampleTask}>Напишите функцию, возвращающую сумму двух чисел.</p>
+            <pre>{`function sum(a, b) {\n  return a + b;\n}`}</pre>
           </div>
 
           <aside className={styles.forms} aria-label="Быстрый вход в интервью">
-            <Card className={styles.formCard}>
-              <Space orientation="vertical" size={4}>
-                <Typography.Title level={2}>Создать комнату</Typography.Title>
-              </Space>
-              <Button block type="primary" size="large" icon={<ArrowRightOutlined aria-hidden="true" />} onClick={() => { setError(""); setCreateOpened(true); }}>Создать комнату</Button>
-            </Card>
-            <Modal open={createOpened} onCancel={() => { if (!isLoading) setCreateOpened(false); }} title="Создать комнату" centered footer={null} mask={{ closable: !isLoading }} keyboard={!isLoading} closable={!isLoading}>
+            <Modal open={createOpened} onCancel={() => { if (!isLoading) setCreateOpened(false); }} title="Новая комната" centered footer={null} mask={{ closable: !isLoading }} keyboard={!isLoading} closable={!isLoading}>
               <form className={styles.form} onSubmit={onCreate}>
                 <label className={styles.field}>
                   <span>Ваше имя</span>
@@ -140,7 +122,7 @@ export function LandingPage() {
                 <Space style={{ justifyContent: "flex-end", width: "100%" }}>
                 <Button htmlType="button" disabled={isLoading} onClick={() => setCreateOpened(false)}>Отмена</Button>
                 <Button htmlType="submit" loading={isLoading} type="primary" icon={<ArrowRightOutlined aria-hidden="true" />}>
-                  Создать комнату
+                  Создать и войти
                 </Button>
                 </Space>
                 {error && <Alert className={styles.formAlert} role="alert" showIcon type="error" message={error} />}
@@ -152,7 +134,7 @@ export function LandingPage() {
               <form className={styles.form} onSubmit={onJoin}>
                 <label className={styles.field}>
                   <span>Ваше имя</span>
-                  <Input autoComplete="name" placeholder="Имя, которое увидят участники" value={displayName} onChange={(event) => setDisplayName(event.currentTarget.value)} required />
+                  <Input autoComplete="name" placeholder="Имя, которое увидят участники" value={joinName} onChange={(event) => setJoinName(event.currentTarget.value)} required />
                 </label>
                 <label className={styles.field}>
                   <span>Код комнаты</span>
@@ -163,6 +145,7 @@ export function LandingPage() {
             </Card>
           </aside>
         </section>
+        <footer className={styles.footer}><PublicDocumentLinks /></footer>
       </div>
     </main>
   );

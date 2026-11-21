@@ -8,9 +8,6 @@ RUN npm ci
 COPY . .
 # COPY intentionally includes the verified .cache/drawio archive prepared by
 # deploy_docker.sh; a cached build does not need GitHub access from BuildKit.
-ARG FEATURE_SOCIAL_AUTH_ENABLED=false
-ARG FEATURE_ROOM_DIAGRAMS_ENABLED=false
-ARG FEATURE_ROOM_WHITEBOARD_ENABLED=false
 ARG DRAWIO_DOWNLOAD_TIMEOUT_MS=180000
 ARG DRAWIO_DOWNLOAD_ATTEMPTS=2
 RUN npm run typecheck && npm run build

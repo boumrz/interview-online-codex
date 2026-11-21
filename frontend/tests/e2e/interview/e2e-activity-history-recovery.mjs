@@ -203,13 +203,30 @@ test('candidate profile hydration keeps the unacknowledged UUIDs when the displa
     await target.page.keyboard.type('ab');
     await target.page.getByText(/Запись активности задерживается/).waitFor();
     const oldConnections = await target.page.evaluate(() => window.__activityConnections);
+    const waitForDelivery = key => target.page.waitForResponse(response => {
+      const request = response.request();
+      if (response.status() !== 204 || request.method() !== 'POST' ||
+          !new URL(request.url()).pathname.endsWith(`/realtime/rooms/${room.inviteCode}/events`)) return false;
+      const event = request.postDataJSON();
+      return event.type === 'key_press' && event.key === key && event.eventToken !== initialToken;
+    }, { timeout: 12_000 });
+    const delivery = Promise.all([
+      target.page.waitForFunction(previous => window.__activityConnections > previous, oldConnections),
+      waitForDelivery('a'),
+      waitForDelivery('b'),
+    ]);
     releaseProfile();
-    await target.page.waitForFunction(previous => window.__activityConnections > previous, oldConnections);
+    const [, acceptedA, acceptedB] = await delivery;
     await target.page.getByText(/Запись активности задерживается/).waitFor({ state: 'hidden' });
+    const originalA = attempted.find(event => event.key === 'a')?.id;
+    const acceptedBId = acceptedB.request().postDataJSON().sourceEventId;
+    assert.ok(originalA, 'the old SSE connection attempted the queue head');
+    assert.equal(acceptedA.request().postDataJSON().sourceEventId, originalA);
     const raw = await request(`/rooms/${room.inviteCode}/keystroke-events`, { token: owner.token });
     assert.deepEqual(raw.filter(e => ['a', 'b'].includes(e.keyValue)).map(e => [e.keyValue, e.sourceEventId]),
-      [['a', attempted[0].id], ['b', attempted.find(e => e.key === 'b').id]]);
-    assert.equal(new Set(attempted.filter(e => e.key === 'a').map(e => e.id)).size, 1);
+      [['a', originalA], ['b', acceptedBId]]);
+    assert.deepEqual(new Set(attempted.filter(e => e.key === 'a').map(e => e.id)), new Set([originalA]));
+    assert.deepEqual(new Set(attempted.filter(e => e.key === 'b').map(e => e.id)), new Set([acceptedBId]));
   } finally { releaseProfile(); await browser.close(); }
 });
 

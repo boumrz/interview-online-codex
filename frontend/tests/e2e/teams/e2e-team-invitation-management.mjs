@@ -898,7 +898,7 @@ async function assertKeyboardLogoutReloginCleanup(owner, team, cell, marker) {
       await focusWithKeyboard(page, logout, `${marker}_LOGOUT`);
       await page.keyboard.press("Enter");
       await page.waitForURL(`${web}/`);
-      const accountLink = page.getByRole("link", { name: "Личный кабинет", exact: true });
+      const accountLink = page.getByRole("link", { name: "Войти", exact: true });
       await focusWithKeyboard(page, accountLink, `${marker}_LOGIN_LINK`);
       await page.keyboard.press("Enter");
       await page.waitForURL(`${web}/login`);

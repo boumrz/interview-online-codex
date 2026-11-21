@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Button, Space } from "antd";
+import { GithubFilled } from "@ant-design/icons";
 import { store } from "../../app/store";
 import { getApiErrorMessage } from "../../services/apiErrors";
 import { readAuthorizationUrl, socialRequest, SOCIAL_INVITATION_RETURN_KEY, SocialProvider } from "../../services/socialAuth";
@@ -8,11 +9,13 @@ import styles from "./SocialLoginButtons.module.css";
 type Props = {
   disabled: boolean;
   invitationReturn: boolean;
+  roomReturn: boolean;
+  roomContextId?: string;
   onError: (message: string) => void;
   onBusyChange: (busy: boolean) => void;
 };
 
-export function SocialLoginButtons({ disabled, invitationReturn, onError, onBusyChange }: Props) {
+export function SocialLoginButtons({ disabled, invitationReturn, roomReturn, roomContextId, onError, onBusyChange }: Props) {
   const [providers, setProviders] = useState<SocialProvider[]>([]);
   const [starting, setStarting] = useState<SocialProvider | null>(null);
   const attempt = useRef<AbortController | null>(null);
@@ -22,7 +25,7 @@ export function SocialLoginButtons({ disabled, invitationReturn, onError, onBusy
       if (controller.signal.aborted || !data || typeof data !== "object"
         || !("providers" in data) || !Array.isArray(data.providers)) return;
       const configured = data.providers;
-      setProviders(["google", "vk"].filter((provider) => configured.includes(provider)) as SocialProvider[]);
+      setProviders(["google", "github"].filter((provider) => configured.includes(provider)) as SocialProvider[]);
     }).catch(() => {});
     const cancel = () => { attempt.current?.abort(); attempt.current = null; };
     const onPageHide = () => { cancel(); setStarting(null); onBusyChange(false); };
@@ -48,7 +51,7 @@ export function SocialLoginButtons({ disabled, invitationReturn, onError, onBusy
     onBusyChange(true);
     onError("");
     try {
-      const data = await socialRequest<unknown>(`/${provider}/start`, controller.signal, {});
+      const data = await socialRequest<unknown>(`/${provider}/start`, controller.signal, { roomReturn, roomContextId });
       if (!current()) return;
       const url = readAuthorizationUrl(data, provider);
       // Only this fixed, non-secret path survives navigation to the provider.
@@ -71,12 +74,13 @@ export function SocialLoginButtons({ disabled, invitationReturn, onError, onBusy
     <Space orientation="vertical" style={{ width: "100%" }}>
       {providers.map((provider) => (
         <Button block size="large" key={provider} className={styles.providerButton} disabled={disabled || Boolean(starting)}
-          aria-label={`Войти через ${provider === "google" ? "Google" : "VK ID"}`}
+          aria-label={`Войти через ${provider === "google" ? "Google" : "GitHub"}`}
           loading={starting === provider} onClick={() => void start(provider)}>
-          <img src={provider === "google" ? "/auth/google-g.png" : "/auth/vk-id.svg"}
-            alt="" aria-hidden="true" width={20} height={20} />
+          {provider === "google"
+            ? <img src="/auth/google-g.png" alt="" aria-hidden="true" width={20} height={20} />
+            : <GithubFilled aria-hidden="true" style={{ fontSize: 20 }} />}
           <span className={provider === "google" ? styles.googleLabel : undefined}>
-            Войти через {provider === "google" ? "Google" : "VK ID"}
+            Войти через {provider === "google" ? "Google" : "GitHub"}
           </span>
         </Button>
       ))}

@@ -28,25 +28,27 @@ async function suiteFiles(directory, prefix = "tests/e2e/") {
   return groups.flat().sort();
 }
 
-test("the complete E2E command lists every active suite in the required mode without starting fixtures", async () => {
-  const result = await fullCommand();
+test("the complete E2E command assigns every suite to the standard, dev tool, or provider fixture runner without starting fixtures", async () => {
+  const result = await fullCommand({ FEATURE_LEARNING_ENABLED: "true", FEATURE_SOCIAL_AUTH_ENABLED: "true" });
   assert.equal(result.code, 0, `complete regression needs an inspectable plan: ${result.output}`);
   const plan = JSON.parse(result.output);
-  assert.deepEqual(plan.featureFlags, {
-    FEATURE_ROOM_DIAGRAMS_ENABLED: "true",
-    FEATURE_ROOM_WHITEBOARD_ENABLED: "true",
-    FEATURE_SOCIAL_AUTH_ENABLED: "false",
-  }, "the full active suite must exercise both canvases while deferred social login stays off");
+  assert.deepEqual(Object.keys(plan).sort(), ["development", "production", "provider"]);
   const all = await suiteFiles(new URL("../e2e/", import.meta.url));
-  assert.deepEqual([...plan.production, ...plan.development].sort(), all.filter(file => file !== "tests/e2e/account/e2e-social-login.mjs"));
+  assert.deepEqual([...plan.production, ...plan.development, ...plan.provider].sort(), all);
   assert.deepEqual(plan.development, [
     "tests/e2e/platform/e2e-local-runtime-chunk-recovery.mjs",
     "tests/e2e/theme/e2e-workspace-burger-frames.mjs",
     "tests/e2e/theme/e2e-workspace-switch-stability.mjs",
   ]);
-  assert.deepEqual(plan.excluded.map(item => item.file), ["tests/e2e/account/e2e-social-login.mjs"]);
-  assert.match(plan.excluded[0].reason, /deferred|отлож/i);
-  assert.equal(new Set([...plan.production, ...plan.development]).size, plan.production.length + plan.development.length);
+  assert.deepEqual(plan.provider, [
+    "tests/e2e/account/e2e-profile-social-links-integration.mjs",
+    "tests/e2e/account/e2e-profile-social-links.mjs",
+    "tests/e2e/account/e2e-social-login.mjs",
+  ]);
+  assert.ok(plan.production.includes("tests/e2e/account/e2e-social-login-provider-discovery.mjs"));
+  assert.ok(plan.production.includes("tests/e2e/learning/e2e-continuous-onboarding.mjs"));
+  assert.ok(plan.production.includes("tests/e2e/learning/e2e-contextual-learning.mjs"));
+  assert.ok(plan.production.includes("tests/e2e/learning/e2e-room-training-controls.mjs"));
 });
 
 test("complete E2E orchestration rejects unowned targets before starting any child runtime", async () => {

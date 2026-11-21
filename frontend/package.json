@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "predev": "node scripts/prepare-drawio.mjs --if-enabled && node --experimental-strip-types scripts/generate-theme-css.mjs",
+    "predev": "node scripts/prepare-drawio.mjs && node --experimental-strip-types scripts/generate-theme-css.mjs",
     "dev": "rspack serve --config rspack.config.mjs",
-    "prebuild": "node scripts/prepare-drawio.mjs --if-enabled && node --experimental-strip-types scripts/generate-theme-css.mjs",
+    "prebuild": "node scripts/prepare-drawio.mjs && node --experimental-strip-types scripts/generate-theme-css.mjs",
     "build": "rspack build --config rspack.config.mjs && npm run compress:dist",
     "compress:dist": "node scripts/compress-dist.mjs",
     "typecheck": "tsc --noEmit",

@@ -31,7 +31,7 @@ import java.util.zip.Deflater
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
 
-@SpringBootTest(properties = ["app.features.room-diagrams-enabled=true"])
+@SpringBootTest
 @AutoConfigureMockMvc(print = MockMvcPrint.NONE)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class RoomDiagramIntegrationTest(
@@ -462,40 +462,38 @@ class RoomDiagramIntegrationTest(
 @SpringBootTest
 @AutoConfigureMockMvc(print = MockMvcPrint.NONE)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
-class RoomDiagramDisabledIntegrationTest(
+class RoomDiagramAvailabilityIntegrationTest(
     @Autowired private val mvc: MockMvc,
     @Autowired private val rooms: RoomRepository,
     @Autowired private val jdbc: JdbcTemplate,
     @Autowired private val mapper: ObjectMapper,
 ) {
     companion object {
-        private val postgres = Postgres16TestSupport.create("room_diagram_disabled")
+        private val postgres = Postgres16TestSupport.create("room_diagram_availability")
         @JvmStatic @DynamicPropertySource fun properties(registry: DynamicPropertyRegistry) = postgres.register(registry)
         @JvmStatic @AfterAll fun cleanup() = postgres.close()
     }
-    @Test fun `diagram API remains unavailable by default`() {
-        val room = rooms.saveAndFlush(Room(inviteCode = "diagram-disabled-${UUID.randomUUID()}", ownerSessionToken = "owner", interviewerSessionToken = "interviewer"))
-        assertEquals(404, mvc.get("/api/rooms/${room.inviteCode}/diagram").andReturn().response.status)
-        assertEquals(404, mvc.post("/api/rooms/${room.inviteCode}/diagram/changes") {
-            param("sessionId", "none"); contentType = MediaType.APPLICATION_JSON
-            content = """{"diagramId":"${UUID.randomUUID()}","operationId":"${UUID.randomUUID()}","baseSequence":0,"xml":"<mxGraphModel/>"}"""
-        }.andReturn().response.status)
+    @Test fun `diagram snapshot is available without feature configuration`() {
+        val room = rooms.saveAndFlush(Room(inviteCode = "diagram-ready-${UUID.randomUUID()}", ownerSessionToken = "owner", interviewerSessionToken = "interviewer"))
+        val result = mvc.get("/api/rooms/${room.inviteCode}/diagram").andReturn().response
+        assertEquals(200, result.status)
+        assertFalse(mapper.readTree(result.contentAsString).path("canEdit").asBoolean())
     }
 
-    @Test fun `disabling diagrams leaves existing rooms usable and prevents mode bypass`() {
-        val room = rooms.saveAndFlush(Room(inviteCode = "diagram-disabled-mode-${UUID.randomUUID()}", ownerSessionToken = "owner", interviewerSessionToken = "interviewer"))
+    @Test fun `saved diagram is visible in room APIs and owners can select it again`() {
+        val room = rooms.saveAndFlush(Room(inviteCode = "diagram-ready-mode-${UUID.randomUUID()}", ownerSessionToken = "owner", interviewerSessionToken = "interviewer"))
         jdbc.update("UPDATE rooms SET room_editor_mode='diagram' WHERE id=?", room.id)
         val roomResponse = mvc.get("/api/rooms/${room.inviteCode}") { header("X-Room-Owner-Token", "owner") }.andReturn()
-        assertEquals("code", mapper.readTree(roomResponse.response.contentAsString).path("roomEditorMode").asText())
+        assertEquals("diagram", mapper.readTree(roomResponse.response.contentAsString).path("roomEditorMode").asText())
         val sessionId = UUID.randomUUID().toString()
         val connection = mvc.get("/api/realtime/rooms/${room.inviteCode}/stream") {
             param("sessionId", sessionId); param("ownerToken", "owner")
         }.andReturn()
         val state = connection.response.contentAsString.lineSequence().filter { it.startsWith("data:") }
             .map { mapper.readTree(it.removePrefix("data:")) }.last { it.path("type").asText() == "state_sync" }.path("payload")
-        assertEquals("code", state.path("roomEditorMode").asText())
-        assertFalse(state.path("roomDiagramsEnabled").asBoolean())
-        assertEquals(404, mvc.post("/api/realtime/rooms/${room.inviteCode}/events") {
+        assertEquals("diagram", state.path("roomEditorMode").asText())
+        assertTrue(state.path("roomDiagramsEnabled").asBoolean())
+        assertEquals(204, mvc.post("/api/realtime/rooms/${room.inviteCode}/events") {
             contentType = MediaType.APPLICATION_JSON
             content = mapper.writeValueAsString(mapOf("sessionId" to sessionId, "eventToken" to state.path("eventToken").asText(),
                 "type" to "room_editor_mode_update", "roomEditorMode" to "diagram", "expectedRoomEditorModeRevision" to 0))

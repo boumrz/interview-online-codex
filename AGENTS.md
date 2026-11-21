@@ -72,7 +72,7 @@ only for unresolved material choices or actions outside the authorized scope.
   scenarios explicitly.
 - Invitation links, auth tokens, idempotency keys and private candidate data
   must never be persisted or logged through UI recovery state.
-- Feature flags must remain off by default until their release gate is accepted.
+- Shipped features run without opt-in toggles. Keep role and data access checks enforced.
 - Do not touch the user's running local app unless the user explicitly asks for
   restart/stop/start.
 - Follow the active role matrix. Do not invent owner-only restrictions, token
@@ -112,12 +112,19 @@ Older files such as `openspec/project.md`, `openspec/specs/` and
 not the active workflow. Do not recreate new OpenSpec artifacts for ordinary
 development.
 
-## Deferred Google/VK Login
+## Social Login Release State
 
-Google/VK integration is postponed by the user. Keep `FEATURE_SOCIAL_AUTH_ENABLED=false`
-for backend and frontend; provider credentials/flags alone must not expose it.
-Users keep the current nickname/password flow. Resume only on a new explicit request.
+The implementation is verified with test providers. On 2026-11-18 the owner accepted
+Google terms and confirmed GitHub sudo; both OAuth clients and secrets are prepared.
+Google remains External/Testing with Branding links saved. The requested basic
+identity scopes work in Testing. Publish Audience to leave testing mode and
+verify Branding to display the app name and logo. The public legal documents
+ship with the application.
+The owner retains server access and deployment. Do not request SSH access
+or deploy. The server enables Google and GitHub when their credentials are
+configured. See the owner runbook for live checks.
+The nickname/password flow remains available. VK is still deferred.
 Contract: [AUTH.1](specs/features/auth-1-social-login.md).
-Console setup: [saved instruction](specs/references/2026-10-05-social-login-setup.md).
+Current setup/deployment: [owner runbook](specs/references/2026-11-18-learning-social-login-deploy.md).
 Backend: `backend/src/main/kotlin/com/interviewonline/features/socialauth/`.
 Frontend: `SocialLoginButtons`, `SocialLoginPage`, `services/socialAuth.ts`.

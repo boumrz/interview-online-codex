@@ -296,7 +296,7 @@ test("public guest creation has no hiring-manager field and never submits hiring
     await page.goto(web, { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "Создать комнату", exact: true }).waitFor();
     await page.getByRole("button", { name: "Создать комнату", exact: true }).click();
-    const guestForm = page.getByRole("dialog", { name: "Создать комнату" }).locator("form");
+    const guestForm = page.getByRole("dialog", { name: "Новая комната", exact: true }).locator("form");
     assert.equal(await guestForm.count(), 1);
     assert.equal(await guestForm.getByRole("combobox", { name: "Нанимающий", exact: true }).count(), 0,
       "The open public guest form must not expose an authenticated hiring-manager control");
@@ -305,7 +305,7 @@ test("public guest creation has no hiring-manager field and never submits hiring
     const submitted = page.waitForRequest((request) =>
       request.url().endsWith("/api/public/rooms") && request.method() === "POST",
     );
-    await guestForm.getByRole("button", { name: "Создать комнату", exact: true }).click();
+    await guestForm.getByRole("button", { name: "Создать и войти", exact: true }).click();
     const payload = JSON.parse((await submitted).postData() ?? "{}");
     assert.equal(Object.hasOwn(payload, "hiringManagerIds"), false,
       "The public guest request must omit the authenticated-only field entirely");

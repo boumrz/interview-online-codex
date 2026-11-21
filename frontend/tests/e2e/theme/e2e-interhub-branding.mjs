@@ -95,7 +95,7 @@ test('InterHub starts with local IBM Plex when external font CSS is unavailable 
           });
         }
         await page.goto(`${web}/`, { waitUntil: 'domcontentloaded' });
-        await page.getByRole('heading', { name: 'Запускайте интервью за 30 секунд.', exact: true }).waitFor();
+        await page.getByRole('heading', { name: 'Комната для технического интервью', exact: true }).waitFor();
         await page.locator('header').getByText('InterHub', { exact: true }).waitFor();
         assert.equal(await page.title(), 'InterHub');
         assert.equal(await page.getByRole('link', { name: /InterHub.*главн|главн.*InterHub/ }).isVisible(), true);
@@ -107,7 +107,8 @@ test('InterHub starts with local IBM Plex when external font CSS is unavailable 
             faces: (await document.fonts.load(`${weight} 15px "${family}"`, 'Hello Интервью')).map(face => ({ family: normalizeFamily(face.family), weight: face.weight, display: face.display, status: face.status })),
           })));
           await document.fonts.ready;
-          const brand = [...document.querySelectorAll('header *')].find(node => node.textContent?.trim() === 'InterHub');
+          const brand = [...document.querySelectorAll('header a span')].find(node =>
+            node.childElementCount === 0 && node.textContent?.trim() === 'InterHub');
           return {
             loaded,
             bodyFamily: getComputedStyle(document.body).fontFamily,
@@ -127,7 +128,7 @@ test('InterHub starts with local IBM Plex when external font CSS is unavailable 
         if (failLocalFont) {
           assert.ok(failedLocalFonts.length > 0, 'The fallback scenario actually denies local font bytes');
           assert.ok(typography.fontErrors > 0, 'The interface remains ready despite a real FontFace load error');
-          assert.equal(await page.getByRole('heading', { name: 'Запускайте интервью за 30 секунд.', exact: true }).isVisible(), true);
+          assert.equal(await page.getByRole('heading', { name: 'Комната для технического интервью', exact: true }).isVisible(), true);
         } else {
           assert.ok(localFontResponses.length > 0);
           assert.ok(localFontResponses.every(response => response.status === 200), 'Real same-origin WOFF2 responses load successfully');

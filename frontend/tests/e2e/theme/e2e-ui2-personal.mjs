@@ -11,10 +11,10 @@ test('guest creation is modal and login fields explain expected input', async ()
   try {
     const page = await browser.newPage();
     await page.goto(base, { waitUntil: 'networkidle' });
-    await page.getByRole('heading', { name: 'Запускайте интервью за 30 секунд.' }).waitFor();
+    await page.getByRole('heading', { name: 'Комната для технического интервью', exact: true }).waitFor();
     assert.equal(await page.getByRole('textbox', { name: 'Название комнаты' }).count(), 0, 'creation fields must not be inline');
     await page.getByRole('button', { name: 'Создать комнату', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: 'Создать комнату' });
+    const dialog = page.getByRole('dialog', { name: 'Новая комната', exact: true });
     await dialog.waitFor();
     assert.ok(await dialog.getByRole('textbox', { name: 'Название комнаты' }).getAttribute('placeholder'));
     await dialog.getByRole('button', { name: 'Отмена', exact: true }).click();

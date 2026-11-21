@@ -53,7 +53,7 @@ function verifyGoal(goal, definition) {
     && goal?.status === "Active";
 }
 
-export async function syncProductMetrikaGoals({ token, counterId = DEFAULT_COUNTER_ID, apply = false } = {}) {
+export async function syncMetrikaGoals({ token, counterId = DEFAULT_COUNTER_ID, apply = false, definitions = PRODUCT_GOAL_DEFINITIONS } = {}) {
   if (!token?.trim()) throw new Error("METRIKA_OAUTH_TOKEN is required.");
   if (!Number.isSafeInteger(counterId) || counterId <= 0) throw new Error("METRIKA_COUNTER_ID must be a positive integer.");
   const goalsPayload = await request(`/management/v1/counter/${counterId}/goals?useDeleted=true`, { token });
@@ -62,14 +62,14 @@ export async function syncProductMetrikaGoals({ token, counterId = DEFAULT_COUNT
   for (const goal of goals) {
     const target = goalTarget(goal);
     if (!target) continue;
-    const matching = PRODUCT_GOAL_DEFINITIONS.find((definition) => definition.target === target);
+    const matching = definitions.find((definition) => definition.target === target);
     if (!matching) continue;
     if (existingByTarget.has(target)) throw new Error("Metrika has duplicate product goal targets; no changes were made.");
     existingByTarget.set(target, goal);
   }
 
-  const missing = PRODUCT_GOAL_DEFINITIONS.filter((definition) => !existingByTarget.has(definition.target));
-  for (const definition of PRODUCT_GOAL_DEFINITIONS) {
+  const missing = definitions.filter((definition) => !existingByTarget.has(definition.target));
+  for (const definition of definitions) {
     const existing = existingByTarget.get(definition.target);
     if (existing && !verifyGoal(existing, definition)) {
       throw new Error("An existing product goal does not match the approved v1 definition; no changes were made.");
@@ -95,13 +95,17 @@ export async function syncProductMetrikaGoals({ token, counterId = DEFAULT_COUNT
   }
 
   const verified = [];
-  for (const definition of PRODUCT_GOAL_DEFINITIONS) {
+  for (const definition of definitions) {
     const expected = existingByTarget.get(definition.target);
     const payload = await request(`/management/v1/counter/${counterId}/goal/${expected?.id}`, { token });
     if (!verifyGoal(payload?.goal, definition)) throw new Error("A product goal failed post-create verification.");
     verified.push({ key: definition.key, id: payload.goal.id });
   }
   return { created: missing.map((definition) => definition.key), missing: [], verified };
+}
+
+export function syncProductMetrikaGoals(options = {}) {
+  return syncMetrikaGoals({ ...options, definitions: PRODUCT_GOAL_DEFINITIONS });
 }
 
 async function main() {

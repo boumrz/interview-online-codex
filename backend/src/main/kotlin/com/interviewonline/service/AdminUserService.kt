@@ -51,9 +51,8 @@ class AdminUserService(
     fun updateRole(currentUser: User, targetUserId: String, role: String): AdminUserDto {
         requireAdmin(currentUser)
         val normalizedRole = normalizeRole(role)
-        val target = userRepository.findById(targetUserId).orElseThrow {
-            ApiException(HttpStatus.NOT_FOUND, "Пользователь не найден")
-        }
+        val target = userRepository.lockById(targetUserId)
+            ?: throw ApiException(HttpStatus.NOT_FOUND, "Пользователь не найден")
         if (target.nickname.equals(PRIMARY_ADMIN_NICKNAME, ignoreCase = true) && normalizedRole != ROLE_ADMIN) {
             throw ApiException(HttpStatus.BAD_REQUEST, "Нельзя снять права администратора у системного администратора")
         }

@@ -187,7 +187,7 @@ async function logoutAndLogin(page, auth, destination = "/workspace/personal/int
   }
   await page.getByRole("button", { name: "Выйти", exact: true }).click();
   await page.waitForURL(`${web}/`);
-  await page.getByRole("link", { name: "Личный кабинет", exact: true }).click();
+  await page.getByRole("link", { name: "Войти", exact: true }).click();
   await page.waitForURL("**/login");
   await page.getByLabel(/^Ник(?:\s*\*)?$/).fill(auth.user.nickname);
   await page.getByLabel(/^Пароль(?:\s*\*)?$/).fill("test-password-123");
@@ -1888,7 +1888,9 @@ for (const routeCase of remediationLegacyRoutes) {
         }
         assert.equal(await page.getByRole("heading", { name: routeCase.heading, exact: true }).count(), 1, `CANONICAL_HEADING_MISSING_AFTER_${phase.toUpperCase()}: ${routeCase.oldPath}`);
         if (routeCase.data) {
-          assert.equal(await page.getByText(fixtures[routeCase.data].title ?? fixtures[routeCase.data].name, { exact: true }).count(), 1, `CANONICAL_DATA_MISSING_AFTER_${phase.toUpperCase()}: ${routeCase.oldPath}`);
+          const data = page.getByText(fixtures[routeCase.data].title ?? fixtures[routeCase.data].name, { exact: true });
+          await data.waitFor();
+          assert.equal(await data.count(), 1, `CANONICAL_DATA_MISSING_AFTER_${phase.toUpperCase()}: ${routeCase.oldPath}`);
         }
         if (routeCase.action) {
           assert.equal(await page.getByRole("button", { name: routeCase.action, exact: true }).count(), 1, `CANONICAL_ACTION_MISSING_AFTER_${phase.toUpperCase()}: ${routeCase.oldPath}`);

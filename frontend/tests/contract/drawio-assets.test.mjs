@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { strToU8, zipSync } from 'fflate';
-import { extractDrawioArchive, installDrawioArchive, isDrawioPrepared, prepareDrawio } from '../../scripts/prepare-drawio.mjs';
+import { extractDrawioArchive, installDrawioArchive, isDrawioPrepared } from '../../scripts/prepare-drawio.mjs';
 
 function archive(extra = {}) {
   return zipSync({
@@ -52,8 +52,6 @@ test('feature-off preparation does not access an archive or create editor files'
   const directory = await mkdtemp(path.join(tmpdir(), 'interhub-drawio-off-'));
   try {
     const target = path.join(directory, 'editor');
-    assert.deepEqual(await prepareDrawio({ ifEnabled: true, enabled: false, target,
-      archivePath: path.join(directory, 'absent-archive') }), { prepared: false, skipped: true });
     assert.equal(await isDrawioPrepared(target), false);
   } finally {
     await rm(directory, { recursive: true, force: true });

@@ -70,11 +70,14 @@
 .hero {
   display: grid;
   grid-template-columns: minmax(0, 1.12fr) minmax(340px, 0.88fr);
+  grid-template-areas: "copy forms" "preview forms";
   align-items: start;
-  gap: 32px;
+  gap: 28px 48px;
 }
 
-.heroCopy { min-width: 0; padding: 20px 0; }
+.heroCopy { grid-area: copy; min-width: 0; padding: 20px 0 0; }
+.heroDescription { font-size: 18px; color: var(--app-muted); margin-bottom: 24px !important; }
+.sampleTask { padding: 16px 18px 0; margin: 0; font-size: 14px; }
 .eyebrow { color: var(--app-primary-text); font-size: 12px; font-weight: 600; letter-spacing: 0.08em; }
 .heroTitle { max-width: 680px; margin: 14px 0 12px !important; font-size: clamp(32px, 3.2vw, 40px) !important; line-height: 1.2 !important; }
 
@@ -86,8 +89,9 @@
 .secondaryText { color: var(--app-muted) !important; }
 
 .codeSample {
+  grid-area: preview;
   overflow: hidden;
-  margin-top: 18px;
+  margin-top: 0;
   border: 1px solid var(--app-border);
   border-radius: 8px;
   background: var(--app-editor-bg);
@@ -102,7 +106,7 @@
 .codeSampleHeader :global(.ant-typography) { margin-left: 6px; color: inherit; font-size: 12px; }
 .codeSample pre { overflow: auto; margin: 0; padding: 18px; font-size: 13px; line-height: 1.6; }
 
-.forms { display: grid; gap: 16px; min-width: 0; }
+.forms { grid-area: forms; display: grid; gap: 16px; min-width: 0; }
 .formCard,
 .joinCard { min-width: 0; background: var(--app-surface); }
 .formCard { padding: 24px !important; }
@@ -116,13 +120,14 @@
 .form { display: grid; gap: 16px; }
 .field { display: grid; gap: 8px; color: var(--app-text); font-size: 14px; font-weight: 500; }
 .formAlert { margin: 0; }
+.footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--app-border); }
 
 @media (max-width: 991px) {
   .headerInner,
   .content { width: calc(100% - 48px); }
-  .hero { grid-template-columns: minmax(0, 1fr); }
+  .hero { grid-template-columns: minmax(0, 1fr); grid-template-areas: "copy" "forms" "preview"; }
   .heroCopy { padding-top: 0; }
-  .forms { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  .forms { grid-template-columns: minmax(0, 1fr); align-items: start; }
 }
 
 @media (max-width: 767px) {

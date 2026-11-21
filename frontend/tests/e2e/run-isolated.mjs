@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { createOwnedRuntime } from "./support/owned-runtime.mjs";
+import { installLearningVisitFixtureSql, setLearningVisitFixtureModeSql } from "./support/learning-visit-fixtures.mjs";
 
 const root = new URL("../../../", import.meta.url);
 const backendDir = new URL("backend/", root);
@@ -37,8 +38,10 @@ let lifecycleLogPath;
 const backendLogs = [];
 
 function runPsql(database, sql) {
-  return execFileSync(psql, ["-h", pgHost, "-p", pgPort, "-U", pgUser, "-d", database, "-v", "ON_ERROR_STOP=1", "-Atc", sql], {
-    encoding: "utf8", env: { ...process.env, PGPASSWORD: pgPassword }, stdio: ["ignore", "pipe", "inherit"],
+  return execFileSync(psql, ["-Xw", "-h", pgHost, "-p", pgPort, "-U", pgUser, "-d", database, "-v", "ON_ERROR_STOP=1", "-Atc", sql], {
+    encoding: "utf8", timeout: 10_000,
+    env: { ...process.env, PGPASSWORD: pgPassword, PGCONNECT_TIMEOUT: "5", PGOPTIONS: "-c lock_timeout=5000" },
+    stdio: ["ignore", "pipe", "inherit"],
   }).trim();
 }
 
@@ -141,9 +144,7 @@ try {
     readFileSync(join(isolatedBackend, "target", "e2e-runtime-classpath.txt"), "utf8").trim()].join(delimiter);
 
   execFileSync(process.execPath, ["--experimental-strip-types", "scripts/generate-theme-css.mjs"], { cwd: frontendDir, env: frontendEnv, stdio: "inherit" });
-  if (process.env.FEATURE_ROOM_DIAGRAMS_ENABLED === "true") {
-    execFileSync(process.execPath, ["scripts/prepare-drawio.mjs"], { cwd: frontendDir, env: frontendEnv, stdio: "inherit" });
-  }
+  execFileSync(process.execPath, ["scripts/prepare-drawio.mjs"], { cwd: frontendDir, env: frontendEnv, stdio: "inherit" });
   if (process.env.E2E_PRODUCTION === "true" || process.env.E2E_TEAM_WORKSPACES_PRODUCTION === "true") {
     productionDir = mkdtempSync(join(fileURLToPath(frontendDir), ".team-availability-"));
     execFileSync(process.execPath, [fileURLToPath(new URL("node_modules/@rspack/cli/bin/rspack.js", frontendDir)),
@@ -156,11 +157,30 @@ try {
   runPsql(scratchDatabase, `CREATE SCHEMA ${schema}`);
   schemaCreated = true;
   const jdbcUrl = `jdbc:postgresql://${pgHost === "::1" ? "[::1]" : pgHost}:${pgPort}/${scratchDatabase}?currentSchema=${schema}`;
-  const isolatedBackendEnv = Object.fromEntries(Object.entries(nodeEnv).filter(([name]) =>
-    !name.startsWith("SPRING_") && !name.startsWith("DB_")
-    && !["JAVA_TOOL_OPTIONS", "JDK_JAVA_OPTIONS", "_JAVA_OPTIONS"].includes(name)));
+  const isolatedBackendEnv = Object.fromEntries(Object.entries(nodeEnv).filter(([name]) => {
+    // Spring binds environment aliases with separators and mixed case as well.
+    const key = name.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    return !/^(?:SPRING|DB|APPSOCIALAUTH|GOOGLECLIENT|GITHUBCLIENT|VK)/.test(key)
+      && !["JAVATOOLOPTIONS", "JDKJAVAOPTIONS", "JAVAOPTIONS", "PUBLICBASEURL", "SOCIALAUTHFLOWSECRET"].includes(key);
+  }));
+  const providerFixture = {};
+  if (process.env.E2E_GITHUB_FIXTURE_ORIGIN) {
+    const origin = process.env.E2E_GITHUB_FIXTURE_ORIGIN;
+    const match = /^http:\/\/127\.0\.0\.1:([1-9]\d{0,4})$/.exec(origin);
+    if (!match || Number(match[1]) > 65535) {
+      throw new Error("E2E_GITHUB_FIXTURE_REQUIRES_LOOPBACK");
+    }
+    Object.assign(providerFixture, {
+      PUBLIC_BASE_URL: webUrl,
+      SOCIAL_AUTH_FLOW_SECRET: publicFixtureKey,
+      GITHUB_CLIENT_ID: "github-profile-fixture",
+      GITHUB_CLIENT_SECRET: "github-profile-fixture-secret",
+      APP_SOCIALAUTH_GITHUB_TOKENURI: `${origin}/token`,
+      APP_SOCIALAUTH_GITHUB_USERINFOURI: `${origin}/user`,
+    });
+  }
   const backendEnv = {
-    ...isolatedBackendEnv, SPRING_PROFILES_ACTIVE: "test", TRUSTED_PROXY_CIDRS: "127.0.0.1/32,::1/128",
+    ...isolatedBackendEnv, ...providerFixture, SPRING_PROFILES_ACTIVE: "test", TRUSTED_PROXY_CIDRS: "127.0.0.1/32,::1/128",
     ROOM_REALTIME_LIFECYCLE_DIAGNOSTICS: "true",
     CHAT_RECEIPT_HMAC_SECRET: publicFixtureKey,
     SPRING_APPLICATION_JSON: JSON.stringify({ app: {
@@ -173,11 +193,11 @@ try {
     SPRING_FLYWAY_ENABLED: "true", SPRING_FLYWAY_SCHEMAS: schema, SPRING_FLYWAY_DEFAULT_SCHEMA: schema,
     SPRING_JPA_HIBERNATE_DDL_AUTO: "validate", SPRING_JPA_PROPERTIES_HIBERNATE_DEFAULT_SCHEMA: schema,
   };
-  function backend(port, merge) {
+  function backend(port) {
     const log = createWriteStream(port === backendPort ? lifecycleLogPath : join(runtimeDir, `backend-${port}.log`));
     backendLogs.push(log);
     const state = start(join(javaHome, "bin", "java"), ["-cp", classpath, "com.interviewonline.InterviewOnlineApplicationKt",
-      `--server.port=${port}`, `--app.features.team-merge-commit-enabled=${merge}`,
+      `--server.port=${port}`,
       `--spring.datasource.url=${jdbcUrl}`, `--spring.datasource.hikari.schema=${schema}`,
       `--spring.flyway.schemas=${schema}`, `--spring.flyway.default-schema=${schema}`,
       `--spring.jpa.properties.hibernate.default_schema=${schema}`,
@@ -187,7 +207,7 @@ try {
     state.child.stderr.on("data", data => { if (!log.writableEnded) log.write(data); process.stderr.write(data); });
     return state;
   }
-  const firstBackend = backend(backendPort, process.env.FEATURE_TEAM_MERGE_COMMIT === "true");
+  const firstBackend = backend(backendPort);
   const frontend = start(process.execPath, [fileURLToPath(new URL("node_modules/@rspack/cli/bin/rspack.js", frontendDir)),
     ...(productionDir ? ["preview", relative(fileURLToPath(frontendDir), productionDir)] : ["serve"]),
     "--config", "rspack.config.mjs", "--host", "127.0.0.1", "--port", String(frontendPort)], {
@@ -195,9 +215,12 @@ try {
   });
   await Promise.all([waitFor(`${apiUrl}/me/workspaces`, firstBackend, "BACKEND"), waitFor(webUrl, frontend, "WEB")]);
   if (secondBackendPort !== null) {
-    const second = backend(secondBackendPort, true);
+    const second = backend(secondBackendPort);
     await waitFor(`http://127.0.0.1:${secondBackendPort}/api/me/workspaces`, second, "SECOND_BACKEND");
   }
+  const visitFixtureFor = (suite) => !suite.startsWith("tests/e2e/learning/");
+  let visitedLearningAccounts = visitFixtureFor(suites[0]);
+  runPsql(scratchDatabase, installLearningVisitFixtureSql(schema, visitedLearningAccounts));
   const suiteEnv = {
     ...nodeEnv, E2E_API_URL: apiUrl, E2E_BASE_URL: webUrl, E2E_ISOLATED_RUN_ID: runId,
     E2E_ISOLATED_SCHEMA: schema, E2E_ISOLATED_DATABASE: scratchDatabase,
@@ -206,6 +229,11 @@ try {
   };
   for (const suiteFile of suites) {
     if (cancelled) throw new Error("E2E_RUN_CANCELLED");
+    const visited = visitFixtureFor(suiteFile);
+    if (visited !== visitedLearningAccounts) {
+      runPsql(scratchDatabase, setLearningVisitFixtureModeSql(schema, visited));
+      visitedLearningAccounts = visited;
+    }
     const args = ["--test", "--test-timeout=180000"];
     const pattern = process.env.E2E_TEST_NAME_PATTERN ?? suitePatterns[suiteFile];
     if (pattern !== undefined) args.push("--test-name-pattern", pattern);

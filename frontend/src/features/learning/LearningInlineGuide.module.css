@@ -1,0 +1,19 @@
+:global([data-learning-form-guide-slot]:empty) {
+  display: none;
+}
+
+.guide {
+  padding: 10px 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface-soft);
+  overflow-wrap: anywhere;
+}
+
+:global(form) > :global([data-learning-form-guide-slot]) > .guide {
+  margin-block-end: 16px;
+}
+
+.guide > [data-learning-tour] {
+  padding: 0;
+}

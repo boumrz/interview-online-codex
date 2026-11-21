@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { readdir, readFile } from "node:fs/promises";
 import { test } from "node:test";
 import ts from "typescript";
+import { installLearningVisitFixtureSql, setLearningVisitFixtureModeSql } from "../e2e/support/learning-visit-fixtures.mjs";
 
 const frontendDir = new URL("../../", import.meta.url);
 
@@ -75,6 +77,81 @@ const metadata = {
   E2E_ISOLATED_SCHEMA: schema,
   E2E_ISOLATED_DATABASE: database,
 };
+
+test("learning visit fixtures accept only an owned-style schema and an explicit fixture mode", () => {
+  for (const statement of [installLearningVisitFixtureSql, setLearningVisitFixtureModeSql]) {
+    for (const unsafe of ["public", "interview_online", "interhub_e2e_user", `${schema}; SELECT 1`]) {
+      assert.throws(() => statement(unsafe, true), /E2E_LEARNING_VISITS_REQUIRE_ISOLATED_SCHEMA/);
+    }
+    assert.throws(() => statement(schema, "false"), /E2E_LEARNING_VISITS_REQUIRE_ISOLATED_SCHEMA/);
+  }
+});
+
+test("learning visit fixture switches modes while a transaction reads users", {
+  skip: !process.env.TEAM_TEST_PG_DATABASE,
+}, async () => {
+  const database = process.env.TEAM_TEST_PG_DATABASE;
+  const host = process.env.TEAM_TEST_PG_HOST || "127.0.0.1";
+  const port = process.env.TEAM_TEST_PG_PORT || "5432";
+  assert.match(database, /^[A-Za-z0-9_]+$/);
+  assert.notEqual(database, "interview_online");
+  assert.ok(["localhost", "127.0.0.1", "::1"].includes(host));
+  assert.match(port, /^[1-9][0-9]{0,4}$/);
+  assert.ok(Number(port) <= 65535);
+  const executable = process.env.PSQL_BIN || "psql";
+  const args = ["-XqAt", "-h", host, "-p", port, "-d", database,
+    "-U", process.env.TEAM_TEST_PG_USER || "interview", "-v", "ON_ERROR_STOP=1"];
+  const env = { ...process.env, PGPASSWORD: process.env.TEAM_TEST_PG_PASSWORD || "interview", PGCONNECT_TIMEOUT: "3" };
+  const schema = `visit_e2e_${randomUUID().replaceAll("-", "")}`;
+  const users = `${schema}.users`;
+  const progress = `${schema}.learning_progress_versions`;
+  const sql = (statement) => execFileSync(executable, [...args, "-c", `SET lock_timeout TO '1s'; ${statement}`], {
+    env, timeout: 5000, encoding: "utf8",
+  }).trim();
+  sql(`CREATE SCHEMA ${schema}; CREATE TABLE ${users} (id text PRIMARY KEY);
+    CREATE TABLE ${progress} (user_id text REFERENCES ${users}, module text, version integer NOT NULL, state_json text NOT NULL,
+    PRIMARY KEY (user_id, module, version));`);
+  let holder;
+  let exited;
+  try {
+    sql(installLearningVisitFixtureSql(schema, true));
+    sql(`INSERT INTO ${users} VALUES ('visited');`);
+    holder = spawn(executable, args, { env, stdio: ["pipe", "pipe", "inherit"] });
+    exited = new Promise((resolve) => holder.once("close", resolve));
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error("E2E_LEARNING_VISITS_LOCK_NOT_READY")), 5000);
+      let output = "";
+      holder.stdout.on("data", (data) => {
+        output += data;
+        if (!output.includes("fixture_lock_ready")) return;
+        clearTimeout(timeout);
+        resolve();
+      });
+      holder.once("error", (error) => {
+        clearTimeout(timeout);
+        reject(error);
+      });
+      holder.stdin.write(`BEGIN; SELECT id FROM ${users}; SELECT 'fixture_lock_ready';\n`);
+    });
+
+    sql(setLearningVisitFixtureModeSql(schema, false));
+    sql(`INSERT INTO ${users} VALUES ('fresh');`);
+    sql(setLearningVisitFixtureModeSql(schema, true));
+    sql(`INSERT INTO ${users} VALUES ('visited-again');`);
+    assert.equal(sql(`SELECT id, count(progress.module) FROM ${users}
+      LEFT JOIN ${progress} progress ON progress.user_id = ${users}.id GROUP BY id ORDER BY id;`),
+      "fresh|0\nvisited|8\nvisited-again|8");
+    assert.equal(sql(`SELECT module, state_json::jsonb->>'offerSeen', state_json::jsonb->>'skipped'
+      FROM ${progress} WHERE user_id = 'visited' AND module IN ('onboarding', 'library') ORDER BY module;`),
+      "library|true|false\nonboarding|true|true");
+  } finally {
+    if (holder) {
+      holder.stdin.end();
+      await exited;
+    }
+    sql(`DROP SCHEMA ${schema} CASCADE;`);
+  }
+});
 const guardedRegistration = ["--input-type=module", "--eval", `
   const actualFetch = globalThis.fetch;
   globalThis.fetch = (input, options) => {

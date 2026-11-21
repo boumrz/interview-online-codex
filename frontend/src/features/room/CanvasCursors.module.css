@@ -1,0 +1,8 @@
+.layer { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 8; }
+.cursor { position: absolute; pointer-events: none; color: var(--cursor-color); }
+.crosshair { display: block; width: 20px; height: 20px; transform: translate(-50%, -50%); }
+.direction { display: block; width: 20px; height: 24px; font: bold 24px/1 sans-serif; text-shadow: 0 0 2px white, 1px 1px 1px white, -1px -1px 1px white; }
+.direction { transform-origin: center; }
+.name { position: absolute; top: 21px; left: 9px; max-width: 160px; padding: 2px 6px; border: 2px solid var(--cursor-color); border-radius: 4px; background: var(--app-surface); color: var(--app-text); font-size: 12px; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 1px 3px #0004; }
+.name.left { left: auto; right: 4px; }
+.cursor[data-offscreen="true"] .name { top: -6px; }

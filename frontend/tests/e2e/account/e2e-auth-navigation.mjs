@@ -1,4 +1,5 @@
 import "../support/require-isolated-api.mjs";
+import assert from "node:assert/strict";
 import { chromium } from "playwright";
 
 const webBaseUrl = process.env.E2E_BASE_URL || "http://localhost:5173";
@@ -43,6 +44,13 @@ const browser = await chromium.launch({ headless: true });
 
 try {
   const auth = await register();
+  const visit = await fetch(`${apiBaseUrl}/me/learning/personal_interviews`, {
+    headers: { Authorization: `Bearer ${auth.token}` },
+  });
+  assert.equal(visit.status, 200);
+  const progress = await visit.json();
+  assert.equal(progress.offerSeen, true);
+  assert.equal(progress.attempt, 0);
   const room = await createGuestRoom();
 
   const context = await browser.newContext();

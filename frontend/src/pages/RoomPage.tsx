@@ -1,3 +1,4 @@
+import { LearningScope } from "../features/learning/LearningScope";
 import React, {
   useCallback,
   useEffect,
@@ -122,7 +123,6 @@ import {
   type Participant,
 } from "../features/room/TopBar";
 import type { HrManager, Room, RoomEditorMode, RoomTask, RoomTaskWorkspace, TaskTemplate } from "../types";
-import { ROOM_DIAGRAMS_ENABLED, ROOM_WHITEBOARD_ENABLED } from "../config/runtime";
 import { RoomDiagramPanel } from "../features/room/diagram/RoomDiagramPanel";
 import { RoomWhiteboardPanel } from "../features/room/whiteboard/RoomWhiteboardPanel";
 import { RoomInterviewPanel } from "../features/room/RoomInterviewPanel";
@@ -677,6 +677,9 @@ function roomEditorModeLabel(mode: RoomEditorMode | undefined): string {
   return mode === "whiteboard" ? "Доска" : mode === "diagram" ? "Редактор диаграмм" : mode === "markdown" ? "Markdown" : "Code";
 }
 
+const roomEditorModeOptions = (["code", "markdown", "diagram", "whiteboard"] as const)
+  .map((value) => ({ value, label: roomEditorModeLabel(value) }));
+
 export function RoomPage() {
   const { notification } = AntDesignApp.useApp();
   const { inviteCode = "" } = useParams();
@@ -944,7 +947,12 @@ export function RoomPage() {
   ]);
 
   const merged = useMemo<RealtimeState | null>(() => {
-    if (state) return state;
+    if (state) {
+      const roomDiagramsEnabled = state.roomDiagramsEnabled ?? room?.roomDiagramsEnabled;
+      const roomWhiteboardEnabled = state.roomWhiteboardEnabled ?? room?.roomWhiteboardEnabled;
+      if (roomDiagramsEnabled === state.roomDiagramsEnabled && roomWhiteboardEnabled === state.roomWhiteboardEnabled) return state;
+      return { ...state, roomDiagramsEnabled, roomWhiteboardEnabled };
+    }
     if (!room) return null;
     return {
       inviteCode: room.inviteCode,
@@ -962,8 +970,8 @@ export function RoomPage() {
       briefingMarkdown: room.briefingMarkdown ?? "",
       roomEditorMode: room.roomEditorMode ?? "code",
       roomEditorModeRevision: room.roomEditorModeRevision ?? 0,
-      roomDiagramsEnabled: room.roomDiagramsEnabled ?? false,
-      roomWhiteboardEnabled: room.roomWhiteboardEnabled ?? false,
+      roomDiagramsEnabled: room.roomDiagramsEnabled,
+      roomWhiteboardEnabled: room.roomWhiteboardEnabled,
       drawingColor: null,
       tasks: [...(room.tasks ?? [])].sort(
         (left, right) => left.stepIndex - right.stepIndex,
@@ -3039,12 +3047,27 @@ export function RoomPage() {
     }
   };
 
-  const goToLoginAndReturn = () => {
+  const socialRoomReturnRequest = useRef<AbortController | null>(null);
+  useEffect(() => () => socialRoomReturnRequest.current?.abort(), [inviteCode]);
+  const goToLoginAndReturn = async () => {
+    if (socialRoomReturnRequest.current) return;
     const next = `${location.pathname}${location.search}`;
-    trackEvent("prod_room_go_to_login", {
-      entry_point: "room",
-    });
-    navigate(`/login?next=${encodeURIComponent(next)}`);
+    let roomContextId: string | undefined;
+    if (inviteCode) {
+      const controller = new AbortController();
+      socialRoomReturnRequest.current = controller;
+      try {
+        const { readRoomContextId, socialRequest } = await import("../services/socialAuth");
+        roomContextId = readRoomContextId(await socialRequest<unknown>("/room-context", controller.signal, { inviteCode }));
+      } catch {
+        // The login page can still open. Social completion explains an unavailable room return.
+      } finally {
+        if (socialRoomReturnRequest.current === controller) socialRoomReturnRequest.current = null;
+      }
+      if (controller.signal.aborted) return;
+    }
+    trackEvent("prod_room_go_to_login", { entry_point: "room" });
+    navigate(`/login?next=${encodeURIComponent(next)}`, { state: { socialRoomReturn: Boolean(inviteCode), roomContextId } });
   };
 
   const forwardLocalYjsUpdate = useCallback<YjsUpdateHandler>(
@@ -3131,14 +3154,14 @@ export function RoomPage() {
   const briefingFocusMode = merged.roomEditorMode === "markdown";
   const ownerBriefingValue = stripFocusMarker(rawBriefingValue);
   const candidateBriefingValue = stripFocusMarker(mergedBriefingMarkdown);
-  const canViewSavedDiagram = ROOM_DIAGRAMS_ENABLED && Boolean(merged.roomDiagramsEnabled) && roomReadOnly;
-  const canViewSavedWhiteboard = ROOM_WHITEBOARD_ENABLED && Boolean(merged.roomWhiteboardEnabled) && roomReadOnly;
-  const viewingSavedWhiteboard = canViewSavedWhiteboard && savedWhiteboardViewScope === markdownPreviewScope;
-  const viewingSavedDiagram = canViewSavedDiagram && savedDiagramViewScope === markdownPreviewScope && !viewingSavedWhiteboard;
-  const diagramMode = ROOM_DIAGRAMS_ENABLED && Boolean(merged.roomDiagramsEnabled) && (viewingSavedDiagram || (merged.roomEditorMode === "diagram" && !viewingSavedWhiteboard));
-  const whiteboardMode = ROOM_WHITEBOARD_ENABLED && Boolean(merged.roomWhiteboardEnabled) && (viewingSavedWhiteboard || (merged.roomEditorMode === "whiteboard" && !viewingSavedDiagram));
+  const diagramsAvailable = merged.roomDiagramsEnabled !== false;
+  const whiteboardAvailable = merged.roomWhiteboardEnabled !== false;
+  const viewingSavedWhiteboard = whiteboardAvailable && roomReadOnly && savedWhiteboardViewScope === markdownPreviewScope;
+  const viewingSavedDiagram = diagramsAvailable && roomReadOnly && savedDiagramViewScope === markdownPreviewScope && !viewingSavedWhiteboard;
+  const diagramMode = diagramsAvailable && (viewingSavedDiagram || (merged.roomEditorMode === "diagram" && !viewingSavedWhiteboard));
+  const whiteboardMode = whiteboardAvailable && (viewingSavedWhiteboard || (merged.roomEditorMode === "whiteboard" && !viewingSavedDiagram));
   const candidateBriefingFocusMode = briefingFocusMode && !diagramMode && !whiteboardMode;
-  const diagramPanel = ROOM_DIAGRAMS_ENABLED && merged.roomDiagramsEnabled && canvasTaskId !== undefined ? (
+  const diagramPanel = diagramsAvailable && canvasTaskId !== undefined ? (
     <RoomDiagramPanel
       onInteractiveFrame={setInteractiveDiagramFrame}
       key={markdownPreviewScope}
@@ -3156,7 +3179,7 @@ export function RoomPage() {
       drawingColor={merged.drawingColor}
     />
   ) : null;
-  const whiteboardPanel = ROOM_WHITEBOARD_ENABLED && merged.roomWhiteboardEnabled && canvasTaskId !== undefined ? (
+  const whiteboardPanel = whiteboardAvailable && canvasTaskId !== undefined ? (
     <RoomWhiteboardPanel
       key={markdownPreviewScope}
       taskId={canvasTaskId}
@@ -3337,7 +3360,7 @@ export function RoomPage() {
   };
 
   return (
-    <>
+    <LearningScope module="room" eligible={canManageRoom && presenceConfirmed && !nameModalOpened} inviteCode={inviteCode} sessionId={sessionId} eventToken={merged.eventToken}>
       <Modal
         opened={nameModalOpened}
         onClose={() => {}}
@@ -3617,11 +3640,11 @@ export function RoomPage() {
             whiteboardPanel={whiteboardPanel}
             whiteboardMode={whiteboardMode}
             viewingSavedDiagram={viewingSavedDiagram}
-            onToggleSavedDiagram={canViewSavedDiagram && merged.roomEditorMode !== "diagram"
+            onToggleSavedDiagram={diagramsAvailable && roomReadOnly && merged.roomEditorMode !== "diagram"
               ? () => { setSavedWhiteboardViewScope(null); setSavedDiagramViewScope(viewingSavedDiagram ? null : markdownPreviewScope); }
               : undefined}
             viewingSavedWhiteboard={viewingSavedWhiteboard}
-            onToggleSavedWhiteboard={canViewSavedWhiteboard && merged.roomEditorMode !== "whiteboard"
+            onToggleSavedWhiteboard={whiteboardAvailable && roomReadOnly && merged.roomEditorMode !== "whiteboard"
               ? () => { setSavedDiagramViewScope(null); setSavedWhiteboardViewScope(viewingSavedWhiteboard ? null : markdownPreviewScope); }
               : undefined}
             merged={merged}
@@ -3659,7 +3682,7 @@ export function RoomPage() {
           />
         )}
       </Box>
-    </>
+    </LearningScope>
   );
 }
 
@@ -3912,6 +3935,9 @@ function OwnerLayout({
   const conditionMarkdownPreviewKey = localWorkspacePreview
     ? JSON.stringify([markdownPreviewScope, "manager", localWorkspacePreview.taskId ?? localWorkspacePreview.stepIndex])
     : sharedMarkdownPreviewKey;
+  const availableModeOptions = roomEditorModeOptions.filter(({ value }) =>
+    (value !== "diagram" || merged.roomDiagramsEnabled !== false) &&
+    (value !== "whiteboard" || merged.roomWhiteboardEnabled !== false));
   const [addTaskModalOpened, setAddTaskModalOpened] = useState(false);
   const [addTaskMode, setAddTaskMode] = useState<"catalog" | "custom">(
     "catalog",
@@ -4602,30 +4628,35 @@ function OwnerLayout({
         headerAction={
           <div className={styles.editorModeControl}>
             <Select
-              data={[{ value: "code", label: "Code" }, { value: "markdown", label: "Markdown" }, ...(ROOM_DIAGRAMS_ENABLED && merged.roomDiagramsEnabled ? [{ value: "diagram", label: "Редактор диаграмм" }] : []), ...(ROOM_WHITEBOARD_ENABLED && merged.roomWhiteboardEnabled ? [{ value: "whiteboard", label: "Доска" }] : [])]}
+              data={availableModeOptions}
               className={styles.roomModeSelect}
               labelRender={({ label }: { label: React.ReactNode }) => (
                 <span className={styles.roomModeSelectedLabel}>
                   <span>Режим комнаты</span>{" "}
                   <span aria-hidden="true">—</span>{" "}
-                  <span className={styles.roomModeSelectedValue}>{label}</span>
+                  <span className={styles.roomModeSelectedValue}
+                    data-learning-anchor={`room-mode-${merged.roomEditorMode ?? "code"}`}>
+                    {label}
+                  </span>
                 </span>
               )}
               value={merged.roomEditorMode ?? "code"}
               aria-label="Режим комнаты"
               data-testid="room-editor-mode-switch"
+              data-learning-anchor="room-mode"
+              data-learning-interactive={!roomReadOnly && roomModeConnected && !roomModeSubmitting ? "true" : undefined}
               disabled={roomReadOnly || !roomModeConnected || roomModeSubmitting}
               onChange={(value: string | null) => {
-                if (value !== "code" && value !== "markdown" && !(value === "diagram" && ROOM_DIAGRAMS_ENABLED && merged.roomDiagramsEnabled) && !(value === "whiteboard" && ROOM_WHITEBOARD_ENABLED && merged.roomWhiteboardEnabled)) return;
-                if (value === (merged.roomEditorMode ?? "code")) return;
-                setRoomModeConfirmation({ mode: value, revision: merged.roomEditorModeRevision ?? 0 });
+                const mode = availableModeOptions.find((option) => option.value === value)?.value;
+                if (!mode || mode === (merged.roomEditorMode ?? "code")) return;
+                setRoomModeConfirmation({ mode, revision: merged.roomEditorModeRevision ?? 0 });
                 setRoomModeError(null);
               }}
             />
             <Tooltip motion={{ motionName: "" }} classNames={{ root: styles.roomModeTooltip }} trigger={["hover", "focus"]} label="Общий редактор">
               <button type="button" className={styles.roomModeHelp} aria-label="Как работает режим комнаты"><IconHelpCircle size={18} aria-hidden="true" /></button>
             </Tooltip>
-            <Button color="red" variant="light" size="sm" onClick={onOpenVerdictModal} disabled={roomReadOnly}>
+            <Button data-learning-anchor="room-result" data-learning-interactive={roomReadOnly ? undefined : "true"} color="red" variant="light" size="sm" onClick={onOpenVerdictModal} disabled={roomReadOnly}>
               {merged.status === "finished" ? "Изменить результат" : "Завершить интервью"}
             </Button>
           </div>
@@ -4675,6 +4706,7 @@ function OwnerLayout({
                   <BriefingBoard
                     mode="interviewer"
                     previewDocumentKey={sharedMarkdownPreviewKey}
+                    learningFullscreen
                     readOnly={roomReadOnly || Boolean(tasks.find((task) => task.stepIndex === merged.currentStep)?.mandatory)}
                     value={briefingMarkdown}
                     onChange={onBriefingChange}
@@ -4710,7 +4742,7 @@ function OwnerLayout({
         </RoomContextSurface>
 
         <RoomContextSurface name="steps">
-          <div className={styles.contextSurfaceScroll}>
+          <div className={styles.contextSurfaceScroll} data-learning-anchor="room-task-panel" data-learning-task-count={tasks.length}>
             <Group
               justify="space-between"
               align="center"
@@ -4725,6 +4757,8 @@ function OwnerLayout({
                 color="blue"
                 leftSection={<IconPlus size={12} />}
                 disabled={roomReadOnly}
+                data-learning-anchor={!roomReadOnly ? "room-task-add" : undefined}
+                data-learning-interactive={!roomReadOnly ? "true" : undefined}
                 onClick={() => setAddTaskModalOpened(true)}
               >
                 Задача
@@ -4744,6 +4778,7 @@ function OwnerLayout({
                   <div
                     key={task.stepIndex}
                     className={styles.stepRow}
+                    data-learning-anchor={isLocalSelected && !isGlobalActive ? "room-local-task-selected" : undefined}
                     data-local-selected={isLocalSelected ? "true" : undefined}
                     data-global-active={isGlobalActive ? "true" : undefined}
                     onClick={(event) => {
@@ -4756,6 +4791,8 @@ function OwnerLayout({
                       type="button"
                       className={styles.stepRowMain}
                       data-testid={`room-step-row-${task.stepIndex}`}
+                      data-learning-anchor={!isGlobalActive && !isLocalSelected ? "room-step-select" : undefined}
+                      data-learning-interactive={!isGlobalActive && !isLocalSelected ? "true" : undefined}
                       data-local-selected={isLocalSelected ? "true" : undefined}
                       aria-current={isLocalSelected ? "step" : undefined}
                       aria-label={fullLabel}
@@ -4795,7 +4832,7 @@ function OwnerLayout({
                       <button
                         type="button"
                         className={styles.stepRowPublishAction}
-                        data-testid="room-publish-step"
+                        data-testid="room-publish-step" data-learning-anchor="room-publish" data-learning-interactive="true"
                         aria-label={`Переключить всех участников комнаты на задачу «${task.title}»`}
                         onClick={() => onPublishSelectedStep(task.stepIndex)}
                       >
@@ -5328,6 +5365,8 @@ function OwnerLayout({
             aria-controls="owner-side-panel"
             onClick={() => toggleRailPanel("tasks")}
             data-testid="room-rail-tasks"
+            data-learning-anchor="room-steps"
+            data-learning-interactive="true"
           >
             <IconChecklist size={16} stroke={1.8} />
             <span className={styles.railButtonLabel}>Шаги</span>
@@ -5347,6 +5386,8 @@ function OwnerLayout({
             aria-controls="owner-side-panel"
             onClick={() => toggleRailPanel("roomTools")}
             data-testid="room-rail-tools"
+            data-learning-anchor="room-activity"
+            data-learning-interactive="true"
           >
             <IconMessages size={16} stroke={1.8} />
             <span className={styles.railButtonLabel}>Чат</span>
@@ -5551,7 +5592,7 @@ function OwnerLayout({
                           <button
                             type="button"
                             className={styles.stepRowPublishAction}
-                            data-testid="room-publish-step"
+                            data-testid="room-publish-step" data-learning-anchor="room-publish"
                             aria-label={`Переключить всех участников комнаты на задачу «${task.title}»`}
                             onClick={() => onPublishSelectedStep(task.stepIndex)}
                           >
@@ -5868,6 +5909,7 @@ function OwnerLayout({
                         size="xs"
                         variant="subtle"
                         color="gray"
+                        data-learning-anchor="room-result"
                         onClick={onOpenVerdictModal}
                       >
                         Изменить
@@ -5882,6 +5924,7 @@ function OwnerLayout({
                         size="xs"
                         variant="subtle"
                         color="red"
+                        data-learning-anchor="room-result"
                         onClick={onOpenVerdictModal}
                       >
                         Завершить интервью
@@ -6286,7 +6329,7 @@ function OwnerLayout({
         title="Завершить интервью"
         centered
       >
-        <Stack gap="md">
+        <Stack gap="md" data-learning-anchor="room-result-open">
           <Radio.Group
             value={selectedVerdict}
             onChange={onSelectedVerdictChange}
@@ -6404,6 +6447,7 @@ function ManagerWorkspaceEditor({
         <BriefingBoard
           mode="interviewer"
           previewDocumentKey={JSON.stringify([markdownPreviewScope, "manager", workspace.taskId ?? workspace.stepIndex])}
+          learningFullscreen
           readOnly={readOnly}
           value={workspace.briefingMarkdown}
           onChange={onBriefingChange}

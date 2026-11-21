@@ -36,21 +36,14 @@ spring:
 
 app:
   social-auth:
-    enabled: ${FEATURE_SOCIAL_AUTH_ENABLED:false}
     public-base-url: ${PUBLIC_BASE_URL:http://localhost:5173}
     flow-secret: ${SOCIAL_AUTH_FLOW_SECRET:}
     google:
-      enabled: ${GOOGLE_AUTH_ENABLED:false}
       client-id: ${GOOGLE_CLIENT_ID:}
       client-secret: ${GOOGLE_CLIENT_SECRET:}
-    vk:
-      enabled: ${VK_AUTH_ENABLED:false}
-      client-id: ${VK_CLIENT_ID:}
-      service-token: ${VK_SERVICE_TOKEN:}
-  features:
-    team-merge-commit-enabled: ${FEATURE_TEAM_MERGE_COMMIT:false}
-    room-diagrams-enabled: ${FEATURE_ROOM_DIAGRAMS_ENABLED:false}
-    room-whiteboard-enabled: ${FEATURE_ROOM_WHITEBOARD_ENABLED:false}
+    github:
+      client-id: ${GITHUB_CLIENT_ID:}
+      client-secret: ${GITHUB_CLIENT_SECRET:}
   team-invitation-link-encryption:
     active-key-id: ${TEAM_INVITATION_LINK_ENCRYPTION_ACTIVE_KEY_ID:}
   http:

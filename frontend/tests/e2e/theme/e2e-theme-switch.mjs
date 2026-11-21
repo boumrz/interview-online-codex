@@ -22,7 +22,7 @@ try {
   });
 
   await firstPage.goto(baseUrl, { waitUntil: "networkidle" });
-  await firstPage.getByRole("heading", { name: "Запускайте интервью за 30 секунд." }).waitFor();
+  await firstPage.getByRole("heading", { name: "Комната для технического интервью", exact: true }).waitFor();
   assert.equal(await firstPage.locator("html").getAttribute("data-theme"), "light");
   assert.equal(await firstPage.locator("body").evaluate((element) => getComputedStyle(element).backgroundColor), "rgb(243, 245, 251)");
   await firstPage.screenshot({ path: `${evidenceDirectory}/landing-light.png`, fullPage: true });

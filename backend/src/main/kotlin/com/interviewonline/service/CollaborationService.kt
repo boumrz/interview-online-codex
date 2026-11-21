@@ -90,8 +90,7 @@ class CollaborationService(
     private val roomRealtimeSendBoundaryProbe: RoomRealtimeSendBoundaryProbe,
     private val roomRealtimeActivityLeaseService: RoomRealtimeActivityLeaseService,
     private val clock: Clock,
-    private val roomDiagramFeatureGate: RoomDiagramFeatureGate,
-    private val roomWhiteboardFeatureGate: RoomWhiteboardFeatureGate,
+    private val canvasStorage: RoomCanvasStorage,
     private val roomDrawingColorService: RoomDrawingColorService,
     private val languageObservations: RoomTaskLanguageObservationRepository,
 ) {
@@ -118,6 +117,21 @@ class CollaborationService(
     private val appliedOperationIdTtlMillis = 15 * 60_000L
     private val appliedOperationIdCacheMaxSize = 20_000
     private val yjsSequenceAuthorHistoryLimit = 4_096L
+    private val canvasPresence = ConcurrentHashMap<String, CanvasPresence>()
+    private val canvasSnapshotSequence = java.util.concurrent.atomic.AtomicLong()
+
+    private data class CanvasPresence(
+        val inviteCode: String, val taskId: String?, val canvasType: String,
+        val logicalId: String, val cursorId: String, val displayName: String, val color: String,
+        val sequence: Long, val order: Long, val modeRevision: Long, val active: Boolean, val subscribed: Boolean,
+        val x: Double?, val y: Double?, val updatedAt: Long,
+    )
+    private data class CanvasPresenceDelivery(
+        val emitter: SseEmitter,
+        val participant: ParticipantMeta,
+        val subscription: CanvasPresence,
+        val payload: Map<String, Any?>,
+    )
 
     private enum class PresenceStatus(val wireValue: String) {
         ACTIVE("active"),
@@ -305,6 +319,19 @@ class CollaborationService(
     private val managerWorkspaceRoomLocks = ConcurrentHashMap<String, Any>()
     private val connectionByRoomSession = ConcurrentHashMap<String, String>()
     private val sseHeartbeatScheduler = Executors.newSingleThreadScheduledExecutor()
+    private val pendingCanvasPresenceBroadcasts = ConcurrentHashMap.newKeySet<String>()
+    private val runningCanvasPresenceBroadcasts = ConcurrentHashMap.newKeySet<String>()
+    private val canvasPresenceExecutor = ThreadPoolExecutor(
+        4, 4, 0L, TimeUnit.MILLISECONDS, ArrayBlockingQueue(256),
+        { task -> Thread(task, "room-canvas-presence").apply { isDaemon = true } },
+        ThreadPoolExecutor.AbortPolicy(),
+    )
+
+    @PreDestroy
+    fun stopCanvasPresenceDispatch() {
+        canvasPresenceExecutor.shutdownNow()
+    }
+
     private val yjsStateBroadcastScheduler = Executors.newSingleThreadScheduledExecutor()
     private val pendingYjsStateBroadcastByRoom = ConcurrentHashMap<String, ScheduledFuture<*>>()
     private val roomCodeDbSaveScheduler = Executors.newSingleThreadScheduledExecutor()
@@ -531,7 +558,7 @@ class CollaborationService(
             inviteCode = inviteCode,
             sessionId = sessionId,
             participantId = normalizedParticipantId,
-            drawingColor = if (roomDiagramFeatureGate.enabled || roomWhiteboardFeatureGate.enabled) {
+            drawingColor = if (canvasStorage.available) {
                 roomDrawingColorService.forParticipant(requirePersistedRoomId(room), user?.id, normalizedParticipantId, sessionId)
             } else null,
             eventToken = "evt_${UUID.randomUUID()}",
@@ -979,11 +1006,12 @@ class CollaborationService(
 
     private fun handleRealtimeEventInTransaction(inviteCode: String, request: RealtimeEventRequest): String? {
         val eventReceivedAt = System.currentTimeMillis()
-        val passiveEvent = request.type in setOf("presence_update", "request_state_sync", "leave_room")
-        val persistedRoom = if (passiveEvent) {
-            roomRepository.findByInviteCode(inviteCode)
-        } else {
-            roomRepository.lockByInviteCode(inviteCode)
+        if (request.type == "canvas_cursor_update") canvasStorage.requireSupported()
+        val passiveEvent = request.type in setOf("presence_update", "request_state_sync", "leave_room", "canvas_cursor_update")
+        val persistedRoom = when {
+            request.type == "canvas_cursor_update" -> roomRepository.lockForSharedReadByInviteCode(inviteCode)
+            passiveEvent -> roomRepository.findByInviteCode(inviteCode)
+            else -> roomRepository.lockByInviteCode(inviteCode)
         }
             ?: throw ApiException(HttpStatus.NOT_FOUND, "Комната не найдена")
         val legacyNoteMessage = request.type == "note_message"
@@ -1070,12 +1098,12 @@ class CollaborationService(
             }
         }
         when (request.type) {
+            "canvas_cursor_update" -> updateCanvasPresence(connectionId, persistedRoom, request)
             "room_editor_mode_update" -> {
                 if (!participant.canManageRoom) throw ApiException(HttpStatus.FORBIDDEN, "Недостаточно прав для изменения режима комнаты")
                 val nextMode = request.roomEditorMode
-                if (nextMode == "diagram") roomDiagramFeatureGate.requireEnabled()
-                if (nextMode == "whiteboard") roomWhiteboardFeatureGate.requireEnabled()
                 if (nextMode !in setOf("code", "markdown", "diagram", "whiteboard")) throw ApiException(HttpStatus.BAD_REQUEST, "Неизвестный режим комнаты")
+                if (nextMode == "diagram" || nextMode == "whiteboard") canvasStorage.requireSupported()
                 val expectedRevision = request.expectedRoomEditorModeRevision
                     ?: throw ApiException(HttpStatus.BAD_REQUEST, "Не передана версия режима комнаты")
                 if (expectedRevision != persistedRoom.roomEditorModeRevision) {
@@ -1279,6 +1307,152 @@ class CollaborationService(
             roomProductMetricsProjector.recordMeaningfulCandidateActivity(roomId)
         }
         broadcastState(participant.inviteCode)
+    }
+
+    private fun updateCanvasPresence(connectionId: String, room: Room, request: RealtimeEventRequest) {
+        val participant = participants[connectionId] ?: return
+        val canvas = request.canvasType
+        if (canvas != "diagram" && canvas != "whiteboard") throw ApiException(HttpStatus.BAD_REQUEST, "Неизвестный холст")
+        val sequence = request.canvasSequence
+            ?: throw ApiException(HttpStatus.BAD_REQUEST, "Не передана последовательность курсора")
+        val taskId = request.taskId
+            ?: throw ApiException(HttpStatus.BAD_REQUEST, "Не передан контекст холста")
+        if (request.expectedRoomEditorModeRevision != room.roomEditorModeRevision) {
+            throw ApiException(HttpStatus.CONFLICT, "Режим комнаты изменился")
+        }
+        val scope = RoomCanvasTaskScope().resolve(room, taskId, participant.canManageRoom)
+        // Old clients only distinguished foreground presence. Preserve that
+        // fallback; new clients explicitly keep visible background subscriptions.
+        val subscribed = request.canvasSubscribed ?: (request.canvasActive == true)
+        val active = subscribed && request.canvasActive == true
+        val visible = request.canvasVisible == true && active
+        if (visible && (request.canvasX?.isFinite() != true || request.canvasY?.isFinite() != true ||
+                kotlin.math.abs(request.canvasX) > 1e9 || kotlin.math.abs(request.canvasY) > 1e9)) {
+            throw ApiException(HttpStatus.BAD_REQUEST, "Некорректная позиция курсора")
+        }
+        synchronized(managerWorkspaceRoomLock(room.inviteCode)) {
+            if (!isCurrentCanvasParticipant(connectionId, participant)) return
+            val previous = canvasPresence[connectionId]
+            if (sequence <= (previous?.sequence ?: 0)) throw ApiException(HttpStatus.CONFLICT, "Устаревшее положение курсора")
+            if (!subscribed && previous != null && (previous.taskId != scope || previous.canvasType != canvas)) {
+                canvasPresence.replace(connectionId, previous, previous.copy(sequence = sequence))
+                return
+            }
+            // Identity comes exclusively from admitted credentials, never the request's participant/name/color.
+            val logicalId = participant.userId ?: participant.guestPrincipalId ?: participant.sessionId
+            val cursorId = UUID.nameUUIDFromBytes("${room.id}:$logicalId".toByteArray()).toString()
+            val cursor = CanvasPresence(
+                room.inviteCode, scope, canvas, logicalId, cursorId, participant.displayName,
+                participant.drawingColor ?: "#2563eb", sequence, canvasSnapshotSequence.incrementAndGet(), room.roomEditorModeRevision,
+                active, subscribed, if (visible) request.canvasX else null,
+                if (visible) request.canvasY else null, clock.millis(),
+            )
+            canvasPresence[connectionId] = cursor
+            // Detach can remove registry members without waiting on this monitor.
+            if (!isCurrentCanvasParticipant(connectionId, participant)) {
+                canvasPresence.remove(connectionId, cursor)
+                return
+            }
+            // A new foreground tab takes over this logical participant. Keep sequence
+            // tombstones so a late move cannot revive an older tab after it leaves.
+            if (active) canvasPresence.entries.forEach { (otherId, other) ->
+                if (otherId != connectionId && other.inviteCode == room.inviteCode && other.logicalId == logicalId) {
+                    canvasPresence.replace(otherId, other, other.copy(active = false, x = null, y = null))
+                }
+            }
+        }
+        val inviteCode = room.inviteCode
+        TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+            override fun afterCommit() = scheduleCanvasPresenceBroadcast(inviteCode)
+        })
+    }
+
+    private fun broadcastCanvasPresence(inviteCode: String) {
+        val connections = canvasPresence.entries.filter { it.value.inviteCode == inviteCode }.map { it.key }
+        for (connectionId in connections) {
+            // A previous receiver may have stalled. Reauthorize both sides at
+            // each delivery, then release the database and workspace before I/O.
+            val delivery = captureCanvasPresence(inviteCode, connectionId) ?: continue
+            try {
+                val message = encodeSseMessage(WsOutgoingMessage("canvas_cursor_snapshot", delivery.payload))
+                if (sseConnections[connectionId] !== delivery.emitter || canvasPresence[connectionId] !== delivery.subscription ||
+                    !isCurrentCanvasParticipant(connectionId, delivery.participant)) continue
+                sendSseMessage(delivery.emitter, message)
+            } catch (_: Exception) {
+                detachConnection(connectionId, closeTransport = true)
+            }
+        }
+    }
+
+    private fun captureCanvasPresence(inviteCode: String, connectionId: String): CanvasPresenceDelivery? =
+        TransactionTemplate(transactionManager).execute {
+            val room = roomRepository.lockForSharedReadByInviteCode(inviteCode) ?: return@execute null
+            synchronized(managerWorkspaceRoomLock(inviteCode)) {
+                val receiver = canvasPresence[connectionId]?.takeIf { it.inviteCode == inviteCode } ?: return@synchronized null
+                val participant = participants[connectionId]?.takeIf { isCurrentCanvasParticipant(connectionId, it) } ?: return@synchronized null
+                val emitter = sseConnections[connectionId] ?: return@synchronized null
+                val now = clock.millis()
+                val peers = if (isCurrentCanvasSubscription(room, connectionId, receiver, now)) {
+                    canvasPresence.entries.asSequence()
+                        .filter { (_, cursor) -> cursor.inviteCode == inviteCode && cursor.active && cursor.logicalId != receiver.logicalId &&
+                            cursor.taskId == receiver.taskId && cursor.canvasType == receiver.canvasType }
+                        .filter { (peerId, cursor) -> isCurrentCanvasSubscription(room, peerId, cursor, now) }
+                        .map { it.value }
+                        .groupBy { it.logicalId }
+                        .values.mapNotNull { entries -> entries.maxByOrNull { it.order } }
+                        .filter { it.x != null }
+                        .map { cursor -> mapOf("id" to cursor.cursorId, "displayName" to cursor.displayName,
+                            "color" to cursor.color, "x" to cursor.x, "y" to cursor.y) }
+                } else emptyList()
+                val subscription = canvasPresence[connectionId] ?: return@synchronized null
+                CanvasPresenceDelivery(emitter, participant, subscription, mapOf(
+                    "taskId" to receiver.taskId, "canvasType" to receiver.canvasType,
+                    "sequence" to canvasSnapshotSequence.incrementAndGet(), "cursors" to peers,
+                ))
+            }
+        }
+
+    private fun isCurrentCanvasSubscription(room: Room, connectionId: String, cursor: CanvasPresence, now: Long): Boolean {
+        if (!cursor.subscribed) return false
+        val participant = participants[connectionId]
+        val authorized = participant != null && isCurrentCanvasParticipant(connectionId, participant) &&
+            participant.admittedTeamId == room.teamId && room.archivedAt == null &&
+            cursor.modeRevision == room.roomEditorModeRevision && now - cursor.updatedAt < RoomRealtimeActivityLeaseService.LEASE_SECONDS * 1000 &&
+            runCatching {
+                val role = resolveCurrentParticipantRole(room, participant)
+                RoomCanvasTaskScope().resolve(room, cursor.taskId ?: "", role.canManageRoom)
+            }.isSuccess
+        if (!authorized) {
+            canvasPresence.computeIfPresent(connectionId) { _, current ->
+                if (current === cursor) current.copy(active = false, subscribed = false, x = null, y = null) else current
+            }
+        }
+        return authorized
+    }
+
+    private fun isCurrentCanvasParticipant(connectionId: String, participant: ParticipantMeta): Boolean =
+        participants[connectionId] === participant && connectionByRoomSession[roomSessionKey(participant.inviteCode, participant.sessionId)] == connectionId
+
+    private fun scheduleCanvasPresenceBroadcast(inviteCode: String) {
+        if (canvasPresence.values.none { it.inviteCode == inviteCode }) return
+        pendingCanvasPresenceBroadcasts.add(inviteCode)
+        if (!runningCanvasPresenceBroadcasts.add(inviteCode)) return
+        try {
+            canvasPresenceExecutor.execute {
+                try {
+                    pendingCanvasPresenceBroadcasts.remove(inviteCode)
+                    broadcastCanvasPresence(inviteCode)
+                } catch (error: Exception) {
+                    logger.debug("Deferred canvas presence broadcast failed", error)
+                } finally {
+                    runningCanvasPresenceBroadcasts.remove(inviteCode)
+                    if (pendingCanvasPresenceBroadcasts.remove(inviteCode)) scheduleCanvasPresenceBroadcast(inviteCode)
+                }
+            }
+        } catch (_: RejectedExecutionException) {
+            pendingCanvasPresenceBroadcasts.remove(inviteCode)
+            runningCanvasPresenceBroadcasts.remove(inviteCode)
+        }
     }
 
     private fun relayAwarenessUpdate(connectionId: String, awarenessBase64: String) {
@@ -2651,6 +2825,10 @@ class CollaborationService(
     }
 
     private fun broadcastState(inviteCode: String) {
+        // State broadcasts also run from afterCommit, where the old entity
+        // manager is still bound but cannot acquire a new pessimistic lock.
+        // The queued dispatch opens a fresh transaction and rechecks scope.
+        scheduleCanvasPresenceBroadcast(inviteCode)
         val faultProfile = realtimeFaultInjectionService.profileFor(inviteCode)
         if (faultProfile != null && faultProfile.latencyMs > 0) {
             Thread.sleep(faultProfile.latencyMs.toLong())
@@ -2712,6 +2890,7 @@ class CollaborationService(
             rooms - lost
         }
         if (activeRooms.isEmpty()) return
+        activeRooms.forEach(::scheduleCanvasPresenceBroadcast)
         val payload = mapOf("ts" to Instant.now().toEpochMilli())
         activeRooms.forEach { inviteCode ->
             runCatching {
@@ -2852,10 +3031,10 @@ class CollaborationService(
             notesMessages = if (participant.canManageRoom) state.notesMessages.toList() else emptyList(),
             personalNotes = personalNotes,
             briefingMarkdown = state.briefingMarkdown,
-            roomEditorMode = roomWhiteboardFeatureGate.visibleMode(roomDiagramFeatureGate.visibleMode(editorMode.first)),
+            roomEditorMode = canvasStorage.visibleMode(editorMode.first),
             roomEditorModeRevision = editorMode.second,
-            roomDiagramsEnabled = roomDiagramFeatureGate.enabled,
-            roomWhiteboardEnabled = roomWhiteboardFeatureGate.enabled,
+            roomDiagramsEnabled = canvasStorage.available,
+            roomWhiteboardEnabled = canvasStorage.available,
             drawingColor = participant.drawingColor,
             participants = participantsPayload,
             participantSnapshotRevision = participantRevision,
@@ -3085,6 +3264,7 @@ class CollaborationService(
     private fun detachConnection(connectionId: String, closeTransport: Boolean): String? {
         val detached = synchronized(realtimeLifecycleRegistryLock) {
             val participant = participants.remove(connectionId)
+            canvasPresence.remove(connectionId)
             val inviteCode = participant?.inviteCode
             managerWorkspaceSubscriptionByConnection.remove(connectionId)
 
@@ -3112,6 +3292,7 @@ class CollaborationService(
         if (closeTransport) {
             detached.second?.let { emitter -> runCatching { emitter.complete() } }
         }
+        detached.first?.let(::scheduleCanvasPresenceBroadcast)
         return detached.first
     }
 

@@ -7,15 +7,15 @@ import { setVisitParams, trackPageView } from "../services/analytics";
 import { LegacyDomainNotice } from "../components/LegacyDomainNotice";
 import { normalizeLanguageKey } from "../pages/dashboard/dashboardHelpers";
 import { captureTeamInvitationFragment } from "../features/workspace/teamInvitationToken";
-import { SOCIAL_AUTH_ENABLED } from "../config/runtime";
+import { OnboardingProvider } from "../features/learning/LearningScope";
 
 captureTeamInvitationFragment();
 
 const LandingPage = lazy(() => import("../pages/LandingPage").then((module) => ({ default: module.LandingPage })));
 const LoginPage = lazy(() => import("../pages/LoginPage").then((module) => ({ default: module.LoginPage })));
-const SocialLoginPage = SOCIAL_AUTH_ENABLED
-  ? lazy(() => import("../pages/SocialLoginPage").then((module) => ({ default: module.SocialLoginPage })))
-  : null;
+const PrivacyPage = lazy(() => import("../pages/PrivacyPage").then((module) => ({ default: module.PrivacyPage })));
+const TermsPage = lazy(() => import("../pages/TermsPage").then((module) => ({ default: module.TermsPage })));
+const SocialLoginPage = lazy(() => import("../pages/SocialLoginPage").then((module) => ({ default: module.SocialLoginPage })));
 const DashboardPage = lazy(() => import("../pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
 const AdminPage = lazy(() => import("../pages/AdminPage").then((module) => ({ default: module.AdminPage })));
 const PersonalWorkspacePage = lazy(() => import("../pages/workspace/PersonalWorkspacePage").then((module) => ({ default: module.PersonalWorkspacePage })));
@@ -140,7 +140,7 @@ function PersonalWorkspaceRoute() {
 
 export function App() {
   return (
-    <>
+    <OnboardingProvider>
       <LegacyDomainNotice />
       <AuthSessionSync />
       <RoutePageTracker />
@@ -150,7 +150,9 @@ export function App() {
             <Routes>
               <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<LoginPage />} />
-              <Route path="/login/social" element={SocialLoginPage ? <SocialLoginPage /> : <Navigate to="/login" replace />} />
+              <Route path="/privacy" element={<PrivacyPage />} />
+              <Route path="/terms" element={<TermsPage />} />
+              <Route path="/login/social" element={<SocialLoginPage />} />
               <Route path="/dashboard" element={<LegacyPersonalRedirect />} />
               <Route path="/dashboard/rooms" element={<LegacyPersonalRedirect />} />
               <Route path="/dashboard/manage" element={<LegacyPersonalRedirect />} />
@@ -172,6 +174,6 @@ export function App() {
           </ClearLazyChunkRecoveryGuard>
         </Suspense>
       </LazyChunkRecoveryBoundary>
-    </>
+    </OnboardingProvider>
   );
 }

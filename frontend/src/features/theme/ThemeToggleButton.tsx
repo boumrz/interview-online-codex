@@ -2,6 +2,7 @@ import React from "react";
 import { Button, ConfigProvider, Tooltip } from "antd";
 import { MoonOutlined, SunOutlined } from "@ant-design/icons";
 import { useThemeMode } from "./ThemeProvider";
+import { LearningHelpButton } from "../learning/LearningScope";
 import styles from "./theme.module.css";
 
 export function ThemeToggleButton() {
@@ -10,6 +11,7 @@ export function ThemeToggleButton() {
 
   return (
     <ConfigProvider wave={{ disabled: true }}>
+      <LearningHelpButton />
       <Tooltip title={isDark ? "Включить светлую тему" : "Включить тёмную тему"}>
         <Button
           aria-label="Тёмная тема"

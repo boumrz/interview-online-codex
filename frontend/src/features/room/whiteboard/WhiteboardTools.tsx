@@ -38,11 +38,13 @@ type Props = {
 
 export function WhiteboardTools({ activeTool, color, strokeWidth, onWidth, onSelect, onPointerSelect, onColor, canClear, onClear, importing, onImage }: Props) {
   const group = useId();
-  return <div className={styles.bar} role="group" aria-label="Инструменты доски">
+  return <div className={styles.bar} role="group" aria-label="Инструменты доски" data-learning-anchor="room-whiteboard-tools">
     {tools.map(({ type, label, icon: Icon }) => <label key={type} className={styles.tool} title={type === "selection" ? "Выделить и переместить объекты" : label}>
       <input type="radio" name={group} checked={activeTool === type} onChange={() => onSelect(type)}
         onClick={event => { if (event.detail > 0) onPointerSelect(); }}
-        aria-label={label} data-testid={`toolbar-${type}`} />
+        aria-label={label} data-testid={`toolbar-${type}`}
+        data-learning-anchor={type === "rectangle" ? (activeTool === type ? "room-whiteboard-rectangle-selected" : "room-whiteboard-tool") : undefined}
+        data-learning-interactive={type === "rectangle" && activeTool !== "rectangle" ? "true" : undefined} />
       <Icon aria-hidden="true" />
       <span className={styles.caption}>{label}</span>
     </label>)}

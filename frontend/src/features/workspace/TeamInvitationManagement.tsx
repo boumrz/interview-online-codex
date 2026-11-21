@@ -365,7 +365,7 @@ export function TeamInvitationManagement({ accountId, authToken, teamId }: Props
         <Stack gap="xs">
           <Title order={2}>Приглашения</Title>
         </Stack>
-        <Button className={styles.primaryAction} loading={busyKey === "create"} onClick={() => void runCreate()}>
+        <Button className={styles.primaryAction} data-learning-anchor="team-invite-create" loading={busyKey === "create"} onClick={() => void runCreate()}>
           {invitations.some((item) => item.state === "PENDING") ? "Перевыпустить ссылку" : "Выпустить ссылку"}
         </Button>
       </Group>

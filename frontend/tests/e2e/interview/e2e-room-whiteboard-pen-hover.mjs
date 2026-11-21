@@ -180,6 +180,10 @@ test('перо: наведение без штриха, давление, вых
     await alignedPreview(page, location);
     await page.screenshot({ path: '/tmp/interhub-whiteboard-pen-hover.png' });
     await panel(page).getByRole('button', { name: 'Вернуться в комнату', exact: true }).click();
+    await panel(page).and(page.locator('[data-whiteboard-expanded="false"]')).waitFor();
+    // Collapse moves the same canvas. Let its ResizeObserver clear the old
+    // preview before sending the first pen move at the new position.
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     location = await point(page, -10);
     await hover(cdp, location);
     await alignedPreview(page, location);

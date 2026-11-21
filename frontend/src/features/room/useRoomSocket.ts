@@ -1,3 +1,4 @@
+import { canvasPresenceConnection, receiveCanvasPresence } from "./canvasPresenceEvents";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { applyUpdate, Doc, encodeStateAsUpdate, mergeUpdates } from "yjs";
 import { API_BASE_URL } from "../../config/runtime";
@@ -1902,6 +1903,7 @@ export function useRoomSocket({
             },
             { minIntervalMs: 1000 }
           );
+          canvasPresenceConnection(inviteCode, sessionId, payload.eventToken ?? null, payload.roomEditorModeRevision ?? 0);
           onState(payload);
           if (shouldHydrateFromState) {
             discardObsoleteRecoveryMutations(payload);
@@ -2085,6 +2087,10 @@ export function useRoomSocket({
               yjsSequence: typeof payload.yjsSequence === "number" ? payload.yjsSequence : null
             });
           }
+          return;
+        }
+        if (message.type === "canvas_cursor_snapshot") {
+          receiveCanvasPresence(inviteCode, sessionId, message.payload);
           return;
         }
         if (message.type === "awareness_update") {

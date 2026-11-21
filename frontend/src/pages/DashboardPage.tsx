@@ -102,7 +102,7 @@ import { PresetsSection } from "./dashboard/PresetsSection";
 import { HrCabinetSection } from "./dashboard/HrCabinetSection";
 import { HrProfileSection } from "./dashboard/HrProfileSection";
 
-declare const __FEATURE_AGENT_OPS__: string | undefined;
+
 
 const EMPTY_ROOMS: RoomSummary[] = [];
 const EMPTY_TASK_GROUPS: TaskLanguageGroup[] = [];
@@ -132,10 +132,7 @@ export function DashboardPage({
   const markdownPreviewScope = useMemo(() => crypto.randomUUID(), [auth.token, auth.user?.id]);
   const authIdentityRef = useRef({ token: auth.token, userId: auth.user?.id ?? null });
   authIdentityRef.current = { token: auth.token, userId: auth.user?.id ?? null };
-  const agentOpsEnabled =
-    (typeof __FEATURE_AGENT_OPS__ !== "undefined"
-      ? __FEATURE_AGENT_OPS__
-      : "false") === "true";
+  const agentOpsEnabled = process.env.NODE_ENV === "development";
   const isAdmin = auth.user?.role === "admin";
   const isHr = auth.user?.isHr === true;
 

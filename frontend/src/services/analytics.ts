@@ -297,3 +297,31 @@ export function setVisitParams(payload: MetricPayload) {
 export function isAnalyticsEnabled() {
   return enabled;
 }
+
+const LEARNING_STEPS: Record<string, number> = {
+  personal_interviews: 3, team_interviews: 3, library: 2, candidates: 2,
+  tracks: 2, team_settings: 2, room: 5,
+};
+const LEARNING_ACTIONS = new Set([
+  "offer_seen", "offer_skip", "manual_open", "manual_start", "first_start", "retry_start",
+  "resume", "cancel", "first_done", "replay_start", "replay_done",
+]);
+
+/** Only categorical learning metadata crosses the analytics boundary. */
+export function trackLearningEvent(module: string, action: string, context: {
+  source: string; attemptType: string; skipped: boolean; version?: number;
+}) {
+  if (!Object.hasOwn(LEARNING_STEPS, module)) return;
+  const step = /^step_([1-5])$/.exec(action);
+  if (!LEARNING_ACTIONS.has(action) && !(step && Number(step[1]) <= LEARNING_STEPS[module])) return;
+  if (!["help", "offer"].includes(context.source) || !["first", "retry", "replay"].includes(context.attemptType)) return;
+  const goal = `learn_${module}_${action}_v1`;
+  const params = {
+    learning_module: module,
+    learning_version: context.version === 2 ? "v2" : "v1",
+    learning_source: context.source,
+    learning_attempt: context.attemptType,
+    learning_previously_skipped: context.skipped === true,
+  };
+  invokeYm("reachGoal", [goal, params], { debugEvent: goal, debugPayload: params });
+}

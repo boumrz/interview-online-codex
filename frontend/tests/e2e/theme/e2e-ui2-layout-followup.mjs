@@ -73,7 +73,20 @@ test('personal and team library controls and selected tabs remain compact and al
    const r=await filter.locator('xpath=ancestor::*[contains(concat(" ",normalize-space(@class)," ")," ant-select ")][1]').boundingBox();assert.ok(r.height>=32&&r.height<=40,`${scope}: single select height ${r.height}`);assert.ok(r.width>=190&&r.width<=210,`${scope}: language filter width ${r.width}`);
    const tabs=page.getByRole('tab');const first=tabs.filter({hasText:/^Задачи$/});const second=tabs.filter({hasText:/^Наборы задач$/});const [a,b]=await Promise.all([first,second].map(tab=>tab.locator('xpath=ancestor::*[contains(concat(" ",normalize-space(@class)," ")," ant-tabs-tab ")][1]').boundingBox()));assert.ok(Math.abs(a.y+a.height/2-b.y-b.height/2)<=1,'tabs share axis');assert.ok(b.x-a.x-a.width<=9,'tab spacing has no duplicated gutter');
    const active=page.getByRole('tab',{selected:true});const before=await active.evaluate(el=>getComputedStyle(el).color);await active.hover();await active.evaluate(el=>el.getAnimations().forEach(a=>a.finish()));assert.equal(await active.evaluate(el=>getComputedStyle(el).color),before,'selected tab keeps its color on hover');
-   await second.click();assert.equal(await second.getAttribute('aria-selected'),'true');await first.click();await filter.waitFor();
+   const actionBoxes = async (createLabel) => Promise.all([
+    page.getByRole('button', { name: createLabel, exact: true }),
+    page.getByRole('button', { name: 'Импортировать', exact: true }),
+   ].map(async (locator) => { await locator.waitFor(); return locator.boundingBox(); }));
+   const taskActions = await actionBoxes('Создать задачу');
+   await second.click();assert.equal(await second.getAttribute('aria-selected'),'true');
+   const setActions = await actionBoxes('Создать набор');
+   for (const [index, taskBox] of taskActions.entries()) {
+    const setBox = setActions[index];
+    for (const key of ['x', 'y', 'width', 'height']) {
+     assert.ok(Math.abs(taskBox[key] - setBox[key]) <= 1, `${scope}/${width}/${mode}: ${key} moves for action ${index}`);
+    }
+   }
+   await first.click();await filter.waitFor();
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
    await page.screenshot({path:`.run/layout-${scope}-library-${mode}-${width}.png`,fullPage:true});
   }

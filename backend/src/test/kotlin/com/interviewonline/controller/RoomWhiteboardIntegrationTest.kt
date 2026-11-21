@@ -27,7 +27,7 @@ import java.util.concurrent.Callable
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
-@SpringBootTest(properties = ["app.features.room-whiteboard-enabled=true", "app.features.room-diagrams-enabled=true"])
+@SpringBootTest
 @AutoConfigureMockMvc(print = MockMvcPrint.NONE)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class RoomWhiteboardIntegrationTest(
@@ -547,38 +547,42 @@ class RoomWhiteboardIntegrationTest(
 @SpringBootTest
 @AutoConfigureMockMvc(print = MockMvcPrint.NONE)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
-class RoomWhiteboardDisabledIntegrationTest(
+class RoomWhiteboardAvailabilityIntegrationTest(
     @Autowired private val mvc: MockMvc,
     @Autowired private val rooms: RoomRepository,
     @Autowired private val jdbc: JdbcTemplate,
     @Autowired private val mapper: ObjectMapper,
 ) {
     companion object {
-        private val postgres = Postgres16TestSupport.create("room_whiteboard_disabled")
+        private val postgres = Postgres16TestSupport.create("room_whiteboard_availability")
         @JvmStatic @DynamicPropertySource fun properties(registry: DynamicPropertyRegistry) = postgres.register(registry)
         @JvmStatic @AfterAll fun cleanup() = postgres.close()
     }
-    @Test fun `whiteboard API defaults off and cannot be enabled by mode request`() {
-        val room = rooms.saveAndFlush(Room(inviteCode = "board-off-${UUID.randomUUID()}", ownerSessionToken = "owner", interviewerSessionToken = "interviewer"))
-        assertEquals(404, mvc.get("/api/rooms/${room.inviteCode}/whiteboard").andReturn().response.status)
+    @Test fun `whiteboard snapshot and mode are available without feature configuration`() {
+        val room = rooms.saveAndFlush(Room(inviteCode = "board-ready-${UUID.randomUUID()}", ownerSessionToken = "owner", interviewerSessionToken = "interviewer"))
+        val snapshot = mvc.get("/api/rooms/${room.inviteCode}/whiteboard").andReturn().response
+        assertEquals(200, snapshot.status)
+        val boardId = mapper.readTree(snapshot.contentAsString).path("boardId").asText()
         val sessionId = UUID.randomUUID().toString()
         val connection = mvc.get("/api/realtime/rooms/${room.inviteCode}/stream") { param("sessionId", sessionId); param("ownerToken", "owner") }.andReturn()
         val state = connection.response.contentAsString.lineSequence().filter { it.startsWith("data:") }.map { mapper.readTree(it.removePrefix("data:")) }.last { it.path("type").asText() == "state_sync" }.path("payload")
-        assertFalse(state.path("roomWhiteboardEnabled").asBoolean())
-        assertEquals(404, mvc.post("/api/realtime/rooms/${room.inviteCode}/events") {
+        assertTrue(state.path("roomWhiteboardEnabled").asBoolean())
+        assertEquals(204, mvc.post("/api/realtime/rooms/${room.inviteCode}/events") {
             contentType = MediaType.APPLICATION_JSON
             content = mapper.writeValueAsString(mapOf("sessionId" to sessionId, "eventToken" to state.path("eventToken").asText(), "type" to "room_editor_mode_update", "roomEditorMode" to "whiteboard", "expectedRoomEditorModeRevision" to 0))
         }.andReturn().response.status)
-        assertEquals(404, mvc.post("/api/rooms/${room.inviteCode}/whiteboard/changes") {
+        assertEquals(403, mvc.post("/api/rooms/${room.inviteCode}/whiteboard/changes") {
             param("sessionId", sessionId); contentType = MediaType.APPLICATION_JSON
-            content = mapper.writeValueAsString(mapOf("boardId" to UUID.randomUUID().toString(), "operationId" to UUID.randomUUID().toString(), "baseSequence" to 0, "elements" to emptyList<Any>()))
+            content = mapper.writeValueAsString(mapOf("boardId" to boardId, "operationId" to UUID.randomUUID().toString(),
+                "baseSequence" to 0, "elements" to listOf(mapOf("id" to "attempted", "type" to "rectangle", "version" to 1,
+                    "versionNonce" to 1, "x" to 0, "y" to 0, "width" to 1, "height" to 1, "angle" to 0, "isDeleted" to false))))
         }.andReturn().response.status)
     }
-    @Test fun `persisted whiteboard mode is safely projected to code while disabled`() {
-        val room = rooms.saveAndFlush(Room(inviteCode = "board-off-mode-${UUID.randomUUID()}", ownerSessionToken = "owner", interviewerSessionToken = "interviewer"))
+    @Test fun `saved whiteboard mode remains visible without feature configuration`() {
+        val room = rooms.saveAndFlush(Room(inviteCode = "board-ready-mode-${UUID.randomUUID()}", ownerSessionToken = "owner", interviewerSessionToken = "interviewer"))
         jdbc.update("UPDATE rooms SET room_editor_mode='whiteboard' WHERE id=?", room.id)
         val result = mvc.get("/api/rooms/${room.inviteCode}") { header("X-Room-Owner-Token", "owner") }.andReturn()
-        assertEquals("code", mapper.readTree(result.response.contentAsString).path("roomEditorMode").asText())
-        assertFalse(mapper.readTree(result.response.contentAsString).path("roomWhiteboardEnabled").asBoolean())
+        assertEquals("whiteboard", mapper.readTree(result.response.contentAsString).path("roomEditorMode").asText())
+        assertTrue(mapper.readTree(result.response.contentAsString).path("roomWhiteboardEnabled").asBoolean())
     }
 }

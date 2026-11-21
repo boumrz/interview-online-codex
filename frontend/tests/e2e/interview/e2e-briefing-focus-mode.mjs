@@ -68,7 +68,7 @@ try {
   await interviewerPage
     .getByRole("button", { name: "Создать комнату" })
     .click();
-  await interviewerPage.getByRole("dialog", { name: "Создать комнату" }).getByRole("button", { name: "Создать комнату", exact: true }).click();
+  await interviewerPage.getByRole("dialog", { name: "Новая комната", exact: true }).getByRole("button", { name: "Создать и войти", exact: true }).click();
   await interviewerPage.waitForURL(/\/room\//, { timeout: 15000 });
   await interviewerPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });
   const inviteCode = parseInviteCode(interviewerPage.url());

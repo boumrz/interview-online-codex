@@ -1,3 +1,4 @@
+import { useCanvasPresence } from "../useCanvasPresence";
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Modal } from "antd";
 import { useDiagramExpansion as useCanvasExpansion } from "../diagram/useDiagramExpansion";
@@ -34,6 +35,7 @@ function MountedWhiteboardPanel(props: RoomWhiteboardPanelProps & TaskCanvasLife
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const presence = useCanvasPresence(props, props.active && state.loaded && !state.accessDenied, "whiteboard");
   const canExport = props.active && props.connected && state.loaded && !state.accessDenied && !exporting;
   const { panelRef, expanded, toggleExpanded } = useCanvasExpansion(props.active);
   const onReady = useCallback((handle: WhiteboardCanvasHandle | null) => setCanvas(handle), []);
@@ -71,7 +73,7 @@ function MountedWhiteboardPanel(props: RoomWhiteboardPanelProps & TaskCanvasLife
     finally { setExporting(false); }
   };
 
-  return <section ref={panelRef} hidden={props.retiring} data-canvas-task-id={props.taskId ?? ""} aria-label="Доска интервью" aria-hidden={!props.active} data-whiteboard-expanded={expanded ? "true" : "false"} className={`${styles.panel} ${expanded ? styles.expanded : ""}`}>
+  return <section ref={panelRef} hidden={props.retiring} data-canvas-task-id={props.taskId ?? ""} aria-label="Доска интервью" aria-hidden={!props.active} data-whiteboard-expanded={expanded ? "true" : "false"} data-learning-canvas-expanded={expanded ? "true" : undefined} className={`${styles.panel} ${expanded ? styles.expanded : ""}`}>
     <RoomCanvasToolbar expanded={expanded} onToggleExpanded={toggleExpanded}
       color={drawingColor}
       onApplyColor={props.active && !props.readOnly && state.editable && canvas && drawingColor
@@ -81,8 +83,8 @@ function MountedWhiteboardPanel(props: RoomWhiteboardPanelProps & TaskCanvasLife
       {state.error && !state.canDiscard && !state.accessDenied && <Button onClick={() => session.current?.retry()}>Повторить</Button>}
       {state.canDiscard && <Button onClick={() => setConfirmDiscard(true)}>Вернуться к сохранённой доске</Button>}
     </RoomCanvasToolbar>
-    <div className={styles.body}>
-      {drawingColor && !state.accessDenied && <div className={styles.canvas} data-testid="room-whiteboard-canvas"><Suspense fallback={<div className={styles.placeholder}>Подготавливаем редактор доски…</div>}><WhiteboardCanvas active={props.active} readOnly={props.readOnly || !state.editable} drawingColor={drawingColor} onReady={onReady} onChange={onChange} /></Suspense></div>}
+    <div className={styles.body} data-learning-anchor="room-whiteboard-view">
+      {drawingColor && !state.accessDenied && <div className={styles.canvas} data-testid="room-whiteboard-canvas"><Suspense fallback={<div className={styles.placeholder}>Подготавливаем редактор доски…</div>}><WhiteboardCanvas active={props.active} readOnly={props.readOnly || !state.editable} drawingColor={drawingColor} cursors={presence.cursors} onCursor={presence.point} onReady={onReady} onChange={onChange} /></Suspense></div>}
       {(!state.loaded || state.accessDenied) && <div className={styles.placeholder}>{state.message}</div>}
     </div>
     <Modal getContainer={() => panelRef.current ?? document.body} open={confirmDiscard} title="Удалить несохранённые изменения доски?" okText="Загрузить сохранённую" cancelText="Оставить изменения" okButtonProps={{ danger: true }} onCancel={() => setConfirmDiscard(false)} onOk={() => { setConfirmDiscard(false); session.current?.reset(); }}>

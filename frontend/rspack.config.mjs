@@ -129,12 +129,6 @@ export default defineConfig({
       }
     }),
     new rspack.DefinePlugin({
-      __FEATURE_ROOM_DIAGRAMS_ENABLED__: JSON.stringify(process.env.FEATURE_ROOM_DIAGRAMS_ENABLED === "true"),
-      __FEATURE_ROOM_WHITEBOARD_ENABLED__: JSON.stringify(process.env.FEATURE_ROOM_WHITEBOARD_ENABLED === "true"),
-      __FEATURE_SOCIAL_AUTH_ENABLED__: JSON.stringify(process.env.FEATURE_SOCIAL_AUTH_ENABLED === "true"),
-      __FEATURE_AGENT_OPS__: JSON.stringify(process.env.FEATURE_AGENT_OPS ?? "false"),
-      "process.env.FEATURE_AGENT_OPS": JSON.stringify(process.env.FEATURE_AGENT_OPS ?? "false"),
-      "process.env.FEATURE_TEAM_MERGE_COMMIT": JSON.stringify(process.env.FEATURE_TEAM_MERGE_COMMIT ?? "false"),
       "process.env.VITE_API_BASE_URL": JSON.stringify(process.env.VITE_API_BASE_URL ?? "/api"),
       "process.env.VITE_LEGACY_PUBLIC_DOMAIN": JSON.stringify(
         process.env.VITE_LEGACY_PUBLIC_DOMAIN ?? "interview.domiknote.ru"
@@ -144,9 +138,6 @@ export default defineConfig({
       ),
       "process.env.VITE_LEGACY_DOMAIN_SHUTDOWN_DATE": JSON.stringify(
         process.env.VITE_LEGACY_DOMAIN_SHUTDOWN_DATE ?? "2026-07-26"
-      ),
-      "process.env.VITE_SHOW_LEGACY_DOMAIN_NOTICE": JSON.stringify(
-        process.env.VITE_SHOW_LEGACY_DOMAIN_NOTICE ?? "false"
       ),
       "process.env.VITE_METRIKA_ALLOWED_HOSTS": JSON.stringify(
         process.env.VITE_METRIKA_ALLOWED_HOSTS ?? "interview.vtools.tech,interview.domiknote.ru"
@@ -164,14 +155,14 @@ export default defineConfig({
             ignore: ["**/index.html", "**/drawio/**"]
           }
         },
-        ...(process.env.FEATURE_ROOM_DIAGRAMS_ENABLED === "true" ? [{
+        {
           from: path.resolve(process.cwd(), "public/drawio"),
           to: "drawio",
           // Keep the pinned upstream editor intact; some unused upstream files
           // are servlet templates rather than independently parseable modules.
           info: { minimized: true }
-        }] : []),
-        ...(process.env.FEATURE_ROOM_WHITEBOARD_ENABLED === "true" ? [{
+        },
+        {
           from: path.resolve(process.cwd(), "node_modules/@excalidraw/excalidraw/dist/prod/fonts"),
           to: "whiteboard-assets/fonts",
           globOptions: { ignore: ["**/Liberation/**"] }
@@ -185,7 +176,7 @@ export default defineConfig({
           from: path.join(excalidrawDist, "prod", file),
           to: `whiteboard-assets/subset/${file}`,
           info: { minimized: true }
-        }))] : [])
+        }))
       ]
     }),
     new rspack.CssExtractRspackPlugin(

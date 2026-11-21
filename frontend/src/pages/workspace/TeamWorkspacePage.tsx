@@ -64,6 +64,8 @@ import {
 import { LANGUAGE_OPTIONS } from "../dashboard/dashboardConstants";
 import { labelForLanguage } from "../dashboard/dashboardHelpers";
 import type { TeamDetail, TeamInterview, TeamInterviewAssignee, TeamInterviewListItem, TeamInterviewOwnerOfferListItem, TeamInterviewProgramme, TeamMemberDirectoryItem, TeamTaskSet, TeamTaskTemplate, TeamTrack, TeamVacancy, WorkspaceCacheScope } from "../../types";
+import { LearningHelpButton, LearningScope } from "../../features/learning/LearningScope";
+import { workspaceLearningModule } from "../../features/learning/learningContent";
 import styles from "./TeamWorkspacePage.module.css";
 import { HrCabinetSection } from "../dashboard/HrCabinetSection";
 import { TeamInterviewEditAction } from "../../features/workspace/TeamInterviewEditAction";
@@ -155,9 +157,11 @@ function programmeStatusColor(status: TeamInterviewProgramme["status"]) {
 
 function ProgrammeSummary({
   inheritedFromTrack = false,
+  learningAnchor,
   programme,
 }: {
   readonly inheritedFromTrack?: boolean;
+  readonly learningAnchor?: string;
   readonly programme: TeamInterviewProgramme | null;
 }) {
   if (!programme) return null;
@@ -165,7 +169,7 @@ function ProgrammeSummary({
   const mandatoryLabel = programme.mandatory ? "обязательные" : "дополнительные";
 
   return (
-    <Box className={styles.programmeSummary}>
+    <Box className={styles.programmeSummary} data-learning-anchor={learningAnchor}>
       <Group gap="xs" wrap="wrap">
         <Text size="sm" fw={700}>{programmeOriginLabel(programme)} · {mandatoryLabel}</Text>
         <Badge variant="light" color={programmeStatusColor(programme.status)}>{programmeStatusLabel(programme.status)}</Badge>
@@ -194,11 +198,11 @@ function idempotencyKey() {
 
 function TeamNavigation({ teamId, authorized, isAdmin }: { teamId: string; authorized: boolean; isAdmin: boolean }) {
   const location = useLocation();
-  const items = useMemo(() => [
-    { label: "Интервью", to: `/workspace/teams/${teamId}/interviews` },
-    { label: "Библиотека", to: `/workspace/teams/${teamId}/library` },
-    { label: "Кандидаты", to: `/workspace/teams/${teamId}/candidates` },
-    { label: "Треки и вакансии", to: `/workspace/teams/${teamId}/tracks` },
+  const items = useMemo<Array<{ label: string; to: string; learningAnchor?: string }>>(() => [
+    { label: "Интервью", to: `/workspace/teams/${teamId}/interviews`, learningAnchor: "team-interviews-link" },
+    { label: "Библиотека", to: `/workspace/teams/${teamId}/library`, learningAnchor: "team-library-link" },
+    { label: "Кандидаты", to: `/workspace/teams/${teamId}/candidates`, learningAnchor: "team-candidates-link" },
+    { label: "Треки и вакансии", to: `/workspace/teams/${teamId}/tracks`, learningAnchor: "team-tracks-link" },
     ...(isAdmin ? [{ label: "Админка", to: "/dashboard/admin" }] : []),
   ], [teamId, isAdmin]);
   const navRef = useRef<HTMLElement | null>(null);
@@ -253,6 +257,8 @@ function TeamNavigation({ teamId, authorized, isAdmin }: { teamId: string; autho
       tabIndex={authorized ? undefined : -1}
       aria-label={activeOverflow ? `Меню разделов: ${activeOverflow.label}` : "Меню разделов"}
       data-active-section={activeOverflow ? "true" : undefined}
+      data-learning-anchor="team-sections-menu"
+      data-learning-interactive="true"
       aria-expanded={authorized && overflowOpened}
       aria-haspopup={authorized ? "menu" : undefined}
       onKeyDown={(event: React.KeyboardEvent<HTMLButtonElement>) => {
@@ -279,6 +285,8 @@ function TeamNavigation({ teamId, authorized, isAdmin }: { teamId: string; autho
         <NavLink
           key={item.to}
           to={item.to}
+          data-learning-anchor={item.learningAnchor}
+          data-learning-interactive="true"
           className={({ isActive }) => `${isActive ? styles.navActive : styles.navLink} app-header-control`}
         >
           {item.label}
@@ -297,6 +305,8 @@ function TeamNavigation({ teamId, authorized, isAdmin }: { teamId: string; autho
                 key={item.to}
                 component={NavLink}
                 to={item.to}
+                data-learning-anchor={item.learningAnchor}
+                data-learning-interactive={item.learningAnchor ? "true" : undefined}
                 className={location.pathname === item.to ? styles.overflowMenuItemActive : styles.overflowMenuItem}
                 aria-current={location.pathname === item.to ? "page" : undefined}
               >
@@ -564,7 +574,7 @@ function TeamInterviewList({
         <div>
           <Title order={1}>Интервью</Title>
         </div>
-        <Button className={styles.primaryAction} color="blue" onClick={() => navigate(`/workspace/teams/${teamId}/interviews/new`)}>
+        <Button className={styles.primaryAction} color="blue" data-learning-anchor="interview-create" data-learning-interactive="true" onClick={() => navigate(`/workspace/teams/${teamId}/interviews/new`)}>
           Создать интервью
         </Button>
       </Group>
@@ -959,7 +969,7 @@ function TeamInterviewCard({
       actions={<>
             {canRename ? <TeamInterviewEditAction accountId={accountId} teamId={teamId} interview={interview} /> : null}
             {!isFrozen ? (
-              <Button type="button" variant="light" size="compact-sm" onClick={async () => {
+              <Button type="button" variant="light" size="compact-sm" data-learning-anchor="interview-copy" onClick={async () => {
                 await copyToClipboard(`${window.location.origin}/room/${interview.inviteCode}`, {
                   success: "Ссылка для кандидата готова к отправке.",
                   failure: "Разрешите доступ к буферу обмена и повторите попытку.",
@@ -986,6 +996,8 @@ function TeamInterviewCard({
               color="blue"
               size="compact-sm"
               aria-label={`Открыть комнату ${interview.title}`}
+              data-learning-anchor="interview-enter"
+              data-learning-interactive="true"
             >
               Войти в комнату
             </Button>
@@ -1292,11 +1304,13 @@ function TeamCreateInterview({
       title="Создать интервью" centered size="lg"
       closeOnClickOutside={!isCreatingInterview} closeOnEscape={!isCreatingInterview} withCloseButton={!isCreatingInterview}
     >
-      <form className="app-authoring-form" onSubmit={submit}>
+      <form className="app-authoring-form" onSubmit={submit} data-learning-onboarding-dialog="interview" data-learning-anchor="interview-form" data-learning-interactive="true">
+        <Group justify="flex-end"><LearningHelpButton /></Group>
         <div className="app-authoring-fields">
+          <div data-learning-form-guide-slot />
           <section className="app-authoring-section" aria-label="Основное">
             <h4>Основное</h4>
-            <TextInput label="Название интервью" placeholder="Введите название интервью" value={title} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setTitle(event.currentTarget.value)} disabled={isCreatingInterview} />
+            <TextInput label="Название интервью" placeholder="Введите название интервью" data-learning-anchor="interview-title" data-learning-interactive="true" value={title} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setTitle(event.currentTarget.value)} disabled={isCreatingInterview} />
             <div className="app-authoring-grid">
               <TextInput label="Имя кандидата" placeholder="Введите имя кандидата" value={candidateName} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setCandidateName(event.currentTarget.value)} maxLength={200} disabled={isCreatingInterview} />
               <TextInput label="Позиция" placeholder="Введите название должности" value={position} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setPosition(event.currentTarget.value)} maxLength={200} disabled={isCreatingInterview} />
@@ -1322,6 +1336,7 @@ function TeamCreateInterview({
             {isTaskSetLoading ? <Text role="status">Загружаем наборы…</Text> : null}
             {taskSetError ? <Alert color="red" role="alert" title="Не удалось загрузить наборы задач" /> : null}
             <MultiSelect label="Задачи интервью" aria-label="Задачи интервью" value={selectedTaskIds} data={taskSelectionOptions}
+              data-learning-anchor="interview-task-picker" data-learning-interactive="true"
               onChange={updateSelectedTasks} searchable clearable maxTagCount={2} placeholder="Выберите задачи для интервью"
               disabled={isTaskLoading} error={taskError ? "Не удалось загрузить библиотеку задач" : undefined}
               optionRender={(option: { label?: React.ReactNode; data?: { label?: React.ReactNode; language?: string; programmeSource?: string | null; taskSetSource?: string | null } }) => <div className={styles.interviewTaskOption}><span className={styles.interviewTaskOptionTitle}>{option.data?.label ?? option.label}</span><span className={styles.interviewTaskOptionLanguage}>{option.data?.language}</span><Group gap={6}>{option.data?.programmeSource ? <Badge>{option.data.programmeSource}</Badge> : null}{option.data?.taskSetSource ? <Badge>{option.data.taskSetSource}</Badge> : null}</Group></div>} />
@@ -1339,7 +1354,7 @@ function TeamCreateInterview({
         </div>
         <div className="app-form-actions">
           <Button type="button" variant="subtle" disabled={isCreatingInterview} onClick={() => navigate(`/workspace/teams/${teamId}/interviews`)}>Отмена</Button>
-          <Button type="submit" disabled={!canCreateInterview} loading={isCreatingInterview}>Создать интервью</Button>
+          <Button type="submit" data-learning-anchor="interview-submit" data-learning-interactive="true" disabled={!canCreateInterview} loading={isCreatingInterview}>Создать интервью</Button>
         </div>
       </form>
     </Modal>
@@ -1950,58 +1965,59 @@ function TeamTaskLibrarySection({
     <Stack gap="lg">
       <Group justify="space-between" align="flex-end" gap="md" wrap="wrap">
         <div>
-          <Title order={1}>Библиотека</Title>
+          <Title order={1} data-learning-anchor="library-title">Библиотека</Title>
         </div>
         <Button type="button" variant="light" leftSection={<IconRefresh size={16} />} onClick={() => void refetch()} loading={isFetching && !isLoading}>
           Обновить
         </Button>
       </Group>
 
-      <div className={styles.libraryToolbar}>
+      <div className={styles.libraryToolbar} data-learning-anchor={libraryTab === "sets" ? "library-sets-open" : undefined}>
         <Tabs
           className={styles.libraryTabs}
           activeKey={libraryTab}
           onChange={(key) => setLibraryTab(key === "sets" ? "sets" : "tasks")}
           items={[
-            { key: "tasks", label: "Задачи" },
-            { key: "sets", label: "Наборы задач" },
+            { key: "tasks", label: <span data-learning-anchor="library-tasks">Задачи</span> },
+            { key: "sets", label: <span data-learning-anchor="library-sets">Наборы задач</span> },
           ]}
           aria-label="Содержимое библиотеки"
         />
 
 
-        {libraryTab === "tasks" ? (
-          <TextInput
-            aria-label="Поиск задач"
-            value={search}
-            onChange={(event: React.ChangeEvent<HTMLInputElement>) => setSearch(event.currentTarget.value)}
-            placeholder="Поиск задач"
-            className={styles.librarySearch}
-          />
-        ) : null}
-
-                  <Group className={styles.libraryActions} gap="xs" wrap="nowrap">
+        <div className={styles.libraryActions}>
             {libraryTab === "tasks" ? (
               <>
-                <Button type="button" color="blue" leftSection={<IconPlus size={17} />} onClick={() => setCreateTaskOpened(true)}>Создать задачу</Button>
+                <Button type="button" color="blue" leftSection={<IconPlus size={17} />} data-learning-anchor="library-create-task" data-learning-interactive="true" onClick={() => setCreateTaskOpened(true)}>Создать задачу</Button>
                 <Button type="button" variant="light" onClick={() => setImportTaskOpened(true)}>Импортировать</Button>
               </>
             ) : (
               <>
-                <Button type="button" color="blue" leftSection={<IconPlus size={17} />} onClick={() => setCreateSetOpened(true)}>Создать набор</Button>
+                <Button
+                  type="button"
+                  color="blue"
+                  leftSection={<IconPlus size={17} />}
+                  data-learning-anchor="library-create-set"
+                  data-learning-interactive="true"
+                  onClick={() => setCreateSetOpened(true)}
+                >
+                  Создать набор
+                </Button>
                 <Button type="button" variant="light" onClick={() => setImportPresetOpened(true)}>Импортировать</Button>
               </>
             )}
-          </Group>
+        </div>
       </div>
 
-
           <Modal authoring opened={createTaskOpened} onClose={() => { if (!(createTaskState.isLoading)) setCreateTaskOpened(false); }} title="Новая командная задача" centered size="xl">
-            <form className="app-authoring-form app-task-authoring" onSubmit={submitTask}>
+            <form className="app-authoring-form app-task-authoring" onSubmit={submitTask} data-learning-onboarding-dialog="task">
               <div className="app-authoring-fields">
+                <div data-learning-form-guide-slot />
                 <section className="app-task-metadata-grid">
                   <TextInput
                     autoFocus label="Название задачи"
+                    data-learning-anchor="library-task-title"
+                    data-learning-interactive="true"
                     value={taskTitle}
                     onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
                       setTaskTitle(event.currentTarget.value);
@@ -2034,7 +2050,7 @@ function TeamTaskLibrarySection({
               </div>
             <Group className="app-form-actions" justify="flex-end" align="center" wrap="wrap">
                   <Button type="button" variant="subtle" disabled={createTaskState.isLoading} onClick={() => setCreateTaskOpened(false)}>Отмена</Button>
-                  <Button type="submit" color="blue" loading={createTaskState.isLoading} disabled={!taskTitle.trim()}>
+                  <Button type="submit" color="blue" data-learning-anchor="library-task-save" data-learning-interactive="true" loading={createTaskState.isLoading} disabled={!taskTitle.trim()}>
                     Создать задачу
                   </Button>
                 </Group>
@@ -2090,11 +2106,13 @@ function TeamTaskLibrarySection({
             </form>
           </Modal>
           <Modal authoring opened={createSetOpened} onClose={() => { if (!(createTaskSetState.isLoading)) setCreateSetOpened(false); }} title="Новый командный набор" centered size="lg">
-            <form className="app-authoring-form" onSubmit={submitTaskSet}>
+            <form className="app-authoring-form" onSubmit={submitTaskSet} data-learning-onboarding-dialog="task-set">
               <div className="app-authoring-fields">
-
+                <div data-learning-form-guide-slot />
                 <TextInput
                   autoFocus label="Название набора"
+                  data-learning-anchor="library-set-title"
+                  data-learning-interactive="true"
                   value={taskSetName}
                   onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
                     setTaskSetName(event.currentTarget.value);
@@ -2130,6 +2148,13 @@ function TeamTaskLibrarySection({
       ) : null}
 
       {libraryTab === "tasks" ? <Card className={styles.libraryListSurface} withBorder={false}>
+          <TextInput
+            aria-label="Поиск задач"
+            value={search}
+            onChange={(event: React.ChangeEvent<HTMLInputElement>) => setSearch(event.currentTarget.value)}
+            placeholder="Поиск задач"
+            className={styles.librarySearch}
+          />
         <Stack gap="sm">
           <Group justify="space-between" align="flex-end" gap="md" wrap="wrap">
             <div className={styles.languageControl}>
@@ -2644,6 +2669,7 @@ function TeamTracksSection({
 
       <TextInput
         aria-label="Поиск треков и вакансий"
+        data-learning-anchor="track-search"
         className={styles.trackSearch}
         value={search}
         onChange={(event: React.ChangeEvent<HTMLInputElement>) => setSearch(event.currentTarget.value)}
@@ -2817,7 +2843,7 @@ function TeamTracksSection({
                   </Group>
                 </Group>
 
-                <Stack gap="sm" className={styles.trackTasksBlock}>
+                <Stack gap="sm" className={styles.trackTasksBlock} data-learning-anchor="track-programme">
                 <ProgrammeSummary programme={track.programme} />
                 {canManage && mode === "active" && track.status === "ACTIVE" ? (
                   <Group gap="xs" justify="flex-start">
@@ -2924,6 +2950,7 @@ function TeamTracksSection({
                             <ProgrammeSummary
                               programme={vacancy.programme}
                               inheritedFromTrack={vacancy.programme?.origin === "TRACK"}
+                              learningAnchor="track-vacancy-programme"
                             />
                             {canManage && mode === "active" && track.status === "ACTIVE" && vacancy.status === "ACTIVE" ? (
                               <Group gap="xs" justify="flex-start">
@@ -3210,6 +3237,7 @@ export function TeamWorkspacePage() {
   const sectionContextKey = contextKey;
 
   return (
+    <LearningScope module={workspaceLearningModule(section, true)} eligible={Boolean(team) && !stateForContext?.refreshFailed} teamId={teamId}>
     <Box className={styles.page}>
       <header className={styles.header}>
         <Container size="xl" className={styles.headerInner}>
@@ -3233,7 +3261,7 @@ export function TeamWorkspacePage() {
             />
             <Tooltip title="Настройки команды" trigger={["hover", "focus"]} motion={{ motionName: "" }} open={settingsTooltipOpen} onOpenChange={setSettingsTooltipOpen}>
               {team ? (
-                <NavLink to={`/workspace/teams/${teamId}/settings`} className={`${styles.settingsGear} app-header-control`} aria-label="Настройки команды">
+                <NavLink to={`/workspace/teams/${teamId}/settings`} className={`${styles.settingsGear} app-header-control`} aria-label="Настройки команды" data-learning-anchor="team-settings-link" data-learning-interactive="true">
                   <SettingOutlined aria-hidden="true" />
                 </NavLink>
               ) : (
@@ -3323,5 +3351,6 @@ export function TeamWorkspacePage() {
         </Container>
       </main>
     </Box>
+    </LearningScope>
   );
 }

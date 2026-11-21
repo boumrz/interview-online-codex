@@ -77,9 +77,9 @@ test('download settings reject invalid or unbounded retry/timeout values before 
 test('archive-only mode verifies the supplied cache without expanding editor files', () => fixture(async ({ directory, archivePath }) => {
   let requests = 0;
   const target = path.join(directory, 'editor');
-  const result = await preparation.prepareDrawio({ archiveOnly: true, enabled: true,
+  const result = await preparation.prepareDrawio({ archiveOnly: true,
     archivePath, target, expectedDigest: hash, fetchImpl: async () => { requests++; return new Response(bytes); } });
-  assert.deepEqual(result, { prepared: false, skipped: false, archivePath });
+  assert.deepEqual(result, { prepared: false, archivePath });
   assert.deepEqual(await readFile(archivePath), bytes); assert.equal(requests, 1);
   await assert.rejects(stat(target), { code: 'ENOENT' });
 }));

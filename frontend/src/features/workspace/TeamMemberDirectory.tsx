@@ -74,7 +74,7 @@ export function TeamMemberDirectory({ accountId, teamId, renderActions, onMember
     <Stack gap="md">
       <Group justify="space-between" align="flex-end" gap="md" wrap="wrap">
         <Stack gap="xs">
-          <Text fw={700} size="lg">Состав команды</Text>
+          <Text fw={700} size="lg" data-learning-anchor={!hasRows || isError ? "team-settings-members" : undefined}>Состав команды</Text>
         </Stack>
       </Group>
 
@@ -106,9 +106,9 @@ export function TeamMemberDirectory({ accountId, teamId, renderActions, onMember
       ) : null}
 
       {!isError && data && data.items.length > 0 ? (
-        <div className={styles.tableScroll}>
+        <div className={styles.tableScroll} data-learning-anchor="team-settings-members">
           <table className={styles.table} aria-label="Состав команды">
-            <thead><tr><th scope="col">Участник</th><th scope="col">Роль</th><th scope="col">Процессы</th>{renderActions ? <th scope="col">Действия</th> : null}</tr></thead>
+            <thead><tr><th scope="col">Участник</th><th scope="col">Роль</th><th scope="col">Процессы</th>{renderActions ? <th scope="col" data-learning-anchor="team-settings-actions">Действия</th> : null}</tr></thead>
             <tbody>
               {data.items.map((member) => (
                 <tr key={member.userId}>

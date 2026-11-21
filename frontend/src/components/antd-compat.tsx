@@ -328,9 +328,16 @@ function menuItems(children: ReactNode): NonNullable<MenuProps["items"]> {
     if (!React.isValidElement(child)) return [];
     const childProps = child.props as CompatProps;
     if (child.type === MenuItem) {
-      const { component: Component, to, href, className, "aria-current": ariaCurrent } = childProps;
+      const {
+        component: Component, to, href, className, "aria-current": ariaCurrent,
+        "data-learning-anchor": learningAnchor, "data-learning-interactive": learningInteractive,
+      } = childProps;
       const label = Component
-        ? React.createElement(Component, { to, href, className, "aria-current": false }, childProps.children)
+        ? React.createElement(Component, {
+          to, href, className, "aria-current": false,
+          "data-learning-anchor": learningAnchor,
+          "data-learning-interactive": learningInteractive,
+        }, childProps.children)
         : childProps.children;
       const activate = (info: { domEvent: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement> }) => {
         if (childProps.disabled) return;

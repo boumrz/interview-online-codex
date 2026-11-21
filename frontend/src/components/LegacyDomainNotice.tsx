@@ -5,7 +5,6 @@ import styles from "./LegacyDomainNotice.module.css";
 const LEGACY_DOMAIN = process.env.VITE_LEGACY_PUBLIC_DOMAIN ?? "interview.domiknote.ru";
 const NEW_DOMAIN = process.env.VITE_NEW_PUBLIC_DOMAIN ?? "interview.vtools.tech";
 const SHUTDOWN_DATE = process.env.VITE_LEGACY_DOMAIN_SHUTDOWN_DATE ?? "2026-07-26";
-const FORCE_NOTICE = process.env.VITE_SHOW_LEGACY_DOMAIN_NOTICE === "true";
 
 function formatShutdownDate(value: string): string {
   if (value === "2026-07-26") return "26 июля 2026 года";
@@ -17,7 +16,6 @@ function shouldShowLegacyDomainNotice(): boolean {
 
   const hostname = window.location.hostname.trim().toLowerCase();
   if (hostname === LEGACY_DOMAIN.toLowerCase()) return true;
-  if (FORCE_NOTICE) return true;
 
   const params = new URLSearchParams(window.location.search);
   if (

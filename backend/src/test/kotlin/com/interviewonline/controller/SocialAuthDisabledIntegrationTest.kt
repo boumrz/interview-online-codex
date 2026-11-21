@@ -3,6 +3,7 @@ package com.interviewonline.controller
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.interviewonline.features.socialauth.SocialAuthFlow
 import com.interviewonline.features.socialauth.SocialAuthFlowRepository
+import com.interviewonline.features.socialauth.SocialAuthIdentity
 import com.interviewonline.features.socialauth.SocialAuthIdentityRepository
 import com.interviewonline.features.socialauth.SocialAuthSettings
 import com.interviewonline.model.User
@@ -45,14 +46,17 @@ class SocialAuthDisabledIntegrationTest(
         @JvmStatic @DynamicPropertySource fun properties(registry: DynamicPropertyRegistry) {
             postgres.register(registry)
             mapOf(
-                "app.social-auth.enabled" to "false",
+                "app.social-auth.enabled" to "true",
                 "app.social-auth.google.enabled" to "true",
-                "app.social-auth.google.client-id" to "accidentally-set",
-                "app.social-auth.google.client-secret" to "accidentally-set",
+                "app.social-auth.google.client-id" to "",
+                "app.social-auth.google.client-secret" to "",
+                "app.social-auth.github.enabled" to "true",
+                "app.social-auth.github.client-id" to "",
+                "app.social-auth.github.client-secret" to "",
                 "app.social-auth.vk.enabled" to "true",
                 "app.social-auth.vk.client-id" to "accidentally-set",
                 "app.social-auth.vk.service-token" to "accidentally-set",
-                "app.social-auth.public-base-url" to "NOT_A_URL",
+                "app.social-auth.public-base-url" to ORIGIN,
                 "app.social-auth.flow-secret" to "NOT_A_SECRET",
                 "app.social-auth.http-timeout-millis" to "NOT_A_NUMBER",
                 "app.social-auth.google.token-uri" to "NOT_AN_ENDPOINT",
@@ -61,12 +65,55 @@ class SocialAuthDisabledIntegrationTest(
         @JvmStatic @AfterAll fun cleanup()=postgres.close()
     }
 
-    @Test fun `disabled providers and start stay unavailable with accidentally enabled provider flags`() {
+    @Test fun `providers and start remain unavailable without credentials despite legacy flags`() {
         postgres.verifyPostgres16()
         mvc.get("/api/auth/social/providers").andExpect { status { isOk() }; jsonPath("$.providers") { isEmpty() } }
         val count=flows.count()
-        for(provider in listOf("google","vk")) mvc.post("/api/auth/social/$provider/start") { header("Origin",ORIGIN); contentType=MediaType.APPLICATION_JSON; content="{}" }.andExpect { status { isNotFound() } }
+        for(provider in listOf("google","github","vk")) mvc.post("/api/auth/social/$provider/start") { header("Origin",ORIGIN); contentType=MediaType.APPLICATION_JSON; content="{}" }.andExpect { status { isNotFound() } }
         assertEquals(count,flows.count())
+    }
+
+    @Test fun `without credentials profile linking is unavailable and private statuses still require a session`() {
+        val local = users.saveAndFlush(User(nickname = "profile_off_${UUID.randomUUID().toString().take(8)}", displayName = "Имя"))
+        val token = "usr_${UUID.randomUUID()}"
+        sessions.saveAndFlush(com.interviewonline.model.UserSession(user = local, token = token))
+        val (flow, cookie) = ready()
+        val beforeSessions = sessions.count()
+        mvc.get("/api/auth/social/connections").andExpect {
+            status { isUnauthorized() }; jsonPath("$.connections") { doesNotExist() }
+        }
+        mvc.get("/api/auth/social/connections") { header("Authorization", "Bearer $token") }.andExpect {
+            status { isOk() }
+            jsonPath("$.connections[0].available") { value(false) }; jsonPath("$.connections[0].linked") { value(false) }
+            jsonPath("$.connections[1].available") { value(false) }; jsonPath("$.connections[1].linked") { value(false) }
+        }
+        for (provider in listOf("google", "github")) mvc.post("/api/auth/social/$provider/profile-link/start") {
+            header("Origin", ORIGIN); header("Authorization", "Bearer $token")
+        }.andExpect { status { isNotFound() }; jsonPath("$.code") { value("SOCIAL_AUTH_DISABLED") } }
+        mvc.post("/api/auth/social/profile-link/complete") { cookie(cookie); header("Origin", ORIGIN); header("Authorization", "Bearer $token") }
+            .andExpect { status { isNotFound() }; jsonPath("$.code") { value("SOCIAL_AUTH_DISABLED") } }
+        assertEquals(beforeSessions, sessions.count())
+        assertEquals("READY", flows.findById(flow.id).orElseThrow().status)
+    }
+
+    @Test fun `password profile retains and can unlink an unavailable provider with no OAuth credentials`() {
+        val local = users.saveAndFlush(User(nickname = "retained_${UUID.randomUUID().toString().take(8)}", displayName = "Имя",
+            passwordHash = BCryptPasswordEncoder().encode("password123")))
+        val token = "usr_${UUID.randomUUID()}"
+        sessions.saveAndFlush(com.interviewonline.model.UserSession(user = local, token = token))
+        identities.saveAndFlush(SocialAuthIdentity(provider = "google", subject = "retained-link", user = local))
+        mvc.get("/api/auth/social/connections") { header("Authorization", "Bearer $token") }.andExpect {
+            status { isOk() }
+            jsonPath("$.connections[0].available") { value(false) }; jsonPath("$.connections[0].linked") { value(true) }
+            jsonPath("$.connections[0].canUnlink") { value(true) }
+        }
+        mvc.post("/api/auth/social/google/unlink") { header("Authorization", "Bearer $token") }
+            .andExpect { status { isForbidden() } }
+        mvc.post("/api/auth/social/google/unlink") { header("Origin", ORIGIN); header("Authorization", "Bearer $token") }
+            .andExpect { status { isOk() }; jsonPath("$.connections[0].linked") { value(false) } }
+        assertNull(identities.findByProviderAndSubject("google", "retained-link"))
+        mvc.get("/api/me/profile") { header("Authorization", "Bearer $token") }
+            .andExpect { status { isOk() }; jsonPath("$.id") { value(local.id) } }
     }
 
     @Test fun `disabled pending cannot reveal a previously verified flow`() {

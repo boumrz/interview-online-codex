@@ -638,6 +638,7 @@ export function RoomContextPanels({
             className={styles.tabList}
             role="tablist"
             aria-label="Рабочие области комнаты"
+            data-learning-anchor="room-workspaces"
             aria-orientation="horizontal"
           >
             {availableAuxiliarySurfaces.map((surface) => (
@@ -648,6 +649,9 @@ export function RoomContextPanels({
                   else tabRefs.current.delete(surface.name);
                 }}
                 id={surfaceTabId(surface.name)}
+                data-learning-anchor={surface.name === "notes" ? "room-workspaces-tab"
+                  : surface.name === "chat" ? "room-chat-tab"
+                  : surface.name === "steps" || surface.name === "activity" ? `room-${surface.name}` : undefined}
                 type="button"
                 role="tab"
                 aria-selected={selectedAuxiliarySurface === surface.name}
@@ -664,7 +668,9 @@ export function RoomContextPanels({
                   activateSurface(surface.name);
                 }}
               >
-                {surface.tabLabel}
+                {selectedAuxiliarySurface === surface.name && (surface.name === "notes" || surface.name === "chat" || surface.name === "activity")
+                  ? <span data-learning-anchor={`room-${surface.name}-open`}>{surface.tabLabel}</span>
+                  : surface.tabLabel}
               </button>
             ))}
           </div>
@@ -741,6 +747,8 @@ export function RoomContextPanels({
                   className={styles.editorReturnButton}
                   aria-label="Вернуться к редактору"
                   aria-controls={surfaceRegionId("editor")}
+                  data-learning-anchor="room-editor-return"
+                  data-learning-interactive="true"
                   onClick={() => {
                     editorReturnRequestedRef.current = true;
                     setActiveSurface("editor");
@@ -894,6 +902,8 @@ export function RoomContextSurface({
       className={classes}
       aria-hidden={visible ? undefined : true}
       data-room-context-surface={name}
+      data-learning-anchor={name === "editor" ? "room-editor" : name === "activity" ? "room-activity"
+        : name === "notes" || name === "chat" ? `room-${name}-panel` : undefined}
       data-room-context-visible={visible ? "true" : "false"}
       onFocusCapture={(event) => {
         if (name !== "condition" && visible && context.activeSurface !== name) {

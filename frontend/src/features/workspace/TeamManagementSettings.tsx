@@ -362,7 +362,7 @@ export function TeamManagementSettings({ accountId, team, onTeamRefresh }: Props
   return (
     <Stack className={styles.settings} gap="lg">
       <header ref={settingsIntroRef} className={styles.intro}>
-        <Title order={1} tabIndex={-1}>Настройки команды</Title>
+        <Title order={1} tabIndex={-1} data-learning-anchor="team-settings-title">Настройки команды</Title>
       </header>
 
       <Card className={styles.identityCard} withBorder>
@@ -440,7 +440,7 @@ export function TeamManagementSettings({ accountId, team, onTeamRefresh }: Props
           const manageable = !ownRow && member.role !== "OWNER";
           return <Group gap="xs" wrap="wrap">
             {isOwner && manageable ? <>
-              <Button className={styles.rowAction} variant="light" aria-label="Изменить роль участника" onClick={() => openRoleDialog(member)} disabled={disabled}>Изменить роль</Button>
+              <Button className={styles.rowAction} variant="light" aria-label="Изменить роль участника" data-learning-anchor="team-settings-role" onClick={() => openRoleDialog(member)} disabled={disabled}>Изменить роль</Button>
               <Button className={styles.rowAction} color="blue" variant="light" aria-label="Передать владение командой" onClick={() => openTransferDialog(member)} disabled={disabled}>Передать владение</Button>
             </> : null}
             {isManager && manageable ? <ActionIcon className={styles.rowAction} size="lg" color="red" variant="light" aria-label="Удалить участника" title="Удалить участника" onClick={() => openRemoveDialog(member)} disabled={disabled}><IconTrash size={16} aria-hidden="true" /></ActionIcon> : null}

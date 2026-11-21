@@ -146,7 +146,7 @@ async function settleLayout(page) {
   });
 }
 
-async function openRoom({ auth, room, ownerToken, displayName = "Участник AC-11", viewport = { width: 1280, height: 720 }, acceptDownloads = false }) {
+async function openRoom({ auth, room, ownerToken, displayName = "Участник AC-11", viewport = { width: 1280, height: 720 }, acceptDownloads = false, fromInterviewList = false }) {
   const context = await browser.newContext({ viewport, acceptDownloads });
   await context.addInitScript(() => {
     window.__ac11SseMessages = [];
@@ -190,11 +190,11 @@ async function openRoom({ auth, room, ownerToken, displayName = "Участни�
     ownerTokenValue: ownerToken ?? null,
     displayNameValue: displayName,
   });
-  const page = await openRoomPage(context, room, displayName);
+  const page = await openRoomPage(context, room, displayName, fromInterviewList ? auth.user : undefined);
   return { context, page };
 }
 
-async function openRoomPage(context, room, displayName) {
+async function openRoomPage(context, room, displayName, accountBeforeRoom) {
   const page = await context.newPage();
   const networkTrace = [];
   const consoleTrace = [];
@@ -208,7 +208,14 @@ async function openRoomPage(context, room, displayName) {
     if (entry.type() === "error" || entry.text().includes("[room-sync]")) consoleTrace.push(entry.text().slice(0, 240));
   });
   page.setDefaultTimeout(8_000);
-  await page.goto(`${web}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
+  if (accountBeforeRoom) {
+    await page.goto(`${web}/workspace/personal/interviews`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("link", { name: `Открыть профиль @${accountBeforeRoom.nickname}`, exact: true }).waitFor();
+    await page.getByRole("link", { name: `Открыть комнату ${room.title}`, exact: true }).click();
+    await page.waitForURL(`${web}/room/${room.inviteCode}`);
+  } else {
+    await page.goto(`${web}/room/${room.inviteCode}`, { waitUntil: "domcontentloaded" });
+  }
   const nameInput = page.getByLabel("Ваше имя", { exact: true });
   if (await nameInput.isVisible().catch(() => false)) {
     await nameInput.fill(displayName);
@@ -302,8 +309,6 @@ async function waitForLifecycleReturn({ afterSequence, expectedReasons, baseline
   while (Date.now() < deadline) {
     const records = await lifecycleRecords();
     const next = records.find((record) => record.sequence === expectedSequence);
-    const later = records.find((record) => record.sequence > expectedSequence);
-    assert.equal(later, undefined, `${label}_DIRECT_NEXT_SEQUENCE_MISSING_EXPECTED_${expectedSequence}:${later?.line}`);
     if (next) {
       assert.ok(expectedReasons.includes(next.reason), `${label}_UNEXPECTED_REASON:${next.line}`);
       if (baseline) {
@@ -323,6 +328,8 @@ async function waitForLifecycleReturn({ afterSequence, expectedReasons, baseline
       }
       return next;
     }
+    const later = records.find((record) => record.sequence > expectedSequence);
+    assert.equal(later, undefined, `${label}_DIRECT_NEXT_SEQUENCE_MISSING_EXPECTED_${expectedSequence}:${later?.line}`);
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   assert.fail(`${label}_LIFECYCLE_RETURN_TIMEOUT_EXPECTED_DIRECT_SEQUENCE_${expectedSequence}`);
@@ -1140,15 +1147,15 @@ test("owner and assigned interviewer select locally and publish only through the
     }
   }
 
-  // Keep the display name stable during the controlled lease-replacement window.
-  // A real authenticated display-name change legitimately restarts the stream
-  // and is covered by the multi-participant startup transport checks.
+  // Resolve the signed-in profile before room admission to isolate lease
+  // replacement from the independent profile-hydration rebind.
   const lifecycleOwner = await register("Участник");
   const lifecycleRoom = await createAuthenticatedRoom(lifecycleOwner, []);
   const { context: lifecycleContext, page: oldLeasePage } = await openRoom({
     auth: lifecycleOwner,
     room: lifecycleRoom,
     displayName: "Участник",
+    fromInterviewList: true,
   });
   let lifecycleContextClosed = false;
   try {
@@ -1169,7 +1176,7 @@ test("owner and assigned interviewer select locally and publish only through the
     await lifecycleContext.addInitScript(({ inviteCode, sessionId }) => {
       sessionStorage.setItem(`room_ws_session_id_${inviteCode}`, sessionId);
     }, { inviteCode: lifecycleRoom.inviteCode, sessionId: sharedSessionId });
-    const replacementPage = await openRoomPage(lifecycleContext, lifecycleRoom, "Участник");
+    const replacementPage = await openRoomPage(lifecycleContext, lifecycleRoom, "Участник", lifecycleOwner.user);
     assert.equal(
       await sessionIdFor(replacementPage, lifecycleRoom.inviteCode, "AC11_REPLACEMENT"),
       sharedSessionId,

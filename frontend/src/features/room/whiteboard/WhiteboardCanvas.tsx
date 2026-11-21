@@ -1,4 +1,5 @@
 import "./excalidrawAssets";
+import { CanvasCursors } from "../CanvasCursors";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { CaptureUpdateAction, Excalidraw, FONT_FAMILY, convertToExcalidrawElements, exportToBlob, exportToSvg, isInvisiblySmallElement, newElementWith, reconcileElements, restoreElements, serializeAsJSON, viewportCoordsToSceneCoords } from "@excalidraw/excalidraw";
 import type { ExcalidrawElement, OrderedExcalidrawElement } from "@excalidraw/excalidraw/element/types";
@@ -69,7 +70,7 @@ function supportsStrokeWidth(tool: string): tool is keyof typeof initialWidths {
   return Object.hasOwn(initialWidths, tool);
 }
 
-export default React.memo(function WhiteboardCanvas({ active, readOnly, drawingColor, onReady, onChange }: WhiteboardCanvasProps) {
+export default React.memo(function WhiteboardCanvas({ active, readOnly, drawingColor, cursors = [], onCursor, onReady, onChange }: WhiteboardCanvasProps) {
   const { mode } = useThemeMode();
   // Dark paper is a local view preference. Colors and raster bytes themselves
   // stay unchanged, matching the palette and the light-background exports.
@@ -98,6 +99,8 @@ export default React.memo(function WhiteboardCanvas({ active, readOnly, drawingC
   const [activeTool, setActiveTool] = useState<AppState["activeTool"]["type"]>("freedraw");
   const [color, setColor] = useState(drawingColor);
   const [canClear, setCanClear] = useState(false);
+  const [cursorView, setCursorView] = useState({ width: 0, height: 0, scale: 1, x: 0, y: 0 });
+  const cursorCallback = useRef(onCursor); cursorCallback.current = onCursor;
   const getAppState = useCallback(() => sdkRef.current?.getAppState(), []);
   const { hostRef, previewRef, onAppStateChange } = usePenHover({ active, readOnly, getAppState });
   const focusCanvas = useCallback(() => {
@@ -121,6 +124,14 @@ export default React.memo(function WhiteboardCanvas({ active, readOnly, drawingC
       if (hostRef.current?.contains(document.activeElement)) focusCanvas();
     }
     onAppStateChange(appState);
+    const host = hostRef.current?.getBoundingClientRect();
+    const view = { width: host?.width ?? appState.width, height: host?.height ?? appState.height,
+      scale: appState.zoom.value, x: appState.scrollX * appState.zoom.value + appState.offsetLeft - (host?.left ?? appState.offsetLeft),
+      y: appState.scrollY * appState.zoom.value + appState.offsetTop - (host?.top ?? appState.offsetTop) };
+    if (pointer.current && active && !document.hidden && document.hasFocus()) {
+      cursorCallback.current?.(viewportCoordsToSceneCoords(pointer.current, appState));
+    }
+    setCursorView(previous => previous.width === view.width && previous.height === view.height && previous.scale === view.scale && previous.x === view.x && previous.y === view.y ? previous : view);
     const tool = appState.activeTool.type;
     const width = supportsStrokeWidth(tool) ? widths.current[tool] : undefined;
     // Native keyboard shortcuts can switch the tool without touching our toolbar.
@@ -132,7 +143,7 @@ export default React.memo(function WhiteboardCanvas({ active, readOnly, drawingC
     setColor(appState.currentItemStrokeColor);
     setCanClear(elements.some(element => !element.isDeleted));
     observeElements(elements, files);
-  }, [observeElements, onAppStateChange, focusCanvas, hostRef]);
+  }, [observeElements, onAppStateChange, focusCanvas, hostRef, active]);
 
   async function importImages(inputs: readonly File[], position?: { clientX: number; clientY: number }, expectedGeneration = importGate.current.generation) {
     const sdk = sdkRef.current;
@@ -314,8 +325,20 @@ export default React.memo(function WhiteboardCanvas({ active, readOnly, drawingC
         event.preventDefault(); event.stopPropagation();
         if (active && !readOnly) void importImages(Array.from(event.dataTransfer.files), { clientX: event.clientX, clientY: event.clientY });
       }}
-      onPointerMoveCapture={event => { if (event.target instanceof HTMLCanvasElement) pointer.current = { clientX: event.clientX, clientY: event.clientY }; }}
-      onPointerLeave={() => { pointer.current = null; }}
+      onPointerMoveCapture={event => {
+        if (event.target instanceof HTMLCanvasElement) {
+          pointer.current = { clientX: event.clientX, clientY: event.clientY };
+          const state = sdkRef.current?.getAppState();
+          if (active && state && (event.pointerType !== "touch" || event.buttons > 0)) cursorCallback.current?.(viewportCoordsToSceneCoords(pointer.current, state));
+        } else { pointer.current = null; cursorCallback.current?.(null); }
+      }}
+      onPointerDownCapture={event => {
+        const state = sdkRef.current?.getAppState();
+        if (active && state && event.target instanceof HTMLCanvasElement) cursorCallback.current?.(viewportCoordsToSceneCoords({ clientX: event.clientX, clientY: event.clientY }, state));
+      }}
+      onPointerUpCapture={event => { if (event.pointerType === "touch") { pointer.current = null; cursorCallback.current?.(null); } }}
+      onPointerCancel={() => cursorCallback.current?.(null)}
+      onPointerLeave={() => { pointer.current = null; cursorCallback.current?.(null); }}
       onContextMenuCapture={event => {
         if (event.target instanceof HTMLCanvasElement) { event.preventDefault(); event.stopPropagation(); }
       }}>
@@ -369,6 +392,7 @@ export default React.memo(function WhiteboardCanvas({ active, readOnly, drawingC
         }}
         UIOptions={{ tools: { image: false }, canvasActions: { clearCanvas: false, loadScene: false, saveToActiveFile: false, export: false, saveAsImage: false, changeViewBackgroundColor: false, toggleTheme: false } }}
       />
+      <CanvasCursors cursors={cursors} width={cursorView.width} height={cursorView.height} project={point => ({ x: point.x * cursorView.scale + cursorView.x, y: point.y * cursorView.scale + cursorView.y })} />
       <span ref={previewRef} className={penHoverStyles.preview} data-testid="whiteboard-pen-hover" aria-hidden="true" hidden />
     </div>
   </div>;

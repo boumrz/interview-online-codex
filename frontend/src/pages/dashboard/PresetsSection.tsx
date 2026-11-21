@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ActionIcon,
   Badge,
@@ -40,6 +41,7 @@ import workspaceStyles from "../workspace/PersonalWorkspacePage.module.css";
 interface PresetsSectionProps {
   taskOptions: Array<{ value: string; label: string; language: string }>;
   onError?: (message: string) => void;
+  actionsContainer?: HTMLElement | null;
 }
 
 const languageOrder = new Map(LANGUAGE_OPTIONS.map((language, index) => [language.value, index]));
@@ -81,7 +83,7 @@ function languageSummary(counts: Record<string, number>) {
  * All error reporting is delegated to the `onError` callback so the
  * parent controls the notification presentation.
  */
-export function PresetsSection({ taskOptions, onError }: PresetsSectionProps) {
+export function PresetsSection({ taskOptions, onError, actionsContainer }: PresetsSectionProps) {
   const { token } = useAppSelector((state) => state.auth);
   const [formError, setFormError] = useState("");
 
@@ -259,6 +261,19 @@ export function PresetsSection({ taskOptions, onError }: PresetsSectionProps) {
 
   const actionLoading = updatePresetState.isLoading || deletePresetState.isLoading;
 
+  const actions = <>
+    <Button
+      color="blue"
+      leftSection={<IconPlus size={17} />}
+      data-learning-anchor="library-create-set"
+      data-learning-interactive="true"
+      onClick={handleOpenCreate}
+    >
+      Создать набор
+    </Button>
+    <Button variant="light" onClick={openImport}>Импортировать</Button>
+  </>;
+
   return (
     <>
       <Modal opened={presetToDelete !== null} onClose={() => { if (!deletePresetState.isLoading) setPresetToDelete(null); }} title="Удалить набор?" centered>
@@ -290,11 +305,14 @@ export function PresetsSection({ taskOptions, onError }: PresetsSectionProps) {
         centered
         authoring
       >
-        <div className="app-authoring-form">
+        <div className="app-authoring-form" data-learning-onboarding-dialog="task-set">
           <div className="app-authoring-fields">
+            <div data-learning-form-guide-slot />
             <section className="app-authoring-section">
           <TextInput placeholder="Введите название"
             label="Название набора"
+            data-learning-anchor="library-set-title"
+            data-learning-interactive="true"
             value={createName}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCreateName(e.currentTarget.value)}
             styles={darkFieldStyles}
@@ -380,6 +398,8 @@ export function PresetsSection({ taskOptions, onError }: PresetsSectionProps) {
         </Stack>
       </Modal>
 
+      {actionsContainer ? createPortal(actions, actionsContainer) : null}
+
       <Box c="gray.1">
         <Stack>
           <Group justify="space-between" align="center" gap="md" wrap="wrap">
@@ -390,10 +410,9 @@ export function PresetsSection({ taskOptions, onError }: PresetsSectionProps) {
               <Title order={4} m={0}>Наборы задач</Title>
             </Group>
 
-            <Group gap="xs" align="center" wrap="wrap">
-              <Button color="blue" leftSection={<IconPlus size={16} />} onClick={handleOpenCreate}>Создать набор</Button>
-              <Button variant="light" onClick={openImport}>Импортировать</Button>
-            </Group>
+            {actionsContainer === undefined ? (
+              <Group gap="xs" align="center" wrap="wrap">{actions}</Group>
+            ) : null}
           </Group>
 
           {isLoading && (

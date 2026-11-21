@@ -35,11 +35,19 @@ New work should not create OpenSpec changes or require the OpenSpec CLI.
 
 ## Quick Start
 
-Вход через Google и VK ID сохранён как отключённая заготовка; интеграция отложена.
-Оставьте `FEATURE_SOCIAL_AUTH_ENABLED=false` на сервере и при сборке frontend:
-пользователи сохраняют обычный вход по нику и паролю. Место для возобновления:
-[AUTH.1](specs/features/auth-1-social-login.md),
-[инструкция будущего подключения](specs/references/2026-10-05-social-login-setup.md).
+Google и GitHub автоматически появляются на странице входа, когда серверу
+переданы ID и секрет соответствующего OAuth-клиента. Для локального входа
+используйте зарегистрированный callback на `http://localhost:5173`.
+Храните ключи вне репозитория.
+[Спецификация и инструкция выкладки](specs/references/2026-11-18-learning-social-login-deploy.md)
+
+### Обучение в приложении
+
+После первого входа в личные интервью автоматически открывается общий маршрут
+через библиотеку, команды и подготовку интервью. Последние шаги проходят в
+комнате. Кнопка «?» открывает помощь текущего экрана. Прогресс хранится на сервере.
+В текущей версии все аккаунты начинают с чистым статусом. История старой
+версии остаётся в базе. Метрика получает события контекстных туров отдельно.
 
 ### Схемы в интервью
 
@@ -47,21 +55,8 @@ New work should not create OpenSpec changes or require the OpenSpec CLI.
 «Редактор диаграмм» рядом с Code/Markdown. Редактор и его ресурсы обслуживает существующий
 frontend; отдельные платформы, серверы синхронизации и платные интеграции не нужны.
 
-Функция выключена по умолчанию: `FEATURE_ROOM_DIAGRAMS_ENABLED=false`. Для
-изолированной проверки задайте `true` backend и при сборке/запуске frontend.
-В Docker Compose одно значение передаётся backend и frontend build argument;
-смена флага frontend требует новой сборки. Без явной опции активации рабочие `.env` не меняются.
-Для разрешённой выкладки обоих холстов на стенд выполните на сервере:
-
-```bash
-sudo /opt/interview-online/repo/deploy/scripts/deploy_docker.sh --enable-canvases
-```
-
-Опция после preflight сохраняет два флага как `true` в существующем `.env`
-с приватной резервной копией, сохраняя ключи и остальные настройки, и пересобирает
-frontend/backend. Обычный запуск без опции не переписывает `.env`.
-Smoke проверяет native ресурсы и не принимает HTML fallback с HTTP 200 за успех.
-Первый включённый `npm run dev`/`npm run build` получает закреплённый draw.io
+Обычный деплой публикует ресурсы редактора диаграмм и доски и проверяет их
+доступность по HTTP. Первый `npm run dev` или `npm run build` получает draw.io
 32.6.10 и проверяет SHA-256; явная подготовка — `npm run prepare:drawio` из
 `frontend`. При Docker-деплое архив заранее подготавливается на хосте в
 `frontend/.cache/drawio/32.6.10/draw.war` и включается в контекст сборки:
@@ -87,9 +82,7 @@ draw.io. При обновлении с V37 прежние рисунки ост
 В комнате без задач они перейдут к первой добавленной задаче. Совместность использует тот же
 backend и PostgreSQL, без внешней платформы или платного API.
 
-Для проверки задайте `FEATURE_ROOM_WHITEBOARD_ENABLED=true` backend и frontend;
-по умолчанию флаг `false`. В Compose одно значение передаётся серверу и сборке
-клиента. Шрифты копируются из закреплённого npm package в `/whiteboard-assets/`,
+Шрифты копируются из закреплённого npm package в `/whiteboard-assets/`,
 runtime CDN не требуется. Mouse/touch и pen используют Pointer Events; форма
 штриха и давление пера сохраняются, если браузер и драйвер их предоставляют.
 Физическую совместимость конкретного планшета следует проверить вручную.
@@ -154,7 +147,7 @@ mvn spring-boot:run
 powershell -ExecutionPolicy Bypass -File .\scripts\start-backend-local.ps1
 ```
 
-Профиль `local` задаётся в `application-local.yml` (in-memory H2). API всё так же: `http://localhost:8080`.
+Профиль `local` задаётся в `application-local.yml` и использует H2 в памяти. В комнате доступны Code и Markdown. Для доски и диаграмм запустите приложение с PostgreSQL. API доступен на `http://localhost:8080`.
 
 Backend default URL: `http://localhost:8080`
 
@@ -199,6 +192,11 @@ npm run test:e2e-fixture-safety
 `TEAM_TEST_PG_PASSWORD` и `PSQL_BIN`. Нужны PostgreSQL 16, Maven и Java 17.
 `E2E_PRODUCTION=true` проверяет production-сборку frontend. Можно выбрать конкретный
 файл через `node tests/e2e/run-isolated.mjs tests/e2e/account/e2e-auth-navigation.mjs`.
+Команда `npm run e2e:all` включает обучение в обычную группу production-сборки.
+Отдельная группа OAuth использует локальный тестовый GitHub. Основная группа
+не наследует рабочие OAuth-секреты. Сценарии тура проверяют первое посещение
+на новых аккаунтах, обычные навигационные сценарии используют аккаунты,
+которые уже видели подсказки.
 
 Прямой запуск файла без runner завершается до регистрации и других fixtures:
 центральная проверка требует подтверждения временной схемы от API и его web proxy.
@@ -221,38 +219,24 @@ chat_receipt_secret="$(<.run/chat-receipt.secret)"
 team_link_key="$(<.run/team-invitation-link-encryption.key)"
 spring_config_json="{\"app\":{\"team-invitation-link-encryption\":{\"active-key-id\":\"primary\",\"keys\":{\"primary\":\"$team_link_key\"}}}}"
 JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home \
-FEATURE_TEAM_MERGE_COMMIT=true \
 CHAT_RECEIPT_HMAC_SECRET="$chat_receipt_secret" \
 SPRING_APPLICATION_JSON="$spring_config_json" mvn spring-boot:run
 
 cd ../frontend
-FEATURE_TEAM_MERGE_COMMIT=true npm run dev
+npm run dev
 ```
 
 Для совместного локального запуска backend и frontend используйте
 `scripts/dev-up.sh`, предварительно передав те же стабильные ключи через
 окружение. Выбор и создание команд доступны без отдельного флага.
 
-`FEATURE_TEAM_MERGE_COMMIT=true` в примере нужен только для отладки финального
-запуска объединения команд. По умолчанию этот флаг выключен;
-общая проверка активности комнат для нескольких процессов находится в
-PostgreSQL. Если порт `5173` уже занят, используйте для frontend
-`npm run dev -- --port 5174`. Codex не перезапускает уже работающий локальный
-сервер без просьбы пользователя.
+Если порт `5173` уже занят, используйте `npm run dev -- --port 5174`.
 
-Маршрут для ручной отладки: создать две команды и пригласить участников →
-завести трек, вакансию и задачи → собрать программу интервью → провести
-интервью в комнате → завершить его и проверить результат/экспорт → в первой
-команде создать план объединения со второй → получить согласование обоих
-владельцев → выполнить объединение и проверить старые ссылки и права доступа.
-Подробные критерии каждого шага находятся в [спецификациях фич](specs/features/).
+Вручную можно создать команду и пригласить участников, завести
+трек, вакансию и задачи, собрать программу, провести интервью и проверить
+результат и экспорт. [Спецификации](specs/features/)
 
-Опционально для вкладки Agent Ops (выключена по умолчанию):
-
-```bash
-cd frontend
-FEATURE_AGENT_OPS=true npm run dev
-```
+Вкладка Agent Ops доступна в development-сборке для локальной диагностики.
 
 Опционально для Яндекс Метрики (события отправляются только с разрешённых хостов):
 

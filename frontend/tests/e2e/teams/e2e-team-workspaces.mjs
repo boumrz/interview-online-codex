@@ -349,7 +349,7 @@ async function createTeamThroughUi(page, name) {
 async function loginInSamePage(page, auth) {
   await page.getByRole("button", { name: "Выйти", exact: true }).click();
   await page.waitForURL(`${web}/`);
-  await page.getByRole("link", { name: "Личный кабинет", exact: true }).click();
+  await page.getByRole("link", { name: "Войти", exact: true }).click();
   await page.waitForURL("**/login");
   await page.getByLabel(/^Ник(?:\s*\*)?$/).fill(auth.user.nickname);
   await page.getByLabel(/^Пароль(?:\s*\*)?$/).fill(password);
@@ -615,8 +615,7 @@ test("team interview creation needs no set, candidate picker or self assignment"
     assert.deepEqual(sent.postDataJSON().candidateIds ?? [], []);
     const created = (await (await createResponse).json()).interview;
     await page.waitForURL(`**/room/${created.inviteCode}`);
-    await page.getByTestId("room-connection-status").waitFor();
-    assert.equal(await page.getByTestId("room-connection-status").getAttribute("data-state"), "online");
+    await page.getByTestId("room-connection-status").and(page.locator('[data-state="online"]')).waitFor();
     assert.equal(created.taskSetId, null);
     assert.deepEqual(created.tasks, []);
     assert.ok(created.assignees.some((assignee) => assignee.userId === auth.user.id && assignee.role === "owner"));

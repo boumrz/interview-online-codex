@@ -24,7 +24,7 @@ async function createRoom() {
   });
   assert.equal(response.status, 200);
   const room = await response.json();
-  assert.equal(room.roomDiagramsEnabled, true, 'the isolated backend enables the feature explicitly');
+  assert.equal(room.roomDiagramsEnabled, true, 'the room advertises diagram capability by default');
   return room;
 }
 

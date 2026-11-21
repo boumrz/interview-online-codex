@@ -1,6 +1,13 @@
 import { API_BASE_URL } from "../config/runtime";
 
-export type SocialProvider = "google" | "vk";
+export type SocialProvider = "google" | "github";
+export type SocialConnection = {
+  provider: SocialProvider;
+  linked: boolean;
+  available: boolean;
+  canUnlink: boolean;
+  requiresPassword: boolean;
+};
 export type SocialPending = {
   provider: SocialProvider;
   displayName: string;
@@ -9,7 +16,7 @@ export type SocialPending = {
 
 export const SOCIAL_INVITATION_RETURN_KEY = "interhub:social-invitation-return";
 
-export async function socialRequest<T>(path: string, signal: AbortSignal, body?: unknown): Promise<T> {
+export async function socialRequest<T>(path: string, signal: AbortSignal, body?: unknown, headers?: Record<string, string>): Promise<T> {
   const controller = new AbortController();
   const abort = () => controller.abort();
   signal.addEventListener("abort", abort, { once: true });
@@ -22,7 +29,7 @@ export async function socialRequest<T>(path: string, signal: AbortSignal, body?:
       credentials: "same-origin",
       cache: "no-store",
       redirect: "error",
-      headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+      headers: { ...(body === undefined ? {} : { "Content-Type": "application/json" }), ...headers },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: controller.signal,
     });
@@ -41,12 +48,40 @@ export async function socialRequest<T>(path: string, signal: AbortSignal, body?:
 
 export function readPending(data: unknown): SocialPending {
   if (!data || typeof data !== "object"
-    || !("provider" in data) || (data.provider !== "google" && data.provider !== "vk")
+    || !("provider" in data) || (data.provider !== "google" && data.provider !== "github")
     || !("displayName" in data) || typeof data.displayName !== "string"
     || !("accountExists" in data) || typeof data.accountExists !== "boolean") {
     throw { status: "PARSING_ERROR" };
   }
   return data as SocialPending;
+}
+
+export function readConnections(value: unknown): SocialConnection[] {
+  if (!value || typeof value !== "object" || !("connections" in value) || !Array.isArray(value.connections)
+    || value.connections.length !== 2) throw { status: "PARSING_ERROR" };
+  const connections = value.connections;
+  return (["google", "github"] as const).map((provider) => {
+    const matches = connections.filter((item: unknown) => item && typeof item === "object"
+      && "provider" in item && item.provider === provider);
+    const item: unknown = matches[0];
+    if (matches.length !== 1 || !item || typeof item !== "object"
+      || !("linked" in item) || typeof item.linked !== "boolean"
+      || !("available" in item) || typeof item.available !== "boolean"
+      || !("canUnlink" in item) || typeof item.canUnlink !== "boolean"
+      || (item.canUnlink && !item.linked)) throw { status: "PARSING_ERROR" };
+    const requiresPassword = "requiresPassword" in item ? item.requiresPassword : false;
+    if (typeof requiresPassword !== "boolean" || (requiresPassword && (!item.linked || item.canUnlink))) {
+      throw { status: "PARSING_ERROR" };
+    }
+    return { provider, linked: item.linked, available: item.available, canUnlink: item.canUnlink, requiresPassword };
+  });
+}
+
+export function readProfileLinkResult(value: unknown): SocialProvider {
+  if (!value || typeof value !== "object" || !("provider" in value)
+    || (value.provider !== "google" && value.provider !== "github")
+    || !("linked" in value) || value.linked !== true) throw { status: "PARSING_ERROR" };
+  return value.provider;
 }
 
 export function readAuthorizationUrl(data: unknown, provider: SocialProvider): string {
@@ -55,9 +90,26 @@ export function readAuthorizationUrl(data: unknown, provider: SocialProvider): s
   const url = new URL(data.authorizationUrl);
   const expected = provider === "google"
     ? "https://accounts.google.com/o/oauth2/v2/auth"
-    : "https://id.vk.ru/authorize";
+    : "https://github.com/login/oauth/authorize";
   if (`${url.origin}${url.pathname}` !== expected || url.username || url.password || url.hash) {
     throw new Error("Invalid authorization URL");
   }
   return url.href;
+}
+
+export type SocialContinuation = { path: string; notice: string | null };
+
+export function readRoomContextId(value: unknown): string {
+  if (!value || typeof value !== "object" || !("contextId" in value)
+    || typeof value.contextId !== "string" || !value.contextId) throw { status: "PARSING_ERROR" };
+  return value.contextId;
+}
+
+export function readContinuation(value: unknown): SocialContinuation {
+  if (!value || typeof value !== "object" || !("path" in value) || typeof value.path !== "string"
+    || (value.path !== "/workspace/personal/interviews" && !/^\/room\/[A-Za-z0-9_-]+$/.test(value.path))
+    || !("notice" in value) || (value.notice !== null && typeof value.notice !== "string")) {
+    throw { status: "PARSING_ERROR" };
+  }
+  return value as SocialContinuation;
 }

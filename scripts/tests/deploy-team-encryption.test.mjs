@@ -14,7 +14,7 @@ const script = path.join(root, "deploy/scripts/deploy_docker.sh");
 // Public deterministic fixture; no production or local key material is used.
 const key = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8";
 
-test("explicit canvas deployment persists both flags, preserves secrets and rebuilds before verifying assets", async () => {
+async function startAssets() {
   const manifest = await readFile(path.join(root, "frontend/scripts/whiteboard-font-licenses/manifest.json"));
   const fontPath = Object.keys(Object.values(JSON.parse(manifest).families)[0].fontFiles)[0];
   const font = await readFile(path.join(root, "frontend/node_modules/@excalidraw/excalidraw/dist/prod/fonts", fontPath));
@@ -30,11 +30,16 @@ test("explicit canvas deployment persists both flags, preserves secrets and rebu
     }
   });
   server.listen(0, "127.0.0.1"); await once(server, "listening");
+  return { server, requests, fontPath };
+}
+
+test("ordinary deployment verifies both canvas assets and ignores obsolete false values without rewriting the env", async () => {
+  const { server, requests, fontPath } = await startAssets();
   try {
-    const result = await runDeployment(key, { enableCanvases: true, httpPort: server.address().port });
+    const result = await runDeployment(key, { legacyValues: true, httpPort: server.address().port });
     assert.equal(result.exitCode, 0, result.output);
-    assert.match(result.persistedEnv, /^FEATURE_ROOM_DIAGRAMS_ENABLED=true$/m);
-    assert.match(result.persistedEnv, /^FEATURE_ROOM_WHITEBOARD_ENABLED=true$/m);
+    assert.match(result.persistedEnv, /^FEATURE_ROOM_DIAGRAMS_ENABLED=false$/m);
+    assert.match(result.persistedEnv, /^FEATURE_ROOM_WHITEBOARD_ENABLED=false$/m);
     assert.ok(result.persistedEnv.includes(`TEAM_INVITATION_LINK_ENCRYPTION_KEY=${key}`));
     assert.equal(result.output.includes(key), false);
     assert.ok(result.commands.some(command => command.endsWith(" build")));
@@ -45,7 +50,9 @@ test("explicit canvas deployment persists both flags, preserves secrets and rebu
   } finally { await new Promise(resolve => server.close(resolve)); }
 });
 
-async function runDeployment(suppliedKey, { trace = false, composeConfigFails = false, activeKeyId = "primary", backendEnvironment = null, enableCanvases = false, httpPort = null, archiveMismatch = false } = {}) {
+async function runDeployment(suppliedKey, { trace = false, composeConfigFails = false, activeKeyId = "primary", backendEnvironment = null, legacyValues = false, httpPort = null, archiveMismatch = false } = {}) {
+  const ownedAssets = httpPort === null ? (await startAssets()).server : null;
+  const assetPort = httpPort ?? ownedAssets.address().port;
   const directory = await mkdtemp(path.join(tmpdir(), "interhub-deploy-preflight-"));
   const commandsFile = path.join(directory, "commands");
   const envFile = path.join(directory, "deploy.env");
@@ -54,8 +61,8 @@ async function runDeployment(suppliedKey, { trace = false, composeConfigFails = 
     "DOMAIN=deployment-test.invalid",
     "NGINX_SSL=false",
     `TEAM_INVITATION_LINK_ENCRYPTION_ACTIVE_KEY_ID=${activeKeyId}`,
-    ...(enableCanvases ? ["FEATURE_ROOM_DIAGRAMS_ENABLED=false", "FEATURE_ROOM_WHITEBOARD_ENABLED=false"] : []),
-    ...(httpPort ? [`HTTP_PORT=${httpPort}`] : []),
+    ...(legacyValues ? ["FEATURE_ROOM_DIAGRAMS_ENABLED=false", "FEATURE_ROOM_WHITEBOARD_ENABLED=false"] : []),
+    `HTTP_PORT=${assetPort}`,
     ...(suppliedKey === null ? [] : [`TEAM_INVITATION_LINK_ENCRYPTION_KEY=${suppliedKey}`]),
   ].join("\n"));
   await writeFile(composeFile, "services: {}\n");
@@ -69,8 +76,7 @@ async function runDeployment(suppliedKey, { trace = false, composeConfigFails = 
   await writeFile(resolvedConfigFile, JSON.stringify({ services: { backend: { environment: backendEnvironment ?? {
     TEAM_INVITATION_LINK_ENCRYPTION_ACTIVE_KEY_ID: activeKeyId,
     APP_TEAMINVITATIONLINKENCRYPTION_KEYS_PRIMARY: suppliedKey,
-    ...(enableCanvases ? { FEATURE_ROOM_DIAGRAMS_ENABLED: "true", FEATURE_ROOM_WHITEBOARD_ENABLED: "true" } : {}),
-  } }, ...(enableCanvases ? { web: { build: { args: { FEATURE_ROOM_DIAGRAMS_ENABLED: "true", FEATURE_ROOM_WHITEBOARD_ENABLED: "true" } } } } : {}) } }));
+  } }, web: { build: {} } } }));
   await writeFile(path.join(directory, "docker"), [
     "#!/bin/bash",
     'printf \'%s\\n\' "$*" >> "$DEPLOY_TEST_COMMANDS"',
@@ -94,7 +100,7 @@ async function runDeployment(suppliedKey, { trace = false, composeConfigFails = 
   delete env.COMPOSE_FILES;
   delete env.TEAM_INVITATION_LINK_ENCRYPTION_KEY;
   try {
-    const child = spawn("/bin/bash", [...(trace ? ["-x"] : []), script, ...(enableCanvases ? ["--enable-canvases"] : [])], { env, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn("/bin/bash", [...(trace ? ["-x"] : []), script], { env, stdio: ["ignore", "pipe", "pipe"] });
     const stdout = [];
     const stderr = [];
     child.stdout.on("data", (chunk) => stdout.push(chunk));
@@ -107,23 +113,18 @@ async function runDeployment(suppliedKey, { trace = false, composeConfigFails = 
       persistedEnv: await readFile(envFile, "utf8"),
     };
   } finally {
+    if (ownedAssets) await new Promise(resolve => ownedAssets.close(resolve));
     await rm(directory, { recursive: true, force: true });
   }
 }
 
-test("canvas activation leaves the env and containers untouched after any preflight refusal", async () => {
+test("deployment leaves the env and containers untouched after preflight refusal", async () => {
   for (const [suppliedKey, options] of [
     [null, {}],
     [key, { composeConfigFails: true }],
     [key, { archiveMismatch: true }],
-    [key, { backendEnvironment: {
-      TEAM_INVITATION_LINK_ENCRYPTION_ACTIVE_KEY_ID: "primary",
-      APP_TEAMINVITATIONLINKENCRYPTION_KEYS_PRIMARY: key,
-      FEATURE_ROOM_DIAGRAMS_ENABLED: "false",
-      FEATURE_ROOM_WHITEBOARD_ENABLED: "false",
-    } }],
   ]) {
-    const result = await runDeployment(suppliedKey, { ...options, enableCanvases: true });
+    const result = await runDeployment(suppliedKey, { ...options, legacyValues: true });
     assert.notEqual(result.exitCode, 0);
     assert.match(result.persistedEnv, /^FEATURE_ROOM_DIAGRAMS_ENABLED=false$/m);
     assert.match(result.persistedEnv, /^FEATURE_ROOM_WHITEBOARD_ENABLED=false$/m);
@@ -196,5 +197,45 @@ test("deployment validates effective overrides including Spring JSON keyring pre
     assert.notEqual(rejected.exitCode, 0);
     assert.equal(rejected.commands.some(command => /\b(build|up)\b/.test(command)), false);
     assert.equal(rejected.output.includes(key), false);
+  }
+});
+
+const githubRelease = {
+  TEAM_INVITATION_LINK_ENCRYPTION_ACTIVE_KEY_ID: "primary",
+  APP_TEAMINVITATIONLINKENCRYPTION_KEYS_PRIMARY: key,
+  PUBLIC_BASE_URL: "https://deployment-test.invalid",
+  SOCIAL_AUTH_FLOW_SECRET: key,
+  GITHUB_CLIENT_ID: "github-fixture-client",
+  GITHUB_CLIENT_SECRET: "github-fixture-secret",
+};
+
+
+test("production preflight validates the origin and flow secret whenever credentials are configured", async () => {
+  for (const [overrides, rejectedSetting] of [
+    [{ SOCIAL_AUTH_FLOW_SECRET: "invalid-flow-secret" }, "SOCIAL_AUTH_FLOW_SECRET"],
+    [{ PUBLIC_BASE_URL: "https://deployment-test.invalid/login" }, "PUBLIC_BASE_URL"],
+    [{ PUBLIC_BASE_URL: "https://deployment_test.invalid" }, "PUBLIC_BASE_URL"],
+    [{ PUBLIC_BASE_URL: "https://[::1]suffix" }, "PUBLIC_BASE_URL"],
+  ]) {
+    const result = await runDeployment(key, { trace: true, backendEnvironment: { ...githubRelease, ...overrides } });
+    assert.notEqual(result.exitCode, 0);
+    assert.ok(result.output.includes(rejectedSetting), result.output);
+    assert.equal(result.commands.some(command => /\b(build|up)\b/.test(command)), false);
+    for (const secret of [key, githubRelease.GITHUB_CLIENT_SECRET, "invalid-flow-secret"]) {
+      assert.equal(result.output.includes(secret), false);
+    }
+  }
+});
+
+test("preflight discovers providers from credentials and reports an incomplete pair without blocking GitHub", async () => {
+  for (const origin of ["https://deployment-test.invalid", "http://[::1]:5173"]) {
+    const backendEnvironment = { ...githubRelease, PUBLIC_BASE_URL: origin,
+      GOOGLE_CLIENT_ID: "google-fixture-client",
+      FEATURE_SOCIAL_AUTH_ENABLED: "false", GOOGLE_AUTH_ENABLED: "false", GITHUB_AUTH_ENABLED: "false" };
+    const result = await runDeployment(key, { trace: true, backendEnvironment });
+    assert.equal(result.exitCode, 0, result.output);
+    assert.match(result.output, /GOOGLE_CLIENT_SECRET/);
+    assert.ok(result.commands.some(command => command.endsWith(" up -d")));
+    assert.equal(result.output.includes(githubRelease.GITHUB_CLIENT_SECRET), false);
   }
 });

@@ -45,9 +45,7 @@ class AuthService(
         if (nickname.any { it.code !in 0x20..0x7E }) {
             throw ApiException(HttpStatus.BAD_REQUEST, "Ник может содержать только латинские буквы, цифры и символы")
         }
-        if (request.password.any { it.code !in 0x20..0x7E }) {
-            throw ApiException(HttpStatus.BAD_REQUEST, "Пароль может содержать только латинские буквы, цифры и символы")
-        }
+        validatePasswordCharacters(request.password)
         if (userRepository.findByNickname(nickname) != null) {
             throw ApiException(HttpStatus.CONFLICT, "Ник уже занят")
         }
@@ -63,6 +61,29 @@ class AuthService(
         )
         userTaskService.initializeTaskBank(user)
         return createSession(user)
+    }
+
+    internal fun encodeInitialPassword(password: String): String {
+        validateInitialPassword(password)
+        return passwordEncoder.encode(password)
+    }
+
+    internal fun matchesInitialPassword(password: String, hash: String): Boolean {
+        validateInitialPassword(password)
+        return passwordEncoder.matches(password, hash)
+    }
+
+    private fun validateInitialPassword(password: String) {
+        if (password.isBlank() || password.length !in 6..72) {
+            throw ApiException(HttpStatus.BAD_REQUEST, "Пароль должен содержать от 6 до 72 символов")
+        }
+        validatePasswordCharacters(password)
+    }
+
+    private fun validatePasswordCharacters(password: String) {
+        if (password.any { it.code !in 0x20..0x7E }) {
+            throw ApiException(HttpStatus.BAD_REQUEST, "Пароль может содержать только латинские буквы, цифры и символы")
+        }
     }
 
     fun login(request: LoginRequest): AuthResponse {

@@ -33,21 +33,31 @@ class SocialAuthMigrationIntegrationTest(
         private val postgres = Postgres16TestSupport.create("social_auth_upgrade")
         private val userId = UUID.randomUUID().toString()
         private val roomId = UUID.randomUUID().toString()
+        private val historicalFlowId = UUID.randomUUID().toString()
         private val nickname = "прежний_${userId.take(8)}"
         private const val password = " Старый пароль123 "
         private val passwordHash = BCryptPasswordEncoder().encode(password)
         init {
             val properties = postgres.applicationProperties()
-            Flyway.configure()
+            val migration = Flyway.configure()
                 .dataSource(properties.getValue("spring.datasource.url").toString(), properties.getValue("spring.datasource.username").toString(), properties.getValue("spring.datasource.password").toString())
                 .schemas(postgres.schema).defaultSchema(postgres.schema).locations("classpath:db/migration")
-                .target(MigrationVersion.fromVersion("33")).load().migrate()
+            migration.target(MigrationVersion.fromVersion("33")).load().migrate()
             postgres.connection().use { connection ->
                 connection.prepareStatement("INSERT INTO users(id,nickname,display_name,password_hash,role,is_hr,created_at) VALUES (?,?,'Старое имя',?,'user',true,CURRENT_TIMESTAMP)").use {
                     it.setString(1,userId); it.setString(2,nickname); it.setString(3,passwordHash); it.executeUpdate()
                 }
                 connection.prepareStatement("INSERT INTO rooms(id,title,invite_code,owner_session_token,interviewer_session_token,owner_user_id,language,current_step,code,created_at) VALUES (?,'Existing interview',?,?,?,?,'nodejs',0,'Preserved code',CURRENT_TIMESTAMP)").use {
                     it.setString(1,roomId); it.setString(2,"invite-$roomId"); it.setString(3,"owner-$roomId"); it.setString(4,"interviewer-$roomId"); it.setString(5,userId); it.executeUpdate()
+                }
+            }
+            migration.target(MigrationVersion.fromVersion("44")).load().migrate()
+            postgres.connection().use { connection ->
+                repeat(2) { index -> connection.prepareStatement("INSERT INTO social_auth_identities(id,provider,subject,user_id,created_at) VALUES (?,'google',?,?,CURRENT_TIMESTAMP)").use {
+                    it.setString(1, UUID.randomUUID().toString()); it.setString(2, "historical-$index-$userId"); it.setString(3, userId); it.executeUpdate()
+                } }
+                connection.prepareStatement("INSERT INTO social_auth_flows(id,provider,state_hash,browser_proof_hash,status,created_at,expires_at) VALUES (?,'google',?,?,'CREATED',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP + INTERVAL '10 minutes')").use {
+                    it.setString(1, historicalFlowId); it.setString(2, "a".repeat(64)); it.setString(3, "b".repeat(64)); it.executeUpdate()
                 }
             }
         }
@@ -57,7 +67,10 @@ class SocialAuthMigrationIntegrationTest(
 
     @Test fun `V34 preserves pre-existing local credentials account profile and owned interview`() {
         postgres.verifyPostgres16()
-        assertEquals("37",jdbc.queryForObject("SELECT version FROM flyway_schema_history WHERE success=true ORDER BY installed_rank DESC LIMIT 1",String::class.java))
+        assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM flyway_schema_history WHERE success=true AND version='43'", Int::class.java))
+        assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM flyway_schema_history WHERE success=true AND version='45'", Int::class.java))
+        assertEquals("login", jdbc.queryForObject("SELECT intent FROM social_auth_flows WHERE id=?", String::class.java, historicalFlowId))
+        assertEquals(2, jdbc.queryForObject("SELECT count(*) FROM social_auth_identities WHERE user_id=? AND provider='google'", Int::class.java, userId))
         assertEquals(passwordHash,jdbc.queryForObject("SELECT password_hash FROM users WHERE id=?",String::class.java,userId))
         assertEquals("Preserved code",jdbc.queryForObject("SELECT code FROM rooms WHERE id=? AND owner_user_id=?",String::class.java,roomId,userId))
         mvc.post("/api/auth/login") {

@@ -11,7 +11,7 @@ try {
   const ownerPage = await ownerContext.newPage();
   await ownerPage.goto(webBaseUrl, { waitUntil: "domcontentloaded" });
   await ownerPage.getByRole("button", { name: "Создать комнату" }).click();
-  await ownerPage.getByRole("dialog", { name: "Создать комнату" }).getByRole("button", { name: "Создать комнату", exact: true }).click();
+  await ownerPage.getByRole("dialog", { name: "Новая комната", exact: true }).getByRole("button", { name: "Создать и войти", exact: true }).click();
   await ownerPage.waitForURL(/\/room\//, { timeout: 15000 });
   const roomUrl = ownerPage.url();
 

@@ -27,6 +27,9 @@ interface RoomRepository : JpaRepository<Room, String> {
     @Query("select r from Room r where r.inviteCode = :inviteCode")
     fun lockForSharedReadByInviteCode(@Param("inviteCode") inviteCode: String): Room?
 
+    @Query(value = "SELECT * FROM rooms WHERE invite_code = :inviteCode FOR SHARE NOWAIT", nativeQuery = true)
+    fun lockForImmediateSharedReadByInviteCode(@Param("inviteCode") inviteCode: String): Room?
+
     @EntityGraph(attributePaths = ["tasks"])
     fun findWithTasksByInviteCode(inviteCode: String): Room?
     @EntityGraph(attributePaths = ["tasks"])

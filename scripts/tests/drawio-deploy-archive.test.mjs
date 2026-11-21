@@ -14,13 +14,12 @@ const bytes = Buffer.from("a public pinned synthetic WAR fixture");
 const sha = createHash("sha256").update(bytes).digest("hex");
 const version = "32.6.10";
 const secret = "signed-url-secret-must-not-appear";
-const configuration = enabled => ({ services: { web: { build: { args: { FEATURE_ROOM_DIAGRAMS_ENABLED: enabled ? "true" : "false" } } } } });
 const exists = async file => access(file).then(() => true, () => false);
-async function run(f, { enabled = true, environment = {}, release = f.release, denyOfflineRead = false } = {}) {
+async function run(f, { environment = {}, release = f.release, denyOfflineRead = false } = {}) {
   const env = { ...process.env, DRAWIO_DOWNLOAD_TIMEOUT_MS: "200", DRAWIO_DOWNLOAD_ATTEMPTS: "2" };
   delete env.DRAWIO_ARCHIVE_PATH;
   Object.assign(env, environment);
-  const invocation = [helper, "--from-compose", "--release", release, "--cache-dir", f.cache];
+  const invocation = [helper, "--release", release, "--cache-dir", f.cache];
   const child = spawn("python3", denyOfflineRead ? ["-c", `
 import errno, os, runpy, sys
 from pathlib import Path
@@ -32,9 +31,8 @@ def deny_input(self, *args, **kwargs):
 Path.open = deny_input
 sys.argv = sys.argv[1:]
 runpy.run_path(sys.argv[0], run_name='__main__')
-`, ...invocation] : invocation, { env, stdio: ["pipe", "pipe", "pipe"] });
+`, ...invocation] : invocation, { env, stdio: ["ignore", "pipe", "pipe"] });
   const chunks = []; child.stdout.on("data", x => chunks.push(x)); child.stderr.on("data", x => chunks.push(x));
-  child.stdin.end(JSON.stringify(configuration(enabled)));
   const [code] = await once(child, "close"); const output = Buffer.concat(chunks).toString();
   assert.equal(output.includes(secret), false); assert.equal(output.includes("Traceback"), false);
   return { code, output };
@@ -53,9 +51,11 @@ async function fixture(fn, handler = (req, res) => { res.end(bytes); }) {
   finally { server.closeAllConnections(); server.close(); await once(server, "close"); await rm(directory, { recursive: true, force: true }); }
 }
 
-test("disabled diagrams do not read release/cache/settings or contact the network", () => fixture(async f => {
-  const result = await run(f, { enabled: false, release: path.join(f.directory, "missing.json"), environment: { DRAWIO_DOWNLOAD_TIMEOUT_MS: "invalid", DRAWIO_ARCHIVE_PATH: "missing.war" } });
-  assert.equal(result.code, 0, result.output); assert.equal(await exists(f.cache), false); assert.deepEqual(f.requests, []);
+test("ordinary deployment prepares the editor without feature arguments", () => fixture(async f => {
+  const result = await run(f);
+  assert.equal(result.code, 0, result.output);
+  assert.deepEqual(await readFile(f.archive), bytes);
+  assert.deepEqual(f.requests, ["/draw.war"]);
 }));
 
 test("an offline pinned WAR is copied into the Docker-context cache and the verified cache needs no network", () => fixture(async f => {
@@ -138,7 +138,7 @@ test("an oversized chunked download is not retried or promoted", () => fixture(a
 }, (req, res) => { res.writeHead(200, { "Transfer-Encoding": "chunked" }); res.end(Buffer.alloc(1025)); }));
 
 test("timeouts stop after the configured attempts and clean temporary files with an actionable diagnostic", () => fixture(async f => {
-  const result = await run(f, { environment: { DRAWIO_DOWNLOAD_TIMEOUT_MS: "40", DRAWIO_DOWNLOAD_ATTEMPTS: "2" } });
+  const result = await run(f, { environment: { DRAWIO_DOWNLOAD_TIMEOUT_MS: "400", DRAWIO_DOWNLOAD_ATTEMPTS: "2" } });
   assert.notEqual(result.code, 0); assert.equal(f.requests.length, 2); assert.match(result.output, /timeout/i);
   assert.match(result.output, /DRAWIO_ARCHIVE_PATH/); assert.ok(result.output.includes(sha));
   assert.equal(await exists(f.archive), false); assert.deepEqual(await readdir(path.dirname(f.archive)), []);

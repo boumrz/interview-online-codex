@@ -1,3 +1,7 @@
+import { useCanvasPresence } from "../useCanvasPresence";
+import { DiagramCursors } from "./DiagramCursors";
+import { installDiagramCursorSurface, diagramPreviewOrigin, type DiagramCursorGraph } from "./diagramCursorSurface";
+import type { CanvasPoint } from "../canvasCursorGeometry";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button, Modal } from "antd";
 import { API_BASE_URL } from "../../../config/runtime";
@@ -31,7 +35,7 @@ export type RoomDiagramPanelProps = {
   onInteractiveFrame?: (frame: HTMLIFrameElement | null) => void;
 };
 
-type PanelState = { loaded: boolean; editable: boolean; message: string; error: boolean; busy: boolean; preview?: string; presentationOnly: boolean; accessDenied: boolean; canDiscard: boolean };
+type PanelState = { loaded: boolean; editable: boolean; message: string; error: boolean; busy: boolean; preview?: string; previewOrigin?: CanvasPoint; presentationOnly: boolean; accessDenied: boolean; canDiscard: boolean };
 type Bridge = ReturnType<typeof createDrawioBridge>;
 type ExportFormat = "drawio" | "png" | "svg";
 type Controller = { refresh(): void; permissionsChanged(): void; editorEvent(event: DrawioEvent, canonical: boolean): void; export(format: ExportFormat): void; retire(onSettled: () => void): () => void; destroy(): void };
@@ -72,6 +76,7 @@ function createController(options: {
   notify: (state: PanelState) => void;
   drawingColor: string;
   configureNativeEditor(canonical: boolean): void;
+  getPreviewOrigin(): CanvasPoint | undefined;
 }): Controller {
   const { visible, canonical } = options;
   const { taskId } = options.current();
@@ -164,7 +169,7 @@ function createController(options: {
     await canonicalLoad(accepted.xml);
     const result = await canonical.request("export", { format: "svg", background: "#ffffff" });
     if (typeof result.data !== "string" || !result.data.startsWith("data:image/svg+xml")) throw new Error("Не удалось подготовить просмотр схемы");
-    update({ preview: result.data });
+    update({ preview: result.data, previewOrigin: options.getPreviewOrigin() });
   }
 
   async function restoreVisible(document: DiagramDocument): Promise<void> {
@@ -378,9 +383,13 @@ function MountedRoomDiagramPanel(props: RoomDiagramPanelProps & TaskCanvasLifecy
   const current = useRef(props); current.current = props;
   const visible = useRef<HTMLIFrameElement>(null);
   const canonical = useRef<HTMLIFrameElement>(null);
+  const preview = useRef<HTMLImageElement>(null);
+  const canonicalGraph = useRef<DiagramCursorGraph | null>(null);
+  const [cursorGraph, setCursorGraph] = useState<DiagramCursorGraph | null>(null);
   const applyAssignedColor = useRef<(() => void) | undefined>(undefined);
   const controller = useRef<Controller | null>(null);
   const [state, setState] = useState<PanelState>(initialState);
+  const presence = useCanvasPresence(props, props.active && state.loaded && !state.accessDenied, "diagram");
   const [retry, setRetry] = useState(0);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const { mode } = useThemeMode();
@@ -400,7 +409,12 @@ function MountedRoomDiagramPanel(props: RoomDiagramPanelProps & TaskCanvasLifecy
     const canonicalBridge = bridge(canonicalWindow, true);
     const session = createController({
       visible: visibleBridge, canonical: canonicalBridge, current: () => current.current, notify: setState, drawingColor,
+      getPreviewOrigin: () => canonicalGraph.current ? diagramPreviewOrigin(canonicalGraph.current) : undefined,
       configureNativeEditor(isCanonical) {
+        installDiagramCursorSurface(isCanonical ? canonicalWindow : visibleWindow, graph => {
+          if (isCanonical) canonicalGraph.current = graph;
+          else setCursorGraph(graph);
+        });
         const applyColor = installDrawioDrawingDefaults(isCanonical ? canonicalWindow : visibleWindow, drawingColor);
         if (!isCanonical) {
           applyAssignedColor.current = applyColor;
@@ -412,7 +426,7 @@ function MountedRoomDiagramPanel(props: RoomDiagramPanelProps & TaskCanvasLifecy
     const receive = (event: MessageEvent) => { visibleBridge.receive(event); canonicalBridge.receive(event); };
     window.addEventListener("message", receive);
     const loadingTimeout = setTimeout(() => setState((previous) => previous.loaded || previous.error ? previous : { ...previous, error: true, message: "Не удалось загрузить редактор схемы. Повторите действие." }), 25_000);
-    return () => { clearTimeout(loadingTimeout); window.removeEventListener("message", receive); session.destroy(); applyAssignedColor.current = undefined; if (controller.current === session) controller.current = null; };
+    return () => { clearTimeout(loadingTimeout); window.removeEventListener("message", receive); session.destroy(); canonicalGraph.current = null; setCursorGraph(null); applyAssignedColor.current = undefined; if (controller.current === session) controller.current = null; };
   }, [props.inviteCode, props.sessionId, retry, state.accessDenied, drawingColor]);
 
   const refreshSignal = props.retiring ? undefined : props.refreshSignal;
@@ -434,7 +448,7 @@ function MountedRoomDiagramPanel(props: RoomDiagramPanelProps & TaskCanvasLifecy
 
   const url = `${editorUrl}&dark=${initialTheme.current === "dark" ? "1" : "0"}`;
   const readonly = props.readOnly || (state.loaded && !state.editable);
-  return <section ref={panelRef} hidden={props.retiring} data-canvas-task-id={props.taskId ?? ""} className={`${styles.panel} ${expanded ? styles.expanded : ""}`} aria-label="Схема интервью" aria-hidden={!props.active} data-diagram-expanded={expanded ? "true" : "false"}>
+  return <section ref={panelRef} hidden={props.retiring} data-canvas-task-id={props.taskId ?? ""} className={`${styles.panel} ${expanded ? styles.expanded : ""}`} aria-label="Схема интервью" aria-hidden={!props.active} data-diagram-expanded={expanded ? "true" : "false"} data-learning-canvas-expanded={expanded ? "true" : undefined}>
     <RoomCanvasToolbar expanded={expanded} onToggleExpanded={toggleExpanded}
       color={drawingColor} onApplyColor={props.active && state.loaded && !readonly && !state.busy && !state.accessDenied ? applyAssignedColor.current : undefined}
       nativeFormat="drawio" canDownload={props.active && state.loaded && !state.busy && !state.accessDenied && props.connected}
@@ -443,10 +457,13 @@ function MountedRoomDiagramPanel(props: RoomDiagramPanelProps & TaskCanvasLifecy
       {state.canDiscard && <Button onClick={() => setConfirmDiscard(true)}>Вернуться к сохранённой схеме</Button>}
     </RoomCanvasToolbar>
     {state.presentationOnly && <p className={styles.notice}>Настройки вида холста действуют в этой вкладке. Фигуры и наброски сохраняются для всех.</p>}
-    <div className={styles.body}>
+    <div className={styles.body} data-learning-anchor="room-diagram-view">
       {drawingColor && !state.accessDenied && <iframe key={`visible-${retry}`} ref={visible} title="Редактор схемы" src={url} className={`${styles.frame} ${readonly ? styles.hidden : ""} ${!state.loaded ? styles.loadingFrame : ""}`} tabIndex={readonly || !props.active || !state.loaded ? -1 : 0} sandbox="allow-scripts allow-same-origin allow-downloads" />}
-      {readonly && state.preview && <img className={styles.preview} src={state.preview} alt="Сохранённая схема интервью" />}
+      {readonly && state.preview && <img ref={preview} className={styles.preview} src={state.preview} alt="Сохранённая схема интервью" />}
       {(!state.loaded || (readonly && !state.preview)) && <div className={styles.placeholder}>{state.error ? state.message : readonly ? "Подготавливаем просмотр схемы…" : "Подготавливаем схему…"}</div>}
+      <DiagramCursors graph={cursorGraph} frame={visible} preview={preview} previewOrigin={state.previewOrigin}
+        readonly={readonly} active={props.active && state.loaded && !state.accessDenied && !state.busy}
+        cursors={presence.cursors} onCursor={presence.point} />
       {state.busy && <div className={styles.busy} aria-live="polite">Подготавливаем схему…</div>}
     </div>
     {drawingColor && !state.accessDenied && <iframe key={`canonical-${retry}`} ref={canonical} title="Подготовка сохранённой схемы" src={url} className={styles.canonical} tabIndex={-1} aria-hidden="true" sandbox="allow-scripts allow-same-origin" />}

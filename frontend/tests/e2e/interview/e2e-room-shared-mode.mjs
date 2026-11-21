@@ -7,10 +7,7 @@ import { chromium } from "playwright";
 const web = process.env.E2E_BASE_URL ?? "http://localhost:5173";
 const api = process.env.E2E_API_URL ?? "http://localhost:8080/api";
 const code = "const preserved = 42;\n";
-const expectedModes = ["Code", "Markdown",
-  ...(process.env.FEATURE_ROOM_DIAGRAMS_ENABLED === "true" ? ["Редактор диаграмм"] : []),
-  ...(process.env.FEATURE_ROOM_WHITEBOARD_ENABLED === "true" ? ["Доска"] : []),
-];
+const expectedModes = ["Code", "Markdown", "Редактор диаграмм", "Доска"];
 const markdown = "# Условие\nТекст задания сохраняется.";
 async function request(path, token, body, method = body ? "POST" : "GET") {
   const response = await fetch(`${api}${path}`, {

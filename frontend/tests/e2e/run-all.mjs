@@ -11,7 +11,11 @@ const developmentSuites = new Set([
   "tests/e2e/theme/e2e-workspace-burger-frames.mjs",
   "tests/e2e/theme/e2e-workspace-switch-stability.mjs",
 ]);
-const deferredSuite = "tests/e2e/account/e2e-social-login.mjs";
+const providerSuites = new Set([
+  "tests/e2e/account/e2e-social-login.mjs",
+  "tests/e2e/account/e2e-profile-social-links.mjs",
+  "tests/e2e/account/e2e-profile-social-links-integration.mjs",
+]);
 
 async function collect(directory, prefix = "tests/e2e/") {
   const groups = await Promise.all((await readdir(directory, { withFileTypes: true })).map(entry => entry.isDirectory()
@@ -31,14 +35,9 @@ async function main() {
   if (process.argv.slice(2).some(arg => arg !== "--list")) throw new Error("E2E_FULL_UNKNOWN_ARGUMENT");
   const files = await collect(new URL("./", import.meta.url));
   const plan = {
-    featureFlags: {
-      FEATURE_ROOM_DIAGRAMS_ENABLED: "true",
-      FEATURE_ROOM_WHITEBOARD_ENABLED: "true",
-      FEATURE_SOCIAL_AUTH_ENABLED: "false",
-    },
-    production: files.filter(file => file !== deferredSuite && !developmentSuites.has(file)),
+    production: files.filter(file => !providerSuites.has(file) && !developmentSuites.has(file)),
     development: files.filter(file => developmentSuites.has(file)),
-    excluded: [{ file: deferredSuite, reason: "Google/VK integration is deferred by the user; FEATURE_SOCIAL_AUTH_ENABLED remains false" }],
+    provider: files.filter(file => providerSuites.has(file)),
   };
   if (process.argv.includes("--list")) {
     process.stdout.write(`${JSON.stringify(plan)}\n`);
@@ -52,16 +51,20 @@ async function main() {
   const interrupt = () => { interrupted = true; owned.interrupt(); };
   process.once("SIGINT", interrupt);
   process.once("SIGTERM", interrupt);
+  const modes = ["production", "development", "provider"];
   const results = [];
   try {
-    for (const mode of ["production", "development"]) {
+    for (const mode of modes) {
       if (interrupted) break;
       const log = createWriteStream(join(reportDir, `${mode}.log`));
       const startedAt = new Date().toISOString();
-      const run = owned.start(process.execPath, ["tests/e2e/run-isolated.mjs", ...plan[mode]], {
+      const production = String(mode !== "development");
+      const usesProviderFixture = mode === "provider";
+      const runner = usesProviderFixture ? "tests/e2e/account/run-profile-social-links.mjs" : "tests/e2e/run-isolated.mjs";
+      const run = owned.start(process.execPath, [runner, ...plan[mode]], {
         cwd: frontend,
-        env: { ...process.env, ...plan.featureFlags, E2E_PRODUCTION: String(mode === "production"),
-          E2E_TEAM_WORKSPACES_PRODUCTION: String(mode === "production"),
+        env: { ...process.env, E2E_PRODUCTION: production,
+          E2E_TEAM_WORKSPACES_PRODUCTION: production,
           E2E_CONTINUE_ON_FAILURE: "true", E2E_RESULTS_FILE: join(reportDir, `${mode}-results.jsonl`) },
         stdio: ["ignore", "pipe", "pipe"],
       });
@@ -80,15 +83,16 @@ async function main() {
     process.removeListener("SIGTERM", interrupt);
   }
   const suites = [];
-  for (const mode of ["production", "development"]) {
+  for (const mode of modes) {
     const text = await readFile(join(reportDir, `${mode}-results.jsonl`), "utf8").catch(error => {
       if (error.code === "ENOENT") return "";
       throw error;
     });
     suites.push(...text.trim().split("\n").filter(Boolean).map(line => ({ mode, ...JSON.parse(line) })));
   }
-  const passed = suites.length === plan.production.length + plan.development.length &&
-    results.length === 2 && results.every(result => result.exitCode === 0) && suites.every(suite => suite.exitCode === 0);
+  const expectedSuites = modes.flatMap(mode => plan[mode]);
+  const passed = suites.length === expectedSuites.length &&
+    results.length === modes.length && results.every(result => result.exitCode === 0) && suites.every(suite => suite.exitCode === 0);
   const summary = { plan, results, suites, interrupted, passed, reportDir };
   await writeFile(join(reportDir, "summary.json"), `${JSON.stringify(summary, null, 2)}\n`);
   process.stdout.write(`E2E_FULL_REGRESSION_RESULT ${JSON.stringify({ passed, reportDir, suites: suites.length })}\n`);

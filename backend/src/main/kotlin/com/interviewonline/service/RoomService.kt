@@ -55,8 +55,7 @@ class RoomService(
     private val objectMapper: ObjectMapper,
     private val personalInterviewSummaryProjector: PersonalInterviewSummaryProjector,
     private val roomHrTrackingService: RoomHrTrackingService,
-    private val roomDiagramFeatureGate: RoomDiagramFeatureGate,
-    private val roomWhiteboardFeatureGate: RoomWhiteboardFeatureGate,
+    private val canvasStorage: RoomCanvasStorage,
     private val jdbc: JdbcTemplate,
 ) {
     /**
@@ -816,10 +815,10 @@ class RoomService(
                 )
             } else emptyList(),
             briefingMarkdown = activeTask?.briefingMarkdown?.takeIf { it.isNotBlank() } ?: activeTask?.description.orEmpty(),
-            roomEditorMode = roomWhiteboardFeatureGate.visibleMode(roomDiagramFeatureGate.visibleMode(room.roomEditorMode)),
+            roomEditorMode = canvasStorage.visibleMode(room.roomEditorMode),
             roomEditorModeRevision = room.roomEditorModeRevision,
-            roomDiagramsEnabled = roomDiagramFeatureGate.enabled,
-            roomWhiteboardEnabled = roomWhiteboardFeatureGate.enabled,
+            roomDiagramsEnabled = canvasStorage.available,
+            roomWhiteboardEnabled = canvasStorage.available,
             ownerToken = if (includeOwnerToken) room.ownerSessionToken else null,
             interviewerToken = if (includeInterviewerToken) room.interviewerSessionToken else null,
             role = access.role.wireValue,

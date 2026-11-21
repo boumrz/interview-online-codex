@@ -36,6 +36,15 @@ data class RealtimeEventRequest(
     val selectionEndLineNumber: Int? = null,
     val selectionEndColumn: Int? = null,
     val cursorSequence: Long? = null,
+    /** Ephemeral canvas presence, independent of document writes and activity. */
+    val canvasType: String? = null,
+    val canvasSequence: Long? = null,
+    val canvasActive: Boolean? = null,
+    /** Open visible canvas receives peers even while its window has no focus. */
+    val canvasSubscribed: Boolean? = null,
+    val canvasVisible: Boolean? = null,
+    val canvasX: Double? = null,
+    val canvasY: Double? = null,
     val key: String? = null,
     val keyCode: String? = null,
     val ctrlKey: Boolean? = null,

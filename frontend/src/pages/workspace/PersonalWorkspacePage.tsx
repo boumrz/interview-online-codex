@@ -54,6 +54,9 @@ import { VerdictBadge } from "../../features/room/VerdictBadge";
 import { LANGUAGE_OPTIONS } from "../dashboard/dashboardConstants";
 import { darkSelectStyles } from "../dashboard/dashboardFieldStyles";
 import { labelForLanguage, normalizeLanguageKey } from "../dashboard/dashboardHelpers";
+import { LearningHelpButton, LearningScope } from "../../features/learning/LearningScope";
+import { workspaceLearningModule } from "../../features/learning/learningContent";
+import { SocialConnections } from "../../features/auth/SocialConnections";
 import styles from "./PersonalWorkspacePage.module.css";
 
 type WorkspaceSection = "interviews" | "create" | "library" | "candidates" | "profile";
@@ -144,10 +147,10 @@ function PersonalInterviewCard({ room, metadata }: { room: RoomSummary; metadata
       actions={<>
         {canManage ? <InterviewEditAction kind="PERSONAL" accountId={auth.user?.id ?? ""} interview={room}
           canEditTitle={isOwner} ownerToken={room.ownerToken ?? undefined} interviewerToken={room.interviewerToken ?? undefined} /> : null}
-        {canManage ? <Button type="button" variant="light" size="compact-sm" onClick={() => void copyToClipboard(`${window.location.origin}/room/${room.inviteCode}`, {
+        {canManage ? <Button type="button" variant="light" size="compact-sm" data-learning-anchor="interview-copy" onClick={() => void copyToClipboard(`${window.location.origin}/room/${room.inviteCode}`, {
           success: "Ссылка для кандидата готова к отправке.", failure: "Разрешите доступ к буферу обмена и повторите попытку.",
         })}>Копировать ссылку для кандидата</Button> : null}
-        <Button component={NavLink} to={`/room/${room.inviteCode}`} variant="filled" color="blue" size="compact-sm" aria-label={`Открыть комнату ${room.title}`}>Войти в комнату</Button>
+        <Button component={NavLink} to={`/room/${room.inviteCode}`} variant="filled" color="blue" size="compact-sm" aria-label={`Открыть комнату ${room.title}`} data-learning-anchor={canManage ? "interview-enter" : undefined} data-learning-interactive={canManage ? "true" : undefined}>Войти в комнату</Button>
         {isOwner ? <Button type="button" size="compact-sm" variant="light" color="red" loading={deleteState.isLoading}
           aria-label={`Удалить интервью ${room.title}`} title={`Удалить интервью ${room.title}`} onClick={() => { setDeleteError(""); setDeleteOpened(true); }}><IconTrash size={16} aria-hidden="true" /></Button> : null}
       </>}
@@ -214,7 +217,7 @@ function InterviewList({
         <div>
           <Title order={1}>Интервью</Title>
         </div>
-        <Button className={styles.primaryAction} color="blue" onClick={() => navigate("/workspace/personal/interviews/new")}>
+        <Button className={styles.primaryAction} color="blue" data-learning-anchor="interview-create" data-learning-interactive="true" onClick={() => navigate("/workspace/personal/interviews/new")}>
           Создать интервью
         </Button>
       </Group>
@@ -233,7 +236,7 @@ function InterviewList({
       ) : null}
       {!isLoading && rooms.length > 0 ? (
         <Group justify="space-between" align="flex-end">
-          <TextInput placeholder="Найдите интервью по названию или кандидату" className={styles.interviewSearch} label="Поиск интервью" value={search} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setSearch(event.currentTarget.value)} />
+          <TextInput placeholder="Найдите интервью по названию или кандидату" className={styles.interviewSearch} data-learning-anchor="interview-search" label="Поиск интервью" value={search} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setSearch(event.currentTarget.value)} />
           <Button type="button" variant="light" leftSection={<IconRefresh size={16} />} onClick={() => { onRefresh(); dispatch(api.util.invalidateTags(["InterviewMetadata"])); }} loading={isFetching && !error}>Обновить интервью</Button>
         </Group>
       ) : null}
@@ -445,11 +448,15 @@ function CreateInterview({ tasks, isTaskLoading }: { tasks: TaskTemplate[]; isTa
       closeOnEscape={!isCreatingInterview && !pendingMetadata}
       withCloseButton={!isCreatingInterview && !pendingMetadata}
     >
-        <form onSubmit={submit} noValidate className="app-authoring-form" data-testid="create-room-card">
+        <form onSubmit={submit} noValidate className="app-authoring-form" data-testid="create-room-card" data-learning-onboarding-dialog="interview" data-learning-anchor="interview-form" data-learning-interactive="true">
+          <Group justify="flex-end"><LearningHelpButton /></Group>
           <div className="app-authoring-fields">
+            <div data-learning-form-guide-slot />
             <section className="app-authoring-section" aria-label="Информация об интервью">
               <TextInput placeholder="Введите название интервью"
                 label="Название интервью"
+                data-learning-anchor="interview-title"
+                data-learning-interactive="true"
                 value={title}
                 onChange={(event: React.ChangeEvent<HTMLInputElement>) => setTitle(event.currentTarget.value)}
                 disabled={isCreatingInterview || Boolean(pendingMetadata)}
@@ -472,6 +479,8 @@ function CreateInterview({ tasks, isTaskLoading }: { tasks: TaskTemplate[]; isTa
             <section className="app-authoring-section" aria-label="Задачи интервью">
               <MultiSelect placeholder="Выберите задачи в порядке интервью"
                 data-testid="room-task-select"
+                data-learning-anchor="interview-task-picker"
+                data-learning-interactive="true"
                 label="Задачи для интервью"
                 data={taskOptions}
                 value={taskIds}
@@ -528,6 +537,8 @@ function CreateInterview({ tasks, isTaskLoading }: { tasks: TaskTemplate[]; isTa
               <Button type="button" variant="subtle" disabled={isCreatingInterview || Boolean(pendingMetadata)} onClick={() => navigate("/workspace/personal/interviews")}>Отмена</Button>
               <Button
                 type="submit"
+                data-learning-anchor="interview-submit"
+                data-learning-interactive="true"
                 loading={isCreatingInterview}
                 disabled={!canCreateInterview}
               >
@@ -560,6 +571,7 @@ function TaskLibrary({
     return () => { mountedRef.current = false; };
   }, []);
   const [searchParams, setSearchParams] = useSearchParams();
+  const [libraryActions, setLibraryActions] = useState<HTMLDivElement | null>(null);
   useListPresetsQuery(undefined);
   const [createTask, createTaskState] = useCreateTaskTemplateMutation();
   const [createOpened, setCreateOpened] = useState(false);
@@ -643,10 +655,11 @@ function TaskLibrary({
   return (
     <Stack gap="lg">
       <Modal opened={createOpened} onClose={() => { if (!createTaskState.isLoading) setCreateOpened(false); }} title="Создать задачу" centered size="xl" authoring closeOnClickOutside={!createTaskState.isLoading} closeOnEscape={!createTaskState.isLoading}>
-        <form onSubmit={submitTask} className="app-authoring-form app-task-authoring">
+        <form onSubmit={submitTask} className="app-authoring-form app-task-authoring" data-learning-onboarding-dialog="task">
           <div className="app-authoring-fields">
+            <div data-learning-form-guide-slot />
             <section className="app-task-metadata-grid">
-            <TextInput placeholder="Введите название" id="create-task-title" data-testid="create-task-title-input" label="Название" value={taskTitle} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setTaskTitle(event.currentTarget.value)} required />
+            <TextInput placeholder="Введите название" id="create-task-title" data-testid="create-task-title-input" data-learning-anchor="library-task-title" data-learning-interactive="true" label="Название" value={taskTitle} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setTaskTitle(event.currentTarget.value)} required />
             <Select placeholder="Выберите язык решения" label="Язык" value={taskLanguage} onChange={(value) => setTaskLanguage(value ?? "nodejs")} data={LANGUAGE_OPTIONS} />
             </section>
             <section className="app-task-content-grid">
@@ -655,7 +668,7 @@ function TaskLibrary({
             </section>
             {createTaskState.error ? <Text role="alert" c="var(--app-error)">Не удалось сохранить задачу. Проверьте подключение и повторите попытку.</Text> : null}
           </div>
-            <Group className="app-form-actions" justify="flex-end"><Button type="button" variant="subtle" color="gray" disabled={createTaskState.isLoading} onClick={() => setCreateOpened(false)}>Отмена</Button><Button data-testid="create-task-submit-button" type="submit" color="blue" loading={createTaskState.isLoading}>Сохранить задачу</Button></Group>
+            <Group className="app-form-actions" justify="flex-end"><Button type="button" variant="subtle" color="gray" disabled={createTaskState.isLoading} onClick={() => setCreateOpened(false)}>Отмена</Button><Button data-testid="create-task-submit-button" data-learning-anchor="library-task-save" data-learning-interactive="true" type="submit" color="blue" loading={createTaskState.isLoading}>Сохранить задачу</Button></Group>
         </form>
       </Modal>
       <Modal opened={importOpened} onClose={() => { if (!createTaskState.isLoading) setImportOpened(false); }} title="Импортировать задачу" centered size="lg" closeOnClickOutside={!createTaskState.isLoading} closeOnEscape={!createTaskState.isLoading}>
@@ -667,27 +680,27 @@ function TaskLibrary({
         </form>
       </Modal>
       <div>
-        <Title order={1}>Библиотека</Title>
+        <Title order={1} data-learning-anchor="library-title">Библиотека</Title>
       </div>
-      <div className={styles.libraryToolbar}>
+      <div className={styles.libraryToolbar} data-learning-anchor={activeTab === "sets" ? "library-sets-open" : undefined}>
         <Tabs
           className={styles.libraryTabs}
           activeKey={activeTab}
           onChange={(key) => selectTab(key === "sets" ? "sets" : "tasks")}
           items={[
-            { key: "tasks", label: "Задачи" },
-            { key: "sets", label: "Наборы задач" },
+            { key: "tasks", label: <span data-learning-anchor="library-tasks">Задачи</span> },
+            { key: "sets", label: <span data-learning-anchor="library-sets">Наборы задач</span> },
           ]}
           aria-label="Разделы библиотеки"
         />
-        {activeTab === "tasks" ? (
-          <Group gap="xs">
-            <Button data-testid="open-create-task-modal" type="button" color="blue" leftSection={<IconPlus size={17} />} onClick={() => { createTaskState.reset(); setTaskLanguage(selectedLanguage || "nodejs"); setCreateOpened(true); }}>
+        <div className={styles.libraryActions} ref={setLibraryActions}>
+          {activeTab === "tasks" ? <>
+            <Button data-testid="open-create-task-modal" data-learning-anchor="library-create-task" data-learning-interactive="true" type="button" color="blue" leftSection={<IconPlus size={17} />} onClick={() => { createTaskState.reset(); setTaskLanguage(selectedLanguage || "nodejs"); setCreateOpened(true); }}>
               Создать задачу
             </Button>
             <Button type="button" variant="light" onClick={() => setImportOpened(true)}>Импортировать</Button>
-          </Group>
-        ) : null}
+          </> : null}
+        </div>
       </div>
       {activeTab === "tasks" ? (
         <Card className={styles.libraryListSurface} withBorder={false} data-testid="task-bank-panel">
@@ -737,7 +750,7 @@ function TaskLibrary({
             {filteredTasks.map((task) => <PersonalTaskCard key={task.id} task={task} onCopy={() => void copyTask(task)} />)}
           </Stack>
         </Card>
-      ) : <PresetsSection taskOptions={taskOptions} />}
+      ) : <PresetsSection taskOptions={taskOptions} actionsContainer={libraryActions} />}
     </Stack>
   );
 }
@@ -914,6 +927,7 @@ export function ProfilePage() {
           </Stack>
         ) : <Loader />}
       </Card>
+      {auth.token && auth.user ? <SocialConnections token={auth.token} userId={auth.user.id} /> : null}
     </Stack>
   );
 }
@@ -951,6 +965,7 @@ export function PersonalWorkspacePage() {
           : "Интервью";
 
   return (
+    <LearningScope module={workspaceLearningModule(section, false)} eligible={Boolean(auth.user)}>
     <Box className={styles.page}>
       <PersonalWorkspaceHeader />
       <main aria-label={`Личный раздел: ${sectionTitle}`}>
@@ -996,5 +1011,6 @@ export function PersonalWorkspacePage() {
         </Container>
       </main>
     </Box>
+    </LearningScope>
   );
 }

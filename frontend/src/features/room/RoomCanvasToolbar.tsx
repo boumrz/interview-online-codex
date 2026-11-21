@@ -41,8 +41,11 @@ export function RoomCanvasToolbar<NativeFormat extends "drawio" | "excalidraw">(
   }, [saving, saved, showSaving]);
   const formats = ["png", "svg", nativeFormat] as const;
   const expandLabel = expanded ? "Вернуться в комнату" : "На весь экран";
+  const canvasLearningName = nativeFormat === "drawio" ? "diagram" : "whiteboard";
 
-  return <div className={styles.toolbar} role="group" aria-label="Действия с холстом">
+  return <div className={styles.toolbar} role="group" aria-label="Действия с холстом"
+    data-learning-anchor={nativeFormat === "drawio" ? "room-diagram-toolbar" : undefined}
+    data-learning-interactive={nativeFormat === "drawio" ? "true" : undefined}>
     <div className={styles.actions}>
       {color && <Button type="text" onClick={onApplyColor} disabled={!onApplyColor}
         data-testid="room-drawing-color" data-color={color}
@@ -73,6 +76,8 @@ export function RoomCanvasToolbar<NativeFormat extends "drawio" | "excalidraw">(
       </span>}
     </div>
     <Button className={styles.expand} type="text" title={expandLabel} aria-label={expandLabel}
+      data-learning-anchor={`room-${canvasLearningName}-${expanded ? "collapse" : "expand"}`}
+      data-learning-interactive="true"
       aria-expanded={expanded} onClick={onToggleExpanded}
       icon={expanded ? <FullscreenExitOutlined aria-hidden="true" /> : <FullscreenOutlined aria-hidden="true" />}>
       <span className={styles.expandLabel}>{expandLabel}</span>

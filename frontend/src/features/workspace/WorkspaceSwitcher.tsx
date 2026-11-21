@@ -324,7 +324,7 @@ export function WorkspaceSwitcher({ currentTeamId, currentTeamName }: WorkspaceS
               }
             }}
           >
-            <button type="button" role="menuitem" className={styles.createButton} onClick={openCreate}>
+            <button type="button" role="menuitem" className={styles.createButton} data-learning-anchor="workspace-create-team" data-learning-interactive="true" onClick={openCreate}>
               <PlusOutlined aria-hidden="true" />
               <span>Создать команду</span>
             </button>
@@ -354,6 +354,8 @@ export function WorkspaceSwitcher({ currentTeamId, currentTeamName }: WorkspaceS
                   className={`${styles.choiceButton} ${workspace.id === workspaceId ? styles.choiceSelected : ""}`}
                   aria-checked={workspace.id === workspaceId}
                   aria-current={workspace.id === workspaceId ? "true" : undefined}
+                  data-learning-anchor={workspace.id !== workspaceId ? "workspace-team-option" : undefined}
+                  data-learning-interactive={workspace.id !== workspaceId ? "true" : undefined}
                   onClick={() => selectTeam(workspace)}
                 >
                   <span className={styles.workspaceName} title={workspace.name}>{workspace.name}</span>
@@ -366,6 +368,8 @@ export function WorkspaceSwitcher({ currentTeamId, currentTeamName }: WorkspaceS
       >
       <Button
         ref={workspaceTriggerRef}
+        data-learning-anchor="workspace-switcher"
+        data-learning-interactive="true"
         htmlType="button"
         className={`${styles.trigger} app-header-control`}
         aria-label={`Команды: ${currentLabel}. Сменить команду`}
@@ -390,15 +394,16 @@ export function WorkspaceSwitcher({ currentTeamId, currentTeamName }: WorkspaceS
       </Button>
       </Popover>
       <Modal open={createOpened} onCancel={closeCreate} title="Создать команду" centered footer={null} destroyOnHidden>
-        <form onSubmit={submit}>
+        <form onSubmit={submit} data-learning-onboarding-dialog="team">
+          <div data-learning-form-guide-slot />
           <Flex vertical gap={16}>
             <Form.Item required style={{ marginBottom: 0 }}>
-              <Input aria-label="Название команды" placeholder="Введите название команды" value={name} onChange={(event) => setName(event.currentTarget.value)} disabled={isCreating} autoFocus />
+              <Input aria-label="Название команды" placeholder="Введите название команды" data-learning-anchor="workspace-team-name" data-learning-interactive="true" value={name} onChange={(event) => setName(event.currentTarget.value)} disabled={isCreating} autoFocus />
             </Form.Item>
             {error ? <Alert type="error" showIcon role="alert" message={error} /> : null}
             <Flex justify="flex-end" gap={8}>
               <Button htmlType="button" disabled={isCreating} onClick={closeCreate}>Отмена</Button>
-              <Button htmlType="submit" type="primary" loading={isCreating} aria-label={error ? "Повторить" : "Создать команду"} aria-busy={isCreating}>
+              <Button htmlType="submit" type="primary" data-learning-anchor="workspace-team-submit" data-learning-interactive="true" loading={isCreating} aria-label={error ? "Повторить" : "Создать команду"} aria-busy={isCreating}>
                 {error ? "Повторить" : "Создать команду"}
               </Button>
             </Flex>

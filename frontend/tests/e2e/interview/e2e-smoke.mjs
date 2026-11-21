@@ -11,10 +11,10 @@ try {
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
   await page.waitForSelector("text=Создать комнату", { timeout: 15000 });
   await page.click("button:has-text('Создать комнату')");
-  const dialog = page.getByRole("dialog", { name: "Создать комнату", exact: true });
+  const dialog = page.getByRole("dialog", { name: "Новая комната", exact: true });
   await dialog.getByRole("textbox", { name: "Ваше имя", exact: true }).fill("Smoke owner");
   await dialog.getByRole("textbox", { name: "Название комнаты", exact: true }).fill(`Smoke ${Date.now()}`);
-  await dialog.getByRole("button", { name: "Создать комнату", exact: true }).click();
+  await dialog.getByRole("button", { name: "Создать и войти", exact: true }).click();
   await page.waitForURL(/\/room\//, { timeout: 15000 });
   await page.waitForSelector('[data-testid="room-code-editor-host"] .cm-editor', { timeout: 15000 });
   // The connection state used to be a "Подключено" badge in the top bar;

@@ -10,7 +10,7 @@ const page = await context.newPage();
 try {
   await page.goto(webBaseUrl, { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "Создать комнату" }).click();
-  await page.getByRole("dialog", { name: "Создать комнату" }).getByRole("button", { name: "Создать комнату", exact: true }).click();
+  await page.getByRole("dialog", { name: "Новая комната", exact: true }).getByRole("button", { name: "Создать и войти", exact: true }).click();
   await page.waitForURL(/\/room\//, { timeout: 15000 });
 
   const returnLink = page.getByRole("link", { name: "Вернуться к списку интервью", exact: true });
@@ -48,10 +48,7 @@ try {
   const choices = page.locator(".ant-select-dropdown:visible .ant-select-item-option");
   await choices.first().waitFor();
   const labels = await choices.allTextContents();
-  const expectedModes = ["Code", "Markdown",
-    ...(process.env.FEATURE_ROOM_DIAGRAMS_ENABLED === "true" ? ["Редактор диаграмм"] : []),
-    ...(process.env.FEATURE_ROOM_WHITEBOARD_ENABLED === "true" ? ["Доска"] : []),
-  ];
+  const expectedModes = ["Code", "Markdown", "Редактор диаграмм", "Доска"];
   if (JSON.stringify(labels) !== JSON.stringify(expectedModes)) {
     throw new Error(`ROOM_EDITOR_MODE_MUST_OFFER_CONFIGURED_MODES:${JSON.stringify({ labels, expectedModes })}`);
   }

@@ -12,9 +12,9 @@ import styles from "./PersonalWorkspacePage.module.css";
 
 function WorkspaceNavigation({ isHr, isAdmin }: { isHr: boolean; isAdmin: boolean }) {
   const location = useLocation();
-  const items = useMemo(() => [
-    { label: "Интервью", to: "/workspace/personal/interviews" },
-    { label: "Библиотека", to: "/workspace/personal/library" },
+  const items = useMemo<Array<{ label: string; to: string; learningAnchor?: string }>>(() => [
+    { label: "Интервью", to: "/workspace/personal/interviews", learningAnchor: "personal-interviews-link" },
+    { label: "Библиотека", to: "/workspace/personal/library", learningAnchor: "personal-library-link" },
     ...(isHr ? [{ label: "Кандидаты", to: "/workspace/personal/candidates" }] : []),
     ...(isAdmin ? [{ label: "Админка", to: "/dashboard/admin" }] : []),
   ], [isHr, isAdmin]);
@@ -73,6 +73,8 @@ function WorkspaceNavigation({ isHr, isAdmin }: { isHr: boolean; isAdmin: boolea
         <NavLink
           key={item.to}
           to={item.to}
+          data-learning-anchor={item.learningAnchor}
+          data-learning-interactive={item.learningAnchor ? "true" : undefined}
           className={({ isActive }) => `${isActive ? styles.navActive : styles.navLink} app-header-control`}
         >
           {item.label}
@@ -87,6 +89,8 @@ function WorkspaceNavigation({ isHr, isAdmin }: { isHr: boolean; isAdmin: boolea
               className={`${styles.navButton} app-header-control`}
               aria-label={activeOverflow ? `Меню разделов: ${activeOverflow.label}` : "Меню разделов"}
               data-active-section={activeOverflow ? "true" : undefined}
+              data-learning-anchor="personal-sections-menu"
+              data-learning-interactive="true"
               aria-haspopup="menu"
               aria-expanded={overflowOpened}
               onKeyDown={(event: React.KeyboardEvent<HTMLButtonElement>) => {
@@ -105,6 +109,8 @@ function WorkspaceNavigation({ isHr, isAdmin }: { isHr: boolean; isAdmin: boolea
                 key={item.to}
                 component={NavLink}
                 to={item.to}
+                data-learning-anchor={item.learningAnchor}
+                data-learning-interactive={item.learningAnchor ? "true" : undefined}
                 className={location.pathname === item.to ? styles.overflowMenuItemActive : styles.overflowMenuItem}
                 aria-current={location.pathname === item.to ? "page" : undefined}
               >

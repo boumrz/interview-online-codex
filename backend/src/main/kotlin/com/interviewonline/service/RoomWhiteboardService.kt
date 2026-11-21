@@ -27,7 +27,7 @@ class RoomWhiteboardService(
     private val mapper: ObjectMapper,
     private val accessService: RoomAccessService,
     private val collaboration: CollaborationService,
-    private val gate: RoomWhiteboardFeatureGate,
+    private val storage: RoomCanvasStorage,
     private val validator: RoomWhiteboardValidator,
     private val canvasTaskScope: RoomCanvasTaskScope,
     transactionManager: PlatformTransactionManager,
@@ -36,7 +36,7 @@ class RoomWhiteboardService(
     data class Credentials(val user: User?, val ownerToken: String?, val interviewerToken: String?, val eventToken: String?, val sessionId: String?)
 
     fun get(inviteCode: String, credentials: Credentials, requestedTaskId: String?, knownFileIds: String? = null): RoomWhiteboardDto {
-        gate.requireEnabled()
+        storage.requireSupported()
         return requireNotNull(transaction.execute {
             val room = rooms.lockForSharedReadByInviteCode(inviteCode) ?: throw missingRoom()
             requireNotArchived(room)
@@ -52,7 +52,7 @@ class RoomWhiteboardService(
     }
 
     fun change(inviteCode: String, credentials: Credentials, body: JsonNode, requestedTaskId: String?): RoomWhiteboardOperationDto {
-        gate.requireEnabled()
+        storage.requireSupported()
         val request = validator.readRequest(body)
         val outcome = requireNotNull(transaction.execute {
             val room = rooms.lockByInviteCode(inviteCode) ?: throw missingRoom()

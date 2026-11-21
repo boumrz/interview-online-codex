@@ -1,5 +1,5 @@
 import React, { FormEvent, useEffect, useRef, useState } from "react";
-import { Alert, Button, Card, Checkbox, Input, Space, Spin, Typography } from "antd";
+import { App as AntDesignApp, Alert, Button, Card, Checkbox, Input, Space, Spin, Typography } from "antd";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../app/hooks";
 import { store } from "../app/store";
@@ -8,7 +8,7 @@ import { clearAuth, setAuthToken, setCurrentUser } from "../features/auth/authSl
 import { ThemeToggleButton } from "../features/theme/ThemeToggleButton";
 import { api } from "../services/api";
 import { getApiErrorMessage } from "../services/apiErrors";
-import { readPending, socialRequest, SOCIAL_INVITATION_RETURN_KEY, SocialPending } from "../services/socialAuth";
+import { readContinuation, readPending, socialRequest, SOCIAL_INVITATION_RETURN_KEY, SocialPending } from "../services/socialAuth";
 import type { User } from "../types";
 import styles from "./LoginPage.module.css";
 
@@ -20,6 +20,7 @@ type Attempt = {
 };
 
 export function SocialLoginPage() {
+  const { notification } = AntDesignApp.useApp();
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const authToken = useAppSelector((state) => state.auth.token);
@@ -41,6 +42,7 @@ export function SocialLoginPage() {
   const attempt = useRef<Attempt | null>(null);
   const issued = useRef<string | null>(null);
   const pendingRequest = useRef<AbortController | null>(null);
+  const completedDestination = useRef<{ path: string; suppressLearningOffer: boolean } | null>(null);
   const nextPath = sessionStorage.getItem(SOCIAL_INVITATION_RETURN_KEY) === "1"
     ? "/join/team?resume=accept" : "/workspace/personal/interviews";
 
@@ -156,16 +158,30 @@ export function SocialLoginPage() {
         value.controller.signal.removeEventListener("abort", abort);
       }
       if (!current(value)) return;
+      let destination = nextPath;
+      let notice: string | null = null;
+      if (nextPath !== "/join/team?resume=accept") {
+        try {
+          const continuation = readContinuation(await socialRequest<unknown>("/continue", value.controller.signal, {}, { Authorization: `Bearer ${token}` }));
+          destination = continuation.path;
+          notice = continuation.notice;
+        } catch {
+          notice = "Вход выполнен. Возврат в комнату недоступен — откройте приглашение ещё раз.";
+        }
+      }
+      if (!current(value)) return;
       attempt.current = null;
       issued.current = null;
       sessionStorage.removeItem(SOCIAL_INVITATION_RETURN_KEY);
+      completedDestination.current = { path: destination, suppressLearningOffer: Boolean(notice) };
       dispatch(clearAuth());
       dispatch(api.util.resetApiState());
       dispatch(setAuthToken(token));
       dispatch(setCurrentUser(profile));
       localStorage.setItem("auth_user", JSON.stringify(profile));
       localStorage.setItem("display_name", profile.displayName);
-      navigate(nextPath, { replace: true });
+      if (notice) notification.info({ title: "Вход выполнен", description: notice });
+      navigate(destination, { replace: true, state: notice ? { suppressLearningOffer: true } : undefined });
     } catch (cause) {
       if (!current(value)) return;
       const record = cause && typeof cause === "object" ? cause as Record<string, unknown> : null;
@@ -215,7 +231,8 @@ export function SocialLoginPage() {
     } else void authenticate("link", { nickname: nickname.trim(), password });
   };
 
-  if (authToken) return <Navigate to={nextPath} replace />;
+  if (authToken) return <Navigate to={completedDestination.current?.path ?? nextPath} replace
+    state={completedDestination.current?.suppressLearningOffer ? { suppressLearningOffer: true } : undefined} />;
   const submitLabel = retryProfile || pending?.accountExists ? "Повторить"
     : mode === "link" ? "Привязать и войти" : "Создать аккаунт";
   return (
@@ -255,6 +272,10 @@ export function SocialLoginPage() {
               }}>{mode === "register" ? "У меня есть аккаунт" : "Создать новый аккаунт"}</Button>}
             </form>
           )}
+          {pending && !pending.accountExists && !retryProfile && <Space orientation="vertical" size={4}>
+            <Typography.Text type="secondary">Уже регистрировались через другой сервис? Войдите прежним способом.</Typography.Text>
+            <Link to="/login">Вернуться ко входу</Link>
+          </Space>}
           {error && <Alert role="alert" showIcon type={initialResult === "cancelled" ? "info" : "error"} message={error} />}
           {!pending && !loading && canRetryPending && <Button onClick={() => { setError(""); setPendingReload((value) => value + 1); }}>Повторить</Button>}
           <Space orientation="vertical" align="center" style={{ width: "100%" }}>

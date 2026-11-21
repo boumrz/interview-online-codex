@@ -26,7 +26,7 @@ class RoomDiagramService(
     private val mapper: ObjectMapper,
     private val accessService: RoomAccessService,
     private val collaboration: CollaborationService,
-    private val gate: RoomDiagramFeatureGate,
+    private val storage: RoomCanvasStorage,
     private val validator: RoomDiagramValidator,
     private val taskScope: RoomCanvasTaskScope,
     transactionManager: PlatformTransactionManager,
@@ -42,7 +42,7 @@ class RoomDiagramService(
     )
 
     fun get(inviteCode: String, credentials: Credentials, afterSequence: Long?, taskId: String? = null): RoomDiagramDto {
-        gate.requireEnabled()
+        storage.requireSupported()
         if (afterSequence != null && afterSequence < 0) throw invalid("Некорректная последовательность схемы")
         return requireNotNull(transaction.execute {
             val room = rooms.lockForSharedReadByInviteCode(inviteCode) ?: throw missingRoom()
@@ -78,7 +78,7 @@ class RoomDiagramService(
     }
 
     fun change(inviteCode: String, credentials: Credentials, request: RoomDiagramChangeRequest, taskId: String? = null): RoomDiagramOperationDto {
-        gate.requireEnabled()
+        storage.requireSupported()
         val proposedCells = validator.validate(request)
         val outcome = requireNotNull(transaction.execute {
             val room = rooms.lockByInviteCode(inviteCode) ?: throw missingRoom()

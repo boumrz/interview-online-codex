@@ -59,7 +59,7 @@ try {
   // (1) В селекте лендинга появился пункт Plain text. Открываем его и
   //     проверяем, что значение доступно для выбора.
   await interviewerPage.getByRole("button", { name: "Создать комнату", exact: true }).click();
-  const createDialog = interviewerPage.getByRole("dialog", { name: "Создать комнату", exact: true });
+  const createDialog = interviewerPage.getByRole("dialog", { name: "Новая комната", exact: true });
   await createDialog.getByRole("textbox", { name: "Ваше имя", exact: true }).fill("Owner Plain");
   await createDialog.getByRole("textbox", { name: "Название комнаты", exact: true }).fill(`Plain text ${Date.now()}`);
   const langSelect = createDialog.getByRole("combobox", { name: "Язык", exact: true });
@@ -72,7 +72,7 @@ try {
     .click();
 
   await interviewerPage
-    .getByRole("dialog", { name: "Создать комнату" }).getByRole("button", { name: "Создать комнату", exact: true })
+    .getByRole("dialog", { name: "Новая комната", exact: true }).getByRole("button", { name: "Создать и войти", exact: true })
     .click();
   await interviewerPage.waitForURL(/\/room\//, { timeout: 15000 });
   await interviewerPage.locator('[data-testid="room-code-editor-host"] .cm-editor').waitFor({ timeout: 15000 });

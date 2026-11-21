@@ -25,18 +25,6 @@ class ArchiveError(Exception):
     pass
 
 
-def enabled_from_compose(configuration):
-    web = configuration.get("services", {}).get("web", {})
-    build = web.get("build", {})
-    arguments = build.get("args", {}) if isinstance(build, dict) else {}
-    flag = arguments.get("FEATURE_ROOM_DIAGRAMS_ENABLED", "false")
-    if flag is True or flag == "true":
-        return True
-    if flag is False or flag == "false":
-        return False
-    raise ArchiveError("The resolved draw.io build flag must be literal true or false.")
-
-
 def read_release(filename):
     release = json.loads(Path(filename).read_text())
     if not isinstance(release.get("version"), str) or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", release["version"]):
@@ -213,20 +201,16 @@ def prepare(release, cache_directory):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--from-compose", action="store_true", required=True)
     parser.add_argument("--release", required=True)
     parser.add_argument("--cache-dir", required=True)
     args = parser.parse_args()
     try:
-        if not enabled_from_compose(json.load(sys.stdin)):
-            print("Room diagrams are disabled; no archive or network access requested.")
-            return 0
         prepare(read_release(args.release), args.cache_dir)
         return 0
     except ArchiveError as error:
         print(str(error), file=sys.stderr)
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
-        print("Invalid draw.io deployment configuration or unreadable pinned release metadata; no environment values were printed.", file=sys.stderr)
+        print("Invalid or unreadable pinned draw.io release metadata.", file=sys.stderr)
     return 1
 
 

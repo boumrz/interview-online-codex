@@ -35,7 +35,6 @@ class TeamMergePlanService(
     private val planRepository: TeamMergePlanRepository,
     private val jdbc: JdbcTemplate,
     private val mapper: ObjectMapper,
-    private val commitGate: TeamMergeCommitFeatureGate,
     private val collaborationService: CollaborationService,
     private val teamAuditWriter: TeamAuditWriter,
 ) {
@@ -141,7 +140,6 @@ class TeamMergePlanService(
 
     @Transactional
     fun commit(actor: User, destinationTeamId: String, planId: String, key: UUID): TeamMergeCommitResponse {
-        commitGate.requireEnabled()
         val actorId = requireNotNull(actor.id)
         val initialPlan = planRepository.findById(planId).orElse(null)
             ?.takeIf { it.destinationTeamId == destinationTeamId } ?: throw planNotFound()

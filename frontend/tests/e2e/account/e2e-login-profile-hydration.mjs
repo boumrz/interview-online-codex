@@ -274,7 +274,7 @@ test("a newer real SPA login replaces the old attempt; its late failure cannot c
     await gate.ready();
     await page.getByRole("link", { name: "На главную страницу", exact: true }).click();
     await page.waitForURL(`${web}/`);
-    await page.getByRole("link", { name: "Личный кабинет", exact: true }).click();
+    await page.getByRole("link", { name: "Войти", exact: true }).click();
     await page.getByRole("textbox", { name: "Ник", exact: true }).fill(accountB.nickname);
     await page.getByLabel("Пароль", { exact: true }).fill(accountB.password);
     await page.getByLabel("Пароль", { exact: true }).press("Enter");

@@ -25,7 +25,7 @@ import java.util.UUID
 import java.util.Base64
 import java.security.MessageDigest
 
-@SpringBootTest(properties = ["app.features.room-whiteboard-enabled=true"])
+@SpringBootTest
 @AutoConfigureMockMvc(print = MockMvcPrint.NONE)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class RoomWhiteboardImagesIntegrationTest(

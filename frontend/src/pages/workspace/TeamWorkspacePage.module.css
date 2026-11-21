@@ -431,9 +431,8 @@
 }
 
 .librarySearch {
-  min-width: 180px;
-  width: 220px;
-  flex: 0 1 220px;
+  inline-size: min(100%, 220px);
+  margin-bottom: 12px;
 }
 
 .libraryToolbar {
@@ -509,7 +508,14 @@
 }
 
 .libraryActions {
-  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-inline-start: auto;
+}
+
+.libraryActions > button:first-child {
+  min-inline-size: 10.875rem;
 }
 
 .libraryActions button {

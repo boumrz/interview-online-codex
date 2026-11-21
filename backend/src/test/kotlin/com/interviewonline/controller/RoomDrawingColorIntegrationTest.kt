@@ -24,7 +24,7 @@ import java.util.UUID
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
 
-@SpringBootTest(properties = ["app.features.room-whiteboard-enabled=true", "app.features.room-diagrams-enabled=true"])
+@SpringBootTest
 @AutoConfigureMockMvc(print = MockMvcPrint.NONE)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class RoomDrawingColorIntegrationTest(
@@ -159,28 +159,29 @@ class RoomDrawingColorIntegrationTest(
 @SpringBootTest(properties = ["app.features.room-whiteboard-enabled=false", "app.features.room-diagrams-enabled=false"])
 @AutoConfigureMockMvc(print = MockMvcPrint.NONE)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
-class RoomDrawingColorDisabledIntegrationTest(
+class RoomDrawingColorAvailabilityIntegrationTest(
     @Autowired private val mvc: MockMvc,
     @Autowired private val mapper: ObjectMapper,
     @Autowired private val rooms: RoomRepository,
     @Autowired private val jdbc: JdbcTemplate,
 ) {
     companion object {
-        private val postgres = Postgres16TestSupport.create("room_drawing_color_off")
+        private val postgres = Postgres16TestSupport.create("room_drawing_color_ready")
         @JvmStatic @DynamicPropertySource fun properties(registry: DynamicPropertyRegistry) = postgres.register(registry)
         @JvmStatic @AfterAll fun cleanup() = postgres.close()
     }
 
-    @Test fun `disabled canvases leave own and roster colors unset without reserving a color`() {
-        val room = rooms.saveAndFlush(Room(inviteCode = "color-off-${UUID.randomUUID()}", ownerSessionToken = "owner", interviewerSessionToken = "interviewer"))
+    @Test fun `old false settings do not prevent reservation and sharing of drawing color`() {
+        val room = rooms.saveAndFlush(Room(inviteCode = "color-ready-${UUID.randomUUID()}", ownerSessionToken = "owner", interviewerSessionToken = "interviewer"))
         val result = mvc.get("/api/realtime/rooms/${room.inviteCode}/stream") {
             param("sessionId", "off"); param("participantId", "off"); param("displayName", "Off")
         }.andReturn()
         assertEquals(200, result.response.status)
         val state = result.response.contentAsString.lineSequence().filter { it.startsWith("data:") }
             .map { mapper.readTree(it.removePrefix("data:")) }.last { it.path("type").asText() == "state_sync" }.path("payload")
-        assertTrue(state.path("drawingColor").isNull)
-        assertTrue(state.path("participants").single().path("drawingColor").isNull)
-        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM room_drawing_colors WHERE room_id=?", Int::class.java, room.id))
+        val color = state.path("drawingColor").asText()
+        assertTrue(color.matches(Regex("#[0-9a-f]{6}")))
+        assertEquals(color, state.path("participants").single().path("drawingColor").asText())
+        assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM room_drawing_colors WHERE room_id=?", Int::class.java, room.id))
     }
 }

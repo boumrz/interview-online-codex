@@ -199,3 +199,18 @@ test("workspace page hits and initialization expose only supported sections and 
   }
   assert.doesNotMatch(JSON.stringify(calls), /private-/);
 });
+
+test("learning goals accept only fixed module actions and category values", async () => {
+  const calls = installBrowserStub();
+  const analytics = await loadAnalyticsModule();
+  analytics.initAnalytics();
+  analytics.trackLearningEvent("room", "first_start", { source: "help", attemptType: "first", skipped: true, version: 2 });
+  analytics.trackLearningEvent("private-room-id", "first_start", { source: "help", attemptType: "first", skipped: true });
+  analytics.trackLearningEvent("room", "secret", { source: "help", attemptType: "first", skipped: true });
+  assert.deepEqual(calls.filter(call => call[1] === "reachGoal").map(call => call.slice(2)), [[
+    "learn_room_first_start_v1", {
+      learning_module: "room", learning_version: "v2", learning_source: "help",
+      learning_attempt: "first", learning_previously_skipped: true,
+    },
+  ]]);
+});

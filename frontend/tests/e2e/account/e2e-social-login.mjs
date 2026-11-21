@@ -1,4 +1,4 @@
-// Prepared integration suite: run with FEATURE_SOCIAL_AUTH_ENABLED=true.
+// OAuth UI coverage run against the isolated app and test provider.
 // The default dormant UI has its own e2e-social-login-disabled.mjs suite.
 import "../support/require-isolated-api.mjs";
 import assert from "node:assert/strict";
@@ -11,12 +11,13 @@ const api = process.env.E2E_API_URL;
 const browser = await chromium.launch({ headless: true });
 after(() => browser.close());
 const json = (route, data, status = 200) => route.fulfill({ status, json: data });
-async function fixture(t, providers = ["google", "vk"]) {
+async function fixture(t, providers = ["google", "github"]) {
   const context = await browser.newContext();
   t.after(() => context.close());
   const page = await context.newPage();
   page.setDefaultTimeout(8_000);
   await page.route("**/api/auth/social/providers", (route) => json(route, { providers }));
+  await page.route("**/api/auth/social/continue", (route) => json(route, { path: "/workspace/personal/interviews", notice: null }));
   return { context, page };
 }
 async function account(context) {
@@ -33,11 +34,11 @@ async function pending(page, extra = {}) {
   }));
 }
 
-test("configured Google/VK buttons coexist with local login; disabled providers are absent", async (t) => {
+test("configured Google/GitHub buttons coexist with local login; disabled providers are absent", async (t) => {
   const { page } = await fixture(t);
   await page.goto(`${web}/login`);
   await page.getByRole("button", { name: "Войти через Google", exact: true }).waitFor();
-  await page.getByRole("button", { name: "Войти через VK ID", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Войти через GitHub", exact: true }).waitFor();
   assert.equal(await page.getByLabel("Ник", { exact: true }).isEditable(), true);
   assert.equal(await page.getByLabel("Пароль", { exact: true }).isEditable(), true);
   await page.unroute("**/api/auth/social/providers");
@@ -45,6 +46,36 @@ test("configured Google/VK buttons coexist with local login; disabled providers 
   await page.reload();
   await page.getByLabel("Ник", { exact: true }).waitFor();
   assert.equal(await page.getByRole("button", { name: /Войти через/ }).count(), 0);
+});
+
+test("provider buttons follow the selected theme and keep a legible dark hover", async (t) => {
+  const { page } = await fixture(t);
+  await page.goto(`${web}/login`);
+  const providers = ["Google", "GitHub"].map((name) => page.getByRole("button", {
+    name: `Войти через ${name}`, exact: true,
+  }));
+  for (const button of providers) {
+    await button.waitFor();
+    assert.equal(await button.evaluate((node) => getComputedStyle(node).backgroundColor), "rgb(255, 255, 255)");
+  }
+  await page.getByRole("button", { name: "Тёмная тема", exact: true }).click();
+  await page.waitForFunction(() => document.documentElement.dataset.theme === "dark");
+  for (const button of providers) {
+    const handle = await button.elementHandle();
+    await page.waitForFunction((node) => getComputedStyle(node).backgroundColor === "rgb(19, 19, 20)", handle);
+    assert.deepEqual(await button.evaluate((node) => {
+      const style = getComputedStyle(node);
+      return [style.backgroundColor, style.color, style.borderTopColor];
+    }), ["rgb(19, 19, 20)", "rgb(227, 227, 227)", "rgb(142, 145, 143)"]);
+    await button.hover();
+    await page.waitForFunction((node) => {
+      const style = getComputedStyle(node);
+      return style.backgroundColor === "rgb(32, 33, 36)" && style.color === "rgb(227, 227, 227)"
+        && style.borderTopColor === "rgb(142, 145, 143)";
+    }, handle);
+    await page.mouse.move(0, 0);
+    await handle.dispose();
+  }
 });
 
 test("start network failure is readable and retry redirects to selected provider", async (t) => {
@@ -70,11 +101,11 @@ test("start network failure is readable and retry redirects to selected provider
 
 test("unexpected provider redirect cannot navigate away", async (t) => {
   const { page } = await fixture(t);
-  await page.route("**/api/auth/social/vk/start", (route) => json(route, {
-    authorizationUrl: "https://id.vk.ru.evil.example/authorize?access_token=secret",
+  await page.route("**/api/auth/social/github/start", (route) => json(route, {
+    authorizationUrl: "https://github.com.evil.example/login/oauth/authorize?access_token=secret",
   }));
   await page.goto(`${web}/login`);
-  await page.getByRole("button", { name: "Войти через VK ID" }).click();
+  await page.getByRole("button", { name: "Войти через GitHub" }).click();
   await page.getByRole("alert").filter({ hasText: "Не удалось начать вход. Попробуйте ещё раз." }).waitFor();
   assert.equal(page.url(), `${web}/login`);
 });
@@ -131,7 +162,7 @@ test("explicit existing account link checks password and retains form for correc
   const { page, context } = await fixture(t);
   const auth = await account(context);
   const links = [];
-  await pending(page, { provider: "vk" });
+  await pending(page, { provider: "github" });
   await page.route("**/api/auth/social/link", (route) => {
     links.push(route.request().postDataJSON());
     return links.length === 1 ? json(route, { error: "Неверный ник или пароль" }, 401) : json(route, auth);
@@ -280,5 +311,62 @@ test("a hidden pending identity request cannot start authentication after its ca
   release();
   await page.getByRole("alert").filter({ hasText: "Вход прерван. Начните вход заново." }).waitFor();
   assert.equal(completions, 0);
+  assert.equal(await page.evaluate(() => localStorage.getItem("auth_token")), null);
+});
+
+
+test("GitHub continuation returns to the same candidate room after profile hydration", async (t) => {
+  const { page, context } = await fixture(t, ["github"]);
+  let learningRequested = false;
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname.startsWith("/api/me/learning/")) learningRequested = true;
+  });
+  const auth = await account(context);
+  const roomResponse = await context.request.post(`${api}/public/rooms`, { data: {
+    displayName: "Интервьюер", title: "Возврат кандидата", language: "nodejs",
+  } });
+  assert.equal(roomResponse.status(), 200);
+  const room = await roomResponse.json();
+  await pending(page, { provider: "github", accountExists: true });
+  await page.route("**/api/auth/social/complete", (route) => json(route, auth));
+  await page.route("**/api/auth/social/continue", (route) => {
+    assert.equal(route.request().headers().authorization, `Bearer ${auth.token}`);
+    return json(route, { path: `/room/${room.inviteCode}`, notice: null });
+  });
+  await page.goto(`${web}/login/social`);
+  await page.waitForURL(`${web}/room/${room.inviteCode}`);
+  await page.locator('[data-testid="room-connection-status"][data-state="online"]').waitFor({ timeout: 15_000 }).catch(async (error) => {
+    throw new Error(`${error.message}\n${await page.locator("body").innerText()}`);
+  });
+  assert.equal(await page.getByRole("button", { name: "Помощь", exact: true }).count(), 0);
+  assert.equal(await page.locator('[data-learning-tour="true"]').count(), 0);
+  assert.equal(learningRequested, false);
+});
+
+
+test("social completion preserves explicit team invitation continuation", async (t) => {
+  const { page, context } = await fixture(t);
+  const auth = await account(context);
+  await pending(page, { accountExists: true });
+  await page.route("**/api/auth/social/complete", (route) => json(route, auth));
+  await page.goto(`${web}/login`);
+  await page.evaluate(() => sessionStorage.setItem("interhub:social-invitation-return", "1"));
+  await page.goto(`${web}/login/social`);
+  await page.waitForURL(`${web}/join/team?resume=accept`);
+  await page.getByText("Приглашение недоступно", { exact: true }).waitFor();
+  assert.equal(await page.evaluate(() => sessionStorage.getItem("interhub:social-invitation-return")), null);
+});
+
+
+test("first provider profile can return to the original login method without creating another account", async (t) => {
+  const { page } = await fixture(t);
+  await pending(page, { provider: "github" });
+  let completed = 0;
+  await page.route("**/api/auth/social/complete", (route) => { completed++; return route.abort(); });
+  await page.goto(`${web}/login/social`);
+  await page.getByText("Уже регистрировались через другой сервис? Войдите прежним способом.", { exact: true }).waitFor();
+  await page.getByRole("link", { name: "Вернуться ко входу", exact: true }).click();
+  await page.getByRole("button", { name: "Войти через Google", exact: true }).waitFor();
+  assert.equal(completed, 0);
   assert.equal(await page.evaluate(() => localStorage.getItem("auth_token")), null);
 });

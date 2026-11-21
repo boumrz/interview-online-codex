@@ -82,6 +82,7 @@ export type BriefingBoardProps = {
    */
   onFocusModeChange?: (next: boolean) => void;
   showModeToggle?: boolean;
+  learningFullscreen?: boolean;
 };
 
 type MarkdownEditorHandle = {
@@ -116,6 +117,7 @@ export function BriefingBoard({
   focusMode = false,
   onFocusModeChange,
   showModeToggle = true,
+  learningFullscreen = false,
 }: BriefingBoardProps) {
   const editorRef = useRef<MarkdownEditorHandle | null>(null);
   /**
@@ -125,6 +127,10 @@ export function BriefingBoard({
    * Не путать с `focusMode`, который синхронизируется между сторонами.
    */
   const [isExpanded, setIsExpanded] = useState(false);
+  const learningAnchor = mode === "interviewer"
+    ? learningFullscreen ? (isExpanded ? "room-markdown-collapse" : "room-markdown-expand")
+      : isExpanded ? "room-condition-collapse" : undefined
+    : undefined;
   const preview = useMarkdownPreview(value, JSON.stringify([previewDocumentKey ?? "", mode]));
   const emptyText = "Условие не добавлено";
   const markdownLength = useMemo(
@@ -247,6 +253,7 @@ export function BriefingBoard({
       data-mode={mode}
       data-focus={focusMode ? "on" : "off"}
       data-expanded={isExpanded ? "on" : "off"}
+      data-learning-canvas-expanded={isExpanded && mode === "interviewer" ? "true" : undefined}
       data-testid={`briefing-board-${mode}`}
     >
       {mode === "interviewer" && !readOnly ? (
@@ -401,6 +408,8 @@ export function BriefingBoard({
               <Button
                 type="text" htmlType="button"
                 data-testid="briefing-expand-toggle"
+                data-learning-anchor={learningAnchor}
+                data-learning-interactive={learningAnchor ? "true" : undefined}
                 className={roomPageStyles.briefingToolButton}
                 aria-pressed={isExpanded}
                 aria-label={
@@ -472,6 +481,8 @@ export function BriefingBoard({
               <Button
                 type="text" htmlType="button"
                 data-testid="briefing-expand-toggle"
+                data-learning-anchor={learningAnchor}
+                data-learning-interactive={learningAnchor ? "true" : undefined}
                 className={roomPageStyles.briefingToolButton}
                 aria-pressed={isExpanded}
                 aria-label={

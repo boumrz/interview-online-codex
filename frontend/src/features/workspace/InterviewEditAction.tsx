@@ -190,7 +190,7 @@ function InterviewEditSession({ accountId, teamId, kind, interview, canEditTitle
     }
   };
   return <>
-    <Button type="button" variant="light" size="compact-sm" leftSection={<IconPencil size={16} />} aria-label={`Редактировать интервью ${interview.title}`} onClick={() => { clear(); setOpened(true); void load(); }}>Редактировать</Button>
+    <Button type="button" variant="light" size="compact-sm" leftSection={<IconPencil size={16} />} aria-label={`Редактировать интервью ${interview.title}`} data-learning-anchor="interview-edit" onClick={() => { clear(); setOpened(true); void load(); }}>Редактировать</Button>
     <Modal opened={opened} authoring title="Редактировать интервью" centered size="lg" onClose={close} closeOnEscape={!pending} closeOnClickOutside={!pending} withCloseButton={!pending}>
       <form className="app-authoring-form" onSubmit={save}>
         <div className="app-authoring-fields">

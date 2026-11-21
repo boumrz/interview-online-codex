@@ -18,24 +18,68 @@ class SocialAuthController(private val service: SocialAuthService, private val s
     @GetMapping("/providers")
     fun providers(): ResponseEntity<Map<String, List<String>>> = secure(ResponseEntity.ok()).body(mapOf("providers" to service.providers()))
 
-    @PostMapping("/{provider}/start")
-    fun start(@PathVariable provider: String, request: HttpServletRequest): ResponseEntity<Map<String, String>> {
+    @GetMapping("/connections")
+    fun connections(request: HttpServletRequest): ResponseEntity<SocialConnectionsResponse> =
+        secure(ResponseEntity.ok()).body(service.connections(bearer(request)))
+
+    @PostMapping("/{provider}/unlink")
+    fun unlink(
+        @PathVariable provider: String,
+        @RequestBody(required = false) body: SocialUnlinkRequest?,
+        request: HttpServletRequest,
+    ): ResponseEntity<SocialConnectionsResponse> {
+        service.requireTrustedOrigin(originHeader(request))
+        return secure(ResponseEntity.ok()).body(service.unlink(provider, bearer(request), body?.newPassword))
+    }
+
+    @PostMapping("/{provider}/profile-link/start")
+    fun startProfileLink(@PathVariable provider: String, request: HttpServletRequest): ResponseEntity<Map<String, String>> {
         origin(request)
-        val result = service.start(provider)
+        val result = service.startProfileLink(provider, bearer(request))
         return secure(ResponseEntity.ok()).header(HttpHeaders.SET_COOKIE, cookie(result.cookie, false))
             .body(mapOf("authorizationUrl" to result.authorizationUrl))
     }
+
+    @PostMapping("/profile-link/complete")
+    fun completeProfileLink(request: HttpServletRequest): ResponseEntity<SocialProfileLinkResponse> {
+        origin(request)
+        return secure(ResponseEntity.ok()).body(service.completeProfileLink(proof(request), bearer(request)))
+    }
+
+    @PostMapping("/{provider}/start")
+    fun start(@PathVariable provider: String, @RequestBody(required = false) body: SocialStartRequest?, request: HttpServletRequest): ResponseEntity<Map<String, String>> {
+        origin(request)
+        val result = service.start(provider, proof(request), body ?: SocialStartRequest())
+        return secure(ResponseEntity.ok()).header(HttpHeaders.SET_COOKIE, cookie(result.cookie, false))
+            .body(mapOf("authorizationUrl" to result.authorizationUrl))
+    }
+    @PostMapping("/room-context")
+    fun roomContext(@RequestBody body: SocialRoomContextRequest, request: HttpServletRequest): ResponseEntity<SocialRoomContextResponse> {
+        origin(request)
+        val result = service.roomContext(body, request.getHeader("X-Room-Event-Token"))
+        return secure(ResponseEntity.ok()).header(HttpHeaders.SET_COOKIE, cookie(result.cookie, false))
+            .body(SocialRoomContextResponse(result.contextId))
+    }
+    @PostMapping("/continue")
+    fun continueToRoom(request: HttpServletRequest): ResponseEntity<SocialContinueResponse> {
+        origin(request)
+        val token = request.getHeader("Authorization")?.removePrefix("Bearer ")?.trim()
+        val result = service.continueToRoom(proof(request), token)
+        return secure(ResponseEntity.ok()).header(HttpHeaders.SET_COOKIE, cookie("", true)).body(result)
+    }
     @GetMapping("/{provider}/callback")
     fun callback(@PathVariable provider: String, request: HttpServletRequest): ResponseEntity<Void> {
-        if (!settings.enabled) return secure(ResponseEntity.status(HttpStatus.FOUND)).header(HttpHeaders.LOCATION, "/login").build()
+        if (settings.providers.isEmpty()) return secure(ResponseEntity.status(HttpStatus.FOUND)).header(HttpHeaders.LOCATION, "/login").build()
+        val profileLink = service.isProfileLinkCallback(proof(request))
+        fun destination(result: String) = if (profileLink) "/profile?social_link=$result"
+            else if (result == "ready") "/login/social" else "/login/social?result=$result"
         val location = try {
             val state = single(request, "state")
             val code = single(request, "code")
-            val deviceId = single(request, "device_id")
             val error = single(request, "error")
             if (error != null && code != null) throw IllegalArgumentException()
-            if (service.callback(provider, proof(request), state, code, deviceId, error)) "/login/social" else "/login/social?result=cancelled"
-        } catch (_: Exception) { "/login/social?result=failed" }
+            destination(if (service.callback(provider, proof(request), state, code, error)) "ready" else "cancelled")
+        } catch (_: Exception) { destination("failed") }
         return secure(ResponseEntity.status(HttpStatus.FOUND)).header(HttpHeaders.LOCATION, settings.origin + location).build()
     }
     @GetMapping("/pending")
@@ -50,13 +94,13 @@ class SocialAuthController(private val service: SocialAuthService, private val s
     fun complete(@RequestBody body: SocialCompleteRequest, request: HttpServletRequest): ResponseEntity<AuthResponse> {
         origin(request)
         val result = service.complete(proof(request), body)
-        return secure(ResponseEntity.ok()).header(HttpHeaders.SET_COOKIE, cookie("", true)).body(result)
+        return secure(ResponseEntity.ok()).body(result)
     }
     @PostMapping("/link")
     fun link(@RequestBody body: SocialLinkRequest, request: HttpServletRequest): ResponseEntity<AuthResponse> {
         origin(request)
         val result = service.link(proof(request), body)
-        return secure(ResponseEntity.ok()).header(HttpHeaders.SET_COOKIE, cookie("", true)).body(result)
+        return secure(ResponseEntity.ok()).body(result)
     }
     @ExceptionHandler(ApiException::class)
     fun apiError(error: ApiException): ResponseEntity<Map<String, String>> = secure(ResponseEntity.status(error.status))
@@ -67,13 +111,16 @@ class SocialAuthController(private val service: SocialAuthService, private val s
     @ExceptionHandler(HttpMessageNotReadableException::class)
     fun unreadable(): ResponseEntity<Map<String, String>> = secure(ResponseEntity.badRequest())
         .body(mapOf("error" to "Некорректный запрос", "code" to "INVALID_REQUEST"))
-    private fun origin(request: HttpServletRequest) {
-        val origins = request.getHeaders("Origin").toList()
-        service.requireOrigin(origins.singleOrNull())
-    }
+    private fun origin(request: HttpServletRequest) = service.requireOrigin(originHeader(request))
+    private fun originHeader(request: HttpServletRequest): String? = request.getHeaders("Origin").toList().singleOrNull()
     private fun proof(request: HttpServletRequest): String? {
         val cookies = request.cookies.orEmpty().filter { it.name == cookieName() }
         return cookies.singleOrNull()?.value
+    }
+    private fun bearer(request: HttpServletRequest): String? {
+        val value = request.getHeaders(HttpHeaders.AUTHORIZATION).toList().singleOrNull() ?: return null
+        if (!value.startsWith("Bearer ")) return null
+        return value.removePrefix("Bearer ").takeIf { it.isNotBlank() && !it.any(Char::isWhitespace) }
     }
     private fun single(request: HttpServletRequest, key: String): String? {
         val values = request.getParameterValues(key) ?: return null

@@ -171,7 +171,7 @@ function RowActions({ interview, onResults }: { interview: HrInterview; onResult
   const navigate = useNavigate();
   return (
     <Stack gap="xs" className={styles.rowActions}>
-      <Button type="button" size="xs" variant="light" onClick={onResults}>Результаты</Button>
+      <Button type="button" size="xs" variant="light" data-learning-anchor="candidates-result" onClick={onResults}>Результаты</Button>
       {!interview.archivedAt ? (
         <Button
           type="button"
@@ -346,16 +346,16 @@ export function HrCabinetSection({ user, token, teamId }: { user: User; token: s
       <Stack gap="lg">
         <Group justify="space-between" align="flex-start" gap="xl" wrap="wrap">
           <div>
-            <Title order={2}>Кандидаты и интервью</Title>
+            <Title order={2} data-learning-anchor="candidates-title">Кандидаты и интервью</Title>
           </div>
           {!teamId ? <CopyHrId nickname={user.nickname} compact /> : null}
         </Group>
 
         {teamId ? <TeamProcessFilters accountId={user.id} teamId={teamId} value={processFilter} onChange={value => { setProcessFilter(value); setPage(0); setDetailRoomId(null); }} /> : null}
 
-        <form onSubmit={applyPeriod}>
+        <form onSubmit={applyPeriod} data-learning-anchor="candidates-period">
           <Group gap={4} align="center" mb="xs">
-            <Text size="sm" fw={500}>Период</Text>
+            <Text size="sm" fw={500} data-learning-anchor={appliedRange ? "candidates-period-applied" : undefined}>Период</Text>
             <Tooltip position="top" w={320} trigger={["hover", "focus"]} label="Даты по Москве, обе границы включены. Если дата интервью не назначена, используется дата завершения или создания.">
               <Button type="button" size="xs" variant="subtle" className={styles.periodHint} aria-label="Как выбирается период"><IconHelpCircle size={16} aria-hidden="true" /></Button>
             </Tooltip>
@@ -394,6 +394,7 @@ export function HrCabinetSection({ user, token, teamId }: { user: User; token: s
             <Button
               type="button"
               leftSection={<IconDownload size={15} />}
+              data-learning-anchor="candidates-export"
               onClick={() => void exportWorkbook()}
               disabled={exporting}
             >

@@ -191,22 +191,19 @@ export async function ensureDrawioArchive({ archivePath = process.env.DRAWIO_ARC
   throw new Error('DRAWIO_DOWNLOAD_FAILED: no verified archive available');
 }
 
-export async function prepareDrawio({ ifEnabled = false, enabled = process.env.FEATURE_ROOM_DIAGRAMS_ENABLED === 'true',
-  target = defaultTarget, archivePath = process.env.DRAWIO_ARCHIVE_PATH || DRAWIO_DEFAULT_ARCHIVE_PATH,
+export async function prepareDrawio({ target = defaultTarget, archivePath = process.env.DRAWIO_ARCHIVE_PATH || DRAWIO_DEFAULT_ARCHIVE_PATH,
   archiveOnly = false, ...downloadOptions } = {}) {
-  if (ifEnabled && !enabled) return { prepared: false, skipped: true };
-  if (!archiveOnly && await isDrawioPrepared(target)) return { prepared: true, skipped: false };
+  if (!archiveOnly && await isDrawioPrepared(target)) return { prepared: true };
   const bytes = await ensureDrawioArchive({ archivePath, ...downloadOptions });
-  if (archiveOnly) return { prepared: false, skipped: false, archivePath };
+  if (archiveOnly) return { prepared: false, archivePath };
   await installDrawioArchive(bytes, target, downloadOptions.expectedDigest ?? DRAWIO_ARCHIVE_SHA256);
-  return { prepared: true, skipped: false };
+  return { prepared: true };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const archiveArgument = process.argv.slice(2).find((argument) => argument.startsWith('--archive='));
   try {
-    const result = await prepareDrawio({ ifEnabled: process.argv.includes('--if-enabled'),
-      archiveOnly: process.argv.includes('--archive-only'),
+    const result = await prepareDrawio({ archiveOnly: process.argv.includes('--archive-only'),
       onAttempt: ({ attempt, attempts, timeoutMs }) => process.stderr.write(`Downloading pinned draw.io ${DRAWIO_VERSION} (${attempt}/${attempts}, timeout ${timeoutMs / 1000}s): ${DRAWIO_ARCHIVE_URL}\n`),
       ...(archiveArgument ? { archivePath: path.resolve(archiveArgument.slice('--archive='.length)) } : {}) });
     if (result.prepared) process.stdout.write(`draw.io ${DRAWIO_VERSION} prepared locally\n`);

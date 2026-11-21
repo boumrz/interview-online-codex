@@ -31,7 +31,7 @@ data class VerifiedSocialIdentity(val subject: String, val displayName: String)
 @Component
 class SocialProviderClient(private val settings: SocialAuthSettings, private val mapper: ObjectMapper) {
     private val client by lazy {
-        HttpClient.newBuilder().connectTimeout(Duration.ofMillis(settings.properties.httpTimeoutMillis))
+        HttpClient.newBuilder().connectTimeout(Duration.ofMillis(settings.httpTimeoutMillis))
             .followRedirects(HttpClient.Redirect.NEVER).build()
     }
     fun authorizationUrl(provider: String, flowId: String, proof: String, state: String): String {
@@ -45,10 +45,14 @@ class SocialProviderClient(private val settings: SocialAuthSettings, private val
             params["scope"] = "openid profile"
             params["nonce"] = settings.derive("nonce", flowId, proof)
             settings.properties.google.authorizationUri
-        } else settings.properties.vk.authorizationUri
+        } else {
+            require(provider == "github")
+            params["scope"] = ""
+            settings.properties.github.authorizationUri
+        }
         return "$endpoint?${form(params)}"
     }
-    fun exchange(provider: String, flowId: String, proof: String, code: String, state: String, deviceId: String?): VerifiedSocialIdentity {
+    fun exchange(provider: String, flowId: String, proof: String, code: String): VerifiedSocialIdentity {
         try {
             val params = linkedMapOf("grant_type" to "authorization_code", "code" to code, "client_id" to clientId(provider),
                 "redirect_uri" to settings.callback(provider), "code_verifier" to settings.derive("verifier", flowId, proof))
@@ -57,16 +61,19 @@ class SocialProviderClient(private val settings: SocialAuthSettings, private val
                 val token = post(settings.properties.google.tokenUri, params)
                 googleIdentity(token.path("id_token").asText(), settings.derive("nonce", flowId, proof))
             } else {
-                params["state"] = state
-                params["device_id"] = requireNotNull(deviceId)
-                params["service_token"] = settings.properties.vk.serviceToken
-                val token = post(settings.properties.vk.tokenUri, params)
-                require(token.path("state").isTextual && constantEquals(token.path("state").asText(), state))
-                val subject = numericSubject(token.path("user_id"))
-                val accessToken = token.path("access_token").takeIf { it.isTextual && it.asText().isNotBlank() }?.asText() ?: throw SocialProviderFailure()
-                val info = post(settings.properties.vk.userInfoUri, mapOf("client_id" to clientId(provider), "access_token" to accessToken)).path("user")
-                require(numericSubject(info.path("user_id")) == subject)
-                VerifiedSocialIdentity(subject, name(listOf(info.path("first_name").asText(""), info.path("last_name").asText("")).filter(String::isNotBlank).joinToString(" ")))
+                require(provider == "github")
+                params["client_secret"] = settings.properties.github.clientSecret
+                val token = post(settings.properties.github.tokenUri, params)
+                require(token.path("scope").isTextual && token.path("scope").asText().isBlank())
+                require(token.path("token_type").asText().equals("bearer", ignoreCase = true))
+                val accessToken = token.path("access_token").takeIf { it.isTextual && it.asText().isNotBlank() }?.asText()
+                    ?: throw SocialProviderFailure()
+                val info = request(HttpRequest.newBuilder(URI(settings.properties.github.userInfoUri))
+                    .header("Authorization", "Bearer $accessToken")
+                    .header("Accept", "application/vnd.github+json")
+                    .header("X-GitHub-Api-Version", "2026-03-10")
+                    .header("User-Agent", "InterHub").GET())
+                VerifiedSocialIdentity(numericSubject(info.path("id")), name(info.path("name").asText("")))
             }
         } catch (_: Exception) { throw SocialProviderFailure() }
     }
@@ -100,12 +107,16 @@ class SocialProviderClient(private val settings: SocialAuthSettings, private val
     private fun name(raw: String): String = raw.trim().let { value ->
         if (value.length <= 64) value else value.take(64).dropLastWhile(Char::isHighSurrogate)
     }
-    private fun clientId(provider: String) = if (provider == "google") settings.properties.google.clientId else settings.properties.vk.clientId
+    private fun clientId(provider: String) = when (provider) {
+        "google" -> settings.properties.google.clientId
+        "github" -> settings.properties.github.clientId
+        else -> throw SocialProviderFailure()
+    }
     private fun post(url: String, params: Map<String, String>) = request(HttpRequest.newBuilder(URI(url))
-        .header("Content-Type", "application/x-www-form-urlencoded").POST(HttpRequest.BodyPublishers.ofString(form(params))))
+        .header("Accept", "application/json").header("Content-Type", "application/x-www-form-urlencoded").POST(HttpRequest.BodyPublishers.ofString(form(params))))
     private fun get(url: String) = request(HttpRequest.newBuilder(URI(url)).GET())
     private fun request(builder: HttpRequest.Builder): JsonNode {
-        val timeout = settings.properties.httpTimeoutMillis
+        val timeout = settings.httpTimeoutMillis
         val future = client.sendAsync(builder.timeout(Duration.ofMillis(timeout)).build(), HttpResponse.BodyHandler { LimitedBody() })
         val response = try {
             // HttpRequest.timeout alone stops at headers on JDK 17. Bound the complete body too.

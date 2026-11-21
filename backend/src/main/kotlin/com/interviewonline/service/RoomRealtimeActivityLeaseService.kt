@@ -64,7 +64,7 @@ class RoomRealtimeActivityLeaseService(private val jdbc: JdbcTemplate) {
         "SELECT CURRENT_TIMESTAMP", Timestamp::class.java,
     )!!.toInstant()
 
-    private companion object {
+    companion object {
         const val LEASE_SECONDS = 60L
     }
 }

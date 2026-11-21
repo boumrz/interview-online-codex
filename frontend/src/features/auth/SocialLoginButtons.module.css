@@ -1,19 +1,30 @@
 @import /* webpackIgnore: true */ url("/auth/fonts.css");
 
 .providerButton {
+  --provider-background: #fff;
+  --provider-hover: #f8faff;
+  --provider-text: #1f1f1f;
+  --provider-border: #747775;
   height: 40px;
   gap: 10px;
   padding-inline: 12px;
-  border-color: #747775;
-  color: #1f1f1f;
-  background: #fff;
+  border-color: var(--provider-border);
+  color: var(--provider-text);
+  background: var(--provider-background);
   box-shadow: none;
 }
 
-.providerButton:not(:disabled):hover {
-  color: #1f1f1f;
-  border-color: #747775;
-  background: #f8faff;
+:global([data-theme="dark"]) .providerButton {
+  --provider-background: #131314;
+  --provider-hover: #202124;
+  --provider-text: #e3e3e3;
+  --provider-border: #8e918f;
+}
+
+.providerButton:global(.ant-btn.ant-btn-variant-outlined):not(:disabled):is(:hover, :active) {
+  color: var(--provider-text);
+  border-color: var(--provider-border);
+  background: var(--provider-hover);
 }
 
 .providerButton img { flex: none; object-fit: contain; }

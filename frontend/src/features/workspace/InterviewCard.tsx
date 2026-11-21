@@ -14,7 +14,7 @@ type Props = {
 
 export function InterviewCard({ title, subtitle, badges, context, children, actions, ariaLabel }: Props) {
   return (
-    <Card className={styles.panel} withBorder role="region" aria-label={ariaLabel}>
+    <Card className={styles.panel} withBorder role="region" aria-label={ariaLabel} data-learning-anchor="interview-card">
       <Stack gap="sm" role="listitem">
         <Group justify="space-between" gap="sm" wrap="wrap">
           <div className={styles.heading}>

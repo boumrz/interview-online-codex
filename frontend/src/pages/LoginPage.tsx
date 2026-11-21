@@ -4,7 +4,7 @@ import { KeyOutlined, UserOutlined } from "@ant-design/icons";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../app/hooks";
 import { store } from "../app/store";
-import { API_BASE_URL, SOCIAL_AUTH_ENABLED } from "../config/runtime";
+import { API_BASE_URL } from "../config/runtime";
 import { clearAuth, setAuthToken, setCurrentUser } from "../features/auth/authSlice";
 import { api, useLoginMutation, useRegisterMutation } from "../services/api";
 import { setVisitParams, trackEvent } from "../services/analytics";
@@ -12,10 +12,10 @@ import { getApiErrorMessage } from "../services/apiErrors";
 import { ThemeToggleButton } from "../features/theme/ThemeToggleButton";
 import type { User } from "../types";
 import styles from "./LoginPage.module.css";
+import { PublicDocumentLinks } from "./LegalPage";
 
-const SocialLoginButtons = SOCIAL_AUTH_ENABLED
-  ? lazy(() => import("../features/auth/SocialLoginButtons").then((module) => ({ default: module.SocialLoginButtons })))
-  : null;
+const SocialLoginButtons = lazy(() => import("../features/auth/SocialLoginButtons")
+  .then((module) => ({ default: module.SocialLoginButtons })));
 
 type AuthenticationAttempt = {
   initialToken: string | null;
@@ -367,14 +367,15 @@ export function LoginPage() {
             </div>
           </form>
 
-          {SocialLoginButtons && (
-            <Suspense fallback={null}>
-              <SocialLoginButtons disabled={isLoading} invitationReturn={nextPath === "/join/team?resume=accept"}
-                onError={setError} onBusyChange={setIsStartingSocial} />
-            </Suspense>
-          )}
+          <Suspense fallback={null}>
+            <SocialLoginButtons disabled={isLoading} invitationReturn={nextPath === "/join/team?resume=accept"}
+              roomReturn={location.state?.socialRoomReturn === true}
+              roomContextId={typeof location.state?.roomContextId === "string" ? location.state.roomContextId : undefined}
+              onError={setError} onBusyChange={setIsStartingSocial} />
+          </Suspense>
 
           <Link className={styles.homeLink} to="/">На главную страницу</Link>
+          <PublicDocumentLinks />
         </Card>
       </section>
     </main>
