@@ -1,7 +1,8 @@
 import { API_BASE_URL } from "../../../config/runtime";
+import { trackClientError, type ClientErrorCode } from "../../../services/analytics";
 import { classifyDiagramResponse } from "../diagram/diagramRequestPolicy";
 import { matchesCanvasTask, canvasTaskMismatch } from "../canvasTaskScope";
-import { roomRealtimeFetch } from "../roomRealtimeTransport";
+import { roomRealtimeFetch, withRoomRequestDeadline } from "../roomRealtimeTransport";
 import { compareElementVersions, elementFingerprint, parseAck, parseElement, parseFiles, parseSnapshot, type WhiteboardChange, type WhiteboardElement, type WhiteboardFile, type WhiteboardFiles, type WhiteboardSnapshot } from "./whiteboardProtocol";
 
 export type WhiteboardConnection = {
@@ -38,6 +39,21 @@ type Attempt = { change: WhiteboardChange; body: string };
 const MAX_BATCH_BYTES = 480 * 1024;
 const MAX_REQUEST_BYTES = 8 * 1024 * 1024;
 class SessionError extends Error {}
+
+function authorityPending(): SessionError {
+  const error = new SessionError("Ожидаем подтверждение нового подключения");
+  error.name = "WhiteboardAuthorityPending";
+  return error;
+}
+
+function report(method: "GET" | "POST", code: ClientErrorCode, status?: number): void {
+  trackClientError(method === "GET" ? "whiteboard_load" : "whiteboard_save", code, status);
+}
+
+function requestFailure(method: "GET" | "POST", code: ClientErrorCode, detail: string, status?: number): SessionError {
+  report(method, code, status);
+  return new SessionError(`${method === "GET" ? "Не удалось загрузить доску" : "Не удалось сохранить доску"}. ${detail}`);
+}
 
 export function createWhiteboardSession(options: WhiteboardSessionOptions): WhiteboardSession {
   const lifetime = new AbortController();
@@ -95,9 +111,16 @@ export function createWhiteboardSession(options: WhiteboardSessionOptions): Whit
     validationBlocked = true;
     publish({ error: true, message: "Изменение доски отклонено. Несохранённые изменения остаются в этой вкладке." });
   }
-  function verifyScope(body: unknown): boolean {
+  function rejectDraft(status?: number): void {
+    report("POST", "draft_rejected", status);
+    block();
+  }
+  function verifyScope(body: unknown, method: "GET" | "POST", status: number): boolean {
     scopeMismatch = !matchesCanvasTask(body, taskId);
-    if (scopeMismatch) publish({ error: true, message: canvasTaskMismatch });
+    if (scopeMismatch) {
+      report(method, "invalid_scope", status);
+      publish({ error: true, message: canvasTaskMismatch });
+    }
     return !scopeMismatch;
   }
   function clearPending(): void { pending.clear(); pendingFiles.clear(); acknowledged.clear(); attempt = undefined; }
@@ -145,53 +168,79 @@ export function createWhiteboardSession(options: WhiteboardSessionOptions): Whit
       }
       if (known.length) query.set("knownFileIds", known.join(","));
     }
-    const response = await roomRealtimeFetch(`${API_BASE_URL}/rooms/${encodeURIComponent(connection.inviteCode)}/whiteboard${method === "POST" ? "/changes" : ""}?${query}`, {
-      method, headers, ...(body === undefined ? {} : { body }),
-      // A saved board can contain 20 MiB of raster data; allow its base64
-      // transfer on a slower connection while retaining context cancellation.
-      signal: AbortSignal.any([lifetime.signal, AbortSignal.timeout(120_000)]),
-    }, fetcher);
-    if (closed || epoch !== permissionEpoch) return undefined;
-    if (response.status === 403) {
-      const body: unknown = await response.clone().json().catch(() => undefined);
-      if (closed || epoch !== permissionEpoch) return undefined;
-      if (typeof body === "object" && body !== null && "code" in body && body.code === "ROOM_EVENT_CAPABILITY_STALE") {
-        // The server can retire a lease before EventSource reports onerror.
-        // Keep its immutable operation and wait for a genuinely different proof.
-        rejectedProof = connection.eventToken ?? null;
-        const error = new SessionError("Ожидаем подтверждение нового подключения"); error.name = "WhiteboardAuthorityPending"; throw error;
+    const url = `${API_BASE_URL}/rooms/${encodeURIComponent(connection.inviteCode)}/whiteboard${method === "POST" ? "/changes" : ""}?${query}`;
+    const obsolete = () => closed || epoch !== permissionEpoch;
+    const currentProof = () => {
+      const current = options.current();
+      return current.connected && current.eventToken === connection.eventToken;
+    };
+    // Keep the deadline through the response body: a board may carry 20 MiB
+    // of raster files before base64 encoding.
+    return withRoomRequestDeadline(120_000, async (signal, timedOut) => {
+      let response: Response;
+      try {
+        response = await roomRealtimeFetch(url, { method, headers, body, signal }, fetcher);
+      } catch {
+        if (obsolete()) return undefined;
+        if (!currentProof()) throw authorityPending();
+        if (timedOut()) throw requestFailure(method, "request_timeout", "Время ожидания истекло. Повторите действие.");
+        throw requestFailure(method, "network_failure", "Проверьте соединение и повторите действие.");
       }
-    }
-    const current = options.current();
-    const action = classifyDiagramResponse(response.status, method, connection.eventToken ?? null, current.eventToken ?? null, current.connected);
-    if (action === "deny-read") { denyRead(); return undefined; }
-    if (action === "deny-write") { denyWrite(); refreshRequested = true; return undefined; }
-    if (action === "reset-document") { block(); return undefined; }
-    if (action === "recover-proof") {
-      const error = new SessionError("Ожидаем подтверждение нового подключения"); error.name = "WhiteboardAuthorityPending"; throw error;
-    }
-    if (action === "retry") throw new SessionError(method === "POST" ? "Не удалось сохранить доску. Повторите действие." : "Не удалось загрузить доску. Повторите действие.");
-    return { response, action, epoch, proof: connection.eventToken };
+      if (obsolete()) return undefined;
+      const status = response.status;
+      if (!response.ok && !currentProof()) throw authorityPending();
+      let data: unknown;
+      if (status === 403) {
+        data = await response.json().catch(() => undefined);
+        if (obsolete()) return undefined;
+        if (!currentProof()) throw authorityPending();
+        if (typeof data === "object" && data !== null && "code" in data && data.code === "ROOM_EVENT_CAPABILITY_STALE") {
+          // An expired connection proof can be detected before the browser reconnects.
+          rejectedProof = connection.eventToken ?? null;
+          throw authorityPending();
+        }
+      }
+      const current = options.current();
+      const action = classifyDiagramResponse(status, method, connection.eventToken ?? null, current.eventToken ?? null, current.connected);
+      if (action === "deny-read") { report(method, "access_denied", status); denyRead(); return undefined; }
+      if (action === "deny-write") { report(method, "access_denied", status); denyWrite(); refreshRequested = true; return undefined; }
+      if (action === "reset-document") { rejectDraft(status); return undefined; }
+      if (action === "recover-proof") throw authorityPending();
+      if (action === "conflict" && method === "POST") return { action, status, data, epoch, proof: connection.eventToken };
+      if (action !== "accepted") {
+        throw requestFailure(method, "http_failure", `Ошибка HTTP ${status}. Повторите действие.`, status);
+      }
+      try { data = await response.json(); }
+      catch (error) {
+        if (obsolete()) return undefined;
+        if (!currentProof()) throw authorityPending();
+        if (timedOut()) throw requestFailure(method, "request_timeout", "Время ожидания истекло. Повторите действие.", status);
+        const code = error instanceof SyntaxError ? "invalid_json" : "body_failure";
+        throw requestFailure(method, code, "Не удалось прочитать ответ сервера. Повторите действие.", status);
+      }
+      return obsolete() ? undefined : { action, status, data, epoch, proof: connection.eventToken };
+    }, lifetime.signal);
   }
 
   async function pull(): Promise<boolean> {
     const result = await request("GET");
-    if (!result) return false;
-    if (result.action !== "accepted") throw new SessionError("Не удалось загрузить актуальную доску. Повторите действие.");
-    const body: unknown = await result.response.json();
-    if (closed || result.epoch !== permissionEpoch) return false;
+    if (!result || closed || result.epoch !== permissionEpoch) return false;
+    const { data: body, status: httpStatus } = result;
     if (!ready() || result.proof !== options.current().eventToken) {
       // A valid 200 may project canEdit=false for a superseded capability. Only
       // current authority can revoke a draft or switch the canvas to readonly.
       if (ready()) { refreshRequested = true; schedule(); }
       return false;
     }
-    if (!verifyScope(body)) return false;
+    if (!verifyScope(body, "GET", httpStatus)) return false;
     // Never attach cached private bytes to a response for another board/task.
-    if (canonical && typeof body === "object" && body !== null && "boardId" in body && body.boardId !== canonical.boardId) { block(); return false; }
-    const incoming = parseSnapshot(body, canonical?.files);
-    if (canonical && incoming.boardId !== canonical.boardId) { block(); return false; }
-    if (incoming.sequence < Math.max(minimumSequence, canonical?.sequence ?? 0)) throw new SessionError("Ожидаем актуальную версию доски. Повторите действие.");
+    if (canonical && typeof body === "object" && body !== null && "boardId" in body && body.boardId !== canonical.boardId) {
+      report("GET", "invalid_scope", httpStatus); block(); return false;
+    }
+    let incoming: WhiteboardSnapshot;
+    try { incoming = parseSnapshot(body, canonical?.files); }
+    catch { throw requestFailure("GET", "invalid_snapshot", "Сервер вернул некорректный снимок доски. Повторите действие.", httpStatus); }
+    if (incoming.sequence < Math.max(minimumSequence, canonical?.sequence ?? 0)) throw requestFailure("GET", "stale_snapshot", "Сервер вернул устаревшую версию. Повторите действие.", httpStatus);
     minimumSequence = incoming.sequence;
     canonical = incoming;
     state.accessDenied = false;
@@ -207,7 +256,8 @@ export function createWhiteboardSession(options: WhiteboardSessionOptions): Whit
       for (const [id, version] of acknowledged) if (version.sequence <= incoming.sequence) acknowledged.delete(id);
       for (const id of pendingFiles.keys()) if (Object.hasOwn(incoming.files, id)) pendingFiles.delete(id);
     }
-    options.onScene(incoming, force);
+    try { options.onScene(incoming, force); }
+    catch { throw requestFailure("GET", "scene_failure", "Редактор не смог отобразить сохранённую доску. Повторите действие.", httpStatus); }
     forceNextScene = false;
     resetting = false;
     status();
@@ -228,7 +278,7 @@ export function createWhiteboardSession(options: WhiteboardSessionOptions): Whit
       const file = fileId && !Object.hasOwn(canonical.files, fileId) && !Object.hasOwn(files, fileId) ? pendingFiles.get(fileId) : undefined;
       const extraBytes = file ? new TextEncoder().encode(JSON.stringify({ [file.id]: file })).byteLength : 0;
       if (bytes + size + (elements.length ? 1 : 0) > MAX_BATCH_BYTES || bytes + size + fileBytes + extraBytes + 32 > MAX_REQUEST_BYTES) {
-        if (!elements.length) block();
+        if (!elements.length) rejectDraft();
         break;
       }
       bytes += size + (elements.length ? 1 : 0);
@@ -248,13 +298,14 @@ export function createWhiteboardSession(options: WhiteboardSessionOptions): Whit
     // Retry clicks must not turn a temporary failure into a tight write loop.
     nextWriteAt = Date.now() + throttle;
     const result = await request("POST", sent.body);
-    if (!result) return "stopped";
+    if (!result || closed || result.epoch !== permissionEpoch || attempt !== sent) return "stopped";
     if (result.action === "conflict") return "conflict";
-    const body: unknown = await result.response.json();
-    if (closed || attempt !== sent) return "stopped";
-    if (!verifyScope(body)) return "stopped";
-    const ack = parseAck(body);
-    if (ack.boardId !== sent.change.boardId || ack.operationId !== sent.change.operationId || ack.sequence < sent.change.baseSequence) throw new SessionError("Не удалось подтвердить сохранение доски. Повторите действие.");
+    if (!verifyScope(result.data, "POST", result.status)) return "stopped";
+    const invalidAck = () => requestFailure("POST", "invalid_ack", "Сервер вернул некорректное подтверждение. Повторите действие.", result.status);
+    let ack: ReturnType<typeof parseAck>;
+    try { ack = parseAck(result.data); }
+    catch { throw invalidAck(); }
+    if (ack.boardId !== sent.change.boardId || ack.operationId !== sent.change.operationId || ack.sequence < sent.change.baseSequence) throw invalidAck();
     minimumSequence = Math.max(minimumSequence, ack.sequence);
     for (const element of sent.change.elements) {
       const fingerprint = elementFingerprint(element);
@@ -270,19 +321,25 @@ export function createWhiteboardSession(options: WhiteboardSessionOptions): Whit
     if (closed || running) return;
     running = true;
     let conflicts = 0;
+    let method: "GET" | "POST" = "GET";
     try {
       while (!closed && ready()) {
-        if (refreshRequested || !canonical) { refreshRequested = false; if (!await pull()) break; }
+        if (refreshRequested || !canonical) {
+          method = "GET";
+          refreshRequested = false;
+          if (!await pull()) break;
+        }
         if (closed || !ready() || validationBlocked || !editable()) break;
         if (!attempt && pending.size === 0) { status(); break; }
         const wait = nextWriteAt - Date.now();
         if (wait > 0) { schedule(wait); break; }
+        method = "POST";
         const outcome = await push();
         if (outcome === "stopped") {
           if (refreshRequested && !state.accessDenied) continue;
           break;
         }
-        if (outcome === "conflict" && ++conflicts > 1) throw new SessionError("Версия доски изменилась. Повторите действие.");
+        if (outcome === "conflict" && ++conflicts > 1) throw requestFailure("POST", "conflict", "Версия доски изменилась. Повторите действие.", 409);
         refreshRequested = true;
       }
       if (!closed && !ready()) status();
@@ -291,7 +348,10 @@ export function createWhiteboardSession(options: WhiteboardSessionOptions): Whit
         if (error instanceof Error && error.name === "WhiteboardAuthorityPending") {
           publish({ error: false, message: "Восстанавливаем подключение · Изменения ещё не сохранены" });
           if (ready()) { refreshRequested = true; schedule(); }
-        } else publish({ error: true, message: error instanceof SessionError ? error.message : "Не удалось обновить доску. Повторите действие." });
+        } else {
+          if (!(error instanceof SessionError)) report(method, "session_failure");
+          publish({ error: true, message: error instanceof SessionError ? error.message : "Не удалось обновить доску. Повторите действие." });
+        }
       }
     } finally {
       running = false;
@@ -333,10 +393,10 @@ export function createWhiteboardSession(options: WhiteboardSessionOptions): Whit
           for (const file of Object.values(validated)) if (!Object.hasOwn(canonical.files, file.id)) pendingFiles.set(file.id, file);
         }
         for (const element of changes) pending.set(element.id, element);
-        if (pending.size > 5000) block();
+        if (pending.size > 5000) rejectDraft();
         else status();
         if (!validationBlocked && (pending.size || attempt)) schedule(Math.max(0, nextWriteAt - Date.now()));
-      } catch { block(); }
+      } catch { rejectDraft(); }
     },
     permissionsChanged() {
       if (closed) return;

@@ -108,14 +108,30 @@ test('изображения добавляются файлом, из буфе�
     assert.equal(first.files[image.fileId].mimeType, 'image/png');
     await saved(owner);
     await owner.keyboard.press('ArrowRight');
-    await waitScene(room, scene => images(scene)[0]?.x > image.x);
+    const moved = images(await waitScene(room, scene => images(scene)[0]?.x > image.x))[0];
+    const initialVisible = await displayedImage(owner);
+    await panel(owner).getByTestId('room-whiteboard-canvas').locator('.zoom-in-button').click();
+    await owner.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     const visible = await displayedImage(owner);
-    await owner.mouse.move(visible.x + visible.width, visible.y + visible.height);
+    assert.ok(visible.width > initialVisible.width, 'resize is exercised at a higher board zoom');
+    const interactive = panel(owner).getByTestId('room-whiteboard-canvas').locator('canvas.interactive');
+    const cursor = () => interactive.evaluate(canvas => decodeURIComponent(getComputedStyle(canvas).cursor));
+    const left = visible.x - 4, right = visible.x + visible.width + 4;
+    const top = visible.y - 4, bottom = visible.y + visible.height + 4;
+    for (const [x, y, angle] of [[left, top, 27], [right, top, 153], [left, bottom, 153], [right, bottom, 27]]) {
+      await owner.mouse.move(x, y);
+      assert.ok((await cursor()).includes(`rotate(${angle} 12 12)`), 'image corner cursor follows the image diagonal');
+    }
     await owner.mouse.down();
-    await owner.mouse.move(visible.x + visible.width + 40, visible.y + visible.height + 20, { steps: 8 });
+    await owner.mouse.move(right, bottom + 30, { steps: 8 });
+    assert.ok((await cursor()).includes('rotate(27 12 12)'), 'the image diagonal cursor stays aligned while resizing');
     await owner.mouse.up();
-    const resized = await waitScene(room, scene => images(scene)[0]?.width > image.width);
-    assert.ok(Math.abs(images(resized)[0].width / images(resized)[0].height - 2) < .02, 'corner resize preserves image proportions');
+    const resized = images(await waitScene(room, scene => images(scene)[0]?.width > image.width))[0];
+    const zoom = visible.width / moved.width;
+    assert.ok(Math.abs((resized.width - moved.width) * zoom - 12) < 2, '30 px down projects to 12 px width growth for a 2:1 image');
+    assert.ok(Math.abs((resized.height - moved.height) * zoom - 6) < 2, '30 px down projects to 6 px height growth for a 2:1 image');
+    assert.ok(Math.abs(resized.width / resized.height - 2) < .02, 'corner resize preserves image proportions');
+    assert.ok(Math.hypot(resized.x - moved.x, resized.y - moved.y) < .02, 'the opposite corner stays fixed');
     await saved(owner);
     await owner.keyboard.press('ControlOrMeta+z');
     await waitScene(room, scene => images(scene)[0]?.width === image.width);

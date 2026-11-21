@@ -24,3 +24,22 @@ export function roomRealtimeFetch(
     credentials: "include",
   });
 }
+
+export async function withRoomRequestDeadline<T>(
+  timeoutMs: number,
+  run: (signal: AbortSignal, timedOut: () => boolean) => Promise<T>,
+  lifetime?: AbortSignal,
+): Promise<T> {
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  if (lifetime?.aborted) abort();
+  else lifetime?.addEventListener("abort", abort, { once: true });
+  let expired = false;
+  const timeout = setTimeout(() => { expired = true; abort(); }, timeoutMs);
+  try {
+    return await run(controller.signal, () => expired);
+  } finally {
+    clearTimeout(timeout);
+    lifetime?.removeEventListener("abort", abort);
+  }
+}

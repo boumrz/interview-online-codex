@@ -559,7 +559,7 @@ test("team help hands off to Candidates and explains the filtered Excel download
   await page.getByLabel("По", { exact: true }).fill("2026-01-31");
   await page.getByRole("button", { name: "Применить период", exact: true }).click();
   await heading(page, "Скачайте Excel по выборке").waitFor();
-  await guide(page).getByText(/по выбранным периоду, треку и вакансии/).waitFor();
+  await guide(page).getByText(/по выбранному периоду, треку и вакансии/).waitFor();
   const exportRequest = page.waitForRequest((request) => new URL(request.url()).pathname.endsWith("/hr/rooms/export"));
   const [workbook, request] = await Promise.all([
     page.waitForEvent("download"), exportRequest, target(page, "candidates-export").click(),

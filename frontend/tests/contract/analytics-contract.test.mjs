@@ -16,7 +16,7 @@ async function loadAnalyticsModule() {
   return import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}#${Math.random()}`);
 }
 
-function installBrowserStub(hostname = "interview.vtools.tech") {
+function installBrowserStub(hostname = "interview.vtools.tech", listeners = new Map()) {
   const calls = [];
   globalThis.window = {
     location: {
@@ -26,6 +26,7 @@ function installBrowserStub(hostname = "interview.vtools.tech") {
     },
     dataLayer: [],
     ym: (...args) => calls.push(args),
+    addEventListener: (name, listener) => listeners.set(name, listener),
   };
   globalThis.document = {
     scripts: [],
@@ -73,6 +74,67 @@ test("analytics keeps only approved event names and finite enum or bounded paylo
   ]);
 });
 
+test("client error goals expose bounded diagnostic categories and deduplicate repeated failures", async () => {
+  const calls = installBrowserStub();
+  window.location.pathname = "/room/private-invite";
+  document.referrer = "https://interview.vtools.tech/room/private-referrer?token=private-token";
+  const analytics = await loadAnalyticsModule();
+  analytics.initAnalytics();
+  analytics.trackClientError("whiteboard_load", "http_failure", 503);
+  analytics.trackClientError("whiteboard_load", "http_failure", 503);
+  analytics.trackClientError("whiteboard_load", "invalid_json", 200);
+  analytics.trackClientError("whiteboard_load", "https://example.test/room/private-invite", 503);
+  analytics.trackClientError("private-operation", "http_failure", 503);
+  analytics.trackClientError("whiteboard_load", "toString", 503);
+  analytics.trackClientError("whiteboard_load", "network_failure", "private-auth-token");
+  analytics.trackEvent("client_error", { error_code: "network_error" });
+  const goals = calls.filter(call => call[1] === "reachGoal");
+  const options = calls.find(call => call[1] === "init")[2];
+  assert.equal(options.defer, true);
+  assert.equal(options.referrer, "https://interview.vtools.tech/room/:invite");
+  const firstHit = calls.findIndex(call => call[1] === "hit");
+  assert.ok(firstHit > 0 && firstHit < calls.indexOf(goals[0]));
+  assert.deepEqual(calls[firstHit].slice(1), ["hit", "https://interview.vtools.tech/room/:invite", { referer: "https://interview.vtools.tech/room/:invite" }]);
+  analytics.trackPageView(window.location.pathname);
+  assert.equal(calls.filter(call => call[1] === "hit").length, 1);
+  assert.equal(goals.length, 3);
+  assert.deepEqual(goals.map(call => call[2]), Array(3).fill("client_error"));
+  assert.deepEqual(goals[0][3], { client_error: { whiteboard_load: { response: { http_failure: { http_503: "Сервер вернул ошибку HTTP" } } } } });
+  assert.deepEqual(goals[1][3], { client_error: { whiteboard_load: { decode: { invalid_json: { http_200: "Ответ не удалось прочитать как JSON" } } } } });
+  assert.deepEqual(goals[2][3], { client_error: { whiteboard_load: { request: { network_failure: { none: "Не удалось получить ответ от сервера" } } } } });
+  assert.doesNotMatch(JSON.stringify(calls), /private/);
+});
+
+test("unhandled errors report only a known JavaScript category and tolerate a failed analytics tag", async () => {
+  const listeners = new Map();
+  const calls = installBrowserStub("interview.vtools.tech", listeners);
+  const analytics = await loadAnalyticsModule();
+  analytics.initAnalytics();
+  const reason = new TypeError("private error with /room/private-invite and auth token");
+  listeners.get("unhandledrejection")({ reason });
+  const goal = calls.find(call => call[1] === "reachGoal");
+  assert.deepEqual(goal?.slice(2), ["client_error", { client_error: { browser_rejection: { javascript: { type_error: { none: "JavaScript TypeError" } } } } }]);
+  window.ym = () => { throw new Error("tag failure"); };
+  assert.doesNotThrow(() => listeners.get("unhandledrejection")({ reason: new ReferenceError("private reference") }));
+});
+
+test("error goals wait for a safe page hit if the analytics tag throws on startup", async () => {
+  const calls = installBrowserStub();
+  const originalYm = window.ym;
+  window.ym = (...args) => {
+    if (args[1] === "hit") throw new Error("tag failure");
+    originalYm(...args);
+  };
+  const analytics = await loadAnalyticsModule();
+  assert.doesNotThrow(() => analytics.initAnalytics());
+  analytics.trackClientError("whiteboard_load", "network_failure");
+  assert.equal(calls.some(call => call[1] === "reachGoal"), false);
+  window.ym = originalYm;
+  analytics.trackPageView(window.location.pathname);
+  analytics.trackClientError("whiteboard_load", "network_failure");
+  assert.deepEqual(calls.map(call => call[1]), ["init", "hit", "reachGoal"]);
+});
+
 test("analytics redacts invite routes and rejects token-like values even in approved fields", async () => {
   const calls = installBrowserStub();
   const analytics = await loadAnalyticsModule();
@@ -92,10 +154,10 @@ test("analytics redacts invite routes and rejects token-like values even in appr
   assert.equal(serialized.includes("next=/dashboard"), false);
   assert.equal(serialized.includes("y0__token-shaped-value"), false);
 
-  const hit = calls.find((call) => call[1] === "hit");
+  const hit = calls.filter((call) => call[1] === "hit").at(-1);
   const verdict = calls.find((call) => call[1] === "reachGoal");
   const visitParams = calls.find((call) => call[1] === "params");
-  assert.deepEqual(hit.slice(1), ["hit", "/room/:invite"]);
+  assert.deepEqual(hit.slice(1), ["hit", "https://interview.vtools.tech/room/:invite", { referer: "https://interview.vtools.tech/" }]);
   assert.deepEqual(verdict.slice(1), ["reachGoal", analytics.PRODUCT_METRIKA_EVENT.verdictSaved, {
     verdict_code: "HIRE",
     has_comment: true,
@@ -195,7 +257,8 @@ test("workspace page hits and initialization expose only supported sections and 
   ];
   for (const [path, expected] of routes) {
     analytics.trackPageView(`${path}?search=private-query#private-fragment`);
-    assert.deepEqual(calls.at(-1).slice(1), ["hit", expected]);
+    assert.equal(calls.at(-1)[1], "hit");
+    assert.equal(calls.at(-1)[2], `https://interview.vtools.tech${expected}`);
   }
   assert.doesNotMatch(JSON.stringify(calls), /private-/);
 });

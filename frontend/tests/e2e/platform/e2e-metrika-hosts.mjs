@@ -50,6 +50,7 @@ async function assertMetrikaEnabled(browser, host) {
 
     if (
       !result.hasYm || result.initCalls < 1 || result.hitCalls < 1
+      || result.initOptions?.defer !== true
       || result.initOptions?.webvisor !== false
       || result.initOptions?.clickmap !== false
       || result.initOptions?.trackLinks !== false
@@ -72,7 +73,7 @@ async function assertInviteRouteIsRedacted(browser) {
     const calls = await page.evaluate(() => Array.isArray(window.ym?.a) ? window.ym.a : []);
     const serialised = JSON.stringify(calls);
     const roomHit = calls.find((call) => call[1] === "hit");
-    if (serialised.includes(invite) || serialised.includes("next=") || roomHit?.[2] !== "/room/:invite") {
+    if (serialised.includes(invite) || serialised.includes("next=") || roomHit?.[2] !== `http://${productionHosts[0]}:${devServerPort}/room/:invite`) {
       throw new Error(`METRIKA_ROUTE_LEAK result=${serialised}`);
     }
   } finally {

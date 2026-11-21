@@ -109,10 +109,42 @@ const NUMBER_LIMITS: Record<string, number> = {
   ready_state: 3,
 };
 
+const CLIENT_ERROR_GOAL = "client_error";
+const CLIENT_ERROR_OPERATION_NAMES = [
+  "whiteboard_load", "whiteboard_save", "whiteboard_export", "browser_runtime", "browser_rejection",
+] as const;
+type ClientErrorOperation = typeof CLIENT_ERROR_OPERATION_NAMES[number];
+const CLIENT_ERROR_OPERATIONS = new Set(CLIENT_ERROR_OPERATION_NAMES);
+const CLIENT_ERROR_DETAILS = {
+  network_failure: ["request", "Не удалось получить ответ от сервера"],
+  request_timeout: ["request", "Истекло время ожидания ответа"],
+  http_failure: ["response", "Сервер вернул ошибку HTTP"],
+  access_denied: ["response", "Сервер отклонил доступ к доске"],
+  body_failure: ["decode", "Не удалось загрузить тело ответа"],
+  invalid_json: ["decode", "Ответ не удалось прочитать как JSON"],
+  invalid_snapshot: ["validation", "Получен некорректный снимок доски"],
+  invalid_ack: ["validation", "Получено некорректное подтверждение записи"],
+  invalid_scope: ["validation", "Ответ не соответствует текущей доске"],
+  stale_snapshot: ["validation", "Получена устаревшая версия доски"],
+  draft_rejected: ["validation", "Не удалось принять изменения доски"],
+  conflict: ["response", "Не удалось согласовать версии доски"],
+  scene_failure: ["editor", "Редактор не смог отобразить снимок доски"],
+  export_failure: ["editor", "Не удалось сформировать файл доски"],
+  session_failure: ["session", "Необработанный сбой синхронизации доски"],
+  type_error: ["javascript", "JavaScript TypeError"],
+  reference_error: ["javascript", "JavaScript ReferenceError"],
+  syntax_error: ["javascript", "JavaScript SyntaxError"],
+  unexpected_error: ["javascript", "Необработанная ошибка JavaScript"],
+} as const;
+export type ClientErrorCode = keyof typeof CLIENT_ERROR_DETAILS;
+const recentClientErrors = new Map<string, number>();
+
 let initialized = false;
 let enabled = false;
 let activeHost = "";
 let activePath = "";
+let initialTrackedPath: string | undefined;
+let hasSafePageView = false;
 
 function normalizeAllowedHosts(raw: string | undefined): string[] {
   if (!raw) return DEFAULT_ALLOWED_HOSTS;
@@ -187,6 +219,26 @@ function invokeYm(method: string, args: unknown[], options: { debugEvent: string
   window.ym(METRIKA_COUNTER_ID, method, ...args);
 }
 
+function initialReferrer(raw: string, origin: string): string | undefined {
+  if (!raw) return;
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return origin;
+    return url.origin === origin ? new URL(analyticsRouteTemplate(url.pathname), origin).href : url.origin;
+  } catch { return origin; }
+}
+
+function sendPageView(path: string, referer?: string, payload?: MetricPayload) {
+  if (typeof window === "undefined") return;
+  const url = new URL(path, window.location.origin).href;
+  const params = sanitizePayload(payload);
+  const options = { ...(referer ? { referer } : {}), ...(params ? { params } : {}) };
+  try {
+    invokeYm("hit", Object.keys(options).length ? [url, options] : [url], { debugEvent: path, debugPayload: params });
+    hasSafePageView = enabled && typeof window.ym === "function";
+  } catch { hasSafePageView = false; }
+}
+
 export function initAnalytics() {
   if (initialized || typeof window === "undefined" || typeof document === "undefined") return;
   initialized = true;
@@ -215,25 +267,42 @@ export function initAnalytics() {
     a.parentNode.insertBefore(k, a);
   })(window, document, "script", METRIKA_SCRIPT_URL, "ym");
 
+  const safeReferrer = initialReferrer(document.referrer, window.location.origin);
   window.ym?.(METRIKA_COUNTER_ID, "init", {
+    defer: true,
     ssr: true,
     webvisor: false,
     // Link and referrer telemetry can contain invite-bearing or third-party URLs.
     // Re-enable either only after a dedicated analytics privacy review.
     clickmap: false,
     ecommerce: "dataLayer",
-    referrer: "",
+    referrer: safeReferrer ?? "",
     url: new URL(activePath, window.location.origin).toString(),
     accurateTrackBounce: true,
     trackLinks: false,
   });
+  // Metrika uses the last explicit hit as the referrer for reachGoal.
+  // Seed it before React renders or installs listeners for error goals.
+  initialTrackedPath = window.location.pathname;
+  sendPageView(activePath, safeReferrer);
+  window.addEventListener("error", event => {
+    if (event instanceof ErrorEvent) trackClientError("browser_runtime", browserErrorCode(event.error));
+  });
+  window.addEventListener("unhandledrejection", event => {
+    trackClientError("browser_rejection", browserErrorCode(event.reason));
+  });
 }
 
 export function trackPageView(path: string, payload?: MetricPayload) {
+  const initialPath = initialTrackedPath;
+  initialTrackedPath = undefined;
+  if (hasSafePageView && initialPath === path && !payload) return;
   const safePath = analyticsRouteTemplate(path);
+  const previousPath = activePath;
   activePath = safePath;
-  const options = sanitizePayload(payload);
-  invokeYm("hit", options ? [safePath, options] : [safePath], { debugEvent: safePath, debugPayload: options });
+  if (typeof window === "undefined") return;
+  const referer = previousPath ? new URL(previousPath, window.location.origin).href : undefined;
+  sendPageView(safePath, referer, payload);
 }
 
 export function trackEvent(goalId: string, payload?: MetricPayload) {
@@ -241,6 +310,30 @@ export function trackEvent(goalId: string, payload?: MetricPayload) {
   if (!APPROVED_EVENT_NAMES.has(goal)) return;
   const params = sanitizePayload(payload);
   invokeYm("reachGoal", params ? [goal, params] : [goal], { debugEvent: goal, debugPayload: params });
+}
+
+function browserErrorCode(error: unknown): ClientErrorCode {
+  if (error instanceof TypeError) return "type_error";
+  if (error instanceof ReferenceError) return "reference_error";
+  if (error instanceof SyntaxError) return "syntax_error";
+  return "unexpected_error";
+}
+
+export function trackClientError(operation: ClientErrorOperation, code: ClientErrorCode, status?: number) {
+  if (!hasSafePageView || !CLIENT_ERROR_OPERATIONS.has(operation) || !Object.prototype.hasOwnProperty.call(CLIENT_ERROR_DETAILS, code)) return;
+  const [stage, message] = CLIENT_ERROR_DETAILS[code];
+  const statusKey = typeof status === "number" && Number.isInteger(status) && status >= 100 && status <= 599 ? `http_${status}` : "none";
+  const key = `${operation}:${code}:${statusKey}`;
+  const now = Date.now();
+  for (const [previous, seenAt] of recentClientErrors) {
+    if (now - seenAt >= 30_000) recentClientErrors.delete(previous);
+  }
+  if (recentClientErrors.has(key) || recentClientErrors.size >= 50) return;
+  recentClientErrors.set(key, now);
+  try {
+    const params = { [CLIENT_ERROR_GOAL]: { [operation]: { [stage]: { [code]: { [statusKey]: message } } } } };
+    invokeYm("reachGoal", [CLIENT_ERROR_GOAL, params], { debugEvent: CLIENT_ERROR_GOAL });
+  } catch { /* An analytics failure must not interrupt the application. */ }
 }
 
 export function trackInterviewLanguageObservation(language: string, acknowledgement: unknown) {

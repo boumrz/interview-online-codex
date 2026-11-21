@@ -9,6 +9,21 @@ async function loadTransport() {
   }
 }
 
+test("room request deadlines distinguish a timeout from leaving the room", async () => {
+  const { withRoomRequestDeadline } = await loadTransport();
+  const waitForAbort = (signal: AbortSignal, timedOut: () => boolean) => new Promise<boolean>(resolve => {
+    if (signal.aborted) resolve(timedOut());
+    else signal.addEventListener("abort", () => resolve(timedOut()), { once: true });
+  });
+  assert.equal(await withRoomRequestDeadline(5, waitForAbort), true);
+
+  const lifetime = new AbortController();
+  const activeRequest = withRoomRequestDeadline(1000, waitForAbort, lifetime.signal);
+  lifetime.abort();
+  assert.equal(await activeRequest, false);
+  assert.equal(await withRoomRequestDeadline(1000, waitForAbort, lifetime.signal), false);
+});
+
 test("createRoomEventSource forces credential delivery even when the caller tries to downgrade it", async () => {
   const { createRoomEventSource } = await loadTransport();
   const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, "EventSource");

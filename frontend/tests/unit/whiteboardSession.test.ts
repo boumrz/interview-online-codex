@@ -67,6 +67,53 @@ function harness(options: { throttleMs?: number; taskId?: string | null } = {}) 
   };
 }
 
+test("the board loads, retries and saves without newer AbortSignal methods", async () => {
+  const any = Object.getOwnPropertyDescriptor(AbortSignal, "any")!;
+  const timeout = Object.getOwnPropertyDescriptor(AbortSignal, "timeout")!;
+  // Make the methods absent, as in older embedded browsers.
+  Object.defineProperty(AbortSignal, "any", { value: undefined, configurable: true });
+  Object.defineProperty(AbortSignal, "timeout", { value: undefined, configurable: true });
+  const h = harness();
+  try {
+    h.intercept = () => { throw new TypeError("private request details"); };
+    h.session.refresh();
+    await until(() => h.state.error, "a failed request is shown");
+    assert.equal(h.requests.length, 1, "the browser actually sent a request");
+    assert.match(h.state.message, /соединение/i);
+    h.intercept = undefined;
+    h.session.retry();
+    await until(() => h.state.loaded && h.state.editable, "retry loads the board");
+    h.session.observe([element("after-retry")]);
+    await h.settled();
+    assert.equal(h.saved.elements[0]?.id, "after-retry");
+  } finally {
+    h.session.destroy();
+    Object.defineProperty(AbortSignal, "any", any);
+    Object.defineProperty(AbortSignal, "timeout", timeout);
+  }
+});
+
+test("HTTP, invalid JSON and invalid snapshots show distinct safe failures and allow retry", async () => {
+  const h = harness();
+  try {
+    for (const [response, message] of [
+      [new Response("private proxy body", { status: 503 }), /HTTP 503/],
+      [new Response("private non-json body"), /прочитать ответ/i],
+      [Response.json({ taskId: null, elements: ["private board text"] }), /некорректн.+снимок/i],
+    ] as const) {
+      h.intercept = () => response;
+      h.session.retry();
+      await until(() => h.state.error, "failure is reported");
+      assert.match(h.state.message, message);
+      assert.equal(h.state.loaded, false);
+      assert.equal(h.state.message.includes("private"), false);
+    }
+    h.intercept = undefined;
+    h.session.retry();
+    await until(() => h.state.loaded, "retry recovers from the invalid response");
+  } finally { h.session.destroy(); }
+});
+
 test("an outgoing task session drains only to its original task, including an explicit taskless board", async () => {
   for (const taskId of ["dcb8b846-ce76-4763-948d-6c1170cd3612", null]) {
     const h = harness({ taskId });
@@ -351,24 +398,26 @@ test("stale GET snapshots cannot replace canonical state or erase newer pending 
   } finally { h.session.destroy(); }
 });
 
-test("late 403 from an older capability preserves pending changes and retries using the new proof", async () => {
-  const h = harness();
-  try {
-    await h.load();
-    let release: (() => void) | undefined;
-    h.intercept = request => {
-      if (request.method === "POST" && !release) return new Promise(resolve => { release = () => resolve(new Response(null, { status: 403 })); });
-    };
-    h.session.observe([element()]);
-    await until(() => release !== undefined, "old proof request is pending");
-    h.connection = { ...h.connection, eventToken: "renewed-proof" };
-    release!();
-    await h.settled();
-    assert.equal(h.posts.length, 2);
-    assert.equal(h.posts[0]?.rawBody, h.posts[1]?.rawBody);
-    assert.equal(h.posts[1]?.headers.get("X-Room-Event-Token"), "renewed-proof");
-    assert.equal(h.state.accessDenied, false);
-  } finally { h.session.destroy(); }
+test("late HTTP denial or validation errors preserve pending changes and retry using the new proof", async () => {
+  for (const status of [403, 404, 410, 422]) {
+    const h = harness();
+    try {
+      await h.load();
+      let release: (() => void) | undefined;
+      h.intercept = request => {
+        if (request.method === "POST" && !release) return new Promise(resolve => { release = () => resolve(new Response(null, { status })); });
+      };
+      h.session.observe([element()]);
+      await until(() => release !== undefined, `old proof request is pending before HTTP ${status}`);
+      h.connection = { ...h.connection, eventToken: "renewed-proof" };
+      release!();
+      await h.settled();
+      assert.equal(h.posts.length, 2);
+      assert.equal(h.posts[0]?.rawBody, h.posts[1]?.rawBody);
+      assert.equal(h.posts[1]?.headers.get("X-Room-Event-Token"), "renewed-proof");
+      assert.equal(h.state.accessDenied, false);
+    } finally { h.session.destroy(); }
+  }
 });
 
 test("a fresh write denial clears local changes and replaces the scene with canonical readonly state", async () => {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { API_BASE_URL } from '../../config/runtime';
-import { roomRealtimeFetch } from './roomRealtimeTransport';
+import { roomRealtimeFetch, withRoomRequestDeadline } from './roomRealtimeTransport';
 import { canvasPresenceRequest, subscribeCanvasPresence, type CanvasCursor } from './canvasPresenceEvents';
 import type { CanvasPoint } from './canvasCursorGeometry';
 
@@ -34,7 +34,7 @@ export function useCanvasPresence(connection: Connection, active: boolean, canva
       if (closed || running || !pending) return;
       pending = false; running = true;
       try {
-        const response = await roomRealtimeFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body(latest), signal: AbortSignal.timeout(2500) });
+        const response = await withRoomRequestDeadline(2500, signal => roomRealtimeFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body(latest), signal }));
         if (!closed && (response.status === 403 || response.status === 404 || response.status === 410)) { latest = null; setCursors([]); }
       } catch { /* A newer position or presence heartbeat supersedes this attempt. */ }
       finally { running = false; if (!closed && pending) timer = setTimeout(flush, 60); }

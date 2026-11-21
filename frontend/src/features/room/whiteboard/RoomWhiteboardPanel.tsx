@@ -9,6 +9,7 @@ import styles from "./RoomWhiteboardPanel.module.css";
 import { normalizeDrawingColor } from "../drawingColor";
 import { RoomCanvasToolbar } from "../RoomCanvasToolbar";
 import { TaskCanvasSessions, type TaskCanvasLifecycle } from "../TaskCanvasSessions";
+import { trackClientError } from "../../../services/analytics";
 
 const WhiteboardCanvas = lazy(() => import("./WhiteboardCanvas"));
 export type RoomWhiteboardPanelProps = WhiteboardConnection & { active: boolean; refreshSignal: number; drawingColor?: string | null };
@@ -69,7 +70,12 @@ function MountedWhiteboardPanel(props: RoomWhiteboardPanelProps & TaskCanvasLife
       const blob = await canvas.exportSnapshot(snapshot, format);
       if (current.current.active && current.current.connected && session.current === controller && controller.getSnapshot()) download(blob, format);
     }
-    catch { setExportError("Не удалось подготовить файл доски. Повторите экспорт."); }
+    catch {
+      if (session.current === controller && current.current.active) {
+        trackClientError("whiteboard_export", "export_failure");
+        setExportError("Не удалось подготовить файл доски. Повторите экспорт.");
+      }
+    }
     finally { setExporting(false); }
   };
 
